@@ -1,10 +1,10 @@
-<p align="center"><img src="./public/logos/aibtcdev-logo-sm-250px.png" alt="Bitcoin x AI Logo" width="150px" ></p>
+<img src="https://aibtc.dev/logos/aibtcdev-primary-logo-black-wide-1000px.png" alt="AIBTC Working Group Logo" style="width: 100%; max-width: 1000px; display: block; margin: 1rem auto;" />
 
-# Bitcoin x AI: Landing Page
+# AIBTC: Landing Page
 
 ## Description
 
-This is a simple landing page that provides a brief overview of the Bitcoin x AI working group.
+The code that runs https://aibtc.dev
 
 - [RSVP Thursdays](https://evt.to/emamdeggw)
 - [Intro Thread](https://github.com/orgs/stacks-network/discussions/531)
