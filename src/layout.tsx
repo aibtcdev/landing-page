@@ -8,7 +8,22 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { FaDiscord, FaGithub, FaInfo } from "react-icons/fa";
-import smLogo from "/logos/aibtcdev-logo-sm-250px.png";
+import smLogo from "/logos/aibtcdev-avatar-250px.png";
+
+export function Header() {
+  return (
+    <Stack
+      align="center"
+      justify="space-between"
+      direction="row"
+      px={24}
+      py={16}
+    >
+      <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
+      <Button variant="aibtcOrange">MEETING MINUTES</Button>
+    </Stack>
+  );
+}
 
 export function Content() {
   return (
@@ -17,7 +32,7 @@ export function Content() {
       justifyContent={["flex-start", null, "center"]}
       flexGrow={1}
     >
-      <Image src={smLogo} alt="aiBTC Neural Network" w={[200, 250]} py={4} />
+      <Image src={smLogo} alt="AIBTC Logo" w={[200, 250]} py={4} />
       <Heading size="2xl" color="orange.400">
         Bitcoin x AI
       </Heading>
