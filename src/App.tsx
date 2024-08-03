@@ -7,7 +7,6 @@ function App() {
   return (
     <ChakraProvider theme={theme}>
       <CustomFonts />
-
       <Content />
     </ChakraProvider>
   );
