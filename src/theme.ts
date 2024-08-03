@@ -79,7 +79,17 @@ const fonts = {
 
 const globalStyles = {
   "body, html": {
-    bg: "aibtc.black",
+    backgroundImage: "url('/logos/aibtcdev-pattern-1-640px.png')",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+    backgroundAttachment: "fixed",
+    "@media (min-width: 640px)": {
+      backgroundImage: "url('/logos/aibtcdev-pattern-1-1280px.png')",
+    },
+    "@media (min-width: 1280px)": {
+      backgroundImage: "url('/logos/aibtcdev-pattern-1-1920px.png')",
+    },
   },
   ".spin": {
     animation: "spin 1s linear infinite",
