@@ -1,6 +1,7 @@
 import {
   Button,
   ButtonGroup,
+  Flex,
   IconButton,
   Image,
   Stack,
@@ -9,36 +10,29 @@ import {
 import { FaDiscord, FaGithub, FaInfo } from "react-icons/fa";
 import aibtcLogoWide from "/logos/aibtcdev-primary-logo-white-wide-1000px.png";
 
-export function Header() {
-  return (
-    <Stack
-      align="center"
-      justify="space-between"
-      direction="row"
-      px={24}
-      py={16}
-    >
-      <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
-      <Button variant="aibtcOrange">MEETING MINUTES</Button>
-    </Stack>
-  );
-}
-
 export function Content() {
   return (
-    <Stack
-      alignItems="center"
-      justifyContent={["flex-start", null, "center"]}
-      flexGrow={1}
-    >
-      <Image
-        src={aibtcLogoWide}
-        alt="AIBTCDEV Wide Logo"
-        w="100%"
-        maxW="1000px"
-        py={4}
-      />
-    </Stack>
+    <Flex direction="column" height="100vh" className="bg-pattern-1">
+      <Stack
+        align="center"
+        justify="space-between"
+        direction={["column", "row"]}
+        px={[4, 12, 24]}
+        py={[4, 8, 16]}
+      >
+        <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
+        <Button variant="aibtcOrange">MEETING MINUTES</Button>
+      </Stack>
+      <Flex flex={1} alignItems="center" justifyContent="center">
+        <Image
+          src={aibtcLogoWide}
+          alt="AIBTCDEV Wide Logo"
+          w="100%"
+          maxW="1000px"
+          p={4}
+        />
+      </Flex>
+    </Flex>
   );
 }
 
