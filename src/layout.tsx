@@ -1,62 +1,38 @@
 import {
   Button,
   ButtonGroup,
-  Heading,
+  Flex,
   IconButton,
   Image,
   Stack,
   Text,
 } from "@chakra-ui/react";
 import { FaDiscord, FaGithub, FaInfo } from "react-icons/fa";
-import smLogo from "/logos/aibtcdev-logo-sm-250px.png";
+import aibtcLogoWide from "/logos/aibtcdev-primary-logo-white-wide-1000px.png";
 
 export function Content() {
   return (
-    <Stack
-      alignItems="center"
-      justifyContent={["flex-start", null, "center"]}
-      flexGrow={1}
-    >
-      <Image src={smLogo} alt="aiBTC Neural Network" w={[200, 250]} py={4} />
-      <Heading size="2xl" color="orange.400">
-        Bitcoin x AI
-      </Heading>
-      <Text fontSize="x-large" textAlign="center" p={4}>
-        Welcome to the working group!
-      </Text>
-      <Stack direction={["column", null, "row"]}>
-        <Button
-          size="lg"
-          _hover={{ bg: "orange.400", color: "white" }}
-          as="a"
-          href="https://evt.to/emamdeggw"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          RSVP Thursdays
-        </Button>
-        <Button
-          size="lg"
-          _hover={{ bg: "orange.400", color: "white" }}
-          as="a"
-          href="https://github.com/orgs/stacks-network/discussions/534"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Meeting Minutes
-        </Button>
-        <Button
-          size="lg"
-          _hover={{ bg: "orange.400", color: "white" }}
-          as="a"
-          href="https://docs.aibtc.dev"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          Documentation
-        </Button>
+    <Flex direction="column" height="100vh" className="bg-pattern-1">
+      <Stack
+        align="center"
+        justify="space-between"
+        direction={["column", "row"]}
+        px={[4, 12, 24]}
+        py={[4, 8, 16]}
+      >
+        <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
+        <Button variant="aibtcOrange">MEETING MINUTES</Button>
       </Stack>
-    </Stack>
+      <Flex flex={1} alignItems="center" justifyContent="center">
+        <Image
+          src={aibtcLogoWide}
+          alt="AIBTCDEV Wide Logo"
+          w="100%"
+          maxW="1000px"
+          p={4}
+        />
+      </Flex>
+    </Flex>
   );
 }
 
