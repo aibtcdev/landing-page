@@ -6,9 +6,8 @@ import {
   Heading,
   IconButton,
   Image,
-  ListItem,
-  OrderedList,
   Stack,
+  StackProps,
   Text,
 } from "@chakra-ui/react";
 import { FaDiscord, FaGithub, FaInfo } from "react-icons/fa";
@@ -16,6 +15,38 @@ import { motion } from "framer-motion";
 import aibtcLogoWide from "/logos/aibtcdev-primary-logo-white-wide-1000px.png";
 
 const MotionFlex = motion(Flex);
+
+interface HeaderProps extends Omit<StackProps, "children"> {
+  showLogo?: boolean;
+}
+
+function SectionHeader({
+  showLogo = true,
+  ...stackProps
+}: HeaderProps): React.ReactElement {
+  return (
+    <Stack
+      align="center"
+      justify="space-between"
+      direction={["column", "row"]}
+      px={[4, 12, 24]}
+      py={[4, 8, 16]}
+      {...stackProps}
+    >
+      <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
+      {showLogo && (
+        <Image
+          src={aibtcLogoWide}
+          alt="AIBTCDEV Wide Logo"
+          w="50%"
+          maxW="1000px"
+          p={4}
+        />
+      )}
+      <Button variant="aibtcOrange">MEETING MINUTES</Button>
+    </Stack>
+  );
+}
 
 export function Content() {
   return (
@@ -37,16 +68,7 @@ export function Content() {
         scrollSnapAlign="start"
         flexShrink={0}
       >
-        <Stack
-          align="center"
-          justify="space-between"
-          direction={["column", "row"]}
-          px={[4, 12, 24]}
-          py={[4, 8, 16]}
-        >
-          <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
-          <Button variant="aibtcOrange">MEETING MINUTES</Button>
-        </Stack>
+        <SectionHeader showLogo={false} />
         <Flex flex={1} alignItems="center" justifyContent="center">
           <Image
             src={aibtcLogoWide}
@@ -68,23 +90,7 @@ export function Content() {
         scrollSnapAlign="start"
         flexShrink={0}
       >
-        <Stack
-          align="center"
-          justify="space-between"
-          direction={["column", "row"]}
-          px={[4, 12, 24]}
-          py={[4, 8, 16]}
-        >
-          <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
-          <Image
-            src={aibtcLogoWide}
-            alt="AIBTCDEV Wide Logo"
-            w="50%"
-            maxW="1000px"
-            p={4}
-          />
-          <Button variant="aibtcOrange">MEETING MINUTES</Button>
-        </Stack>
+        <SectionHeader />
         <Stack
           flexGrow={1}
           width="90%"
@@ -115,23 +121,7 @@ export function Content() {
         scrollSnapAlign="start"
         flexShrink={0}
       >
-        <Stack
-          align="center"
-          justify="space-between"
-          direction={["column", "row"]}
-          px={[4, 12, 24]}
-          py={[4, 8, 16]}
-        >
-          <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
-          <Image
-            src={aibtcLogoWide}
-            alt="AIBTCDEV Wide Logo"
-            w="50%"
-            maxW="1000px"
-            p={4}
-          />
-          <Button variant="aibtcOrange">MEETING MINUTES</Button>
-        </Stack>
+        <SectionHeader />
         <Stack
           flexGrow={1}
           width="90%"
