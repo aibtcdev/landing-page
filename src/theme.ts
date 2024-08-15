@@ -78,7 +78,7 @@ const fonts = {
 };
 
 const globalStyles = {
-  "body, html": {
+  ".bg-pattern-1": {
     backgroundImage: "url('/logos/aibtcdev-pattern-1-640px.png')",
     backgroundSize: "cover",
     backgroundPosition: "center",
@@ -89,6 +89,32 @@ const globalStyles = {
     },
     "@media (min-width: 1280px)": {
       backgroundImage: "url('/logos/aibtcdev-pattern-1-1920px.png')",
+    },
+  },
+  ".bg-pattern-2": {
+    backgroundImage: "url('/logos/aibtcdev-pattern-2-640px.png')",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+    backgroundAttachment: "fixed",
+    "@media (min-width: 640px)": {
+      backgroundImage: "url('/logos/aibtcdev-pattern-2-1280px.png')",
+    },
+    "@media (min-width: 1280px)": {
+      backgroundImage: "url('/logos/aibtcdev-pattern-2-1920px.png')",
+    },
+  },
+  ".bg-pattern-3": {
+    backgroundImage: "url('/logos/aibtcdev-pattern-3-640px.png')",
+    backgroundSize: "cover",
+    backgroundPosition: "center",
+    backgroundRepeat: "no-repeat",
+    backgroundAttachment: "fixed",
+    "@media (min-width: 640px)": {
+      backgroundImage: "url('/logos/aibtcdev-pattern-3-1280px.png')",
+    },
+    "@media (min-width: 1280px)": {
+      backgroundImage: "url('/logos/aibtcdev-pattern-3-1920px.png')",
     },
   },
   ".spin": {
