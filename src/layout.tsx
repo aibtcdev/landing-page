@@ -1,4 +1,5 @@
 import {
+  Box,
   Button,
   ButtonGroup,
   Flex,
@@ -8,31 +9,84 @@ import {
   Text,
 } from "@chakra-ui/react";
 import { FaDiscord, FaGithub, FaInfo } from "react-icons/fa";
+import { motion } from "framer-motion";
 import aibtcLogoWide from "/logos/aibtcdev-primary-logo-white-wide-1000px.png";
+
+const MotionFlex = motion(Flex);
 
 export function Content() {
   return (
-    <Flex direction="column" height="100vh" className="bg-pattern-1">
-      <Stack
-        align="center"
-        justify="space-between"
-        direction={["column", "row"]}
-        px={[4, 12, 24]}
-        py={[4, 8, 16]}
+    <Box
+      height="100vh"
+      overflowY="scroll"
+      css={{
+        scrollSnapType: "y mandatory",
+        "&::-webkit-scrollbar": { display: "none" },
+        scrollbarWidth: "none",
+        msOverflowStyle: "none",
+      }}
+    >
+      <MotionFlex
+        direction="column"
+        height="100vh"
+        width="100%"
+        className="bg-pattern-1"
+        scrollSnapAlign="start"
+        flexShrink={0}
       >
-        <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
-        <Button variant="aibtcOrange">MEETING MINUTES</Button>
-      </Stack>
-      <Flex flex={1} alignItems="center" justifyContent="center">
-        <Image
-          src={aibtcLogoWide}
-          alt="AIBTCDEV Wide Logo"
-          w="100%"
-          maxW="1000px"
-          p={4}
-        />
-      </Flex>
-    </Flex>
+        <Stack
+          align="center"
+          justify="space-between"
+          direction={["column", "row"]}
+          px={[4, 12, 24]}
+          py={[4, 8, 16]}
+        >
+          <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
+          <Button variant="aibtcOrange">MEETING MINUTES</Button>
+        </Stack>
+        <Flex flex={1} alignItems="center" justifyContent="center">
+          <Image
+            src={aibtcLogoWide}
+            alt="AIBTCDEV Wide Logo"
+            w="100%"
+            maxW="1000px"
+            p={4}
+          />
+        </Flex>
+      </MotionFlex>
+
+      <MotionFlex
+        direction="column"
+        height="100vh"
+        width="100%"
+        bg="gray.100"
+        alignItems="center"
+        justifyContent="center"
+        scrollSnapAlign="start"
+        flexShrink={0}
+      >
+        <Text fontSize="4xl" fontWeight="bold">
+          Section 2
+        </Text>
+        <Text>Add your content for the second section here</Text>
+      </MotionFlex>
+
+      <MotionFlex
+        direction="column"
+        height="100vh"
+        width="100%"
+        bg="gray.200"
+        alignItems="center"
+        justifyContent="center"
+        scrollSnapAlign="start"
+        flexShrink={0}
+      >
+        <Text fontSize="4xl" fontWeight="bold">
+          Section 3
+        </Text>
+        <Text>Add your content for the third section here</Text>
+      </MotionFlex>
+    </Box>
   );
 }
 
