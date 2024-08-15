@@ -33,7 +33,15 @@ function SectionHeader({
       py={[4, 8, 16]}
       {...stackProps}
     >
-      <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
+      <Button
+        variant="aibtcOrange"
+        as="a"
+        href="https://evt.to/emamdeggw"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        RSVP THURSDAYS
+      </Button>
       {showLogo && (
         <Image
           src={aibtcLogoWide}
@@ -43,7 +51,15 @@ function SectionHeader({
           p={4}
         />
       )}
-      <Button variant="aibtcOrange">MEETING MINUTES</Button>
+      <Button
+        variant="aibtcOrange"
+        as="a"
+        href="https://github.com/aibtcdev/communication/tree/main/meetings"
+        target="_blank"
+        rel="noopener noreferrer"
+      >
+        MEETING MINUTES
+      </Button>
     </Stack>
   );
 }
