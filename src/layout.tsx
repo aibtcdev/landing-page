@@ -3,8 +3,11 @@ import {
   Button,
   ButtonGroup,
   Flex,
+  Heading,
   IconButton,
   Image,
+  ListItem,
+  OrderedList,
   Stack,
   Text,
 } from "@chakra-ui/react";
@@ -65,10 +68,42 @@ export function Content() {
         scrollSnapAlign="start"
         flexShrink={0}
       >
-        <Text fontSize="4xl" fontWeight="bold">
-          Section 2
-        </Text>
-        <Text>Add your content for the second section here</Text>
+        <Stack
+          align="center"
+          justify="space-between"
+          direction={["column", "row"]}
+          px={[4, 12, 24]}
+          py={[4, 8, 16]}
+        >
+          <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
+          <Image
+            src={aibtcLogoWide}
+            alt="AIBTCDEV Wide Logo"
+            w="50%"
+            maxW="1000px"
+            p={4}
+          />
+          <Button variant="aibtcOrange">MEETING MINUTES</Button>
+        </Stack>
+        <Stack
+          flexGrow={1}
+          width="90%"
+          alignItems="flex-start"
+          justifyContent="center"
+        >
+          <Heading>
+            To empower individuals by integrating Bitcoin with open-source AI,
+            ensuring freedom, security, and innovation in a decentralized
+            digital future.
+          </Heading>
+          <Text>
+            As AI transforms the digital world, we must ensure that this future
+            belongs to everyone, not just a few. By combining Bitcoin with
+            open-source AI, we empower individuals to stay free and in control,
+            protecting our autonomy and revolutionizing how we live and work
+            online.
+          </Text>
+        </Stack>
       </MotionFlex>
 
       <MotionFlex
@@ -81,10 +116,68 @@ export function Content() {
         scrollSnapAlign="start"
         flexShrink={0}
       >
-        <Text fontSize="4xl" fontWeight="bold">
-          Section 3
-        </Text>
-        <Text>Add your content for the third section here</Text>
+        <Stack
+          align="center"
+          justify="space-between"
+          direction={["column", "row"]}
+          px={[4, 12, 24]}
+          py={[4, 8, 16]}
+        >
+          <Button variant="aibtcOrange">RSVP THURSDAYS</Button>
+          <Image
+            src={aibtcLogoWide}
+            alt="AIBTCDEV Wide Logo"
+            w="50%"
+            maxW="1000px"
+            p={4}
+          />
+          <Button variant="aibtcOrange">MEETING MINUTES</Button>
+        </Stack>
+        <Stack
+          flexGrow={1}
+          width="90%"
+          alignItems="flex-start"
+          justifyContent="center"
+        >
+          <Heading>Values</Heading>
+          <OrderedList spacing={3}>
+            <ListItem>
+              <Text as="span" fontWeight="bold">
+                Freedom:
+              </Text>{" "}
+              Ensuring everyone has control over their digital lives and choices
+              in an AI-driven world.
+            </ListItem>
+            <ListItem>
+              <Text as="span" fontWeight="bold">
+                Composability:
+              </Text>{" "}
+              Building a flexible, open marketplace where ideas and tools can
+              connect and grow.
+            </ListItem>
+            <ListItem>
+              <Text as="span" fontWeight="bold">
+                Innovation:
+              </Text>{" "}
+              Moving fast, experimenting boldly, and refining as we go to drive
+              progress.
+            </ListItem>
+            <ListItem>
+              <Text as="span" fontWeight="bold">
+                Empowerment:
+              </Text>{" "}
+              Making AI tools accessible to all, so everyone can thrive in the
+              new digital economy.
+            </ListItem>
+            <ListItem>
+              <Text as="span" fontWeight="bold">
+                Security:
+              </Text>{" "}
+              Safeguarding autonomy with decentralized, secure technologies like
+              Bitcoin.
+            </ListItem>
+          </OrderedList>
+        </Stack>
       </MotionFlex>
     </Box>
   );
