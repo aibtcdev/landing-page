@@ -113,6 +113,87 @@ export function Content() {
           alignItems="flex-start"
           justifyContent="center"
         >
+          <Text fontSize="4xl">
+            Imagine a world where computers are so smart, they can do almost
+            anything—build things, make decisions, even talk to each other.
+            While that might sound amazing, it also means these machines could
+            end up controlling much of our lives. What if they start deciding
+            what we can or can&apos;t do? That&apos;s a scary thought.
+          </Text>
+        </Stack>
+      </MotionFlex>
+
+      <MotionFlex
+        direction="column"
+        height="100vh"
+        width="100%"
+        className="bg-pattern-3"
+        alignItems="center"
+        justifyContent="center"
+        scrollSnapAlign="start"
+        flexShrink={0}
+      >
+        <SectionHeader />
+        <Stack
+          flexGrow={1}
+          width="90%"
+          alignItems="flex-start"
+          justifyContent="center"
+        >
+          <Text fontSize="4xl">
+            Now, consider Bitcoin. It&apos;s special because there&apos;s only a
+            limited amount of it, like a rare treasure. In a world where
+            computers can create more of almost everything, Bitcoin stays rare
+            and valuable. This makes it really important, especially when
+            everything else can be copied or made by smart machines.
+          </Text>
+        </Stack>
+      </MotionFlex>
+
+      <MotionFlex
+        direction="column"
+        height="100vh"
+        width="100%"
+        className="bg-pattern-1"
+        alignItems="center"
+        justifyContent="center"
+        scrollSnapAlign="start"
+        flexShrink={0}
+      >
+        <SectionHeader />
+        <Stack
+          flexGrow={1}
+          width="90%"
+          alignItems="flex-start"
+          justifyContent="center"
+        >
+          <Text fontSize="4xl">
+            But here&apos;s the problem: If these smart machines control
+            everything, including our money, we might lose the freedom to make
+            our own choices. We could end up in a world where a few people—or
+            even just the machines themselves—hold all the power. That&apos;s
+            where AIBTC comes in.
+          </Text>
+        </Stack>
+      </MotionFlex>
+
+      <MotionFlex
+        direction="column"
+        height="100vh"
+        width="100%"
+        className="bg-pattern-2"
+        alignItems="center"
+        justifyContent="center"
+        scrollSnapAlign="start"
+        flexShrink={0}
+      >
+        <SectionHeader />
+        <Stack
+          flexGrow={1}
+          width="90%"
+          alignItems="flex-start"
+          justifyContent="center"
+        >
           <Heading>
             Our community mission is to empower individuals by integrating
             Bitcoin with open-source AI, ensuring freedom, security, and
