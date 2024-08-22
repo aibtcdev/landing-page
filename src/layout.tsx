@@ -95,7 +95,14 @@ export function Content() {
           />
         </Flex>
       </MotionFlex>
+    </Box>
+  );
+}
 
+// placeholder for possible main content
+export function AdditionalContent() {
+  return (
+    <Stack>
       <MotionFlex
         direction="column"
         height="100vh"
@@ -325,7 +332,7 @@ export function Content() {
           <Text>Could insert something here, represents 3rd background.</Text>
         </Stack>
       </MotionFlex>
-    </Box>
+    </Stack>
   );
 }
 
