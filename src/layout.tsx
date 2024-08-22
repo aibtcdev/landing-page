@@ -77,7 +77,7 @@ export function Content() {
       }}
     >
       <MotionFlex
-        direction="column"
+        direction={["column-reverse", "column"]}
         height="100vh"
         width="100%"
         className="bg-pattern-1"
