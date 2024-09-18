@@ -70,7 +70,7 @@ function SectionHeader({
 export function Content() {
   return (
     <Box
-      height="100vh"
+      height="100svh"
       overflowY="auto"
       css={{
         scrollSnapType: "y mandatory",
@@ -81,7 +81,7 @@ export function Content() {
     >
       <MotionFlex
         direction={["column-reverse", "column"]}
-        height="100%"
+        height="100svh"
         width="100%"
         className="bg-pattern-1"
         scrollSnapAlign="start"
