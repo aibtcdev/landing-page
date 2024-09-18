@@ -71,7 +71,7 @@ export function Content() {
   return (
     <Box
       height="100vh"
-      overflowY="scroll"
+      overflowY="auto"
       css={{
         scrollSnapType: "y mandatory",
         "&::-webkit-scrollbar": { display: "none" },
@@ -81,7 +81,7 @@ export function Content() {
     >
       <MotionFlex
         direction={["column-reverse", "column"]}
-        height="100vh"
+        height="100%"
         width="100%"
         className="bg-pattern-1"
         scrollSnapAlign="start"
