@@ -400,7 +400,7 @@ export function Footer() {
           icon={<FaDiscord />}
           size={["sm", null, "md"]}
           as="a"
-          href="https://discord.gg/5DJaBrf"
+          href="https://discord.gg/Z59Z3FNbEX"
           target="_blank"
           rel="noopener noreferrer"
         />
