@@ -346,7 +346,7 @@ export function Footer() {
       <ButtonGroup>
         <IconButton
           isRound
-          _hover={{ bg: "orange.400", color: "white" }}
+          _hover={{ bg: "aibtc.orange.500", color: "white" }}
           aria-label="Run a Crew"
           title="Run a Crew"
           icon={<FaRunning />}
@@ -358,7 +358,7 @@ export function Footer() {
         />
         <IconButton
           isRound
-          _hover={{ bg: "orange.400", color: "white" }}
+          _hover={{ bg: "aibtc.orange.500", color: "white" }}
           aria-label="AIBTC Documentation"
           title="AIBTC Documentation"
           icon={<FaBook />}
@@ -370,7 +370,7 @@ export function Footer() {
         />
         <IconButton
           isRound
-          _hover={{ bg: "orange.400", color: "white" }}
+          _hover={{ bg: "aibtc.orange.500", color: "white" }}
           aria-label="AIBTC GitHub"
           title="AIBTC GitHub"
           icon={<PiGithubLogoFill />}
@@ -382,7 +382,7 @@ export function Footer() {
         />
         <IconButton
           isRound
-          _hover={{ bg: "orange.400", color: "white" }}
+          _hover={{ bg: "aibtc.orange.500", color: "white" }}
           aria-label="AIBTC Replit"
           title="AIBTC Replit"
           icon={<SiReplit />}
@@ -394,7 +394,7 @@ export function Footer() {
         />
         <IconButton
           isRound
-          _hover={{ bg: "orange.400", color: "white" }}
+          _hover={{ bg: "aibtc.orange.500", color: "white" }}
           aria-label="AIBTC Discord"
           title="AIBTC Discord"
           icon={<FaDiscord />}
@@ -406,7 +406,7 @@ export function Footer() {
         />
         <IconButton
           isRound
-          _hover={{ bg: "orange.400", color: "white" }}
+          _hover={{ bg: "aibtc.orange.500", color: "white" }}
           aria-label="AIBTC on X"
           title="AIBTC on X"
           icon={<FaXTwitter />}
