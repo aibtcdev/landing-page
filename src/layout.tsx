@@ -10,7 +10,10 @@ import {
   StackProps,
   Text,
 } from "@chakra-ui/react";
-import { FaDiscord, FaGithub, FaInfo } from "react-icons/fa";
+import { FaBook, FaDiscord, FaRunning } from "react-icons/fa";
+import { FaXTwitter } from "react-icons/fa6";
+import { PiGithubLogoFill } from "react-icons/pi";
+import { SiReplit } from "react-icons/si";
 import { motion } from "framer-motion";
 import aibtcLogoWide from "/logos/aibtcdev-primary-logo-white-wide-1000px.png";
 
@@ -94,6 +97,7 @@ export function Content() {
             p={4}
           />
         </Flex>
+        <Footer />
       </MotionFlex>
     </Box>
   );
@@ -338,27 +342,38 @@ export function AdditionalContent() {
 
 export function Footer() {
   return (
-    <Stack align="center" justify="space-between" direction="row" p={4}>
-      <Text>&copy; 2024</Text>
+    <Stack align="center" justify="center" direction="row" p={4}>
       <ButtonGroup>
         <IconButton
           isRound
           _hover={{ bg: "orange.400", color: "white" }}
-          aria-label="Working Group Info"
-          title="Working Group Info"
-          icon={<FaInfo />}
+          aria-label="Run a Crew"
+          title="Run a Crew"
+          icon={<FaRunning />}
           size={["sm", null, "md"]}
           as="a"
-          href="https://github.com/orgs/stacks-network/discussions/531"
+          href="https://run.aibtc.dev"
           target="_blank"
           rel="noopener noreferrer"
         />
         <IconButton
           isRound
           _hover={{ bg: "orange.400", color: "white" }}
-          aria-label="GitHub Resources"
-          title="GitHub Resources"
-          icon={<FaGithub />}
+          aria-label="AIBTC Documentation"
+          title="AIBTC Documentation"
+          icon={<FaBook />}
+          size={["sm", null, "md"]}
+          as="a"
+          href="https://docs.aibtc.dev"
+          target="_blank"
+          rel="noopener noreferrer"
+        />
+        <IconButton
+          isRound
+          _hover={{ bg: "orange.400", color: "white" }}
+          aria-label="AIBTC GitHub"
+          title="AIBTC GitHub"
+          icon={<PiGithubLogoFill />}
           size={["sm", null, "md"]}
           as="a"
           href="https://github.com/aibtcdev"
@@ -368,12 +383,36 @@ export function Footer() {
         <IconButton
           isRound
           _hover={{ bg: "orange.400", color: "white" }}
-          aria-label="Discord"
-          title="Discord"
+          aria-label="AIBTC Replit"
+          title="AIBTC Replit"
+          icon={<SiReplit />}
+          size={["sm", null, "md"]}
+          as="a"
+          href="https://replit.com/@wbtc402/ai-agent-crew"
+          target="_blank"
+          rel="noopener noreferrer"
+        />
+        <IconButton
+          isRound
+          _hover={{ bg: "orange.400", color: "white" }}
+          aria-label="AIBTC Discord"
+          title="AIBTC Discord"
           icon={<FaDiscord />}
           size={["sm", null, "md"]}
           as="a"
           href="https://discord.gg/5DJaBrf"
+          target="_blank"
+          rel="noopener noreferrer"
+        />
+        <IconButton
+          isRound
+          _hover={{ bg: "orange.400", color: "white" }}
+          aria-label="AIBTC on X"
+          title="AIBTC on X"
+          icon={<FaXTwitter />}
+          size={["sm", null, "md"]}
+          as="a"
+          href="https://x.com/aibtcdev"
           target="_blank"
           rel="noopener noreferrer"
         />
