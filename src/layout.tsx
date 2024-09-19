@@ -14,6 +14,7 @@ import aibtcLogoWide from "/logos/aibtcdev-primary-logo-white-wide-1000px.png";
 export function Content() {
   return (
     <Stack
+      className="bg-pattern-1"
       direction="column"
       height="100svh"
       alignItems="center"
