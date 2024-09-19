@@ -35,8 +35,10 @@ export function Content() {
         />
         <ButtonGroup
           flexDirection={["column", "row"]}
+          alignItems="center"
+          justifyContent="center"
           gap={4}
-          w={["75%", "fit-content"]}
+          w={["75%", "100%"]}
         >
           <Button
             variant="aibtcOrange"
