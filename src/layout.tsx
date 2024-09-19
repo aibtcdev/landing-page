@@ -14,7 +14,6 @@ import aibtcLogoWide from "/logos/aibtcdev-primary-logo-white-wide-1000px.png";
 export function Content() {
   return (
     <Stack
-      className="bg-pattern-1"
       direction="column"
       height="100svh"
       alignItems="center"
@@ -33,12 +32,12 @@ export function Content() {
           maxW="1000px"
           p={4}
         />
-        <ButtonGroup
-          flexDirection={["column", "row"]}
+        <Stack
+          direction={["column", "row"]}
           alignItems="center"
           justifyContent="center"
           gap={4}
-          w={["75%", "100%"]}
+          w="100%"
         >
           <Button
             variant="aibtcOrange"
@@ -47,6 +46,7 @@ export function Content() {
             href="https://run.aibtc.dev"
             target="_blank"
             rel="noopener noreferrer"
+            w={["70%", "40%"]}
           >
             RUN AIBTC AGENTS
           </Button>
@@ -57,10 +57,11 @@ export function Content() {
             href="https://evt.to/emamdeggw"
             target="_blank"
             rel="noopener noreferrer"
+            w={["70%", "40%"]}
           >
             RSVP THURSDAYS
           </Button>
-        </ButtonGroup>
+        </Stack>
       </Stack>
       <Stack align="center" justify="center" direction="row" p={4}>
         <ButtonGroup>
