@@ -72,7 +72,7 @@ export function Content() {
             aria-label="Run a Crew"
             title="Run a Crew"
             icon={<FaRunning />}
-            size={["md", null, "lg"]}
+            size={["sm", "md", "lg"]}
             as="a"
             href="https://run.aibtc.dev"
             target="_blank"
@@ -84,7 +84,7 @@ export function Content() {
             aria-label="AIBTC Documentation"
             title="AIBTC Documentation"
             icon={<FaBook />}
-            size={["md", null, "lg"]}
+            size={["sm", "md", "lg"]}
             as="a"
             href="https://docs.aibtc.dev"
             target="_blank"
@@ -96,7 +96,7 @@ export function Content() {
             aria-label="AIBTC GitHub"
             title="AIBTC GitHub"
             icon={<PiGithubLogoFill />}
-            size={["md", null, "lg"]}
+            size={["sm", "md", "lg"]}
             as="a"
             href="https://github.com/aibtcdev"
             target="_blank"
@@ -108,7 +108,7 @@ export function Content() {
             aria-label="AIBTC Replit"
             title="AIBTC Replit"
             icon={<SiReplit />}
-            size={["md", null, "lg"]}
+            size={["sm", "md", "lg"]}
             as="a"
             href="https://replit.com/@wbtc402/ai-agent-crew"
             target="_blank"
@@ -120,7 +120,7 @@ export function Content() {
             aria-label="AIBTC Discord"
             title="AIBTC Discord"
             icon={<FaDiscord />}
-            size={["md", null, "lg"]}
+            size={["sm", "md", "lg"]}
             as="a"
             href="https://discord.gg/Z59Z3FNbEX"
             target="_blank"
@@ -132,7 +132,7 @@ export function Content() {
             aria-label="AIBTC on X"
             title="AIBTC on X"
             icon={<FaXTwitter />}
-            size={["md", null, "lg"]}
+            size={["sm", "md", "lg"]}
             as="a"
             href="https://x.com/aibtcdev"
             target="_blank"
