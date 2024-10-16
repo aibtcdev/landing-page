@@ -30,10 +30,10 @@ export function Content() {
         p={4}
         backgroundColor="aibtc.blue.500"
       >
-        <Text>
-          Join the{" "}
+        <Text fontWeight="bold">
+          JOIN THE{" "}
           <Link href="https://discord.gg/Z59Z3FNbEX" isExternal>
-            AIBTC Champions Sprint
+            AIBTC CHAMPIONS SPRINT
           </Link>
         </Text>
       </Stack>
