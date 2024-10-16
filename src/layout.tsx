@@ -30,9 +30,13 @@ export function Content() {
         p={4}
         backgroundColor="aibtc.blue.500"
       >
-        <Text fontWeight="bold">
+        <Text fontWeight="bold" fontSize={["md", "xl"]}>
           JOIN THE{" "}
-          <Link href="https://discord.gg/Z59Z3FNbEX" isExternal>
+          <Link
+            href="https://discord.gg/Z59Z3FNbEX"
+            isExternal
+            textDecoration="underline"
+          >
             AIBTC CHAMPIONS SPRINT
           </Link>
         </Text>
