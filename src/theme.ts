@@ -73,8 +73,8 @@ const buttonStyles = {
 };
 
 const fonts = {
-  heading: "DM Sans 9pt, Open Sans, sans-serif",
-  body: "DM Sans 9pt, Open Sans, sans-serif",
+  heading: "Roc Grotesk Extra Wide, Open Sans, sans-serif",
+  body: "Roc Grotesk Regular, Open Sans, sans-serif",
 };
 
 const globalStyles = {

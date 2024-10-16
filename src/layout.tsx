@@ -3,7 +3,9 @@ import {
   ButtonGroup,
   IconButton,
   Image,
+  Link,
   Stack,
+  Text,
 } from "@chakra-ui/react";
 import { FaBook, FaDiscord, FaRunning } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
@@ -20,6 +22,25 @@ export function Content() {
       alignItems="center"
       justifyContent="space-between"
     >
+      <Stack
+        direction="row"
+        alignItems="center"
+        justifyContent="center"
+        w="100%"
+        p={4}
+        backgroundColor="aibtc.blue.500"
+      >
+        <Text fontWeight="bold" fontSize={["md", "xl"]}>
+          JOIN THE{" "}
+          <Link
+            href="https://discord.gg/Z59Z3FNbEX"
+            isExternal
+            textDecoration="underline"
+          >
+            AIBTC CHAMPIONS SPRINT
+          </Link>
+        </Text>
+      </Stack>
       <Stack
         direction="column"
         alignItems="center"
