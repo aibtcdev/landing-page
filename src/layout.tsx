@@ -3,14 +3,11 @@ import {
   ButtonGroup,
   IconButton,
   Image,
-  Link,
   Stack,
-  Text,
 } from "@chakra-ui/react";
 import { FaBook, FaDiscord, FaRunning } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
 import { PiGithubLogoFill } from "react-icons/pi";
-import { SiReplit } from "react-icons/si";
 import aibtcLogoWide from "/logos/aibtcdev-primary-logo-white-wide-1000px.png";
 
 export function Content() {
@@ -22,25 +19,6 @@ export function Content() {
       alignItems="center"
       justifyContent="space-between"
     >
-      <Stack
-        direction="row"
-        alignItems="center"
-        justifyContent="center"
-        w="100%"
-        p={4}
-        backgroundColor="aibtc.blue.500"
-      >
-        <Text fontWeight="bold" fontSize={["md", "xl"]}>
-          JOIN THE{" "}
-          <Link
-            href="https://discord.gg/Z59Z3FNbEX"
-            isExternal
-            textDecoration="underline"
-          >
-            AIBTC CHAMPIONS SPRINT
-          </Link>
-        </Text>
-      </Stack>
       <Stack
         direction="column"
         alignItems="center"
@@ -65,7 +43,7 @@ export function Content() {
             variant="aibtcOrange"
             size="lg"
             as="a"
-            href="https://run.aibtc.dev"
+            href="https://sprint.aibtc.dev"
             target="_blank"
             rel="noopener noreferrer"
             w={["70%", "40%"]}
@@ -95,7 +73,7 @@ export function Content() {
             icon={<FaRunning />}
             size={["sm", "md", "lg"]}
             as="a"
-            href="https://run.aibtc.dev"
+            href="https://sprint.aibtc.dev"
             target="_blank"
             rel="noopener noreferrer"
           />
@@ -120,18 +98,6 @@ export function Content() {
             size={["sm", "md", "lg"]}
             as="a"
             href="https://github.com/aibtcdev"
-            target="_blank"
-            rel="noopener noreferrer"
-          />
-          <IconButton
-            isRound
-            _hover={{ bg: "aibtc.orange.500", color: "white" }}
-            aria-label="AIBTC Replit"
-            title="AIBTC Replit"
-            icon={<SiReplit />}
-            size={["sm", "md", "lg"]}
-            as="a"
-            href="https://replit.com/@wbtc402/ai-agent-crew"
             target="_blank"
             rel="noopener noreferrer"
           />
