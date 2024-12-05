@@ -44,7 +44,7 @@ export function Content() {
             variant="aibtcOrange"
             size="lg"
             as="a"
-            href="https://run.aibtc.dev"
+            href="https://sprint.aibtc.dev"
             target="_blank"
             rel="noopener noreferrer"
             w={["70%", "40%"]}
@@ -74,7 +74,7 @@ export function Content() {
             icon={<FaRunning />}
             size={["sm", "md", "lg"]}
             as="a"
-            href="https://run.aibtc.dev"
+            href="https://sprint.aibtc.dev"
             target="_blank"
             rel="noopener noreferrer"
           />
