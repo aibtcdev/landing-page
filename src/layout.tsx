@@ -3,9 +3,7 @@ import {
   ButtonGroup,
   IconButton,
   Image,
-  Link,
   Stack,
-  Text,
 } from "@chakra-ui/react";
 import { FaBook, FaDiscord, FaRunning } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
