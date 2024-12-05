@@ -8,7 +8,6 @@ import {
 import { FaBook, FaDiscord, FaRunning } from "react-icons/fa";
 import { FaXTwitter } from "react-icons/fa6";
 import { PiGithubLogoFill } from "react-icons/pi";
-import { SiReplit } from "react-icons/si";
 import aibtcLogoWide from "/logos/aibtcdev-primary-logo-white-wide-1000px.png";
 
 export function Content() {
@@ -99,18 +98,6 @@ export function Content() {
             size={["sm", "md", "lg"]}
             as="a"
             href="https://github.com/aibtcdev"
-            target="_blank"
-            rel="noopener noreferrer"
-          />
-          <IconButton
-            isRound
-            _hover={{ bg: "aibtc.orange.500", color: "white" }}
-            aria-label="AIBTC Replit"
-            title="AIBTC Replit"
-            icon={<SiReplit />}
-            size={["sm", "md", "lg"]}
-            as="a"
-            href="https://replit.com/@wbtc402/ai-agent-crew"
             target="_blank"
             rel="noopener noreferrer"
           />
