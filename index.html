@@ -1,157 +1,1370 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta charset="utf-8" />
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+    <meta name="description" content="AIBTC is a public working group building the agent economy on Bitcoin.">
+    <meta property="og:title" content="AIBTC - Building the Agent Economy on Bitcoin">
+    <meta property="og:description" content="We're building the agent economy on Bitcoin. Join the AIBTC public working group and start contributing.">
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://aibtc.dev">
+    <meta property="og:image" content="https://aibtc.dev/assets/Artwork/AIBTC_Pattern1.jpg">
+    <meta name="twitter:card" content="summary_large_image">
+    <meta name="twitter:site" content="@aibtcdev">
+    <meta name="twitter:title" content="AIBTC - Building the Agent Economy on Bitcoin">
+    <meta name="twitter:description" content="We're building the agent economy on Bitcoin. Join the AIBTC public working group and start contributing.">
+    <meta name="twitter:image" content="https://aibtc.dev/assets/Artwork/AIBTC_Pattern1.jpg">
+    <meta name="theme-color" content="#000000">
+    <title>AIBTC - Building the Agent Economy on Bitcoin</title>
 
-    <!-- Favicons generated via https://favicon-generator.org -->
-    <!-- Favicons: Icons -->
-    <link
-      rel="apple-touch-icon"
-      sizes="57x57"
-      href="https://aibtc.dev/apple-icon-57x57.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="60x60"
-      href="https://aibtc.dev/apple-icon-60x60.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="72x72"
-      href="https://aibtc.dev/apple-icon-72x72.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="76x76"
-      href="https://aibtc.dev/apple-icon-76x76.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="114x114"
-      href="https://aibtc.dev/apple-icon-114x114.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="120x120"
-      href="https://aibtc.dev/apple-icon-120x120.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="144x144"
-      href="https://aibtc.dev/apple-icon-144x144.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="152x152"
-      href="https://aibtc.dev/apple-icon-152x152.png"
-    />
-    <link
-      rel="apple-touch-icon"
-      sizes="180x180"
-      href="https://aibtc.dev/apple-icon-180x180.png"
-    />
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="192x192"
-      href="https://aibtc.dev/android-icon-192x192.png"
-    />
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="32x32"
-      href="https://aibtc.dev/favicon-32x32.png"
-    />
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="96x96"
-      href="https://aibtc.dev/favicon-96x96.png"
-    />
-    <link
-      rel="icon"
-      type="image/png"
-      sizes="16x16"
-      href="https://aibtc.dev/favicon-16x16.png"
-    />
-    <!-- Favicons: App Data -->
-    <link rel="manifest" href="https://aibtc.dev/manifest.json" />
-    <link rel="shortcut icon" href="https://aibtc.dev/favicon.ico" />
-    <meta name="msapplication-TileColor" content="#000000" />
-    <meta
-      name="msapplication-TileImage"
-      content="https://aibtc.dev/ms-icon-144x144.png"
-    />
-    <meta name="theme-color" content="#000000" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <!-- Preload critical assets -->
+    <link rel="preload" href="assets/Artwork/AIBTC_Pattern1.jpg" as="image">
+    <link rel="preload" href="assets/Roc_Grotesk/RocGrotesk-WideMedium.otf" as="font" type="font/otf" crossorigin>
 
-    <!-- Meta Tags generated via https://heymeta.com -->
-    <!-- HTML Meta Tags -->
-    <title>aibtc.dev</title>
-    <meta
-      name="description"
-      content="AI meets Bitcoin: Build, trade, explore and govern on-chain."
-    />
-    <!-- Google / Search Engine Tags -->
-    <meta itemprop="name" content="aibtc.dev" />
-    <meta
-      itemprop="description"
-      content="AI meets Bitcoin: Build, trade, explore and govern on-chain."
-    />
-    <meta
-      itemprop="image"
-      content="https://aibtc.dev/logos/aibtcdev-pattern-1-with-text-social.png"
-    />
-    <!-- Facebook Meta Tags -->
-    <meta property="og:url" content="https://aibtc.dev" />
-    <meta property="og:type" content="website" />
-    <meta property="og:title" content="aibtc.dev" />
-    <meta
-      property="og:description"
-      content="AI meets Bitcoin: Build, trade, explore and govern on-chain."
-    />
-    <meta
-      property="og:image"
-      content="https://aibtc.dev/logos/aibtcdev-pattern-1-with-text-social.png"
-    />
-    <!-- Twitter Meta Tags -->
-    <meta name="twitter:card" content="summary_large_image" />
-    <meta name="twitter:title" content="aibtc.dev" />
-    <meta
-      name="twitter:description"
-      content="AI meets Bitcoin: Build, trade, explore and govern on-chain."
-    />
-    <meta
-      name="twitter:image"
-      content="https://aibtc.dev/logos/aibtcdev-pattern-1-with-text-social.png"
-    />
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" href="assets/Favicon/AIBTC_Favicon.png">
+    <link rel="apple-touch-icon" href="assets/Favicon/AIBTC_Favicon.png">
 
-    <!-- Custom Fonts generated via https://transfonter.org -->
-    <link
-      rel="preload"
-      href="https://aibtc.dev/fonts/RocGrotesk-Regular.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      href="https://aibtc.dev/fonts/RocGrotesk-WideMedium.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-    <link
-      rel="preload"
-      href="https://aibtc.dev/fonts/RocGrotesk-ExtraWideMedium.woff2"
-      as="font"
-      type="font/woff2"
-      crossorigin
-    />
-  </head>
-  <body>
-    <div id="root"></div>
-    <script type="module" src="/src/main.tsx"></script>
-  </body>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+    <style>
+        /* Brand Font */
+        @font-face {
+            font-family: 'Roc Grotesk';
+            src: url('assets/Roc_Grotesk/RocGrotesk-Regular.otf') format('opentype');
+            font-weight: 400;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        @font-face {
+            font-family: 'Roc Grotesk';
+            src: url('assets/Roc_Grotesk/RocGrotesk-WideMedium.otf') format('opentype');
+            font-weight: 500;
+            font-style: normal;
+            font-display: swap;
+        }
+
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        html {
+            font-size: 16px;
+            -webkit-font-smoothing: antialiased;
+            -moz-osx-font-smoothing: grayscale;
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            color: #ffffff;
+            overflow-x: hidden;
+            line-height: 1.6;
+            background: #000000;
+        }
+
+        :root {
+            --orange: #F7931A;
+            --orange-glow: rgba(247, 147, 26, 0.5);
+            --orange-soft: rgba(247, 147, 26, 0.08);
+            --blue: #5B7FFF;
+            --blue-glow: rgba(91, 127, 255, 0.4);
+            --white: #FFFFFF;
+            --gray-100: rgba(255, 255, 255, 0.95);
+            --gray-200: rgba(255, 255, 255, 0.7);
+            --gray-300: rgba(255, 255, 255, 0.5);
+            --gray-400: rgba(255, 255, 255, 0.15);
+            --gray-500: rgba(255, 255, 255, 0.08);
+            --gray-600: rgba(255, 255, 255, 0.04);
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
+            --safe-left: env(safe-area-inset-left);
+            --safe-right: env(safe-area-inset-right);
+        }
+
+        /* Animated Background */
+        .background {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            z-index: -1;
+            overflow: hidden;
+            background: linear-gradient(135deg, #000000 0%, #0a0a0a 50%, #050208 100%);
+        }
+
+        .background-pattern {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: url('assets/Artwork/AIBTC_Pattern1.jpg') center center / cover no-repeat;
+            opacity: 0.1;
+            filter: saturate(1.3);
+            animation: patternPulse 8s ease-in-out infinite;
+        }
+
+        @keyframes patternPulse {
+            0%, 100% { opacity: 0.08; }
+            50% { opacity: 0.12; }
+        }
+
+        /* Vignette */
+        .vignette {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: radial-gradient(ellipse at center, transparent 0%, transparent 50%, rgba(0,0,0,0.4) 100%);
+            pointer-events: none;
+        }
+
+        .orb {
+            position: absolute;
+            border-radius: 50%;
+            filter: blur(100px);
+            will-change: transform;
+        }
+
+        .orb-1 {
+            width: 700px;
+            height: 700px;
+            background: radial-gradient(circle, var(--orange-glow) 0%, transparent 70%);
+            top: -250px;
+            right: -200px;
+            opacity: 0.6;
+            animation: float1 20s ease-in-out infinite;
+        }
+
+        .orb-2 {
+            width: 600px;
+            height: 600px;
+            background: radial-gradient(circle, var(--blue-glow) 0%, transparent 70%);
+            bottom: -250px;
+            left: -200px;
+            opacity: 0.5;
+            animation: float2 25s ease-in-out infinite;
+        }
+
+        .orb-3 {
+            width: 400px;
+            height: 400px;
+            background: radial-gradient(circle, var(--orange-glow) 0%, transparent 70%);
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            opacity: 0.2;
+            animation: pulse 12s ease-in-out infinite;
+        }
+
+        @keyframes float1 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            25% { transform: translate(-30px, 40px) scale(1.05); }
+            50% { transform: translate(20px, -20px) scale(0.98); }
+            75% { transform: translate(-40px, -30px) scale(1.02); }
+        }
+
+        @keyframes float2 {
+            0%, 100% { transform: translate(0, 0) scale(1); }
+            33% { transform: translate(50px, -40px) scale(1.08); }
+            66% { transform: translate(-30px, 50px) scale(0.95); }
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: translate(-50%, -50%) scale(1); opacity: 0.15; }
+            50% { transform: translate(-50%, -50%) scale(1.3); opacity: 0.25; }
+        }
+
+        /* Floating particles */
+        .particles {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            pointer-events: none;
+        }
+
+        .particle {
+            position: absolute;
+            width: 2px;
+            height: 2px;
+            border-radius: 50%;
+            opacity: 0;
+            will-change: transform, opacity;
+        }
+
+        /* White particles */
+        .particle:nth-child(3n+1) {
+            background: rgba(255, 255, 255, 0.9);
+            box-shadow: 0 0 6px 2px rgba(255, 255, 255, 0.2);
+        }
+
+        /* Orange particles */
+        .particle:nth-child(3n+2) {
+            background: rgba(247, 147, 26, 0.9);
+            box-shadow: 0 0 6px 2px rgba(247, 147, 26, 0.25);
+        }
+
+        /* Blue particles */
+        .particle:nth-child(3n) {
+            background: rgba(91, 127, 255, 0.9);
+            box-shadow: 0 0 6px 2px rgba(91, 127, 255, 0.25);
+        }
+
+        .particle:nth-child(1) { animation: rise1 70s ease-in-out infinite; }
+        .particle:nth-child(2) { animation: rise2 75s ease-in-out infinite 1.5s; }
+        .particle:nth-child(3) { animation: rise3 72s ease-in-out infinite 3s; }
+        .particle:nth-child(4) { animation: rise1 78s ease-in-out infinite 4.5s; }
+        .particle:nth-child(5) { animation: rise2 68s ease-in-out infinite 6s; }
+        .particle:nth-child(6) { animation: rise3 80s ease-in-out infinite 7.5s; }
+        .particle:nth-child(7) { animation: rise1 73s ease-in-out infinite 9s; }
+        .particle:nth-child(8) { animation: rise2 76s ease-in-out infinite 10.5s; }
+        .particle:nth-child(9) { animation: rise3 71s ease-in-out infinite 12s; }
+        .particle:nth-child(10) { animation: rise1 77s ease-in-out infinite 13.5s; }
+        .particle:nth-child(11) { animation: rise2 69s ease-in-out infinite 15s; }
+        .particle:nth-child(12) { animation: rise3 82s ease-in-out infinite 16.5s; }
+        .particle:nth-child(13) { animation: rise1 74s ease-in-out infinite 18s; }
+        .particle:nth-child(14) { animation: rise2 79s ease-in-out infinite 19.5s; }
+        .particle:nth-child(15) { animation: rise3 72s ease-in-out infinite 21s; }
+        .particle:nth-child(16) { animation: rise1 68s ease-in-out infinite 22.5s; }
+        .particle:nth-child(17) { animation: rise2 76s ease-in-out infinite 24s; }
+        .particle:nth-child(18) { animation: rise3 70s ease-in-out infinite 25.5s; }
+        .particle:nth-child(19) { animation: rise1 75s ease-in-out infinite 27s; }
+        .particle:nth-child(20) { animation: rise2 81s ease-in-out infinite 28.5s; }
+        .particle:nth-child(21) { animation: rise3 67s ease-in-out infinite 30s; }
+        .particle:nth-child(22) { animation: rise1 78s ease-in-out infinite 31.5s; }
+        .particle:nth-child(23) { animation: rise2 73s ease-in-out infinite 33s; }
+        .particle:nth-child(24) { animation: rise3 77s ease-in-out infinite 34.5s; }
+        .particle:nth-child(25) { animation: rise1 66s ease-in-out infinite 36s; }
+        .particle:nth-child(26) { animation: rise2 83s ease-in-out infinite 37.5s; }
+        .particle:nth-child(27) { animation: rise3 71s ease-in-out infinite 39s; }
+        .particle:nth-child(28) { animation: rise1 74s ease-in-out infinite 40.5s; }
+        .particle:nth-child(29) { animation: rise2 69s ease-in-out infinite 42s; }
+        .particle:nth-child(30) { animation: rise3 80s ease-in-out infinite 43.5s; }
+        .particle:nth-child(31) { animation: rise1 72s ease-in-out infinite 1s; }
+        .particle:nth-child(32) { animation: rise2 76s ease-in-out infinite 2.5s; }
+        .particle:nth-child(33) { animation: rise3 70s ease-in-out infinite 4s; }
+        .particle:nth-child(34) { animation: rise1 79s ease-in-out infinite 5.5s; }
+        .particle:nth-child(35) { animation: rise2 73s ease-in-out infinite 7s; }
+        .particle:nth-child(36) { animation: rise3 81s ease-in-out infinite 8.5s; }
+        .particle:nth-child(37) { animation: rise1 68s ease-in-out infinite 10s; }
+        .particle:nth-child(38) { animation: rise2 77s ease-in-out infinite 11.5s; }
+        .particle:nth-child(39) { animation: rise3 74s ease-in-out infinite 13s; }
+        .particle:nth-child(40) { animation: rise1 80s ease-in-out infinite 14.5s; }
+        .particle:nth-child(41) { animation: rise2 67s ease-in-out infinite 16s; }
+        .particle:nth-child(42) { animation: rise3 75s ease-in-out infinite 17.5s; }
+        .particle:nth-child(43) { animation: rise1 78s ease-in-out infinite 19s; }
+        .particle:nth-child(44) { animation: rise2 71s ease-in-out infinite 20.5s; }
+        .particle:nth-child(45) { animation: rise3 79s ease-in-out infinite 22s; }
+        .particle:nth-child(46) { animation: rise1 73s ease-in-out infinite 23.5s; }
+        .particle:nth-child(47) { animation: rise2 82s ease-in-out infinite 25s; }
+        .particle:nth-child(48) { animation: rise3 66s ease-in-out infinite 26.5s; }
+        .particle:nth-child(49) { animation: rise1 76s ease-in-out infinite 28s; }
+        .particle:nth-child(50) { animation: rise2 72s ease-in-out infinite 29.5s; }
+
+        @keyframes rise1 {
+            0% { transform: translateY(0) translateX(0); opacity: 0; }
+            5% { opacity: 0.25; }
+            15% { transform: translateY(-15vh) translateX(40px); }
+            30% { transform: translateY(-30vh) translateX(-30px); }
+            45% { transform: translateY(-45vh) translateX(50px); }
+            60% { transform: translateY(-60vh) translateX(-20px); }
+            75% { transform: translateY(-75vh) translateX(35px); }
+            90% { opacity: 0.25; }
+            100% { transform: translateY(-100vh) translateX(-15px); opacity: 0; }
+        }
+
+        @keyframes rise2 {
+            0% { transform: translateY(0) translateX(0); opacity: 0; }
+            5% { opacity: 0.25; }
+            15% { transform: translateY(-12vh) translateX(-45px); }
+            30% { transform: translateY(-28vh) translateX(35px); }
+            45% { transform: translateY(-42vh) translateX(-55px); }
+            60% { transform: translateY(-58vh) translateX(25px); }
+            75% { transform: translateY(-72vh) translateX(-40px); }
+            90% { opacity: 0.25; }
+            100% { transform: translateY(-100vh) translateX(20px); opacity: 0; }
+        }
+
+        @keyframes rise3 {
+            0% { transform: translateY(0) translateX(0); opacity: 0; }
+            5% { opacity: 0.25; }
+            15% { transform: translateY(-18vh) translateX(30px); }
+            30% { transform: translateY(-32vh) translateX(-50px); }
+            45% { transform: translateY(-48vh) translateX(40px); }
+            60% { transform: translateY(-62vh) translateX(-35px); }
+            75% { transform: translateY(-78vh) translateX(55px); }
+            90% { opacity: 0.25; }
+            100% { transform: translateY(-100vh) translateX(-25px); opacity: 0; }
+        }
+
+        /* Header */
+        .header {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            z-index: 1000;
+            padding: calc(20px + var(--safe-top)) 48px 20px;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .header.scrolled {
+            padding: calc(14px + var(--safe-top)) 48px 14px;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(24px);
+            -webkit-backdrop-filter: blur(24px);
+            border-bottom: 1px solid var(--gray-500);
+        }
+
+        .header-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo img {
+            height: 26px;
+            width: auto;
+            opacity: 0.9;
+            transition: all 0.3s ease;
+        }
+
+        .logo:hover img {
+            opacity: 1;
+            filter: drop-shadow(0 0 20px var(--orange-glow));
+        }
+
+        .nav {
+            display: flex;
+            gap: 36px;
+            align-items: center;
+        }
+
+        .nav a {
+            color: var(--gray-200);
+            text-decoration: none;
+            font-family: 'Roc Grotesk', 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            transition: all 0.3s ease;
+            position: relative;
+            padding: 4px 0;
+        }
+
+        .nav a::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 0;
+            height: 1px;
+            background: var(--orange);
+            transition: width 0.3s ease;
+        }
+
+        .nav a:hover {
+            color: var(--white);
+        }
+
+        .nav a:hover::after {
+            width: 100%;
+        }
+
+        /* Mobile menu */
+        .menu-btn {
+            display: none;
+            background: none;
+            border: none;
+            cursor: pointer;
+            padding: 12px;
+            margin: -12px;
+            z-index: 1001;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .menu-btn span {
+            display: block;
+            width: 22px;
+            height: 2px;
+            background: var(--white);
+            margin: 5px 0;
+            transition: all 0.3s ease;
+            border-radius: 2px;
+        }
+
+        .menu-btn.active span:nth-child(1) {
+            transform: rotate(45deg) translate(5px, 5px);
+        }
+
+        .menu-btn.active span:nth-child(2) {
+            opacity: 0;
+        }
+
+        .menu-btn.active span:nth-child(3) {
+            transform: rotate(-45deg) translate(5px, -5px);
+        }
+
+        /* Hero */
+        .hero {
+            min-height: 100vh;
+            min-height: 100dvh;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 140px 48px 100px;
+            position: relative;
+        }
+
+        .hero-content {
+            max-width: 880px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .hero-content > * {
+            opacity: 0;
+            animation: fadeUp 0.8s ease-out forwards;
+        }
+
+        .hero-content .tagline {
+            animation-delay: 0.1s;
+        }
+
+        .hero-content .subtitle {
+            animation-delay: 0.2s;
+        }
+
+        .hero-content .cta-group {
+            animation-delay: 0.3s;
+        }
+
+        @keyframes fadeUp {
+            from {
+                opacity: 0;
+                transform: translateY(30px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .tagline {
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: clamp(32px, 5.5vw, 60px);
+            font-weight: 700;
+            line-height: 1.08;
+            letter-spacing: -0.035em;
+            color: var(--white);
+            margin-bottom: 24px;
+            text-wrap: balance;
+        }
+
+        .subtitle {
+            font-size: clamp(17px, 2.5vw, 21px);
+            color: var(--gray-200);
+            margin-bottom: 40px;
+            font-weight: 400;
+            max-width: 600px;
+            margin-left: auto;
+            margin-right: auto;
+            text-wrap: balance;
+        }
+
+        .cta-group {
+            display: flex;
+            gap: 14px;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            padding: 15px 32px;
+            font-family: 'Roc Grotesk', 'Inter', sans-serif;
+            font-size: 12px;
+            font-weight: 500;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            text-decoration: none;
+            border-radius: 8px;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            cursor: pointer;
+            border: none;
+            position: relative;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        /* Button shimmer effect */
+        .btn::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -100%;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
+            transition: left 0.5s ease;
+        }
+
+        .btn:hover::before {
+            left: 100%;
+        }
+
+        .btn-primary {
+            background: var(--orange);
+            color: #000;
+            box-shadow: 0 4px 20px rgba(247, 147, 26, 0.25);
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 32px rgba(247, 147, 26, 0.4);
+        }
+
+        .btn-primary:active {
+            transform: translateY(0);
+            box-shadow: 0 2px 12px rgba(247, 147, 26, 0.3);
+        }
+
+        .btn-secondary {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--white);
+            border: 1px solid var(--gray-400);
+        }
+
+        .btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: var(--gray-300);
+            transform: translateY(-2px);
+        }
+
+        .btn-secondary:active {
+            transform: translateY(0);
+            background: rgba(255, 255, 255, 0.06);
+        }
+
+        /* Scroll Arrow */
+        .scroll-arrow {
+            position: absolute;
+            bottom: 32px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            padding: 12px;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            -webkit-tap-highlight-color: transparent;
+            opacity: 0;
+            animation: fadeIn 0.6s ease-out 0.6s forwards;
+        }
+
+        @keyframes fadeIn {
+            to { opacity: 1; }
+        }
+
+        .scroll-arrow:hover {
+            transform: translateX(-50%) translateY(4px);
+        }
+
+        .scroll-arrow svg {
+            width: 22px;
+            height: 22px;
+            stroke: var(--gray-300);
+            animation: bounce 2.5s ease-in-out infinite;
+        }
+
+        @keyframes bounce {
+            0%, 100% { transform: translateY(0); opacity: 0.4; }
+            50% { transform: translateY(10px); opacity: 0.9; }
+        }
+
+        /* Get Started Section */
+        .get-started {
+            padding: 100px 48px 120px;
+            position: relative;
+        }
+
+        .section-divider {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 1px;
+            background: linear-gradient(90deg, transparent 0%, var(--gray-400) 50%, transparent 100%);
+        }
+
+        .get-started-container {
+            max-width: 1000px;
+            margin: 0 auto;
+        }
+
+        .get-started-intro {
+            text-align: center;
+            margin-bottom: 72px;
+        }
+
+        .get-started-title {
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: clamp(26px, 4vw, 36px);
+            font-weight: 700;
+            letter-spacing: -0.02em;
+            color: var(--white);
+            margin-bottom: 18px;
+            text-wrap: balance;
+        }
+
+        .get-started-text {
+            font-size: clamp(16px, 2vw, 18px);
+            color: var(--gray-200);
+            line-height: 1.7;
+            max-width: 580px;
+            margin: 0 auto;
+            text-wrap: balance;
+        }
+
+        .get-started-text a {
+            color: var(--orange);
+            text-decoration: none;
+            font-weight: 500;
+            transition: all 0.2s ease;
+            border-bottom: 1px solid transparent;
+        }
+
+        .get-started-text a:hover {
+            border-bottom-color: var(--orange);
+            text-shadow: 0 0 20px var(--orange-glow);
+        }
+
+        .initiatives-label {
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 13px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--gray-300);
+            margin-bottom: 28px;
+            font-weight: 500;
+            text-align: center;
+        }
+
+        .initiatives-list {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 16px;
+        }
+
+        .initiative {
+            display: block;
+            text-decoration: none;
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.12) 0%, rgba(255, 255, 255, 0.06) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 14px;
+            padding: 32px 24px;
+            transition: all 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .initiative::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--blue), var(--orange));
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Card glow effect */
+        .initiative::after {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), rgba(247, 147, 26, 0.1) 0%, transparent 50%);
+            opacity: 0;
+            transition: opacity 0.3s ease;
+            pointer-events: none;
+        }
+
+        .initiative:hover::after {
+            opacity: 1;
+        }
+
+        .initiative:hover {
+            transform: translateY(-6px);
+            border-color: rgba(255, 255, 255, 0.3);
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5), 0 0 40px rgba(247, 147, 26, 0.05);
+            background: linear-gradient(145deg, rgba(255, 255, 255, 0.18) 0%, rgba(255, 255, 255, 0.10) 100%);
+        }
+
+        .initiative:hover::before {
+            opacity: 1;
+        }
+
+        .initiative:active {
+            transform: translateY(-2px);
+        }
+
+        .initiative-icon {
+            width: 44px;
+            height: 44px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin-bottom: 18px;
+            font-size: 16px;
+            font-weight: 600;
+            font-family: 'Inter', system-ui, sans-serif;
+            position: relative;
+            z-index: 1;
+            transition: transform 0.3s ease;
+        }
+
+        .initiative:hover .initiative-icon {
+            transform: scale(1.1);
+        }
+
+        .initiative:nth-child(1) .initiative-icon {
+            background: linear-gradient(135deg, rgba(91, 127, 255, 0.25), rgba(91, 127, 255, 0.08));
+            color: var(--blue);
+            font-size: 12px;
+        }
+
+        .initiative:nth-child(2) .initiative-icon {
+            background: linear-gradient(135deg, rgba(247, 147, 26, 0.25), rgba(247, 147, 26, 0.08));
+            color: var(--orange);
+        }
+
+        .initiative:nth-child(3) .initiative-icon {
+            background: linear-gradient(135deg, rgba(255, 255, 255, 0.15), rgba(255, 255, 255, 0.05));
+            color: var(--white);
+            font-size: 20px;
+        }
+
+        .initiative-name {
+            font-family: 'Inter', system-ui, sans-serif;
+            font-size: 20px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
+            color: var(--white);
+            margin-bottom: 6px;
+            position: relative;
+            z-index: 1;
+        }
+
+        .initiative-desc {
+            font-size: 14px;
+            color: var(--gray-200);
+            line-height: 1.5;
+            position: relative;
+            z-index: 1;
+        }
+
+        /* Footer */
+        .footer {
+            padding: 44px 48px calc(44px + var(--safe-bottom));
+            position: relative;
+        }
+
+        .footer .section-divider {
+            background: linear-gradient(90deg, transparent 0%, var(--gray-500) 50%, transparent 100%);
+        }
+
+        .footer-inner {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .footer-logo img {
+            height: 20px;
+            opacity: 0.4;
+            transition: all 0.3s ease;
+        }
+
+        .footer-logo:hover img {
+            opacity: 0.7;
+            filter: drop-shadow(0 0 10px var(--orange-glow));
+        }
+
+        .footer-links {
+            display: flex;
+            gap: 32px;
+        }
+
+        .footer-links a {
+            font-family: 'Roc Grotesk', 'Inter', sans-serif;
+            font-size: 11px;
+            letter-spacing: 0.1em;
+            text-transform: uppercase;
+            color: var(--gray-300);
+            text-decoration: none;
+            transition: all 0.2s ease;
+            padding: 8px 0;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        .footer-links a:hover {
+            color: var(--white);
+        }
+
+        .footer-copyright {
+            text-align: center;
+            font-size: 12px;
+            color: var(--gray-300);
+            margin-top: 32px;
+            opacity: 0.6;
+        }
+
+        /* Tablet */
+        @media (max-width: 1024px) {
+            .header {
+                padding: calc(20px + var(--safe-top)) 32px 20px;
+            }
+
+            .header.scrolled {
+                padding: calc(14px + var(--safe-top)) 32px 14px;
+            }
+
+            .hero {
+                padding: 130px 32px 90px;
+            }
+
+            .initiatives-list {
+                gap: 14px;
+            }
+
+            .get-started {
+                padding: 90px 32px 110px;
+            }
+
+            .footer {
+                padding: 40px 32px calc(40px + var(--safe-bottom));
+            }
+        }
+
+        /* Mobile */
+        @media (max-width: 768px) {
+            .header {
+                padding: calc(16px + var(--safe-top)) 20px 16px;
+            }
+
+            .header.scrolled {
+                padding: calc(12px + var(--safe-top)) 20px 12px;
+            }
+
+            .logo img {
+                height: 22px;
+            }
+
+            .menu-btn {
+                display: block;
+            }
+
+            .nav {
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                bottom: 0;
+                background: rgba(0, 0, 0, 0.98);
+                backdrop-filter: blur(24px);
+                -webkit-backdrop-filter: blur(24px);
+                flex-direction: column;
+                justify-content: center;
+                align-items: center;
+                gap: 0;
+                opacity: 0;
+                visibility: hidden;
+                transition: all 0.4s ease;
+            }
+
+            .nav.active {
+                opacity: 1;
+                visibility: visible;
+            }
+
+            .nav a {
+                font-size: 18px;
+                letter-spacing: 0.15em;
+                padding: 20px 40px;
+                width: 100%;
+                text-align: center;
+            }
+
+            .nav a::after {
+                display: none;
+            }
+
+            .hero {
+                padding: calc(100px + var(--safe-top)) 24px 80px;
+                min-height: calc(100vh - var(--safe-bottom));
+                min-height: calc(100dvh - var(--safe-bottom));
+                justify-content: center;
+            }
+
+            .hero-content {
+                max-width: 100%;
+            }
+
+            .tagline {
+                font-size: 30px;
+                line-height: 1.12;
+                margin-bottom: 20px;
+            }
+
+            .subtitle {
+                font-size: 16px;
+                margin-bottom: 32px;
+                max-width: 100%;
+            }
+
+            .cta-group {
+                flex-direction: column;
+                width: 100%;
+                gap: 12px;
+            }
+
+            .btn {
+                width: 100%;
+                padding: 16px 24px;
+                font-size: 12px;
+            }
+
+            .btn::before {
+                display: none;
+            }
+
+            .scroll-arrow {
+                bottom: calc(24px + var(--safe-bottom));
+            }
+
+            .scroll-arrow svg {
+                width: 20px;
+                height: 20px;
+            }
+
+            .get-started {
+                padding: 72px 24px 88px;
+            }
+
+            .get-started-intro {
+                margin-bottom: 56px;
+            }
+
+            .get-started-title {
+                font-size: 24px;
+            }
+
+            .get-started-text {
+                font-size: 15px;
+            }
+
+            .initiatives-label {
+                margin-bottom: 20px;
+            }
+
+            .initiatives-list {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .initiative {
+                padding: 24px 20px;
+                border-radius: 12px;
+            }
+
+            .initiative:hover {
+                transform: none;
+            }
+
+            .initiative:hover .initiative-icon {
+                transform: none;
+            }
+
+            .initiative:active {
+                transform: scale(0.98);
+                background: var(--gray-500);
+            }
+
+            .initiative-icon {
+                width: 40px;
+                height: 40px;
+                margin-bottom: 14px;
+                font-size: 14px;
+            }
+
+            .initiative:nth-child(1) .initiative-icon {
+                font-size: 10px;
+            }
+
+            .initiative:nth-child(3) .initiative-icon {
+                font-size: 18px;
+            }
+
+            .initiative-name {
+                font-size: 18px;
+            }
+
+            .initiative-desc {
+                font-size: 14px;
+            }
+
+            .footer {
+                padding: 32px 24px calc(32px + var(--safe-bottom));
+            }
+
+            .footer-inner {
+                flex-direction: column;
+                gap: 24px;
+            }
+
+            .footer-logo img {
+                height: 18px;
+            }
+
+            .footer-links {
+                gap: 24px;
+            }
+
+            .footer-links a {
+                font-size: 11px;
+                padding: 12px 8px;
+            }
+
+            .footer-copyright {
+                margin-top: 24px;
+            }
+
+            .orb-1 {
+                width: 350px;
+                height: 350px;
+                top: -100px;
+                right: -100px;
+                filter: blur(80px);
+            }
+
+            .orb-2 {
+                width: 280px;
+                height: 280px;
+                bottom: -100px;
+                left: -100px;
+                filter: blur(80px);
+            }
+
+            .orb-3 {
+                display: none;
+            }
+
+            .particles {
+                display: none;
+            }
+        }
+
+        /* Small Mobile */
+        @media (max-width: 380px) {
+            .tagline {
+                font-size: 26px;
+            }
+
+            .subtitle {
+                font-size: 15px;
+            }
+
+            .get-started-title {
+                font-size: 22px;
+            }
+
+            .initiative-name {
+                font-size: 17px;
+            }
+        }
+
+        /* Accessibility */
+        @media (prefers-reduced-motion: reduce) {
+            *, *::before, *::after {
+                animation-duration: 0.01ms !important;
+                animation-iteration-count: 1 !important;
+                transition-duration: 0.01ms !important;
+            }
+
+            .hero-content > *,
+            .scroll-arrow {
+                opacity: 1;
+                animation: none;
+            }
+
+            .particles {
+                display: none;
+            }
+        }
+
+        /* Focus styles */
+        .btn:focus-visible,
+        .nav a:focus-visible,
+        .initiative:focus-visible,
+        .footer-links a:focus-visible {
+            outline: 2px solid var(--orange);
+            outline-offset: 3px;
+        }
+
+        .skip-link {
+            position: absolute;
+            top: -100px;
+            left: 16px;
+            background: var(--orange);
+            color: #000;
+            padding: 12px 24px;
+            text-decoration: none;
+            border-radius: 8px;
+            font-weight: 600;
+            z-index: 2000;
+        }
+
+        .skip-link:focus {
+            top: calc(16px + var(--safe-top));
+        }
+    </style>
+</head>
+<body>
+    <a href="#main" class="skip-link">Skip to main content</a>
+
+    <div class="background" aria-hidden="true">
+        <div class="background-pattern"></div>
+        <div class="orb orb-1"></div>
+        <div class="orb orb-2"></div>
+        <div class="orb orb-3"></div>
+        <div class="particles">
+            <div class="particle" style="left: 3%; top: 18%;"></div>
+            <div class="particle" style="left: 8%; top: 52%;"></div>
+            <div class="particle" style="left: 12%; top: 78%;"></div>
+            <div class="particle" style="left: 17%; top: 32%;"></div>
+            <div class="particle" style="left: 22%; top: 65%;"></div>
+            <div class="particle" style="left: 27%; top: 88%;"></div>
+            <div class="particle" style="left: 32%; top: 22%;"></div>
+            <div class="particle" style="left: 37%; top: 48%;"></div>
+            <div class="particle" style="left: 42%; top: 72%;"></div>
+            <div class="particle" style="left: 47%; top: 38%;"></div>
+            <div class="particle" style="left: 52%; top: 82%;"></div>
+            <div class="particle" style="left: 57%; top: 15%;"></div>
+            <div class="particle" style="left: 62%; top: 58%;"></div>
+            <div class="particle" style="left: 67%; top: 92%;"></div>
+            <div class="particle" style="left: 72%; top: 28%;"></div>
+            <div class="particle" style="left: 77%; top: 68%;"></div>
+            <div class="particle" style="left: 82%; top: 42%;"></div>
+            <div class="particle" style="left: 87%; top: 85%;"></div>
+            <div class="particle" style="left: 92%; top: 12%;"></div>
+            <div class="particle" style="left: 97%; top: 55%;"></div>
+            <div class="particle" style="left: 5%; top: 95%;"></div>
+            <div class="particle" style="left: 15%; top: 8%;"></div>
+            <div class="particle" style="left: 25%; top: 45%;"></div>
+            <div class="particle" style="left: 35%; top: 95%;"></div>
+            <div class="particle" style="left: 45%; top: 5%;"></div>
+            <div class="particle" style="left: 55%; top: 35%;"></div>
+            <div class="particle" style="left: 65%; top: 75%;"></div>
+            <div class="particle" style="left: 75%; top: 10%;"></div>
+            <div class="particle" style="left: 85%; top: 62%;"></div>
+            <div class="particle" style="left: 95%; top: 25%;"></div>
+            <div class="particle" style="left: 2%; top: 40%;"></div>
+            <div class="particle" style="left: 10%; top: 70%;"></div>
+            <div class="particle" style="left: 18%; top: 25%;"></div>
+            <div class="particle" style="left: 26%; top: 58%;"></div>
+            <div class="particle" style="left: 34%; top: 85%;"></div>
+            <div class="particle" style="left: 42%; top: 12%;"></div>
+            <div class="particle" style="left: 50%; top: 55%;"></div>
+            <div class="particle" style="left: 58%; top: 80%;"></div>
+            <div class="particle" style="left: 66%; top: 30%;"></div>
+            <div class="particle" style="left: 74%; top: 62%;"></div>
+            <div class="particle" style="left: 82%; top: 90%;"></div>
+            <div class="particle" style="left: 90%; top: 20%;"></div>
+            <div class="particle" style="left: 98%; top: 45%;"></div>
+            <div class="particle" style="left: 6%; top: 72%;"></div>
+            <div class="particle" style="left: 14%; top: 8%;"></div>
+            <div class="particle" style="left: 22%; top: 50%;"></div>
+            <div class="particle" style="left: 30%; top: 78%;"></div>
+            <div class="particle" style="left: 38%; top: 18%;"></div>
+            <div class="particle" style="left: 46%; top: 65%;"></div>
+            <div class="particle" style="left: 54%; top: 92%;"></div>
+        </div>
+        <div class="vignette"></div>
+    </div>
+
+    <!-- Header -->
+    <header class="header" id="header">
+        <div class="header-inner">
+            <a href="/" class="logo">
+                <img src="assets/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg" alt="AIBTC">
+            </a>
+            <button class="menu-btn" aria-label="Toggle menu" aria-expanded="false">
+                <span></span>
+                <span></span>
+                <span></span>
+            </button>
+            <nav class="nav" role="navigation" aria-label="Main navigation">
+                <a href="https://x.com/aibtcdev" target="_blank" rel="noopener noreferrer">X</a>
+                <a href="https://github.com/aibtcdev" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="https://discord.gg/SehpxQJ2" target="_blank" rel="noopener noreferrer">Discord</a>
+                <a href="https://aibtc.dev" target="_blank" rel="noopener noreferrer">Order Network</a>
+            </nav>
+        </div>
+    </header>
+
+    <!-- Hero -->
+    <main id="main">
+        <section class="hero">
+            <div class="hero-content">
+                <h1 class="tagline">We're building the agent economy on Bitcoin.</h1>
+                <p class="subtitle">Join the AIBTC public working group and start contributing.</p>
+                <div class="cta-group">
+                    <a href="https://www.addevent.com/event/UM20108233" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
+                        Join Weekly Call
+                    </a>
+                    <a href="https://github.com/aibtcdev" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+                        Review GitHub Repos
+                    </a>
+                </div>
+            </div>
+            <a href="#get-started" class="scroll-arrow" aria-label="Scroll to learn more">
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M12 5v14M5 12l7 7 7-7"/>
+                </svg>
+            </a>
+        </section>
+
+        <!-- Get Started Section -->
+        <section class="get-started" id="get-started">
+            <div class="section-divider"></div>
+            <div class="get-started-container">
+                <div class="get-started-intro">
+                    <h2 class="get-started-title">Get Started</h2>
+                    <p class="get-started-text">Anyone can use <a href="https://claude.ai/download" target="_blank" rel="noopener noreferrer">Claude Code</a> to start building with agents and contributing to AIBTC.</p>
+                </div>
+                <div class="initiatives">
+                    <p class="initiatives-label">Current Initiatives</p>
+                    <div class="initiatives-list">
+                        <a href="https://stx402.com/" class="initiative" target="_blank" rel="noopener noreferrer">
+                            <div class="initiative-icon">x402</div>
+                            <h3 class="initiative-name">x402</h3>
+                            <p class="initiative-desc">Agent payment protocol</p>
+                        </a>
+                        <a href="https://github.com/aibtcdev/erc-8004-stacks" class="initiative" target="_blank" rel="noopener noreferrer">
+                            <div class="initiative-icon">ID</div>
+                            <h3 class="initiative-name">ERC-8004</h3>
+                            <p class="initiative-desc">Agent identities</p>
+                        </a>
+                        <a href="https://www.stacks.co/sbtc" class="initiative" target="_blank" rel="noopener noreferrer">
+                            <div class="initiative-icon">₿</div>
+                            <h3 class="initiative-name">sBTC Rails</h3>
+                            <p class="initiative-desc">Programmable Bitcoin</p>
+                        </a>
+                    </div>
+                </div>
+            </div>
+        </section>
+    </main>
+
+    <!-- Footer -->
+    <footer class="footer">
+        <div class="section-divider"></div>
+        <div class="footer-inner">
+            <a href="/" class="footer-logo">
+                <img src="assets/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg" alt="AIBTC">
+            </a>
+            <div class="footer-links">
+                <a href="https://x.com/aibtcdev" target="_blank" rel="noopener noreferrer">X</a>
+                <a href="https://github.com/aibtcdev" target="_blank" rel="noopener noreferrer">GitHub</a>
+                <a href="https://discord.gg/SehpxQJ2" target="_blank" rel="noopener noreferrer">Discord</a>
+            </div>
+        </div>
+        <p class="footer-copyright">© 2025 AIBTC</p>
+    </footer>
+
+    <script>
+        // Header scroll effect
+        const header = document.getElementById('header');
+
+        const updateHeader = () => {
+            header.classList.toggle('scrolled', window.scrollY > 50);
+        };
+
+        window.addEventListener('scroll', updateHeader, { passive: true });
+        updateHeader();
+
+        // Mobile menu
+        const menuBtn = document.querySelector('.menu-btn');
+        const nav = document.querySelector('.nav');
+
+        const toggleMenu = (open) => {
+            const isOpen = open !== undefined ? open : !nav.classList.contains('active');
+            menuBtn.classList.toggle('active', isOpen);
+            nav.classList.toggle('active', isOpen);
+            menuBtn.setAttribute('aria-expanded', isOpen);
+            document.body.style.overflow = isOpen ? 'hidden' : '';
+        };
+
+        menuBtn.addEventListener('click', () => toggleMenu());
+
+        document.querySelectorAll('.nav a').forEach(link => {
+            link.addEventListener('click', () => toggleMenu(false));
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!nav.contains(e.target) && !menuBtn.contains(e.target) && nav.classList.contains('active')) {
+                toggleMenu(false);
+            }
+        });
+
+        // Close menu on escape
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && nav.classList.contains('active')) {
+                toggleMenu(false);
+                menuBtn.focus();
+            }
+        });
+
+        // Card glow follow mouse
+        document.querySelectorAll('.initiative').forEach(card => {
+            card.addEventListener('mousemove', (e) => {
+                const rect = card.getBoundingClientRect();
+                const x = ((e.clientX - rect.left) / rect.width) * 100;
+                const y = ((e.clientY - rect.top) / rect.height) * 100;
+                card.style.setProperty('--mouse-x', x + '%');
+                card.style.setProperty('--mouse-y', y + '%');
+            });
+        });
+    </script>
+</body>
 </html>
