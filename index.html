@@ -289,10 +289,11 @@
 
         .header.scrolled {
             padding: calc(14px + var(--safe-top)) 48px 14px;
-            background: rgba(0, 0, 0, 0.85);
-            backdrop-filter: blur(24px);
-            -webkit-backdrop-filter: blur(24px);
-            border-bottom: 1px solid var(--gray-500);
+            background: rgba(0, 0, 0, 0.75);
+            backdrop-filter: blur(32px);
+            -webkit-backdrop-filter: blur(32px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.15);
         }
 
         .header-inner {
@@ -434,12 +435,12 @@
 
         .tagline {
             font-family: 'Inter', system-ui, sans-serif;
-            font-size: clamp(28px, 4.5vw, 48px);
+            font-size: clamp(38px, 5.8vw, 68px);
             font-weight: 700;
-            line-height: 1.05;
-            letter-spacing: -0.03em;
+            line-height: 1.15;
+            letter-spacing: -0.04em;
             color: var(--white);
-            margin-bottom: 24px;
+            margin-bottom: 28px;
             text-wrap: balance;
         }
 
@@ -452,10 +453,11 @@
 
         .subtitle {
             font-family: 'Inter', system-ui, sans-serif;
-            font-size: clamp(16px, 2vw, 18px);
-            color: rgba(255, 255, 255, 0.7);
-            margin-bottom: 48px;
+            font-size: clamp(19px, 2.3vw, 24px);
+            color: rgba(255, 255, 255, 0.75);
+            margin-bottom: 52px;
             font-weight: 400;
+            line-height: 1.6;
             max-width: 845px;
             margin-left: auto;
             margin-right: auto;
@@ -474,20 +476,20 @@
             align-items: center;
             justify-content: center;
             gap: 10px;
-            padding: 16px 48px;
+            padding: 18px 52px;
             font-family: 'Inter', system-ui, sans-serif;
-            font-size: 14px;
-            font-weight: 500;
-            letter-spacing: 0.02em;
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: -0.01em;
             text-decoration: none;
-            border-radius: 4px;
-            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            border-radius: 12px;
+            transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
             border: none;
             position: relative;
             overflow: hidden;
             -webkit-tap-highlight-color: transparent;
-            min-width: 180px;
+            min-width: 200px;
         }
 
         /* Button shimmer effect */
@@ -508,36 +510,40 @@
 
         .btn-primary {
             background: linear-gradient(135deg, var(--orange) 0%, #E8850F 100%);
-            color: #ffffff;
-            box-shadow: 0 4px 24px rgba(247, 147, 26, 0.35);
+            color: rgba(255, 255, 255, 0.98);
+            box-shadow: 0 8px 32px rgba(247, 147, 26, 0.4), 0 2px 8px rgba(0, 0, 0, 0.15);
             font-weight: 600;
         }
 
         .btn-primary:hover {
-            transform: translateY(-3px);
-            box-shadow: 0 12px 40px rgba(247, 147, 26, 0.5);
+            transform: translateY(-4px);
+            box-shadow: 0 16px 48px rgba(247, 147, 26, 0.55), 0 4px 16px rgba(0, 0, 0, 0.2);
             background: linear-gradient(135deg, #FFA033 0%, var(--orange) 100%);
         }
 
         .btn-primary:active {
-            transform: translateY(-1px);
-            box-shadow: 0 4px 16px rgba(247, 147, 26, 0.4);
+            transform: translateY(-2px);
+            box-shadow: 0 8px 24px rgba(247, 147, 26, 0.45), 0 2px 8px rgba(0, 0, 0, 0.15);
         }
 
         .btn-secondary {
-            background: transparent;
+            background: rgba(255, 255, 255, 0.05);
             color: var(--white);
-            border: 2px solid rgba(255, 255, 255, 0.9);
+            border: 1.5px solid rgba(255, 255, 255, 0.2);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
         }
 
         .btn-secondary:hover {
-            background: rgba(255, 255, 255, 1);
-            color: #000;
-            transform: translateY(-3px);
+            background: rgba(255, 255, 255, 0.12);
+            border-color: rgba(255, 255, 255, 0.35);
+            transform: translateY(-4px);
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.2);
         }
 
         .btn-secondary:active {
-            transform: translateY(-1px);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.15);
         }
 
         /* Scroll Arrow */
@@ -672,11 +678,11 @@
 
         .get-started-title {
             font-family: 'Inter', system-ui, sans-serif;
-            font-size: clamp(24px, 3.5vw, 32px);
-            font-weight: 600;
-            letter-spacing: -0.02em;
+            font-size: clamp(36px, 5vw, 56px);
+            font-weight: 700;
+            letter-spacing: -0.03em;
             color: var(--white);
-            margin-bottom: 20px;
+            margin-bottom: 24px;
             text-wrap: balance;
         }
 
@@ -704,13 +710,13 @@
         }
 
         .initiatives-label {
-            font-family: 'Roc Grotesk', 'Inter', sans-serif;
-            font-size: 11px;
+            font-family: 'Inter', sans-serif;
+            font-size: 12px;
             text-transform: uppercase;
-            letter-spacing: 0.15em;
-            color: var(--gray-300);
-            margin-bottom: 28px;
-            font-weight: 500;
+            letter-spacing: 0.2em;
+            color: rgba(255, 255, 255, 0.5);
+            margin-bottom: 32px;
+            font-weight: 600;
             text-align: center;
         }
 
@@ -720,17 +726,25 @@
             gap: 20px;
         }
 
+        .initiatives-cta {
+            margin-top: 48px;
+            text-align: center;
+        }
+
         .initiative {
             display: block;
             text-decoration: none;
-            background: linear-gradient(160deg, #1a1a1a 0%, #0f0f0f 100%);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 32px 28px;
+            background: linear-gradient(160deg, rgba(26, 26, 26, 0.6) 0%, rgba(15, 15, 15, 0.4) 100%);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 20px;
+            padding: 36px 32px;
             transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
             position: relative;
             overflow: hidden;
             -webkit-tap-highlight-color: transparent;
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            box-shadow: 0 4px 24px rgba(0, 0, 0, 0.2);
         }
 
         .initiative::before {
@@ -764,10 +778,10 @@
         }
 
         .initiative:hover {
-            transform: translateY(-8px) scale(1.02);
-            border-color: rgba(255, 255, 255, 0.18);
-            box-shadow: 0 24px 64px rgba(0, 0, 0, 0.4), 0 0 48px var(--card-shadow, rgba(247, 147, 26, 0.08));
-            background: linear-gradient(160deg, #222222 0%, #151515 100%);
+            transform: translateY(-12px) scale(1.015);
+            border-color: rgba(255, 255, 255, 0.2);
+            box-shadow: 0 32px 72px rgba(0, 0, 0, 0.5), 0 0 56px var(--card-shadow, rgba(247, 147, 26, 0.12));
+            background: linear-gradient(160deg, rgba(34, 34, 34, 0.8) 0%, rgba(21, 21, 21, 0.6) 100%);
         }
 
         .initiative:hover::before {
@@ -786,15 +800,15 @@
         }
 
         .initiative:nth-child(2) {
-            --card-accent: var(--orange);
-            --card-glow: rgba(247, 147, 26, 0.1);
-            --card-shadow: rgba(247, 147, 26, 0.1);
-        }
-
-        .initiative:nth-child(3) {
             --card-accent: #A855F7;
             --card-glow: rgba(168, 85, 247, 0.1);
             --card-shadow: rgba(168, 85, 247, 0.1);
+        }
+
+        .initiative:nth-child(3) {
+            --card-accent: var(--orange);
+            --card-glow: rgba(247, 147, 26, 0.1);
+            --card-shadow: rgba(247, 147, 26, 0.1);
         }
 
         /* External link arrow */
@@ -814,58 +828,63 @@
         }
 
         .initiative-icon {
-            width: 44px;
-            height: 44px;
-            border-radius: 10px;
+            width: 52px;
+            height: 52px;
+            border-radius: 14px;
             display: flex;
             align-items: center;
             justify-content: center;
-            margin-bottom: 18px;
-            font-size: 16px;
-            font-weight: 600;
+            margin-bottom: 20px;
+            font-size: 18px;
+            font-weight: 700;
             font-family: 'Inter', system-ui, sans-serif;
             position: relative;
             z-index: 1;
-            transition: transform 0.3s ease;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.15);
         }
 
         .initiative:hover .initiative-icon {
-            transform: scale(1.1);
+            transform: scale(1.15) rotate(-5deg);
+            box-shadow: 0 8px 24px rgba(0, 0, 0, 0.25);
         }
 
         .initiative:nth-child(1) .initiative-icon {
-            background: linear-gradient(135deg, rgba(125, 162, 255, 0.35), rgba(125, 162, 255, 0.15));
-            color: #9DB8FF;
-            font-size: 12px;
+            background: linear-gradient(135deg, rgba(125, 162, 255, 0.4), rgba(125, 162, 255, 0.2));
+            color: #B4CCFF;
+            font-size: 14px;
+            border: 1px solid rgba(125, 162, 255, 0.25);
         }
 
         .initiative:nth-child(2) .initiative-icon {
-            background: linear-gradient(135deg, rgba(247, 147, 26, 0.35), rgba(247, 147, 26, 0.15));
-            color: #FFB347;
+            background: linear-gradient(135deg, rgba(168, 85, 247, 0.4), rgba(168, 85, 247, 0.2));
+            color: #D4ADFF;
+            border: 1px solid rgba(168, 85, 247, 0.25);
         }
 
         .initiative:nth-child(3) .initiative-icon {
-            background: linear-gradient(135deg, rgba(168, 85, 247, 0.35), rgba(168, 85, 247, 0.15));
-            color: #C084FC;
-            font-size: 20px;
+            background: linear-gradient(135deg, rgba(247, 147, 26, 0.4), rgba(247, 147, 26, 0.2));
+            color: #FFCA80;
+            font-size: 22px;
+            border: 1px solid rgba(247, 147, 26, 0.25);
         }
 
         .initiative-name {
             font-family: 'Inter', system-ui, sans-serif;
-            font-size: 20px;
-            font-weight: 600;
-            letter-spacing: -0.01em;
+            font-size: 22px;
+            font-weight: 700;
+            letter-spacing: -0.02em;
             color: #ffffff;
-            margin-bottom: 8px;
+            margin-bottom: 10px;
             position: relative;
             z-index: 1;
         }
 
         .initiative-desc {
             font-family: 'Inter', system-ui, sans-serif;
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.7);
-            line-height: 1.5;
+            font-size: 15px;
+            color: rgba(255, 255, 255, 0.65);
+            line-height: 1.6;
             position: relative;
             z-index: 1;
         }
@@ -1035,27 +1054,27 @@
             }
 
             .tagline {
-                font-size: 28px;
-                line-height: 1.08;
-                margin-bottom: 20px;
+                font-size: 38px;
+                line-height: 1.12;
+                margin-bottom: 24px;
             }
 
             .subtitle {
-                font-size: 16px;
-                margin-bottom: 32px;
+                font-size: 19px;
+                margin-bottom: 40px;
                 max-width: 100%;
             }
 
             .cta-group {
                 flex-direction: column;
                 width: 100%;
-                gap: 12px;
+                gap: 16px;
             }
 
             .btn {
                 width: 100%;
-                padding: 16px 24px;
-                font-size: 12px;
+                padding: 18px 32px;
+                font-size: 15px;
             }
 
             .scroll-arrow {
@@ -1088,7 +1107,7 @@
             }
 
             .get-started-title {
-                font-size: 22px;
+                font-size: 36px;
             }
 
             .get-started-text {
@@ -1104,9 +1123,13 @@
                 gap: 12px;
             }
 
+            .initiatives-cta {
+                margin-top: 32px;
+            }
+
             .initiative {
-                padding: 24px 20px;
-                border-radius: 12px;
+                padding: 28px 24px;
+                border-radius: 16px;
             }
 
             .initiative:hover {
@@ -1119,30 +1142,30 @@
 
             .initiative:active {
                 transform: scale(0.98);
-                background: var(--gray-500);
+                opacity: 0.9;
             }
 
             .initiative-icon {
-                width: 40px;
-                height: 40px;
-                margin-bottom: 14px;
-                font-size: 14px;
+                width: 48px;
+                height: 48px;
+                margin-bottom: 16px;
+                font-size: 16px;
             }
 
             .initiative:nth-child(1) .initiative-icon {
-                font-size: 10px;
+                font-size: 12px;
             }
 
             .initiative:nth-child(3) .initiative-icon {
-                font-size: 18px;
+                font-size: 20px;
             }
 
             .initiative-name {
-                font-size: 18px;
+                font-size: 20px;
             }
 
             .initiative-desc {
-                font-size: 14px;
+                font-size: 15px;
             }
 
             .footer {
@@ -1199,23 +1222,23 @@
         /* Small Mobile */
         @media (max-width: 380px) {
             .tagline {
-                font-size: 24px;
+                font-size: 32px;
             }
 
             .subtitle {
-                font-size: 15px;
+                font-size: 18px;
             }
 
             .what-is-title {
-                font-size: 20px;
+                font-size: 22px;
             }
 
             .get-started-title {
-                font-size: 20px;
+                font-size: 32px;
             }
 
             .initiative-name {
-                font-size: 17px;
+                font-size: 19px;
             }
         }
 
@@ -1326,7 +1349,7 @@
                 <a href="https://x.com/aibtcdev" target="_blank" rel="noopener noreferrer">X</a>
                 <a href="https://github.com/aibtcdev" target="_blank" rel="noopener noreferrer">GitHub</a>
                 <a href="https://discord.gg/SehpxQJ2" target="_blank" rel="noopener noreferrer">Discord</a>
-                <a href="https://aibtc.dev" target="_blank" rel="noopener noreferrer">Order Network</a>
+                <a href="/orders">Order Network</a>
             </nav>
         </div>
     </header>
@@ -1335,14 +1358,11 @@
     <main id="main">
         <section class="hero">
             <div class="hero-content">
-                <h1 class="tagline">Building the agent economy<br>on Bitcoin.</h1>
-                <p class="subtitle">Join the AIBTC public working group and start contributing.</p>
+                <h1 class="tagline">Building the agent economy<br><span class="tagline-accent">on Bitcoin.</span></h1>
+                <p class="subtitle">Join the AIBTC public working group and start contributing today.</p>
                 <div class="cta-group">
                     <a href="https://www.addevent.com/event/UM20108233" class="btn btn-primary" target="_blank" rel="noopener noreferrer">
-                        Join Weekly Call
-                    </a>
-                    <a href="https://github.com/aibtcdev" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
-                        View GitHub
+                        Attend Weekly Call
                     </a>
                 </div>
             </div>
@@ -1358,7 +1378,7 @@
             <div class="section-divider"></div>
             <div class="get-started-container">
                 <div class="get-started-intro">
-                    <h2 class="get-started-title">Start Contributing</h2>
+                    <h2 class="get-started-title">Get Started</h2>
                     <p class="get-started-text">Anyone can use <a href="https://claude.ai/download" target="_blank" rel="noopener noreferrer">Claude Code</a> to start building with agents and contributing to AIBTC.</p>
                 </div>
                 <div class="initiatives">
@@ -1379,8 +1399,13 @@
                         <a href="https://www.stacks.co/sbtc" class="initiative" target="_blank" rel="noopener noreferrer">
                             <svg class="initiative-arrow" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M7 17L17 7M17 7H7M17 7V17"/></svg>
                             <div class="initiative-icon">₿</div>
-                            <h3 class="initiative-name">sBTC Rails</h3>
+                            <h3 class="initiative-name">sBTC</h3>
                             <p class="initiative-desc">Programmable Bitcoin</p>
+                        </a>
+                    </div>
+                    <div class="initiatives-cta">
+                        <a href="https://github.com/aibtcdev" class="btn btn-secondary" target="_blank" rel="noopener noreferrer">
+                            View AIBTC GitHub Repos
                         </a>
                     </div>
                 </div>
