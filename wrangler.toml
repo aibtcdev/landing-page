@@ -1,4 +1,8 @@
 name = "aibtcdev-landing-page"
-pages_build_output_dir = ".open-next"
+main = ".open-next/worker.js"
 compatibility_date = "2025-01-02"
 compatibility_flags = ["nodejs_compat"]
+
+[assets]
+directory = ".open-next/assets"
+binding = "ASSETS"
