@@ -61,5 +61,6 @@ next-env.d.ts
 # Vercel
 .vercel
 
-# OpenNext
+# Cloudflare Pages
+.vercel
 .open-next
