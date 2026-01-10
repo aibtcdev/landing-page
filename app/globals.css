@@ -1,5 +1,33 @@
 @import "tailwindcss";
 
+/* Roc Grotesk Font Family */
+@font-face {
+  font-family: 'Roc Grotesk';
+  src: url('/fonts/RocGrotesk-Regular.woff2') format('woff2'),
+       url('/fonts/RocGrotesk-Regular.woff') format('woff');
+  font-weight: 400;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Roc Grotesk';
+  src: url('/fonts/RocGrotesk-WideMedium.woff2') format('woff2'),
+       url('/fonts/RocGrotesk-WideMedium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: 'Roc Grotesk Wide';
+  src: url('/fonts/RocGrotesk-ExtraWideMedium.woff2') format('woff2'),
+       url('/fonts/RocGrotesk-ExtraWideMedium.woff') format('woff');
+  font-weight: 500;
+  font-style: normal;
+  font-display: swap;
+}
+
 @theme {
   --color-orange: #F7931A;
   --color-orange-glow: rgba(247, 147, 26, 0.5);
@@ -25,7 +53,7 @@
   }
 
   body {
-    font-family: 'Inter', system-ui, sans-serif;
+    font-family: 'Roc Grotesk', system-ui, sans-serif;
     color: #ffffff;
     overflow-x: hidden;
     line-height: 1.6;
@@ -159,35 +187,6 @@
   height: 8px;
   background: radial-gradient(ellipse at center, rgba(247, 147, 26, 0.15) 0%, transparent 70%);
   filter: blur(2px);
-}
-
-/* Footer link underline effect */
-.footer-link::after {
-  content: '';
-  position: absolute;
-  bottom: 4px;
-  left: 0;
-  width: 0;
-  height: 1px;
-  background: var(--color-orange);
-  transition: width 0.3s ease;
-}
-
-.footer-link:hover::after {
-  width: 100%;
-}
-
-/* Menu button animation */
-.menu-btn-active span:nth-child(1) {
-  transform: rotate(45deg) translate(4px, 4px);
-}
-
-.menu-btn-active span:nth-child(2) {
-  opacity: 0;
-}
-
-.menu-btn-active span:nth-child(3) {
-  transform: rotate(-45deg) translate(4px, -4px);
 }
 
 /* Accessibility */
