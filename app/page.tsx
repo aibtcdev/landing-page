@@ -88,27 +88,24 @@ export default function Home() {
 
           {/* Mobile Menu Button */}
           <button
-            className={`hidden items-center gap-2 rounded-md border border-white/15 bg-white/[0.08] px-4.5 py-2.5 text-sm font-medium text-white transition-all duration-300 hover:border-white/25 hover:bg-white/[0.12] max-md:flex ${
-              isMenuOpen ? "z-[1001]" : ""
-            }`}
-            aria-label="Toggle menu"
+            className={`relative z-[1001] hidden h-11 w-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-all duration-300 hover:border-white/25 hover:bg-white/[0.12] max-md:flex`}
+            aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMenuOpen}
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
-            <span>Menu</span>
-            <div className={`flex flex-col gap-1 ${isMenuOpen ? "menu-btn-active" : ""}`}>
-              <span className="block h-[1.5px] w-4 rounded-sm bg-white transition-all duration-300" />
-              <span className="block h-[1.5px] w-4 rounded-sm bg-white transition-all duration-300" />
-              <span className="block h-[1.5px] w-4 rounded-sm bg-white transition-all duration-300" />
+            <div className="flex h-5 w-5 flex-col items-center justify-center gap-[5px]">
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-300 ${isMenuOpen ? "translate-y-[7px] rotate-45" : ""}`} />
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-300 ${isMenuOpen ? "opacity-0" : ""}`} />
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-300 ${isMenuOpen ? "-translate-y-[7px] -rotate-45" : ""}`} />
             </div>
           </button>
 
           {/* Navigation */}
           <nav
-            className={`flex items-center gap-9 max-md:fixed max-md:inset-0 max-md:z-[1000] max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-0 max-md:bg-black/95 max-md:backdrop-blur-[24px] max-md:transition-all max-md:duration-400 ${
+            className={`flex items-center gap-9 max-md:fixed max-md:inset-0 max-md:z-[1000] max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-2 max-md:bg-black/98 max-md:backdrop-blur-[24px] max-md:transition-all max-md:duration-300 ${
               isMenuOpen
                 ? "max-md:visible max-md:opacity-100"
-                : "max-md:invisible max-md:opacity-0"
+                : "max-md:invisible max-md:opacity-0 max-md:pointer-events-none"
             }`}
             role="navigation"
             aria-label="Main navigation"
@@ -118,7 +115,7 @@ export default function Home() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setIsMenuOpen(false)}
-              className="text-sm font-medium text-white/85 transition-all duration-300 hover:text-white max-md:w-full max-md:py-5 max-md:text-center max-md:text-lg"
+              className="text-sm font-medium text-white/85 transition-all duration-300 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-lg max-md:hover:border-white/20 max-md:hover:bg-white/10"
             >
               X
             </a>
@@ -127,7 +124,7 @@ export default function Home() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setIsMenuOpen(false)}
-              className="text-sm font-medium text-white/85 transition-all duration-300 hover:text-white max-md:w-full max-md:py-5 max-md:text-center max-md:text-lg"
+              className="text-sm font-medium text-white/85 transition-all duration-300 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-lg max-md:hover:border-white/20 max-md:hover:bg-white/10"
             >
               GitHub
             </a>
@@ -136,14 +133,14 @@ export default function Home() {
               target="_blank"
               rel="noopener noreferrer"
               onClick={() => setIsMenuOpen(false)}
-              className="text-sm font-medium text-white/85 transition-all duration-300 hover:text-white max-md:w-full max-md:py-5 max-md:text-center max-md:text-lg"
+              className="text-sm font-medium text-white/85 transition-all duration-300 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-lg max-md:hover:border-white/20 max-md:hover:bg-white/10"
             >
               Discord
             </a>
             <Link
               href="/orders"
               onClick={() => setIsMenuOpen(false)}
-              className="text-sm font-medium text-white/85 transition-all duration-300 hover:text-white max-md:w-full max-md:py-5 max-md:text-center max-md:text-lg"
+              className="text-sm font-medium text-white/85 transition-all duration-300 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-[#F7931A]/30 max-md:bg-[#F7931A]/10 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-lg max-md:text-[#F7931A] max-md:hover:border-[#F7931A]/50 max-md:hover:bg-[#F7931A]/20"
             >
               Order Network
             </Link>
@@ -154,46 +151,53 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center px-12 pb-[100px] pt-[140px] text-center max-lg:px-8 max-lg:pb-[90px] max-lg:pt-[130px] max-md:justify-center max-md:px-6 max-md:pb-20 max-md:pt-[100px]">
-          <div className="relative z-[1] max-w-[880px] max-md:max-w-full">
-            <h1 className="mb-7 animate-fadeUp text-[clamp(38px,5.8vw,68px)] font-bold leading-[1.15] tracking-[-0.04em] text-white opacity-0 [animation-delay:0.1s] [text-wrap:balance] max-md:mb-6 max-md:text-[38px] max-md:leading-[1.12] max-[380px]:text-[32px]">
-              Building the agent economy
-              <br />
-              <span className="bg-gradient-to-br from-[#F7931A] to-[#FFB347] bg-clip-text text-transparent">
-                on Bitcoin.
+        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6">
+          {/* Decorative elements */}
+          <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
+            <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
+          </div>
+
+          <div className="relative z-[1] flex flex-col items-center text-center">
+            {/* Main Headline */}
+            <h1 className="mb-8 animate-fadeUp text-[clamp(36px,5vw,72px)] font-medium leading-[1.1] tracking-[-0.03em] text-white opacity-0 [animation-delay:0.1s]">
+              Building the agent<br />
+              <span className="relative inline-block">
+                economy <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">on Bitcoin.</span>
+                <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl"></span>
               </span>
             </h1>
-            <p className="mx-auto mb-[52px] max-w-[845px] animate-fadeUp text-[clamp(19px,2.3vw,24px)] font-normal leading-[1.6] text-white/75 opacity-0 [animation-delay:0.2s] [text-wrap:balance] max-md:mb-10 max-md:max-w-full max-md:text-[19px] max-[380px]:text-[18px]">
-              Join the AIBTC public working group and start contributing today.
+
+            {/* Subheadline */}
+            <p className="mb-12 animate-fadeUp text-[clamp(16px,1.6vw,18px)] leading-[1.7] tracking-[0.01em] text-white/50 opacity-0 [animation-delay:0.2s]">
+              Join the AIBTC public working group<br />
+              and start contributing today.
             </p>
-            <div className="flex animate-fadeUp flex-wrap justify-center gap-5 opacity-0 [animation-delay:0.3s] max-md:w-full max-md:flex-col max-md:items-center max-md:gap-4">
+
+            {/* CTA */}
+            <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
               <a
                 href="https://www.addevent.com/event/UM20108233"
-                className="btn-shimmer relative inline-flex min-w-[200px] items-center justify-center gap-2.5 overflow-hidden rounded-xl bg-gradient-to-br from-[#F7931A] to-[#E8850F] px-[52px] py-4.5 text-[15px] font-semibold tracking-[-0.01em] text-white/[0.98] shadow-[0_8px_32px_rgba(247,147,26,0.4),0_2px_8px_rgba(0,0,0,0.15)] transition-all duration-300 hover:-translate-y-1 hover:bg-gradient-to-br hover:from-[#FFA033] hover:to-[#F7931A] hover:shadow-[0_16px_48px_rgba(247,147,26,0.55),0_4px_16px_rgba(0,0,0,0.2)] active:-translate-y-0.5 active:shadow-[0_8px_24px_rgba(247,147,26,0.45),0_2px_8px_rgba(0,0,0,0.15)] max-md:min-w-[240px] max-md:max-w-[320px] max-md:px-8 focus-ring"
+                className="group relative inline-flex items-center justify-center gap-3 overflow-hidden rounded-full bg-[#F7931A] px-8 py-4 text-[15px] font-semibold tracking-[0.01em] text-white shadow-[0_0_0_1px_rgba(247,147,26,0.5),0_4px_24px_rgba(247,147,26,0.4)] transition-all duration-300 hover:shadow-[0_0_0_1px_rgba(247,147,26,0.6),0_8px_40px_rgba(247,147,26,0.5)] active:scale-[0.98]"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                Join Weekly Calls
+                <span className="relative z-10">Join Weekly Call</span>
+                <svg className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
+                </svg>
+                <div className="absolute inset-0 bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
               </a>
             </div>
           </div>
 
-          {/* Scroll Arrow */}
+          {/* Scroll indicator */}
           <a
             href="#get-started"
-            className="absolute bottom-8 left-1/2 flex -translate-x-1/2 animate-fadeIn flex-col items-center p-3 opacity-0 transition-all duration-300 hover:translate-y-1 max-md:bottom-6"
+            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn p-2 text-white/30 opacity-0 transition-colors duration-300 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8"
             aria-label="Scroll to learn more"
           >
-            <svg
-              className="h-[22px] w-[22px] animate-bounce-slow stroke-white/50 max-md:h-5 max-md:w-5"
-              xmlns="http://www.w3.org/2000/svg"
-              viewBox="0 0 24 24"
-              fill="none"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <path d="M12 5v14M5 12l7 7 7-7" />
+            <svg className="h-5 w-5 animate-bounce-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
             </svg>
           </a>
         </section>
@@ -209,16 +213,16 @@ export default function Home() {
           <div className="mx-auto w-full max-w-[1200px]">
             {/* Intro */}
             <div className="mb-[72px] text-center max-md:mb-14">
-              <h2 className="mb-6 text-[clamp(36px,5vw,56px)] font-bold tracking-[-0.03em] text-white [text-wrap:balance] max-md:text-[36px] max-[380px]:text-[32px]">
+              <h2 className="mb-4 text-[clamp(32px,4vw,48px)] font-medium tracking-[0.01em] text-white max-md:text-[28px]">
                 Get Started
               </h2>
-              <p className="mx-auto max-w-[580px] text-[clamp(16px,2vw,18px)] leading-[1.7] text-white/75 [text-wrap:balance] max-md:text-[15px]">
+              <p className="mx-auto max-w-[480px] text-[clamp(16px,1.5vw,18px)] leading-[1.7] tracking-[0.015em] text-white/50 max-md:text-[15px]">
                 Anyone can use{" "}
                 <a
                   href="https://claude.ai/download"
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="border-b border-transparent font-medium text-[#F7931A] transition-all duration-200 hover:border-[#F7931A] hover:[text-shadow:0_0_20px_rgba(247,147,26,0.5)]"
+                  className="text-[#F7931A] underline decoration-[#F7931A]/30 underline-offset-2 transition-all duration-200 hover:decoration-[#F7931A]"
                 >
                   Claude Code
                 </a>{" "}
@@ -254,7 +258,7 @@ export default function Home() {
                   <div className="relative z-[1] mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-[14px] border border-[rgba(125,162,255,0.25)] bg-gradient-to-br from-[rgba(125,162,255,0.4)] to-[rgba(125,162,255,0.2)] text-sm font-bold text-[#B4CCFF] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-4 max-md:h-12 max-md:w-12 max-md:text-xs max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
                     x402
                   </div>
-                  <h3 className="relative z-[1] mb-2.5 text-[22px] font-bold tracking-[-0.02em] text-white max-md:text-xl max-[380px]:text-[19px]">
+                  <h3 className="relative z-[1] mb-2.5 text-[20px] font-semibold tracking-[0.02em] text-white max-md:text-xl max-[380px]:text-[19px]">
                     x402
                   </h3>
                   <p className="relative z-[1] text-[15px] leading-[1.6] text-white/65">
@@ -284,7 +288,7 @@ export default function Home() {
                   <div className="relative z-[1] mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-[14px] border border-[rgba(168,85,247,0.25)] bg-gradient-to-br from-[rgba(168,85,247,0.4)] to-[rgba(168,85,247,0.2)] text-lg font-bold text-[#D4ADFF] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-4 max-md:h-12 max-md:w-12 max-md:text-base max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
                     ID
                   </div>
-                  <h3 className="relative z-[1] mb-2.5 text-[22px] font-bold tracking-[-0.02em] text-white max-md:text-xl max-[380px]:text-[19px]">
+                  <h3 className="relative z-[1] mb-2.5 text-[20px] font-semibold tracking-[0.02em] text-white max-md:text-xl max-[380px]:text-[19px]">
                     ERC-8004
                   </h3>
                   <p className="relative z-[1] text-[15px] leading-[1.6] text-white/65">
@@ -314,7 +318,7 @@ export default function Home() {
                   <div className="relative z-[1] mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-[14px] border border-[rgba(247,147,26,0.25)] bg-gradient-to-br from-[rgba(247,147,26,0.4)] to-[rgba(247,147,26,0.2)] text-[22px] font-bold text-[#FFCA80] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-4 max-md:h-12 max-md:w-12 max-md:text-xl max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
                     ₿
                   </div>
-                  <h3 className="relative z-[1] mb-2.5 text-[22px] font-bold tracking-[-0.02em] text-white max-md:text-xl max-[380px]:text-[19px]">
+                  <h3 className="relative z-[1] mb-2.5 text-[20px] font-semibold tracking-[0.02em] text-white max-md:text-xl max-[380px]:text-[19px]">
                     sBTC
                   </h3>
                   <p className="relative z-[1] text-[15px] leading-[1.6] text-white/65">
@@ -327,11 +331,11 @@ export default function Home() {
               <div className="mt-12 text-center max-md:mt-8">
                 <a
                   href="https://github.com/aibtcdev"
-                  className="btn-shimmer relative inline-flex min-w-[200px] items-center justify-center gap-2.5 overflow-hidden rounded-xl border-[1.5px] border-white/20 bg-white/[0.05] px-[52px] py-4.5 text-[15px] font-semibold tracking-[-0.01em] text-white backdrop-blur-[12px] transition-all duration-300 hover:-translate-y-1 hover:border-white/35 hover:bg-white/[0.12] hover:shadow-[0_12px_32px_rgba(0,0,0,0.2)] active:-translate-y-0.5 active:shadow-[0_6px_16px_rgba(0,0,0,0.15)] max-md:min-w-[240px] max-md:max-w-[320px] max-md:px-8 focus-ring"
+                  className="inline-flex min-w-[220px] items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white/[0.06] px-10 py-4 text-[16px] font-semibold tracking-[0.01em] text-white backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:max-w-[280px] focus-ring"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
-                  View AIBTC GitHub Repos
+                  View GitHub Repos
                 </a>
               </div>
             </div>
@@ -340,26 +344,26 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="relative px-12 pb-11 pt-11 max-lg:px-8 max-lg:pb-10 max-lg:pt-10 max-md:px-6 max-md:pb-8 max-md:pt-8">
+      <footer className="relative px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
         {/* Section Divider */}
-        <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/[0.08] to-transparent" />
+        <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
 
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between max-md:flex-col max-md:gap-6">
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between max-md:flex-col max-md:gap-8">
           <Link href="/" className="group">
             <Image
               src="/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg"
               alt="AIBTC"
               width={100}
               height={24}
-              className="h-6 w-auto opacity-85 transition-all duration-300 group-hover:opacity-100 group-hover:drop-shadow-[0_0_16px_rgba(247,147,26,0.5)] max-md:h-[18px]"
+              className="h-6 w-auto opacity-80 transition-all duration-300 group-hover:opacity-100 max-md:h-5"
             />
           </Link>
-          <div className="flex gap-8 max-md:gap-6">
+          <div className="flex items-center gap-8 max-md:gap-6">
             <a
               href="https://x.com/aibtcdev"
               target="_blank"
               rel="noopener noreferrer"
-              className="footer-link relative py-2 text-xs font-medium uppercase tracking-[0.1em] text-white/85 transition-all duration-200 hover:text-white max-md:px-2 max-md:py-3 max-md:text-[11px]"
+              className="text-sm font-medium tracking-[0.02em] text-white/60 transition-colors duration-200 hover:text-white max-md:text-[13px]"
             >
               X
             </a>
@@ -367,7 +371,7 @@ export default function Home() {
               href="https://github.com/aibtcdev"
               target="_blank"
               rel="noopener noreferrer"
-              className="footer-link relative py-2 text-xs font-medium uppercase tracking-[0.1em] text-white/85 transition-all duration-200 hover:text-white max-md:px-2 max-md:py-3 max-md:text-[11px]"
+              className="text-sm font-medium tracking-[0.02em] text-white/60 transition-colors duration-200 hover:text-white max-md:text-[13px]"
             >
               GitHub
             </a>
@@ -375,13 +379,13 @@ export default function Home() {
               href="https://discord.gg/SehpxQJ2"
               target="_blank"
               rel="noopener noreferrer"
-              className="footer-link relative py-2 text-xs font-medium uppercase tracking-[0.1em] text-white/85 transition-all duration-200 hover:text-white max-md:px-2 max-md:py-3 max-md:text-[11px]"
+              className="text-sm font-medium tracking-[0.02em] text-white/60 transition-colors duration-200 hover:text-white max-md:text-[13px]"
             >
               Discord
             </a>
           </div>
         </div>
-        <p className="mt-8 text-center text-xs text-white/60 max-md:mt-6">
+        <p className="mt-10 text-center text-[13px] tracking-[0.02em] text-white/40 max-md:mt-8">
           © 2026 AIBTC
         </p>
       </footer>
