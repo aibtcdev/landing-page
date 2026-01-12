@@ -8,8 +8,11 @@
     "start": "next start",
     "lint": "next lint",
     "preview": "opennextjs-cloudflare build && opennextjs-cloudflare preview",
-    "deploy": "opennextjs-cloudflare deploy",
-    "cf-typegen": "wrangler types --env-interface CloudflareEnv cloudflare-env.d.ts" 
+    "deploy:staging": "npm run wrangler -- deploy --env staging",
+    "deploy:production": "npm run wrangler -- deploy --env production",
+    "deploy:dry-run": "npm run wrangler -- deploy --dry-run",
+    "wrangler": "set -a && . ./.env && set +a && npx wrangler",
+    "cf-typegen": "npm run wrangler -- types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
     "@opennextjs/cloudflare": "^1.14.8",
