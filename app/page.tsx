@@ -131,7 +131,7 @@ export default function Home() {
       <header
         className={`fixed left-0 right-0 top-0 z-[1000] px-12 pb-5 pt-5 transition-all duration-400 max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
           isScrolled
-            ? "border-b border-white/[0.06] bg-black/75 pb-3.5 pt-3.5 shadow-[0_4px_24px_rgba(0,0,0,0.15)] backdrop-blur-[32px] max-md:pb-3 max-md:pt-3"
+            ? "bg-black/75 pb-3.5 pt-3.5 shadow-[0_4px_24px_rgba(0,0,0,0.15)] backdrop-blur-[32px] max-md:pb-3 max-md:pt-3"
             : ""
         }`}
       >
@@ -244,9 +244,6 @@ export default function Home() {
           className="relative flex min-h-screen flex-col items-center justify-center px-12 py-[120px] max-lg:px-8 max-lg:py-[90px] max-md:px-6 max-md:py-[72px]"
           id="get-started"
         >
-          {/* Section Divider */}
-          <div className="section-divider-glow absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/50 to-transparent" />
-
           <div className="mx-auto w-full max-w-[1200px]">
             {/* Intro */}
             <div className="mb-[72px] text-center max-md:mb-14">
@@ -275,7 +272,7 @@ export default function Home() {
               <div className="grid grid-cols-3 gap-5 max-lg:gap-3.5 max-md:grid-cols-1 max-md:gap-3">
                 {/* x402 Card */}
                 <a
-                  href="https://stx402.com/"
+                  href="https://x402.aibtc.com"
                   className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-9 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:var(--color-blue)] [--card-glow:rgba(125,162,255,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(125,162,255,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-7 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
                   target="_blank"
                   rel="noopener noreferrer"
@@ -381,10 +378,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="relative px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
-        {/* Section Divider */}
-        <div className="absolute left-0 right-0 top-0 h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
-
+      <footer className="px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between max-md:flex-col max-md:gap-8">
           <Link href="/" className="group">
             <Image
