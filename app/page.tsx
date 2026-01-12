@@ -99,14 +99,6 @@ export default function Home() {
 
   return (
     <>
-      {/* Skip Link */}
-      <a
-        href="#main"
-        className="absolute -top-24 left-4 z-[2000] rounded-lg bg-[#F7931A] px-6 py-3 font-semibold text-black focus:top-4"
-      >
-        Skip to main content
-      </a>
-
       {/* Animated Background */}
       <div
         className="fixed inset-0 -z-10 overflow-hidden bg-gradient-to-br from-black via-[#0a0a0a] to-[#050208]"
