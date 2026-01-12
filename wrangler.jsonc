@@ -4,16 +4,44 @@
   "main": ".open-next/worker.js",
   "compatibility_date": "2026-01-08",
   "compatibility_flags": ["nodejs_compat"],
+  // Local development settings
   "workers_dev": true,
   "preview_urls": true,
+
+  /**
+   * Top-level bindings are for local development only (wrangler dev).
+   * These are NOT inherited by environments - each env must define its own.
+   */
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
-  "routes": [
-    {
-      "pattern": "aibtc.com",
-      "custom_domain": true
+
+  /**
+   * Environments
+   * Note: assets binding is NOT inherited by environments.
+   * Each environment must explicitly define all bindings it needs.
+   */
+  "env": {
+    "staging": {
+      "name": "landing-page-staging",
+      "workers_dev": false,
+      "routes": [{ "pattern": "aibtc.dev", "custom_domain": true }],
+      // Bindings must be duplicated per environment
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS"
+      }
+    },
+    "production": {
+      "name": "landing-page-production",
+      "workers_dev": false,
+      "routes": [{ "pattern": "aibtc.com", "custom_domain": true }],
+      // Bindings must be duplicated per environment
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS"
+      }
     }
-  ]
+  }
 }
