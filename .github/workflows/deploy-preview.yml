@@ -39,6 +39,13 @@ jobs:
         env:
           GITHUB_PAGES: "true"
 
+      - name: Fix asset paths for GitHub Pages
+        run: |
+          # Fix font paths in CSS files
+          find out/_next/static/css -name "*.css" -exec sed -i 's|url(/fonts/|url(/landing-page/fonts/|g' {} \;
+          # Fix any remaining absolute paths to public assets
+          find out/_next/static/css -name "*.css" -exec sed -i 's|url(/Artwork/|url(/landing-page/Artwork/|g' {} \;
+
       - name: Upload artifact
         uses: actions/upload-pages-artifact@v3
         with:

@@ -4,6 +4,8 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 const socialLinks = [
   {
     name: "X",
@@ -107,7 +109,7 @@ export default function Home() {
         {/* Background Pattern - optimized for fast loading */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.12] saturate-[1.3]"
-          style={{ backgroundImage: "url('/Artwork/AIBTC_Pattern1_optimized.jpg')" }}
+          style={{ backgroundImage: `url('${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg')` }}
         />
 
         {/* Orbs */}
