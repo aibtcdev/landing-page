@@ -6,7 +6,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Guide: Vibe Coding with Bitcoin Agents",
     description: "Build AI agents with their own Bitcoin wallets and payment-gated APIs. No coding experience required.",
-    url: "https://aibtc.dev/guide",
+    url: "https://aibtc.com/guide",
     images: ["/guide/og-image.png"],
   },
   twitter: {
