@@ -132,7 +132,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between">
           <Link href="/" className="group">
             <Image
-              src="/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg"
+              src={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
               alt="AIBTC"
               width={120}
               height={32}
@@ -487,7 +487,7 @@ export default function Home() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between max-md:flex-col max-md:gap-8">
           <Link href="/" className="group">
             <Image
-              src="/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg"
+              src={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
               alt="AIBTC"
               width={100}
               height={24}
