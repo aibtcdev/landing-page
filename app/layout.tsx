@@ -1,6 +1,8 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
@@ -58,7 +60,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head />
+      <head>
+        <link
+          rel="preload"
+          href={`${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg`}
+          as="image"
+          type="image/jpeg"
+        />
+      </head>
       <body>
         {children}
       </body>
