@@ -9,7 +9,7 @@ const socialLinks = [
     name: "X",
     href: "https://x.com/aibtcdev",
     icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="h-5 w-5">
+      <svg viewBox="0 0 24 24" fill="currentColor" className="size-5">
         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
       </svg>
     ),
@@ -18,16 +18,16 @@ const socialLinks = [
     name: "GitHub",
     href: "https://github.com/aibtcdev",
     icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="h-[18px] w-[18px]">
+      <svg viewBox="0 0 24 24" fill="currentColor" className="size-[18px]">
         <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z" />
       </svg>
     ),
   },
   {
     name: "Discord",
-    href: "https://discord.gg/SehpxQJ2",
+    href: "https://discord.gg/fyrsX3mtTk",
     icon: (
-      <svg viewBox="0 0 24 24" fill="currentColor" className="h-[18px] w-[18px]">
+      <svg viewBox="0 0 24 24" fill="currentColor" className="size-[18px]">
         <path d="M20.317 4.3698a19.7913 19.7913 0 00-4.8851-1.5152.0741.0741 0 00-.0785.0371c-.211.3753-.4447.8648-.6083 1.2495-1.8447-.2762-3.68-.2762-5.4868 0-.1636-.3933-.4058-.8742-.6177-1.2495a.077.077 0 00-.0785-.037 19.7363 19.7363 0 00-4.8852 1.515.0699.0699 0 00-.0321.0277C.5334 9.0458-.319 13.5799.0992 18.0578a.0824.0824 0 00.0312.0561c2.0528 1.5076 4.0413 2.4228 5.9929 3.0294a.0777.0777 0 00.0842-.0276c.4616-.6304.8731-1.2952 1.226-1.9942a.076.076 0 00-.0416-.1057c-.6528-.2476-1.2743-.5495-1.8722-.8923a.077.077 0 01-.0076-.1277c.1258-.0943.2517-.1923.3718-.2914a.0743.0743 0 01.0776-.0105c3.9278 1.7933 8.18 1.7933 12.0614 0a.0739.0739 0 01.0785.0095c.1202.099.246.1981.3728.2924a.077.077 0 01-.0066.1276 12.2986 12.2986 0 01-1.873.8914.0766.0766 0 00-.0407.1067c.3604.698.7719 1.3628 1.225 1.9932a.076.076 0 00.0842.0286c1.961-.6067 3.9495-1.5219 6.0023-3.0294a.077.077 0 00.0313-.0552c.5004-5.177-.8382-9.6739-3.5485-13.6604a.061.061 0 00-.0312-.0286zM8.02 15.3312c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9555-2.4189 2.157-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9555 2.4189-2.1569 2.4189zm7.9748 0c-1.1825 0-2.1569-1.0857-2.1569-2.419 0-1.3332.9554-2.4189 2.1569-2.4189 1.2108 0 2.1757 1.0952 2.1568 2.419 0 1.3332-.9460 2.4189-2.1568 2.4189Z" />
       </svg>
     ),
@@ -55,7 +55,7 @@ function SocialLinks({
           target="_blank"
           rel="noopener noreferrer"
           onClick={onLinkClick}
-          className={`flex items-center justify-center transition-all duration-300 ${baseStyles}`}
+          className={`flex items-center justify-center transition-all duration-200 ${baseStyles}`}
           aria-label={link.name}
         >
           {link.icon}
@@ -111,9 +111,9 @@ export default function Home() {
         />
 
         {/* Orbs */}
-        <div className="absolute -right-[200px] -top-[250px] h-[800px] w-[800px] animate-float1 rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.4)_0%,rgba(247,147,26,0.15)_40%,transparent_70%)] opacity-70 blur-[100px]" />
-        <div className="absolute -bottom-[250px] -left-[200px] h-[700px] w-[700px] animate-float2 rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.35)_0%,rgba(125,162,255,0.12)_40%,transparent_70%)] opacity-60 blur-[100px]" />
-        <div className="absolute bottom-[20%] -right-[150px] h-[500px] w-[500px] animate-float1-reverse rounded-full bg-[radial-gradient(circle,rgba(168,85,247,0.25)_0%,rgba(168,85,247,0.08)_40%,transparent_70%)] opacity-50 blur-[100px] max-md:hidden" />
+        <div className="absolute -right-[200px] -top-[250px] h-[800px] w-[800px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.4)_0%,rgba(247,147,26,0.15)_40%,transparent_70%)] opacity-70 blur-[100px] animate-float1" />
+        <div className="absolute -bottom-[250px] -left-[200px] h-[700px] w-[700px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.35)_0%,rgba(125,162,255,0.12)_40%,transparent_70%)] opacity-60 blur-[100px] animate-float2" />
+        <div className="absolute bottom-[20%] -right-[150px] h-[500px] w-[500px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.2)_0%,rgba(125,162,255,0.08)_40%,transparent_70%)] opacity-40 blur-[100px] max-md:hidden animate-float1-reverse" />
 
         {/* Vignette */}
         <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.6)_0%,rgba(0,0,0,0.3)_40%,transparent_70%)]" />
@@ -121,7 +121,7 @@ export default function Home() {
 
       {/* Header */}
       <header
-        className={`fixed left-0 right-0 top-0 z-[1000] px-12 pb-5 pt-5 transition-all duration-500 ease-out max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
+        className={`fixed left-0 right-0 top-0 z-50 px-12 pb-5 pt-5 transition-all duration-200 ease-out max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
           isScrolled
             ? "border-b border-white/[0.06] bg-[rgba(10,10,10,0.75)] pb-4 pt-4 backdrop-blur-2xl backdrop-saturate-150 max-md:pb-3 max-md:pt-3"
             : "border-b border-transparent"
@@ -135,27 +135,27 @@ export default function Home() {
               width={120}
               height={32}
               priority
-              className="h-8 w-auto transition-all duration-300 group-hover:drop-shadow-[0_0_20px_rgba(247,147,26,0.5)] max-md:h-7"
+              className="h-8 w-auto transition-all duration-200 group-hover:drop-shadow-[0_0_20px_rgba(247,147,26,0.5)] max-md:h-7"
             />
           </Link>
 
           {/* Mobile Menu Button */}
           <button
-            className={`relative z-[1001] hidden h-11 w-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-all duration-300 hover:border-white/25 hover:bg-white/[0.12] max-md:flex`}
+            className={`relative z-50 hidden size-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-all duration-200 hover:border-white/25 hover:bg-white/[0.12] max-md:flex`}
             aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMenuOpen}
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
-            <div className="flex h-5 w-5 flex-col items-center justify-center gap-[5px]">
-              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-300 ${isMenuOpen ? "translate-y-[7px] rotate-45" : ""}`} />
-              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-300 ${isMenuOpen ? "opacity-0" : ""}`} />
-              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-300 ${isMenuOpen ? "-translate-y-[7px] -rotate-45" : ""}`} />
+            <div className="flex size-5 flex-col items-center justify-center gap-[5px]">
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-200 ${isMenuOpen ? "translate-y-[7px] rotate-45" : ""}`} />
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-200 ${isMenuOpen ? "opacity-0" : ""}`} />
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-200 ${isMenuOpen ? "-translate-y-[7px] -rotate-45" : ""}`} />
             </div>
           </button>
 
           {/* Navigation */}
           <nav
-            className={`flex items-center gap-9 max-md:fixed max-md:inset-0 max-md:z-[1000] max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-2 max-md:bg-black/98 max-md:backdrop-blur-[24px] max-md:transition-all max-md:duration-300 ${
+            className={`flex items-center gap-9 max-md:fixed max-md:inset-0 max-md:z-50 max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-2 max-md:bg-black/98 max-md:backdrop-blur-[24px] max-md:transition-all max-md:duration-300 ${
               isMenuOpen
                 ? "max-md:visible max-md:opacity-100"
                 : "max-md:invisible max-md:opacity-0 max-md:pointer-events-none"
@@ -165,13 +165,11 @@ export default function Home() {
           >
             <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
             <a
-              href="https://app.aibtc.com"
-              target="_blank"
-              rel="noopener noreferrer"
+              href="#our-stack"
               onClick={() => setIsMenuOpen(false)}
-              className="text-sm font-medium text-white/85 transition-all duration-300 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-[#F7931A]/30 max-md:bg-[#F7931A]/10 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-lg max-md:text-[#F7931A] max-md:hover:border-[#F7931A]/50 max-md:hover:bg-[#F7931A]/20"
+              className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"
             >
-              Order Network
+              Start Building
             </a>
           </nav>
         </div>
@@ -186,9 +184,9 @@ export default function Home() {
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
           </div>
 
-          <div className="relative z-[1] flex flex-col items-center text-center">
+          <div className="relative z-10 flex flex-col items-center text-center">
             {/* Main Headline */}
-            <h1 className="mb-8 animate-fadeUp text-[clamp(36px,5vw,72px)] font-medium leading-[1.1] tracking-[-0.03em] text-white opacity-0 [animation-delay:0.1s]">
+            <h1 className="mb-8 animate-fadeUp text-balance text-[clamp(36px,5vw,72px)] font-medium leading-[1.1] text-white opacity-0 [animation-delay:0.1s]">
               Building the agent<br />
               <span className="relative inline-block">
                 economy <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">on Bitcoin.</span>
@@ -197,7 +195,7 @@ export default function Home() {
             </h1>
 
             {/* Subheadline */}
-            <p className="mb-12 animate-fadeUp text-[clamp(16px,1.6vw,18px)] leading-[1.7] tracking-[0.01em] text-white/50 opacity-0 [animation-delay:0.2s]">
+            <p className="mb-12 animate-fadeUp text-[clamp(16px,1.6vw,18px)] leading-[1.7] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s]">
               Join the AIBTC public working group<br />
               and start contributing today.
             </p>
@@ -206,26 +204,22 @@ export default function Home() {
             <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
               <a
                 href="https://www.addevent.com/event/UM20108233"
-                className="group relative inline-flex items-center justify-center gap-3 overflow-hidden rounded-full bg-[#F7931A] px-8 py-4 text-[15px] font-semibold tracking-[0.01em] text-white shadow-[0_0_0_1px_rgba(247,147,26,0.5),0_4px_24px_rgba(247,147,26,0.4)] transition-all duration-300 hover:shadow-[0_0_0_1px_rgba(247,147,26,0.6),0_8px_40px_rgba(247,147,26,0.5)] active:scale-[0.98]"
+                className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-all duration-200 hover:bg-[#E8850F] active:scale-[0.98]"
                 target="_blank"
                 rel="noopener noreferrer"
               >
-                <span className="relative z-10">Join Weekly Call</span>
-                <svg className="relative z-10 h-4 w-4 transition-transform duration-300 group-hover:translate-x-0.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-                </svg>
-                <div className="absolute inset-0 bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] opacity-0 transition-opacity duration-300 group-hover:opacity-100"></div>
+                Join Weekly Call
               </a>
             </div>
           </div>
 
           {/* Scroll indicator */}
           <a
-            href="#get-started"
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn p-2 text-white/30 opacity-0 transition-colors duration-300 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8"
+            href="#our-stack"
+            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn p-2 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8"
             aria-label="Scroll to learn more"
           >
-            <svg className="h-5 w-5 animate-bounce-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <svg className="size-5 animate-bounce-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
             </svg>
           </a>
@@ -234,204 +228,254 @@ export default function Home() {
         {/* Get Started Section */}
         <section
           className="relative flex min-h-screen flex-col items-center justify-center px-12 py-[120px] max-lg:px-8 max-lg:py-[90px] max-md:px-6 max-md:py-[72px]"
-          id="get-started"
+          id="our-stack"
         >
           <div className="mx-auto w-full max-w-[1200px]">
             {/* Intro */}
-            <div className="mb-[72px] text-center max-md:mb-14">
-              <h2 className="mb-4 text-[clamp(32px,4vw,48px)] font-medium tracking-[0.01em] text-white max-md:text-[28px]">
-                Get Started
+            <div className="mb-12 text-center max-md:mb-10">
+              <h2 className="mb-4 text-balance text-[clamp(32px,4vw,48px)] font-medium text-white max-md:text-[28px]">
+                Our Stack
               </h2>
-              <p className="mx-auto max-w-[480px] text-[clamp(16px,1.5vw,18px)] leading-[1.7] tracking-[0.015em] text-white/50 max-md:text-[15px]">
-                Anyone can use{" "}
-                <a
-                  href="https://claude.ai/download"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-[#F7931A] underline decoration-[#F7931A]/30 underline-offset-2 transition-all duration-200 hover:decoration-[#F7931A]"
-                >
-                  Claude Code
-                </a>{" "}
-                to start building with agents and contributing to AIBTC.
+              <p className="mx-auto max-w-[520px] text-[clamp(16px,1.5vw,18px)] leading-[1.7] tracking-normal text-white/50 max-md:text-[15px]">
+                Open-source building blocks powering the agent economy on Bitcoin.
               </p>
             </div>
 
             {/* Categories */}
             <div>
-              <p className="mb-8 text-center text-xs font-semibold uppercase tracking-[0.2em] text-white/50 max-md:mb-5">
-                Building Blocks
-              </p>
               <div className="grid grid-cols-5 gap-4 max-lg:grid-cols-3 max-lg:gap-3.5 max-md:grid-cols-1 max-md:gap-3">
                 {/* x402 Card */}
-                <a
-                  href="https://x402.org"
-                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:var(--color-blue)] [--card-glow:rgba(125,162,255,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(125,162,255,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onMouseMove={handleCardMouseMove}
-                >
-                  <svg
-                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M7 17L17 7M17 7H7M17 7V17" />
-                  </svg>
-                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(125,162,255,0.25)] bg-gradient-to-br from-[rgba(125,162,255,0.4)] to-[rgba(125,162,255,0.2)] text-xs font-bold text-[#B4CCFF] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
+                <div className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-xl backdrop-blur-[12px] [--card-accent:var(--color-blue)] [--card-glow:rgba(125,162,255,0.1)] max-md:rounded-2xl max-md:p-6">
+                  <div className="relative z-10 mb-4 flex size-11 items-center justify-center rounded-xl border border-[rgba(125,162,255,0.25)] bg-gradient-to-br from-[rgba(125,162,255,0.4)] to-[rgba(125,162,255,0.2)] text-xs font-bold text-[#B4CCFF] shadow-lg max-md:mb-3 max-md:h-10 max-md:w-10">
                     402
                   </div>
-                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
+                  <h3 className="relative z-10 mb-1.5 text-balance text-[17px] font-semibold text-white max-md:text-lg">
                     x402
                   </h3>
-                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                  <p className="relative z-10 mb-4 text-[13px] leading-[1.5] text-white/65">
                     Agent payments
                   </p>
-                </a>
+                  <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
+                    <a href="https://x402.org" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#B4CCFF]">x402.org →</span>
+                      <span className="block text-[11px] text-white/40">Protocol specification</span>
+                    </a>
+                    <a href="https://www.stacksx402.com" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#B4CCFF]">stacksx402.com →</span>
+                      <span className="block text-[11px] text-white/40">Endpoint directory</span>
+                    </a>
+                    <a href="https://x402.aibtc.dev" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#B4CCFF]">x402.aibtc.dev →</span>
+                      <span className="block text-[11px] text-white/40">Testnet playground</span>
+                    </a>
+                  </div>
+                </div>
 
                 {/* MCP Card */}
-                <a
-                  href="https://modelcontextprotocol.io"
-                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:#10B981] [--card-glow:rgba(16,185,129,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(16,185,129,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onMouseMove={handleCardMouseMove}
-                >
-                  <svg
-                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M7 17L17 7M17 7H7M17 7V17" />
-                  </svg>
-                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(16,185,129,0.25)] bg-gradient-to-br from-[rgba(16,185,129,0.4)] to-[rgba(16,185,129,0.2)] text-lg font-bold text-[#6EE7B7] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <div className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-xl backdrop-blur-[12px] [--card-accent:#10B981] [--card-glow:rgba(16,185,129,0.1)] max-md:rounded-2xl max-md:p-6">
+                  <div className="relative z-10 mb-4 flex size-11 items-center justify-center rounded-xl border border-[rgba(16,185,129,0.25)] bg-gradient-to-br from-[rgba(16,185,129,0.4)] to-[rgba(16,185,129,0.2)] text-lg font-bold text-[#6EE7B7] shadow-lg max-md:mb-3 max-md:h-10 max-md:w-10">
+                    <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <path d="M12 2L2 7l10 5 10-5-10-5z" />
                       <path d="M2 17l10 5 10-5" />
                       <path d="M2 12l10 5 10-5" />
                     </svg>
                   </div>
-                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
+                  <h3 className="relative z-10 mb-1.5 text-balance text-[17px] font-semibold text-white max-md:text-lg">
                     MCP
                   </h3>
-                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                  <p className="relative z-10 mb-4 text-[13px] leading-[1.5] text-white/65">
                     Agent tools
                   </p>
-                </a>
+                  <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
+                    <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#6EE7B7]">MCP spec →</span>
+                      <span className="block text-[11px] text-white/40">Protocol documentation</span>
+                    </a>
+                    <a href="https://www.npmjs.com/package/stx402-agent" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#6EE7B7]">stx402-agent →</span>
+                      <span className="block text-[11px] text-white/40">Stacks wallet MCP server</span>
+                    </a>
+                  </div>
+                </div>
 
-                {/* ERC-8004 Card */}
-                <a
-                  href="https://eips.ethereum.org/EIPS/eip-8004"
-                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:#A855F7] [--card-glow:rgba(168,85,247,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(168,85,247,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onMouseMove={handleCardMouseMove}
-                >
-                  <svg
-                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M7 17L17 7M17 7H7M17 7V17" />
-                  </svg>
-                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(168,85,247,0.25)] bg-gradient-to-br from-[rgba(168,85,247,0.4)] to-[rgba(168,85,247,0.2)] text-sm font-bold text-[#D4ADFF] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
+                {/* Agent Registry Card */}
+                <div className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-xl backdrop-blur-[12px] [--card-accent:#A855F7] [--card-glow:rgba(168,85,247,0.1)] max-md:rounded-2xl max-md:p-6">
+                  <div className="relative z-10 mb-4 flex size-11 items-center justify-center rounded-xl border border-[rgba(168,85,247,0.25)] bg-gradient-to-br from-[rgba(168,85,247,0.4)] to-[rgba(168,85,247,0.2)] text-sm font-bold text-[#D4ADFF] shadow-lg max-md:mb-3 max-md:h-10 max-md:w-10">
                     ID
                   </div>
-                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
-                    ERC-8004
+                  <h3 className="relative z-10 mb-1.5 text-balance text-[17px] font-semibold text-white max-md:text-lg">
+                    Agent Registry
                   </h3>
-                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                  <p className="relative z-10 mb-4 text-[13px] leading-[1.5] text-white/65">
                     Agent identity
                   </p>
-                </a>
+                  <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
+                    <a href="https://eips.ethereum.org/EIPS/eip-8004" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#D4ADFF]">ERC-8004 →</span>
+                      <span className="block text-[11px] text-white/40">Ethereum EIP spec</span>
+                    </a>
+                    <a href="https://github.com/aibtcdev/aibtcdev-daos" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#D4ADFF]">GitHub →</span>
+                      <span className="block text-[11px] text-white/40">Stacks implementation</span>
+                    </a>
+                    <a href="https://github.com/stacksgov/sips" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#D4ADFF]">Stacks SIP →</span>
+                      <span className="block text-[11px] text-white/40">Draft proposal</span>
+                    </a>
+                  </div>
+                </div>
 
-                {/* ERC-8001 Card */}
-                <a
-                  href="https://eips.ethereum.org/EIPS/eip-8001"
-                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:#EC4899] [--card-glow:rgba(236,72,153,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(236,72,153,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onMouseMove={handleCardMouseMove}
-                >
-                  <svg
-                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M7 17L17 7M17 7H7M17 7V17" />
-                  </svg>
-                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(236,72,153,0.25)] bg-gradient-to-br from-[rgba(236,72,153,0.4)] to-[rgba(236,72,153,0.2)] text-lg font-bold text-[#F9A8D4] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
-                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                {/* Agent Intents Card */}
+                <div className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-xl backdrop-blur-[12px] [--card-accent:#EC4899] [--card-glow:rgba(236,72,153,0.1)] max-md:rounded-2xl max-md:p-6">
+                  <div className="relative z-10 mb-4 flex size-11 items-center justify-center rounded-xl border border-[rgba(236,72,153,0.25)] bg-gradient-to-br from-[rgba(236,72,153,0.4)] to-[rgba(236,72,153,0.2)] text-lg font-bold text-[#F9A8D4] shadow-lg max-md:mb-3 max-md:h-10 max-md:w-10">
+                    <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                       <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
                       <path d="M7 11V7a5 5 0 0110 0v4" />
                     </svg>
                   </div>
-                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
-                    ERC-8001
+                  <h3 className="relative z-10 mb-1.5 text-balance text-[17px] font-semibold text-white max-md:text-lg">
+                    Agent Intents
                   </h3>
-                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                  <p className="relative z-10 mb-4 text-[13px] leading-[1.5] text-white/65">
                     Agent wallets
                   </p>
-                </a>
-
-                {/* sBTC Card */}
-                <a
-                  href="https://www.stacks.co/sbtc"
-                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:var(--color-orange)] [--card-glow:rgba(247,147,26,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(247,147,26,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  onMouseMove={handleCardMouseMove}
-                >
-                  <svg
-                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M7 17L17 7M17 7H7M17 7V17" />
-                  </svg>
-                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.25)] bg-gradient-to-br from-[rgba(247,147,26,0.4)] to-[rgba(247,147,26,0.2)] text-xl font-bold text-[#FFCA80] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
-                    ₿
+                  <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
+                    <a href="https://eips.ethereum.org/EIPS/eip-8001" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#F9A8D4]">ERC-8001 →</span>
+                      <span className="block text-[11px] text-white/40">Ethereum EIP spec</span>
+                    </a>
+                    <a href="https://github.com/stacksgov/sips" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#F9A8D4]">Stacks SIP →</span>
+                      <span className="block text-[11px] text-white/40">Kwame's draft proposal</span>
+                    </a>
                   </div>
-                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
-                    sBTC
+                </div>
+
+                {/* Stacks Card */}
+                <div className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-xl backdrop-blur-[12px] [--card-accent:var(--color-orange)] [--card-glow:rgba(247,147,26,0.1)] max-md:rounded-2xl max-md:p-6">
+                  <div className="relative z-10 mb-4 flex size-11 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.25)] bg-gradient-to-br from-[rgba(247,147,26,0.4)] to-[rgba(247,147,26,0.2)] text-[#FFCA80] shadow-lg max-md:mb-3 max-md:h-10 max-md:w-10">
+                    <svg className="size-5" viewBox="0 0 21 22" fill="currentColor">
+                      <path fillRule="evenodd" clipRule="evenodd" d="M13.7663 7.58669C13.6897 7.45517 13.7007 7.29078 13.7882 7.15926L17.4445 1.73424C17.543 1.58081 17.554 1.39449 17.4664 1.24106C17.3788 1.07666 17.2146 0.988987 17.0395 0.988987H15.6164C15.4631 0.988987 15.3099 1.0657 15.2113 1.20818L10.942 7.56477C10.8326 7.72916 10.6574 7.81684 10.4604 7.81684H9.92398C9.72693 7.81684 9.55178 7.7182 9.44231 7.56477L5.19491 1.19722C5.10734 1.05474 4.94314 0.978027 4.78988 0.978027H3.36678C3.19163 0.978027 3.01648 1.07666 2.93985 1.24106C2.85228 1.40545 2.87417 1.59177 2.96175 1.73424L6.61801 7.17022C6.70559 7.29078 6.71653 7.45517 6.63991 7.58669C6.56328 7.72916 6.43192 7.80588 6.27866 7.80588H0.684789C0.411116 7.80588 0.203125 8.02507 0.203125 8.2881V9.47174C0.203125 9.74574 0.422063 9.95397 0.684789 9.95397H19.7215C19.9951 9.95397 20.2031 9.73478 20.2031 9.47174V8.2881C20.2031 8.03603 20.017 7.83876 19.7762 7.80588C19.7543 7.80588 19.7324 7.80588 19.7105 7.80588H14.1276C13.9743 7.80588 13.832 7.72916 13.7663 7.58669ZM9.45326 14.568L5.18397 20.9246C5.09639 21.067 4.93219 21.1438 4.77893 21.1438H3.35583C3.18068 21.1438 3.01648 21.0451 2.9289 20.8917C2.84133 20.7382 2.85228 20.541 2.9508 20.3985L6.59612 14.9735C6.68369 14.842 6.69464 14.6885 6.61801 14.5461C6.54138 14.4145 6.41002 14.3269 6.25676 14.3269H0.684789C0.422063 14.3269 0.203125 14.1186 0.203125 13.8446V12.661C0.203125 12.398 0.411116 12.1788 0.684789 12.1788H19.6777C19.6777 12.1788 19.7105 12.1788 19.7215 12.1788C19.9842 12.1788 20.2031 12.387 20.2031 12.661V13.8446C20.2031 14.1077 19.9951 14.3269 19.7215 14.3269H14.1385C13.9743 14.3269 13.843 14.4036 13.7773 14.5461C13.7007 14.6885 13.7116 14.842 13.7992 14.9625L17.4555 20.3985C17.543 20.541 17.5649 20.7273 17.4773 20.8917C17.3898 21.0561 17.2256 21.1547 17.0504 21.1547H15.6273C15.4631 21.1547 15.3208 21.078 15.2332 20.9465L10.9639 14.5899C10.8545 14.4255 10.6793 14.3378 10.4823 14.3378H9.94587C9.74883 14.3378 9.57368 14.4365 9.46421 14.5899L9.45326 14.568Z" />
+                    </svg>
+                  </div>
+                  <h3 className="relative z-10 mb-1.5 text-balance text-[17px] font-semibold text-white max-md:text-lg">
+                    Stacks
                   </h3>
-                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                  <p className="relative z-10 mb-4 text-[13px] leading-[1.5] text-white/65">
                     Bitcoin L2
                   </p>
-                </a>
+                  <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
+                    <a href="https://www.stacks.co" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#FFCA80]">stacks.co →</span>
+                      <span className="block text-[11px] text-white/40">Stacks ecosystem</span>
+                    </a>
+                    <a href="https://www.stacks.co/sbtc" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#FFCA80]">sBTC →</span>
+                      <span className="block text-[11px] text-white/40">Bitcoin-backed token</span>
+                    </a>
+                    <a href="https://docs.stacks.co" target="_blank" rel="noopener noreferrer" className="group/link block">
+                      <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#FFCA80]">Docs →</span>
+                      <span className="block text-[11px] text-white/40">Developer documentation</span>
+                    </a>
+                  </div>
+                </div>
               </div>
 
               {/* CTA */}
               <div className="mt-12 text-center max-md:mt-8">
                 <a
                   href="https://github.com/aibtcdev"
-                  className="inline-flex min-w-[220px] items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white/[0.06] px-10 py-4 text-[16px] font-semibold tracking-[0.01em] text-white backdrop-blur-sm transition-all duration-300 hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:max-w-[280px] focus-ring"
+                  className="inline-flex min-w-[220px] items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white/[0.06] px-10 py-4 text-[16px] font-semibold tracking-normal text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:max-w-[280px] focus-ring"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
                   View GitHub Repos
                 </a>
               </div>
+
+              {/* Guidance prompt */}
+              <div className="mt-16 flex justify-center max-md:mt-12">
+                <a
+                  href="#guide"
+                  className="inline-flex flex-col items-center gap-2 text-white/40 transition-colors duration-200 hover:text-white/60"
+                >
+                  <span className="text-sm">Need guidance?</span>
+                  <svg className="size-4 animate-bounce-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+                  </svg>
+                </a>
+              </div>
             </div>
+          </div>
+        </section>
+
+        {/* Guide Section */}
+        <section id="guide" className="relative px-12 py-[100px] max-lg:px-8 max-lg:py-[80px] max-md:px-6 max-md:py-[64px]">
+          <div className="mx-auto max-w-[800px]">
+            {/* Section Header */}
+            <div className="mb-12 text-center max-md:mb-10">
+              <h2 className="mb-4 text-balance text-[clamp(32px,4vw,48px)] font-medium text-white max-md:text-[28px]">
+                Getting Started
+              </h2>
+              <p className="text-[clamp(16px,1.5vw,18px)] leading-[1.7] tracking-normal text-white/50 max-md:text-[15px]">
+                Anyone can use agents to start building and contributing to AIBTC.
+              </p>
+            </div>
+
+            <Link
+              href="/guide"
+              className="group relative block overflow-hidden rounded-2xl border border-white/[0.08] bg-[rgba(20,20,20,0.6)] backdrop-blur-sm transition-all duration-200 hover:border-white/[0.12] hover:bg-[rgba(24,24,24,0.7)]"
+            >
+              {/* Stacked pages effect */}
+              <div className="absolute -bottom-1 left-2 right-2 h-2 rounded-b-xl border-x border-b border-white/[0.04] bg-[rgba(16,16,16,0.4)]" />
+              <div className="absolute -bottom-2 left-4 right-4 h-2 rounded-b-xl border-x border-b border-white/[0.02] bg-[rgba(12,12,12,0.3)]" />
+
+              <div className="relative flex gap-6 p-8 max-md:flex-col max-md:p-6">
+                {/* Book icon */}
+                <div className="flex size-14 shrink-0 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.2)] bg-[rgba(247,147,26,0.1)] max-md:size-12">
+                  <svg className="size-7 text-[#F7931A] max-md:size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" strokeLinecap="round" strokeLinejoin="round" />
+                  </svg>
+                </div>
+
+                {/* Content */}
+                <div className="flex-1">
+                  <div className="mb-1 flex items-center gap-2">
+                    <span className="rounded bg-[#F7931A]/20 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-[#F7931A]">Guide</span>
+                    <span className="text-[12px] text-white/40">~30 min</span>
+                  </div>
+                  <h3 className="mb-2 text-balance text-[20px] font-semibold text-white max-md:text-[18px]">
+                    Vibe Coding with Bitcoin Agents
+                  </h3>
+                  <p className="mb-4 text-[14px] leading-relaxed text-white/50">
+                    Build AI agents with Bitcoin wallets and payment-gated APIs.
+                  </p>
+
+                  {/* Steps preview */}
+                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-white/40">
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-1 rounded-full bg-[#D97757]" />
+                      Claude Code
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-1 rounded-full bg-[#F7931A]" />
+                      Agent Wallet
+                    </span>
+                    <span className="flex items-center gap-1.5">
+                      <span className="size-1 rounded-full bg-[#B4CCFF]" />
+                      x402 Endpoints
+                    </span>
+                  </div>
+                </div>
+
+                {/* Arrow */}
+                <div className="flex items-center self-center text-white/30 transition-all duration-200 group-hover:translate-x-1 group-hover:text-[#F7931A] max-md:self-start">
+                  <svg className="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
+                </div>
+              </div>
+            </Link>
           </div>
         </section>
       </main>
@@ -445,22 +489,14 @@ export default function Home() {
               alt="AIBTC"
               width={100}
               height={24}
-              className="h-6 w-auto opacity-80 transition-all duration-300 group-hover:opacity-100 max-md:h-5"
+              className="h-6 w-auto opacity-80 transition-all duration-200 group-hover:opacity-100 max-md:h-5"
             />
           </Link>
           <div className="flex items-center gap-8 max-md:gap-6">
             <SocialLinks variant="footer" />
-            <a
-              href="https://app.aibtc.com"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="text-sm font-medium tracking-[0.02em] text-white/60 transition-colors duration-200 hover:text-white max-md:text-[13px]"
-            >
-              Order Network
-            </a>
           </div>
         </div>
-        <p className="mt-10 text-center text-[13px] tracking-[0.02em] text-white/40 max-md:mt-8">
+        <p className="mt-10 text-center text-[13px] tracking-normal text-white/40 max-md:mt-8">
           © 2026 AIBTC
         </p>
       </footer>
