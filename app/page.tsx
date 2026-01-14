@@ -412,7 +412,7 @@ export default function Home() {
         </section>
 
         {/* Guide Section */}
-        <section id="guide" className="relative scroll-mt-24 px-12 pb-[180px] pt-[140px] max-lg:px-8 max-lg:pb-[140px] max-lg:pt-[120px] max-md:scroll-mt-20 max-md:px-6 max-md:pb-[100px] max-md:pt-[100px]">
+        <section id="guide" className="relative scroll-mt-24 px-12 pb-[220px] pt-[140px] max-lg:px-8 max-lg:pb-[180px] max-lg:pt-[120px] max-md:scroll-mt-20 max-md:px-6 max-md:pb-[140px] max-md:pt-[100px]">
           <div className="mx-auto max-w-[800px]">
             {/* Section Header */}
             <div className="mb-12 text-center max-md:mb-10">
