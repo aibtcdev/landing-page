@@ -412,7 +412,7 @@ export default function Home() {
         </section>
 
         {/* Guide Section */}
-        <section id="guide" className="relative scroll-mt-24 px-12 pb-[120px] pt-[140px] max-lg:px-8 max-lg:pb-[100px] max-lg:pt-[120px] max-md:scroll-mt-20 max-md:px-6 max-md:pb-[80px] max-md:pt-[100px]">
+        <section id="guide" className="relative scroll-mt-24 px-12 pb-[180px] pt-[140px] max-lg:px-8 max-lg:pb-[140px] max-lg:pt-[120px] max-md:scroll-mt-20 max-md:px-6 max-md:pb-[100px] max-md:pt-[100px]">
           <div className="mx-auto max-w-[800px]">
             {/* Section Header */}
             <div className="mb-12 text-center max-md:mb-10">
@@ -426,15 +426,18 @@ export default function Home() {
 
             <Link
               href="/guide"
-              className="group relative block overflow-hidden rounded-2xl border border-white/[0.08] bg-[rgba(20,20,20,0.6)] backdrop-blur-sm transition-all duration-200 hover:border-white/[0.12] hover:bg-[rgba(24,24,24,0.7)]"
+              className="group relative block overflow-hidden rounded-2xl border border-white/[0.08] bg-[rgba(20,20,20,0.6)] backdrop-blur-sm transition-all duration-200 hover:border-white/[0.15] hover:bg-[rgba(28,28,28,0.7)]"
             >
+              {/* Top accent line */}
+              <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-[#F7931A]/30 to-transparent" />
+
               {/* Stacked pages effect */}
-              <div className="absolute -bottom-1 left-2 right-2 h-2 rounded-b-xl border-x border-b border-white/[0.04] bg-[rgba(16,16,16,0.4)]" />
-              <div className="absolute -bottom-2 left-4 right-4 h-2 rounded-b-xl border-x border-b border-white/[0.02] bg-[rgba(12,12,12,0.3)]" />
+              <div className="absolute -bottom-1.5 left-3 right-3 h-3 rounded-b-xl border-x border-b border-white/[0.04] bg-[rgba(16,16,16,0.5)]" />
+              <div className="absolute -bottom-3 left-6 right-6 h-3 rounded-b-xl border-x border-b border-white/[0.02] bg-[rgba(12,12,12,0.4)]" />
 
               <div className="relative flex gap-6 p-8 max-md:flex-col max-md:p-6">
                 {/* Book icon */}
-                <div className="flex size-14 shrink-0 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.2)] bg-[rgba(247,147,26,0.1)] max-md:size-12">
+                <div className="flex size-14 shrink-0 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.25)] bg-gradient-to-br from-[rgba(247,147,26,0.15)] to-[rgba(247,147,26,0.05)] max-md:size-12">
                   <svg className="size-7 text-[#F7931A] max-md:size-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
                     <path d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" strokeLinecap="round" strokeLinejoin="round" />
                   </svg>
@@ -442,7 +445,7 @@ export default function Home() {
 
                 {/* Content */}
                 <div className="flex-1">
-                  <div className="mb-1 flex items-center gap-2">
+                  <div className="mb-1.5 flex items-center gap-2">
                     <span className="rounded bg-[#F7931A]/20 px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide text-[#F7931A]">Guide</span>
                     <span className="text-[12px] text-white/40">~30 min</span>
                   </div>
@@ -454,17 +457,17 @@ export default function Home() {
                   </p>
 
                   {/* Steps preview */}
-                  <div className="flex flex-wrap gap-x-4 gap-y-1 text-[13px] text-white/40">
+                  <div className="flex flex-wrap gap-x-4 gap-y-1.5 text-[13px] text-white/40">
                     <span className="flex items-center gap-1.5">
-                      <span className="size-1 rounded-full bg-[#D97757]" />
+                      <span className="size-1.5 rounded-full bg-[#D97757]" />
                       Claude Code
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="size-1 rounded-full bg-[#F7931A]" />
+                      <span className="size-1.5 rounded-full bg-[#F7931A]" />
                       Agent Wallet
                     </span>
                     <span className="flex items-center gap-1.5">
-                      <span className="size-1 rounded-full bg-[#B4CCFF]" />
+                      <span className="size-1.5 rounded-full bg-[#B4CCFF]" />
                       x402 Endpoints
                     </span>
                   </div>
@@ -483,7 +486,7 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
+      <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
         <div className="mx-auto flex max-w-[1200px] items-center justify-between max-md:flex-col max-md:gap-8">
           <Link href="/" className="group">
             <Image
