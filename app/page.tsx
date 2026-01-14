@@ -121,10 +121,10 @@ export default function Home() {
 
       {/* Header */}
       <header
-        className={`fixed left-0 right-0 top-0 z-[1000] px-12 pb-5 pt-5 transition-all duration-400 max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
+        className={`fixed left-0 right-0 top-0 z-[1000] px-12 pb-5 pt-5 transition-all duration-500 ease-out max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
           isScrolled
-            ? "bg-black/75 pb-3.5 pt-3.5 shadow-[0_4px_24px_rgba(0,0,0,0.15)] backdrop-blur-[32px] max-md:pb-3 max-md:pt-3"
-            : ""
+            ? "border-b border-white/[0.06] bg-[rgba(10,10,10,0.75)] pb-4 pt-4 backdrop-blur-2xl backdrop-saturate-150 max-md:pb-3 max-md:pt-3"
+            : "border-b border-transparent"
         }`}
       >
         <div className="mx-auto flex max-w-[1200px] items-center justify-between">
