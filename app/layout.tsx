@@ -58,7 +58,14 @@ export default function RootLayout({
 }) {
   return (
     <html lang="en">
-      <head />
+      <head>
+        <link
+          rel="preload"
+          href="/Artwork/AIBTC_Pattern1_optimized.jpg"
+          as="image"
+          type="image/jpeg"
+        />
+      </head>
       <body>
         {children}
       </body>

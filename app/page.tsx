@@ -104,10 +104,10 @@ export default function Home() {
         className="fixed inset-0 -z-10 overflow-hidden bg-gradient-to-br from-black via-[#0a0a0a] to-[#050208]"
         aria-hidden="true"
       >
-        {/* Background Pattern */}
+        {/* Background Pattern - optimized for fast loading */}
         <div
           className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.12] saturate-[1.3]"
-          style={{ backgroundImage: "url('/Artwork/AIBTC_Pattern1.jpg')" }}
+          style={{ backgroundImage: "url('/Artwork/AIBTC_Pattern1_optimized.jpg')" }}
         />
 
         {/* Orbs */}
@@ -256,22 +256,22 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Initiatives */}
+            {/* Categories */}
             <div>
               <p className="mb-8 text-center text-xs font-semibold uppercase tracking-[0.2em] text-white/50 max-md:mb-5">
-                Current Initiatives
+                Building Blocks
               </p>
-              <div className="grid grid-cols-3 gap-5 max-lg:gap-3.5 max-md:grid-cols-1 max-md:gap-3">
+              <div className="grid grid-cols-5 gap-4 max-lg:grid-cols-3 max-lg:gap-3.5 max-md:grid-cols-1 max-md:gap-3">
                 {/* x402 Card */}
                 <a
-                  href="https://x402.aibtc.com"
-                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-9 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:var(--color-blue)] [--card-glow:rgba(125,162,255,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(125,162,255,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-7 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
+                  href="https://x402.org"
+                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:var(--color-blue)] [--card-glow:rgba(125,162,255,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(125,162,255,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
                   target="_blank"
                   rel="noopener noreferrer"
                   onMouseMove={handleCardMouseMove}
                 >
                   <svg
-                    className="absolute right-6 top-6 h-5 w-5 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
+                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -281,27 +281,61 @@ export default function Home() {
                   >
                     <path d="M7 17L17 7M17 7H7M17 7V17" />
                   </svg>
-                  <div className="relative z-[1] mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-[14px] border border-[rgba(125,162,255,0.25)] bg-gradient-to-br from-[rgba(125,162,255,0.4)] to-[rgba(125,162,255,0.2)] text-sm font-bold text-[#B4CCFF] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-4 max-md:h-12 max-md:w-12 max-md:text-xs max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
-                    x402
+                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(125,162,255,0.25)] bg-gradient-to-br from-[rgba(125,162,255,0.4)] to-[rgba(125,162,255,0.2)] text-xs font-bold text-[#B4CCFF] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
+                    402
                   </div>
-                  <h3 className="relative z-[1] mb-2.5 text-[20px] font-semibold tracking-[0.02em] text-white max-md:text-xl max-[380px]:text-[19px]">
+                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
                     x402
                   </h3>
-                  <p className="relative z-[1] text-[15px] leading-[1.6] text-white/65">
-                    Agent payment protocol
+                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                    Agent payments
+                  </p>
+                </a>
+
+                {/* MCP Card */}
+                <a
+                  href="https://modelcontextprotocol.io"
+                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:#10B981] [--card-glow:rgba(16,185,129,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(16,185,129,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onMouseMove={handleCardMouseMove}
+                >
+                  <svg
+                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M7 17L17 7M17 7H7M17 7V17" />
+                  </svg>
+                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(16,185,129,0.25)] bg-gradient-to-br from-[rgba(16,185,129,0.4)] to-[rgba(16,185,129,0.2)] text-lg font-bold text-[#6EE7B7] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path d="M12 2L2 7l10 5 10-5-10-5z" />
+                      <path d="M2 17l10 5 10-5" />
+                      <path d="M2 12l10 5 10-5" />
+                    </svg>
+                  </div>
+                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
+                    MCP
+                  </h3>
+                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                    Agent tools
                   </p>
                 </a>
 
                 {/* ERC-8004 Card */}
                 <a
-                  href="https://github.com/aibtcdev/erc-8004-stacks"
-                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-9 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:#A855F7] [--card-glow:rgba(168,85,247,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(168,85,247,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-7 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
+                  href="https://eips.ethereum.org/EIPS/eip-8004"
+                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:#A855F7] [--card-glow:rgba(168,85,247,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(168,85,247,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
                   target="_blank"
                   rel="noopener noreferrer"
                   onMouseMove={handleCardMouseMove}
                 >
                   <svg
-                    className="absolute right-6 top-6 h-5 w-5 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
+                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -311,27 +345,60 @@ export default function Home() {
                   >
                     <path d="M7 17L17 7M17 7H7M17 7V17" />
                   </svg>
-                  <div className="relative z-[1] mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-[14px] border border-[rgba(168,85,247,0.25)] bg-gradient-to-br from-[rgba(168,85,247,0.4)] to-[rgba(168,85,247,0.2)] text-lg font-bold text-[#D4ADFF] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-4 max-md:h-12 max-md:w-12 max-md:text-base max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
+                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(168,85,247,0.25)] bg-gradient-to-br from-[rgba(168,85,247,0.4)] to-[rgba(168,85,247,0.2)] text-sm font-bold text-[#D4ADFF] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
                     ID
                   </div>
-                  <h3 className="relative z-[1] mb-2.5 text-[20px] font-semibold tracking-[0.02em] text-white max-md:text-xl max-[380px]:text-[19px]">
+                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
                     ERC-8004
                   </h3>
-                  <p className="relative z-[1] text-[15px] leading-[1.6] text-white/65">
-                    Agent identities
+                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                    Agent identity
+                  </p>
+                </a>
+
+                {/* ERC-8001 Card */}
+                <a
+                  href="https://eips.ethereum.org/EIPS/eip-8001"
+                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:#EC4899] [--card-glow:rgba(236,72,153,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(236,72,153,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  onMouseMove={handleCardMouseMove}
+                >
+                  <svg
+                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M7 17L17 7M17 7H7M17 7V17" />
+                  </svg>
+                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(236,72,153,0.25)] bg-gradient-to-br from-[rgba(236,72,153,0.4)] to-[rgba(236,72,153,0.2)] text-lg font-bold text-[#F9A8D4] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
+                    <svg className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <rect x="3" y="11" width="18" height="11" rx="2" ry="2" />
+                      <path d="M7 11V7a5 5 0 0110 0v4" />
+                    </svg>
+                  </div>
+                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
+                    ERC-8001
+                  </h3>
+                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                    Agent wallets
                   </p>
                 </a>
 
                 {/* sBTC Card */}
                 <a
                   href="https://www.stacks.co/sbtc"
-                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-9 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:var(--color-orange)] [--card-glow:rgba(247,147,26,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(247,147,26,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-7 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
+                  className="card-glow card-accent group relative block overflow-hidden rounded-[20px] border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-7 shadow-[0_4px_24px_rgba(0,0,0,0.2)] backdrop-blur-[12px] transition-all duration-400 [--card-accent:var(--color-orange)] [--card-glow:rgba(247,147,26,0.1)] hover:-translate-y-3 hover:scale-[1.015] hover:border-white/20 hover:bg-gradient-to-br hover:from-[rgba(34,34,34,0.8)] hover:to-[rgba(21,21,21,0.6)] hover:shadow-[0_32px_72px_rgba(0,0,0,0.5),0_0_56px_rgba(247,147,26,0.1)] active:-translate-y-1 active:scale-[1.01] max-md:rounded-2xl max-md:p-6 max-md:hover:translate-y-0 max-md:hover:scale-100 max-md:active:scale-[0.98] max-md:active:opacity-90"
                   target="_blank"
                   rel="noopener noreferrer"
                   onMouseMove={handleCardMouseMove}
                 >
                   <svg
-                    className="absolute right-6 top-6 h-5 w-5 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
+                    className="absolute right-5 top-5 h-4 w-4 text-white/40 transition-all duration-300 group-hover:translate-x-[3px] group-hover:-translate-y-[3px] group-hover:text-white/80"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -341,14 +408,14 @@ export default function Home() {
                   >
                     <path d="M7 17L17 7M17 7H7M17 7V17" />
                   </svg>
-                  <div className="relative z-[1] mb-5 flex h-[52px] w-[52px] items-center justify-center rounded-[14px] border border-[rgba(247,147,26,0.25)] bg-gradient-to-br from-[rgba(247,147,26,0.4)] to-[rgba(247,147,26,0.2)] text-[22px] font-bold text-[#FFCA80] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-4 max-md:h-12 max-md:w-12 max-md:text-xl max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
+                  <div className="relative z-[1] mb-4 flex h-11 w-11 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.25)] bg-gradient-to-br from-[rgba(247,147,26,0.4)] to-[rgba(247,147,26,0.2)] text-xl font-bold text-[#FFCA80] shadow-[0_4px_16px_rgba(0,0,0,0.15)] transition-all duration-400 group-hover:scale-[1.15] group-hover:-rotate-[5deg] group-hover:shadow-[0_8px_24px_rgba(0,0,0,0.25)] max-md:mb-3 max-md:h-10 max-md:w-10 max-md:group-hover:scale-100 max-md:group-hover:rotate-0">
                     ₿
                   </div>
-                  <h3 className="relative z-[1] mb-2.5 text-[20px] font-semibold tracking-[0.02em] text-white max-md:text-xl max-[380px]:text-[19px]">
+                  <h3 className="relative z-[1] mb-1.5 text-[17px] font-semibold tracking-[0.02em] text-white max-md:text-lg">
                     sBTC
                   </h3>
-                  <p className="relative z-[1] text-[15px] leading-[1.6] text-white/65">
-                    Programmable Bitcoin
+                  <p className="relative z-[1] text-[13px] leading-[1.5] text-white/65">
+                    Bitcoin L2
                   </p>
                 </a>
               </div>
