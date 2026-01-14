@@ -218,10 +218,10 @@ export default function Home() {
           {/* Scroll indicator */}
           <a
             href="#our-stack"
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn p-2 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8"
+            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn p-3 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8 max-md:p-4"
             aria-label="Scroll to learn more"
           >
-            <svg className="size-5 animate-bounce-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <svg className="size-5 animate-bounce-slow max-md:size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
             </svg>
           </a>
@@ -258,15 +258,15 @@ export default function Home() {
                     Agent payments
                   </p>
                   <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
-                    <a href="https://x402.org" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://x402.org" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#B4CCFF]">x402.org →</span>
                       <span className="block text-[11px] text-white/40">Protocol specification</span>
                     </a>
-                    <a href="https://www.stacksx402.com" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://www.stacksx402.com" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#B4CCFF]">stacksx402.com →</span>
                       <span className="block text-[11px] text-white/40">Endpoint directory</span>
                     </a>
-                    <a href="https://x402.aibtc.dev" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://x402.aibtc.dev" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#B4CCFF]">x402.aibtc.dev →</span>
                       <span className="block text-[11px] text-white/40">Testnet playground</span>
                     </a>
@@ -289,11 +289,11 @@ export default function Home() {
                     Agent tools
                   </p>
                   <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
-                    <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://modelcontextprotocol.io" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#6EE7B7]">MCP spec →</span>
                       <span className="block text-[11px] text-white/40">Protocol documentation</span>
                     </a>
-                    <a href="https://www.npmjs.com/package/stx402-agent" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://www.npmjs.com/package/stx402-agent" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#6EE7B7]">stx402-agent →</span>
                       <span className="block text-[11px] text-white/40">Stacks wallet MCP server</span>
                     </a>
@@ -312,15 +312,15 @@ export default function Home() {
                     Agent identity
                   </p>
                   <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
-                    <a href="https://eips.ethereum.org/EIPS/eip-8004" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://eips.ethereum.org/EIPS/eip-8004" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#D4ADFF]">ERC-8004 →</span>
                       <span className="block text-[11px] text-white/40">Ethereum EIP spec</span>
                     </a>
-                    <a href="https://github.com/aibtcdev/aibtcdev-daos" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://github.com/aibtcdev/aibtcdev-daos" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#D4ADFF]">GitHub →</span>
                       <span className="block text-[11px] text-white/40">Stacks implementation</span>
                     </a>
-                    <a href="https://github.com/stacksgov/sips" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://github.com/stacksgov/sips" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#D4ADFF]">Stacks SIP →</span>
                       <span className="block text-[11px] text-white/40">Draft proposal</span>
                     </a>
@@ -342,11 +342,11 @@ export default function Home() {
                     Agent wallets
                   </p>
                   <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
-                    <a href="https://eips.ethereum.org/EIPS/eip-8001" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://eips.ethereum.org/EIPS/eip-8001" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#F9A8D4]">ERC-8001 →</span>
                       <span className="block text-[11px] text-white/40">Ethereum EIP spec</span>
                     </a>
-                    <a href="https://github.com/stacksgov/sips" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://github.com/stacksgov/sips" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#F9A8D4]">Stacks SIP →</span>
                       <span className="block text-[11px] text-white/40">Kwame's draft proposal</span>
                     </a>
@@ -367,15 +367,15 @@ export default function Home() {
                     Bitcoin L2
                   </p>
                   <div className="relative z-10 flex flex-col gap-3 border-t border-white/[0.06] pt-4">
-                    <a href="https://www.stacks.co" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://www.stacks.co" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#FFCA80]">stacks.co →</span>
                       <span className="block text-[11px] text-white/40">Stacks ecosystem</span>
                     </a>
-                    <a href="https://www.stacks.co/sbtc" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://www.stacks.co/sbtc" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#FFCA80]">sBTC →</span>
                       <span className="block text-[11px] text-white/40">Bitcoin-backed token</span>
                     </a>
-                    <a href="https://docs.stacks.co" target="_blank" rel="noopener noreferrer" className="group/link block">
+                    <a href="https://docs.stacks.co" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#FFCA80]">Docs →</span>
                       <span className="block text-[11px] text-white/40">Developer documentation</span>
                     </a>
@@ -412,7 +412,7 @@ export default function Home() {
         </section>
 
         {/* Guide Section */}
-        <section id="guide" className="relative px-12 py-[100px] max-lg:px-8 max-lg:py-[80px] max-md:px-6 max-md:py-[64px]">
+        <section id="guide" className="relative scroll-mt-24 px-12 pb-[120px] pt-[140px] max-lg:px-8 max-lg:pb-[100px] max-lg:pt-[120px] max-md:scroll-mt-20 max-md:px-6 max-md:pb-[80px] max-md:pt-[100px]">
           <div className="mx-auto max-w-[800px]">
             {/* Section Header */}
             <div className="mb-12 text-center max-md:mb-10">

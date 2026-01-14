@@ -70,7 +70,7 @@ function CodeBlock({ children }: { children: string }) {
       <code className="font-mono text-[13px] leading-relaxed text-white/70">{children}</code>
       <button
         onClick={handleCopy}
-        className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.05] text-white/40 opacity-0 transition-all hover:border-white/20 hover:text-white/70 group-hover:opacity-100 [pre:hover_&]:opacity-100"
+        className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.05] text-white/40 transition-all hover:border-white/20 hover:text-white/70 max-md:size-10 max-md:opacity-100"
         aria-label="Copy code"
       >
         {copied ? (
@@ -497,10 +497,10 @@ npx wrangler deploy --env staging`}</CodeBlock>
         <div className="mx-auto max-w-[720px]">
           <h2 className="mb-8 text-balance text-center text-xl font-normal">Common Questions</h2>
           {faqs.map((faq, idx) => (
-            <div key={idx} className="border-b border-white/[0.08] py-5 first:border-t">
-              <button onClick={() => toggleFaq(idx)} className="flex w-full items-center justify-between text-left text-[15px]">
+            <div key={idx} className="border-b border-white/[0.08] py-4 first:border-t max-md:py-5">
+              <button onClick={() => toggleFaq(idx)} className="flex w-full items-center justify-between gap-4 text-left text-[15px]">
                 {faq.q}
-                <svg className={`size-[18px] flex-shrink-0 text-white/50 transition-transform ${openFaqs.includes(idx) ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <svg className={`size-5 flex-shrink-0 text-white/50 transition-transform ${openFaqs.includes(idx) ? "rotate-180" : ""}`} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M6 9l6 6 6-6" />
                 </svg>
               </button>
