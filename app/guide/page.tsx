@@ -4,14 +4,27 @@ import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 
-const steps = [
+interface Command {
+  cmd: string;
+  output: string | null;
+  showClaudeUI?: boolean;
+}
+
+interface Step {
+  id: number;
+  title: string;
+  subtitle: string;
+  commands: Command[];
+}
+
+const steps: Step[] = [
   {
     id: 1,
     title: "Install Claude Code",
     subtitle: "Get the AI coding assistant",
     commands: [
       { cmd: "npm install -g @anthropic-ai/claude-code", output: "added 1 package" },
-      { cmd: "claude", output: "Welcome to Claude Code!\nAuthenticating..." },
+      { cmd: "claude", output: null, showClaudeUI: true },
     ],
   },
   {
@@ -53,8 +66,30 @@ const steps = [
   },
 ];
 
-function TerminalWindow({ commands, isActive }: { commands: typeof steps[0]["commands"]; isActive: boolean }) {
-  const [displayedLines, setDisplayedLines] = useState<{ type: "cmd" | "output"; text: string }[]>([]);
+function ClaudeCodeUI() {
+  return (
+    <div className="mt-2 overflow-hidden rounded-lg border border-[#F7931A]/30 bg-[#0a0a0a]">
+      <div className="flex items-center gap-2 border-b border-[#F7931A]/20 bg-[#F7931A]/10 px-3 py-2">
+        <svg className="size-4 text-[#F7931A]" viewBox="0 0 24 24" fill="currentColor">
+          <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+        </svg>
+        <span className="text-xs font-medium text-[#F7931A]">Claude Code</span>
+      </div>
+      <div className="p-3">
+        <div className="mb-3 text-sm text-white/70">
+          Welcome! I can help you build with Bitcoin agents.
+        </div>
+        <div className="flex items-center gap-2 rounded-md border border-white/10 bg-white/5 px-3 py-2">
+          <span className="text-white/30">›</span>
+          <span className="animate-pulse text-sm text-white/50">What would you like to build?</span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function TerminalWindow({ commands, isActive }: { commands: Command[]; isActive: boolean }) {
+  const [displayedLines, setDisplayedLines] = useState<{ type: "cmd" | "output" | "claude-ui"; text: string }[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [currentCharIndex, setCurrentCharIndex] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
@@ -74,13 +109,16 @@ function TerminalWindow({ commands, isActive }: { commands: typeof steps[0]["com
   };
 
   // Flatten commands into lines
-  const allLines: { type: "cmd" | "output"; text: string }[] = [];
+  const allLines: { type: "cmd" | "output" | "claude-ui"; text: string }[] = [];
   commands.forEach((c) => {
     allLines.push({ type: "cmd", text: c.cmd });
     if (c.output) {
       c.output.split("\n").forEach((line) => {
         allLines.push({ type: "output", text: line });
       });
+    }
+    if (c.showClaudeUI) {
+      allLines.push({ type: "claude-ui", text: "" });
     }
   });
 
@@ -173,12 +211,16 @@ function TerminalWindow({ commands, isActive }: { commands: typeof steps[0]["com
       {/* Terminal Content */}
       <div ref={terminalRef} className="h-[320px] overflow-y-auto p-4 font-mono text-[13px] leading-relaxed">
         {displayedLines.map((line, i) => (
-          <div key={i} className={`${line.type === "cmd" ? "flex" : ""}`}>
-            {line.type === "cmd" && <span className="mr-2 text-[#28c840]">❯</span>}
-            <span className={line.type === "cmd" ? "text-white" : "text-white/50"}>
-              {line.text}
-            </span>
-          </div>
+          line.type === "claude-ui" ? (
+            <ClaudeCodeUI key={i} />
+          ) : (
+            <div key={i} className={`${line.type === "cmd" ? "flex" : ""}`}>
+              {line.type === "cmd" && <span className="mr-2 text-[#28c840]">❯</span>}
+              <span className={line.type === "cmd" ? "text-white" : "text-white/50"}>
+                {line.text}
+              </span>
+            </div>
+          )
         ))}
         {isTyping && currentLineIsCommand && (
           <span className="ml-6 inline-block h-[1.1em] w-[2px] animate-blink bg-white/70" />
