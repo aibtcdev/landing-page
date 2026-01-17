@@ -6,8 +6,7 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  maximumScale: 1,
-  userScalable: false,
+  themeColor: "#000000",
 };
 
 export const metadata: Metadata = {
@@ -19,6 +18,9 @@ export const metadata: Metadata = {
   description: "The Bitcoin Coordination Network.",
   keywords: ["Bitcoin", "AI", "Stacks", "L2", "Trading"],
   authors: [{ name: "AIBTC" }],
+  other: {
+    "color-scheme": "dark",
+  },
   openGraph: {
     title: "AIBTC",
     description: "The Bitcoin Coordination Network.",
@@ -59,7 +61,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en">
+    <html lang="en" style={{ colorScheme: "dark" }}>
       <head>
         <link
           rel="preload"
