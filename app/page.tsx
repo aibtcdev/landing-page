@@ -57,7 +57,7 @@ function SocialLinks({
           target="_blank"
           rel="noopener noreferrer"
           onClick={onLinkClick}
-          className={`flex items-center justify-center transition-all duration-200 ${baseStyles}`}
+          className={`flex items-center justify-center transition-[color,background-color,border-color] duration-200 ${baseStyles}`}
           aria-label={link.name}
         >
           {link.icon}
@@ -123,7 +123,7 @@ export default function Home() {
 
       {/* Header */}
       <header
-        className={`fixed left-0 right-0 top-0 z-50 px-12 pb-5 pt-5 transition-all duration-200 ease-out max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
+        className={`fixed left-0 right-0 top-0 z-50 px-12 pb-5 pt-5 transition-[background-color,border-color,padding,backdrop-filter] duration-200 ease-out max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
           isScrolled
             ? "border-b border-white/[0.06] bg-[rgba(10,10,10,0.75)] pb-4 pt-4 backdrop-blur-2xl backdrop-saturate-150 max-md:pb-3 max-md:pt-3"
             : "border-b border-transparent"
@@ -137,27 +137,27 @@ export default function Home() {
               width={120}
               height={32}
               priority
-              className="h-8 w-auto transition-all duration-200 group-hover:drop-shadow-[0_0_20px_rgba(247,147,26,0.5)] max-md:h-7"
+              className="h-8 w-auto transition-[filter] duration-200 group-hover:drop-shadow-[0_0_20px_rgba(247,147,26,0.5)] max-md:h-7"
             />
           </Link>
 
           {/* Mobile Menu Button */}
           <button
-            className={`relative z-50 hidden size-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-all duration-200 hover:border-white/25 hover:bg-white/[0.12] max-md:flex`}
+            className={`relative z-50 hidden size-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-[background-color,border-color] duration-200 hover:border-white/25 hover:bg-white/[0.12] max-md:flex`}
             aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMenuOpen}
             onClick={() => setIsMenuOpen(!isMenuOpen)}
           >
             <div className="flex size-5 flex-col items-center justify-center gap-[5px]">
-              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-200 ${isMenuOpen ? "translate-y-[7px] rotate-45" : ""}`} />
-              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-200 ${isMenuOpen ? "opacity-0" : ""}`} />
-              <span className={`block h-[2px] w-5 rounded-full bg-white transition-all duration-200 ${isMenuOpen ? "-translate-y-[7px] -rotate-45" : ""}`} />
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-[transform,opacity] duration-200 ${isMenuOpen ? "translate-y-[7px] rotate-45" : ""}`} />
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-opacity duration-200 ${isMenuOpen ? "opacity-0" : ""}`} />
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-[transform,opacity] duration-200 ${isMenuOpen ? "-translate-y-[7px] -rotate-45" : ""}`} />
             </div>
           </button>
 
           {/* Navigation */}
           <nav
-            className={`flex items-center gap-9 max-md:fixed max-md:inset-0 max-md:z-50 max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-2 max-md:bg-black/98 max-md:backdrop-blur-[24px] max-md:transition-all max-md:duration-300 ${
+            className={`flex items-center gap-9 max-md:fixed max-md:inset-0 max-md:z-50 max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-2 max-md:bg-black/98 max-md:backdrop-blur-[24px] max-md:transition-[opacity,visibility] max-md:duration-300 ${
               isMenuOpen
                 ? "max-md:visible max-md:opacity-100"
                 : "max-md:invisible max-md:opacity-0 max-md:pointer-events-none"
@@ -169,7 +169,7 @@ export default function Home() {
             <a
               href="#our-stack"
               onClick={() => setIsMenuOpen(false)}
-              className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"
+              className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"
             >
               Start Building
             </a>
@@ -206,7 +206,7 @@ export default function Home() {
             <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
               <a
                 href="https://www.addevent.com/event/UM20108233"
-                className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-all duration-200 hover:bg-[#E8850F] active:scale-[0.98]"
+                className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98]"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -387,7 +387,7 @@ export default function Home() {
               <div className="mt-12 text-center max-md:mt-8">
                 <a
                   href="https://github.com/aibtcdev"
-                  className="inline-flex min-w-[220px] items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white/[0.06] px-10 py-4 text-[16px] font-semibold tracking-normal text-white backdrop-blur-sm transition-all duration-200 hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:max-w-[280px] focus-ring"
+                  className="inline-flex min-w-[220px] items-center justify-center gap-2.5 rounded-2xl border border-white/15 bg-white/[0.06] px-10 py-4 text-[16px] font-semibold tracking-normal text-white backdrop-blur-sm transition-[transform,background-color,border-color] duration-200 hover:-translate-y-1 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:max-w-[280px] focus-ring"
                   target="_blank"
                   rel="noopener noreferrer"
                 >
@@ -426,7 +426,7 @@ export default function Home() {
 
             <Link
               href="/guide"
-              className="group relative block overflow-hidden rounded-2xl border border-white/[0.08] bg-[rgba(20,20,20,0.6)] backdrop-blur-sm transition-all duration-200 hover:border-white/[0.15] hover:bg-[rgba(28,28,28,0.7)]"
+              className="group relative block overflow-hidden rounded-2xl border border-white/[0.08] bg-[rgba(20,20,20,0.6)] backdrop-blur-sm transition-[background-color,border-color] duration-200 hover:border-white/[0.15] hover:bg-[rgba(28,28,28,0.7)]"
             >
               {/* Top accent line */}
               <div className="absolute left-0 top-0 h-px w-full bg-gradient-to-r from-transparent via-[#F7931A]/30 to-transparent" />
@@ -474,7 +474,7 @@ export default function Home() {
                 </div>
 
                 {/* Arrow */}
-                <div className="flex items-center self-center text-white/30 transition-all duration-200 group-hover:translate-x-1 group-hover:text-[#F7931A] max-md:self-start">
+                <div className="flex items-center self-center text-white/30 transition-[transform,color] duration-200 group-hover:translate-x-1 group-hover:text-[#F7931A] max-md:self-start">
                   <svg className="size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                   </svg>
@@ -494,7 +494,7 @@ export default function Home() {
               alt="AIBTC"
               width={100}
               height={24}
-              className="h-6 w-auto opacity-80 transition-all duration-200 group-hover:opacity-100 max-md:h-5"
+              className="h-6 w-auto opacity-80 transition-opacity duration-200 group-hover:opacity-100 max-md:h-5"
             />
           </Link>
           <div className="flex items-center gap-8 max-md:gap-6">
