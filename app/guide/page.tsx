@@ -19,7 +19,7 @@ const steps = [
     title: "Add Wallet MCP",
     subtitle: "Give Claude a Bitcoin wallet",
     commands: [
-      { cmd: "claude mcp add stx402 npx stx402-agent -e NETWORK=testnet", output: "✓ Added MCP server: stx402" },
+      { cmd: "claude mcp add stx402 -- npx stx402-agent@latest -e NETWORK=testnet", output: "✓ Added MCP server: stx402" },
     ],
   },
   {
