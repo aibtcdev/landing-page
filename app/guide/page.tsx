@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import Navbar from "../components/Navbar";
 
 const steps = [
   {
@@ -121,20 +122,10 @@ export default function GuidePage() {
 
   return (
     <div className="min-h-dvh bg-[#09090b] font-[system-ui,-apple-system,sans-serif] text-white">
-      {/* Header */}
-      <header className="sticky top-0 z-50 border-b border-white/[0.08] bg-[#09090b]/80 backdrop-blur-xl">
-        <div className="mx-auto flex max-w-[900px] items-center justify-between px-6 py-4">
-          <Link href="/" className="flex items-center gap-1.5 text-sm text-white/50 transition-colors hover:text-white">
-            <svg className="size-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-              <path d="M19 12H5M12 19l-7-7 7-7" />
-            </svg>
-            aibtc.com
-          </Link>
-        </div>
-      </header>
+      <Navbar />
 
       {/* Hero */}
-      <section className="relative px-6 pb-12 pt-16 text-center">
+      <section className="relative px-6 pb-12 pt-28 text-center">
         <div className="pointer-events-none absolute left-1/2 top-0 h-[300px] w-full max-w-[600px] -translate-x-1/2 bg-[radial-gradient(ellipse_at_center_top,rgba(247,147,26,0.08)_0%,transparent_70%)]" />
         <div className="relative">
           <div className="mb-5 inline-flex items-center gap-1.5 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/[0.08] px-3.5 py-1.5 text-xs text-[#F7931A]">
