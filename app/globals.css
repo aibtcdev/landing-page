@@ -105,6 +105,11 @@
   100% { left: 100%; }
 }
 
+@keyframes blink {
+  0%, 50% { opacity: 1; }
+  51%, 100% { opacity: 0; }
+}
+
 /* Animation classes */
 .animate-float1 {
   animation: float1 30s ease-in-out infinite;
@@ -128,6 +133,10 @@
 
 .animate-bounce-slow {
   animation: bounce 2.5s ease-in-out infinite;
+}
+
+.animate-blink {
+  animation: blink 1s step-end infinite;
 }
 
 /* Shimmer effect for buttons */
