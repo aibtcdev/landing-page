@@ -58,7 +58,20 @@ function TerminalWindow({ commands, isActive }: { commands: typeof steps[0]["com
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [currentCharIndex, setCurrentCharIndex] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
+  const [copied, setCopied] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
+
+  // Get copyable commands (exclude comments)
+  const copyableCommands = commands
+    .map((c) => c.cmd)
+    .filter((cmd) => !cmd.startsWith("#") && !cmd.startsWith('"'))
+    .join("\n");
+
+  const handleCopy = async () => {
+    await navigator.clipboard.writeText(copyableCommands);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
 
   // Flatten commands into lines
   const allLines: { type: "cmd" | "output"; text: string }[] = [];
@@ -131,7 +144,30 @@ function TerminalWindow({ commands, isActive }: { commands: typeof steps[0]["com
           <div className="size-3 rounded-full bg-[#28c840]" />
         </div>
         <span className="flex-1 text-center text-xs text-white/40">Terminal — zsh</span>
-        <div className="w-14" />
+        {copyableCommands && (
+          <button
+            onClick={handleCopy}
+            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/50 transition-colors hover:border-white/20 hover:text-white/70"
+            aria-label="Copy commands"
+          >
+            {copied ? (
+              <>
+                <svg className="size-3.5 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <polyline points="20 6 9 17 4 12" />
+                </svg>
+                Copied!
+              </>
+            ) : (
+              <>
+                <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                </svg>
+                Copy
+              </>
+            )}
+          </button>
+        )}
       </div>
 
       {/* Terminal Content */}
