@@ -213,25 +213,6 @@ export default function GuidePage() {
                 </div>
               </button>
             ))}
-
-            {/* Resources */}
-            <div className="mt-6 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
-              <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-white/40">Resources</h4>
-              <div className="space-y-2">
-                <a href="https://explorer.hiro.so/sandbox/faucet?chain=testnet" target="_blank" className="flex items-center justify-between text-sm text-white/70 transition-colors hover:text-[#F7931A]">
-                  Stacks Testnet Faucet
-                  <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
-                </a>
-                <a href="https://github.com/aibtcdev/x402-api" target="_blank" className="flex items-center justify-between text-sm text-white/70 transition-colors hover:text-[#F7931A]">
-                  x402 API Template
-                  <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
-                </a>
-                <a href="https://discord.gg/fyrsX3mtTk" target="_blank" className="flex items-center justify-between text-sm text-white/70 transition-colors hover:text-[#F7931A]">
-                  AIBTC Discord
-                  <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
-                </a>
-              </div>
-            </div>
           </div>
 
           {/* Right: Terminal */}
@@ -244,6 +225,84 @@ export default function GuidePage() {
             <p className="mt-4 text-center text-xs text-white/30">
               Click a step to see the commands
             </p>
+          </div>
+        </div>
+      </section>
+
+      {/* Resources */}
+      <section className="border-t border-white/[0.06] px-6 py-16">
+        <div className="mx-auto max-w-6xl">
+          <h2 className="mb-8 text-center text-xl font-medium">Quick Reference</h2>
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+            {/* Endpoints */}
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
+              <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-white/40">Endpoints</h4>
+              <div className="space-y-2">
+                {[
+                  { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev" },
+                  { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com" },
+                  { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev" },
+                  { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet" },
+                ].map((link) => (
+                  <a key={link.name} href={link.url} target="_blank" className="flex items-center justify-between text-sm text-white/70 transition-colors hover:text-[#F7931A]">
+                    {link.name}
+                    <svg className="size-3.5 shrink-0 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Repositories */}
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
+              <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-white/40">Repositories</h4>
+              <div className="space-y-2">
+                {[
+                  { name: "stx402-agent MCP", url: "https://www.npmjs.com/package/stx402-agent" },
+                  { name: "x402 API Template", url: "https://github.com/aibtcdev/x402-api" },
+                  { name: "Sponsor Relay", url: "https://github.com/aibtcdev/x402-sponsor-relay" },
+                  { name: "All AIBTC Repos", url: "https://github.com/aibtcdev" },
+                ].map((link) => (
+                  <a key={link.name} href={link.url} target="_blank" className="flex items-center justify-between text-sm text-white/70 transition-colors hover:text-[#F7931A]">
+                    {link.name}
+                    <svg className="size-3.5 shrink-0 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment Tokens */}
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
+              <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-white/40">Payment Tokens</h4>
+              <div className="space-y-2.5">
+                {[
+                  { badge: "STX", desc: "Native Stacks token" },
+                  { badge: "sBTC", desc: "Bitcoin on Stacks" },
+                  { badge: "USDCx", desc: "USDC bridged to Stacks" },
+                ].map((token) => (
+                  <div key={token.badge} className="flex items-center gap-2.5">
+                    <span className="rounded bg-[#F7931A]/10 px-2 py-0.5 font-mono text-xs font-medium text-[#F7931A]">{token.badge}</span>
+                    <span className="text-sm text-white/50">{token.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Get Help */}
+            <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
+              <h4 className="mb-3 text-xs font-medium uppercase tracking-wider text-white/40">Get Help</h4>
+              <div className="space-y-2">
+                {[
+                  { name: "AIBTC Discord", url: "https://discord.gg/fyrsX3mtTk" },
+                  { name: "Stacks Docs", url: "https://docs.stacks.co" },
+                  { name: "x402 Protocol", url: "https://x402.org" },
+                ].map((link) => (
+                  <a key={link.name} href={link.url} target="_blank" className="flex items-center justify-between text-sm text-white/70 transition-colors hover:text-[#F7931A]">
+                    {link.name}
+                    <svg className="size-3.5 shrink-0 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
+                  </a>
+                ))}
+              </div>
+            </div>
           </div>
         </div>
       </section>
