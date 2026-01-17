@@ -112,7 +112,7 @@ export default function Navbar() {
 
         {/* Mobile Menu Button */}
         <button
-          className={`relative z-50 hidden size-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-[background-color,border-color] duration-200 hover:border-white/25 hover:bg-white/[0.12] max-md:flex`}
+          className={`relative z-[60] hidden size-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-[background-color,border-color] duration-200 hover:border-white/25 hover:bg-white/[0.12] max-md:flex`}
           aria-label={isMenuOpen ? "Close menu" : "Open menu"}
           aria-expanded={isMenuOpen}
           onClick={() => setIsMenuOpen(!isMenuOpen)}

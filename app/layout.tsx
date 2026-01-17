@@ -61,8 +61,14 @@ export default function RootLayout({
   children: React.ReactNode;
 }) {
   return (
-    <html lang="en" style={{ colorScheme: "dark" }}>
+    <html lang="en" style={{ colorScheme: "dark" }} data-scroll-behavior="smooth">
       <head>
+        <link
+          rel="preload"
+          href={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
+          as="image"
+          type="image/svg+xml"
+        />
         <link
           rel="preload"
           href={`${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg`}
