@@ -59,6 +59,11 @@
     line-height: 1.6;
     background: #000000;
   }
+
+  /* Optimize touch interactions - removes 300ms tap delay */
+  a, button, [role="button"] {
+    touch-action: manipulation;
+  }
 }
 
 /* Custom animations */
