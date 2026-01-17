@@ -217,3 +217,27 @@
   outline: 2px solid var(--color-orange);
   outline-offset: 3px;
 }
+
+/* Terminal scrollbar - prevent content shift on all devices */
+.terminal-content {
+  scrollbar-gutter: stable;
+}
+
+/* Custom scrollbar styling for terminal */
+.terminal-content::-webkit-scrollbar {
+  width: 8px;
+}
+
+.terminal-content::-webkit-scrollbar-track {
+  background: rgba(255, 255, 255, 0.05);
+  border-radius: 4px;
+}
+
+.terminal-content::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+}
+
+.terminal-content::-webkit-scrollbar-thumb:hover {
+  background: rgba(255, 255, 255, 0.3);
+}

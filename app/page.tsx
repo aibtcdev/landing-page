@@ -156,7 +156,7 @@ export default function Home() {
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#6EE7B7]">MCP spec →</span>
                       <span className="block text-[11px] text-white/40">Protocol documentation</span>
                     </a>
-                    <a href="https://www.npmjs.com/package/stx402-agent" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
+                    <a href="https://github.com/biwasxyz/stx402-agent" target="_blank" rel="noopener noreferrer" className="group/link block py-1 max-md:py-1.5">
                       <span className="text-[12px] text-white/70 transition-colors group-hover/link:text-[#6EE7B7]">stx402-agent →</span>
                       <span className="block text-[11px] text-white/40">Stacks wallet MCP server</span>
                     </a>
