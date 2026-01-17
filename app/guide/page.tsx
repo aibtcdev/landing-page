@@ -70,7 +70,7 @@ function CodeBlock({ children }: { children: string }) {
       <code className="font-mono text-[13px] leading-relaxed text-white/70">{children}</code>
       <button
         onClick={handleCopy}
-        className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.05] text-white/40 transition-all hover:border-white/20 hover:text-white/70 max-md:size-10 max-md:opacity-100"
+        className="absolute right-2 top-2 flex size-8 items-center justify-center rounded-md border border-white/[0.08] bg-white/[0.05] text-white/40 transition-[color,border-color] hover:border-white/20 hover:text-white/70 max-md:size-10 max-md:opacity-100"
         aria-label="Copy code"
       >
         {copied ? (
@@ -158,7 +158,7 @@ export default function GuidePage() {
           </p>
           <div className="grid gap-3 md:grid-cols-3">
             {/* Claude Code Card */}
-            <div className="rounded-xl border border-white/[0.08] bg-[#18181b] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.15]">
+            <div className="rounded-xl border border-white/[0.08] bg-[#18181b] p-5 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-white/[0.15]">
               <div className="mb-3.5 flex size-10 items-center justify-center rounded-lg bg-[#D97757]/[0.12]">
                 <svg className="size-5 text-[#D97757]" viewBox="0 0 16 16" fill="currentColor">
                   <path d="m3.127 10.604 3.135-1.76.053-.153-.053-.085H6.11l-.525-.032-1.791-.048-1.554-.065-1.505-.08-.38-.081L0 7.832l.036-.234.32-.214.455.04 1.009.069 1.513.105 1.097.064 1.626.17h.259l.036-.105-.089-.065-.068-.064-1.566-1.062-1.695-1.121-.887-.646-.48-.327-.243-.306-.104-.67.435-.48.585.04.15.04.593.456 1.267.981 1.654 1.218.242.202.097-.068.012-.049-.109-.181-.9-1.626-.96-1.655-.428-.686-.113-.411a2 2 0 0 1-.068-.484l.496-.674L4.446 0l.662.089.279.242.411.94.666 1.48 1.033 2.014.302.597.162.553.06.17h.105v-.097l.085-1.134.157-1.392.154-1.792.052-.504.25-.605.497-.327.387.186.319.456-.045.294-.19 1.23-.37 1.93-.243 1.29h.142l.161-.16.654-.868 1.097-1.372.484-.545.565-.601.363-.287h.686l.505.751-.226.775-.707.895-.585.759-.839 1.13-.524.904.048.072.125-.012 1.897-.403 1.024-.186 1.223-.21.553.258.06.263-.218.536-1.307.323-1.533.307-2.284.54-.028.02.032.04 1.029.098.44.024h1.077l2.005.15.525.346.315.424-.053.323-.807.411-3.631-.863-.872-.218h-.12v.073l.726.71 1.331 1.202 1.667 1.55.084.383-.214.302-.226-.032-1.464-1.101-.565-.497-1.28-1.077h-.084v.113l.295.432 1.557 2.34.08.718-.112.234-.404.141-.444-.08-.911-1.28-.94-1.44-.759-1.291-.093.053-.448 4.821-.21.246-.484.186-.403-.307-.214-.496.214-.98.258-1.28.21-1.016.19-1.263.112-.42-.008-.028-.092.012-.953 1.307-1.448 1.957-1.146 1.227-.274.109-.477-.247.045-.44.266-.39 1.586-2.018.956-1.25.617-.723-.004-.105h-.036l-4.212 2.736-.75.096-.324-.302.04-.496.154-.162 1.267-.871z"/>
@@ -170,7 +170,7 @@ export default function GuidePage() {
             </div>
 
             {/* Agent Wallet Card */}
-            <div className="rounded-xl border border-white/[0.08] bg-[#18181b] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.15]">
+            <div className="rounded-xl border border-white/[0.08] bg-[#18181b] p-5 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-white/[0.15]">
               <div className="mb-3.5 flex size-10 items-center justify-center rounded-lg bg-[#F7931A]/[0.12]">
                 <svg className="size-5 text-[#F7931A]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <rect x="2" y="6" width="20" height="14" rx="2" />
@@ -184,7 +184,7 @@ export default function GuidePage() {
             </div>
 
             {/* x402 Endpoints Card */}
-            <div className="rounded-xl border border-white/[0.08] bg-[#18181b] p-5 transition-all duration-200 hover:-translate-y-0.5 hover:border-white/[0.15]">
+            <div className="rounded-xl border border-white/[0.08] bg-[#18181b] p-5 transition-[transform,border-color] duration-200 hover:-translate-y-0.5 hover:border-white/[0.15]">
               <div className="mb-3.5 flex size-10 items-center justify-center rounded-lg bg-[#B4CCFF]/[0.12]">
                 <svg className="size-5 text-[#B4CCFF]" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                   <path d="M13 2L3 14h9l-1 8 10-12h-9l1-8z" />
@@ -221,7 +221,7 @@ export default function GuidePage() {
                   setAllExpanded(false);
                   setOpenStep(step.num);
                 }}
-                className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[13px] transition-all ${
+                className={`flex items-center gap-2 rounded-full border px-4 py-2 text-[13px] transition-[color,background-color,border-color] ${
                   openStep === step.num && !allExpanded
                     ? "border-[#F7931A] bg-[#F7931A]/[0.08] text-[#F7931A]"
                     : "border-white/[0.08] text-white/50 hover:border-white/[0.15] hover:text-white/70"
@@ -531,7 +531,7 @@ npx wrangler deploy --env staging`}</CodeBlock>
             <a
               href="https://discord.gg/ZZPeck5P"
               target="_blank"
-              className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-all duration-200 hover:bg-[#E8850F] active:scale-[0.98]"
+              className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98]"
             >
               Join AIBTC Discord
             </a>
