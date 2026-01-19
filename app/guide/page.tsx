@@ -4,6 +4,8 @@ import { useState, useEffect, useRef, useMemo } from "react";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 
+const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 // Hook to detect reduced motion preference
 function usePrefersReducedMotion() {
   const [prefersReducedMotion, setPrefersReducedMotion] = useState(false);
@@ -486,8 +488,28 @@ export default function GuidePage() {
   const [activeStep, setActiveStep] = useState(1);
 
   return (
-    <div className="min-h-dvh bg-[#09090b] text-white">
-      <Navbar />
+    <>
+      {/* Animated Background */}
+      <div
+        className="fixed inset-0 -z-10 overflow-hidden bg-gradient-to-br from-black via-[#0a0a0a] to-[#050208]"
+        aria-hidden="true"
+      >
+        {/* Background Pattern */}
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.08] saturate-[1.3]"
+          style={{ backgroundImage: `url('${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg')` }}
+        />
+
+        {/* Orbs */}
+        <div className="absolute -right-[200px] -top-[250px] h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.3)_0%,rgba(247,147,26,0.1)_40%,transparent_70%)] opacity-60 blur-[100px] animate-float1" />
+        <div className="absolute -bottom-[200px] -left-[150px] h-[500px] w-[500px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.25)_0%,rgba(125,162,255,0.08)_40%,transparent_70%)] opacity-50 blur-[100px] animate-float2" />
+
+        {/* Vignette */}
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.5)_0%,rgba(0,0,0,0.2)_40%,transparent_70%)]" />
+      </div>
+
+      <div className="min-h-dvh text-white">
+        <Navbar />
 
       {/* Hero */}  
       <section className="px-12 pb-6 pt-24 max-lg:px-8 max-md:px-5 md:pb-8 md:pt-28">
@@ -658,6 +680,7 @@ export default function GuidePage() {
           <span>© 2026 AIBTC</span>
         </div>
       </footer>
-    </div>
+      </div>
+    </>
   );
 }
