@@ -50,6 +50,8 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
+    /* Prevent overscroll bounce on mobile that causes background gaps */
+    overscroll-behavior: none;
   }
 
   body {
@@ -58,6 +60,10 @@
     overflow-x: hidden;
     line-height: 1.6;
     background: #000000;
+    /* Prevent overscroll/bounce revealing background gaps on mobile */
+    overscroll-behavior: none;
+    /* Ensure smooth scrolling on iOS */
+    -webkit-overflow-scrolling: touch;
   }
 
   /* Optimize touch interactions - removes 300ms tap delay */

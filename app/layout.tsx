@@ -7,6 +7,7 @@ export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
   themeColor: "#000000",
+  viewportFit: "cover", // Ensures full coverage on notched devices
 };
 
 export const metadata: Metadata = {
