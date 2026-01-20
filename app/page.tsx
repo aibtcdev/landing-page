@@ -51,7 +51,7 @@ const steps: Step[] = [
   {
     id: 1,
     title: "Install Claude Code",
-    subtitle: "Get the AI coding assistant",
+    subtitle: "Set up the AI coding assistant",
     commands: [
       { cmd: "npm install -g @anthropic-ai/claude-code", output: "added 1 package" },
       { cmd: "claude", output: null, showClaudeUI: true },
@@ -60,7 +60,7 @@ const steps: Step[] = [
   {
     id: 2,
     title: "Add Wallet MCP",
-    subtitle: "Give Claude blockchain capabilities",
+    subtitle: "Connect blockchain tools to Claude",
     commands: [
       { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\nUse --testnet flag for testnet.\nRestart your terminal to begin." },
       {
@@ -73,7 +73,7 @@ const steps: Step[] = [
   {
     id: 3,
     title: "Create Wallet",
-    subtitle: "Generate encrypted credentials",
+    subtitle: "Generate your encrypted credentials",
     commands: [
       {
         showClaudeUI: true,
@@ -93,7 +93,7 @@ const steps: Step[] = [
   {
     id: 4,
     title: "Fund & Transact",
-    subtitle: "Get testnet STX and start building",
+    subtitle: "Load tokens and send transactions",
     commands: [
       {
         showClaudeUI: true,
@@ -105,7 +105,7 @@ const steps: Step[] = [
   {
     id: 5,
     title: "Build x402 Endpoint",
-    subtitle: "Create a paid API",
+    subtitle: "Deploy your first paid API",
     commands: [
       { cmd: "git clone https://github.com/aibtcdev/x402-api.git", output: "Cloning into 'x402-api'..." },
       { cmd: "cd x402-api && npm install", output: "added 42 packages" },
@@ -517,7 +517,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6">
+        <section className="relative flex min-h-[90dvh] flex-col items-center justify-center overflow-hidden px-6">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
@@ -573,20 +573,19 @@ export default function Home() {
         </section>
 
         {/* Build Bitcoin Agents in 5 Steps */}
-        <section id="build" className="scroll-mt-20 px-12 pb-12 pt-24 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-28">
+        <section id="build" className="scroll-mt-16 px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
           <div className="mx-auto max-w-[1200px]">
             {/* Section Header */}
             <div className="mb-8 text-center md:mb-12">
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/[0.08] px-3 py-1 text-xs text-[#F7931A]">
-                <span className="size-1.5 rounded-full bg-[#F7931A] motion-safe:animate-pulse" />
-                Interactive Guide
+              <div className="inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/[0.12] px-4 py-1.5 text-sm font-medium text-[#F7931A]">
+                <span className="size-2 rounded-full bg-[#F7931A] motion-safe:animate-pulse" />
+                Interactive Guide — Follow Along Below
               </div>
-              <h2 className="mt-3 text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white md:mt-4">
+              <h2 className="mt-4 text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white md:mt-5">
                 Build Bitcoin Agents in 5 Steps
               </h2>
               <p className="mt-2 text-sm text-white/50 md:text-[15px]">
-                <span className="hidden lg:inline">Follow along with the terminal on the right</span>
-                <span className="lg:hidden">Tap a step to see the commands</span>
+                Get your first agent running in ~10 minutes
               </p>
             </div>
 
@@ -599,10 +598,6 @@ export default function Home() {
                   commands={steps.find((s) => s.id === activeStep)?.commands || []}
                   isActive={true}
                 />
-                <p className="mt-3 text-center text-xs text-white/30 lg:mt-4">
-                  <span className="hidden lg:inline">Click a step to see the commands</span>
-                  <span className="lg:hidden">Tap a step below to switch</span>
-                </p>
               </div>
 
               {/* Steps */}
@@ -612,18 +607,18 @@ export default function Home() {
                     key={step.id}
                     onClick={() => setActiveStep(step.id)}
                     aria-current={activeStep === step.id ? "step" : undefined}
-                    className={`w-full rounded-xl border p-3.5 text-left transition-[border-color,background-color] duration-200 md:p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 ${
+                    className={`group w-full rounded-xl border p-3.5 text-left transition-all duration-200 md:p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 ${
                       activeStep === step.id
                         ? "border-[#F7931A]/40 bg-[#F7931A]/[0.08]"
-                        : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.15] hover:bg-white/[0.04]"
+                        : "border-white/[0.08] bg-white/[0.02] hover:border-[#F7931A]/30 hover:bg-[#F7931A]/[0.04]"
                     }`}
                   >
-                    <div className="flex items-center gap-3 md:items-start md:gap-4">
+                    <div className="flex items-center gap-3 md:gap-4">
                       <div
-                        className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-sm font-medium md:size-8 ${
+                        className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-sm font-medium transition-colors md:size-8 ${
                           activeStep === step.id
                             ? "bg-[#F7931A] text-black"
-                            : "bg-white/[0.08] text-white/60"
+                            : "bg-white/[0.08] text-white/60 group-hover:bg-[#F7931A]/20 group-hover:text-[#F7931A]"
                         }`}
                       >
                         {step.id}
@@ -634,87 +629,23 @@ export default function Home() {
                         </h3>
                         <p className="mt-0.5 truncate text-xs text-white/50 md:text-[13px] md:whitespace-normal">{step.subtitle}</p>
                       </div>
+                      <svg
+                        className={`size-4 shrink-0 transition-all md:size-5 ${
+                          activeStep === step.id
+                            ? "text-[#F7931A]"
+                            : "text-white/20 group-hover:text-[#F7931A]/60 group-hover:translate-x-0.5"
+                        }`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="2"
+                        aria-hidden="true"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
                     </div>
                   </button>
                 ))}
-              </div>
-            </div>
-          </div>
-        </section>
-
-        {/* Quick Reference */}
-        <section className="border-t border-white/[0.06] px-12 py-10 max-lg:px-8 max-md:px-5 md:py-16">
-          <div className="mx-auto max-w-[1200px]">
-            <h2 className="mb-6 text-balance text-center text-lg font-medium md:mb-8 md:text-xl">Quick Reference</h2>
-            <div className="grid gap-3 md:grid-cols-2 md:gap-4 lg:grid-cols-4">
-              {/* Endpoints */}
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 md:p-5">
-                <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-white/40 md:mb-3">Endpoints</h4>
-                <div className="space-y-2">
-                  {[
-                    { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev" },
-                    { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com" },
-                    { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev" },
-                    { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet" },
-                  ].map((link) => (
-                    <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between text-sm text-white/70 transition-colors hover:text-[#F7931A]">
-                      {link.name}
-                      <svg className="size-3.5 shrink-0 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
-                    </a>
-                  ))}
-                </div>
-              </div>
-
-              {/* Repositories */}
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 md:p-5">
-                <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-white/40 md:mb-3">Repositories</h4>
-                <div className="space-y-2">
-                  {[
-                    { name: "AIBTC MCP Server", url: "https://github.com/aibtcdev/aibtc-mcp-server" },
-                    { name: "x402 API Template", url: "https://github.com/aibtcdev/x402-api" },
-                    { name: "Sponsor Relay", url: "https://github.com/aibtcdev/x402-sponsor-relay" },
-                    { name: "All AIBTC Repos", url: "https://github.com/aibtcdev" },
-                  ].map((link) => (
-                    <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between text-sm text-white/70 transition-colors hover:text-[#F7931A]">
-                      {link.name}
-                      <svg className="size-3.5 shrink-0 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
-                    </a>
-                  ))}
-                </div>
-              </div>
-
-              {/* Payment Tokens */}
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 md:p-5">
-                <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-white/40 md:mb-3">Payment Tokens</h4>
-                <div className="space-y-2.5">
-                  {[
-                    { badge: "STX", desc: "Native Stacks token" },
-                    { badge: "sBTC", desc: "Bitcoin on Stacks" },
-                    { badge: "USDCx", desc: "USDC bridged to Stacks" },
-                  ].map((token) => (
-                    <div key={token.badge} className="flex items-center gap-2.5">
-                      <span className="rounded bg-[#F7931A]/10 px-2 py-0.5 font-mono text-xs font-medium text-[#F7931A]">{token.badge}</span>
-                      <span className="text-sm text-white/50">{token.desc}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Get Help */}
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 md:p-5">
-                <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-white/40 md:mb-3">Get Help</h4>
-                <div className="space-y-2">
-                  {[
-                    { name: "AIBTC Discord", url: "https://discord.gg/fyrsX3mtTk" },
-                    { name: "Stacks Docs", url: "https://docs.stacks.co" },
-                    { name: "x402 Protocol", url: "https://x402.org" },
-                  ].map((link) => (
-                    <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center justify-between text-sm text-white/70 transition-colors hover:text-[#F7931A]">
-                      {link.name}
-                      <svg className="size-3.5 shrink-0 text-white/30" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true"><path d="M7 17L17 7M17 7H7M17 7V17" /></svg>
-                    </a>
-                  ))}
-                </div>
               </div>
             </div>
           </div>
@@ -724,23 +655,101 @@ export default function Home() {
 
       {/* Footer */}
       <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between max-md:flex-col max-md:gap-8">
-          <Link href="/" className="group">
-            <Image
-              src={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
-              alt="AIBTC"
-              width={100}
-              height={24}
-              className="h-6 w-auto opacity-80 transition-opacity duration-200 group-hover:opacity-100 max-md:h-5"
-            />
-          </Link>
-          <div className="flex items-center gap-8 max-md:gap-6">
-            <SocialLinks variant="footer" />
+        <div className="mx-auto max-w-[1200px]">
+          {/* Footer Links Grid */}
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
+            {/* Endpoints */}
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">Endpoints</h4>
+              <div className="space-y-2.5">
+                {[
+                  { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev" },
+                  { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com" },
+                  { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev" },
+                  { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet" },
+                ].map((link) => (
+                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-sm text-white/50 transition-colors hover:text-[#F7931A]">
+                    {link.name}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Repositories */}
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">Repositories</h4>
+              <div className="space-y-2.5">
+                {[
+                  { name: "AIBTC MCP Server", url: "https://github.com/aibtcdev/aibtc-mcp-server" },
+                  { name: "x402 API Template", url: "https://github.com/aibtcdev/x402-api" },
+                  { name: "All AIBTC Repos", url: "https://github.com/aibtcdev" },
+                ].map((link) => (
+                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-sm text-white/50 transition-colors hover:text-[#F7931A]">
+                    {link.name}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Resources */}
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">Resources</h4>
+              <div className="space-y-2.5">
+                {[
+                  { name: "Stacks Docs", url: "https://docs.stacks.co" },
+                  { name: "x402 Protocol", url: "https://x402.org" },
+                  { name: "Claude Code", url: "https://claude.ai/code" },
+                ].map((link) => (
+                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-sm text-white/50 transition-colors hover:text-[#F7931A]">
+                    {link.name}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* Payment Tokens */}
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">Payment Tokens</h4>
+              <div className="space-y-2.5">
+                {[
+                  { badge: "STX", desc: "Native Stacks token" },
+                  { badge: "sBTC", desc: "Bitcoin on Stacks" },
+                  { badge: "USDCx", desc: "USDC bridged" },
+                ].map((token) => (
+                  <div key={token.badge} className="flex items-center gap-2">
+                    <span className="rounded bg-[#F7931A]/10 px-1.5 py-0.5 font-mono text-xs font-medium text-[#F7931A]">{token.badge}</span>
+                    <span className="text-sm text-white/40">{token.desc}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            {/* Community */}
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">Join the Community</h4>
+              <p className="mb-4 text-sm text-white/40">Connect with builders and get help.</p>
+              <div className="flex items-center gap-3">
+                <SocialLinks variant="footer" />
+              </div>
+            </div>
+          </div>
+
+          {/* Bottom Bar */}
+          <div className="mt-10 flex items-center justify-between border-t border-white/[0.06] pt-8 max-md:flex-col max-md:gap-4">
+            <Link href="/" className="group">
+              <Image
+                src={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
+                alt="AIBTC"
+                width={100}
+                height={24}
+                className="h-5 w-auto opacity-60 transition-opacity duration-200 group-hover:opacity-100"
+              />
+            </Link>
+            <p className="text-xs text-white/30">
+              © 2026 AIBTC
+            </p>
           </div>
         </div>
-        <p className="mt-10 text-center text-[13px] tracking-normal text-white/40 max-md:mt-8">
-          © 2026 AIBTC
-        </p>
       </footer>
     </>
   );
