@@ -62,7 +62,7 @@ const steps: Step[] = [
     title: "Add Wallet MCP",
     subtitle: "Connect blockchain tools to Claude",
     commands: [
-      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\nUse --testnet flag for testnet.\nRestart your terminal to begin." },
+      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet (use --testnet for testnet)\nRestart your terminal to begin." },
       {
         showClaudeUI: true,
         claudeUserMessage: "What can you do now?",
