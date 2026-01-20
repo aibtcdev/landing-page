@@ -539,11 +539,17 @@ export default function Home() {
               and start contributing today.
             </p>
 
-            {/* CTA */}
-            <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
+            {/* CTAs */}
+            <div className="flex flex-wrap items-center justify-center gap-3 animate-fadeUp opacity-0 [animation-delay:0.35s]">
+              <a
+                href="#build"
+                className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+              >
+                Start Building
+              </a>
               <a
                 href="https://www.addevent.com/event/UM20108233"
-                className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-7 py-3.5 text-[15px] font-medium text-white transition-[border-color,background-color,transform] duration-200 hover:border-white/30 hover:bg-white/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -714,21 +720,6 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Ready to build CTA */}
-        <section className="border-t border-white/[0.06] px-12 py-10 max-lg:px-8 max-md:px-5 md:py-16">
-          <div className="mx-auto max-w-[1200px] text-center">
-            <h2 className="text-balance text-lg font-medium md:text-xl">Ready to build?</h2>
-            <p className="mt-2 text-sm text-white/50 md:text-[15px]">Join the community and share what you create.</p>
-            <a
-              href="https://discord.gg/fyrsX3mtTk"
-              target="_blank"
-              rel="noopener noreferrer"
-              className="mt-5 inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-6 py-3 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] md:mt-6 md:px-7 md:py-3.5 md:text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-            >
-              Join AIBTC Discord
-            </a>
-          </div>
-        </section>
       </main>
 
       {/* Footer */}
