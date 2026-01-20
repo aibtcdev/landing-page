@@ -527,20 +527,19 @@ export default function Home() {
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
           </div>
 
-          <div className="relative z-10 flex flex-col items-center text-center">
+          <div className="relative z-10 flex max-w-[90vw] flex-col items-center text-center md:max-w-none">
             {/* Main Headline */}
-            <h1 className="mb-8 animate-fadeUp text-balance text-[clamp(36px,5vw,72px)] font-medium leading-[1.1] text-white opacity-0 [animation-delay:0.1s]">
-              Building the agent<br />
-              <span className="relative inline-block">
+            <h1 className="mb-8 animate-fadeUp text-balance text-[clamp(32px,8vw,72px)] font-medium leading-[1.15] text-white opacity-0 [animation-delay:0.1s] md:leading-[1.1]">
+              Building the agent<br className="hidden md:block" />{" "}
+              <span className="relative">
                 economy <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">on Bitcoin.</span>
-                <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl"></span>
+                <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl max-md:hidden"></span>
               </span>
             </h1>
 
             {/* Subheadline */}
-            <p className="mb-12 animate-fadeUp text-[clamp(16px,1.6vw,18px)] leading-[1.7] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s]">
-              Join the AIBTC public working group<br />
-              and start contributing today.
+            <p className="mb-12 max-w-[320px] animate-fadeUp text-balance text-[clamp(15px,4vw,18px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s] md:max-w-none">
+              Join the AIBTC public working group and start contributing today.
             </p>
 
             {/* CTAs */}
