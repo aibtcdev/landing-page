@@ -62,7 +62,7 @@ const steps: Step[] = [
     title: "Add Wallet MCP",
     subtitle: "Give Claude blockchain capabilities",
     commands: [
-      { cmd: "claude mcp add stx402 -- npx stx402-agent@latest -e NETWORK=testnet", output: "✓ Added MCP server: stx402" },
+      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\nUse --testnet flag for testnet.\nRestart your terminal to begin." },
       {
         showClaudeUI: true,
         claudeUserMessage: "What can you do now?",
@@ -664,7 +664,7 @@ export default function Home() {
                 <h4 className="mb-2 text-xs font-medium uppercase tracking-wider text-white/40 md:mb-3">Repositories</h4>
                 <div className="space-y-2">
                   {[
-                    { name: "stx402-agent MCP", url: "https://github.com/biwasxyz/stx402-agent" },
+                    { name: "AIBTC MCP Server", url: "https://github.com/aibtcdev/aibtc-mcp-server" },
                     { name: "x402 API Template", url: "https://github.com/aibtcdev/x402-api" },
                     { name: "Sponsor Relay", url: "https://github.com/aibtcdev/x402-sponsor-relay" },
                     { name: "All AIBTC Repos", url: "https://github.com/aibtcdev" },
