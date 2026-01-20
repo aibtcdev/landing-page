@@ -492,9 +492,9 @@ export default function Home() {
 
   return (
     <>
-      {/* Animated Background - simplified on mobile for performance */}
+      {/* Animated Background - uses lvh to prevent shift when mobile browser chrome hides */}
       <div
-        className="fixed inset-0 -z-10 h-[100dvh] w-full overflow-hidden bg-gradient-to-br from-black via-[#0a0a0a] to-[#050208]"
+        className="fixed inset-0 -z-10 min-h-[100lvh] w-full overflow-hidden bg-gradient-to-br from-black via-[#0a0a0a] to-[#050208]"
         aria-hidden="true"
       >
         {/* Background Pattern - optimized for fast loading */}
