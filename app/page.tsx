@@ -84,7 +84,7 @@ const steps: Step[] = [
           },
           {
             user: "MySecureP@ss123",
-            claude: "Creating wallet...\n\n✓ Generated 24-word recovery phrase\n✓ Encrypted with AES-256-GCM + Scrypt\n✓ Stored in ~/.stx402/wallets/\n\nAddress: ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5\n\n⚠️ Save your recovery phrase - it's only shown once!"
+            claude: "Creating wallet...\n\n✓ Generated 24-word recovery phrase\n✓ Encrypted with AES-256-GCM + Scrypt\n✓ Stored in ~/.aibtc/wallets/\n\nAddress: ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5\n\n⚠️ Save your recovery phrase - it's only shown once!"
           },
         ],
       },
