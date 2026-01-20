@@ -289,21 +289,23 @@ function TerminalWindow({ commands, isActive }: { commands: Command[]; isActive:
   const terminalRef = useRef<HTMLDivElement>(null);
 
   // Get copyable content (commands and Claude user messages)
-  const copyableContent = commands
-    .flatMap((c) => {
-      const items: string[] = [];
-      if (c.cmd && !c.cmd.startsWith("#") && !c.cmd.startsWith('"')) {
-        items.push(c.cmd);
-      }
-      if (c.claudeUserMessage) {
-        items.push(c.claudeUserMessage);
-      }
-      if (c.conversation) {
-        c.conversation.forEach((exchange) => items.push(exchange.user));
-      }
-      return items;
-    })
-    .join("\n");
+  const copyableContent = useMemo(() => {
+    return commands
+      .flatMap((c) => {
+        const items: string[] = [];
+        if (c.cmd && !c.cmd.startsWith("#") && !c.cmd.startsWith('"')) {
+          items.push(c.cmd);
+        }
+        if (c.claudeUserMessage) {
+          items.push(c.claudeUserMessage);
+        }
+        if (c.conversation) {
+          c.conversation.forEach((exchange) => items.push(exchange.user));
+        }
+        return items;
+      })
+      .join("\n");
+  }, [commands]);
 
   const handleCopy = async () => {
     await navigator.clipboard.writeText(copyableContent);
@@ -428,7 +430,7 @@ function TerminalWindow({ commands, isActive }: { commands: Command[]; isActive:
         {copyableContent && (
           <button
             onClick={handleCopy}
-            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/50 transition-colors hover:border-white/20 hover:text-white/70"
+            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/50 transition-colors hover:border-white/20 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
             aria-label="Copy commands"
           >
             {copied ? (
@@ -541,7 +543,7 @@ export default function Home() {
             <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
               <a
                 href="https://www.addevent.com/event/UM20108233"
-                className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98]"
+                className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 target="_blank"
                 rel="noopener noreferrer"
               >
@@ -553,12 +555,14 @@ export default function Home() {
           {/* Scroll indicator */}
           <a
             href="#build"
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn p-3 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8 max-md:p-4"
+            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn p-3 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8 max-md:p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:rounded-full"
             aria-label="Scroll to learn more"
           >
-            <svg className="size-5 animate-bounce-slow max-md:size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
-            </svg>
+            <div className="size-5 animate-bounce-slow max-md:size-6">
+              <svg className="size-full" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
+              </svg>
+            </div>
           </a>
         </section>
 
@@ -601,7 +605,8 @@ export default function Home() {
                   <button
                     key={step.id}
                     onClick={() => setActiveStep(step.id)}
-                    className={`w-full rounded-xl border p-3.5 text-left transition-[border-color,background-color] duration-200 md:p-5 ${
+                    aria-current={activeStep === step.id ? "step" : undefined}
+                    className={`w-full rounded-xl border p-3.5 text-left transition-[border-color,background-color] duration-200 md:p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 ${
                       activeStep === step.id
                         ? "border-[#F7931A]/40 bg-[#F7931A]/[0.08]"
                         : "border-white/[0.08] bg-white/[0.02] hover:border-white/[0.15] hover:bg-white/[0.04]"
@@ -718,7 +723,7 @@ export default function Home() {
               href="https://discord.gg/fyrsX3mtTk"
               target="_blank"
               rel="noopener noreferrer"
-              className="mt-5 inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-6 py-3 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] md:mt-6 md:px-7 md:py-3.5 md:text-[15px]"
+              className="mt-5 inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-6 py-3 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] md:mt-6 md:px-7 md:py-3.5 md:text-[15px] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
             >
               Join AIBTC Discord
             </a>
