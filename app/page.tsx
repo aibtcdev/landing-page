@@ -521,7 +521,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[90dvh] flex-col items-center justify-center overflow-hidden px-6 pt-16">
+        <section className="relative flex min-h-[90svh] flex-col items-center justify-center overflow-hidden px-6 pt-16 md:min-h-[90dvh]">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
