@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useMemo } from "react";
 import Image from "next/image";
 import Link from "next/link";
-import Navbar, { SocialLinks } from "./components/Navbar";
+import Navbar from "./components/Navbar";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -50,41 +50,40 @@ interface Step {
 const steps: Step[] = [
   {
     id: 1,
-    title: "Install Claude Code",
-    subtitle: "Set up the AI coding assistant",
+    title: "Install",
+    subtitle: "Get Claude Code + blockchain tools",
     commands: [
       { cmd: "npm install -g @anthropic-ai/claude-code", output: "added 1 package" },
-      { cmd: "claude", output: null, showClaudeUI: true },
+      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\nRestart your terminal to begin." },
     ],
   },
   {
     id: 2,
-    title: "Add Wallet MCP",
-    subtitle: "Connect blockchain tools to Claude",
-    commands: [
-      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet (use --testnet for testnet)\nRestart your terminal to begin." },
-      {
-        showClaudeUI: true,
-        claudeUserMessage: "What can you do now?",
-        claudeResponse: "I now have 50+ blockchain tools:\n\n• Wallet Management - create, import, unlock wallets\n• Token Operations - send STX, sBTC, SIP-010 tokens\n• NFT Support - view holdings, transfer NFTs\n• DeFi Trading - ALEX swaps, Zest lending\n• BNS Domains - resolve .btc names\n• Smart Contracts - deploy and call functions\n• x402 Payments - auto-pay for paid APIs"
-      },
-    ],
-  },
-  {
-    id: 3,
-    title: "Create Wallet",
-    subtitle: "Generate your encrypted credentials",
+    title: "Configure",
+    subtitle: "Create your wallet in seconds",
     commands: [
       {
         showClaudeUI: true,
         conversation: [
           {
-            user: "Create a secure stacks wallet",
-            claude: "I'll create a new encrypted wallet for you.\n\nPlease provide a secure password (min 8 characters):"
+            user: "Create a wallet for my agent",
+            claude: "I'll create an encrypted wallet.\n\n✓ Generated 24-word recovery phrase\n✓ Encrypted with AES-256-GCM\n✓ Stored securely\n\nAddress: ST1SJ3...ZQ8YPD5\n\n⚠️ Save your recovery phrase!"
           },
+        ],
+      },
+    ],
+  },
+  {
+    id: 3,
+    title: "Deploy",
+    subtitle: "Claude builds & deploys your paid API",
+    commands: [
+      {
+        showClaudeUI: true,
+        conversation: [
           {
-            user: "MySecureP@ss123",
-            claude: "Creating wallet...\n\n✓ Generated 24-word recovery phrase\n✓ Encrypted with AES-256-GCM + Scrypt\n✓ Stored in ~/.aibtc/wallets/\n\nAddress: ST1SJ3DTE5DN7X54YDH5D64R3BCB6A2AG2ZQ8YPD5\n\n⚠️ Save your recovery phrase - it's only shown once!"
+            user: "Create a paid API endpoint that returns dad jokes for 0.001 STX per request",
+            claude: "I'll create an x402 endpoint for you.\n\nCreating Cloudflare Worker...\n✓ Generated dad-jokes-api project\n✓ Added x402 payment middleware\n✓ Set price: 0.001 STX per request\n✓ Configured your wallet as recipient\n\nDeploying to Cloudflare Workers...\n✓ Deployed to dad-jokes-api.workers.dev\n\nYour API is live and earning!"
           },
         ],
       },
@@ -92,24 +91,94 @@ const steps: Step[] = [
   },
   {
     id: 4,
-    title: "Fund & Transact",
-    subtitle: "Load tokens and send transactions",
+    title: "Earn",
+    subtitle: "Every request pays you directly",
     commands: [
+      { cmd: "curl https://dad-jokes-api.workers.dev/api/joke", output: "402 Payment Required\n\n→ Price: 0.001 STX\n→ Pay to: ST1SJ3...ZQ8YPD5" },
       {
         showClaudeUI: true,
-        claudeUserMessage: "How much STX do you have?",
-        claudeResponse: "Let me check my balance...\n\nBalance: 0 STX\n\nTo get testnet STX, visit the Stacks faucet:\nhttps://explorer.hiro.so/sandbox/faucet?chain=testnet\n\nOnce funded, I can:\n• Send tokens to any address\n• Swap on ALEX DEX\n• Deploy smart contracts\n• Pay for x402 API calls"
+        claudeUserMessage: "Call my joke endpoint and pay for it",
+        claudeResponse: "Calling your endpoint with x402 payment...\n\n✓ Signed payment: 0.001 STX\n✓ Request sent\n\nResponse:\n\"Why don't scientists trust atoms? Because they make up everything!\"\n\n✓ Payment settled to your wallet"
       },
     ],
   },
   {
     id: 5,
-    title: "Build x402 Endpoint",
-    subtitle: "Deploy your first paid API",
+    title: "Scale",
+    subtitle: "Add more endpoints, grow your earnings",
     commands: [
-      { cmd: "git clone https://github.com/aibtcdev/x402-api.git", output: "Cloning into 'x402-api'..." },
-      { cmd: "cd x402-api && npm install", output: "added 42 packages" },
-      { cmd: "npx wrangler deploy --env staging", output: "✓ Deployed to x402-api.workers.dev" },
+      {
+        showClaudeUI: true,
+        claudeUserMessage: "Check my earnings and create another endpoint for AI summaries at 0.01 STX",
+        claudeResponse: "Checking your wallet...\n\n💰 Earnings today: 0.05 STX (50 requests)\n💰 Total earned: 2.3 STX\n\nCreating new endpoint...\n✓ Generated ai-summary-api project\n✓ Added OpenRouter integration\n✓ Set price: 0.01 STX per request\n✓ Deployed to ai-summary-api.workers.dev\n\nYou now have 2 earning endpoints!"
+      },
+    ],
+  },
+];
+
+// Hero terminal showing x402 earning flow
+const heroTerminalCommands: Command[] = [
+  { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc tools to Claude Code" },
+  { cmd: "claude", output: null },
+  {
+    showClaudeUI: true,
+    conversation: [
+      {
+        user: "Create a paid API that tells dad jokes. Charge 0.001 STX per joke.",
+        claude: "I'll create and deploy that for you.\n\n✓ Created dad-jokes-api\n✓ Added x402 payment (0.001 STX)\n✓ Deployed to dad-jokes-api.workers.dev\n\nYour endpoint is live and earning!"
+      },
+      {
+        user: "How much have I earned?",
+        claude: "💰 12 requests today = 0.012 STX earned\n\nYour joke API is working for you 24/7."
+      },
+    ],
+  },
+];
+
+// Open Standards projects data
+const openStandardsProjects = [
+  {
+    name: "AIBTC MCP Server",
+    description: "Blockchain tools for Claude Code",
+    links: [
+      { type: "github", url: "https://github.com/aibtcdev/aibtc-mcp-server", label: "GitHub" },
+      { type: "website", url: "https://www.npmjs.com/package/@aibtc/mcp-server", label: "npm" },
+    ],
+  },
+  {
+    name: "x402 API Template",
+    description: "Paid API endpoint starter",
+    links: [
+      { type: "github", url: "https://github.com/aibtcdev/x402-api", label: "GitHub" },
+    ],
+  },
+  {
+    name: "x402 Protocol",
+    description: "HTTP payment standard",
+    links: [
+      { type: "website", url: "https://x402.org", label: "Website" },
+    ],
+  },
+  {
+    name: "Stacks",
+    description: "Bitcoin L2 with smart contracts",
+    links: [
+      { type: "docs", url: "https://docs.stacks.co", label: "Docs" },
+      { type: "github", url: "https://github.com/stacks-network", label: "GitHub" },
+    ],
+  },
+  {
+    name: "Claude Code",
+    description: "AI coding assistant",
+    links: [
+      { type: "website", url: "https://claude.ai/code", label: "Website" },
+    ],
+  },
+  {
+    name: "sBTC",
+    description: "Bitcoin on Stacks",
+    links: [
+      { type: "website", url: "https://sbtc.tech", label: "Website" },
     ],
   },
 ];
@@ -278,7 +347,7 @@ interface DisplayLine {
   conversation?: ConversationExchange[];
 }
 
-function TerminalWindow({ commands, isActive }: { commands: Command[]; isActive: boolean }) {
+function TerminalWindow({ commands, isActive, height = "default" }: { commands: Command[]; isActive: boolean; height?: "default" | "tall" }) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const [displayedLines, setDisplayedLines] = useState<DisplayLine[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
@@ -417,6 +486,8 @@ function TerminalWindow({ commands, isActive }: { commands: Command[]; isActive:
   const isTyping = currentLineIndex < allLines.length;
   const currentLineIsCommand = currentLineIndex < allLines.length && allLines[currentLineIndex].type === "cmd";
 
+  const heightClass = height === "tall" ? "h-[380px] md:h-[420px]" : "h-[280px] md:h-[320px]";
+
   return (
     <div className="overflow-hidden rounded-xl border border-white/[0.1] bg-[#0d0d0d] shadow-2xl">
       {/* macOS Title Bar */}
@@ -454,7 +525,7 @@ function TerminalWindow({ commands, isActive }: { commands: Command[]; isActive:
       </div>
 
       {/* Terminal Content */}
-      <div ref={terminalRef} className="terminal-content h-[280px] overflow-y-auto p-3 font-mono text-xs leading-relaxed md:h-[320px] md:p-4 md:text-[13px]">
+      <div ref={terminalRef} className={`terminal-content ${heightClass} overflow-y-auto p-3 font-mono text-xs leading-relaxed md:p-4 md:text-[13px]`}>
         {displayedLines.map((line, i) => (
           line.type === "claude-ui" ? (
             <ClaudeCodeUI
@@ -482,6 +553,66 @@ function TerminalWindow({ commands, isActive }: { commands: Command[]; isActive:
             <span className="inline-block h-[1.1em] w-[2px] animate-blink bg-white/70" />
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+// Icon components for Open Standards cards
+function GitHubIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+      <path d="M12 0c-6.626 0-12 5.373-12 12 0 5.302 3.438 9.8 8.207 11.387.599.111.793-.261.793-.577v-2.234c-3.338.726-4.033-1.416-4.033-1.416-.546-1.387-1.333-1.756-1.333-1.756-1.089-.745.083-.729.083-.729 1.205.084 1.839 1.237 1.839 1.237 1.07 1.834 2.807 1.304 3.492.997.107-.775.418-1.305.762-1.604-2.665-.305-5.467-1.334-5.467-5.931 0-1.311.469-2.381 1.236-3.221-.124-.303-.535-1.524.117-3.176 0 0 1.008-.322 3.301 1.23.957-.266 1.983-.399 3.003-.404 1.02.005 2.047.138 3.006.404 2.291-1.552 3.297-1.23 3.297-1.23.653 1.653.242 2.874.118 3.176.77.84 1.235 1.911 1.235 3.221 0 4.609-2.807 5.624-5.479 5.921.43.372.823 1.102.823 2.222v3.293c0 .319.192.694.801.576 4.765-1.589 8.199-6.086 8.199-11.386 0-6.627-5.373-12-12-12z"/>
+    </svg>
+  );
+}
+
+function GlobeIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <circle cx="12" cy="12" r="10"/>
+      <line x1="2" y1="12" x2="22" y2="12"/>
+      <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"/>
+    </svg>
+  );
+}
+
+function BookIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+      <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+    </svg>
+  );
+}
+
+
+function OpenStandardsCard({ project }: { project: typeof openStandardsProjects[0] }) {
+  return (
+    <div className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 transition-all duration-200 hover:border-[#F7931A]/30 hover:bg-[#F7931A]/[0.04]">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 flex-1">
+          <h3 className="text-[15px] font-medium text-white group-hover:text-[#F7931A] transition-colors">
+            {project.name}
+          </h3>
+          <p className="mt-1 text-sm text-white/50">{project.description}</p>
+        </div>
+        <div className="flex shrink-0 items-center gap-2">
+          {project.links.map((link, i) => (
+            <a
+              key={i}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/40 transition-colors hover:border-white/20 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
+              aria-label={`${project.name} ${link.label}`}
+            >
+              {link.type === "github" && <GitHubIcon className="size-4" />}
+              {link.type === "website" && <GlobeIcon className="size-4" />}
+              {link.type === "docs" && <BookIcon className="size-4" />}
+            </a>
+          ))}
+        </div>
       </div>
     </div>
   );
@@ -520,44 +651,49 @@ export default function Home() {
 
       {/* Main Content */}
       <main id="main">
-        {/* Hero Section */}
+        {/* Hero Section - Two Column Layout */}
         <section className="relative flex min-h-[90svh] flex-col items-center justify-center overflow-hidden px-6 pt-16 md:min-h-[90dvh]">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
           </div>
 
-          <div className="relative z-10 flex max-w-[90vw] flex-col items-center text-center md:max-w-none">
-            {/* Main Headline */}
-            <h1 className="mb-8 animate-fadeUp text-balance text-[clamp(32px,8vw,72px)] font-medium leading-[1.15] text-white opacity-0 [animation-delay:0.1s] md:leading-[1.1]">
-              Building the agent<br className="hidden md:block" />{" "}
-              <span className="relative">
-                economy <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">on Bitcoin.</span>
-                <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl max-md:hidden"></span>
-              </span>
-            </h1>
+          <div className="relative z-10 mx-auto w-full max-w-[1200px]">
+            <div className="flex flex-col gap-8 lg:grid lg:grid-cols-2 lg:items-center lg:gap-12">
+              {/* Left: Copy */}
+              <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
+                {/* Main Headline */}
+                <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,7vw,56px)] font-medium leading-[1.15] text-white opacity-0 [animation-delay:0.1s] md:leading-[1.1]">
+                  Let your ideas{" "}
+                  <span className="relative">
+                    <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">earn for you.</span>
+                    <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl max-md:hidden"></span>
+                  </span>
+                </h1>
 
-            {/* Subheadline */}
-            <p className="mb-12 max-w-[320px] animate-fadeUp text-balance text-[clamp(15px,4vw,18px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s] md:max-w-none">
-              Join the AIBTC public working group and start contributing today.
-            </p>
+                {/* Subheadline */}
+                <p className="mb-8 max-w-[440px] animate-fadeUp text-balance text-[clamp(15px,4vw,18px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s]">
+                  Build an agent with its own Bitcoin wallet and paid services in 10 minutes or less.
+                </p>
 
-            {/* CTAs */}
-            <div className="flex flex-wrap items-center justify-center gap-3 animate-fadeUp opacity-0 [animation-delay:0.35s]">
-              <a
-                href="#build"
-                className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-              >
-                Start Building
-              </a>
-              <a
-                href="https://www.addevent.com/event/UM20108233"
-                className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-7 py-3.5 text-[15px] font-medium text-white transition-[border-color,background-color,transform] duration-200 hover:border-white/30 hover:bg-white/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                Join Weekly Call
-              </a>
+                {/* CTA */}
+                <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
+                  <a
+                    href="#build"
+                    className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-8 py-4 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                  >
+                    Start Building
+                  </a>
+                </div>
+              </div>
+
+              {/* Right: Terminal */}
+              <div className="animate-fadeUp opacity-0 [animation-delay:0.3s]">
+                <TerminalWindow
+                  commands={heroTerminalCommands}
+                  isActive={true}
+                />
+              </div>
             </div>
           </div>
 
@@ -575,20 +711,16 @@ export default function Home() {
           </a>
         </section>
 
-        {/* Build Bitcoin Agents in 5 Steps */}
+        {/* Go from Zero to Agent - Interactive Guide */}
         <section id="build" className="scroll-mt-16 px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
           <div className="mx-auto max-w-[1200px]">
             {/* Section Header */}
             <div className="mb-8 text-center md:mb-12">
-              <div className="inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/[0.12] px-4 py-1.5 text-sm font-medium text-[#F7931A]">
-                <span className="size-2 rounded-full bg-[#F7931A] motion-safe:animate-pulse" />
-                Interactive Guide — Follow Along Below
-              </div>
-              <h2 className="mt-4 text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white md:mt-5">
-                Build Bitcoin Agents in 5 Steps
+              <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
+                Go from Zero to Agent
               </h2>
-              <p className="mt-2 text-sm text-white/50 md:text-[15px]">
-                Get your first agent running in ~10 minutes
+              <p className="mt-3 text-sm text-white/50 md:text-[15px]">
+                Open your terminal app and follow each step by copying the prompts.
               </p>
             </div>
 
@@ -654,24 +786,79 @@ export default function Home() {
           </div>
         </section>
 
+        {/* Built on Open Standards */}
+        <section className="px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
+          <div className="mx-auto max-w-[1200px]">
+            {/* Section Header */}
+            <div className="mb-8 text-center md:mb-12">
+              <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
+                Built on Open Standards
+              </h2>
+              <p className="mt-2 text-sm text-white/50 md:text-[15px]">
+                Every piece is open source. Inspect it, fork it, improve it.
+              </p>
+            </div>
+
+            {/* Project Cards Grid */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {openStandardsProjects.map((project) => (
+                <OpenStandardsCard key={project.name} project={project} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* Join the Community */}
+        <section className="px-12 pb-20 pt-16 max-lg:px-8 max-md:px-5 md:pb-28 md:pt-20">
+          <div className="mx-auto max-w-[600px] text-center">
+            {/* Section Header */}
+            <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
+              Join the Community
+            </h2>
+            <p className="mt-2 text-sm text-white/50 md:text-[15px]">
+              All builders are welcome to join the AIBTC public working group.
+            </p>
+
+            {/* CTAs */}
+            <div className="mt-8 flex flex-wrap items-center justify-center gap-4">
+              <a
+                href="https://www.addevent.com/event/UM20108233"
+                className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-7 py-3.5 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Attend Weekly Calls
+              </a>
+              <a
+                href="https://discord.gg/5DJaBrf"
+                className="inline-flex items-center justify-center rounded-xl border border-white/20 bg-white/5 px-7 py-3.5 text-[15px] font-medium text-white transition-[border-color,background-color,transform] duration-200 hover:border-white/30 hover:bg-white/10 active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/30 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                target="_blank"
+                rel="noopener noreferrer"
+              >
+                Join AIBTC Discord
+              </a>
+            </div>
+          </div>
+        </section>
       </main>
 
-      {/* Footer */}
+      {/* Footer - Quick Reference */}
       <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
         <div className="mx-auto max-w-[1200px]">
-          {/* Footer Links Grid */}
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
+          {/* Quick Reference Grid */}
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
             {/* Endpoints */}
             <div>
               <h4 className="mb-4 text-sm font-semibold text-white/70">Endpoints</h4>
               <div className="space-y-2.5">
                 {[
-                  { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev" },
-                  { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com" },
-                  { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev" },
-                  { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet" },
+                  { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev", type: "website" },
+                  { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com", type: "website" },
+                  { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev", type: "website" },
+                  { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet", type: "website" },
                 ].map((link) => (
-                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-sm text-white/50 transition-colors hover:text-[#F7931A]">
+                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]">
+                    <GlobeIcon className="size-3.5 shrink-0" />
                     {link.name}
                   </a>
                 ))}
@@ -687,7 +874,8 @@ export default function Home() {
                   { name: "x402 API Template", url: "https://github.com/aibtcdev/x402-api" },
                   { name: "All AIBTC Repos", url: "https://github.com/aibtcdev" },
                 ].map((link) => (
-                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-sm text-white/50 transition-colors hover:text-[#F7931A]">
+                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]">
+                    <GitHubIcon className="size-3.5 shrink-0" />
                     {link.name}
                   </a>
                 ))}
@@ -699,11 +887,12 @@ export default function Home() {
               <h4 className="mb-4 text-sm font-semibold text-white/70">Resources</h4>
               <div className="space-y-2.5">
                 {[
-                  { name: "Stacks Docs", url: "https://docs.stacks.co" },
-                  { name: "x402 Protocol", url: "https://x402.org" },
-                  { name: "Claude Code", url: "https://claude.ai/code" },
+                  { name: "Stacks Docs", url: "https://docs.stacks.co", type: "docs" },
+                  { name: "x402 Protocol", url: "https://x402.org", type: "website" },
+                  { name: "Claude Code", url: "https://claude.ai/code", type: "website" },
                 ].map((link) => (
-                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="block text-sm text-white/50 transition-colors hover:text-[#F7931A]">
+                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]">
+                    {link.type === "docs" ? <BookIcon className="size-3.5 shrink-0" /> : <GlobeIcon className="size-3.5 shrink-0" />}
                     {link.name}
                   </a>
                 ))}
@@ -714,25 +903,9 @@ export default function Home() {
             <div>
               <h4 className="mb-4 text-sm font-semibold text-white/70">Payment Tokens</h4>
               <div className="space-y-2.5">
-                {[
-                  { badge: "STX", desc: "Native Stacks token" },
-                  { badge: "sBTC", desc: "Bitcoin on Stacks" },
-                  { badge: "USDCx", desc: "USDC bridged" },
-                ].map((token) => (
-                  <div key={token.badge} className="flex items-center gap-2">
-                    <span className="rounded bg-[#F7931A]/10 px-1.5 py-0.5 font-mono text-xs font-medium text-[#F7931A]">{token.badge}</span>
-                    <span className="text-sm text-white/40">{token.desc}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-
-            {/* Community */}
-            <div>
-              <h4 className="mb-4 text-sm font-semibold text-white/70">Join the Community</h4>
-              <p className="mb-4 text-sm text-white/40">Connect with builders and get help.</p>
-              <div className="flex items-center gap-3">
-                <SocialLinks variant="footer" />
+                <span className="block text-sm text-white/50">STX</span>
+                <span className="block text-sm text-white/50">sBTC</span>
+                <span className="block text-sm text-white/50">USDCx</span>
               </div>
             </div>
           </div>
