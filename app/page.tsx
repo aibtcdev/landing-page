@@ -652,7 +652,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section - Two Column Layout */}
-        <section className="relative flex min-h-[90svh] flex-col items-center justify-center overflow-hidden px-6 pt-16 md:min-h-[90dvh]">
+        <section className="relative flex min-h-[95svh] flex-col items-center justify-center overflow-hidden px-6 pt-16 md:min-h-[90dvh] md:pt-24">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
@@ -661,7 +661,7 @@ export default function Home() {
           <div className="relative z-10 mx-auto w-full max-w-[1200px]">
             <div className="flex flex-col gap-8 lg:grid lg:grid-cols-2 lg:items-center lg:gap-12">
               {/* Left: Copy */}
-              <div className="flex flex-col items-center text-center lg:items-start lg:text-left">
+              <div className="flex flex-col items-start text-left">
                 {/* Main Headline */}
                 <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,7vw,56px)] font-medium leading-[1.15] text-white opacity-0 [animation-delay:0.1s] md:leading-[1.1]">
                   Let your ideas earn{" "}
@@ -673,12 +673,12 @@ export default function Home() {
                 </h1>
 
                 {/* Subheadline */}
-                <p className="mb-8 max-w-[440px] animate-fadeUp text-balance text-[clamp(15px,4vw,18px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s]">
+                <p className="mb-0 max-w-[440px] animate-fadeUp text-balance text-[clamp(15px,4vw,18px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s] lg:mb-8">
                   Build autonomous agents and paid services on Bitcoin&apos;s Agentic Layer.
                 </p>
 
-                {/* CTA */}
-                <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
+                {/* CTA - Desktop only */}
+                <div className="hidden animate-fadeUp opacity-0 [animation-delay:0.35s] lg:block">
                   <a
                     href="#build"
                     className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-8 py-4 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
@@ -695,13 +695,23 @@ export default function Home() {
                   isActive={true}
                 />
               </div>
+
+              {/* CTA - Mobile only, after terminal */}
+              <div className="w-full animate-fadeUp opacity-0 [animation-delay:0.4s] lg:hidden">
+                <a
+                  href="#build"
+                  className="inline-flex w-full items-center justify-center rounded-xl bg-[#F7931A] px-8 py-4 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
+                >
+                  Start Building
+                </a>
+              </div>
             </div>
           </div>
 
           {/* Scroll indicator */}
           <a
             href="#build"
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn p-3 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8 max-md:p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:rounded-full"
+            className="absolute bottom-2 left-1/2 -translate-x-1/2 animate-fadeIn p-3 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:-bottom-6 max-md:p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:rounded-full"
             aria-label="Scroll to learn more"
           >
             <div className="size-5 animate-bounce-slow max-md:size-6">
