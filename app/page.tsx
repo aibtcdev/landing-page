@@ -59,22 +59,32 @@ const steps: Step[] = [
     subtitle: "AI coding assistant from Anthropic",
     skippable: true,
     commands: [
-      { cmd: "curl -fsSL https://claude.ai/code/install.sh -o install.sh && sh install.sh", output: "Downloading installer...\n✓ Downloaded install.sh (inspect before running if desired)\n\nInstalling Claude Code...\n✓ Installed to ~/.claude/bin/claude\n✓ Added to PATH\n\nRun 'claude' to start." },
+      { link: { text: "Claude Code install page", url: "https://claude.ai/code" } },
+      { cmd: "curl -fsSL https://claude.ai/code/install.sh | sh", output: "Installing Claude Code...\n✓ Installed to ~/.claude/bin/claude\n✓ Added to PATH\n\nRun 'claude' to start." },
     ],
   },
   {
     id: 2,
-    title: "Add Bitcoin Tools",
-    subtitle: "Blockchain tools for Claude",
+    title: "Install Node.js",
+    subtitle: "Required for npm/npx commands",
+    skippable: true,
     commands: [
-      { link: { text: "Requires Node.js", url: "https://nodejs.org" } },
-      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\n⚠️ Restart Claude Code to activate." },
+      { link: { text: "Download Node.js", url: "https://nodejs.org" } },
+      { cmd: "node --version", output: "v22.0.0" },
     ],
   },
   {
     id: 3,
+    title: "Add Stacks Tools",
+    subtitle: "Smart contracts on Bitcoin",
+    commands: [
+      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\n⚠️ Restart Claude Code to activate." },
+    ],
+  },
+  {
+    id: 4,
     title: "Create Wallet",
-    subtitle: "Your agent's Bitcoin identity",
+    subtitle: "Your agent's identity on Stacks",
     commands: [
       {
         showClaudeUI: true,
@@ -88,7 +98,7 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 4,
+    id: 5,
     title: "Build",
     subtitle: "Scaffold from a template",
     commands: [
@@ -106,23 +116,26 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 5,
+    id: 6,
     title: "Deploy",
     subtitle: "Get your API online",
     commands: [
+      { link: { text: "Cloudflare Workers", url: "https://workers.cloudflare.com" } },
+      { link: { text: "Vercel", url: "https://vercel.com" } },
+      { link: { text: "Railway", url: "https://railway.app" } },
       {
         showClaudeUI: true,
         conversation: [
           {
-            user: "Deploy this API",
-            claude: "Where would you like to deploy?\n\n• Cloudflare Workers - wrangler deploy\n• Railway/Render - git push\n• Docker - docker build && docker push\n\nI'll handle the deployment once you choose a platform.\n\n🚀 Once live, every request pays you via x402!"
+            user: "Deploy this to Cloudflare Workers",
+            claude: "Deploying to Cloudflare Workers...\n\n✓ Authenticated with Cloudflare\n✓ Built and bundled\n✓ Deployed to yield-hunter.workers.dev\n\n🚀 Live! Every request now pays you via x402."
           },
         ],
       },
     ],
   },
   {
-    id: 6,
+    id: 7,
     title: "Earn",
     subtitle: "x402 handles payments automatically",
     commands: [
@@ -130,8 +143,8 @@ const steps: Step[] = [
         showClaudeUI: true,
         conversation: [
           {
-            user: "Show my x402 earnings",
-            claude: "Checking wallet transactions...\n\n💰 12 requests = 0.0012 sBTC earned\n\nTip: The x402-api template includes a /stats endpoint for building dashboards."
+            user: "Show my earnings",
+            claude: "Checking your wallet...\n\n💰 12 requests = 0.0012 sBTC earned\n\nTip: Build a dashboard with the /stats endpoint from the x402-api template."
           },
         ],
       },
