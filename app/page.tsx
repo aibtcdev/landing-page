@@ -59,7 +59,7 @@ const steps: Step[] = [
     subtitle: "AI coding assistant from Anthropic",
     skippable: true,
     commands: [
-      { cmd: "curl -fsSL https://claude.ai/code/install.sh | sh", output: "Installing Claude Code...\n✓ Installed to ~/.claude/bin/claude\n✓ Added to PATH\n\nRun 'claude' to start." },
+      { cmd: "curl -fsSL https://claude.ai/code/install.sh -o install.sh && sh install.sh", output: "Downloading installer...\n✓ Downloaded install.sh (inspect before running if desired)\n\nInstalling Claude Code...\n✓ Installed to ~/.claude/bin/claude\n✓ Added to PATH\n\nRun 'claude' to start." },
     ],
   },
   {
@@ -67,6 +67,7 @@ const steps: Step[] = [
     title: "Add Bitcoin Tools",
     subtitle: "Blockchain tools for Claude",
     commands: [
+      { link: { text: "Requires Node.js", url: "https://nodejs.org" } },
       { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\n⚠️ Restart Claude Code to activate." },
     ],
   },
@@ -97,8 +98,8 @@ const steps: Step[] = [
         showClaudeUI: true,
         conversation: [
           {
-            user: "Build an x402 endpoint using the x402-api template that returns the best sBTC yield opportunities",
-            claude: "I'll scaffold from aibtcdev/x402-api...\n\n✓ Cloned template\n✓ Configured x402 middleware\n✓ Set price: 0.0001 sBTC per request\n✓ Added yield-hunter endpoint\n\nReady to deploy!"
+            user: "Build an x402 endpoint that returns the best sBTC yield opportunities",
+            claude: "I'll scaffold from one of the templates above...\n\n✓ Cloned template\n✓ Configured x402 middleware\n✓ Set price: 0.0001 sBTC per request\n✓ Added yield-hunter endpoint\n\nReady to deploy!"
           },
         ],
       },
@@ -113,8 +114,8 @@ const steps: Step[] = [
         showClaudeUI: true,
         conversation: [
           {
-            user: "Deploy this to Cloudflare Workers",
-            claude: "Deploying to Cloudflare Workers...\n\n✓ Authenticated with Cloudflare\n✓ Uploaded worker bundle\n✓ Configured routes\n\n🚀 Live at: yield-hunter.your-account.workers.dev\n\nEvery request now pays you via x402!"
+            user: "Deploy this API",
+            claude: "Where would you like to deploy?\n\n• Cloudflare Workers - wrangler deploy\n• Railway/Render - git push\n• Docker - docker build && docker push\n\nI'll handle the deployment once you choose a platform.\n\n🚀 Once live, every request pays you via x402!"
           },
         ],
       },
@@ -124,7 +125,6 @@ const steps: Step[] = [
     id: 6,
     title: "Earn",
     subtitle: "x402 handles payments automatically",
-    skippable: true,
     commands: [
       {
         showClaudeUI: true,
