@@ -60,20 +60,21 @@ const steps: Step[] = [
     skippable: true,
     commands: [
       { link: { text: "Claude Code install page", url: "https://claude.ai/code" } },
-      { cmd: "curl -fsSL https://claude.ai/code/install.sh | sh", output: "Installing Claude Code...\n✓ Installed to ~/.claude/bin/claude\n✓ Added to PATH\n\nRun 'claude' to start." },
+      { cmd: "curl -fsSL https://claude.ai/code/install.sh | sh", output: "Installing Claude Code...\n✓ Installed to ~/.claude/bin/claude\n✓ Added to PATH\nRun 'claude' to start." },
     ],
   },
   {
     id: 2,
     title: "Add Stacks Tools",
-    subtitle: "Smart contracts on Bitcoin",
+    subtitle: "Tools to build on Bitcoin",
     skippable: true,
     commands: [
+      { link: { text: "aibtc mcp server on npm", url: "https://www.npmjs.com/package/@aibtc/mcp-server" } },
       {
         showClaudeUI: true,
         conversation: [
           {
-            user: "Help me install the aibtc MCP server for Stacks development",
+            user: "Help me install the aibtc mcp server from npm",
             claude: "I'll set that up for you.\n\n✓ Node.js found (v22.0.0)\n✓ Installing @aibtc/mcp-server...\n✓ Added to Claude Code config\n✓ Configured for mainnet\n\nRestart Claude Code to activate the Stacks tools."
           },
         ],
@@ -117,11 +118,10 @@ const steps: Step[] = [
   {
     id: 5,
     title: "Deploy",
-    subtitle: "Get your API online",
+    subtitle: "Get your x402 API online",
     commands: [
       { link: { text: "Cloudflare Workers", url: "https://workers.cloudflare.com" } },
       { link: { text: "Vercel", url: "https://vercel.com" } },
-      { link: { text: "Railway", url: "https://railway.app" } },
       {
         showClaudeUI: true,
         conversation: [
@@ -142,7 +142,7 @@ const steps: Step[] = [
         showClaudeUI: true,
         conversation: [
           {
-            user: "Show my earnings",
+            user: "Check my wallet balance for x402 earnings",
             claude: "Checking your wallet...\n\n💰 12 requests = 0.0012 sBTC earned\n\nTip: Build a dashboard with the /stats endpoint from the x402-api template."
           },
         ],
@@ -581,19 +581,36 @@ function TerminalWindow({ commands, isActive, height = "default", showCopy = tru
               onAnimationComplete={i === displayedLines.length - 1 ? handleClaudeUIComplete : undefined}
             />
           ) : line.type === "link" ? (
-            <div key={i} className="my-2">
-              <a
-                href={line.linkUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-2 text-sm text-[#F7931A] transition-colors hover:bg-[#F7931A]/20"
-              >
-                {line.text}
-                <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                </svg>
-              </a>
-            </div>
+            (() => {
+              const prevIsLink = i > 0 && displayedLines[i - 1]?.type === "link";
+              // Skip rendering if previous was also a link (it was included in the group)
+              if (prevIsLink) return null;
+              // Collect all consecutive links starting from this one
+              const linkGroup = [line];
+              let j = i + 1;
+              while (j < displayedLines.length && displayedLines[j]?.type === "link") {
+                linkGroup.push(displayedLines[j]);
+                j++;
+              }
+              return (
+                <div key={i} className="my-2 flex flex-wrap gap-2">
+                  {linkGroup.map((linkLine, idx) => (
+                    <a
+                      key={idx}
+                      href={linkLine.linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-2 text-sm text-[#F7931A] transition-colors hover:bg-[#F7931A]/20"
+                    >
+                      {linkLine.text}
+                      <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                      </svg>
+                    </a>
+                  ))}
+                </div>
+              );
+            })()
           ) : (
             <div key={i} className={`${line.type === "cmd" ? "flex" : ""}`}>
               {line.type === "cmd" && <span className="mr-2 shrink-0 text-[#28c840]">❯</span>}
