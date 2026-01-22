@@ -77,14 +77,23 @@ const steps: Step[] = [
     id: 3,
     title: "Add Stacks Tools",
     subtitle: "Smart contracts on Bitcoin",
+    skippable: true,
     commands: [
-      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\n⚠️ Restart Claude Code to activate." },
+      {
+        showClaudeUI: true,
+        conversation: [
+          {
+            user: "Install the aibtc MCP server",
+            claude: "I'll check your setup and install the tools.\n\n✓ npm found (v10.2.0)\n✓ Installing @aibtc/mcp-server...\n✓ Added to Claude Code config\n✓ Configured for mainnet\n\nRestart Claude Code to activate."
+          },
+        ],
+      },
     ],
   },
   {
     id: 4,
     title: "Create Wallet",
-    subtitle: "Your agent's identity on Stacks",
+    subtitle: "On-chain identity",
     commands: [
       {
         showClaudeUI: true,
