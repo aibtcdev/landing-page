@@ -65,16 +65,6 @@ const steps: Step[] = [
   },
   {
     id: 2,
-    title: "Install Node.js",
-    subtitle: "Required for npm/npx commands",
-    skippable: true,
-    commands: [
-      { link: { text: "Download Node.js", url: "https://nodejs.org" } },
-      { cmd: "node --version", output: "v22.0.0" },
-    ],
-  },
-  {
-    id: 3,
     title: "Add Stacks Tools",
     subtitle: "Smart contracts on Bitcoin",
     skippable: true,
@@ -83,17 +73,17 @@ const steps: Step[] = [
         showClaudeUI: true,
         conversation: [
           {
-            user: "Install the aibtc MCP server",
-            claude: "I'll check your setup and install the tools.\n\n✓ npm found (v10.2.0)\n✓ Installing @aibtc/mcp-server...\n✓ Added to Claude Code config\n✓ Configured for mainnet\n\nRestart Claude Code to activate."
+            user: "Help me install the aibtc MCP server for Stacks development",
+            claude: "I'll set that up for you.\n\n✓ Node.js found (v22.0.0)\n✓ Installing @aibtc/mcp-server...\n✓ Added to Claude Code config\n✓ Configured for mainnet\n\nRestart Claude Code to activate the Stacks tools."
           },
         ],
       },
     ],
   },
   {
-    id: 4,
+    id: 3,
     title: "Create Wallet",
-    subtitle: "On-chain identity",
+    subtitle: "Your agent's on-chain identity",
     commands: [
       {
         showClaudeUI: true,
@@ -107,7 +97,7 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 5,
+    id: 4,
     title: "Build",
     subtitle: "Scaffold from a template",
     commands: [
@@ -125,7 +115,7 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 6,
+    id: 5,
     title: "Deploy",
     subtitle: "Get your API online",
     commands: [
@@ -144,7 +134,7 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 7,
+    id: 6,
     title: "Earn",
     subtitle: "x402 handles payments automatically",
     commands: [
