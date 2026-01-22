@@ -24,8 +24,7 @@ npm run deploy       # Deploy to Cloudflare Workers (requires .env with CF crede
 
 ## Key Files
 
-- `app/page.tsx` - Main landing page (client component with scroll effects and animated background)
-- `app/guide/page.tsx` - Interactive step-by-step guide for building with Bitcoin agents
+- `app/page.tsx` - Main landing page with interactive "Zero to Agent" guide (client component with scroll effects and animated background)
 - `app/layout.tsx` - Root layout with metadata and Open Graph configuration
 - `app/globals.css` - Global styles, custom fonts (Roc Grotesk), and CSS animations
 - `next.config.ts` - Next.js configuration

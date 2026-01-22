@@ -55,34 +55,25 @@ interface Step {
 const steps: Step[] = [
   {
     id: 1,
-    title: "Install Node.js",
-    subtitle: "Required for npm package manager",
+    title: "Install Claude Code",
+    subtitle: "AI coding assistant from Anthropic",
     skippable: true,
     commands: [
-      { link: { text: "Download Node.js (includes npm)", url: "https://nodejs.org" } },
-      { cmd: "npm --version", output: "10.2.0  ✓ npm is installed" },
+      { cmd: "curl -fsSL https://claude.ai/code/install.sh | sh", output: "Installing Claude Code...\n✓ Installed to ~/.claude/bin/claude\n✓ Added to PATH\n\nRun 'claude' to start." },
     ],
   },
   {
     id: 2,
-    title: "Install Claude Code",
-    subtitle: "AI coding assistant from Anthropic",
+    title: "Add Bitcoin Tools",
+    subtitle: "Blockchain tools for Claude",
     commands: [
-      { cmd: "npm install -g @anthropic-ai/claude-code", output: "added 1 package" },
+      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\n⚠️ Restart Claude Code to activate." },
     ],
   },
   {
     id: 3,
-    title: "Add AIBTC Tools",
-    subtitle: "Blockchain tools for Claude",
-    commands: [
-      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\nRestart your terminal to begin." },
-    ],
-  },
-  {
-    id: 4,
-    title: "Configure",
-    subtitle: "Create your wallet in seconds",
+    title: "Create Wallet",
+    subtitle: "Your agent's Bitcoin identity",
     commands: [
       {
         showClaudeUI: true,
@@ -96,16 +87,34 @@ const steps: Step[] = [
     ],
   },
   {
+    id: 4,
+    title: "Build",
+    subtitle: "Scaffold from a template",
+    commands: [
+      { link: { text: "Cloudflare Workers template", url: "https://github.com/aibtcdev/x402-api" } },
+      { link: { text: "Express/Hono template", url: "https://github.com/aibtcdev/x402-crosschain-example" } },
+      {
+        showClaudeUI: true,
+        conversation: [
+          {
+            user: "Build an x402 endpoint using the x402-api template that returns the best sBTC yield opportunities",
+            claude: "I'll scaffold from aibtcdev/x402-api...\n\n✓ Cloned template\n✓ Configured x402 middleware\n✓ Set price: 0.0001 sBTC per request\n✓ Added yield-hunter endpoint\n\nReady to deploy!"
+          },
+        ],
+      },
+    ],
+  },
+  {
     id: 5,
     title: "Deploy",
-    subtitle: "Claude builds & deploys your paid API",
+    subtitle: "Get your API online",
     commands: [
       {
         showClaudeUI: true,
         conversation: [
           {
-            user: "Build a paid x402 endpoint paid in sBTC that hunts down the best Bitcoin yield.",
-            claude: "I'll create an x402 endpoint for you.\n\nCreating Cloudflare Worker...\n✓ Generated yield-hunter-api project\n✓ Added x402 payment middleware\n✓ Set price: 0.0001 sBTC per query\n✓ Configured your wallet as recipient\n\nDeploying to Cloudflare Workers...\n✓ Deployed to yield-hunter-api.workers.dev\n\nYour API is live and earning!"
+            user: "Deploy this to Cloudflare Workers",
+            claude: "Deploying to Cloudflare Workers...\n\n✓ Authenticated with Cloudflare\n✓ Uploaded worker bundle\n✓ Configured routes\n\n🚀 Live at: yield-hunter.your-account.workers.dev\n\nEvery request now pays you via x402!"
           },
         ],
       },
@@ -113,15 +122,16 @@ const steps: Step[] = [
   },
   {
     id: 6,
-    title: "Earn & Scale",
-    subtitle: "Every request pays you directly",
+    title: "Earn",
+    subtitle: "x402 handles payments automatically",
+    skippable: true,
     commands: [
       {
         showClaudeUI: true,
         conversation: [
           {
-            user: "What are my earnings today?",
-            claude: "Checking your wallet transactions...\n\n💰 You've earned 0.0127 sBTC today\n\nKeep building endpoints to grow your earnings!"
+            user: "Show my x402 earnings",
+            claude: "Checking wallet transactions...\n\n💰 12 requests = 0.0012 sBTC earned\n\nTip: The x402-api template includes a /stats endpoint for building dashboards."
           },
         ],
       },
