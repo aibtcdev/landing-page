@@ -465,10 +465,15 @@ function TerminalWindow({ commands, isActive, height = "default", showCopy = tru
       const timeout = setTimeout(() => {
         setDisplayedLines((prev) => {
           const newLines = [...prev];
+          const newLine: DisplayLine = {
+            type: currentLine.type,
+            text: currentLine.text.slice(0, currentCharIndex + 1),
+            linkUrl: currentLine.linkUrl,
+          };
           if (newLines.length <= currentLineIndex) {
-            newLines.push({ type: currentLine.type, text: currentLine.text.slice(0, currentCharIndex + 1) });
+            newLines.push(newLine);
           } else {
-            newLines[currentLineIndex] = { type: currentLine.type, text: currentLine.text.slice(0, currentCharIndex + 1) };
+            newLines[currentLineIndex] = newLine;
           }
           return newLines;
         });
@@ -554,18 +559,19 @@ function TerminalWindow({ commands, isActive, height = "default", showCopy = tru
               onAnimationComplete={i === displayedLines.length - 1 ? handleClaudeUIComplete : undefined}
             />
           ) : line.type === "link" ? (
-            <a
-              key={i}
-              href={line.linkUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="my-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-2 text-sm text-[#F7931A] transition-colors hover:bg-[#F7931A]/20"
-            >
-              {line.text}
-              <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-              </svg>
-            </a>
+            <div key={i} className="my-2">
+              <a
+                href={line.linkUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-2 text-sm text-[#F7931A] transition-colors hover:bg-[#F7931A]/20"
+              >
+                {line.text}
+                <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                </svg>
+              </a>
+            </div>
           ) : (
             <div key={i} className={`${line.type === "cmd" ? "flex" : ""}`}>
               {line.type === "cmd" && <span className="mr-2 shrink-0 text-[#28c840]">❯</span>}
