@@ -82,8 +82,8 @@ const steps: Step[] = [
         showClaudeUI: true,
         conversation: [
           {
-            user: "Create a paid API endpoint that returns dad jokes for 0.001 STX per request",
-            claude: "I'll create an x402 endpoint for you.\n\nCreating Cloudflare Worker...\n✓ Generated dad-jokes-api project\n✓ Added x402 payment middleware\n✓ Set price: 0.001 STX per request\n✓ Configured your wallet as recipient\n\nDeploying to Cloudflare Workers...\n✓ Deployed to dad-jokes-api.workers.dev\n\nYour API is live and earning!"
+            user: "Build a paid x402 endpoint paid in sBTC that hunts down the best Bitcoin yield.",
+            claude: "I'll create an x402 endpoint for you.\n\nCreating Cloudflare Worker...\n✓ Generated yield-hunter-api project\n✓ Added x402 payment middleware\n✓ Set price: 0.0001 sBTC per query\n✓ Configured your wallet as recipient\n\nDeploying to Cloudflare Workers...\n✓ Deployed to yield-hunter-api.workers.dev\n\nYour API is live and earning!"
           },
         ],
       },
@@ -94,11 +94,11 @@ const steps: Step[] = [
     title: "Earn",
     subtitle: "Every request pays you directly",
     commands: [
-      { cmd: "curl https://dad-jokes-api.workers.dev/api/joke", output: "402 Payment Required\n\n→ Price: 0.001 STX\n→ Pay to: ST1SJ3...ZQ8YPD5" },
+      { cmd: "curl https://yield-hunter-api.workers.dev/api/optimize", output: "402 Payment Required\n\n→ Price: 0.0001 sBTC\n→ Pay to: ST1SJ3...ZQ8YPD5" },
       {
         showClaudeUI: true,
-        claudeUserMessage: "Call my joke endpoint and pay for it",
-        claudeResponse: "Calling your endpoint with x402 payment...\n\n✓ Signed payment: 0.001 STX\n✓ Request sent\n\nResponse:\n\"Why don't scientists trust atoms? Because they make up everything!\"\n\n✓ Payment settled to your wallet"
+        claudeUserMessage: "Call my yield endpoint and pay for it",
+        claudeResponse: "Calling your endpoint with x402 payment...\n\n✓ Signed payment: 0.0001 sBTC\n✓ Request sent\n\nResponse:\n\"Best yield: Zest stSTX pool at 8.2% APY\"\n\n✓ Payment settled to your wallet"
       },
     ],
   },
@@ -124,12 +124,12 @@ const heroTerminalCommands: Command[] = [
     showClaudeUI: true,
     conversation: [
       {
-        user: "Create a paid API that tells dad jokes. Charge 0.001 STX per joke.",
-        claude: "I'll create and deploy that for you.\n\n✓ Created dad-jokes-api\n✓ Added x402 payment (0.001 STX)\n✓ Deployed to dad-jokes-api.workers.dev\n\nYour endpoint is live and earning!"
+        user: "Build a paid x402 endpoint paid in sBTC that hunts down the best Bitcoin yield.",
+        claude: "I'll create and deploy that for you.\n\n✓ Created yield-hunter-api\n✓ Added x402 payment (e.g., 0.0001 sBTC per query/optimization)\n✓ Deployed to yield-hunter-api.workers.dev\n\nYour endpoint is live and earning!"
       },
       {
         user: "How much have I earned?",
-        claude: "💰 12 requests today = 0.012 STX earned\n\nYour joke API is working for you 24/7."
+        claude: "💰 45 requests today = 0.0045 sBTC earned\n\nYour yield-hunting API is working for you 24/7—autonomously scanning Stacks DeFi (Zest, Bitflow, Hermetica), optimizing sBTC yields, and compounding real Bitcoin value."
       },
     ],
   },
