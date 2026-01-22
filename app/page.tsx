@@ -38,6 +38,10 @@ interface Command {
   claudeUserMessage?: string;
   claudeResponse?: string;
   conversation?: ConversationExchange[];
+  link?: {
+    text: string;
+    url: string;
+  };
 }
 
 interface Step {
@@ -45,20 +49,38 @@ interface Step {
   title: string;
   subtitle: string;
   commands: Command[];
+  skippable?: boolean;
 }
 
 const steps: Step[] = [
   {
     id: 1,
-    title: "Install",
-    subtitle: "Get Claude Code + blockchain tools",
+    title: "Install Node.js",
+    subtitle: "Required for npm package manager",
+    skippable: true,
     commands: [
-      { cmd: "npm install -g @anthropic-ai/claude-code", output: "added 1 package" },
-      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\nRestart your terminal to begin." },
+      { link: { text: "Download Node.js (includes npm)", url: "https://nodejs.org" } },
+      { cmd: "npm --version", output: "10.2.0  ✓ npm is installed" },
     ],
   },
   {
     id: 2,
+    title: "Install Claude Code",
+    subtitle: "AI coding assistant from Anthropic",
+    commands: [
+      { cmd: "npm install -g @anthropic-ai/claude-code", output: "added 1 package" },
+    ],
+  },
+  {
+    id: 3,
+    title: "Add AIBTC Tools",
+    subtitle: "Blockchain tools for Claude",
+    commands: [
+      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\nRestart your terminal to begin." },
+    ],
+  },
+  {
+    id: 4,
     title: "Configure",
     subtitle: "Create your wallet in seconds",
     commands: [
@@ -74,7 +96,7 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 3,
+    id: 5,
     title: "Deploy",
     subtitle: "Claude builds & deploys your paid API",
     commands: [
@@ -90,27 +112,18 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 4,
-    title: "Earn",
+    id: 6,
+    title: "Earn & Scale",
     subtitle: "Every request pays you directly",
     commands: [
-      { cmd: "curl https://yield-hunter-api.workers.dev/api/optimize", output: "402 Payment Required\n\n→ Price: 0.0001 sBTC\n→ Pay to: ST1SJ3...ZQ8YPD5" },
       {
         showClaudeUI: true,
-        claudeUserMessage: "Call my yield endpoint and pay for it",
-        claudeResponse: "Calling your endpoint with x402 payment...\n\n✓ Signed payment: 0.0001 sBTC\n✓ Request sent\n\nResponse:\n\"Best yield: Zest stSTX pool at 8.2% APY\"\n\n✓ Payment settled to your wallet"
-      },
-    ],
-  },
-  {
-    id: 5,
-    title: "Scale",
-    subtitle: "Add more endpoints, grow your earnings",
-    commands: [
-      {
-        showClaudeUI: true,
-        claudeUserMessage: "Check my earnings and create another endpoint for AI summaries at 0.01 STX",
-        claudeResponse: "Checking your wallet...\n\n💰 Earnings today: 0.05 STX (50 requests)\n💰 Total earned: 2.3 STX\n\nCreating new endpoint...\n✓ Generated ai-summary-api project\n✓ Added OpenRouter integration\n✓ Set price: 0.01 STX per request\n✓ Deployed to ai-summary-api.workers.dev\n\nYou now have 2 earning endpoints!"
+        conversation: [
+          {
+            user: "What are my earnings today?",
+            claude: "Checking your wallet transactions...\n\n💰 You've earned 0.0127 sBTC today\n\nKeep building endpoints to grow your earnings!"
+          },
+        ],
       },
     ],
   },
@@ -340,21 +353,22 @@ function ClaudeCodeUI({
 }
 
 interface DisplayLine {
-  type: "cmd" | "output" | "claude-ui";
+  type: "cmd" | "output" | "claude-ui" | "link";
   text: string;
   claudeUserMessage?: string;
   claudeResponse?: string;
   conversation?: ConversationExchange[];
+  linkUrl?: string;
 }
 
-function TerminalWindow({ commands, isActive, height = "default" }: { commands: Command[]; isActive: boolean; height?: "default" | "tall" }) {
+function TerminalWindow({ commands, isActive, height = "default", showCopy = true }: { commands: Command[]; isActive: boolean; height?: "default" | "tall"; showCopy?: boolean }) {
   const prefersReducedMotion = usePrefersReducedMotion();
   const [displayedLines, setDisplayedLines] = useState<DisplayLine[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
   const [currentCharIndex, setCurrentCharIndex] = useState(0);
   const [hasStarted, setHasStarted] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [waitingForClaudeUI, setWaitingForClaudeUI] = useState(false);
+  const [copied, setCopied] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
 
   // Get copyable content (commands and Claude user messages)
@@ -382,10 +396,14 @@ function TerminalWindow({ commands, isActive, height = "default" }: { commands: 
     setTimeout(() => setCopied(false), 2000);
   };
 
+
   // Flatten commands into lines (memoized to avoid recreation on every render)
   const allLines = useMemo(() => {
     const lines: DisplayLine[] = [];
     commands.forEach((c) => {
+      if (c.link) {
+        lines.push({ type: "link", text: c.link.text, linkUrl: c.link.url });
+      }
       if (c.cmd) {
         lines.push({ type: "cmd", text: c.cmd });
       }
@@ -498,11 +516,11 @@ function TerminalWindow({ commands, isActive, height = "default" }: { commands: 
           <div className="size-3 rounded-full bg-[#28c840]" />
         </div>
         <span className="flex-1 text-center text-xs text-white/40">Terminal — zsh</span>
-        {copyableContent && (
+        {showCopy && copyableContent && (
           <button
             onClick={handleCopy}
             className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/50 transition-colors hover:border-white/20 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
-            aria-label="Copy commands"
+            aria-label="Copy command"
           >
             {copied ? (
               <>
@@ -535,6 +553,19 @@ function TerminalWindow({ commands, isActive, height = "default" }: { commands: 
               conversation={line.conversation}
               onAnimationComplete={i === displayedLines.length - 1 ? handleClaudeUIComplete : undefined}
             />
+          ) : line.type === "link" ? (
+            <a
+              key={i}
+              href={line.linkUrl}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="my-2 inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-2 text-sm text-[#F7931A] transition-colors hover:bg-[#F7931A]/20"
+            >
+              {line.text}
+              <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+              </svg>
+            </a>
           ) : (
             <div key={i} className={`${line.type === "cmd" ? "flex" : ""}`}>
               {line.type === "cmd" && <span className="mr-2 shrink-0 text-[#28c840]">❯</span>}
@@ -693,6 +724,7 @@ export default function Home() {
                 <TerminalWindow
                   commands={heroTerminalCommands}
                   isActive={true}
+                  showCopy={false}
                 />
               </div>
 
@@ -773,7 +805,23 @@ export default function Home() {
                         <h3 className={`text-sm font-medium md:text-[15px] ${activeStep === step.id ? "text-white" : "text-white/80"}`}>
                           {step.title}
                         </h3>
-                        <p className="mt-0.5 truncate text-xs text-white/50 md:text-[13px] md:whitespace-normal">{step.subtitle}</p>
+                        <p className="mt-0.5 truncate text-xs text-white/50 md:text-[13px] md:whitespace-normal">
+                          {step.subtitle}
+                          {step.skippable && activeStep === step.id && (
+                            <>
+                              {" · "}
+                              <span
+                                role="button"
+                                tabIndex={0}
+                                onClick={(e) => { e.stopPropagation(); setActiveStep(step.id + 1); }}
+                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setActiveStep(step.id + 1); } }}
+                                className="cursor-pointer text-white/40 transition-colors hover:text-[#F7931A]"
+                              >
+                                Skip if installed →
+                              </span>
+                            </>
+                          )}
+                        </p>
                       </div>
                       <svg
                         className={`size-4 shrink-0 transition-all md:size-5 ${
