@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef, useMemo } from "react";
+import { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import Navbar from "./components/Navbar";
@@ -24,6 +24,38 @@ function usePrefersReducedMotion() {
   }, []);
 
   return prefersReducedMotion;
+}
+
+// Hook for swipe gesture detection
+function useSwipe(onSwipeLeft: () => void, onSwipeRight: () => void) {
+  const touchStartX = useRef<number | null>(null);
+  const touchEndX = useRef<number | null>(null);
+  const minSwipeDistance = 50;
+
+  const onTouchStart = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = null;
+    touchStartX.current = e.targetTouches[0].clientX;
+  }, []);
+
+  const onTouchMove = useCallback((e: React.TouchEvent) => {
+    touchEndX.current = e.targetTouches[0].clientX;
+  }, []);
+
+  const onTouchEnd = useCallback(() => {
+    if (!touchStartX.current || !touchEndX.current) return;
+
+    const distance = touchStartX.current - touchEndX.current;
+    const isLeftSwipe = distance > minSwipeDistance;
+    const isRightSwipe = distance < -minSwipeDistance;
+
+    if (isLeftSwipe) {
+      onSwipeLeft();
+    } else if (isRightSwipe) {
+      onSwipeRight();
+    }
+  }, [onSwipeLeft, onSwipeRight]);
+
+  return { onTouchStart, onTouchMove, onTouchEnd };
 }
 
 interface ConversationExchange {
@@ -55,34 +87,36 @@ interface Step {
 const steps: Step[] = [
   {
     id: 1,
-    title: "Install Node.js",
-    subtitle: "Required for npm package manager",
+    title: "Install Claude Code",
+    subtitle: "AI coding assistant from Anthropic",
     skippable: true,
     commands: [
-      { link: { text: "Download Node.js (includes npm)", url: "https://nodejs.org" } },
-      { cmd: "npm --version", output: "10.2.0  ✓ npm is installed" },
+      { link: { text: "Claude Code install page", url: "https://claude.ai/code" } },
+      { cmd: "curl -fsSL https://claude.ai/code/install.sh | sh", output: "Installing Claude Code...\n✓ Installed to ~/.claude/bin/claude\n✓ Added to PATH\nRun 'claude' to start." },
     ],
   },
   {
     id: 2,
-    title: "Install Claude Code",
-    subtitle: "AI coding assistant from Anthropic",
+    title: "Add Stacks Tools",
+    subtitle: "Tools to build on Bitcoin",
+    skippable: true,
     commands: [
-      { cmd: "npm install -g @anthropic-ai/claude-code", output: "added 1 package" },
+      { link: { text: "aibtc mcp server on npm", url: "https://www.npmjs.com/package/@aibtc/mcp-server" } },
+      {
+        showClaudeUI: true,
+        conversation: [
+          {
+            user: "Help me install the aibtc mcp server from npm",
+            claude: "I'll set that up for you.\n\n✓ Node.js found (v22.0.0)\n✓ Installing @aibtc/mcp-server...\n✓ Added to Claude Code config\n✓ Configured for mainnet\n\nRestart Claude Code to activate the Stacks tools."
+          },
+        ],
+      },
     ],
   },
   {
     id: 3,
-    title: "Add AIBTC Tools",
-    subtitle: "Blockchain tools for Claude",
-    commands: [
-      { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc MCP server to Claude Code\n✓ Configured for mainnet\n\nRestart your terminal to begin." },
-    ],
-  },
-  {
-    id: 4,
-    title: "Configure",
-    subtitle: "Create your wallet in seconds",
+    title: "Create Wallet",
+    subtitle: "Your agent's on-chain identity",
     commands: [
       {
         showClaudeUI: true,
@@ -96,16 +130,36 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 5,
-    title: "Deploy",
-    subtitle: "Claude builds & deploys your paid API",
+    id: 4,
+    title: "Build",
+    subtitle: "Scaffold from a template",
     commands: [
+      { link: { text: "Cloudflare Workers template", url: "https://github.com/aibtcdev/x402-api" } },
+      { link: { text: "Express/Hono template", url: "https://github.com/aibtcdev/x402-crosschain-example" } },
       {
         showClaudeUI: true,
         conversation: [
           {
-            user: "Build a paid x402 endpoint paid in sBTC that hunts down the best Bitcoin yield.",
-            claude: "I'll create an x402 endpoint for you.\n\nCreating Cloudflare Worker...\n✓ Generated yield-hunter-api project\n✓ Added x402 payment middleware\n✓ Set price: 0.0001 sBTC per query\n✓ Configured your wallet as recipient\n\nDeploying to Cloudflare Workers...\n✓ Deployed to yield-hunter-api.workers.dev\n\nYour API is live and earning!"
+            user: "Build an x402 endpoint that returns the best sBTC yield opportunities",
+            claude: "I'll scaffold from one of the templates above...\n\n✓ Cloned template\n✓ Configured x402 middleware\n✓ Set price: 0.0001 sBTC per request\n✓ Added yield-hunter endpoint\n\nReady to deploy!"
+          },
+        ],
+      },
+    ],
+  },
+  {
+    id: 5,
+    title: "Deploy",
+    subtitle: "Get your x402 API online",
+    commands: [
+      { link: { text: "Cloudflare Workers", url: "https://workers.cloudflare.com" } },
+      { link: { text: "Vercel", url: "https://vercel.com" } },
+      {
+        showClaudeUI: true,
+        conversation: [
+          {
+            user: "Deploy this to Cloudflare Workers",
+            claude: "Deploying to Cloudflare Workers...\n\n✓ Authenticated with Cloudflare\n✓ Built and bundled\n✓ Deployed to yield-hunter.workers.dev\n\n🚀 Live! Every request now pays you via x402."
           },
         ],
       },
@@ -113,15 +167,15 @@ const steps: Step[] = [
   },
   {
     id: 6,
-    title: "Earn & Scale",
-    subtitle: "Every request pays you directly",
+    title: "Earn",
+    subtitle: "x402 handles payments automatically",
     commands: [
       {
         showClaudeUI: true,
         conversation: [
           {
-            user: "What are my earnings today?",
-            claude: "Checking your wallet transactions...\n\n💰 You've earned 0.0127 sBTC today\n\nKeep building endpoints to grow your earnings!"
+            user: "Check my wallet balance for x402 earnings",
+            claude: "Checking your wallet...\n\n💰 12 requests = 0.0012 sBTC earned\n\nTip: Build a dashboard with the /stats endpoint from the x402-api template."
           },
         ],
       },
@@ -371,21 +425,21 @@ function TerminalWindow({ commands, isActive, height = "default", showCopy = tru
   const [copied, setCopied] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
 
-  // Get copyable content (commands and Claude user messages)
+  // Get copyable content - only actionable prompts (commands or Claude user messages)
+  // Links are for reference only and not included in copy
   const copyableContent = useMemo(() => {
     return commands
       .flatMap((c) => {
-        const items: string[] = [];
-        if (c.cmd && !c.cmd.startsWith("#") && !c.cmd.startsWith('"')) {
-          items.push(c.cmd);
+        // Terminal commands get copied
+        if (c.cmd) {
+          return [c.cmd];
         }
-        if (c.claudeUserMessage) {
-          items.push(c.claudeUserMessage);
-        }
+        // Claude conversation user prompts get copied
         if (c.conversation) {
-          c.conversation.forEach((exchange) => items.push(exchange.user));
+          return c.conversation.map((exchange) => exchange.user);
         }
-        return items;
+        // Links and other content are not copied
+        return [];
       })
       .join("\n");
   }, [commands]);
@@ -559,19 +613,36 @@ function TerminalWindow({ commands, isActive, height = "default", showCopy = tru
               onAnimationComplete={i === displayedLines.length - 1 ? handleClaudeUIComplete : undefined}
             />
           ) : line.type === "link" ? (
-            <div key={i} className="my-2">
-              <a
-                href={line.linkUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-2 text-sm text-[#F7931A] transition-colors hover:bg-[#F7931A]/20"
-              >
-                {line.text}
-                <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
-                </svg>
-              </a>
-            </div>
+            (() => {
+              const prevIsLink = i > 0 && displayedLines[i - 1]?.type === "link";
+              // Skip rendering if previous was also a link (it was included in the group)
+              if (prevIsLink) return null;
+              // Collect all consecutive links starting from this one
+              const linkGroup = [line];
+              let j = i + 1;
+              while (j < displayedLines.length && displayedLines[j]?.type === "link") {
+                linkGroup.push(displayedLines[j]);
+                j++;
+              }
+              return (
+                <div key={i} className="my-2 flex flex-wrap gap-2">
+                  {linkGroup.map((linkLine, idx) => (
+                    <a
+                      key={idx}
+                      href={linkLine.linkUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-2 text-sm text-[#F7931A] transition-colors hover:bg-[#F7931A]/20"
+                    >
+                      {linkLine.text}
+                      <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                      </svg>
+                    </a>
+                  ))}
+                </div>
+              );
+            })()
           ) : (
             <div key={i} className={`${line.type === "cmd" ? "flex" : ""}`}>
               {line.type === "cmd" && <span className="mr-2 shrink-0 text-[#28c840]">❯</span>}
@@ -623,6 +694,215 @@ function BookIcon({ className }: { className?: string }) {
   );
 }
 
+
+function StepCard({
+  step,
+  isActive,
+  onClick,
+  onSkip,
+  showChevron = true,
+}: {
+  step: Step;
+  isActive: boolean;
+  onClick: () => void;
+  onSkip?: () => void;
+  showChevron?: boolean;
+}) {
+  return (
+    <button
+      onClick={onClick}
+      aria-current={isActive ? "step" : undefined}
+      className={`group w-full rounded-xl border p-3.5 text-left transition-all duration-200 md:p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 ${
+        isActive
+          ? "border-[#F7931A]/40 bg-[#F7931A]/[0.08]"
+          : "border-white/[0.08] bg-white/[0.02] hover:border-[#F7931A]/30 hover:bg-[#F7931A]/[0.04]"
+      }`}
+    >
+      <div className="flex items-center gap-3 md:gap-4">
+        <div
+          className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-sm font-medium transition-colors md:size-8 ${
+            isActive
+              ? "bg-[#F7931A] text-black"
+              : "bg-white/[0.08] text-white/60 group-hover:bg-[#F7931A]/20 group-hover:text-[#F7931A]"
+          }`}
+        >
+          {step.id}
+        </div>
+        <div className="min-w-0 flex-1">
+          <h3 className={`text-sm font-medium md:text-[15px] ${isActive ? "text-white" : "text-white/80"}`}>
+            {step.title}
+          </h3>
+          <p className="mt-0.5 truncate text-xs text-white/50 md:text-[13px] md:whitespace-normal">
+            {step.subtitle}
+            {step.skippable && isActive && onSkip && (
+              <>
+                {" · "}
+                <span
+                  role="button"
+                  tabIndex={0}
+                  onClick={(e) => { e.stopPropagation(); onSkip(); }}
+                  onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onSkip(); } }}
+                  className="cursor-pointer text-white/40 transition-colors hover:text-[#F7931A]"
+                >
+                  Skip if installed →
+                </span>
+              </>
+            )}
+          </p>
+        </div>
+        {showChevron && (
+          <svg
+            className={`size-4 shrink-0 transition-all md:size-5 ${
+              isActive
+                ? "text-[#F7931A]"
+                : "text-white/20 group-hover:text-[#F7931A]/60 group-hover:translate-x-0.5"
+            }`}
+            fill="none"
+            viewBox="0 0 24 24"
+            stroke="currentColor"
+            strokeWidth="2"
+            aria-hidden="true"
+          >
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+        )}
+      </div>
+    </button>
+  );
+}
+
+function ZeroToAgentSection({
+  activeStep,
+  setActiveStep,
+}: {
+  activeStep: number;
+  setActiveStep: (step: number) => void;
+}) {
+  const currentStep = steps.find((s) => s.id === activeStep);
+
+  const goToPrev = useCallback(() => {
+    setActiveStep(Math.max(1, activeStep - 1));
+  }, [activeStep, setActiveStep]);
+
+  const goToNext = useCallback(() => {
+    setActiveStep(Math.min(steps.length, activeStep + 1));
+  }, [activeStep, setActiveStep]);
+
+  const swipeHandlers = useSwipe(goToNext, goToPrev);
+
+  return (
+    <section id="build" className="scroll-mt-16 px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
+      <div className="mx-auto max-w-[1200px]">
+        {/* Section Header */}
+        <div className="mb-8 text-center md:mb-12">
+          <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
+            Go from Zero to Agent
+          </h2>
+          <p className="mt-3 text-sm text-white/50 md:text-[15px]">
+            Open your terminal app and follow each step by copying the prompts.
+          </p>
+        </div>
+
+        {/* Desktop: Two-column layout */}
+        <div className="hidden lg:grid lg:grid-cols-2 lg:gap-12">
+          {/* Steps list */}
+          <div className="space-y-3">
+            {steps.map((step) => (
+              <StepCard
+                key={step.id}
+                step={step}
+                isActive={activeStep === step.id}
+                onClick={() => setActiveStep(step.id)}
+                onSkip={() => setActiveStep(step.id + 1)}
+              />
+            ))}
+          </div>
+
+          {/* Terminal */}
+          <div className="sticky top-24 self-start">
+            <TerminalWindow
+              key={activeStep}
+              commands={currentStep?.commands || []}
+              isActive={true}
+            />
+          </div>
+        </div>
+
+        {/* Mobile: Carousel layout */}
+        <div className="flex flex-col gap-5 lg:hidden">
+          {/* Step carousel */}
+          <div
+            className="relative"
+            {...swipeHandlers}
+          >
+            {/* Navigation arrows */}
+            <div className="absolute -left-3 top-1/2 z-10 -translate-y-1/2 max-md:-left-2">
+              <button
+                onClick={goToPrev}
+                disabled={activeStep === 1}
+                aria-label="Previous step"
+                className="flex size-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/50 backdrop-blur-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:border-[#F7931A]/40 enabled:hover:text-[#F7931A] enabled:active:scale-95"
+              >
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+            </div>
+            <div className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 max-md:-right-2">
+              <button
+                onClick={goToNext}
+                disabled={activeStep === steps.length}
+                aria-label="Next step"
+                className="flex size-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/50 backdrop-blur-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:border-[#F7931A]/40 enabled:hover:text-[#F7931A] enabled:active:scale-95"
+              >
+                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </button>
+            </div>
+
+            {/* Current step card */}
+            <div className="px-5">
+              {currentStep && (
+                <StepCard
+                  step={currentStep}
+                  isActive={true}
+                  onClick={() => {}}
+                  onSkip={() => setActiveStep(currentStep.id + 1)}
+                  showChevron={false}
+                />
+              )}
+            </div>
+
+            {/* Progress dots */}
+            <div className="mt-4 flex items-center justify-center gap-1.5">
+              {steps.map((step) => (
+                <button
+                  key={step.id}
+                  onClick={() => setActiveStep(step.id)}
+                  aria-label={`Go to step ${step.id}`}
+                  aria-current={activeStep === step.id ? "step" : undefined}
+                  className={`h-1.5 rounded-full transition-all ${
+                    activeStep === step.id
+                      ? "w-4 bg-[#F7931A]"
+                      : "w-1.5 bg-white/20 hover:bg-white/40"
+                  }`}
+                />
+              ))}
+            </div>
+          </div>
+
+          {/* Terminal */}
+          <TerminalWindow
+            key={activeStep}
+            commands={currentStep?.commands || []}
+            isActive={true}
+          />
+        </div>
+      </div>
+    </section>
+  );
+}
 
 function OpenStandardsCard({ project }: { project: typeof openStandardsProjects[0] }) {
   return (
@@ -761,95 +1041,8 @@ export default function Home() {
         </section>
 
         {/* Go from Zero to Agent - Interactive Guide */}
-        <section id="build" className="scroll-mt-16 px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
-          <div className="mx-auto max-w-[1200px]">
-            {/* Section Header */}
-            <div className="mb-8 text-center md:mb-12">
-              <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
-                Go from Zero to Agent
-              </h2>
-              <p className="mt-3 text-sm text-white/50 md:text-[15px]">
-                Open your terminal app and follow each step by copying the prompts.
-              </p>
-            </div>
+        <ZeroToAgentSection activeStep={activeStep} setActiveStep={setActiveStep} />
 
-            {/* Split View */}
-            <div className="flex flex-col gap-6 lg:grid lg:grid-cols-2 lg:gap-12">
-              {/* Terminal first on mobile for better UX */}
-              <div className="order-1 lg:order-2 lg:sticky lg:top-24 lg:self-start">
-                <TerminalWindow
-                  key={activeStep}
-                  commands={steps.find((s) => s.id === activeStep)?.commands || []}
-                  isActive={true}
-                />
-              </div>
-
-              {/* Steps */}
-              <div className="order-2 space-y-2 lg:order-1 lg:space-y-3">
-                {steps.map((step) => (
-                  <button
-                    key={step.id}
-                    onClick={() => setActiveStep(step.id)}
-                    aria-current={activeStep === step.id ? "step" : undefined}
-                    className={`group w-full rounded-xl border p-3.5 text-left transition-all duration-200 md:p-5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 ${
-                      activeStep === step.id
-                        ? "border-[#F7931A]/40 bg-[#F7931A]/[0.08]"
-                        : "border-white/[0.08] bg-white/[0.02] hover:border-[#F7931A]/30 hover:bg-[#F7931A]/[0.04]"
-                    }`}
-                  >
-                    <div className="flex items-center gap-3 md:gap-4">
-                      <div
-                        className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-sm font-medium transition-colors md:size-8 ${
-                          activeStep === step.id
-                            ? "bg-[#F7931A] text-black"
-                            : "bg-white/[0.08] text-white/60 group-hover:bg-[#F7931A]/20 group-hover:text-[#F7931A]"
-                        }`}
-                      >
-                        {step.id}
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <h3 className={`text-sm font-medium md:text-[15px] ${activeStep === step.id ? "text-white" : "text-white/80"}`}>
-                          {step.title}
-                        </h3>
-                        <p className="mt-0.5 truncate text-xs text-white/50 md:text-[13px] md:whitespace-normal">
-                          {step.subtitle}
-                          {step.skippable && activeStep === step.id && (
-                            <>
-                              {" · "}
-                              <span
-                                role="button"
-                                tabIndex={0}
-                                onClick={(e) => { e.stopPropagation(); setActiveStep(step.id + 1); }}
-                                onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); setActiveStep(step.id + 1); } }}
-                                className="cursor-pointer text-white/40 transition-colors hover:text-[#F7931A]"
-                              >
-                                Skip if installed →
-                              </span>
-                            </>
-                          )}
-                        </p>
-                      </div>
-                      <svg
-                        className={`size-4 shrink-0 transition-all md:size-5 ${
-                          activeStep === step.id
-                            ? "text-[#F7931A]"
-                            : "text-white/20 group-hover:text-[#F7931A]/60 group-hover:translate-x-0.5"
-                        }`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2"
-                        aria-hidden="true"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </div>
-                  </button>
-                ))}
-              </div>
-            </div>
-          </div>
-        </section>
 
         {/* Built on Open Standards */}
         <section className="px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
