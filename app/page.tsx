@@ -393,21 +393,21 @@ function TerminalWindow({ commands, isActive, height = "default", showCopy = tru
   const [copied, setCopied] = useState(false);
   const terminalRef = useRef<HTMLDivElement>(null);
 
-  // Get copyable content (commands and Claude user messages)
+  // Get copyable content - only actionable prompts (commands or Claude user messages)
+  // Links are for reference only and not included in copy
   const copyableContent = useMemo(() => {
     return commands
       .flatMap((c) => {
-        const items: string[] = [];
-        if (c.cmd && !c.cmd.startsWith("#") && !c.cmd.startsWith('"')) {
-          items.push(c.cmd);
+        // Terminal commands get copied
+        if (c.cmd) {
+          return [c.cmd];
         }
-        if (c.claudeUserMessage) {
-          items.push(c.claudeUserMessage);
-        }
+        // Claude conversation user prompts get copied
         if (c.conversation) {
-          c.conversation.forEach((exchange) => items.push(exchange.user));
+          return c.conversation.map((exchange) => exchange.user);
         }
-        return items;
+        // Links and other content are not copied
+        return [];
       })
       .join("\n");
   }, [commands]);
