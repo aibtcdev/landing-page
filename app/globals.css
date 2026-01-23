@@ -66,9 +66,10 @@
     -webkit-overflow-scrolling: touch;
   }
 
-  /* Optimize touch interactions - removes 300ms tap delay */
+  /* Optimize touch interactions - removes 300ms tap delay and tap highlight */
   a, button, [role="button"] {
     touch-action: manipulation;
+    -webkit-tap-highlight-color: transparent;
   }
 }
 
