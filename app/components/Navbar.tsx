@@ -136,6 +136,15 @@ export default function Navbar() {
         >
           <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
           <a
+            href="https://www.npmjs.com/package/@aibtc/mcp-server"
+            target="_blank"
+            rel="noopener noreferrer"
+            onClick={() => setIsMenuOpen(false)}
+            className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] px-4 py-2 text-sm font-medium text-white/85 transition-[background-color,border-color,transform] duration-200 hover:border-white/25 hover:bg-white/[0.12] hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"
+          >
+            Install Package
+          </a>
+          <a
             href="/#build"
             onClick={() => setIsMenuOpen(false)}
             className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"

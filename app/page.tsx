@@ -216,7 +216,8 @@ const openStandardsProjects = [
     name: "x402 API Template",
     description: "Paid API endpoint starter",
     links: [
-      { type: "github", url: "https://github.com/aibtcdev/x402-api", label: "GitHub" },
+      { type: "github", url: "https://github.com/aibtcdev/x402-api", label: "GitHub", tooltip: "Cloudflare Workers" },
+      { type: "github", url: "https://github.com/aibtcdev/x402-crosschain-example", label: "GitHub", tooltip: "Express/Hono" },
     ],
   },
   {
@@ -231,7 +232,7 @@ const openStandardsProjects = [
     description: "Bitcoin L2 with smart contracts",
     links: [
       { type: "docs", url: "https://docs.stacks.co", label: "Docs" },
-      { type: "github", url: "https://github.com/stacks-network", label: "GitHub" },
+      { type: "tool", url: "https://stacks.js.org", label: "Stacks.js" },
     ],
   },
   {
@@ -245,7 +246,7 @@ const openStandardsProjects = [
     name: "sBTC",
     description: "Bitcoin on Stacks",
     links: [
-      { type: "website", url: "https://sbtc.tech", label: "Website" },
+      { type: "website", url: "https://www.stacks.co/sbtc", label: "Website" },
     ],
   },
 ];
@@ -694,6 +695,14 @@ function BookIcon({ className }: { className?: string }) {
   );
 }
 
+function ToolIcon({ className }: { className?: string }) {
+  return (
+    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/>
+    </svg>
+  );
+}
+
 
 function StepCard({
   step,
@@ -921,12 +930,14 @@ function OpenStandardsCard({ project }: { project: typeof openStandardsProjects[
               href={link.url}
               target="_blank"
               rel="noopener noreferrer"
+              title={"tooltip" in link ? link.tooltip : undefined}
               className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/40 transition-colors hover:border-white/20 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
-              aria-label={`${project.name} ${link.label}`}
+              aria-label={`${project.name} ${"tooltip" in link ? link.tooltip : link.label}`}
             >
               {link.type === "github" && <GitHubIcon className="size-4" />}
               {link.type === "website" && <GlobeIcon className="size-4" />}
               {link.type === "docs" && <BookIcon className="size-4" />}
+              {link.type === "tool" && <ToolIcon className="size-4" />}
             </a>
           ))}
         </div>
@@ -951,8 +962,7 @@ export default function Home() {
           style={{ backgroundImage: `url('${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg')` }}
         />
 
-        {/* Mobile: Static color accents (no blur/animation) */}
-        <div className="absolute -right-[100px] -top-[100px] h-[300px] w-[300px] rounded-full bg-[rgba(247,147,26,0.15)] md:hidden" />
+        {/* Mobile: Static color accent (bottom only, top removed to avoid header overlap) */}
         <div className="absolute -bottom-[100px] -left-[100px] h-[250px] w-[250px] rounded-full bg-[rgba(125,162,255,0.12)] md:hidden" />
 
         {/* Desktop: Animated orbs with blur (hidden on mobile) */}
@@ -1130,6 +1140,7 @@ export default function Home() {
                 {[
                   { name: "AIBTC MCP Server", url: "https://github.com/aibtcdev/aibtc-mcp-server" },
                   { name: "x402 API Template", url: "https://github.com/aibtcdev/x402-api" },
+                  { name: "x402 Crosschain Example", url: "https://github.com/aibtcdev/x402-crosschain-example" },
                   { name: "All AIBTC Repos", url: "https://github.com/aibtcdev" },
                 ].map((link) => (
                   <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]">
@@ -1145,6 +1156,7 @@ export default function Home() {
               <h4 className="mb-4 text-sm font-semibold text-white/70">Resources</h4>
               <div className="space-y-2.5">
                 {[
+                  { name: "AIBTC MCP Server (npm)", url: "https://www.npmjs.com/package/@aibtc/mcp-server", type: "website" },
                   { name: "Stacks Docs", url: "https://docs.stacks.co", type: "docs" },
                   { name: "x402 Protocol", url: "https://x402.org", type: "website" },
                   { name: "Claude Code", url: "https://claude.ai/code", type: "website" },
