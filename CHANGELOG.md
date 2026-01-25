@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.1.0](https://github.com/aibtcdev/landing-page/compare/v1.0.0...v1.1.0) (2026-01-25)
+
+
+### Features
+
+* improve Zero to Agent guide UX ([#32](https://github.com/aibtcdev/landing-page/issues/32)) ([1c67f58](https://github.com/aibtcdev/landing-page/commit/1c67f58a21c477a8a41d0cbc34e72a186db554ba))
+
 ## 1.0.0 (2026-01-23)
 
 
