@@ -82,6 +82,7 @@ interface Step {
   subtitle: string;
   commands: Command[];
   skippable?: boolean;
+  links?: { text: string; url: string }[];
 }
 
 const steps: Step[] = [
@@ -90,8 +91,8 @@ const steps: Step[] = [
     title: "Install Claude Code",
     subtitle: "AI coding assistant from Anthropic",
     skippable: true,
+    links: [{ text: "Claude Code", url: "https://claude.ai/code" }],
     commands: [
-      { link: { text: "Claude Code install page", url: "https://claude.ai/code" } },
       { cmd: "curl -fsSL https://claude.ai/code/install.sh | sh", output: "Installing Claude Code...\n✓ Installed to ~/.claude/bin/claude\n✓ Added to PATH\nRun 'claude' to start." },
     ],
   },
@@ -100,8 +101,8 @@ const steps: Step[] = [
     title: "Add Stacks Tools",
     subtitle: "Tools to build on Bitcoin",
     skippable: true,
+    links: [{ text: "npm package", url: "https://www.npmjs.com/package/@aibtc/mcp-server" }],
     commands: [
-      { link: { text: "aibtc mcp server on npm", url: "https://www.npmjs.com/package/@aibtc/mcp-server" } },
       {
         showClaudeUI: true,
         conversation: [
@@ -133,15 +134,17 @@ const steps: Step[] = [
     id: 4,
     title: "Build",
     subtitle: "Scaffold from a template",
+    links: [
+      { text: "Cloudflare Workers", url: "https://github.com/aibtcdev/x402-api" },
+      { text: "Express/Hono", url: "https://github.com/aibtcdev/x402-crosschain-example" },
+    ],
     commands: [
-      { link: { text: "Cloudflare Workers template", url: "https://github.com/aibtcdev/x402-api" } },
-      { link: { text: "Express/Hono template", url: "https://github.com/aibtcdev/x402-crosschain-example" } },
       {
         showClaudeUI: true,
         conversation: [
           {
             user: "Build an x402 endpoint that returns the best sBTC yield opportunities",
-            claude: "I'll scaffold from one of the templates above...\n\n✓ Cloned template\n✓ Configured x402 middleware\n✓ Set price: 0.0001 sBTC per request\n✓ Added yield-hunter endpoint\n\nReady to deploy!"
+            claude: "I'll scaffold from a template...\n\n✓ Cloned template\n✓ Configured x402 middleware\n✓ Set price: 0.0001 sBTC per request\n✓ Added yield-hunter endpoint\n\nReady to deploy!"
           },
         ],
       },
@@ -151,9 +154,11 @@ const steps: Step[] = [
     id: 5,
     title: "Deploy",
     subtitle: "Get your x402 API online",
+    links: [
+      { text: "Cloudflare Workers", url: "https://workers.cloudflare.com" },
+      { text: "Vercel", url: "https://vercel.com" },
+    ],
     commands: [
-      { link: { text: "Cloudflare Workers", url: "https://workers.cloudflare.com" } },
-      { link: { text: "Vercel", url: "https://vercel.com" } },
       {
         showClaudeUI: true,
         conversation: [
@@ -416,7 +421,22 @@ interface DisplayLine {
   linkUrl?: string;
 }
 
-function TerminalWindow({ commands, isActive, height = "default", showCopy = true }: { commands: Command[]; isActive: boolean; height?: "default" | "tall"; showCopy?: boolean }) {
+function TerminalWindow({
+  commands,
+  isActive,
+  height = "default",
+  showCopy = true,
+}: {
+  commands: Command[];
+  isActive: boolean;
+  height?: "default" | "tall";
+  showCopy?: boolean;
+}) {
+  // Determine tooltip based on command type
+  const hasTerminalCommand = commands.some(c => c.cmd);
+  const copyTooltip = hasTerminalCommand
+    ? "Copy and paste into terminal"
+    : "Copy and paste into Claude Code";
   const prefersReducedMotion = usePrefersReducedMotion();
   const [displayedLines, setDisplayedLines] = useState<DisplayLine[]>([]);
   const [currentLineIndex, setCurrentLineIndex] = useState(0);
@@ -567,43 +587,56 @@ function TerminalWindow({ commands, isActive, height = "default", showCopy = tru
   const heightClass = height === "tall" ? "h-[380px] md:h-[420px]" : "h-[280px] md:h-[320px]";
 
   return (
-    <div className="overflow-hidden rounded-xl border border-white/[0.1] bg-[#0d0d0d] shadow-2xl">
-      {/* macOS Title Bar */}
-      <div className="flex items-center gap-2 border-b border-white/[0.06] bg-[#1a1a1a] px-4 py-3">
-        <div className="flex items-center gap-2">
-          <div className="size-3 rounded-full bg-[#ff5f57]" />
-          <div className="size-3 rounded-full bg-[#febc2e]" />
-          <div className="size-3 rounded-full bg-[#28c840]" />
+    <div className="rounded-xl border border-white/[0.1] bg-[#0d0d0d] shadow-2xl">
+        {/* macOS Title Bar */}
+        <div className="relative flex items-center gap-2 overflow-visible rounded-t-xl border-b border-white/[0.06] bg-[#1a1a1a] px-4 py-3">
+          <div className="flex items-center gap-2">
+            <div className="size-3 rounded-full bg-[#ff5f57]" />
+            <div className="size-3 rounded-full bg-[#febc2e]" />
+            <div className="size-3 rounded-full bg-[#28c840]" />
+          </div>
+          <span className="flex-1 text-center text-xs text-white/40">Terminal — zsh</span>
+          {showCopy && copyableContent && (
+            <div className="group relative">
+              <button
+                onClick={handleCopy}
+                className={`flex items-center gap-1.5 rounded-md border px-2.5 py-1.5 text-xs font-medium transition-all ${
+                  copied
+                    ? "border-green-500/50 bg-green-500/10 text-green-400"
+                    : "border-[#F7931A]/50 bg-[#F7931A]/10 text-[#F7931A] hover:border-[#F7931A]/70 hover:bg-[#F7931A]/20"
+                } focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50`}
+                aria-label="Copy command"
+              >
+                {copied ? (
+                  <>
+                    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <polyline points="20 6 9 17 4 12" />
+                    </svg>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                    </svg>
+                    Copy
+                  </>
+                )}
+              </button>
+              {/* Tooltip */}
+              {!copied && (
+                <div className="pointer-events-none absolute bottom-full right-0 z-10 mb-2 whitespace-nowrap rounded-md bg-white/90 px-2.5 py-1.5 text-xs font-medium text-black opacity-0 shadow-lg transition-opacity group-hover:opacity-100">
+                  {copyTooltip}
+                  <div className="absolute -bottom-1 right-3 size-2 rotate-45 bg-white/90" />
+                </div>
+              )}
+            </div>
+          )}
         </div>
-        <span className="flex-1 text-center text-xs text-white/40">Terminal — zsh</span>
-        {showCopy && copyableContent && (
-          <button
-            onClick={handleCopy}
-            className="flex items-center gap-1.5 rounded-md border border-white/10 bg-white/5 px-2 py-1 text-xs text-white/50 transition-colors hover:border-white/20 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
-            aria-label="Copy command"
-          >
-            {copied ? (
-              <>
-                <svg className="size-3.5 text-green-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
-                Copied!
-              </>
-            ) : (
-              <>
-                <svg className="size-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
-                  <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
-                  <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
-                </svg>
-                Copy
-              </>
-            )}
-          </button>
-        )}
-      </div>
 
       {/* Terminal Content */}
-      <div ref={terminalRef} className={`terminal-content ${heightClass} overflow-y-auto p-3 font-mono text-xs leading-relaxed md:p-4 md:text-[13px]`}>
+      <div ref={terminalRef} className={`terminal-content ${heightClass} overflow-y-auto overflow-x-hidden rounded-b-xl p-3 font-mono text-xs leading-relaxed md:p-4 md:text-[13px]`}>
         {displayedLines.map((line, i) => (
           line.type === "claude-ui" ? (
             <ClaudeCodeUI
@@ -633,7 +666,7 @@ function TerminalWindow({ commands, isActive, height = "default", showCopy = tru
                       href={linkLine.linkUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-2 text-sm text-[#F7931A] transition-colors hover:bg-[#F7931A]/20"
+                      className="inline-flex cursor-pointer items-center gap-2 rounded-lg border border-white/20 bg-white/5 px-3 py-2 text-sm text-white/60 transition-colors hover:border-white/30 hover:bg-white/10 hover:text-white/80"
                     >
                       {linkLine.text}
                       <svg className="size-3.5 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
@@ -729,7 +762,7 @@ function StepCard({
     >
       <div className="flex items-center gap-3 md:gap-4">
         <div
-          className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-sm font-medium transition-colors md:size-8 ${
+          className={`flex size-7 shrink-0 items-center justify-center rounded-lg text-sm font-bold transition-colors md:size-9 ${
             isActive
               ? "bg-[#F7931A] text-black"
               : "bg-white/[0.08] text-white/60 group-hover:bg-[#F7931A]/20 group-hover:text-[#F7931A]"
@@ -741,8 +774,8 @@ function StepCard({
           <h3 className={`text-sm font-medium md:text-[15px] ${isActive ? "text-white" : "text-white/80"}`}>
             {step.title}
           </h3>
-          <p className="mt-0.5 truncate text-xs text-white/50 md:text-[13px] md:whitespace-normal">
-            {step.subtitle}
+          <p className="mt-0.5 text-xs text-white/50 md:text-[13px]">
+            <span className="truncate md:whitespace-normal">{step.subtitle}</span>
             {step.skippable && isActive && onSkip && (
               <>
                 {" · "}
@@ -753,9 +786,32 @@ function StepCard({
                   onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.stopPropagation(); onSkip(); } }}
                   className="cursor-pointer text-white/40 transition-colors hover:text-[#F7931A]"
                 >
-                  Skip if installed →
+                  Skip
                 </span>
               </>
+            )}
+            {/* Links - desktop only */}
+            {step.links && step.links.length > 0 && isActive && (
+              <span className="hidden md:inline">
+                {" · "}
+                {step.links.map((link, i) => (
+                  <span key={link.url}>
+                    <a
+                      href={link.url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      onClick={(e) => e.stopPropagation()}
+                      className="inline-flex items-center gap-0.5 text-[#F7931A] transition-all hover:underline hover:underline-offset-2"
+                    >
+                      {link.text}
+                      <svg className="size-2.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6M15 3h6v6M10 14L21 3" />
+                      </svg>
+                    </a>
+                    {i < step.links!.length - 1 && ", "}
+                  </span>
+                ))}
+              </span>
             )}
           </p>
         </div>
@@ -838,40 +894,39 @@ function ZeroToAgentSection({
         </div>
 
         {/* Mobile: Carousel layout */}
-        <div className="flex flex-col gap-5 lg:hidden">
+        <div
+          className="flex flex-col gap-5 lg:hidden"
+          {...swipeHandlers}
+        >
+          {/* Step counter */}
+          <div className="mb-2 text-center text-sm text-white/50">
+            Step {activeStep} of {steps.length}
+          </div>
+
           {/* Step carousel */}
-          <div
-            className="relative"
-            {...swipeHandlers}
-          >
-            {/* Navigation arrows */}
-            <div className="absolute -left-3 top-1/2 z-10 -translate-y-1/2 max-md:-left-2">
+          <div className="relative">
+            {/* Current step card */}
+            <div className="relative px-5">
+              {/* Navigation arrows */}
               <button
                 onClick={goToPrev}
                 disabled={activeStep === 1}
                 aria-label="Previous step"
-                className="flex size-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/50 backdrop-blur-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:border-[#F7931A]/40 enabled:hover:text-[#F7931A] enabled:active:scale-95"
+                className="absolute -left-1 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/50 backdrop-blur-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:border-[#F7931A]/40 enabled:hover:text-[#F7931A] enabled:active:scale-95"
               >
                 <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
                 </svg>
               </button>
-            </div>
-            <div className="absolute -right-3 top-1/2 z-10 -translate-y-1/2 max-md:-right-2">
               <button
                 onClick={goToNext}
                 disabled={activeStep === steps.length}
                 aria-label="Next step"
-                className="flex size-8 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/50 backdrop-blur-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:border-[#F7931A]/40 enabled:hover:text-[#F7931A] enabled:active:scale-95"
-              >
-                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
+                className="absolute -right-1 top-1/2 z-10 flex size-8 -translate-y-1/2 items-center justify-center rounded-full border border-white/10 bg-black/60 text-white/50 backdrop-blur-sm transition-all disabled:opacity-30 disabled:cursor-not-allowed enabled:hover:border-[#F7931A]/40 enabled:hover:text-[#F7931A] enabled:active:scale-95"
+              ><svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2" aria-hidden="true">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
               </button>
-            </div>
-
-            {/* Current step card */}
-            <div className="px-5">
               {currentStep && (
                 <StepCard
                   step={currentStep}
