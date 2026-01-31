@@ -85,7 +85,8 @@ interface Step {
   links?: { text: string; url: string }[];
 }
 
-const steps: Step[] = [
+// Setup steps (1-3): Zero to Agent
+const setupSteps: Step[] = [
   {
     id: 1,
     title: "Install Claude Code",
@@ -130,8 +131,12 @@ const steps: Step[] = [
       },
     ],
   },
+];
+
+// Earn steps (1-3, displayed as 1-3 in their own section)
+const earnSteps: Step[] = [
   {
-    id: 4,
+    id: 1,
     title: "Build",
     subtitle: "Create a paid API in minutes",
     links: [
@@ -151,7 +156,7 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 5,
+    id: 2,
     title: "Deploy",
     subtitle: "Ship to the edge in one command",
     links: [
@@ -171,7 +176,7 @@ const steps: Step[] = [
     ],
   },
   {
-    id: 6,
+    id: 3,
     title: "Earn",
     subtitle: "Bitcoin flows directly to your wallet",
     commands: [
@@ -837,10 +842,18 @@ function StepCard({
   );
 }
 
-function ZeroToAgentSection({
+function StepsSection({
+  id,
+  title,
+  subtitle,
+  steps,
   activeStep,
   setActiveStep,
 }: {
+  id: string;
+  title: string;
+  subtitle: string;
+  steps: Step[];
   activeStep: number;
   setActiveStep: (step: number) => void;
 }) {
@@ -852,20 +865,20 @@ function ZeroToAgentSection({
 
   const goToNext = useCallback(() => {
     setActiveStep(Math.min(steps.length, activeStep + 1));
-  }, [activeStep, setActiveStep]);
+  }, [activeStep, setActiveStep, steps.length]);
 
   const swipeHandlers = useSwipe(goToNext, goToPrev);
 
   return (
-    <section id="build" className="scroll-mt-16 px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
+    <section id={id} className="scroll-mt-16 px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
       <div className="mx-auto max-w-[1200px]">
         {/* Section Header */}
         <div className="mb-8 text-center md:mb-12">
           <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
-            Go from Zero to Agent
+            {title}
           </h2>
           <p className="mt-3 text-sm text-white/50 md:text-[15px]">
-            Open your terminal app and follow each step by copying the prompts.
+            {subtitle}
           </p>
         </div>
 
@@ -1003,7 +1016,8 @@ function OpenStandardsCard({ project }: { project: typeof openStandardsProjects[
 }
 
 export default function Home() {
-  const [activeStep, setActiveStep] = useState(1);
+  const [activeSetupStep, setActiveSetupStep] = useState(1);
+  const [activeEarnStep, setActiveEarnStep] = useState(1);
 
   return (
     <>
@@ -1106,33 +1120,17 @@ export default function Home() {
           </a>
         </section>
 
-        {/* Go from Zero to Agent - Interactive Guide */}
-        <ZeroToAgentSection activeStep={activeStep} setActiveStep={setActiveStep} />
+        {/* 1. Zero to Agent - Setup Steps (1-3) */}
+        <StepsSection
+          id="build"
+          title="Go from Zero to Agent"
+          subtitle="Open your terminal and follow each step to set up your agent."
+          steps={setupSteps}
+          activeStep={activeSetupStep}
+          setActiveStep={setActiveSetupStep}
+        />
 
-
-        {/* Built on Open Standards */}
-        <section className="px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
-          <div className="mx-auto max-w-[1200px]">
-            {/* Section Header */}
-            <div className="mb-8 text-center md:mb-12">
-              <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
-                Built on Open Standards
-              </h2>
-              <p className="mt-2 text-sm text-white/50 md:text-[15px]">
-                Every piece is open source. Inspect it, fork it, improve it.
-              </p>
-            </div>
-
-            {/* Project Cards Grid */}
-            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              {openStandardsProjects.map((project) => (
-                <OpenStandardsCard key={project.name} project={project} />
-              ))}
-            </div>
-          </div>
-        </section>
-
-        {/* Where Agents Go */}
+        {/* 2. Where Agents Go */}
         <section className="px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
           <div className="mx-auto max-w-[1200px]">
             {/* Section Header */}
@@ -1141,7 +1139,7 @@ export default function Home() {
                 Where Agents Go From Here
               </h2>
               <p className="mt-2 text-sm text-white/50 md:text-[15px]">
-                Your agent has a wallet and can earn. Now connect it to the ecosystem.
+                Your agent has a wallet. Now connect it to the ecosystem.
               </p>
             </div>
 
@@ -1216,7 +1214,39 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Join the Community */}
+        {/* 3. Earn - Build/Deploy/Earn Steps (1-3) */}
+        <StepsSection
+          id="earn"
+          title="Earn Bitcoin"
+          subtitle="Build paid APIs and start earning sats with every request."
+          steps={earnSteps}
+          activeStep={activeEarnStep}
+          setActiveStep={setActiveEarnStep}
+        />
+
+        {/* 4. Built on Open Standards */}
+        <section className="px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
+          <div className="mx-auto max-w-[1200px]">
+            {/* Section Header */}
+            <div className="mb-8 text-center md:mb-12">
+              <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
+                Built on Open Standards
+              </h2>
+              <p className="mt-2 text-sm text-white/50 md:text-[15px]">
+                Every piece is open source. Inspect it, fork it, improve it.
+              </p>
+            </div>
+
+            {/* Project Cards Grid */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              {openStandardsProjects.map((project) => (
+                <OpenStandardsCard key={project.name} project={project} />
+              ))}
+            </div>
+          </div>
+        </section>
+
+        {/* 5. Join the Community */}
         <section className="px-12 pb-20 pt-16 max-lg:px-8 max-md:px-5 md:pb-28 md:pt-20">
           <div className="mx-auto max-w-[600px] text-center">
             {/* Section Header */}
