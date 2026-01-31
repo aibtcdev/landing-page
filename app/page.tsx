@@ -133,10 +133,10 @@ const setupSteps: Step[] = [
   },
 ];
 
-// Earn steps (1-3, displayed as 1-3 in their own section)
+// Earn steps (4-6)
 const earnSteps: Step[] = [
   {
-    id: 1,
+    id: 4,
     title: "Build",
     subtitle: "Create a paid API in minutes",
     links: [
@@ -156,7 +156,7 @@ const earnSteps: Step[] = [
     ],
   },
   {
-    id: 2,
+    id: 5,
     title: "Deploy",
     subtitle: "Ship to the edge in one command",
     links: [
@@ -176,7 +176,7 @@ const earnSteps: Step[] = [
     ],
   },
   {
-    id: 3,
+    id: 6,
     title: "Earn",
     subtitle: "Bitcoin flows directly to your wallet",
     commands: [
@@ -1017,7 +1017,7 @@ function OpenStandardsCard({ project }: { project: typeof openStandardsProjects[
 
 export default function Home() {
   const [activeSetupStep, setActiveSetupStep] = useState(1);
-  const [activeEarnStep, setActiveEarnStep] = useState(1);
+  const [activeEarnStep, setActiveEarnStep] = useState(4);
 
   return (
     <>
@@ -1214,10 +1214,10 @@ export default function Home() {
           </div>
         </section>
 
-        {/* 3. Earn - Build/Deploy/Earn Steps (1-3) */}
+        {/* 3. Earn - Build/Deploy/Earn Steps (4-6) */}
         <StepsSection
           id="earn"
-          title="Earn Bitcoin"
+          title="Earn Bitcoin with x402"
           subtitle="Build paid APIs and start earning sats with every request."
           steps={earnSteps}
           activeStep={activeEarnStep}
