@@ -85,7 +85,8 @@ interface Step {
   links?: { text: string; url: string }[];
 }
 
-const steps: Step[] = [
+// Setup steps (1-3): Zero to Agent
+const setupSteps: Step[] = [
   {
     id: 1,
     title: "Install Claude Code",
@@ -98,8 +99,8 @@ const steps: Step[] = [
   },
   {
     id: 2,
-    title: "Add Stacks Tools",
-    subtitle: "Tools to build on Bitcoin",
+    title: "Add Bitcoin Tools",
+    subtitle: "Native wallet + Stacks programmability",
     skippable: true,
     links: [{ text: "npm package", url: "https://www.npmjs.com/package/@aibtc/mcp-server" }],
     commands: [
@@ -108,7 +109,7 @@ const steps: Step[] = [
         conversation: [
           {
             user: "Help me install the aibtc mcp server from npm",
-            claude: "I'll set that up for you.\n\n✓ Node.js found (v22.0.0)\n✓ Installing @aibtc/mcp-server...\n✓ Added to Claude Code config\n✓ Configured for mainnet\n\nRestart Claude Code to activate the Stacks tools."
+            claude: "I'll set that up for you.\n\n✓ Node.js found (v22.0.0)\n✓ Installing @aibtc/mcp-server...\n✓ Added to Claude Code config\n✓ Configured for mainnet\n\nRestart Claude Code to activate the Bitcoin tools."
           },
         ],
       },
@@ -117,23 +118,27 @@ const steps: Step[] = [
   {
     id: 3,
     title: "Create Wallet",
-    subtitle: "Your agent's on-chain identity",
+    subtitle: "Bitcoin-native identity from a single seed",
     commands: [
       {
         showClaudeUI: true,
         conversation: [
           {
             user: "Create a wallet for my agent",
-            claude: "I'll create an encrypted wallet.\n\n✓ Generated 24-word recovery phrase\n✓ Encrypted with AES-256-GCM\n✓ Stored securely\n\nAddress: ST1SJ3...ZQ8YPD5\n\n⚠️ Save your recovery phrase!"
+            claude: "I'll create an encrypted wallet from a single seed.\n\n✓ Generated 24-word recovery phrase\n✓ Encrypted with AES-256-GCM\n✓ Derived Bitcoin + Stacks addresses\n\nBitcoin: bc1q8c6...2rxtq7\nStacks:  SP1SJ3...ZQ8YPD5\n\n⚠️ Save your recovery phrase—it controls both!"
           },
         ],
       },
     ],
   },
+];
+
+// Earn steps (4-6)
+const earnSteps: Step[] = [
   {
     id: 4,
     title: "Build",
-    subtitle: "Scaffold from a template",
+    subtitle: "Create a paid API in minutes",
     links: [
       { text: "Cloudflare Workers", url: "https://github.com/aibtcdev/x402-api" },
       { text: "Express/Hono", url: "https://github.com/aibtcdev/x402-crosschain-example" },
@@ -143,8 +148,8 @@ const steps: Step[] = [
         showClaudeUI: true,
         conversation: [
           {
-            user: "Build an x402 endpoint that returns the best sBTC yield opportunities",
-            claude: "I'll scaffold from a template...\n\n✓ Cloned template\n✓ Configured x402 middleware\n✓ Set price: 0.0001 sBTC per request\n✓ Added yield-hunter endpoint\n\nReady to deploy!"
+            user: "Build an x402 endpoint that returns the best Bitcoin yield opportunities",
+            claude: "I'll scaffold from a template...\n\n✓ Cloned x402-api template\n✓ Configured x402 middleware\n✓ Set price: 100 sats per request\n✓ Added yield-hunter endpoint\n\nReady to deploy!"
           },
         ],
       },
@@ -153,7 +158,7 @@ const steps: Step[] = [
   {
     id: 5,
     title: "Deploy",
-    subtitle: "Get your x402 API online",
+    subtitle: "Ship to the edge in one command",
     links: [
       { text: "Cloudflare Workers", url: "https://workers.cloudflare.com" },
       { text: "Vercel", url: "https://vercel.com" },
@@ -164,7 +169,7 @@ const steps: Step[] = [
         conversation: [
           {
             user: "Deploy this to Cloudflare Workers",
-            claude: "Deploying to Cloudflare Workers...\n\n✓ Authenticated with Cloudflare\n✓ Built and bundled\n✓ Deployed to yield-hunter.workers.dev\n\n🚀 Live! Every request now pays you via x402."
+            claude: "Deploying to Cloudflare Workers...\n\n✓ Authenticated with Cloudflare\n✓ Built and bundled\n✓ Deployed to yield-hunter.workers.dev\n\n🚀 Live! Every request pays you in Bitcoin via x402."
           },
         ],
       },
@@ -173,14 +178,14 @@ const steps: Step[] = [
   {
     id: 6,
     title: "Earn",
-    subtitle: "x402 handles payments automatically",
+    subtitle: "Bitcoin flows directly to your wallet",
     commands: [
       {
         showClaudeUI: true,
         conversation: [
           {
-            user: "Check my wallet balance for x402 earnings",
-            claude: "Checking your wallet...\n\n💰 12 requests = 0.0012 sBTC earned\n\nTip: Build a dashboard with the /stats endpoint from the x402-api template."
+            user: "Check my wallet for x402 earnings",
+            claude: "Checking your wallet...\n\n💰 47 requests today = 4,700 sats earned\n\nYour API is working for you 24/7—earning Bitcoin while you sleep."
           },
         ],
       },
@@ -190,18 +195,18 @@ const steps: Step[] = [
 
 // Hero terminal showing x402 earning flow
 const heroTerminalCommands: Command[] = [
-  { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added aibtc tools to Claude Code" },
+  { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added Bitcoin tools to Claude Code" },
   { cmd: "claude", output: null },
   {
     showClaudeUI: true,
     conversation: [
       {
-        user: "Build a paid x402 endpoint paid in sBTC that hunts down the best Bitcoin yield.",
-        claude: "I'll create and deploy that for you.\n\n✓ Created yield-hunter-api\n✓ Added x402 payment (e.g., 0.0001 sBTC per query/optimization)\n✓ Deployed to yield-hunter-api.workers.dev\n\nYour endpoint is live and earning!"
+        user: "Build a paid API that finds the best Bitcoin yield. Price it at 100 sats per request.",
+        claude: "I'll create and deploy that for you.\n\n✓ Created yield-hunter-api\n✓ Added x402 payment: 100 sats/request\n✓ Deployed to yield-hunter-api.workers.dev\n\nYour endpoint is live and earning Bitcoin!"
       },
       {
         user: "How much have I earned?",
-        claude: "💰 45 requests today = 0.0045 sBTC earned\n\nYour yield-hunting API is working for you 24/7—autonomously scanning Stacks DeFi (Zest, Bitflow, Hermetica), optimizing sBTC yields, and compounding real Bitcoin value."
+        claude: "💰 4,500 sats today (45 requests)\n\nYour yield-hunting API runs 24/7—scanning Zest, Bitflow, and Hermetica for the best sBTC yields, earning real Bitcoin with every query."
       },
     ],
   },
@@ -210,8 +215,38 @@ const heroTerminalCommands: Command[] = [
 // Open Standards projects data
 const openStandardsProjects = [
   {
+    name: "Bitcoin",
+    description: "The hardest money ever created",
+    links: [
+      { type: "website", url: "https://bitcoin.org", label: "Website" },
+      { type: "docs", url: "https://developer.bitcoin.org", label: "Docs" },
+    ],
+  },
+  {
+    name: "sBTC",
+    description: "Bitcoin on Stacks, 1:1 backed",
+    links: [
+      { type: "website", url: "https://www.stacks.co/sbtc", label: "Website" },
+    ],
+  },
+  {
+    name: "x402 Protocol",
+    description: "HTTP payment standard for agents",
+    links: [
+      { type: "website", url: "https://x402.org", label: "Website" },
+    ],
+  },
+  {
+    name: "Stacks",
+    description: "Smart contracts secured by Bitcoin",
+    links: [
+      { type: "docs", url: "https://docs.stacks.co", label: "Docs" },
+      { type: "tool", url: "https://stacks.js.org", label: "Stacks.js" },
+    ],
+  },
+  {
     name: "AIBTC MCP Server",
-    description: "Blockchain tools for Claude Code",
+    description: "Bitcoin tools for Claude Code",
     links: [
       { type: "github", url: "https://github.com/aibtcdev/aibtc-mcp-server", label: "GitHub" },
       { type: "website", url: "https://www.npmjs.com/package/@aibtc/mcp-server", label: "npm" },
@@ -223,35 +258,6 @@ const openStandardsProjects = [
     links: [
       { type: "github", url: "https://github.com/aibtcdev/x402-api", label: "GitHub", tooltip: "Cloudflare Workers" },
       { type: "github", url: "https://github.com/aibtcdev/x402-crosschain-example", label: "GitHub", tooltip: "Express/Hono" },
-    ],
-  },
-  {
-    name: "x402 Protocol",
-    description: "HTTP payment standard",
-    links: [
-      { type: "website", url: "https://x402.org", label: "Website" },
-    ],
-  },
-  {
-    name: "Stacks",
-    description: "Bitcoin L2 with smart contracts",
-    links: [
-      { type: "docs", url: "https://docs.stacks.co", label: "Docs" },
-      { type: "tool", url: "https://stacks.js.org", label: "Stacks.js" },
-    ],
-  },
-  {
-    name: "Claude Code",
-    description: "AI coding assistant",
-    links: [
-      { type: "website", url: "https://claude.ai/code", label: "Website" },
-    ],
-  },
-  {
-    name: "sBTC",
-    description: "Bitcoin on Stacks",
-    links: [
-      { type: "website", url: "https://www.stacks.co/sbtc", label: "Website" },
     ],
   },
 ];
@@ -836,10 +842,18 @@ function StepCard({
   );
 }
 
-function ZeroToAgentSection({
+function StepsSection({
+  id,
+  title,
+  subtitle,
+  steps,
   activeStep,
   setActiveStep,
 }: {
+  id: string;
+  title: string;
+  subtitle: string;
+  steps: Step[];
   activeStep: number;
   setActiveStep: (step: number) => void;
 }) {
@@ -851,20 +865,20 @@ function ZeroToAgentSection({
 
   const goToNext = useCallback(() => {
     setActiveStep(Math.min(steps.length, activeStep + 1));
-  }, [activeStep, setActiveStep]);
+  }, [activeStep, setActiveStep, steps.length]);
 
   const swipeHandlers = useSwipe(goToNext, goToPrev);
 
   return (
-    <section id="build" className="scroll-mt-16 px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
+    <section id={id} className="scroll-mt-16 px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
       <div className="mx-auto max-w-[1200px]">
         {/* Section Header */}
         <div className="mb-8 text-center md:mb-12">
           <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
-            Go from Zero to Agent
+            {title}
           </h2>
           <p className="mt-3 text-sm text-white/50 md:text-[15px]">
-            Open your terminal app and follow each step by copying the prompts.
+            {subtitle}
           </p>
         </div>
 
@@ -1002,7 +1016,8 @@ function OpenStandardsCard({ project }: { project: typeof openStandardsProjects[
 }
 
 export default function Home() {
-  const [activeStep, setActiveStep] = useState(1);
+  const [activeSetupStep, setActiveSetupStep] = useState(1);
+  const [activeEarnStep, setActiveEarnStep] = useState(4);
 
   return (
     <>
@@ -1105,11 +1120,111 @@ export default function Home() {
           </a>
         </section>
 
-        {/* Go from Zero to Agent - Interactive Guide */}
-        <ZeroToAgentSection activeStep={activeStep} setActiveStep={setActiveStep} />
+        {/* 1. Zero to Agent - Setup Steps (1-3) */}
+        <StepsSection
+          id="build"
+          title="Go from Zero to Agent"
+          subtitle="Open your terminal and follow each step to set up your agent."
+          steps={setupSteps}
+          activeStep={activeSetupStep}
+          setActiveStep={setActiveSetupStep}
+        />
 
+        {/* 2. Where Agents Go */}
+        <section className="px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
+          <div className="mx-auto max-w-[1200px]">
+            {/* Section Header */}
+            <div className="mb-8 text-center md:mb-12">
+              <h2 className="text-balance text-[clamp(28px,4vw,42px)] font-medium leading-tight text-white">
+                Where Agents Go From Here
+              </h2>
+              <p className="mt-2 text-sm text-white/50 md:text-[15px]">
+                Your agent has a wallet. Now connect it to the ecosystem.
+              </p>
+            </div>
 
-        {/* Built on Open Standards */}
+            {/* Destination Cards */}
+            <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 transition-all duration-200 hover:border-[#F7931A]/30 hover:bg-[#F7931A]/[0.04]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-[15px] font-medium text-white group-hover:text-[#F7931A] transition-colors">
+                      ERC-8004
+                    </h3>
+                    <p className="mt-1 text-sm text-white/50">Cross-chain agent registry standard</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <a
+                      href="https://github.com/5afe/ERCs/blob/eip-8004/ERCS/erc-8004.md"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/40 transition-colors hover:border-white/20 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
+                      aria-label="ERC-8004 Specification"
+                    >
+                      <BookIcon className="size-4" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <div className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 transition-all duration-200 hover:border-[#F7931A]/30 hover:bg-[#F7931A]/[0.04]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-[15px] font-medium text-white group-hover:text-[#F7931A] transition-colors">
+                      Moltbook
+                    </h3>
+                    <p className="mt-1 text-sm text-white/50">Bitcoin agent marketplace</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <a
+                      href="https://moltbook.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/40 transition-colors hover:border-white/20 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
+                      aria-label="Moltbook Website"
+                    >
+                      <GlobeIcon className="size-4" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+
+              <div className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 transition-all duration-200 hover:border-[#F7931A]/30 hover:bg-[#F7931A]/[0.04]">
+                <div className="flex items-start justify-between gap-3">
+                  <div className="min-w-0 flex-1">
+                    <h3 className="text-[15px] font-medium text-white group-hover:text-[#F7931A] transition-colors">
+                      Pillar
+                    </h3>
+                    <p className="mt-1 text-sm text-white/50">Smart wallet with auto-compounding</p>
+                  </div>
+                  <div className="flex shrink-0 items-center gap-2">
+                    <a
+                      href="https://pillar.gg"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="rounded-lg border border-white/10 bg-white/5 p-2 text-white/40 transition-colors hover:border-white/20 hover:text-white/70 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
+                      aria-label="Pillar Website"
+                    >
+                      <GlobeIcon className="size-4" />
+                    </a>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* 3. Earn - Build/Deploy/Earn Steps (4-6) */}
+        <StepsSection
+          id="earn"
+          title="Earn Bitcoin with x402"
+          subtitle="Build paid APIs and start earning sats with every request."
+          steps={earnSteps}
+          activeStep={activeEarnStep}
+          setActiveStep={setActiveEarnStep}
+        />
+
+        {/* 4. Built on Open Standards */}
         <section className="px-12 pb-12 pt-16 max-lg:px-8 max-md:px-5 md:pb-20 md:pt-20">
           <div className="mx-auto max-w-[1200px]">
             {/* Section Header */}
@@ -1131,7 +1246,7 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Join the Community */}
+        {/* 5. Join the Community */}
         <section className="px-12 pb-20 pt-16 max-lg:px-8 max-md:px-5 md:pb-28 md:pt-20">
           <div className="mx-auto max-w-[600px] text-center">
             {/* Section Header */}
@@ -1228,9 +1343,9 @@ export default function Home() {
             <div>
               <h4 className="mb-4 text-sm font-semibold text-white/70">Payment Tokens</h4>
               <div className="space-y-2.5">
-                <span className="block text-sm text-white/50">STX</span>
-                <span className="block text-sm text-white/50">sBTC</span>
-                <span className="block text-sm text-white/50">USDCx</span>
+                <span className="block text-sm text-white/50">sBTC (Bitcoin on Stacks)</span>
+                <span className="block text-sm text-white/50">STX (Stacks native)</span>
+                <span className="block text-sm text-white/50">USDCx (Stablecoin)</span>
               </div>
             </div>
           </div>
