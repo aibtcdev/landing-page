@@ -1083,17 +1083,17 @@ export default function Home() {
               <div className="flex flex-col items-start text-left">
                 {/* Main Headline */}
                 <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,7vw,56px)] font-medium leading-[1.15] text-white opacity-0 [animation-delay:0.1s] md:leading-[1.1]">
-                  Let your ideas earn{" "}
+                  Give your agents a{" "}
                   <span className="relative">
                     <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin</span>
                     <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl max-md:hidden"></span>
                   </span>{" "}
-                  for you.
+                  wallet.
                 </h1>
 
                 {/* Subheadline */}
                 <p className="mb-0 max-w-[440px] animate-fadeUp text-balance text-[clamp(15px,4vw,18px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s] lg:mb-8">
-                  Build autonomous agents and paid services on Bitcoin&apos;s Agentic Layer.
+                  One command to deploy an AI agent that can send, receive, and earn Bitcoin.
                 </p>
 
                 {/* CTA - Desktop only */}
