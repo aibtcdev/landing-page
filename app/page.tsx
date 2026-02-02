@@ -727,6 +727,13 @@ function TerminalWindow({
   );
 }
 
+// Telegram Message type
+interface TelegramMessage {
+  type: "user" | "agent";
+  content: string;
+  time: string;
+}
+
 // Telegram UI Component
 function TelegramUI({ messages }: { messages: TelegramMessage[] }) {
   const prefersReducedMotion = usePrefersReducedMotion();
