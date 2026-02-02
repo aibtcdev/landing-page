@@ -193,9 +193,9 @@ const earnSteps: Step[] = [
   },
 ];
 
-// Hero terminal showing local deploy
+// Hero terminal showing local deploy with new wallet flow
 const heroTerminalCommands: Command[] = [
-  { cmd: "curl -sSL aibtc.com/local | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║                                                           ║\n║   ₿  OpenClaw + aibtc                                     ║\n║                                                           ║\n║   Bitcoin & Stacks AI Agent (Docker Desktop)              ║\n║                                                           ║\n╚═══════════════════════════════════════════════════════════╝\n\n✓ Docker is running\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nGet your key at: https://openrouter.ai/keys\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nCreate a bot via @BotFather on Telegram\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\n1) mainnet (real Bitcoin/Stacks)\n2) testnet (test tokens only)\nSelect [1]: 1\n\nBuilding Docker image...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot to start chatting!\n\nFirst steps:\n  1. Message your bot on Telegram\n  2. Say: \"Create a new Bitcoin wallet\"\n  3. Set a strong password when prompted" },
+  { cmd: "curl -sSL aibtc.com/local | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (Docker Desktop)              ║\n╚═══════════════════════════════════════════════════════════╝\n\n✓ Docker is running\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nStep 4: Agent Wallet Password\nYour agent will have its own Bitcoin wallet.\nThis password authorizes the agent to make transactions.\nEnter password: ********\n\nBuilding Docker image...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot - your agent will create its Bitcoin wallet!" },
 ];
 
 // Deploy steps for OpenClaw
@@ -206,7 +206,7 @@ const deploySteps: Step[] = [
     subtitle: "Run on your machine with Docker Desktop",
     links: [{ text: "Docker Desktop", url: "https://docker.com/products/docker-desktop" }],
     commands: [
-      { cmd: "curl -sSL aibtc.com/local | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (Docker Desktop)              ║\n╚═══════════════════════════════════════════════════════════╝\n\n✓ Docker is running\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nBuilding Docker image...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot to start chatting!" },
+      { cmd: "curl -sSL aibtc.com/local | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (Docker Desktop)              ║\n╚═══════════════════════════════════════════════════════════╝\n\n✓ Docker is running\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nStep 4: Agent Wallet Password\nYour agent will have its own Bitcoin wallet.\nEnter password: ********\n\nBuilding Docker image...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot - your agent will create its Bitcoin wallet!" },
     ],
   },
   {
@@ -219,7 +219,7 @@ const deploySteps: Step[] = [
     ],
     commands: [
       { cmd: "ssh root@your-vps-ip", output: "Welcome to Ubuntu 24.04 LTS" },
-      { cmd: "curl -sSL aibtc.com | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (VPS)                         ║\n╚═══════════════════════════════════════════════════════════╝\n\nDetected OS: ubuntu\nDocker not found. Installing...\n✓ Docker installed\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nBuilding Docker image (this may take 1-2 minutes)...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot to start chatting!\n\nCommands:\n  sudo docker compose logs -f     # View logs\n  sudo docker compose restart     # Restart\n  sudo docker compose down        # Stop" },
+      { cmd: "curl -sSL aibtc.com | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (VPS)                         ║\n╚═══════════════════════════════════════════════════════════╝\n\nDetected OS: ubuntu\nDocker not found. Installing...\n✓ Docker installed\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nStep 4: Agent Wallet Password\nYour agent will have its own Bitcoin wallet.\nEnter password: ********\n\nBuilding Docker image (this may take 1-2 minutes)...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot - your agent will create its Bitcoin wallet!" },
     ],
   },
   {
@@ -727,6 +727,171 @@ function TerminalWindow({
   );
 }
 
+// Telegram UI Component
+function TelegramUI({ messages }: { messages: TelegramMessage[] }) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [displayedMessages, setDisplayedMessages] = useState<number>(0);
+  const chatRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setDisplayedMessages(messages.length);
+      return;
+    }
+
+    if (displayedMessages < messages.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedMessages(prev => prev + 1);
+      }, 800);
+      return () => clearTimeout(timeout);
+    }
+  }, [displayedMessages, messages.length, prefersReducedMotion]);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTo({
+        top: chatRef.current.scrollHeight,
+        behavior: prefersReducedMotion ? "instant" : "smooth",
+      });
+    }
+  }, [displayedMessages, prefersReducedMotion]);
+
+  return (
+    <div className="relative max-w-[360px] mx-auto">
+      {/* Outer glow effect */}
+      <div className="absolute -inset-4 bg-gradient-to-b from-[#F7931A]/20 via-[#F7931A]/5 to-transparent rounded-[3.5rem] blur-2xl opacity-60" />
+
+      {/* iPhone Frame */}
+      <div className="relative rounded-[3rem] bg-gradient-to-b from-[#2a2a2c] to-[#1a1a1c] p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_25px_50px_-12px_rgba(0,0,0,0.8),0_0_100px_-20px_rgba(247,147,26,0.3)]">
+        {/* Inner bezel */}
+        <div className="rounded-[2.8rem] bg-gradient-to-b from-[#1c1c1e] to-[#0c0c0e] p-[2px]">
+          {/* Screen */}
+          <div className="rounded-[2.6rem] overflow-hidden bg-black">
+            {/* Dynamic Island */}
+            <div className="relative bg-[#1c1c1e] pt-3 pb-2">
+              <div className="absolute left-1/2 top-3 -translate-x-1/2 w-[100px] h-[28px] bg-black rounded-full flex items-center justify-center">
+                <div className="w-3 h-3 rounded-full bg-[#1c1c1e] mr-6" />
+              </div>
+              {/* Status Bar */}
+              <div className="flex items-center justify-between text-white text-xs font-semibold px-8 pt-1">
+                <span className="w-12">10:04</span>
+                <div className="flex items-center gap-1.5">
+                  <svg className="w-[17px] h-[12px]" viewBox="0 0 17 12" fill="currentColor">
+                    <path d="M1 4.5h1.5v7H1zM4 3.5h1.5v8H4zM7 2.5h1.5v9H7zM10 1.5h1.5v10H10z"/>
+                    <path d="M13 0.5h1.5v11H13z" fillOpacity="0.35"/>
+                  </svg>
+                  <span className="text-[11px] font-semibold">5G</span>
+                  <svg className="w-[25px] h-[12px] ml-0.5" viewBox="0 0 25 12" fill="currentColor">
+                    <rect x="0.5" y="0.5" width="21" height="11" rx="2.5" stroke="currentColor" strokeOpacity="0.35" fill="none"/>
+                    <rect x="2" y="2" width="17" height="8" rx="1.5" fill="currentColor"/>
+                    <path d="M23 4v4a2 2 0 0 0 0-4z" fillOpacity="0.35"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Telegram Header */}
+            <div className="bg-[#1c1c1e] px-4 pb-3 pt-1 flex items-center border-b border-white/[0.08]">
+              <button className="text-[#0a84ff] text-[15px] flex items-center gap-0.5 font-normal">
+                <svg className="w-[22px] h-[22px] -ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="flex-1 flex items-center justify-center gap-2.5 -ml-4">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#F7931A] via-[#f59e0b] to-[#d97706] flex items-center justify-center text-white text-base font-bold shadow-lg shadow-[#F7931A]/20">
+                  ₿
+                </div>
+                <div className="text-center">
+                  <div className="text-white font-semibold text-[15px] leading-tight">AIBTC Agent</div>
+                  <div className="text-[#0a84ff] text-[12px] leading-tight">online</div>
+                </div>
+              </div>
+              <div className="w-8" />
+            </div>
+
+            {/* Chat Area */}
+            <div
+              ref={chatRef}
+              className="h-[480px] overflow-y-auto px-2.5 py-3 space-y-2"
+              style={{
+                background: `linear-gradient(180deg, #0a0a0a 0%, #0d0d0f 100%)`,
+              }}
+            >
+              {/* Date Chip */}
+              <div className="flex justify-center mb-3 sticky top-0 z-10">
+                <span className="bg-black/60 text-white/50 text-[11px] px-2.5 py-1 rounded-full backdrop-blur-md font-medium">
+                  Today
+                </span>
+              </div>
+
+              {messages.slice(0, displayedMessages).map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[82%] rounded-[18px] px-3 py-2 shadow-sm ${
+                      msg.type === "user"
+                        ? "bg-[#0b84fe] text-white rounded-br-[4px]"
+                        : "bg-[#262628] text-white rounded-bl-[4px]"
+                    }`}
+                  >
+                    <div className="text-[15px] leading-[1.35] whitespace-pre-wrap break-words">
+                      {msg.content}
+                    </div>
+                    <div className={`text-[11px] mt-0.5 ${msg.type === "user" ? "text-white/60" : "text-white/35"} text-right`}>
+                      {msg.time}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Typing indicator */}
+              {displayedMessages < messages.length && (
+                <div className="flex justify-start">
+                  <div className="bg-[#262628] rounded-[18px] rounded-bl-[4px] px-4 py-3">
+                    <div className="flex gap-1.5 items-center h-4">
+                      <span className="w-[7px] h-[7px] bg-white/30 rounded-full animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "0ms" }} />
+                      <span className="w-[7px] h-[7px] bg-white/30 rounded-full animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "150ms" }} />
+                      <span className="w-[7px] h-[7px] bg-white/30 rounded-full animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Input Area */}
+            <div className="bg-[#1c1c1e] px-2 py-2 flex items-end gap-1.5 border-t border-white/[0.08]">
+              <button className="text-[#0a84ff] p-1.5 mb-0.5">
+                <svg className="w-[26px] h-[26px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+              </button>
+              <div className="flex-1 bg-[#2c2c2e] rounded-[20px] px-4 py-2 min-h-[36px] flex items-center border border-white/[0.06]">
+                <span className="text-white/30 text-[15px]">Message</span>
+              </div>
+              <button className="text-white/50 p-1.5 mb-0.5">
+                <svg className="w-[26px] h-[26px]" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 15c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v7c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 15 6.7 12H5c0 3.41 2.72 6.23 6 6.72V22h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Home Indicator */}
+            <div className="bg-[#1c1c1e] pb-2 pt-1 flex justify-center">
+              <div className="w-[134px] h-[5px] bg-white/20 rounded-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Reflection/shadow at bottom */}
+      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-[70%] h-8 bg-gradient-to-t from-transparent via-white/[0.02] to-transparent blur-sm rounded-full" />
+    </div>
+  );
+}
+
 // Icon components for Open Standards cards
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -1093,7 +1258,7 @@ export default function Home() {
 
                 {/* Subheadline */}
                 <p className="mb-0 max-w-[440px] animate-fadeUp text-balance text-[clamp(15px,4vw,18px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s] lg:mb-8">
-                  One command to deploy an AI agent that can send, receive, and earn Bitcoin.
+                  One command away from Bitcoin-powered agents.
                 </p>
 
                 {/* CTA - Desktop only */}
@@ -1102,7 +1267,7 @@ export default function Home() {
                     href="#deploy"
                     className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-8 py-4 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                   >
-                    Deploy Agent
+                    Get Started
                   </a>
                 </div>
               </div>
@@ -1122,7 +1287,7 @@ export default function Home() {
                   href="#deploy"
                   className="inline-flex w-full items-center justify-center rounded-xl bg-[#F7931A] px-8 py-4 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
-                  Deploy Agent
+                  Get Started
                 </a>
               </div>
             </div>
@@ -1142,11 +1307,11 @@ export default function Home() {
           </a>
         </section>
 
-        {/* Deploy Your Bitcoin Agent */}
+        {/* Set Up in One Command */}
         <StepsSection
           id="deploy"
-          title="Deploy Your Bitcoin Agent"
-          subtitle="Choose your deployment method. All options include Telegram integration, Bitcoin wallet, and DeFi access."
+          title="Set Up in One Command"
+          subtitle="Your agent gets its own Bitcoin wallet."
           steps={deploySteps}
           activeStep={activeDeployStep}
           setActiveStep={setActiveDeployStep}
