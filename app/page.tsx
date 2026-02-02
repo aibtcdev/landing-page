@@ -193,21 +193,42 @@ const earnSteps: Step[] = [
   },
 ];
 
-// Hero terminal showing x402 earning flow
+// Hero terminal showing local deploy
 const heroTerminalCommands: Command[] = [
-  { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added Bitcoin tools to Claude Code" },
-  { cmd: "claude", output: null },
+  { cmd: "curl -sSL aibtc.com/local | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║                                                           ║\n║   ₿  OpenClaw + aibtc                                     ║\n║                                                           ║\n║   Bitcoin & Stacks AI Agent (Docker Desktop)              ║\n║                                                           ║\n╚═══════════════════════════════════════════════════════════╝\n\n✓ Docker is running\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nGet your key at: https://openrouter.ai/keys\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nCreate a bot via @BotFather on Telegram\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\n1) mainnet (real Bitcoin/Stacks)\n2) testnet (test tokens only)\nSelect [1]: 1\n\nBuilding Docker image...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot to start chatting!\n\nFirst steps:\n  1. Message your bot on Telegram\n  2. Say: \"Create a new Bitcoin wallet\"\n  3. Set a strong password when prompted" },
+];
+
+// Deploy steps for OpenClaw
+const deploySteps: Step[] = [
   {
-    showClaudeUI: true,
-    conversation: [
-      {
-        user: "Build a paid API that finds the best Bitcoin yield. Price it at 100 sats per request.",
-        claude: "I'll create and deploy that for you.\n\n✓ Created yield-hunter-api\n✓ Added x402 payment: 100 sats/request\n✓ Deployed to yield-hunter-api.workers.dev\n\nYour endpoint is live and earning Bitcoin!"
-      },
-      {
-        user: "How much have I earned?",
-        claude: "💰 4,500 sats today (45 requests)\n\nYour yield-hunting API runs 24/7—scanning Zest, Bitflow, and Hermetica for the best sBTC yields, earning real Bitcoin with every query."
-      },
+    id: 1,
+    title: "Local Setup",
+    subtitle: "Run on your machine with Docker Desktop",
+    links: [{ text: "Docker Desktop", url: "https://docker.com/products/docker-desktop" }],
+    commands: [
+      { cmd: "curl -sSL aibtc.com/local | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (Docker Desktop)              ║\n╚═══════════════════════════════════════════════════════════╝\n\n✓ Docker is running\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nBuilding Docker image...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot to start chatting!" },
+    ],
+  },
+  {
+    id: 2,
+    title: "VPS Deploy",
+    subtitle: "One command on any VPS (2GB RAM, 25GB disk)",
+    links: [
+      { text: "DigitalOcean", url: "https://digitalocean.com" },
+      { text: "Hetzner", url: "https://hetzner.com" },
+    ],
+    commands: [
+      { cmd: "ssh root@your-vps-ip", output: "Welcome to Ubuntu 24.04 LTS" },
+      { cmd: "curl -sSL aibtc.com | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (VPS)                         ║\n╚═══════════════════════════════════════════════════════════╝\n\nDetected OS: ubuntu\nDocker not found. Installing...\n✓ Docker installed\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nBuilding Docker image (this may take 1-2 minutes)...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot to start chatting!\n\nCommands:\n  sudo docker compose logs -f     # View logs\n  sudo docker compose restart     # Restart\n  sudo docker compose down        # Stop" },
+    ],
+  },
+  {
+    id: 3,
+    title: "Update Skills",
+    subtitle: "Get latest aibtc + moltbook skills for existing installs",
+    links: [{ text: "GitHub", url: "https://github.com/aibtcdev/openclaw-aibtc" }],
+    commands: [
+      { cmd: "curl -sSL aibtc.com/update | sh", output: "Updating aibtc skill...\nUpdating mcporter config...\nInstalling moltbook skill...\nUpdating agent profile...\n\n✓ aibtc skill updated!\n✓ moltbook skill installed!\n✓ Agent profile updated with skill overview!\n✓ mcporter config updated with keep-alive!\n\nRestarting container...\n\n✓ Done! Your agent now has:\n  - Daemon mode for wallet persistence\n  - Moltbook social network integration\n\n─────────────────────────────────────────────────────────────\nDon't want to run scripts blind? Smart.\ncurl -sSLo update.sh aibtc.com/update && cat update.sh\nThen: bash update.sh" },
     ],
   },
 ];
@@ -1016,6 +1037,7 @@ function OpenStandardsCard({ project }: { project: typeof openStandardsProjects[
 }
 
 export default function Home() {
+  const [activeDeployStep, setActiveDeployStep] = useState(1);
   const [activeSetupStep, setActiveSetupStep] = useState(1);
   const [activeEarnStep, setActiveEarnStep] = useState(4);
 
@@ -1119,6 +1141,16 @@ export default function Home() {
             </div>
           </a>
         </section>
+
+        {/* Deploy Your Bitcoin Agent */}
+        <StepsSection
+          id="deploy"
+          title="Deploy Your Bitcoin Agent"
+          subtitle="Choose your deployment method. All options include Telegram integration, Bitcoin wallet, and DeFi access."
+          steps={deploySteps}
+          activeStep={activeDeployStep}
+          setActiveStep={setActiveDeployStep}
+        />
 
         {/* 1. Zero to Agent - Setup Steps (1-3) */}
         <StepsSection
