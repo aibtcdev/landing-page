@@ -1099,10 +1099,10 @@ export default function Home() {
                 {/* CTA - Desktop only */}
                 <div className="hidden animate-fadeUp opacity-0 [animation-delay:0.35s] lg:block">
                   <a
-                    href="#build"
+                    href="#deploy"
                     className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-8 py-4 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                   >
-                    Start Building
+                    Deploy Agent
                   </a>
                 </div>
               </div>
@@ -1119,10 +1119,10 @@ export default function Home() {
               {/* CTA - Mobile only, after terminal */}
               <div className="w-full animate-fadeUp opacity-0 [animation-delay:0.4s] lg:hidden">
                 <a
-                  href="#build"
+                  href="#deploy"
                   className="inline-flex w-full items-center justify-center rounded-xl bg-[#F7931A] px-8 py-4 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
-                  Start Building
+                  Deploy Agent
                 </a>
               </div>
             </div>
@@ -1130,7 +1130,7 @@ export default function Home() {
 
           {/* Scroll indicator */}
           <a
-            href="#build"
+            href="#deploy"
             className="absolute bottom-2 left-1/2 -translate-x-1/2 animate-fadeIn p-3 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:-bottom-6 max-md:p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:rounded-full"
             aria-label="Scroll to learn more"
           >
