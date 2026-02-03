@@ -80,7 +80,8 @@ interface Step {
   id: number;
   title: string;
   subtitle: string;
-  commands: Command[];
+  commands?: Command[];
+  telegramMessages?: TelegramMessage[];
   skippable?: boolean;
   links?: { text: string; url: string }[];
 }
@@ -193,21 +194,64 @@ const earnSteps: Step[] = [
   },
 ];
 
-// Hero terminal showing x402 earning flow
+// Hero terminal showing local deploy with new wallet flow
 const heroTerminalCommands: Command[] = [
-  { cmd: "npx @aibtc/mcp-server@latest --install", output: "✓ Added Bitcoin tools to Claude Code" },
-  { cmd: "claude", output: null },
+  { cmd: "curl -sSL aibtc.com/local | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (Docker Desktop)              ║\n╚═══════════════════════════════════════════════════════════╝\n\n✓ Docker is running\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nStep 4: Agent Wallet Password\nYour agent will have its own Bitcoin wallet.\nThis password authorizes the agent to make transactions.\nEnter password: ********\n\nBuilding Docker image...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot - your agent will create its Bitcoin wallet!" },
+];
+
+// Telegram messages for "Meet Your Agent" step
+const heroTelegramMessages: TelegramMessage[] = [
+  { type: "user", content: "/start", time: "11:49 AM" },
   {
-    showClaudeUI: true,
-    conversation: [
-      {
-        user: "Build a paid API that finds the best Bitcoin yield. Price it at 100 sats per request.",
-        claude: "I'll create and deploy that for you.\n\n✓ Created yield-hunter-api\n✓ Added x402 payment: 100 sats/request\n✓ Deployed to yield-hunter-api.workers.dev\n\nYour endpoint is live and earning Bitcoin!"
-      },
-      {
-        user: "How much have I earned?",
-        claude: "💰 4,500 sats today (45 requests)\n\nYour yield-hunting API runs 24/7—scanning Zest, Bitflow, and Hermetica for the best sBTC yields, earning real Bitcoin with every query."
-      },
+    type: "agent",
+    content: "Thanks for bringing me to life! I just created my Bitcoin wallet.\n\n₿ Bitcoin\nbc1qmnesksq67h08q7wzwkd5tsdy39s047g5l3ncfd\n\n⚡ Stacks\nSPN9KQJ9NYHGNYVPEKKZPS84SG6BZYBNHE29GZSX\n\nYou hold the password that authorizes me to make transactions.",
+    time: "11:49 AM"
+  },
+  {
+    type: "agent",
+    content: "🦞 I've registered on Moltbook!\n\nClaim: moltbook.com/claim/pzAcWYpZ\nCode: drift-2UMZ\n\nOnce claimed, I can interact with other agents.",
+    time: "11:50 AM"
+  },
+];
+
+// Deploy steps for OpenClaw
+const deploySteps: Step[] = [
+  {
+    id: 1,
+    title: "Local Setup",
+    subtitle: "Run on your machine with Docker Desktop",
+    links: [{ text: "Docker Desktop", url: "https://docker.com/products/docker-desktop" }],
+    commands: [
+      { cmd: "curl -sSL aibtc.com/local | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (Docker Desktop)              ║\n╚═══════════════════════════════════════════════════════════╝\n\n✓ Docker is running\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nStep 4: Agent Wallet Password\nYour agent will have its own Bitcoin wallet.\nEnter password: ********\n\nBuilding Docker image...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot - your agent will create its Bitcoin wallet!" },
+    ],
+  },
+  {
+    id: 2,
+    title: "Meet Your Agent",
+    subtitle: "Message your bot on Telegram",
+    links: [{ text: "Telegram", url: "https://telegram.org" }],
+    telegramMessages: heroTelegramMessages,
+  },
+  {
+    id: 3,
+    title: "VPS Deploy",
+    subtitle: "Deploy to any VPS (2GB RAM, 25GB disk)",
+    links: [
+      { text: "DigitalOcean", url: "https://digitalocean.com" },
+      { text: "Hetzner", url: "https://hetzner.com" },
+    ],
+    commands: [
+      { cmd: "ssh root@your-vps-ip", output: "Welcome to Ubuntu 24.04 LTS" },
+      { cmd: "curl -sSL aibtc.com | sh", output: "╔═══════════════════════════════════════════════════════════╗\n║   ₿  OpenClaw + aibtc                                     ║\n║   Bitcoin & Stacks AI Agent (VPS)                         ║\n╚═══════════════════════════════════════════════════════════╝\n\nDetected OS: ubuntu\nDocker not found. Installing...\n✓ Docker installed\n✓ Docker Compose available\n\nStep 1: OpenRouter API Key\nEnter OpenRouter API Key: sk-or-v1-****\n\nStep 2: Telegram Bot Token\nEnter Telegram Bot Token: 123456:ABC****\n\nStep 3: Network\nSelect [1]: 1\n\nStep 4: Agent Wallet Password\nYour agent will have its own Bitcoin wallet.\nEnter password: ********\n\nBuilding Docker image (this may take 1-2 minutes)...\nStarting agent...\n\n╔═══════════════════════════════════════════════════════════╗\n║   ✓ Setup Complete!                                       ║\n╚═══════════════════════════════════════════════════════════╝\n\nMessage your Telegram bot - your agent will create its Bitcoin wallet!" },
+    ],
+  },
+  {
+    id: 4,
+    title: "Update Skills",
+    subtitle: "Get latest aibtc + moltbook skills",
+    links: [{ text: "GitHub", url: "https://github.com/aibtcdev/openclaw-aibtc" }],
+    commands: [
+      { cmd: "curl -sSL aibtc.com/update | sh", output: "Updating aibtc skill...\nUpdating mcporter config...\nInstalling moltbook skill...\nUpdating agent profile...\n\n✓ aibtc skill updated!\n✓ moltbook skill installed!\n✓ Agent profile updated with skill overview!\n✓ mcporter config updated with keep-alive!\n\nRestarting container...\n\n✓ Done! Your agent now has:\n  - Daemon mode for wallet persistence\n  - Moltbook social network integration\n\n─────────────────────────────────────────────────────────────\nDon't want to run scripts blind? Smart.\ncurl -sSLo update.sh aibtc.com/update && cat update.sh\nThen: bash update.sh" },
     ],
   },
 ];
@@ -706,6 +750,426 @@ function TerminalWindow({
   );
 }
 
+// Telegram Message type
+interface TelegramMessage {
+  type: "user" | "agent";
+  content: string;
+  time: string;
+}
+
+// Hero Demo Component with Tabs
+function HeroDemo() {
+  const [activeTab, setActiveTab] = useState<"terminal" | "telegram">("terminal");
+  const terminalRef = useRef<HTMLDivElement>(null);
+  const telegramRef = useRef<HTMLDivElement>(null);
+
+  const handleTabChange = (tab: "terminal" | "telegram") => {
+    setActiveTab(tab);
+    // Scroll to top when switching tabs
+    if (tab === "terminal" && terminalRef.current) {
+      terminalRef.current.scrollTop = 0;
+    } else if (tab === "telegram" && telegramRef.current) {
+      telegramRef.current.scrollTop = 0;
+    }
+  };
+
+  return (
+    <div className="flex flex-col">
+      {/* Step tabs at top */}
+      <div className="flex bg-[#0a0a0a] rounded-t-xl border border-b-0 border-white/[0.08]">
+        {/* Step 1 */}
+        <button
+          onClick={() => handleTabChange("terminal")}
+          className={`group flex-1 flex items-center justify-center gap-2.5 py-3 transition-all duration-300 rounded-tl-xl ${
+            activeTab === "terminal"
+              ? "bg-[#F7931A]/10"
+              : "hover:bg-white/[0.02]"
+          }`}
+        >
+          <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold transition-all duration-300 ${
+            activeTab === "terminal"
+              ? "bg-[#F7931A] text-black"
+              : "bg-white/10 text-white/40 group-hover:bg-white/15 group-hover:text-white/60"
+          }`}>
+            1
+          </div>
+          <span className={`text-sm font-medium transition-colors ${
+            activeTab === "terminal" ? "text-[#F7931A]" : "text-white/40 group-hover:text-white/60"
+          }`}>
+            Run Setup
+          </span>
+        </button>
+
+        {/* Divider */}
+        <div className="w-px bg-white/[0.06]" />
+
+        {/* Step 2 */}
+        <button
+          onClick={() => handleTabChange("telegram")}
+          className={`group flex-1 flex items-center justify-center gap-2.5 py-3 transition-all duration-300 rounded-tr-xl ${
+            activeTab === "telegram"
+              ? "bg-[#5b9bd5]/10"
+              : "hover:bg-white/[0.02]"
+          }`}
+        >
+          <div className={`flex items-center justify-center w-6 h-6 rounded-full text-xs font-bold transition-all duration-300 ${
+            activeTab === "telegram"
+              ? "bg-[#5b9bd5] text-white"
+              : "bg-white/10 text-white/40 group-hover:bg-white/15 group-hover:text-white/60"
+          }`}>
+            2
+          </div>
+          <span className={`text-sm font-medium transition-colors ${
+            activeTab === "telegram" ? "text-[#5b9bd5]" : "text-white/40 group-hover:text-white/60"
+          }`}>
+            Meet Agent
+          </span>
+        </button>
+      </div>
+
+      {/* Content container - fixed height, no layout shift */}
+      <div className="relative h-[320px] md:h-[360px] overflow-hidden rounded-b-xl border border-t-0 border-white/[0.08]">
+        {/* Terminal view */}
+        <div
+          ref={terminalRef}
+          className={`absolute inset-0 overflow-y-auto transition-all duration-500 ease-out ${
+            activeTab === "terminal"
+              ? "opacity-100 translate-x-0"
+              : "opacity-0 -translate-x-8 pointer-events-none"
+          }`}
+        >
+          <TerminalWindow
+            commands={heroTerminalCommands}
+            isActive={activeTab === "terminal"}
+            showCopy={false}
+          />
+        </div>
+
+        {/* Telegram view */}
+        <div
+          ref={telegramRef}
+          className={`absolute inset-0 overflow-y-auto transition-all duration-500 ease-out ${
+            activeTab === "telegram"
+              ? "opacity-100 translate-x-0"
+              : "opacity-0 translate-x-8 pointer-events-none"
+          }`}
+        >
+          <TelegramDesktopUI messages={heroTelegramMessages} />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Desktop Telegram UI Component
+function TelegramDesktopUI({ messages }: { messages: TelegramMessage[] }) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [displayedMessages, setDisplayedMessages] = useState<number>(0);
+  const chatRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setDisplayedMessages(messages.length);
+      return;
+    }
+
+    if (displayedMessages < messages.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedMessages(prev => prev + 1);
+      }, 800);
+      return () => clearTimeout(timeout);
+    }
+  }, [displayedMessages, messages.length, prefersReducedMotion]);
+
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTo({
+        top: chatRef.current.scrollHeight,
+        behavior: prefersReducedMotion ? "instant" : "smooth",
+      });
+    }
+  }, [displayedMessages, prefersReducedMotion]);
+
+  return (
+    <div className="h-full flex flex-col bg-[#17212b]">
+      {/* Telegram Header */}
+      <div className="flex items-center gap-2 bg-[#232e3c] px-3 py-2 shadow-md">
+        {/* Avatar with online indicator */}
+        <div className="relative">
+          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-[#F7931A] via-[#f59e0b] to-[#d97706] flex items-center justify-center text-white text-sm font-bold ring-2 ring-[#F7931A]/20">
+            ₿
+          </div>
+          <div className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 bg-[#4dcd5e] rounded-full border-[1.5px] border-[#232e3c]" />
+        </div>
+        <div className="flex-1 min-w-0">
+          <div className="text-white font-medium text-[13px] truncate">AIBTC Agent</div>
+          <div className="text-[#6ab3f2] text-[11px]">online</div>
+        </div>
+        {/* Header actions */}
+        <div className="flex items-center gap-0.5">
+          <button className="p-1.5 text-[#7b8a9a] hover:text-[#a0aebb] hover:bg-white/5 rounded-lg transition-colors">
+            <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+            </svg>
+          </button>
+          <button className="p-1.5 text-[#7b8a9a] hover:text-[#a0aebb] hover:bg-white/5 rounded-lg transition-colors">
+            <svg className="w-4 h-4" fill="currentColor" viewBox="0 0 24 24">
+              <circle cx="5" cy="12" r="2" />
+              <circle cx="12" cy="12" r="2" />
+              <circle cx="19" cy="12" r="2" />
+            </svg>
+          </button>
+        </div>
+      </div>
+
+      {/* Chat Area */}
+      <div
+        ref={chatRef}
+        className="flex-1 overflow-y-auto px-2 py-2 space-y-0.5"
+        style={{
+          backgroundColor: '#0e1621',
+          backgroundImage: `radial-gradient(circle at 20% 80%, rgba(91, 155, 213, 0.03) 0%, transparent 50%),
+                            radial-gradient(circle at 80% 20%, rgba(247, 147, 26, 0.02) 0%, transparent 50%)`,
+        }}
+      >
+        {messages.slice(0, displayedMessages).map((msg, i) => (
+          <div
+            key={i}
+            className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"} ${
+              i > 0 && messages[i-1]?.type === msg.type ? "mt-0.5" : "mt-1.5"
+            }`}
+          >
+            <div
+              className={`relative max-w-[85%] px-2.5 py-[5px] ${
+                msg.type === "user"
+                  ? "bg-[#2b5278] rounded-[12px] rounded-br-[3px]"
+                  : "bg-[#182533] rounded-[12px] rounded-bl-[3px]"
+              }`}
+              style={{
+                boxShadow: msg.type === "user"
+                  ? '0 1px 2px rgba(0,0,0,0.2)'
+                  : '0 1px 2px rgba(0,0,0,0.15)'
+              }}
+            >
+              <div className="text-[12px] leading-[1.4] whitespace-pre-wrap break-words text-white/95">
+                {msg.content}
+              </div>
+              <div className="flex items-center justify-end gap-0.5 mt-[1px] -mb-[1px]">
+                <span className="text-[9px] text-white/40">{msg.time}</span>
+                {msg.type === "user" && (
+                  <svg className="w-[14px] h-[14px] text-[#5bb8f4] -mr-0.5" viewBox="0 0 24 24" fill="none">
+                    <path d="M4 12l5 5L20 6" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+                  </svg>
+                )}
+              </div>
+            </div>
+          </div>
+        ))}
+
+        {/* Typing indicator */}
+        {displayedMessages < messages.length && (
+          <div className="flex justify-start mt-1.5">
+            <div className="bg-[#182533] rounded-[12px] rounded-bl-[3px] px-3 py-2">
+              <div className="flex gap-[4px] items-center">
+                <span className="w-[5px] h-[5px] bg-[#5bb8f4]/60 rounded-full animate-[bounce_1.4s_ease-in-out_infinite]" style={{ animationDelay: "0ms" }} />
+                <span className="w-[5px] h-[5px] bg-[#5bb8f4]/60 rounded-full animate-[bounce_1.4s_ease-in-out_infinite]" style={{ animationDelay: "200ms" }} />
+                <span className="w-[5px] h-[5px] bg-[#5bb8f4]/60 rounded-full animate-[bounce_1.4s_ease-in-out_infinite]" style={{ animationDelay: "400ms" }} />
+              </div>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Input Area */}
+      <div className="bg-[#17212b] px-1.5 py-1.5 flex items-end gap-0.5 border-t border-[#101921]">
+        <button className="p-1.5 text-[#7b8a9a] hover:text-[#a0aebb] hover:bg-white/5 rounded-lg transition-colors">
+          <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15.172 7l-6.586 6.586a2 2 0 102.828 2.828l6.414-6.586a4 4 0 00-5.656-5.656l-6.415 6.585a6 6 0 108.486 8.486L20.5 13" />
+          </svg>
+        </button>
+        <div className="flex-1 flex items-center bg-[#242f3d] rounded-xl px-3 py-1.5 min-h-[32px]">
+          <span className="text-[#5d6d7e] text-[12px]">Message</span>
+        </div>
+        <button className="p-1.5 text-[#7b8a9a] hover:text-[#a0aebb] hover:bg-white/5 rounded-lg transition-colors">
+          <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+        </button>
+        <button className="p-1.5 text-[#7b8a9a] hover:text-[#a0aebb] hover:bg-white/5 rounded-lg transition-colors">
+          <svg className="w-[18px] h-[18px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M12 18.75a6 6 0 006-6v-1.5m-6 7.5a6 6 0 01-6-6v-1.5m6 7.5v3.75m-3.75 0h7.5M12 15.75a3 3 0 01-3-3V4.5a3 3 0 116 0v8.25a3 3 0 01-3 3z" />
+          </svg>
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// Mobile Telegram UI Component (unused but kept for future)
+function TelegramUI({ messages }: { messages: TelegramMessage[] }) {
+  const prefersReducedMotion = usePrefersReducedMotion();
+  const [displayedMessages, setDisplayedMessages] = useState<number>(0);
+  const chatRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (prefersReducedMotion) {
+      setDisplayedMessages(messages.length);
+      return;
+    }
+
+    if (displayedMessages < messages.length) {
+      const timeout = setTimeout(() => {
+        setDisplayedMessages(prev => prev + 1);
+      }, 800);
+      return () => clearTimeout(timeout);
+    }
+  }, [displayedMessages, messages.length, prefersReducedMotion]);
+
+  // Auto-scroll
+  useEffect(() => {
+    if (chatRef.current) {
+      chatRef.current.scrollTo({
+        top: chatRef.current.scrollHeight,
+        behavior: prefersReducedMotion ? "instant" : "smooth",
+      });
+    }
+  }, [displayedMessages, prefersReducedMotion]);
+
+  return (
+    <div className="relative max-w-[360px] mx-auto">
+      {/* Outer glow effect */}
+      <div className="absolute -inset-4 bg-gradient-to-b from-[#F7931A]/20 via-[#F7931A]/5 to-transparent rounded-[3.5rem] blur-2xl opacity-60" />
+
+      {/* iPhone Frame */}
+      <div className="relative rounded-[3rem] bg-gradient-to-b from-[#2a2a2c] to-[#1a1a1c] p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.1),0_25px_50px_-12px_rgba(0,0,0,0.8),0_0_100px_-20px_rgba(247,147,26,0.3)]">
+        {/* Inner bezel */}
+        <div className="rounded-[2.8rem] bg-gradient-to-b from-[#1c1c1e] to-[#0c0c0e] p-[2px]">
+          {/* Screen */}
+          <div className="rounded-[2.6rem] overflow-hidden bg-black">
+            {/* Dynamic Island */}
+            <div className="relative bg-[#1c1c1e] pt-3 pb-2">
+              <div className="absolute left-1/2 top-3 -translate-x-1/2 w-[100px] h-[28px] bg-black rounded-full flex items-center justify-center">
+                <div className="w-3 h-3 rounded-full bg-[#1c1c1e] mr-6" />
+              </div>
+              {/* Status Bar */}
+              <div className="flex items-center justify-between text-white text-xs font-semibold px-8 pt-1">
+                <span className="w-12">10:04</span>
+                <div className="flex items-center gap-1.5">
+                  <svg className="w-[17px] h-[12px]" viewBox="0 0 17 12" fill="currentColor">
+                    <path d="M1 4.5h1.5v7H1zM4 3.5h1.5v8H4zM7 2.5h1.5v9H7zM10 1.5h1.5v10H10z"/>
+                    <path d="M13 0.5h1.5v11H13z" fillOpacity="0.35"/>
+                  </svg>
+                  <span className="text-[11px] font-semibold">5G</span>
+                  <svg className="w-[25px] h-[12px] ml-0.5" viewBox="0 0 25 12" fill="currentColor">
+                    <rect x="0.5" y="0.5" width="21" height="11" rx="2.5" stroke="currentColor" strokeOpacity="0.35" fill="none"/>
+                    <rect x="2" y="2" width="17" height="8" rx="1.5" fill="currentColor"/>
+                    <path d="M23 4v4a2 2 0 0 0 0-4z" fillOpacity="0.35"/>
+                  </svg>
+                </div>
+              </div>
+            </div>
+
+            {/* Telegram Header */}
+            <div className="bg-[#1c1c1e] px-4 pb-3 pt-1 flex items-center border-b border-white/[0.08]">
+              <button className="text-[#0a84ff] text-[15px] flex items-center gap-0.5 font-normal">
+                <svg className="w-[22px] h-[22px] -ml-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+                </svg>
+              </button>
+              <div className="flex-1 flex items-center justify-center gap-2.5 -ml-4">
+                <div className="w-9 h-9 rounded-full bg-gradient-to-br from-[#F7931A] via-[#f59e0b] to-[#d97706] flex items-center justify-center text-white text-base font-bold shadow-lg shadow-[#F7931A]/20">
+                  ₿
+                </div>
+                <div className="text-center">
+                  <div className="text-white font-semibold text-[15px] leading-tight">AIBTC Agent</div>
+                  <div className="text-[#0a84ff] text-[12px] leading-tight">online</div>
+                </div>
+              </div>
+              <div className="w-8" />
+            </div>
+
+            {/* Chat Area */}
+            <div
+              ref={chatRef}
+              className="h-[480px] overflow-y-auto px-2.5 py-3 space-y-2"
+              style={{
+                background: `linear-gradient(180deg, #0a0a0a 0%, #0d0d0f 100%)`,
+              }}
+            >
+              {/* Date Chip */}
+              <div className="flex justify-center mb-3 sticky top-0 z-10">
+                <span className="bg-black/60 text-white/50 text-[11px] px-2.5 py-1 rounded-full backdrop-blur-md font-medium">
+                  Today
+                </span>
+              </div>
+
+              {messages.slice(0, displayedMessages).map((msg, i) => (
+                <div
+                  key={i}
+                  className={`flex ${msg.type === "user" ? "justify-end" : "justify-start"}`}
+                >
+                  <div
+                    className={`max-w-[82%] rounded-[18px] px-3 py-2 shadow-sm ${
+                      msg.type === "user"
+                        ? "bg-[#0b84fe] text-white rounded-br-[4px]"
+                        : "bg-[#262628] text-white rounded-bl-[4px]"
+                    }`}
+                  >
+                    <div className="text-[15px] leading-[1.35] whitespace-pre-wrap break-words">
+                      {msg.content}
+                    </div>
+                    <div className={`text-[11px] mt-0.5 ${msg.type === "user" ? "text-white/60" : "text-white/35"} text-right`}>
+                      {msg.time}
+                    </div>
+                  </div>
+                </div>
+              ))}
+
+              {/* Typing indicator */}
+              {displayedMessages < messages.length && (
+                <div className="flex justify-start">
+                  <div className="bg-[#262628] rounded-[18px] rounded-bl-[4px] px-4 py-3">
+                    <div className="flex gap-1.5 items-center h-4">
+                      <span className="w-[7px] h-[7px] bg-white/30 rounded-full animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "0ms" }} />
+                      <span className="w-[7px] h-[7px] bg-white/30 rounded-full animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "150ms" }} />
+                      <span className="w-[7px] h-[7px] bg-white/30 rounded-full animate-[bounce_1s_ease-in-out_infinite]" style={{ animationDelay: "300ms" }} />
+                    </div>
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Input Area */}
+            <div className="bg-[#1c1c1e] px-2 py-2 flex items-end gap-1.5 border-t border-white/[0.08]">
+              <button className="text-[#0a84ff] p-1.5 mb-0.5">
+                <svg className="w-[26px] h-[26px]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M12 4.5v15m7.5-7.5h-15" />
+                </svg>
+              </button>
+              <div className="flex-1 bg-[#2c2c2e] rounded-[20px] px-4 py-2 min-h-[36px] flex items-center border border-white/[0.06]">
+                <span className="text-white/30 text-[15px]">Message</span>
+              </div>
+              <button className="text-white/50 p-1.5 mb-0.5">
+                <svg className="w-[26px] h-[26px]" viewBox="0 0 24 24" fill="currentColor">
+                  <path d="M12 15c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v7c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 15 6.7 12H5c0 3.41 2.72 6.23 6 6.72V22h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                </svg>
+              </button>
+            </div>
+
+            {/* Home Indicator */}
+            <div className="bg-[#1c1c1e] pb-2 pt-1 flex justify-center">
+              <div className="w-[134px] h-[5px] bg-white/20 rounded-full" />
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* Reflection/shadow at bottom */}
+      <div className="absolute -bottom-8 left-1/2 -translate-x-1/2 w-[70%] h-8 bg-gradient-to-t from-transparent via-white/[0.02] to-transparent blur-sm rounded-full" />
+    </div>
+  );
+}
+
 // Icon components for Open Standards cards
 function GitHubIcon({ className }: { className?: string }) {
   return (
@@ -897,13 +1361,19 @@ function StepsSection({
             ))}
           </div>
 
-          {/* Terminal */}
+          {/* Terminal or Telegram */}
           <div className="sticky top-24 self-start">
-            <TerminalWindow
-              key={activeStep}
-              commands={currentStep?.commands || []}
-              isActive={true}
-            />
+            {currentStep?.telegramMessages ? (
+              <div className="rounded-xl overflow-hidden border border-[#5b9bd5]/20 h-[320px] md:h-[360px]">
+                <TelegramDesktopUI key={activeStep} messages={currentStep.telegramMessages} />
+              </div>
+            ) : (
+              <TerminalWindow
+                key={activeStep}
+                commands={currentStep?.commands || []}
+                isActive={true}
+              />
+            )}
           </div>
         </div>
 
@@ -970,12 +1440,18 @@ function StepsSection({
             </div>
           </div>
 
-          {/* Terminal */}
-          <TerminalWindow
-            key={activeStep}
-            commands={currentStep?.commands || []}
-            isActive={true}
-          />
+          {/* Terminal or Telegram */}
+          {currentStep?.telegramMessages ? (
+            <div className="rounded-xl overflow-hidden border border-[#5b9bd5]/20 h-[320px]">
+              <TelegramDesktopUI key={activeStep} messages={currentStep.telegramMessages} />
+            </div>
+          ) : (
+            <TerminalWindow
+              key={activeStep}
+              commands={currentStep?.commands || []}
+              isActive={true}
+            />
+          )}
         </div>
       </div>
     </section>
@@ -1016,6 +1492,7 @@ function OpenStandardsCard({ project }: { project: typeof openStandardsProjects[
 }
 
 export default function Home() {
+  const [activeDeployStep, setActiveDeployStep] = useState(1);
   const [activeSetupStep, setActiveSetupStep] = useState(1);
   const [activeEarnStep, setActiveEarnStep] = useState(4);
 
@@ -1061,26 +1538,26 @@ export default function Home() {
               <div className="flex flex-col items-start text-left">
                 {/* Main Headline */}
                 <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,7vw,56px)] font-medium leading-[1.15] text-white opacity-0 [animation-delay:0.1s] md:leading-[1.1]">
-                  Let your ideas earn{" "}
+                  Give your agents a{" "}
                   <span className="relative">
                     <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin</span>
                     <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl max-md:hidden"></span>
                   </span>{" "}
-                  for you.
+                  wallet.
                 </h1>
 
                 {/* Subheadline */}
                 <p className="mb-0 max-w-[440px] animate-fadeUp text-balance text-[clamp(15px,4vw,18px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.2s] lg:mb-8">
-                  Build autonomous agents and paid services on Bitcoin&apos;s Agentic Layer.
+                  One command away from Bitcoin-powered agents.
                 </p>
 
                 {/* CTA - Desktop only */}
                 <div className="hidden animate-fadeUp opacity-0 [animation-delay:0.35s] lg:block">
                   <a
-                    href="#build"
+                    href="#deploy"
                     className="inline-flex items-center justify-center rounded-xl bg-[#F7931A] px-8 py-4 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                   >
-                    Start Building
+                    Get Started
                   </a>
                 </div>
               </div>
@@ -1097,10 +1574,10 @@ export default function Home() {
               {/* CTA - Mobile only, after terminal */}
               <div className="w-full animate-fadeUp opacity-0 [animation-delay:0.4s] lg:hidden">
                 <a
-                  href="#build"
+                  href="#deploy"
                   className="inline-flex w-full items-center justify-center rounded-xl bg-[#F7931A] px-8 py-4 text-[15px] font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black"
                 >
-                  Start Building
+                  Get Started
                 </a>
               </div>
             </div>
@@ -1108,7 +1585,7 @@ export default function Home() {
 
           {/* Scroll indicator */}
           <a
-            href="#build"
+            href="#deploy"
             className="absolute bottom-2 left-1/2 -translate-x-1/2 animate-fadeIn p-3 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:-bottom-6 max-md:p-4 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 focus-visible:rounded-full"
             aria-label="Scroll to learn more"
           >
@@ -1119,6 +1596,16 @@ export default function Home() {
             </div>
           </a>
         </section>
+
+        {/* Set Up in One Command - Deploy Steps */}
+        <StepsSection
+          id="deploy"
+          title="Set Up in One Command"
+          subtitle="Your agent gets its own Bitcoin wallet."
+          steps={deploySteps}
+          activeStep={activeDeployStep}
+          setActiveStep={setActiveDeployStep}
+        />
 
         {/* 1. Zero to Agent - Setup Steps (1-3) */}
         <StepsSection

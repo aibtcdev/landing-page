@@ -145,11 +145,11 @@ export default function Navbar() {
             Install Package
           </a>
           <a
-            href="/#build"
+            href="/#deploy"
             onClick={() => setIsMenuOpen(false)}
             className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"
           >
-            Start Building
+            Get Started
           </a>
         </nav>
       </div>
