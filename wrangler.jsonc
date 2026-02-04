@@ -11,6 +11,8 @@
     "directory": ".open-next/assets",
     "binding": "ASSETS"
   },
+  // KV namespace for storing verified agent records
+  // Keys: stx:{address} and btc:{address} for dual indexing
   "kv_namespaces": [
     {
       "binding": "VERIFIED_AGENTS",
