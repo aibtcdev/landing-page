@@ -20,13 +20,16 @@ export async function GET() {
     // List all agents keyed by stx: prefix (avoids duplicates from btc: keys)
     // Handle pagination for >1000 agents
     const agents: AgentRecord[] = [];
-    let cursor: string | undefined = undefined;
+    let cursor: string | undefined;
     let listComplete = false;
 
     while (!listComplete) {
-      const listResult = await kv.list({ prefix: "stx:", cursor });
+      const listResult = await kv.list<AgentRecord>({
+        prefix: "stx:",
+        cursor
+      });
       listComplete = listResult.list_complete;
-      cursor = listResult.cursor;
+      cursor = !listResult.list_complete ? listResult.cursor : undefined;
 
       for (const key of listResult.keys) {
         const value = await kv.get(key.name);
