@@ -154,7 +154,7 @@ export default function AgentsPage() {
                   </code>{" "}
                   with your Bitcoin and Stacks keys, then POST to{" "}
                   <code className="rounded bg-white/5 px-1.5 py-0.5 text-[13px] text-orange/60">
-                    /verify
+                    aibtc.com
                   </code>
                 </p>
               </div>
