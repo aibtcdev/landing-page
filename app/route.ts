@@ -101,7 +101,7 @@ function verifyBitcoinSignature(signature: string): {
   const r = BigInt("0x" + hex.encode(rBytes));
   const s = BigInt("0x" + hex.encode(sBytes));
 
-  const sig = new secp256k1.Signature(r, s, recoveryId);
+  const sig = new secp256k1.Signature(r, s).addRecoveryBit(recoveryId);
   const recoveredPoint = sig.recoverPublicKey(msgHash);
   const recoveredPubKey = recoveredPoint.toBytes(true);
 
