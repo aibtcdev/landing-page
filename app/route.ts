@@ -105,7 +105,7 @@ function verifyBitcoinSignature(signature: string): {
   const recoveredPoint = sig.recoverPublicKey(msgHash);
   const recoveredPubKey = recoveredPoint.toBytes(true);
 
-  const valid = secp256k1.verify(sig.toBytes(), msgHash, recoveredPubKey, {
+  const valid = secp256k1.verify(sig.toBytes('compact'), msgHash, recoveredPubKey, {
     prehash: false,
   });
 
