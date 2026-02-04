@@ -16,8 +16,8 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
-  // /skills serves llms.txt via route handler
-  if (path === "/skills") {
+  // /skills and /verify are handled by Next.js route handlers
+  if (path === "/skills" || path === "/verify") {
     return NextResponse.next();
   }
 
@@ -60,5 +60,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/vps", "/local", "/update", "/update-skill.sh", "/skills"],
+  matcher: ["/", "/vps", "/local", "/update", "/update-skill.sh", "/skills", "/verify"],
 };
