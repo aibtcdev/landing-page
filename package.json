@@ -11,7 +11,9 @@
     "deploy": "npm run wrangler -- deploy",
     "deploy:dry-run": "npm run wrangler -- deploy --dry-run",
     "wrangler": "set -a && . ./.env && set +a && npx wrangler",
-    "cf-typegen": "npm run wrangler -- types --env-interface CloudflareEnv cloudflare-env.d.ts"
+    "cf-typegen": "npm run wrangler -- types --env-interface CloudflareEnv cloudflare-env.d.ts",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "@noble/curves": "^2.0.1",
@@ -36,6 +38,7 @@
     "eslint-config-next": "^15.1.3",
     "tailwindcss": "^4.0.0",
     "typescript": "^5",
+    "vitest": "^4.0.18",
     "wrangler": "^4.57.0"
   }
 }
