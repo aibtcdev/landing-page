@@ -14,6 +14,7 @@
     "cf-typegen": "npm run wrangler -- types --env-interface CloudflareEnv cloudflare-env.d.ts"
   },
   "dependencies": {
+    "@cloudflare/workerd-darwin-arm64": "^1.20260203.0",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
     "@opennextjs/cloudflare": "^1.14.8",

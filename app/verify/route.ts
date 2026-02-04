@@ -16,6 +16,49 @@ import * as btc from "@scure/btc-signer";
 
 const EXPECTED_MESSAGE = "Bitcoin will be the currency of AIs";
 
+// Whimsical name generation from address hash (Cloudflare-style)
+const ADJECTIVES = [
+  "cosmic", "neon", "quantum", "stellar", "cyber", "atomic", "binary",
+  "turbo", "hyper", "mega", "ultra", "nano", "blazing", "frozen",
+  "silent", "swift", "bold", "vivid", "lucid", "stark", "prime",
+  "noble", "lunar", "solar", "iron", "amber", "azure", "coral",
+  "crimson", "golden", "jade", "onyx", "ruby", "silver", "violet",
+];
+const NOUNS = [
+  "falcon", "tiger", "phoenix", "dragon", "wolf", "raven", "eagle",
+  "fox", "bear", "hawk", "lion", "shark", "cobra", "panther", "lynx",
+  "condor", "mantis", "viper", "raptor", "sphinx", "kraken", "hydra",
+  "forge", "nexus", "spark", "pulse", "drift", "surge", "orbit",
+  "cipher", "prism", "vector", "matrix", "vertex", "helix", "titan",
+];
+
+function generateWhimsicalName(address: string): string {
+  // Simple hash from address characters
+  let hash = 0;
+  for (let i = 0; i < address.length; i++) {
+    hash = ((hash << 5) - hash + address.charCodeAt(i)) | 0;
+  }
+  const adjIdx = Math.abs(hash) % ADJECTIVES.length;
+  const nounIdx = Math.abs(hash >> 8) % NOUNS.length;
+  return `${ADJECTIVES[adjIdx]}-${NOUNS[nounIdx]}`;
+}
+
+async function lookupBnsName(stxAddress: string): Promise<string | null> {
+  try {
+    const res = await fetch(
+      `https://api.hiro.so/v1/addresses/stacks/${stxAddress}`
+    );
+    if (!res.ok) return null;
+    const data = (await res.json()) as { names?: string[] };
+    if (data.names && data.names.length > 0) {
+      return data.names[0];
+    }
+    return null;
+  } catch {
+    return null;
+  }
+}
+
 // BIP-137 Bitcoin message prefix
 const BITCOIN_MSG_PREFIX = "\x18Bitcoin Signed Message:\n";
 
@@ -130,8 +173,10 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       bitcoinSignature?: string;
       stacksSignature?: string;
+      name?: string;
+      description?: string;
     };
-    const { bitcoinSignature, stacksSignature } = body;
+    const { bitcoinSignature, stacksSignature, name, description } = body;
 
     if (!bitcoinSignature || !stacksSignature) {
       return NextResponse.json(
@@ -175,6 +220,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Look up BNS name and generate fallback
+    const bnsName = await lookupBnsName(stxResult.address);
+    const generatedName = generateWhimsicalName(btcResult.address);
+    const displayName = name || bnsName || generatedName;
+
     // Store in KV
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
@@ -184,6 +234,9 @@ export async function POST(request: NextRequest) {
       btcAddress: btcResult.address,
       stxPublicKey: stxResult.publicKey,
       btcPublicKey: btcResult.publicKey,
+      bnsName: bnsName || null,
+      displayName,
+      description: description || null,
       verifiedAt: new Date().toISOString(),
     };
 
@@ -196,6 +249,9 @@ export async function POST(request: NextRequest) {
       agent: {
         stxAddress: stxResult.address,
         btcAddress: btcResult.address,
+        displayName,
+        description: record.description,
+        bnsName: bnsName || undefined,
         verifiedAt: record.verifiedAt,
       },
     });

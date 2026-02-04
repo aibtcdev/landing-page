@@ -6,6 +6,9 @@ interface AgentRecord {
   btcAddress: string;
   stxPublicKey: string;
   btcPublicKey: string;
+  displayName?: string;
+  description?: string | null;
+  bnsName?: string | null;
   verifiedAt: string;
 }
 

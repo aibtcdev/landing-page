@@ -7,6 +7,9 @@ import Navbar from "../components/Navbar";
 interface Agent {
   stxAddress: string;
   btcAddress: string;
+  displayName?: string;
+  description?: string | null;
+  bnsName?: string | null;
   verifiedAt: string;
 }
 
@@ -15,14 +18,16 @@ function truncateAddress(address: string) {
   return `${address.slice(0, 8)}...${address.slice(-8)}`;
 }
 
-function timeAgo(dateString: string) {
-  const seconds = Math.floor(
-    (Date.now() - new Date(dateString).getTime()) / 1000
-  );
-  if (seconds < 60) return "just now";
-  if (seconds < 3600) return `${Math.floor(seconds / 60)}m ago`;
-  if (seconds < 86400) return `${Math.floor(seconds / 3600)}h ago`;
-  return `${Math.floor(seconds / 86400)}d ago`;
+function formatTimestamp(dateString: string) {
+  return new Date(dateString).toLocaleString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+    second: "2-digit",
+    hour12: true,
+  });
 }
 
 export default function AgentsPage() {
@@ -47,105 +52,199 @@ export default function AgentsPage() {
   return (
     <>
       <Navbar />
-      <main className="min-h-screen bg-black pt-28 pb-20 px-5">
-        <div className="mx-auto max-w-[900px]">
+      {/* Animated Background - matching main page */}
+      <div
+        className="fixed inset-0 -z-10 min-h-[100lvh] w-full overflow-hidden bg-gradient-to-br from-black via-[#0a0a0a] to-[#050208]"
+        aria-hidden="true"
+      >
+        <div
+          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.12] saturate-[1.3]"
+          style={{ backgroundImage: "url('/Artwork/AIBTC_Pattern1_optimized.jpg')" }}
+        />
+        <div className="absolute -bottom-[100px] -left-[100px] h-[250px] w-[250px] rounded-full bg-[rgba(125,162,255,0.12)] md:hidden" />
+        <div className="absolute -right-[200px] -top-[250px] h-[800px] w-[800px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.4)_0%,rgba(247,147,26,0.15)_40%,transparent_70%)] opacity-70 blur-[100px] max-md:hidden animate-float1" />
+        <div className="absolute -bottom-[250px] -left-[200px] h-[700px] w-[700px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.35)_0%,rgba(125,162,255,0.12)_40%,transparent_70%)] opacity-60 blur-[100px] max-md:hidden animate-float2" />
+        <div className="absolute bottom-[20%] -right-[150px] h-[500px] w-[500px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.2)_0%,rgba(125,162,255,0.08)_40%,transparent_70%)] opacity-40 blur-[100px] max-md:hidden animate-float1-reverse" />
+        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.6)_0%,rgba(0,0,0,0.3)_40%,transparent_70%)]" />
+      </div>
+
+      <main className="relative min-h-screen overflow-hidden">
+
+        <div className="relative mx-auto max-w-[1200px] px-6 pb-24 pt-32 max-md:px-5 max-md:pt-28">
           {/* Header */}
-          <div className="mb-12 text-center">
-            <h1 className="mb-3 text-4xl font-medium tracking-tight text-white max-md:text-3xl">
-              Verified Agents
+          <div className="mb-16 text-center">
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-1.5">
+              <div className="h-1.5 w-1.5 rounded-full bg-[#4dcd5e] shadow-[0_0_8px_rgba(77,205,94,0.5)]" />
+              <span className="text-xs font-medium tracking-wide text-white/70">
+                LIVE REGISTRY
+              </span>
+            </div>
+            <h1 className="mb-4 text-5xl font-medium tracking-tight text-white max-md:text-3xl">
+              Agent Registry
             </h1>
-            <p className="text-lg text-white/50">
-              Agents that proved control of both Bitcoin and Stacks keypairs
+            <p className="mx-auto max-w-lg text-lg leading-relaxed text-white/60 max-md:text-base">
+              Browse all registered agents in the AIBTC ecosystem.
             </p>
           </div>
 
-          {/* Stats */}
-          <div className="mb-10 flex justify-center gap-8">
-            <div className="text-center">
-              <div className="text-3xl font-medium text-orange">
-                {loading ? "-" : agents.length}
-              </div>
-              <div className="mt-1 text-sm text-white/40">
-                Verified Agents
-              </div>
-            </div>
-          </div>
-
-          {/* Agent List */}
+          {/* Agent Table */}
           {loading ? (
-            <div className="flex justify-center py-20">
-              <div className="text-white/40">Loading agents...</div>
+            <div className="overflow-hidden rounded-xl border border-white/[0.06]">
+              <div className="animate-pulse space-y-0">
+                <div className="border-b border-white/[0.06] bg-white/[0.03] px-6 py-3">
+                  <div className="h-4 w-1/3 rounded bg-white/[0.06]" />
+                </div>
+                {[0, 1, 2].map((i) => (
+                  <div
+                    key={i}
+                    className="flex items-center gap-4 border-b border-white/[0.04] px-6 py-4 last:border-0"
+                  >
+                    <div className="h-8 w-8 rounded-full bg-white/[0.06]" />
+                    <div className="h-4 w-1/4 rounded bg-white/[0.06]" />
+                    <div className="h-4 w-1/3 rounded bg-white/[0.06]" />
+                    <div className="h-4 w-1/6 rounded bg-white/[0.06]" />
+                  </div>
+                ))}
+              </div>
             </div>
           ) : error ? (
-            <div className="flex justify-center py-20">
-              <div className="text-red-400/80">Failed to load agents</div>
+            <div className="flex flex-col items-center gap-4 rounded-xl border border-red-500/10 bg-red-500/[0.03] py-16">
+              <svg
+                className="h-8 w-8 text-red-400/60"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="1.5"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
+                />
+              </svg>
+              <div className="text-sm text-red-400/70">
+                Failed to load agents
+              </div>
             </div>
           ) : agents.length === 0 ? (
-            <div className="flex flex-col items-center gap-6 py-20">
-              <div className="text-white/30 text-lg">
-                No verified agents yet
+            <div className="flex flex-col items-center gap-6 rounded-xl border border-dashed border-white/[0.08] py-20">
+              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.03]">
+                <svg
+                  className="h-8 w-8 text-white/20"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="1.5"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z"
+                  />
+                </svg>
               </div>
-              <p className="max-w-md text-center text-sm text-white/20">
-                Be the first! Sign &quot;Bitcoin will be the currency of
-                AIs&quot; with your Bitcoin and Stacks keys, then POST to{" "}
-                <code className="rounded bg-white/5 px-1.5 py-0.5 text-orange/80">
-                  /verify
-                </code>
-              </p>
+              <div className="text-center">
+                <div className="mb-2 text-lg font-medium text-white/70">
+                  No verified agents yet
+                </div>
+                <p className="mx-auto max-w-sm text-sm leading-relaxed text-white/50">
+                  Be the first! Sign{" "}
+                  <code className="rounded bg-white/5 px-1.5 py-0.5 text-[13px] text-orange/60">
+                    Bitcoin will be the currency of AIs
+                  </code>{" "}
+                  with your Bitcoin and Stacks keys, then POST to{" "}
+                  <code className="rounded bg-white/5 px-1.5 py-0.5 text-[13px] text-orange/60">
+                    /verify
+                  </code>
+                </p>
+              </div>
             </div>
           ) : (
-            <div className="space-y-3">
-              {agents.map((agent) => (
-                <div
-                  key={agent.stxAddress}
-                  className="group rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 transition-[border-color,background-color] duration-200 hover:border-white/[0.12] hover:bg-white/[0.04]"
-                >
-                  <div className="flex items-start justify-between gap-4 max-md:flex-col max-md:gap-3">
-                    <div className="min-w-0 flex-1 space-y-2">
-                      {/* STX Address */}
-                      <div className="flex items-center gap-2">
-                        <span className="shrink-0 rounded bg-purple/15 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wider text-purple">
-                          STX
+            <div className="overflow-hidden rounded-xl border border-white/[0.1] bg-black/60 backdrop-blur-md">
+              <table className="w-full">
+                <thead>
+                  <tr className="border-b border-white/[0.1] bg-white/[0.05]">
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50">
+                      Name
+                    </th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50 max-md:hidden">
+                      Description
+                    </th>
+                    <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50 max-md:hidden">
+                      BTC Address
+                    </th>
+                    <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-white/50">
+                      Registered
+                    </th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {agents.map((agent) => (
+                    <tr
+                      key={agent.stxAddress}
+                      className="border-b border-white/[0.06] transition-colors duration-200 last:border-0 hover:bg-white/[0.05]"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          {/* eslint-disable-next-line @next/next/no-img-element */}
+                          <img
+                            src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
+                            alt={agent.displayName || "Agent"}
+                            className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
+                          />
+                          <span className="text-sm font-medium text-white">
+                            {agent.displayName ||
+                              truncateAddress(agent.stxAddress)}
+                          </span>
+                          {agent.bnsName && (
+                            <span className="rounded-md bg-blue/10 px-1.5 py-0.5 text-[10px] font-medium text-blue ring-1 ring-inset ring-blue/20">
+                              .btc
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 max-md:hidden">
+                        <span className="text-[13px] text-white/70">
+                          {agent.description || "—"}
                         </span>
-                        <code className="truncate text-sm text-white/70 max-md:hidden">
-                          {agent.stxAddress}
-                        </code>
-                        <code className="text-sm text-white/70 md:hidden">
-                          {truncateAddress(agent.stxAddress)}
-                        </code>
-                      </div>
-
-                      {/* BTC Address */}
-                      <div className="flex items-center gap-2">
-                        <span className="shrink-0 rounded bg-orange/15 px-1.5 py-0.5 text-[11px] font-medium uppercase tracking-wider text-orange">
-                          BTC
-                        </span>
-                        <code className="truncate text-sm text-white/70 max-md:hidden">
-                          {agent.btcAddress}
-                        </code>
-                        <code className="text-sm text-white/70 md:hidden">
+                      </td>
+                      <td className="px-6 py-4 max-md:hidden">
+                        <code className="text-[13px] text-white/70">
                           {truncateAddress(agent.btcAddress)}
                         </code>
-                      </div>
-                    </div>
-
-                    {/* Verified time */}
-                    <div className="shrink-0 text-xs text-white/30">
-                      {timeAgo(agent.verifiedAt)}
-                    </div>
-                  </div>
-                </div>
-              ))}
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className="text-[13px] text-white/70">
+                          {formatTimestamp(agent.verifiedAt)}
+                        </span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
             </div>
           )}
 
           {/* Back link */}
-          <div className="mt-12 text-center">
+          <div className="mt-16 text-center">
             <Link
               href="/"
-              className="text-sm text-white/30 transition-colors duration-200 hover:text-white/60"
+              className="inline-flex items-center gap-2 text-sm text-white/50 transition-colors duration-200 hover:text-white/80"
             >
-              &larr; Back to aibtc.com
+              <svg
+                className="h-3.5 w-3.5"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  d="M19 12H5M12 19l-7-7 7-7"
+                />
+              </svg>
+              Back to aibtc.com
             </Link>
           </div>
         </div>
