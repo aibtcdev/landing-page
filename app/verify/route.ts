@@ -13,35 +13,9 @@ import { bytesToHex } from "@stacks/common";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { hex } from "@scure/base";
 import * as btc from "@scure/btc-signer";
+import { generateName } from "@/lib/name-generator";
 
 const EXPECTED_MESSAGE = "Bitcoin will be the currency of AIs";
-
-// Whimsical name generation from address hash (Cloudflare-style)
-const ADJECTIVES = [
-  "cosmic", "neon", "quantum", "stellar", "cyber", "atomic", "binary",
-  "turbo", "hyper", "mega", "ultra", "nano", "blazing", "frozen",
-  "silent", "swift", "bold", "vivid", "lucid", "stark", "prime",
-  "noble", "lunar", "solar", "iron", "amber", "azure", "coral",
-  "crimson", "golden", "jade", "onyx", "ruby", "silver", "violet",
-];
-const NOUNS = [
-  "falcon", "tiger", "phoenix", "dragon", "wolf", "raven", "eagle",
-  "fox", "bear", "hawk", "lion", "shark", "cobra", "panther", "lynx",
-  "condor", "mantis", "viper", "raptor", "sphinx", "kraken", "hydra",
-  "forge", "nexus", "spark", "pulse", "drift", "surge", "orbit",
-  "cipher", "prism", "vector", "matrix", "vertex", "helix", "titan",
-];
-
-function generateWhimsicalName(address: string): string {
-  // Simple hash from address characters
-  let hash = 0;
-  for (let i = 0; i < address.length; i++) {
-    hash = ((hash << 5) - hash + address.charCodeAt(i)) | 0;
-  }
-  const adjIdx = Math.abs(hash) % ADJECTIVES.length;
-  const nounIdx = Math.abs(hash >> 8) % NOUNS.length;
-  return `${ADJECTIVES[adjIdx]}-${NOUNS[nounIdx]}`;
-}
 
 async function lookupBnsName(stxAddress: string): Promise<string | null> {
   try {
@@ -173,10 +147,9 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       bitcoinSignature?: string;
       stacksSignature?: string;
-      name?: string;
       description?: string;
     };
-    const { bitcoinSignature, stacksSignature, name, description } = body;
+    const { bitcoinSignature, stacksSignature, description } = body;
 
     if (!bitcoinSignature || !stacksSignature) {
       return NextResponse.json(
@@ -220,10 +193,9 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Look up BNS name and generate fallback
+    // Look up BNS name and generate deterministic display name
     const bnsName = await lookupBnsName(stxResult.address);
-    const generatedName = generateWhimsicalName(btcResult.address);
-    const displayName = name || bnsName || generatedName;
+    const displayName = generateName(stxResult.address);
 
     // Store in KV
     const { env } = await getCloudflareContext();
