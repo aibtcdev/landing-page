@@ -111,15 +111,15 @@ export const NOUNS = [
   "brio", "calyx", "cass", "cleo", "coda", "cyrus",
   "dex", "drift", "dune", "echo", "eden", "elan",
   "elio", "ember", "fenn", "flora", "flux", "grey",
-  "halo", "haven", "hex", "idris", "indra", "io",
+  "halo", "haven", "haze", "idris", "indra", "io",
   "isle", "ivo", "jett", "juno", "kael", "kai",
-  "kaia", "lark", "leo", "lumen", "luna", "lux",
+  "kaia", "lyra", "leo", "lumen", "luna", "lux",
   "marin", "mars", "mira", "neri", "nico", "nova",
-  "nyx", "onyx", "opal", "orion", "otto", "pax",
-  "pixel", "quinn", "raya", "ren", "rho", "rune",
-  "sable", "sage", "seren", "sky", "sol", "taro",
+  "nyx", "orin", "ozma", "orion", "otto", "pax",
+  "pippin", "quinn", "raya", "ren", "rho", "reed",
+  "sable", "soren", "seren", "sky", "sol", "taro",
   "teal", "tess", "uri", "vale", "vega", "vera",
-  "vesper", "wren", "wynn", "zara", "zion",
+  "vesper", "wisp", "wynn", "zara", "zion",
 ] as const;
 
 /** Total combination count for reference */
