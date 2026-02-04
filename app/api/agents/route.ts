@@ -21,14 +21,14 @@ export async function GET() {
     // Handle pagination for >1000 agents
     const agents: AgentRecord[] = [];
     let cursor: string | undefined = undefined;
-    let list_complete = false;
+    let listComplete = false;
 
-    while (!list_complete) {
-      const list = await kv.list({ prefix: "stx:", cursor });
-      list_complete = list.list_complete;
-      cursor = list.cursor;
+    while (!listComplete) {
+      const listResult = await kv.list({ prefix: "stx:", cursor });
+      listComplete = listResult.list_complete;
+      cursor = listResult.cursor;
 
-      for (const key of list.keys) {
+      for (const key of listResult.keys) {
         const value = await kv.get(key.name);
         if (value) {
           try {
