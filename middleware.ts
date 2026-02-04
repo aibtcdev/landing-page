@@ -16,6 +16,11 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
+  // /skills serves llms.txt via route handler
+  if (path === "/skills") {
+    return NextResponse.next();
+  }
+
   // Map paths to scripts
   let scriptPath: string;
   switch (path) {
@@ -55,5 +60,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/vps", "/local", "/update", "/update-skill.sh", "/skills/:path*"],
+  matcher: ["/", "/vps", "/local", "/update", "/update-skill.sh", "/skills"],
 };
