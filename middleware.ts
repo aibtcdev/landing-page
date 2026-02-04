@@ -16,8 +16,8 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
-  // /skills and /verify are handled by Next.js route handlers
-  if (path === "/skills" || path === "/verify") {
+  // /skills and root POST are handled by Next.js route handlers
+  if (path === "/skills") {
     return NextResponse.next();
   }
 
@@ -60,5 +60,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/vps", "/local", "/update", "/update-skill.sh", "/skills", "/verify"],
+  matcher: ["/", "/vps", "/local", "/update", "/update-skill.sh", "/skills"],
 };
