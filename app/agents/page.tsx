@@ -174,7 +174,7 @@ export default function AgentsPage() {
                       BTC Address
                     </th>
                     <th className="px-6 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-white/50">
-                      Registered
+                      Joined
                     </th>
                   </tr>
                 </thead>
