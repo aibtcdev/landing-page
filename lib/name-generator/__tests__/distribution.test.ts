@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { generateNameDetailed } from "../generator";
 import { hashAddress, createSeededRng, selectIndex } from "../hash";
-import { ADJECTIVES, NOUNS, EPITHETS } from "../word-lists";
+import { ADJECTIVES, NOUNS } from "../word-lists";
 
 describe("distribution", () => {
   // Generate a large sample of names from sequential-like addresses
@@ -38,20 +38,6 @@ describe("distribution", () => {
     expect(coverageRatio).toBeGreaterThan(0.4);
   });
 
-  it("word indices spread across epithet list (no clustering)", () => {
-    const indices = sampleAddresses.map((addr) => {
-      const seed = hashAddress(addr);
-      const rng = createSeededRng(seed);
-      rng(); // skip adjective
-      rng(); // skip noun
-      return selectIndex(rng(), EPITHETS.length);
-    });
-
-    const uniqueIndices = new Set(indices);
-    const coverageRatio = uniqueIndices.size / EPITHETS.length;
-    expect(coverageRatio).toBeGreaterThan(0.4);
-  });
-
   it("multiple addresses produce a variety of first words", () => {
     const firstWords = sampleAddresses.map((addr) => {
       const result = generateNameDetailed(addr);
@@ -70,7 +56,7 @@ describe("distribution", () => {
     });
 
     const uniqueLastWords = new Set(lastWords);
-    expect(uniqueLastWords.size).toBeGreaterThan(EPITHETS.length * 0.4);
+    expect(uniqueLastWords.size).toBeGreaterThan(NOUNS.length * 0.4);
   });
 
   it("no single word dominates more than 5% of results for adjectives", () => {

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { generateName, generateNameDetailed } from "../generator";
-import { ADJECTIVES, NOUNS, EPITHETS } from "../word-lists";
+import { ADJECTIVES, NOUNS } from "../word-lists";
 
 // Sample addresses for testing
 const STACKS_ADDRESS = "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
@@ -59,16 +59,16 @@ describe("generateName", () => {
   });
 
   describe("name format", () => {
-    it("generates a 3-part name by default", () => {
+    it("generates a 2-part name by default", () => {
       const name = generateName(STACKS_ADDRESS);
       const parts = name.split(" ");
-      expect(parts).toHaveLength(3);
+      expect(parts).toHaveLength(2);
     });
 
-    it("generates a 4-part name with middleName option", () => {
+    it("generates a 3-part name with middleName option", () => {
       const name = generateName(STACKS_ADDRESS, { middleName: true });
       const parts = name.split(" ");
-      expect(parts).toHaveLength(4);
+      expect(parts).toHaveLength(3);
     });
 
     it("all parts are capitalized", () => {
@@ -83,11 +83,9 @@ describe("generateName", () => {
       const result = generateNameDetailed(STACKS_ADDRESS);
       const adjLower = result.parts[0].toLowerCase();
       const nounLower = result.parts[1].toLowerCase();
-      const epithetLower = result.parts[2].toLowerCase();
 
       expect(ADJECTIVES).toContain(adjLower);
       expect(NOUNS).toContain(nounLower);
-      expect(EPITHETS).toContain(epithetLower);
     });
 
     it("middle name parts come from adjective word list", () => {
@@ -107,7 +105,7 @@ describe("generateName", () => {
       const name = generateName("");
       expect(typeof name).toBe("string");
       const parts = name.split(" ");
-      expect(parts).toHaveLength(3);
+      expect(parts).toHaveLength(2);
     });
 
     it("handles very long address", () => {
@@ -115,28 +113,28 @@ describe("generateName", () => {
       const name = generateName(longAddress);
       expect(typeof name).toBe("string");
       const parts = name.split(" ");
-      expect(parts).toHaveLength(3);
+      expect(parts).toHaveLength(2);
     });
 
     it("handles special characters in address", () => {
       const name = generateName("!@#$%^&*()_+-=[]{}|;':\",./<>?");
       expect(typeof name).toBe("string");
       const parts = name.split(" ");
-      expect(parts).toHaveLength(3);
+      expect(parts).toHaveLength(2);
     });
 
     it("handles address with only whitespace", () => {
       const name = generateName("   ");
       expect(typeof name).toBe("string");
       const parts = name.split(" ").filter((p) => p.length > 0);
-      expect(parts).toHaveLength(3);
+      expect(parts).toHaveLength(2);
     });
 
     it("handles unicode characters", () => {
       const name = generateName("\u{1F600}\u{1F680}\u{1F4A1}");
       expect(typeof name).toBe("string");
       const parts = name.split(" ");
-      expect(parts).toHaveLength(3);
+      expect(parts).toHaveLength(2);
     });
   });
 });
@@ -148,12 +146,12 @@ describe("generateNameDetailed", () => {
     expect(result).toHaveProperty("parts");
     expect(typeof result.full).toBe("string");
     expect(Array.isArray(result.parts)).toBe(true);
-    expect(result.parts).toHaveLength(3);
+    expect(result.parts).toHaveLength(2);
   });
 
   it("returns correct structure with middleName", () => {
     const result = generateNameDetailed(STACKS_ADDRESS, { middleName: true });
-    expect(result.parts).toHaveLength(4);
+    expect(result.parts).toHaveLength(3);
   });
 
   it("full name matches joined parts", () => {

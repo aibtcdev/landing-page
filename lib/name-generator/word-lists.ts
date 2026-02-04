@@ -1,9 +1,9 @@
 /**
  * Curated word lists for deterministic name generation.
  *
- * Three categories of ~250 words each, mixing Bitcoin/crypto themes
- * with whimsical, memorable vocabulary. All words are lowercase
- * and formatted by the generator.
+ * Two categories mixing Bitcoin/crypto themes with whimsical,
+ * memorable vocabulary. All words are lowercase and formatted
+ * by the generator.
  */
 
 /** Descriptive words -- first component of generated names */
@@ -105,52 +105,22 @@ export const NOUNS = [
   "stamp", "star", "stone", "summit", "sword", "temple",
   "throne", "torch", "tower", "trident", "turbine", "vault",
   "vector", "vertex", "vortex", "wand",
-] as const;
 
-/** Action / title words -- third component of generated names */
-export const EPITHETS = [
-  // actions / verbs (gerund-style)
-  "breaker", "builder", "burner", "caller", "carver", "caster",
-  "charger", "chaser", "climber", "coder", "crafter", "crosser",
-  "crusher", "dancer", "darter", "dasher", "dealer", "delver",
-  "digger", "diver", "drifter", "driver", "fencer", "finder",
-  "flier", "forger", "founder", "gazer", "glider", "grinder",
-  "guard", "guide", "hacker", "handler", "hauler", "healer",
-  "herald", "holder", "hooker", "hunter", "jumper", "keeper",
-  "lancer", "launcher", "leader", "leaper", "lifter", "linker",
-  "listener", "maker", "mapper", "marcher", "mender", "miner",
-  "mixer", "molder", "mover", "opener", "packer", "painter",
-  "parser", "patcher", "pacer", "pilot", "planner", "player",
-  "plunger", "prover", "puller", "pusher", "racer", "raider",
-  "ranger", "reader", "reaper", "render", "rider", "rigger",
-  "roamer", "roller", "rover", "runner", "rusher", "sailor",
-  "saver", "scaler", "scout", "seeker", "sender", "setter",
-  "shaker", "shaper", "shifter", "signer", "singer", "skater",
-  "slinger", "smasher", "solver", "sorter", "sparker", "speaker",
-  "spinner", "splitter", "sprinter", "stacker", "stalker", "starter",
-  "stepper", "stoker", "strider", "striker", "surfer", "sweeper",
-  "swimmer", "swinger", "tacker", "tamer", "thinker", "tracker",
-  "trader", "tracer", "trainer", "trapper", "trekker", "turner",
-  "twister", "vaulter", "viewer", "walker", "wanderer", "watcher",
-  "weaver", "welder", "wielder", "worker", "wrapper", "writer",
-
-  // titles / roles
-  "ace", "agent", "alchemist", "anchor", "apprentice", "arbiter",
-  "archer", "artisan", "baron", "bishop", "captain", "centurion",
-  "champion", "chancellor", "chief", "commander", "consul", "corsair",
-  "count", "crusader", "curator", "czar", "deacon", "delegate",
-  "deputy", "duke", "elder", "emissary", "envoy", "expert",
-  "general", "governor", "guardian", "guru", "herald", "hermit",
-  "icon", "judge", "jurist", "king", "knight", "legate",
-  "lord", "maestro", "magus", "marshal", "master", "mentor",
-  "mystic", "noble", "nomad", "oracle", "paladin", "patriarch",
-  "pioneer", "prefect", "priest", "prince", "prophet", "protector",
-  "queen", "rector", "regent", "sage", "samurai", "scholar",
-  "scribe", "senator", "shaman", "sheriff", "shogun", "sovereign",
-  "squire", "steward", "sultan", "templar", "tribune", "vanguard",
-  "vicar", "viking", "vizier", "warden", "wizard",
+  // names
+  "aether", "aiden", "aria", "astra", "atlas", "briar",
+  "brio", "calyx", "cass", "cleo", "coda", "cyrus",
+  "dex", "drift", "dune", "echo", "eden", "elan",
+  "elio", "ember", "fenn", "flora", "flux", "grey",
+  "halo", "haven", "haze", "idris", "indra", "io",
+  "isle", "ivo", "jett", "juno", "kael", "kai",
+  "kaia", "lyra", "leo", "lumen", "luna", "lux",
+  "marin", "mars", "mira", "neri", "nico", "nova",
+  "nyx", "orin", "ozma", "orion", "otto", "pax",
+  "pippin", "quinn", "raya", "ren", "rho", "reed",
+  "sable", "soren", "seren", "sky", "sol", "taro",
+  "teal", "tess", "uri", "vale", "vega", "vera",
+  "vesper", "wisp", "wynn", "zara", "zion",
 ] as const;
 
 /** Total combination count for reference */
-export const TOTAL_COMBINATIONS =
-  ADJECTIVES.length * NOUNS.length * EPITHETS.length;
+export const TOTAL_COMBINATIONS = ADJECTIVES.length * NOUNS.length;

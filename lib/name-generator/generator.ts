@@ -6,15 +6,15 @@
  */
 
 import { hashAddress, createSeededRng, selectIndex } from "./hash";
-import { ADJECTIVES, NOUNS, EPITHETS } from "./word-lists";
+import { ADJECTIVES, NOUNS } from "./word-lists";
 
 /** Options for name generation */
 export interface GenerateNameOptions {
   /**
-   * When true, generates a four-part name with two adjectives:
-   *   "Cosmic Neon Falcon Spark"
-   * Default is three-part:
-   *   "Cosmic Falcon Spark"
+   * When true, generates a three-part name with two adjectives:
+   *   "Cosmic Neon Falcon"
+   * Default is two-part:
+   *   "Cosmic Falcon"
    */
   middleName?: boolean;
 }
@@ -44,10 +44,10 @@ function capitalize(word: string): string {
  * @example
  * ```ts
  * generateName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7")
- * // => "Crimson Phoenix Herald"
+ * // => "Crimson Phoenix"
  *
  * generateName("bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4", { middleName: true })
- * // => "Stellar Azure Dragon Forger"
+ * // => "Stellar Azure Dragon"
  * ```
  */
 export function generateName(
@@ -84,10 +84,6 @@ export function generateNameDetailed(
   // Noun
   const noun = NOUNS[selectIndex(rng(), NOUNS.length)];
   parts.push(capitalize(noun));
-
-  // Epithet
-  const epithet = EPITHETS[selectIndex(rng(), EPITHETS.length)];
-  parts.push(capitalize(epithet));
 
   return {
     full: parts.join(" "),
