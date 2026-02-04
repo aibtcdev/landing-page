@@ -8,6 +8,7 @@ import { generateName } from "@/lib/name-generator";
 interface Agent {
   stxAddress: string;
   btcAddress: string;
+  displayName?: string;
   description?: string | null;
   bnsName?: string | null;
   verifiedAt: string;
@@ -191,6 +192,9 @@ export default function AgentsPage() {
                             src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
                             alt={generateName(agent.btcAddress)}
                             className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
+                            onError={(e) => {
+                              e.currentTarget.style.display = 'none';
+                            }}
                           />
                           <span className="text-sm font-medium text-white">
                             {generateName(agent.btcAddress)}
