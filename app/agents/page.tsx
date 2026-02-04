@@ -189,11 +189,11 @@ export default function AgentsPage() {
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-                            alt={generateName(agent.stxAddress)}
+                            alt={generateName(agent.btcAddress)}
                             className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
                           />
                           <span className="text-sm font-medium text-white">
-                            {generateName(agent.stxAddress)}
+                            {generateName(agent.btcAddress)}
                           </span>
                           {agent.bnsName && (
                             <span className="rounded-md bg-blue/10 px-1.5 py-0.5 text-[10px] font-medium text-blue ring-1 ring-inset ring-blue/20">

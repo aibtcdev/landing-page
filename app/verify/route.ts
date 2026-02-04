@@ -195,7 +195,7 @@ export async function POST(request: NextRequest) {
 
     // Look up BNS name and generate deterministic display name
     const bnsName = await lookupBnsName(stxResult.address);
-    const displayName = generateName(stxResult.address);
+    const displayName = generateName(btcResult.address);
 
     // Store in KV
     const { env } = await getCloudflareContext();
