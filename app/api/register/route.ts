@@ -19,9 +19,15 @@ const EXPECTED_MESSAGE = "Bitcoin will be the currency of AIs";
 
 async function lookupBnsName(stxAddress: string): Promise<string | null> {
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 5000);
+
     const res = await fetch(
-      `https://api.hiro.so/v1/addresses/stacks/${stxAddress}`
+      `https://api.hiro.so/v1/addresses/stacks/${stxAddress}`,
+      { signal: controller.signal }
     );
+    clearTimeout(timeoutId);
+
     if (!res.ok) return null;
     const data = (await res.json()) as { names?: string[] };
     if (data.names && data.names.length > 0) {
@@ -158,6 +164,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate and sanitize description
+    let sanitizedDescription: string | null = null;
+    if (description) {
+      const trimmed = description.trim();
+      if (trimmed.length > 280) {
+        return NextResponse.json(
+          { error: "Description must be 280 characters or less" },
+          { status: 400 }
+        );
+      }
+      sanitizedDescription = trimmed;
+    }
+
     // Verify both signatures
     let btcResult;
     try {
@@ -193,13 +212,26 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Look up BNS name and generate deterministic display name
-    const bnsName = await lookupBnsName(stxResult.address);
-    const displayName = generateName(btcResult.address);
-
     // Store in KV
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+
+    // Check for existing registration
+    const existingStx = await kv.get(`stx:${stxResult.address}`);
+    const existingBtc = await kv.get(`btc:${btcResult.address}`);
+
+    if (existingStx || existingBtc) {
+      return NextResponse.json(
+        {
+          error: "Address already registered. Each address can only be registered once.",
+        },
+        { status: 409 }
+      );
+    }
+
+    // Look up BNS name and generate deterministic display name
+    const bnsName = await lookupBnsName(stxResult.address);
+    const displayName = generateName(btcResult.address);
 
     const record = {
       stxAddress: stxResult.address,
@@ -208,13 +240,15 @@ export async function POST(request: NextRequest) {
       btcPublicKey: btcResult.publicKey,
       bnsName: bnsName || null,
       displayName,
-      description: description || null,
+      description: sanitizedDescription,
       verifiedAt: new Date().toISOString(),
     };
 
-    // Key by STX address, also index by BTC address
-    await kv.put(`stx:${stxResult.address}`, JSON.stringify(record));
-    await kv.put(`btc:${btcResult.address}`, JSON.stringify(record));
+    // Key by STX address, also index by BTC address (atomic write)
+    await Promise.all([
+      kv.put(`stx:${stxResult.address}`, JSON.stringify(record)),
+      kv.put(`btc:${btcResult.address}`, JSON.stringify(record)),
+    ]);
 
     return NextResponse.json({
       success: true,
