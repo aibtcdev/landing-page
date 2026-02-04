@@ -3,11 +3,11 @@
 import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
+import { generateName } from "@/lib/name-generator";
 
 interface Agent {
   stxAddress: string;
   btcAddress: string;
-  displayName?: string;
   description?: string | null;
   bnsName?: string | null;
   verifiedAt: string;
@@ -189,12 +189,11 @@ export default function AgentsPage() {
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-                            alt={agent.displayName || "Agent"}
+                            alt={generateName(agent.stxAddress)}
                             className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
                           />
                           <span className="text-sm font-medium text-white">
-                            {agent.displayName ||
-                              truncateAddress(agent.stxAddress)}
+                            {generateName(agent.stxAddress)}
                           </span>
                           {agent.bnsName && (
                             <span className="rounded-md bg-blue/10 px-1.5 py-0.5 text-[10px] font-medium text-blue ring-1 ring-inset ring-blue/20">
