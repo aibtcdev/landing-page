@@ -18,13 +18,26 @@ export async function GET() {
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     // List all agents keyed by stx: prefix (avoids duplicates from btc: keys)
-    const list = await kv.list({ prefix: "stx:" });
-
+    // Handle pagination for >1000 agents
     const agents: AgentRecord[] = [];
-    for (const key of list.keys) {
-      const value = await kv.get(key.name);
-      if (value) {
-        agents.push(JSON.parse(value));
+    let cursor: string | undefined = undefined;
+    let list_complete = false;
+
+    while (!list_complete) {
+      const list = await kv.list({ prefix: "stx:", cursor });
+      list_complete = list.list_complete;
+      cursor = list.cursor;
+
+      for (const key of list.keys) {
+        const value = await kv.get(key.name);
+        if (value) {
+          try {
+            agents.push(JSON.parse(value));
+          } catch (e) {
+            console.error(`Failed to parse agent record ${key.name}:`, e);
+            // Skip corrupted entries
+          }
+        }
       }
     }
 
