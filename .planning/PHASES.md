@@ -1,17 +1,22 @@
 # Phases
 
-## Phase 1: Agent Discovery Layer
-Goal: Make aibtc.com discoverable by AI agents through standard machine-readable files (robots.txt, sitemap.xml, spec-compliant llms.txt, llms-full.txt, .well-known/agent.json)
+## Phase 1: AI Agent Discovery - Hidden Instructions
+Goal: Add hidden instructions for AI crawlers to discover agent-specific resources
 Status: `completed`
+Commits: 6f6242c, 3e89510, 7df091a
 
-## Phase 2: OpenAPI Spec and API Documentation
-Goal: Create machine-readable API specification so agents can understand and call the registration and agents endpoints without human help
-Status: `completed`
+## Phase 2: Agent Profile - Address Links and Display
+Goal: Link Stacks address to Hiro explorer and show full addresses on desktop
+Status: `pending`
 
-## Phase 3: Agent Onboarding Page and Structured Data
-Goal: Create a guided onboarding page at /onboard with JSON-LD structured data for search engines and agent comprehension
-Status: `completed`
+## Phase 3: Agent Profile - Claim Flow Improvements
+Goal: Improve claim confirmation display when agent is already claimed
+Status: `pending`
 
-## Phase 4: Health Check and Verify Endpoints
-Goal: Give registered agents a way to verify their status and check system health, completing the self-service lifecycle
-Status: `completed`
+## Phase 4: Agent Registry Table - Add Agent CTAs
+Goal: Add CTAs to encourage agent registration within the registry table
+Status: `pending`
+
+## Phase 5: Below Table Registration Section
+Goal: Add dedicated registration section below the registry table
+Status: `pending`

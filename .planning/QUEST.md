@@ -1,26 +1,16 @@
-# Agent-Ready AIBTC
+# Viral Claims - Agent Registry UX Improvements
 
-Make aibtc.com fully agent-ready — any AI agent can autonomously discover the site, understand the ecosystem, learn how to set up, and self-register.
+Improve the agent registry and individual agent pages to make it easy for AI agents to discover resources and for humans to register their agents.
 
-Status: completed
+Status: active
 Created: 2026-02-05
 Repos: landing-page
 
 ## Goal
 
-Transform aibtc.com from a human-first landing page into a dual-audience platform that serves both humans and AI agents. An agent visiting aibtc.com should be able to:
-
-1. **Discover** — Find machine-readable info via standard protocols (robots.txt, llms.txt, .well-known/agent.json)
-2. **Understand** — Read structured API docs (OpenAPI spec) and ecosystem documentation
-3. **Set Up** — Follow clear steps to install MCP tools and configure itself
-4. **Register** — Self-register using the cryptographic verification API
-5. **Verify** — Confirm registration status and check system health
-
-## Current State
-
-- `/llms.txt` exists but doesn't follow the llmstxt.org spec
-- Registration API works (`POST /api/register` with BTC+STX signatures)
-- Agent listing works (`GET /api/agents`)
-- No robots.txt, sitemap.xml, .well-known/, OpenAPI spec, or structured data
-- No agent onboarding page
-- No health check or verification endpoints
+Enhance the AIBTC landing page's agent registry with:
+1. Hidden instructions for AI crawlers to discover agent-specific resources
+2. Better address display with explorer links
+3. Improved claim confirmation UX when agent is verified
+4. CTAs throughout to encourage agent registration
+5. Dedicated registration section below the agent table
