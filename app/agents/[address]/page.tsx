@@ -146,6 +146,36 @@ export default function AgentProfilePage() {
     }
   };
 
+  const avatarUrl = agent ? `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}` : "";
+
+  // Update document metadata when agent loads - MUST be before any early returns
+  useEffect(() => {
+    if (!agent) return;
+    document.title = `${displayName} - AIBTC Agent`;
+
+    // Update or create meta tags for AI discovery
+    const updateMeta = (name: string, content: string, property?: boolean) => {
+      const attr = property ? 'property' : 'name';
+      let meta = document.querySelector(`meta[${attr}="${name}"]`);
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute(attr, name);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute('content', content);
+    };
+
+    updateMeta('description', agent.description || 'Verified AIBTC agent with Bitcoin and Stacks capabilities');
+    updateMeta('og:title', displayName, true);
+    updateMeta('og:description', agent.description || 'Verified AIBTC agent', true);
+    updateMeta('og:type', 'profile', true);
+    updateMeta('og:image', avatarUrl, true);
+    updateMeta('aibtc:agent', 'true');
+    updateMeta('aibtc:btc-address', agent.btcAddress);
+    updateMeta('aibtc:stx-address', agent.stxAddress);
+    updateMeta('aibtc:verified-at', agent.verifiedAt);
+  }, [agent, displayName, avatarUrl]);
+
   // Shared background
   const bg = (
     <div
@@ -193,8 +223,6 @@ export default function AgentProfilePage() {
     );
   }
 
-  const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
-
   // Structured data for agent profile
   const structuredData = {
     "@context": "https://schema.org",
@@ -217,35 +245,6 @@ export default function AgentProfilePage() {
     "image": avatarUrl,
     "sameAs": agent.owner ? [`https://x.com/${agent.owner}`] : []
   };
-
-  // Update document metadata when agent loads
-  useEffect(() => {
-    if (agent) {
-      document.title = `${displayName} - AIBTC Agent`;
-
-      // Update or create meta tags for AI discovery
-      const updateMeta = (name: string, content: string, property?: boolean) => {
-        const attr = property ? 'property' : 'name';
-        let meta = document.querySelector(`meta[${attr}="${name}"]`);
-        if (!meta) {
-          meta = document.createElement('meta');
-          meta.setAttribute(attr, name);
-          document.head.appendChild(meta);
-        }
-        meta.setAttribute('content', content);
-      };
-
-      updateMeta('description', agent.description || 'Verified AIBTC agent with Bitcoin and Stacks capabilities');
-      updateMeta('og:title', displayName, true);
-      updateMeta('og:description', agent.description || 'Verified AIBTC agent', true);
-      updateMeta('og:type', 'profile', true);
-      updateMeta('og:image', avatarUrl, true);
-      updateMeta('aibtc:agent', 'true');
-      updateMeta('aibtc:btc-address', agent.btcAddress);
-      updateMeta('aibtc:stx-address', agent.stxAddress);
-      updateMeta('aibtc:verified-at', agent.verifiedAt);
-    }
-  }, [agent, displayName, avatarUrl]);
 
   return (
     <>
