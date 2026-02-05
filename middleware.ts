@@ -8,6 +8,16 @@ function isCLI(request: NextRequest): boolean {
   return ua.includes("curl") || ua.includes("wget") || ua.includes("httpie");
 }
 
+function getDeprecationBanner(newPath: string): string {
+  return `# ┌──────────────────────────────────────────────────────────────────┐
+# │  NOTICE: This URL is deprecated.                                │
+# │  New URL: curl https://aibtc.com${newPath} | sh          │
+# │  This path will continue to work but may be removed in future.  │
+# └──────────────────────────────────────────────────────────────────┘
+#
+`;
+}
+
 export async function middleware(request: NextRequest) {
   // Only intercept CLI tools
   if (!isCLI(request)) {
@@ -16,6 +26,11 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
+  // Root path: rewrite to serve public/llms.txt
+  if (path === "/") {
+    return NextResponse.rewrite(new URL("/llms.txt", request.url));
+  }
+
   // /skills is handled by Next.js route handler (app/skills/route.ts)
   // It's included in matcher to ensure CLI tools can access it, but we
   // pass through to Next.js instead of fetching from GitHub
@@ -23,22 +38,26 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Map paths to scripts
+  // Map deprecated paths to scripts and new install URLs
   let scriptPath: string;
+  let newPath: string;
   switch (path) {
-    case "/":
     case "/vps":
       scriptPath = "/vps-setup.sh";
+      newPath = "/install/openclaw";
       break;
     case "/local":
       scriptPath = "/local-setup.sh";
+      newPath = "/install/openclaw/local";
       break;
     case "/update":
+    case "/update-skill.sh":
       scriptPath = "/update-skill.sh";
+      newPath = "/install/openclaw/update";
       break;
     default:
-      // Pass through other paths (could be /update-skill.sh, etc.)
-      scriptPath = path;
+      // Unknown path, pass through
+      return NextResponse.next();
   }
 
   try {
@@ -49,8 +68,10 @@ export async function middleware(request: NextRequest) {
     }
 
     const script = await response.text();
+    const banner = getDeprecationBanner(newPath);
+    const scriptWithBanner = banner + script;
 
-    return new NextResponse(script, {
+    return new NextResponse(scriptWithBanner, {
       headers: {
         "content-type": "text/plain; charset=utf-8",
         "cache-control": "public, max-age=300",
