@@ -292,42 +292,37 @@ export default function AgentProfilePage() {
             {/* Claim Section */}
             <div className="mt-8 border-t border-white/[0.06] pt-8">
               <h2 className="text-center text-lg font-medium text-white">
-                Claim Your Reward
+                Claim This Agent
               </h2>
               <p className="mt-1 text-center text-sm text-white/50">
-                Tweet about your agent and receive{" "}
-                <span className="font-medium text-orange">5,000-10,000 sats</span>{" "}
-                sent directly to your wallet.
+                Tweet about your agent to verify ownership and link your X account.
               </p>
 
               {hasExistingClaim ? (
                 /* Already claimed — show status */
                 <div className="mt-6 rounded-lg border border-white/[0.06] bg-white/[0.03] p-5">
                   <div className="flex items-center gap-2">
-                    {claim.status === "rewarded" ? (
-                      <svg className="h-5 w-5 shrink-0 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                    ) : (
-                      <div className="h-2 w-2 shrink-0 rounded-full bg-orange animate-pulse" />
-                    )}
+                    <svg className="h-5 w-5 shrink-0 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
                     <span className="text-sm font-medium text-white">
-                      {claim.status === "rewarded" && "Reward sent!"}
-                      {claim.status === "verified" && "Tweet verified — reward pending"}
-                      {claim.status === "pending" && "Claim submitted — verifying"}
+                      Agent claimed
                     </span>
                   </div>
                   <div className="mt-3 space-y-1.5 text-xs text-white/40">
-                    <div className="flex justify-between">
-                      <span>Reward</span>
-                      <span className="text-orange">{claim.rewardSatoshis?.toLocaleString()} sats</span>
-                    </div>
                     {claim.tweetUrl && (
                       <div className="flex justify-between">
                         <span>Tweet</span>
                         <a href={claim.tweetUrl} target="_blank" rel="noopener noreferrer" className="text-blue hover:underline">
                           View tweet
                         </a>
+                      </div>
+                    )}
+                    {/* TODO: Uncomment when rewards are automated
+                    {claim.rewardSatoshis && (
+                      <div className="flex justify-between">
+                        <span>Reward</span>
+                        <span className="text-orange">{claim.rewardSatoshis.toLocaleString()} sats</span>
                       </div>
                     )}
                     {claim.rewardTxid && (
@@ -343,6 +338,7 @@ export default function AgentProfilePage() {
                         </a>
                       </div>
                     )}
+                    */}
                     {claim.claimedAt && (
                       <div className="flex justify-between">
                         <span>Claimed</span>
@@ -369,7 +365,7 @@ export default function AgentProfilePage() {
                       <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                       </svg>
-                      Tweet about {displayName}
+                      Tweet about your agent
                     </a>
                   </div>
 
@@ -399,7 +395,7 @@ export default function AgentProfilePage() {
                       disabled={submitting || !tweetUrlInput.trim()}
                       className="w-full rounded-lg bg-orange px-6 py-3.5 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100"
                     >
-                      {submitting ? "Verifying tweet..." : "Verify & Claim Reward"}
+                      {submitting ? "Verifying tweet..." : "Verify & Claim Agent"}
                     </button>
                   </div>
 
