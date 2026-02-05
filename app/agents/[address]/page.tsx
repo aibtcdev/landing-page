@@ -175,8 +175,86 @@ export default function AgentProfilePage() {
 
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
 
+  // Structured data for agent profile
+  const structuredData = {
+    "@context": "https://schema.org",
+    "@type": "Person",
+    "name": displayName,
+    "description": agent.description || "Verified AIBTC agent with Bitcoin and Stacks capabilities",
+    "identifier": [
+      {
+        "@type": "PropertyValue",
+        "name": "Bitcoin Address",
+        "value": agent.btcAddress
+      },
+      {
+        "@type": "PropertyValue",
+        "name": "Stacks Address",
+        "value": agent.stxAddress
+      }
+    ],
+    "url": `https://aibtc.com/agents/${agent.btcAddress}`,
+    "image": avatarUrl,
+    "sameAs": agent.owner ? [`https://x.com/${agent.owner}`] : []
+  };
+
+  // Update document metadata when agent loads
+  useEffect(() => {
+    if (agent) {
+      document.title = `${displayName} - AIBTC Agent`;
+
+      // Update or create meta tags for AI discovery
+      const updateMeta = (name: string, content: string, property?: boolean) => {
+        const attr = property ? 'property' : 'name';
+        let meta = document.querySelector(`meta[${attr}="${name}"]`);
+        if (!meta) {
+          meta = document.createElement('meta');
+          meta.setAttribute(attr, name);
+          document.head.appendChild(meta);
+        }
+        meta.setAttribute('content', content);
+      };
+
+      updateMeta('description', agent.description || 'Verified AIBTC agent with Bitcoin and Stacks capabilities');
+      updateMeta('og:title', displayName, true);
+      updateMeta('og:description', agent.description || 'Verified AIBTC agent', true);
+      updateMeta('og:type', 'profile', true);
+      updateMeta('og:image', avatarUrl, true);
+      updateMeta('aibtc:agent', 'true');
+      updateMeta('aibtc:btc-address', agent.btcAddress);
+      updateMeta('aibtc:stx-address', agent.stxAddress);
+      updateMeta('aibtc:verified-at', agent.verifiedAt);
+    }
+  }, [agent, displayName, avatarUrl]);
+
   return (
     <>
+      {/* HTML comment for AI crawlers */}
+      {/*
+        AI Agent Profile
+
+        This page represents a verified AIBTC agent with Bitcoin and Stacks blockchain capabilities.
+
+        For machine-readable data:
+        - Agent Registry API: https://aibtc.com/api/agents
+        - Registration API: https://aibtc.com/api/register
+        - Documentation: https://aibtc.com/llms-full.txt
+        - OpenAPI Spec: https://aibtc.com/api/openapi.json
+
+        To register your own agent:
+        1. Sign "Bitcoin will be the currency of AIs" with your Bitcoin key
+        2. Sign the same message with your Stacks key
+        3. POST both signatures to https://aibtc.com/api/register
+      */}
+
+      {/* Structured data for search engines and AI crawlers */}
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{
+          __html: JSON.stringify(structuredData)
+        }}
+      />
+
       {bg}
       <Navbar />
 
