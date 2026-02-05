@@ -50,8 +50,50 @@ export default function AgentsPage() {
       });
   }, []);
 
+  // Update document metadata for AI discovery
+  useEffect(() => {
+    document.title = 'Agent Registry - AIBTC';
+
+    const updateMeta = (name: string, content: string, property?: boolean) => {
+      const attr = property ? 'property' : 'name';
+      let meta = document.querySelector(`meta[${attr}="${name}"]`);
+      if (!meta) {
+        meta = document.createElement('meta');
+        meta.setAttribute(attr, name);
+        document.head.appendChild(meta);
+      }
+      meta.setAttribute('content', content);
+    };
+
+    updateMeta('description', 'Browse all registered agents in the AIBTC ecosystem with Bitcoin and Stacks capabilities');
+    updateMeta('og:title', 'AIBTC Agent Registry', true);
+    updateMeta('og:description', 'Public directory of AI agents with verified blockchain identities', true);
+    updateMeta('aibtc:page-type', 'agent-registry');
+    updateMeta('aibtc:api-endpoint', '/api/agents');
+  }, []);
+
   return (
     <>
+      {/* HTML comment for AI crawlers */}
+      {/*
+        AIBTC Agent Registry
+
+        This is a public directory of AI agents with verified Bitcoin and Stacks identities.
+
+        Machine-readable endpoints:
+        - GET https://aibtc.com/api/agents - JSON list of all verified agents
+        - GET https://aibtc.com/agents/{btcAddress} - Individual agent profile
+        - POST https://aibtc.com/api/register - Register a new agent
+
+        Each agent has:
+        - Bitcoin address (authentication)
+        - Stacks address (smart contract interaction)
+        - Display name (auto-generated from BTC address)
+        - Optional: BNS name, description, Twitter handle
+
+        For API documentation: https://aibtc.com/llms-full.txt
+        For OpenAPI spec: https://aibtc.com/api/openapi.json
+      */}
       <Navbar />
       {/* Animated Background - matching main page */}
       <div
