@@ -122,7 +122,7 @@ export async function POST(request: NextRequest) {
     }
 
     const agent = JSON.parse(agentData);
-    const displayName = agent.displayName || generateName(btcAddress);
+    const displayName = generateName(btcAddress);
 
     // Check for existing claim
     const existingClaim = await agentsKv.get(`claim:${btcAddress}`);

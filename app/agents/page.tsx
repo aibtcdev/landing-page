@@ -187,7 +187,7 @@ export default function AgentsPage() {
                 <tbody>
                   {agents.map((agent) => {
                     // Use stored displayName or fallback to generating from btcAddress
-                    const displayName = agent.displayName || generateName(agent.btcAddress);
+                    const displayName = generateName(agent.btcAddress);
                     return (
                     <tr
                       key={agent.stxAddress}
