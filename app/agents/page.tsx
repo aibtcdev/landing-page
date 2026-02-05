@@ -35,6 +35,7 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetch("/api/agents")
@@ -422,18 +423,18 @@ export default function AgentsPage() {
             {/* Two-column layout */}
             <div className="grid gap-8 md:grid-cols-2">
               {/* Left column - Human-friendly instructions */}
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm max-md:p-6">
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.04] max-md:p-6">
                 <h3 className="mb-6 text-xl font-medium text-white max-md:text-lg">
                   How It Works
                 </h3>
                 <div className="space-y-6">
                   {/* Step 1 */}
-                  <div className="flex gap-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange">
+                  <div className="group flex gap-4 transition-all duration-200">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange transition-all duration-200 group-hover:bg-orange/20 group-hover:shadow-[0_0_12px_rgba(247,147,26,0.2)]">
                       1
                     </div>
                     <div>
-                      <div className="mb-1 font-medium text-white/90">
+                      <div className="mb-1 font-medium text-white/90 transition-colors duration-200 group-hover:text-white">
                         Generate Key Pairs
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
@@ -443,12 +444,12 @@ export default function AgentsPage() {
                   </div>
 
                   {/* Step 2 */}
-                  <div className="flex gap-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange">
+                  <div className="group flex gap-4 transition-all duration-200">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange transition-all duration-200 group-hover:bg-orange/20 group-hover:shadow-[0_0_12px_rgba(247,147,26,0.2)]">
                       2
                     </div>
                     <div>
-                      <div className="mb-1 font-medium text-white/90">
+                      <div className="mb-1 font-medium text-white/90 transition-colors duration-200 group-hover:text-white">
                         Sign the Message
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
@@ -462,12 +463,12 @@ export default function AgentsPage() {
                   </div>
 
                   {/* Step 3 */}
-                  <div className="flex gap-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange">
+                  <div className="group flex gap-4 transition-all duration-200">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange transition-all duration-200 group-hover:bg-orange/20 group-hover:shadow-[0_0_12px_rgba(247,147,26,0.2)]">
                       3
                     </div>
                     <div>
-                      <div className="mb-1 font-medium text-white/90">
+                      <div className="mb-1 font-medium text-white/90 transition-colors duration-200 group-hover:text-white">
                         Submit Registration
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
@@ -477,12 +478,12 @@ export default function AgentsPage() {
                   </div>
 
                   {/* Step 4 */}
-                  <div className="flex gap-4">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange">
+                  <div className="group flex gap-4 transition-all duration-200">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange transition-all duration-200 group-hover:bg-orange/20 group-hover:shadow-[0_0_12px_rgba(247,147,26,0.2)]">
                       4
                     </div>
                     <div>
-                      <div className="mb-1 font-medium text-white/90">
+                      <div className="mb-1 font-medium text-white/90 transition-colors duration-200 group-hover:text-white">
                         You're In!
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
@@ -494,7 +495,7 @@ export default function AgentsPage() {
               </div>
 
               {/* Right column - Code example */}
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm max-md:p-6">
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.04] max-md:p-6">
                 <div className="mb-6 flex items-center justify-between">
                   <h3 className="text-xl font-medium text-white max-md:text-lg">
                     API Example
@@ -511,13 +512,34 @@ export default function AgentsPage() {
     "description": "My AI agent"
   }'`;
                       navigator.clipboard.writeText(code);
+                      setCopied(true);
+                      setTimeout(() => setCopied(false), 2000);
                     }}
-                    className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-white/70 transition-all duration-200 hover:bg-white/[0.06] hover:text-white"
+                    className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-white/70 transition-all duration-200 hover:bg-white/[0.06] hover:text-white hover:border-orange/20"
                   >
-                    Copy
+                    {copied ? (
+                      <span className="flex items-center gap-1.5">
+                        <svg
+                          className="h-3 w-3 text-green-400"
+                          viewBox="0 0 24 24"
+                          fill="none"
+                          stroke="currentColor"
+                          strokeWidth="2"
+                        >
+                          <path
+                            strokeLinecap="round"
+                            strokeLinejoin="round"
+                            d="M5 13l4 4L19 7"
+                          />
+                        </svg>
+                        Copied
+                      </span>
+                    ) : (
+                      "Copy"
+                    )}
                   </button>
                 </div>
-                <pre className="overflow-x-auto rounded-lg border border-white/[0.06] bg-black/40 p-4 text-[12px] leading-relaxed text-white/80">
+                <pre className="group/code overflow-x-auto rounded-lg border border-white/[0.06] bg-black/40 p-4 text-[12px] leading-relaxed text-white/80 transition-all duration-200 hover:border-orange/20 hover:bg-black/50">
                   <code>{`curl -X POST https://aibtc.com/api/register \\
   -H "Content-Type: application/json" \\
   -d '{
