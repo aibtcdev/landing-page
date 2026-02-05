@@ -181,7 +181,7 @@ export default function AgentProfilePage() {
       <Navbar />
 
       <div className="flex h-[90vh] items-center justify-center px-5">
-        <div className="w-full max-w-[440px]">
+        <div className="w-full max-w-[440px] md:max-w-[520px]">
 
           {/* Identity */}
           <div className="flex flex-col items-center text-center">
@@ -189,21 +189,21 @@ export default function AgentProfilePage() {
             <img
               src={avatarUrl}
               alt={displayName}
-              className="h-20 w-20 rounded-full border-2 border-orange/30 bg-white/[0.06]"
+              className="h-20 w-20 md:h-24 md:w-24 rounded-full border-2 border-orange/30 bg-white/[0.06]"
               onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
-            <h1 className="mt-3 text-2xl font-medium tracking-tight text-white">
+            <h1 className="mt-3 text-2xl md:text-3xl font-medium tracking-tight text-white">
               {displayName}
             </h1>
 
             {/* Badges */}
-            <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5">
+            <div className="mt-2.5 flex flex-wrap items-center justify-center gap-1.5 md:gap-2">
               {agent.bnsName && (
-                <span className="rounded-md bg-blue/10 px-2 py-0.5 text-[11px] font-medium text-blue ring-1 ring-inset ring-blue/20">
+                <span className="rounded-md bg-blue/10 px-2 py-0.5 text-[11px] md:text-xs font-medium text-blue ring-1 ring-inset ring-blue/20">
                   {agent.bnsName}
                 </span>
               )}
-              <span className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/60">
+              <span className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] md:text-xs text-white/60">
                 <svg className="h-3 w-3 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
@@ -214,7 +214,7 @@ export default function AgentProfilePage() {
                   href={`https://x.com/${agent.owner}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/60 transition-colors hover:text-white/80"
+                  className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] md:text-xs text-white/60 transition-colors hover:text-white/80"
                 >
                   <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -225,62 +225,62 @@ export default function AgentProfilePage() {
             </div>
 
             {agent.description && (
-              <p className="mt-2 max-w-sm text-xs leading-relaxed text-white/60">{agent.description}</p>
+              <p className="mt-2 max-w-sm text-xs md:text-sm leading-relaxed text-white/60">{agent.description}</p>
             )}
           </div>
 
           {/* Addresses — inline row */}
-          <div className="mt-5 flex gap-2 max-md:flex-col">
+          <div className="mt-5 md:mt-6 flex gap-2 md:gap-3 max-md:flex-col">
             <a
               href={`https://mempool.space/address/${agent.btcAddress}`}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 transition-colors hover:border-white/[0.12] hover:bg-white/[0.06]"
+              className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 md:px-4 md:py-3 transition-colors hover:border-white/[0.12] hover:bg-white/[0.06]"
             >
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-white/50">BTC</div>
-              <div className="mt-0.5 font-mono text-[12px] text-orange">{truncateAddress(agent.btcAddress)}</div>
+              <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-widest text-white/50">BTC</div>
+              <div className="mt-0.5 font-mono text-[12px] md:text-sm text-orange">{truncateAddress(agent.btcAddress)}</div>
             </a>
-            <div className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2.5">
-              <div className="text-[10px] font-semibold uppercase tracking-widest text-white/50">STX</div>
-              <div className="mt-0.5 font-mono text-[12px] text-purple">{truncateAddress(agent.stxAddress)}</div>
+            <div className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 md:px-4 md:py-3">
+              <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-widest text-white/50">STX</div>
+              <div className="mt-0.5 font-mono text-[12px] md:text-sm text-purple">{truncateAddress(agent.stxAddress)}</div>
             </div>
           </div>
 
           {/* Divider */}
-          <div className="my-5 h-px bg-white/[0.08]" />
+          <div className="my-5 md:my-6 h-px bg-white/[0.08]" />
 
           {/* Claim */}
           {hasExistingClaim ? (
-            <div className="flex items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3">
+            <div className="flex items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3 md:px-5 md:py-4">
               <div className="flex items-center gap-2">
-                <svg className="h-4 w-4 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="h-4 w-4 md:h-5 md:w-5 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                <span className="text-sm text-white/80">Agent claimed</span>
+                <span className="text-sm md:text-base text-white/80">Agent claimed</span>
               </div>
               {claim.tweetUrl && (
-                <a href={claim.tweetUrl} target="_blank" rel="noopener noreferrer" className="text-xs text-blue hover:underline">
+                <a href={claim.tweetUrl} target="_blank" rel="noopener noreferrer" className="text-xs md:text-sm text-blue hover:underline">
                   View tweet
                 </a>
               )}
             </div>
           ) : (
-            <div className="space-y-2.5">
-              <div className="flex gap-2">
+            <div className="space-y-2.5 md:space-y-3">
+              <div className="flex gap-2 md:gap-3">
                 <a
                   href={tweetIntentUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/[0.08] py-2.5 text-xs font-medium text-white transition-colors hover:bg-white/[0.12]"
+                  className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/[0.08] py-2.5 md:py-3 text-xs md:text-sm font-medium text-white transition-colors hover:bg-white/[0.12]"
                 >
-                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+                  <svg className="h-3.5 w-3.5 md:h-4 md:w-4" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                   </svg>
                   Post on X
                 </a>
                 <button
                   onClick={handleCopyLink}
-                  className="flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 text-xs text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white/90"
+                  className="flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-2.5 md:px-5 md:py-3 text-xs md:text-sm text-white/70 transition-colors hover:bg-white/[0.07] hover:text-white/90"
                 >
                   {copied ? (
                     <svg className="h-3.5 w-3.5 text-[#4dcd5e]" viewBox="0 0 20 20" fill="currentColor">
@@ -294,34 +294,34 @@ export default function AgentProfilePage() {
                   {copied ? "Copied" : "Link"}
                 </button>
               </div>
-              <div className="flex gap-2">
+              <div className="flex gap-2 md:gap-3">
                 <input
                   type="url"
                   value={tweetUrlInput}
                   onChange={(e) => { setTweetUrlInput(e.target.value); setClaimError(null); }}
                   placeholder="Paste tweet URL..."
-                  className="min-w-0 flex-1 rounded-lg border border-white/[0.1] bg-white/[0.05] px-3 py-2.5 font-mono text-xs text-white placeholder:text-white/40 outline-none transition-colors focus:border-orange/40 focus:bg-white/[0.07]"
+                  className="min-w-0 flex-1 rounded-lg border border-white/[0.1] bg-white/[0.05] px-3 py-2.5 md:px-4 md:py-3 font-mono text-xs md:text-sm text-white placeholder:text-white/40 outline-none transition-colors focus:border-orange/40 focus:bg-white/[0.07]"
                 />
                 <button
                   onClick={handleSubmitClaim}
                   disabled={submitting || !tweetUrlInput.trim()}
-                  className="shrink-0 rounded-lg bg-orange px-5 py-2.5 text-xs font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30 disabled:active:scale-100"
+                  className="shrink-0 rounded-lg bg-orange px-5 py-2.5 md:px-6 md:py-3 text-xs md:text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30 disabled:active:scale-100"
                 >
                   {submitting ? "Verifying..." : "Claim"}
                 </button>
               </div>
               {claimError && (
-                <p className="text-[11px] text-red-400/80">{claimError}</p>
+                <p className="text-[11px] md:text-xs text-red-400/80">{claimError}</p>
               )}
-              <p className="text-center text-[11px] text-white/45">
+              <p className="text-center text-[11px] md:text-xs text-white/45">
                 Tweet about your agent, paste the URL, and claim ownership.
               </p>
             </div>
           )}
 
           {/* Back link */}
-          <div className="mt-5 text-center">
-            <Link href="/agents" className="inline-flex items-center gap-1.5 text-xs text-white/50 transition-colors hover:text-white/80">
+          <div className="mt-5 md:mt-6 text-center">
+            <Link href="/agents" className="inline-flex items-center gap-1.5 text-xs md:text-sm text-white/50 transition-colors hover:text-white/80">
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M12 19l-7-7 7-7" />
               </svg>
