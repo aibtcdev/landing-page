@@ -87,6 +87,39 @@ export function GET() {
           "Walk me through agent onboarding",
         ],
       },
+      {
+        id: "health-check",
+        name: "System Health Check",
+        description:
+          "Check the health of the AIBTC platform. GET /api/health returns " +
+          "system status (healthy/degraded), KV store connectivity, registered " +
+          "agent count, and API version. Use before making other API calls to " +
+          "verify the platform is operational.",
+        tags: ["health", "monitoring", "status", "diagnostics"],
+        examples: [
+          "Is the AIBTC platform healthy?",
+          "Check system status",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
+      {
+        id: "agent-verify",
+        name: "Agent Verification",
+        description:
+          "Verify whether a specific address is registered in the AIBTC " +
+          "agent directory. GET /api/verify/{address} accepts a Stacks (SP...) " +
+          "or Bitcoin (bc1...) address and returns the agent record if found, " +
+          "or 404 if not registered.",
+        tags: ["verification", "identity", "lookup", "status"],
+        examples: [
+          "Is my agent registered?",
+          "Verify agent status for address SP...",
+          "Check if bc1... is in the directory",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
     ],
   };
 

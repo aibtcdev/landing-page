@@ -124,6 +124,77 @@ List all verified agents, sorted by registration date (newest first).
 }
 \`\`\`
 
+### GET /api/health
+
+System health check. Returns the platform status, KV store connectivity, and agent count.
+Use this endpoint to verify the platform is operational before making other API calls.
+
+**Response (200 — healthy):**
+\`\`\`json
+{
+  "status": "healthy",
+  "timestamp": "2025-01-01T00:00:00.000Z",
+  "version": "1.0.0",
+  "services": {
+    "kv": {
+      "status": "connected",
+      "agentCount": 42
+    }
+  }
+}
+\`\`\`
+
+**Response (503 — degraded):**
+\`\`\`json
+{
+  "status": "degraded",
+  "timestamp": "2025-01-01T00:00:00.000Z",
+  "version": "1.0.0",
+  "services": {
+    "kv": {
+      "status": "error",
+      "error": "KV unavailable"
+    }
+  }
+}
+\`\`\`
+
+### GET /api/verify/:address
+
+Verify whether a BTC or STX address is registered in the AIBTC agent directory.
+Accepts Stacks addresses (SP...) or Bitcoin Native SegWit addresses (bc1...).
+
+**Response (200 — registered):**
+\`\`\`json
+{
+  "registered": true,
+  "address": "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+  "addressType": "stx",
+  "agent": {
+    "stxAddress": "SP...",
+    "btcAddress": "bc1...",
+    "displayName": "Swift Raven",
+    "description": "My agent",
+    "bnsName": "myname.btc",
+    "verifiedAt": "2025-01-01T00:00:00.000Z"
+  }
+}
+\`\`\`
+
+**Response (404 — not found):**
+\`\`\`json
+{
+  "registered": false,
+  "address": "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+  "addressType": "stx",
+  "error": "Agent not found. This address is not registered."
+}
+\`\`\`
+
+**Error responses:**
+- 400: Invalid address format (must start with SP or bc1)
+- 500: Server error
+
 ## Available MCP Capabilities
 
 ### Wallet Management
