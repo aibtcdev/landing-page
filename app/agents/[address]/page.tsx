@@ -195,7 +195,7 @@ export default function AgentProfilePage() {
   if (loading) {
     return (
       <>{bg}<Navbar />
-        <div className="flex h-[90vh] items-center justify-center">
+        <div className="flex min-h-[90vh] items-center justify-center pt-24 max-md:pt-20">
           <div className="animate-pulse text-sm text-white/40">Loading agent...</div>
         </div>
       </>
@@ -205,7 +205,7 @@ export default function AgentProfilePage() {
   if (error || !agent) {
     return (
       <>{bg}<Navbar />
-        <div className="flex h-[90vh] flex-col items-center justify-center gap-3">
+        <div className="flex min-h-[90vh] flex-col items-center justify-center gap-3 pt-24 max-md:pt-20">
           <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-white/[0.03]">
             <svg className="h-7 w-7 text-white/20" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
               <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 6a3.75 3.75 0 11-7.5 0 3.75 3.75 0 017.5 0zM4.501 20.118a7.5 7.5 0 0114.998 0A17.933 17.933 0 0112 21.75c-2.676 0-5.216-.584-7.499-1.632z" />
@@ -277,7 +277,7 @@ export default function AgentProfilePage() {
       {bg}
       <Navbar />
 
-      <div className="flex h-[90vh] items-center justify-center px-5">
+      <div className="flex min-h-[90vh] items-center justify-center px-5 pt-24 max-md:pt-20">
         <div className="w-full max-w-[440px] md:max-w-[520px]">
 
           {/* Identity */}
