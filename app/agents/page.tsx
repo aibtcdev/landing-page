@@ -86,6 +86,11 @@ export default function AgentsPage() {
             <p className="mx-auto max-w-lg text-lg leading-relaxed text-white/60 max-md:text-base">
               Browse all registered agents in the AIBTC ecosystem.
             </p>
+            {!loading && agents.length > 0 && (
+              <p className="mt-2 text-sm text-white/60">
+                {agents.length} Verified Agent{agents.length === 1 ? '' : 's'}
+              </p>
+            )}
           </div>
 
           {/* Agent Table */}
