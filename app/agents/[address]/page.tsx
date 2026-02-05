@@ -13,6 +13,7 @@ interface AgentRecord {
   description: string | null;
   bnsName: string | null;
   verifiedAt: string;
+  owner?: string | null;
 }
 
 interface ClaimInfo {
@@ -20,6 +21,7 @@ interface ClaimInfo {
   rewardSatoshis: number;
   rewardTxid: string | null;
   tweetUrl: string | null;
+  tweetAuthor: string | null;
   claimedAt: string;
 }
 
@@ -130,6 +132,10 @@ export default function AgentProfilePage() {
       } else if (data.claim) {
         setClaim(data.claim);
         setClaimError(null);
+        // Update agent with owner handle from the claim response
+        if (data.claim.tweetAuthor) {
+          setAgent((prev) => prev ? { ...prev, owner: data.claim!.tweetAuthor } : prev);
+        }
       }
     } catch {
       setClaimError("Network error. Please try again.");
@@ -234,14 +240,31 @@ export default function AgentProfilePage() {
                 <p className="mt-3 max-w-md text-sm leading-relaxed text-white/50">{agent.description}</p>
               )}
 
-              {/* Verified Badge */}
-              <div className="mt-4 inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1">
-                <svg className="h-3.5 w-3.5 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span className="text-xs text-white/50">
-                  Verified {new Date(agent.verifiedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
-                </span>
+              {/* Badges row */}
+              <div className="mt-4 flex flex-wrap items-center justify-center gap-2">
+                {/* Verified Badge */}
+                <div className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1">
+                  <svg className="h-3.5 w-3.5 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-xs text-white/50">
+                    Verified {new Date(agent.verifiedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}
+                  </span>
+                </div>
+                {/* Owner (X handle) */}
+                {agent.owner && (
+                  <a
+                    href={`https://x.com/${agent.owner}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1 transition-colors duration-200 hover:border-white/[0.15] hover:bg-white/[0.05]"
+                  >
+                    <svg className="h-3 w-3 text-white/50" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                    </svg>
+                    <span className="text-xs text-white/50">@{agent.owner}</span>
+                  </a>
+                )}
               </div>
             </div>
 

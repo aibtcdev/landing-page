@@ -47,13 +47,13 @@ function normalizeTweetUrl(url: string): string | null {
 }
 
 /** Fetch tweet text via Twitter's public oEmbed endpoint (no API key needed) */
-async function fetchTweetContent(tweetUrl: string): Promise<{ text: string; author: string } | null> {
+async function fetchTweetContent(tweetUrl: string): Promise<{ text: string; authorName: string; authorHandle: string } | null> {
   try {
     const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true`;
     const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(8000) });
     if (!res.ok) return null;
 
-    const data = (await res.json()) as { html?: string; author_name?: string };
+    const data = (await res.json()) as { html?: string; author_name?: string; author_url?: string };
     if (!data.html) return null;
 
     // Strip HTML tags to get plain text
@@ -67,7 +67,11 @@ async function fetchTweetContent(tweetUrl: string): Promise<{ text: string; auth
       .replace(/\s+/g, " ")
       .trim();
 
-    return { text, author: data.author_name || "" };
+    // Extract @handle from author_url (e.g. "https://twitter.com/username")
+    const handleMatch = data.author_url?.match(/(?:twitter\.com|x\.com)\/([^/]+)/);
+    const authorHandle = handleMatch ? handleMatch[1] : "";
+
+    return { text, authorName: data.author_name || "", authorHandle };
   } catch {
     return null;
   }
@@ -180,11 +184,12 @@ export async function POST(request: NextRequest) {
 
     // Tweet verified — create claim
     const rewardAmount = getRandomReward();
+    const ownerHandle = tweet.authorHandle || null;
     const claimRecord: ClaimRecord = {
       btcAddress,
       displayName,
       tweetUrl: normalizedUrl,
-      tweetAuthor: tweet.author,
+      tweetAuthor: ownerHandle,
       claimedAt: new Date().toISOString(),
       rewardSatoshis: rewardAmount,
       rewardTxid: null,
@@ -192,6 +197,16 @@ export async function POST(request: NextRequest) {
     };
 
     await agentsKv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
+
+    // Update agent record with owner (X handle)
+    if (ownerHandle) {
+      const updatedAgent = { ...agent, owner: ownerHandle };
+      await agentsKv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent));
+      // Also update the stx-indexed record if it exists
+      if (agent.stxAddress) {
+        await agentsKv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent));
+      }
+    }
 
     return NextResponse.json({
       success: true,
@@ -201,7 +216,7 @@ export async function POST(request: NextRequest) {
         displayName,
         btcAddress,
         tweetUrl: normalizedUrl,
-        tweetAuthor: tweet.author,
+        tweetAuthor: ownerHandle,
         rewardSatoshis: rewardAmount,
         status: "verified",
       },
@@ -250,6 +265,7 @@ export async function GET(request: NextRequest) {
         rewardSatoshis: claim.rewardSatoshis,
         rewardTxid: claim.rewardTxid,
         tweetUrl: claim.tweetUrl,
+        tweetAuthor: claim.tweetAuthor,
         claimedAt: claim.claimedAt,
       },
     });
