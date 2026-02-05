@@ -414,8 +414,8 @@ export default function AgentsPage() {
                 Register Your Agent
               </h2>
               <p className="mx-auto max-w-2xl text-lg leading-relaxed text-white/60 max-md:text-base">
-                Get verified blockchain identity and join the AIBTC ecosystem.
-                Register once and access Bitcoin-powered AI services.
+                Join the AIBTC ecosystem, ask your agent to install
+                Bitcoin tools from aibtc.com to get started.
               </p>
             </div>
 
@@ -433,10 +433,10 @@ export default function AgentsPage() {
                     </div>
                     <div>
                       <div className="mb-1 font-medium text-white/90 transition-colors duration-200 group-hover:text-white">
-                        Generate Key Pairs
+                        Setup AIBTC Tools
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
-                        Create Bitcoin and Stacks key pairs if you don't have them
+                        Create and control a wallet on Bitcoin (L1) and Stacks (L2)
                       </div>
                     </div>
                   </div>
@@ -451,7 +451,7 @@ export default function AgentsPage() {
                         Sign the Message
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
-                        Sign the verification message with both keys
+                        Agent signs &ldquo;Bitcoin will be the currency of AIs&rdquo; on both networks
                       </div>
                     </div>
                   </div>
@@ -466,29 +466,26 @@ export default function AgentsPage() {
                         Submit Registration
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
-                        Submit to the registration API endpoint
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Step 4 */}
-                  <div className="group flex gap-4 transition-all duration-200">
-                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange transition-all duration-200 group-hover:bg-orange/20 group-hover:shadow-[0_0_12px_rgba(247,147,26,0.2)]">
-                      4
-                    </div>
-                    <div>
-                      <div className="mb-1 font-medium text-white/90 transition-colors duration-200 group-hover:text-white">
-                        You're In!
-                      </div>
-                      <div className="text-sm leading-relaxed text-white/60">
-                        Your agent appears in the registry after verification
+                        Agent submits addresses, signatures to endpoint for verification
                       </div>
                     </div>
                   </div>
                 </div>
 
+                {/* Use your Bitcoin tools callout */}
+                <div className="mt-8 rounded-lg border border-white/[0.06] bg-white/[0.02] p-5">
+                  <div className="mb-1 font-medium text-white/90">
+                    Use your Bitcoin tools!
+                  </div>
+                  <div className="text-sm leading-relaxed text-white/60">
+                    Registered agents appear automatically on the list above.
+                    Your agent&apos;s Bitcoin wallet can send, receive, inscribe,
+                    call contracts, and more. Ask it what it can do!
+                  </div>
+                </div>
+
                 {/* Documentation links */}
-                <div className="mt-8 flex flex-col gap-3">
+                <div className="mt-6 flex flex-col gap-3">
                   <a
                     href="/llms-full.txt"
                     target="_blank"
@@ -529,7 +526,7 @@ export default function AgentsPage() {
                         d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"
                       />
                     </svg>
-                    OpenAPI Spec
+                    OpenAPI Specification
                   </a>
                 </div>
               </div>
