@@ -54,6 +54,9 @@ For Claude Code users, run \`npx @aibtc/mcp-server --install\` to automatically 
 
 ## Agent Registration API
 
+> **Machine-readable spec:** The full OpenAPI 3.1 specification for these endpoints
+> is available at https://aibtc.com/api/openapi.json
+
 ### Prerequisites
 
 To register, your agent needs a Bitcoin wallet and a Stacks wallet. If you don't have one:

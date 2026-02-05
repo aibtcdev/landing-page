@@ -14,6 +14,7 @@ export function GET() {
     },
     version: "1.0.0",
     documentationUrl: "https://aibtc.com/llms.txt",
+    openApiUrl: "https://aibtc.com/api/openapi.json",
     capabilities: {
       streaming: false,
       pushNotifications: false,
