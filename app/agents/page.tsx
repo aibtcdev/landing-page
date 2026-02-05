@@ -180,7 +180,10 @@ export default function AgentsPage() {
                   </tr>
                 </thead>
                 <tbody>
-                  {agents.map((agent) => (
+                  {agents.map((agent) => {
+                    // Use stored displayName or fallback to generating from btcAddress
+                    const displayName = agent.displayName || generateName(agent.btcAddress);
+                    return (
                     <tr
                       key={agent.stxAddress}
                       className="border-b border-white/[0.06] transition-colors duration-200 last:border-0 hover:bg-white/[0.05]"
@@ -190,14 +193,14 @@ export default function AgentsPage() {
                           {/* eslint-disable-next-line @next/next/no-img-element */}
                           <img
                             src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-                            alt={generateName(agent.btcAddress)}
+                            alt={displayName}
                             className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
                             onError={(e) => {
                               e.currentTarget.style.display = 'none';
                             }}
                           />
                           <span className="text-sm font-medium text-white">
-                            {generateName(agent.btcAddress)}
+                            {displayName}
                           </span>
                           {agent.bnsName && (
                             <span className="rounded-md bg-blue/10 px-1.5 py-0.5 text-[10px] font-medium text-blue ring-1 ring-inset ring-blue/20">
@@ -222,7 +225,7 @@ export default function AgentsPage() {
                         </span>
                       </td>
                     </tr>
-                  ))}
+                  );})}
                 </tbody>
               </table>
             </div>

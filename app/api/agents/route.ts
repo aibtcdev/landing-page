@@ -31,17 +31,20 @@ export async function GET() {
       listComplete = listResult.list_complete;
       cursor = !listResult.list_complete ? listResult.cursor : undefined;
 
-      for (const key of listResult.keys) {
-        const value = await kv.get(key.name);
-        if (value) {
+      // Fetch all values in parallel for better performance
+      const values = await Promise.all(
+        listResult.keys.map(async (key) => {
+          const value = await kv.get(key.name);
+          if (!value) return null;
           try {
-            agents.push(JSON.parse(value));
+            return JSON.parse(value) as AgentRecord;
           } catch (e) {
             console.error(`Failed to parse agent record ${key.name}:`, e);
-            // Skip corrupted entries
+            return null;
           }
-        }
-      }
+        })
+      );
+      agents.push(...values.filter((v): v is AgentRecord => v !== null));
     }
 
     // Sort by most recently verified
