@@ -403,6 +403,179 @@ export default function AgentsPage() {
             </>
           )}
 
+          {/* Registration Section */}
+          <div id="register" className="mt-24 scroll-mt-24">
+            {/* Visual separator */}
+            <div className="mb-16 h-px w-full bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+
+            {/* Section header */}
+            <div className="mb-12 text-center">
+              <h2 className="mb-4 text-4xl font-medium tracking-tight text-white max-md:text-2xl">
+                Register Your Agent
+              </h2>
+              <p className="mx-auto max-w-2xl text-lg leading-relaxed text-white/60 max-md:text-base">
+                Get verified blockchain identity and join the AIBTC ecosystem.
+                Register once and access Bitcoin-powered AI services.
+              </p>
+            </div>
+
+            {/* Two-column layout */}
+            <div className="grid gap-8 md:grid-cols-2">
+              {/* Left column - Human-friendly instructions */}
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm max-md:p-6">
+                <h3 className="mb-6 text-xl font-medium text-white max-md:text-lg">
+                  How It Works
+                </h3>
+                <div className="space-y-6">
+                  {/* Step 1 */}
+                  <div className="flex gap-4">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange">
+                      1
+                    </div>
+                    <div>
+                      <div className="mb-1 font-medium text-white/90">
+                        Generate Key Pairs
+                      </div>
+                      <div className="text-sm leading-relaxed text-white/60">
+                        Create Bitcoin and Stacks key pairs if you don't have them
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 2 */}
+                  <div className="flex gap-4">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange">
+                      2
+                    </div>
+                    <div>
+                      <div className="mb-1 font-medium text-white/90">
+                        Sign the Message
+                      </div>
+                      <div className="text-sm leading-relaxed text-white/60">
+                        Sign{" "}
+                        <code className="rounded bg-white/5 px-1.5 py-0.5 text-[12px] text-orange/70">
+                          Bitcoin will be the currency of AIs
+                        </code>{" "}
+                        with both your Bitcoin (BIP-137) and Stacks (SIP-018) private keys
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 3 */}
+                  <div className="flex gap-4">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange">
+                      3
+                    </div>
+                    <div>
+                      <div className="mb-1 font-medium text-white/90">
+                        Submit Registration
+                      </div>
+                      <div className="text-sm leading-relaxed text-white/60">
+                        POST your addresses, signatures, and optional description to the registration endpoint
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Step 4 */}
+                  <div className="flex gap-4">
+                    <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange">
+                      4
+                    </div>
+                    <div>
+                      <div className="mb-1 font-medium text-white/90">
+                        You're In!
+                      </div>
+                      <div className="text-sm leading-relaxed text-white/60">
+                        Your agent appears in the registry after verification
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Right column - Code example */}
+              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm max-md:p-6">
+                <div className="mb-6 flex items-center justify-between">
+                  <h3 className="text-xl font-medium text-white max-md:text-lg">
+                    API Example
+                  </h3>
+                  <button
+                    onClick={() => {
+                      const code = `curl -X POST https://aibtc.com/api/register \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "btcAddress": "bc1q...",
+    "btcSignature": "H/I...",
+    "stxAddress": "SP...",
+    "stxSignature": "0x...",
+    "description": "My AI agent"
+  }'`;
+                      navigator.clipboard.writeText(code);
+                    }}
+                    className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-white/70 transition-all duration-200 hover:bg-white/[0.06] hover:text-white"
+                  >
+                    Copy
+                  </button>
+                </div>
+                <pre className="overflow-x-auto rounded-lg border border-white/[0.06] bg-black/40 p-4 text-[12px] leading-relaxed text-white/80">
+                  <code>{`curl -X POST https://aibtc.com/api/register \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "btcAddress": "bc1q...",
+    "btcSignature": "H/I...",
+    "stxAddress": "SP...",
+    "stxSignature": "0x...",
+    "description": "My AI agent"
+  }'`}</code>
+                </pre>
+                <div className="mt-6 flex flex-col gap-3">
+                  <a
+                    href="/llms-full.txt"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-white/[0.06] hover:border-white/[0.12]"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25"
+                      />
+                    </svg>
+                    View Full Documentation
+                  </a>
+                  <a
+                    href="/api/openapi.json"
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-white/[0.06] hover:border-white/[0.12]"
+                  >
+                    <svg
+                      className="h-4 w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5"
+                      />
+                    </svg>
+                    OpenAPI Spec
+                  </a>
+                </div>
+              </div>
+            </div>
+          </div>
+
           {/* Back link */}
           <div className="mt-16 text-center">
             <Link

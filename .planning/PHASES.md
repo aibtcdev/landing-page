@@ -17,7 +17,8 @@ Commits: cc63f99
 
 ## Phase 4: Agent Registry Table - Add Agent CTAs
 Goal: Add CTAs to encourage agent registration within the registry table
-Status: `pending`
+Status: `completed`
+Commits: a7bc60d, bdaa41b, f939536
 
 ## Phase 5: Below Table Registration Section
 Goal: Add dedicated registration section below the registry table
