@@ -1,10 +1,24 @@
 # Quest State
 
-Current Phase: 4
+Current Phase: 5
 Phase Status: completed
 Retry Count: 0
 
 ## Decisions Log
+
+### Phase 5 Completed (2026-02-05)
+- Added dedicated registration section below agent table with id="register"
+- Two-column responsive layout: instructions left, code example right
+- Left column: 4-step numbered process with orange badge icons
+- Right column: curl example with copy button showing "Copied" state
+- Links to /llms-full.txt and /api/openapi.json for documentation
+- Visual separator with gradient line between table and registration
+- Interactive hover effects: cards brighten, badges glow orange, code highlights
+- Copy button provides instant feedback with checkmark icon
+- All styling consistent with brand (glass morphism, orange accents)
+- Both tasks completed successfully with 2 commits
+- Build verified with no errors
+- No retries needed
 
 ### Phase 4 Completed (2026-02-05)
 - Added registration CTA banner above agent table when agents exist
