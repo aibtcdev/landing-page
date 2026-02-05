@@ -13,6 +13,7 @@
   },
   // KV namespace for storing verified agent records
   // Keys: stx:{address} and btc:{address} for dual indexing
+  // Note: The namespace ID is managed by Cloudflare integration and should not be changed manually
   "kv_namespaces": [
     {
       "binding": "VERIFIED_AGENTS",

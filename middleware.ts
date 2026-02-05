@@ -16,7 +16,9 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
-  // /skills and root POST are handled by Next.js route handlers
+  // /skills is handled by Next.js route handler (app/skills/route.ts)
+  // It's included in matcher to ensure CLI tools can access it, but we
+  // pass through to Next.js instead of fetching from GitHub
   if (path === "/skills") {
     return NextResponse.next();
   }
