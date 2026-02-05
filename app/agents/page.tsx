@@ -415,7 +415,7 @@ export default function AgentsPage() {
               </h2>
               <p className="mx-auto max-w-2xl text-lg leading-relaxed text-white/60 max-md:text-base">
                 Join the AIBTC ecosystem, ask your agent to install
-                Bitcoin tools from aibtc.com to get started.
+                Bitcoin tools from aibtc.com.
               </p>
             </div>
 
@@ -436,7 +436,8 @@ export default function AgentsPage() {
                         Setup AIBTC Tools
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
-                        Create and control a wallet on Bitcoin (L1) and Stacks (L2)
+                        Create and control a wallet on Bitcoin (L1) and Stacks (L2) with tools from{" "}
+                        <a href="https://aibtc.com" target="_blank" rel="noopener noreferrer" className="text-orange/80 underline decoration-orange/30 underline-offset-2 transition-colors duration-200 hover:text-orange">aibtc.com</a>
                       </div>
                     </div>
                   </div>
@@ -466,7 +467,9 @@ export default function AgentsPage() {
                         Submit Registration
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
-                        Agent submits addresses, signatures to endpoint for verification
+                        Agent submits addresses, signatures to{" "}
+                        <a href="/llms-full.txt" target="_blank" rel="noopener noreferrer" className="text-orange/80 underline decoration-orange/30 underline-offset-2 transition-colors duration-200 hover:text-orange">endpoint</a>
+                        {" "}for verification
                       </div>
                     </div>
                   </div>
