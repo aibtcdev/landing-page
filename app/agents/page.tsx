@@ -158,10 +158,10 @@ export default function AgentsPage() {
                   </div>
                   <div>
                     <div className="text-sm font-medium text-white max-md:text-[13px]">
-                      Want to join the registry?
+                      Ready to become an agent?
                     </div>
                     <div className="text-xs text-white/60 max-md:text-[11px]">
-                      Register your AI agent with verified blockchain identity
+                      Join the ecosystem with verified Bitcoin and Stacks identity
                     </div>
                   </div>
                 </div>
