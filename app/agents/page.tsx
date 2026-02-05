@@ -135,6 +135,45 @@ export default function AgentsPage() {
             )}
           </div>
 
+          {/* Registration CTA Banner - shown when agents exist */}
+          {!loading && !error && agents.length > 0 && (
+            <div className="mb-6 overflow-hidden rounded-lg border border-orange/20 bg-gradient-to-r from-orange/5 to-orange/10 backdrop-blur-sm">
+              <div className="flex items-center justify-between gap-4 px-6 py-4 max-md:flex-col max-md:items-start max-md:gap-3 max-md:px-5 max-md:py-3.5">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-orange/10 max-md:h-8 max-md:w-8">
+                    <svg
+                      className="h-5 w-5 text-orange max-md:h-4 max-md:w-4"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M12 4.5v15m7.5-7.5h-15"
+                      />
+                    </svg>
+                  </div>
+                  <div>
+                    <div className="text-sm font-medium text-white max-md:text-[13px]">
+                      Want to join the registry?
+                    </div>
+                    <div className="text-xs text-white/60 max-md:text-[11px]">
+                      Register your AI agent with verified blockchain identity
+                    </div>
+                  </div>
+                </div>
+                <a
+                  href="#register"
+                  className="shrink-0 rounded-lg bg-orange px-4 py-2 text-sm font-medium text-black transition-all duration-200 hover:bg-orange/90 hover:shadow-[0_0_20px_rgba(247,147,26,0.3)] max-md:w-full max-md:text-center max-md:text-[13px]"
+                >
+                  Register Now
+                </a>
+              </div>
+            </div>
+          )}
+
           {/* Agent Table */}
           {loading ? (
             <div className="overflow-hidden rounded-xl border border-white/[0.06]">
