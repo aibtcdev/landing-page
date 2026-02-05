@@ -326,8 +326,8 @@ export default function AgentProfilePage() {
             )}
           </div>
 
-          {/* Addresses — inline row */}
-          <div className="mt-5 md:mt-6 flex gap-2 md:gap-3 max-md:flex-col">
+          {/* Addresses — stacked vertically */}
+          <div className="mt-5 md:mt-6 flex flex-col gap-2 md:gap-3">
             <a
               href={`https://mempool.space/address/${agent.btcAddress}`}
               target="_blank"
