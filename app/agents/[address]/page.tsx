@@ -15,9 +15,12 @@ interface AgentRecord {
   verifiedAt: string;
 }
 
-function truncateAddress(address: string) {
-  if (address.length <= 16) return address;
-  return `${address.slice(0, 8)}...${address.slice(-8)}`;
+interface ClaimInfo {
+  status: "pending" | "verified" | "rewarded" | "failed";
+  rewardSatoshis: number;
+  rewardTxid: string | null;
+  tweetUrl: string | null;
+  claimedAt: string;
 }
 
 export default function AgentProfilePage() {
@@ -28,8 +31,14 @@ export default function AgentProfilePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
-  const [claimStatus, setClaimStatus] = useState<"idle" | "checking" | "claimed" | "eligible">("idle");
 
+  // Claim state
+  const [claim, setClaim] = useState<ClaimInfo | null>(null);
+  const [tweetUrlInput, setTweetUrlInput] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [claimError, setClaimError] = useState<string | null>(null);
+
+  // Fetch agent data
   useEffect(() => {
     async function fetchAgent() {
       try {
@@ -62,15 +71,31 @@ export default function AgentProfilePage() {
     }
   }, [address]);
 
+  // Fetch existing claim status on mount
+  useEffect(() => {
+    if (!agent) return;
+    fetch(`/api/claims/viral?btcAddress=${encodeURIComponent(agent.btcAddress)}`)
+      .then((r) => r.json())
+      .then((raw: unknown) => {
+        const data = raw as { claimed?: boolean; eligible?: boolean; claim?: ClaimInfo };
+        if (data.claim) {
+          setClaim(data.claim);
+        }
+      })
+      .catch(() => {});
+  }, [agent]);
+
   const profileUrl = typeof window !== "undefined"
     ? `${window.location.origin}/agents/${agent?.btcAddress}`
     : "";
 
+  const displayName = agent ? (agent.displayName || generateName(agent.btcAddress)) : "";
+
   const tweetText = agent
-    ? `My AIBTC agent is ${agent.displayName || generateName(agent.btcAddress)} 🤖₿\n\n${profileUrl}\n\n@aibtcdev`
+    ? `My AIBTC agent is ${displayName} 🤖₿\n\n${profileUrl}\n\n@aibtcdev`
     : "";
 
-  const tweetUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+  const tweetIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
 
   const handleCopyLink = () => {
     navigator.clipboard.writeText(profileUrl);
@@ -78,28 +103,38 @@ export default function AgentProfilePage() {
     setTimeout(() => setCopied(false), 2000);
   };
 
-  const handleClaimReward = async () => {
-    if (!agent) return;
-    setClaimStatus("checking");
+  const handleSubmitClaim = async () => {
+    if (!agent || !tweetUrlInput.trim()) return;
+    setSubmitting(true);
+    setClaimError(null);
 
     try {
       const res = await fetch("/api/claims/viral", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ btcAddress: agent.btcAddress }),
+        body: JSON.stringify({
+          btcAddress: agent.btcAddress,
+          tweetUrl: tweetUrlInput.trim(),
+        }),
       });
 
-      const data = (await res.json()) as { claimed?: boolean; eligible?: boolean };
+      const data = (await res.json()) as {
+        error?: string;
+        claim?: ClaimInfo;
+        claimed?: boolean;
+        eligible?: boolean;
+      };
 
-      if (data.claimed) {
-        setClaimStatus("claimed");
-      } else if (data.eligible) {
-        setClaimStatus("eligible");
-      } else {
-        setClaimStatus("idle");
+      if (!res.ok) {
+        setClaimError(data.error || "Verification failed");
+      } else if (data.claim) {
+        setClaim(data.claim);
+        setClaimError(null);
       }
     } catch {
-      setClaimStatus("idle");
+      setClaimError("Network error. Please try again.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -148,13 +183,13 @@ export default function AgentProfilePage() {
     );
   }
 
-  const displayName = agent.displayName || generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+  const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
   return (
     <>
       <Navbar />
-      {/* Animated Background - matching main page */}
+      {/* Animated Background */}
       <div
         className="fixed inset-0 -z-10 min-h-[100lvh] w-full overflow-hidden bg-gradient-to-br from-black via-[#0a0a0a] to-[#050208]"
         aria-hidden="true"
@@ -231,74 +266,149 @@ export default function AgentProfilePage() {
               </div>
             </div>
 
-            {/* Viral Claim Section */}
+            {/* Claim Section */}
             <div className="mt-8 border-t border-white/[0.06] pt-8">
-              <div className="mb-2 text-center">
-                <h2 className="text-lg font-medium text-white">
-                  Claim Your Reward
-                </h2>
-                <p className="mt-1 text-sm text-white/50">
-                  Tweet about your agent and receive{" "}
-                  <span className="font-medium text-orange">5,000-10,000 sats</span>{" "}
-                  sent directly to your wallet.
-                </p>
-              </div>
+              <h2 className="text-center text-lg font-medium text-white">
+                Claim Your Reward
+              </h2>
+              <p className="mt-1 text-center text-sm text-white/50">
+                Tweet about your agent and receive{" "}
+                <span className="font-medium text-orange">5,000-10,000 sats</span>{" "}
+                sent directly to your wallet.
+              </p>
 
-              <div className="mt-6 space-y-3">
-                {/* Tweet Button */}
-                <a
-                  href={tweetUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.08] px-6 py-3.5 text-sm font-medium text-white transition-colors duration-200 hover:bg-white/[0.12]"
-                >
-                  <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                  Post on X
-                </a>
+              {hasExistingClaim ? (
+                /* Already claimed — show status */
+                <div className="mt-6 rounded-lg border border-white/[0.06] bg-white/[0.03] p-5">
+                  <div className="flex items-center gap-2">
+                    {claim.status === "rewarded" ? (
+                      <svg className="h-5 w-5 shrink-0 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      </svg>
+                    ) : (
+                      <div className="h-2 w-2 shrink-0 rounded-full bg-orange animate-pulse" />
+                    )}
+                    <span className="text-sm font-medium text-white">
+                      {claim.status === "rewarded" && "Reward sent!"}
+                      {claim.status === "verified" && "Tweet verified — reward pending"}
+                      {claim.status === "pending" && "Claim submitted — verifying"}
+                    </span>
+                  </div>
+                  <div className="mt-3 space-y-1.5 text-xs text-white/40">
+                    <div className="flex justify-between">
+                      <span>Reward</span>
+                      <span className="text-orange">{claim.rewardSatoshis?.toLocaleString()} sats</span>
+                    </div>
+                    {claim.tweetUrl && (
+                      <div className="flex justify-between">
+                        <span>Tweet</span>
+                        <a href={claim.tweetUrl} target="_blank" rel="noopener noreferrer" className="text-blue hover:underline">
+                          View tweet
+                        </a>
+                      </div>
+                    )}
+                    {claim.rewardTxid && (
+                      <div className="flex justify-between">
+                        <span>Transaction</span>
+                        <a
+                          href={`https://mempool.space/tx/${claim.rewardTxid}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="font-mono text-orange hover:underline"
+                        >
+                          {claim.rewardTxid.slice(0, 8)}...
+                        </a>
+                      </div>
+                    )}
+                    {claim.claimedAt && (
+                      <div className="flex justify-between">
+                        <span>Claimed</span>
+                        <span>{new Date(claim.claimedAt).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}</span>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              ) : (
+                /* No claim yet — show the flow */
+                <div className="mt-6 space-y-4">
+                  {/* Step 1: Tweet */}
+                  <div>
+                    <div className="mb-2 flex items-center gap-2 text-xs font-medium text-white/40">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/[0.08] text-[10px]">1</span>
+                      Post on X
+                    </div>
+                    <a
+                      href={tweetIntentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.08] px-6 py-3.5 text-sm font-medium text-white transition-colors duration-200 hover:bg-white/[0.12]"
+                    >
+                      <svg className="h-4 w-4" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      </svg>
+                      Tweet about {displayName}
+                    </a>
+                  </div>
 
-                {/* Copy Link */}
-                <button
-                  onClick={handleCopyLink}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-6 py-3 text-sm text-white/70 transition-colors duration-200 hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
-                >
-                  {copied ? (
-                    <>
-                      <svg className="h-4 w-4 text-[#4dcd5e]" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
-                      </svg>
-                      Copied!
-                    </>
-                  ) : (
-                    <>
-                      <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
-                      </svg>
-                      Copy Profile Link
-                    </>
+                  {/* Step 2: Paste URL */}
+                  <div>
+                    <div className="mb-2 flex items-center gap-2 text-xs font-medium text-white/40">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/[0.08] text-[10px]">2</span>
+                      Paste your tweet URL
+                    </div>
+                    <input
+                      type="url"
+                      value={tweetUrlInput}
+                      onChange={(e) => { setTweetUrlInput(e.target.value); setClaimError(null); }}
+                      placeholder="https://x.com/you/status/..."
+                      className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-3 font-mono text-sm text-white placeholder:text-white/20 outline-none transition-colors duration-200 focus:border-orange/50 focus:bg-white/[0.05]"
+                    />
+                  </div>
+
+                  {/* Step 3: Verify */}
+                  <div>
+                    <div className="mb-2 flex items-center gap-2 text-xs font-medium text-white/40">
+                      <span className="flex h-5 w-5 items-center justify-center rounded-full bg-white/[0.08] text-[10px]">3</span>
+                      Verify and claim
+                    </div>
+                    <button
+                      onClick={handleSubmitClaim}
+                      disabled={submitting || !tweetUrlInput.trim()}
+                      className="w-full rounded-lg bg-orange px-6 py-3.5 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-40 disabled:active:scale-100"
+                    >
+                      {submitting ? "Verifying tweet..." : "Verify & Claim Reward"}
+                    </button>
+                  </div>
+
+                  {claimError && (
+                    <div className="rounded-lg border border-red-500/20 bg-red-500/[0.06] p-3 text-xs text-red-400">
+                      {claimError}
+                    </div>
                   )}
-                </button>
+                </div>
+              )}
 
-                {/* Check Claim Status */}
-                <button
-                  onClick={handleClaimReward}
-                  disabled={claimStatus === "checking"}
-                  className="w-full rounded-lg bg-orange px-6 py-3.5 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-50 disabled:active:scale-100"
-                >
-                  {claimStatus === "checking" && "Checking..."}
-                  {claimStatus === "claimed" && "Reward Claimed"}
-                  {claimStatus === "eligible" && "Eligible — Reward incoming"}
-                  {claimStatus === "idle" && "Check Claim Status"}
-                </button>
-              </div>
-
-              {/* Instructions */}
-              <div className="mt-6 space-y-1 text-center text-xs text-white/30">
-                <p>1. Click &ldquo;Post on X&rdquo; and publish the tweet</p>
-                <p>2. Click &ldquo;Check Claim Status&rdquo; to verify</p>
-                <p>3. Receive BTC directly to your wallet</p>
-              </div>
+              {/* Copy Link */}
+              <button
+                onClick={handleCopyLink}
+                className="mt-4 flex w-full items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-6 py-3 text-sm text-white/70 transition-colors duration-200 hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
+              >
+                {copied ? (
+                  <>
+                    <svg className="h-4 w-4 text-[#4dcd5e]" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                    </svg>
+                    Copied!
+                  </>
+                ) : (
+                  <>
+                    <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M15.75 17.25v3.375c0 .621-.504 1.125-1.125 1.125h-9.75a1.125 1.125 0 01-1.125-1.125V7.875c0-.621.504-1.125 1.125-1.125H6.75a9.06 9.06 0 011.5.124m7.5 10.376h3.375c.621 0 1.125-.504 1.125-1.125V11.25c0-4.46-3.243-8.161-7.5-8.876a9.06 9.06 0 00-1.5-.124H9.375c-.621 0-1.125.504-1.125 1.125v3.5m7.5 10.375H9.375a1.125 1.125 0 01-1.125-1.125v-9.25m12 6.625v-1.875a3.375 3.375 0 00-3.375-3.375h-1.5a1.125 1.125 0 01-1.125-1.125v-1.5a3.375 3.375 0 00-3.375-3.375H9.75" />
+                    </svg>
+                    Copy Profile Link
+                  </>
+                )}
+              </button>
             </div>
           </div>
 

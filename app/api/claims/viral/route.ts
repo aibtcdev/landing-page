@@ -6,25 +6,23 @@ import { generateName } from "@/lib/name-generator";
  * Viral Claim API
  *
  * Flow:
- * 1. User tweets "My AIBTC agent is [name]" with link to profile
- * 2. User clicks "Check Claim Status" on their profile page
- * 3. This API verifies the tweet exists and matches expected format
- * 4. If valid, marks claim as complete and queues BTC reward
- *
- * Reward: $5-10 in BTC sent to agent's Bitcoin address
+ * 1. User tweets "My AIBTC agent is [name]" via the profile page
+ * 2. User pastes their tweet URL back on the profile page
+ * 3. POST verifies the tweet exists via oEmbed and contains expected text
+ * 4. If valid, marks claim as verified and queues reward
  */
 
 interface ClaimRecord {
   btcAddress: string;
   displayName: string;
-  tweetUrl: string | null;
+  tweetUrl: string;
+  tweetAuthor: string | null;
   claimedAt: string;
   rewardSatoshis: number;
   rewardTxid: string | null;
   status: "pending" | "verified" | "rewarded" | "failed";
 }
 
-// Reward amount in satoshis ($5-10 at ~$100k BTC = 5000-10000 sats)
 const MIN_REWARD_SATS = 5000;
 const MAX_REWARD_SATS = 10000;
 
@@ -32,11 +30,54 @@ function getRandomReward(): number {
   return Math.floor(Math.random() * (MAX_REWARD_SATS - MIN_REWARD_SATS + 1)) + MIN_REWARD_SATS;
 }
 
+/** Normalize x.com / twitter.com URLs to a canonical form */
+function normalizeTweetUrl(url: string): string | null {
+  try {
+    const parsed = new URL(url);
+    if (parsed.hostname !== "twitter.com" && parsed.hostname !== "x.com" && parsed.hostname !== "www.twitter.com" && parsed.hostname !== "www.x.com") {
+      return null;
+    }
+    // Expected path: /{username}/status/{id}
+    const match = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
+    if (!match) return null;
+    return `https://x.com/${match[1]}/status/${match[2]}`;
+  } catch {
+    return null;
+  }
+}
+
+/** Fetch tweet text via Twitter's public oEmbed endpoint (no API key needed) */
+async function fetchTweetContent(tweetUrl: string): Promise<{ text: string; author: string } | null> {
+  try {
+    const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true`;
+    const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(8000) });
+    if (!res.ok) return null;
+
+    const data = (await res.json()) as { html?: string; author_name?: string };
+    if (!data.html) return null;
+
+    // Strip HTML tags to get plain text
+    const text = data.html
+      .replace(/<[^>]*>/g, " ")
+      .replace(/&amp;/g, "&")
+      .replace(/&lt;/g, "<")
+      .replace(/&gt;/g, ">")
+      .replace(/&quot;/g, '"')
+      .replace(/&#39;/g, "'")
+      .replace(/\s+/g, " ")
+      .trim();
+
+    return { text, author: data.author_name || "" };
+  } catch {
+    return null;
+  }
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
       btcAddress?: string;
-      tweetUrl?: string; // Optional: user can provide tweet URL directly
+      tweetUrl?: string;
     };
 
     const { btcAddress, tweetUrl } = body;
@@ -44,6 +85,22 @@ export async function POST(request: NextRequest) {
     if (!btcAddress) {
       return NextResponse.json(
         { error: "btcAddress is required" },
+        { status: 400 }
+      );
+    }
+
+    if (!tweetUrl) {
+      return NextResponse.json(
+        { error: "tweetUrl is required" },
+        { status: 400 }
+      );
+    }
+
+    // Validate and normalize tweet URL
+    const normalizedUrl = normalizeTweetUrl(tweetUrl);
+    if (!normalizedUrl) {
+      return NextResponse.json(
+        { error: "Invalid tweet URL. Must be a twitter.com or x.com status link (e.g. https://x.com/user/status/123)." },
         { status: 400 }
       );
     }
@@ -64,10 +121,7 @@ export async function POST(request: NextRequest) {
     const displayName = agent.displayName || generateName(btcAddress);
 
     // Check for existing claim
-    // Note: In production, use a separate CLAIMS KV namespace
-    // For now, we'll store claims with prefix "claim:"
     const existingClaim = await agentsKv.get(`claim:${btcAddress}`);
-
     if (existingClaim) {
       const claim = JSON.parse(existingClaim) as ClaimRecord;
 
@@ -80,6 +134,7 @@ export async function POST(request: NextRequest) {
             rewardSatoshis: claim.rewardSatoshis,
             rewardTxid: claim.rewardTxid,
             claimedAt: claim.claimedAt,
+            status: claim.status,
           },
         });
       }
@@ -87,94 +142,69 @@ export async function POST(request: NextRequest) {
       if (claim.status === "verified" || claim.status === "pending") {
         return NextResponse.json({
           eligible: true,
-          message: "Claim verified! Reward will be sent shortly.",
+          message: "Claim already submitted. Reward will be sent shortly.",
           claim: {
             displayName: claim.displayName,
             rewardSatoshis: claim.rewardSatoshis,
             status: claim.status,
+            tweetUrl: claim.tweetUrl,
           },
         });
       }
     }
 
-    // TODO: Implement Twitter API verification
-    // For now, we'll use a simplified flow:
-    // 1. If tweetUrl provided, validate format and mark as pending
-    // 2. Background job will verify and send reward
-    //
-    // Expected tweet format:
-    // "My AIBTC agent is [DisplayName] 🤖₿\n\nhttps://aibtc.com/agents/[btcAddress]\n\n@aibtcdev"
-
-    const expectedTweetPattern = new RegExp(
-      `My AIBTC agent is ${displayName}.*${btcAddress}`,
-      "i"
-    );
-
-    // If no tweet URL provided, return instructions
-    if (!tweetUrl) {
-      const profileUrl = `https://aibtc.com/agents/${btcAddress}`;
-      const expectedTweet = `My AIBTC agent is ${displayName} 🤖₿\n\n${profileUrl}\n\n@aibtcdev`;
-
-      return NextResponse.json({
-        claimed: false,
-        eligible: false,
-        instructions: {
-          step1: "Tweet the following text:",
-          tweetTemplate: expectedTweet,
-          tweetUrl: `https://twitter.com/intent/tweet?text=${encodeURIComponent(expectedTweet)}`,
-          step2: "After tweeting, call this endpoint again with tweetUrl parameter",
-          step3: "Once verified, you'll receive $5-10 in BTC!",
-        },
-      });
-    }
-
-    // Validate tweet URL format
-    if (!tweetUrl.includes("twitter.com/") && !tweetUrl.includes("x.com/")) {
+    // Fetch and verify tweet content via oEmbed
+    const tweet = await fetchTweetContent(normalizedUrl);
+    if (!tweet) {
       return NextResponse.json(
-        { error: "Invalid tweet URL. Must be a twitter.com or x.com link." },
+        { error: "Could not fetch tweet. Make sure the tweet is public and the URL is correct." },
         { status: 400 }
       );
     }
 
-    // Create claim record (pending verification)
+    // Verify tweet mentions AIBTC and the agent name or address
+    const tweetLower = tweet.text.toLowerCase();
+    const hasAibtc = tweetLower.includes("aibtc");
+    const hasAgent = tweetLower.includes(displayName.toLowerCase()) || tweetLower.includes(btcAddress.toLowerCase());
+
+    if (!hasAibtc || !hasAgent) {
+      return NextResponse.json(
+        {
+          error: "Tweet does not match expected content. Make sure your tweet includes your agent name and mentions AIBTC.",
+          expected: { displayName, btcAddress: btcAddress.slice(0, 12) + "..." },
+          found: tweet.text.slice(0, 200),
+        },
+        { status: 400 }
+      );
+    }
+
+    // Tweet verified — create claim
     const rewardAmount = getRandomReward();
     const claimRecord: ClaimRecord = {
       btcAddress,
       displayName,
-      tweetUrl,
+      tweetUrl: normalizedUrl,
+      tweetAuthor: tweet.author,
       claimedAt: new Date().toISOString(),
       rewardSatoshis: rewardAmount,
       rewardTxid: null,
-      status: "pending",
+      status: "verified",
     };
 
-    // Store claim
     await agentsKv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
-
-    // TODO: In production, trigger background job to:
-    // 1. Fetch tweet via Twitter API
-    // 2. Verify tweet content matches expected format
-    // 3. Verify tweet author (optional - for extra security)
-    // 4. Send BTC reward via Lightning or on-chain
-    // 5. Update claim status to "rewarded" with txid
 
     return NextResponse.json({
       success: true,
       eligible: true,
-      message: "Claim submitted! Verifying tweet...",
+      message: "Tweet verified! Your reward will be sent shortly.",
       claim: {
         displayName,
         btcAddress,
-        tweetUrl,
+        tweetUrl: normalizedUrl,
+        tweetAuthor: tweet.author,
         rewardSatoshis: rewardAmount,
-        estimatedRewardUSD: `$${((rewardAmount / 100000000) * 100000).toFixed(2)}`, // Assuming $100k BTC
-        status: "pending",
+        status: "verified",
       },
-      nextSteps: [
-        "Your tweet is being verified",
-        "Once confirmed, BTC will be sent to your wallet",
-        "Check back in a few minutes for status update",
-      ],
     });
   } catch (e) {
     console.error("Viral claim error:", e);
@@ -206,7 +236,6 @@ export async function GET(request: NextRequest) {
       return NextResponse.json({
         claimed: false,
         eligible: false,
-        message: "No claim found. Tweet about your agent to claim!",
       });
     }
 
@@ -220,6 +249,7 @@ export async function GET(request: NextRequest) {
         status: claim.status,
         rewardSatoshis: claim.rewardSatoshis,
         rewardTxid: claim.rewardTxid,
+        tweetUrl: claim.tweetUrl,
         claimedAt: claim.claimedAt,
       },
     });
