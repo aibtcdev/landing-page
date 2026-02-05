@@ -7,7 +7,8 @@ Commits: 6f6242c, 3e89510, 7df091a
 
 ## Phase 2: Agent Profile - Address Links and Display
 Goal: Link Stacks address to Hiro explorer and show full addresses on desktop
-Status: `pending`
+Status: `completed`
+Commits: 341cbfd, 0648e56
 
 ## Phase 3: Agent Profile - Claim Flow Improvements
 Goal: Improve claim confirmation display when agent is already claimed

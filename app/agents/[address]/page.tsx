@@ -126,6 +126,26 @@ export default function AgentProfilePage() {
 
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
+  // Helper to format claim date
+  const formatClaimDate = (isoDate: string) => {
+    const date = new Date(isoDate);
+    return date.toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" });
+  };
+
+  // Helper to get status styling
+  const getStatusStyle = (status: string) => {
+    switch (status) {
+      case "rewarded":
+        return { text: "Rewarded", color: "text-[#4dcd5e]", bg: "bg-[#4dcd5e]/10", ring: "ring-[#4dcd5e]/20" };
+      case "verified":
+        return { text: "Verified", color: "text-blue", bg: "bg-blue/10", ring: "ring-blue/20" };
+      case "pending":
+        return { text: "Pending", color: "text-orange", bg: "bg-orange/10", ring: "ring-orange/20" };
+      default:
+        return { text: "Unknown", color: "text-white/60", bg: "bg-white/[0.04]", ring: "ring-white/[0.08]" };
+    }
+  };
+
   // Shared background
   const bg = (
     <div
@@ -340,17 +360,64 @@ export default function AgentProfilePage() {
 
           {/* Claim */}
           {hasExistingClaim ? (
-            <div className="flex items-center justify-between rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3 md:px-5 md:py-4">
+            <div className="space-y-2.5 md:space-y-3 rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3 md:px-5 md:py-4">
+              {/* Header with verification icon */}
               <div className="flex items-center gap-2">
-                <svg className="h-4 w-4 md:h-5 md:w-5 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
+                <svg className="h-5 w-5 md:h-6 md:w-6 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                 </svg>
-                <span className="text-sm md:text-base text-white/80">Agent claimed</span>
+                <span className="text-sm md:text-base font-medium text-white/90">Agent Claimed</span>
               </div>
+
+              {/* Claim details */}
+              <div className="space-y-1.5 md:space-y-2 text-xs md:text-sm">
+                {claim.tweetAuthor && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white/50">Claimed by:</span>
+                    <a
+                      href={`https://x.com/${claim.tweetAuthor}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-white/80 hover:text-blue transition-colors"
+                    >
+                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
+                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      </svg>
+                      @{claim.tweetAuthor}
+                    </a>
+                  </div>
+                )}
+
+                {claim.claimedAt && (
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white/50">Claimed on:</span>
+                    <span className="text-white/80">{formatClaimDate(claim.claimedAt)}</span>
+                  </div>
+                )}
+
+                <div className="flex items-center gap-1.5">
+                  <span className="text-white/50">Status:</span>
+                  <span className={`inline-flex items-center gap-1 rounded-md ${getStatusStyle(claim.status).bg} px-2 py-0.5 text-[11px] md:text-xs font-medium ${getStatusStyle(claim.status).color} ring-1 ring-inset ${getStatusStyle(claim.status).ring}`}>
+                    {getStatusStyle(claim.status).text}
+                  </span>
+                </div>
+              </div>
+
+              {/* View tweet button */}
               {claim.tweetUrl && (
-                <a href={claim.tweetUrl} target="_blank" rel="noopener noreferrer" className="text-xs md:text-sm text-blue hover:underline">
-                  View tweet
-                </a>
+                <div className="pt-1">
+                  <a
+                    href={claim.tweetUrl}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="inline-flex items-center gap-1.5 text-xs md:text-sm text-blue hover:text-blue/80 transition-colors"
+                  >
+                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
+                    </svg>
+                    View tweet
+                  </a>
+                </div>
               )}
             </div>
           ) : (
