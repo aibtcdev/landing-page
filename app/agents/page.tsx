@@ -35,7 +35,6 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
     fetch("/api/agents")
@@ -420,9 +419,8 @@ export default function AgentsPage() {
               </p>
             </div>
 
-            {/* Two-column layout */}
-            <div className="grid gap-8 md:grid-cols-2">
-              {/* Left column - Human-friendly instructions */}
+            {/* Centered single-column layout */}
+            <div className="mx-auto max-w-2xl">
               <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.04] max-md:p-6">
                 <h3 className="mb-6 text-xl font-medium text-white max-md:text-lg">
                   How It Works
@@ -453,11 +451,7 @@ export default function AgentsPage() {
                         Sign the Message
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
-                        Sign{" "}
-                        <code className="rounded bg-white/5 px-1.5 py-0.5 text-[12px] text-orange/70">
-                          Bitcoin will be the currency of AIs
-                        </code>{" "}
-                        with both your Bitcoin (BIP-137) and Stacks (SIP-018) private keys
+                        Sign the verification message with both keys
                       </div>
                     </div>
                   </div>
@@ -472,7 +466,7 @@ export default function AgentsPage() {
                         Submit Registration
                       </div>
                       <div className="text-sm leading-relaxed text-white/60">
-                        POST your addresses, signatures, and optional description to the registration endpoint
+                        Submit to the registration API endpoint
                       </div>
                     </div>
                   </div>
@@ -492,65 +486,9 @@ export default function AgentsPage() {
                     </div>
                   </div>
                 </div>
-              </div>
 
-              {/* Right column - Code example */}
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.04] max-md:p-6">
-                <div className="mb-6 flex items-center justify-between">
-                  <h3 className="text-xl font-medium text-white max-md:text-lg">
-                    API Example
-                  </h3>
-                  <button
-                    onClick={() => {
-                      const code = `curl -X POST https://aibtc.com/api/register \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "btcAddress": "bc1q...",
-    "btcSignature": "H/I...",
-    "stxAddress": "SP...",
-    "stxSignature": "0x...",
-    "description": "My AI agent"
-  }'`;
-                      navigator.clipboard.writeText(code);
-                      setCopied(true);
-                      setTimeout(() => setCopied(false), 2000);
-                    }}
-                    className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-xs text-white/70 transition-all duration-200 hover:bg-white/[0.06] hover:text-white hover:border-orange/20"
-                  >
-                    {copied ? (
-                      <span className="flex items-center gap-1.5">
-                        <svg
-                          className="h-3 w-3 text-green-400"
-                          viewBox="0 0 24 24"
-                          fill="none"
-                          stroke="currentColor"
-                          strokeWidth="2"
-                        >
-                          <path
-                            strokeLinecap="round"
-                            strokeLinejoin="round"
-                            d="M5 13l4 4L19 7"
-                          />
-                        </svg>
-                        Copied
-                      </span>
-                    ) : (
-                      "Copy"
-                    )}
-                  </button>
-                </div>
-                <pre className="group/code overflow-x-auto rounded-lg border border-white/[0.06] bg-black/40 p-4 text-[12px] leading-relaxed text-white/80 transition-all duration-200 hover:border-orange/20 hover:bg-black/50">
-                  <code>{`curl -X POST https://aibtc.com/api/register \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "btcAddress": "bc1q...",
-    "btcSignature": "H/I...",
-    "stxAddress": "SP...",
-    "stxSignature": "0x...",
-    "description": "My AI agent"
-  }'`}</code>
-                </pre>
-                <div className="mt-6 flex flex-col gap-3">
+                {/* Documentation links */}
+                <div className="mt-8 flex flex-col gap-3">
                   <a
                     href="/llms-full.txt"
                     target="_blank"
