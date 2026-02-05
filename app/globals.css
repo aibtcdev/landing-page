@@ -50,8 +50,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
-    /* Prevent overscroll bounce on mobile that causes background gaps */
-    overscroll-behavior: none;
   }
 
   body {
@@ -60,16 +58,6 @@
     overflow-x: hidden;
     line-height: 1.6;
     background: #000000;
-    /* Prevent overscroll/bounce revealing background gaps on mobile */
-    overscroll-behavior: none;
-    /* Ensure smooth scrolling on iOS */
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Optimize touch interactions - removes 300ms tap delay and tap highlight */
-  a, button, [role="button"] {
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -112,11 +100,6 @@
   100% { left: 100%; }
 }
 
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
 /* Animation classes */
 .animate-float1 {
   animation: float1 30s ease-in-out infinite;
@@ -140,10 +123,6 @@
 
 .animate-bounce-slow {
   animation: bounce 2.5s ease-in-out infinite;
-}
-
-.animate-blink {
-  animation: blink 1s step-end infinite;
 }
 
 /* Shimmer effect for buttons */
@@ -225,26 +204,11 @@
   outline-offset: 3px;
 }
 
-/* Terminal scrollbar - prevent content shift on all devices */
-.terminal-content {
-  scrollbar-gutter: stable;
+/* Hide scrollbar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-
-/* Custom scrollbar styling for terminal */
-.terminal-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.terminal-content::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
-}
-
-.terminal-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-.terminal-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }
