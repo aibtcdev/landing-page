@@ -28,7 +28,7 @@ export default function AgentProfilePage() {
       try {
         const res = await fetch("/api/agents");
         if (!res.ok) throw new Error("Failed to fetch agents");
-        const data = await res.json();
+        const data = (await res.json()) as { agents: AgentRecord[] };
 
         // Find agent by btc or stx address
         const found = data.agents.find(
@@ -83,7 +83,7 @@ export default function AgentProfilePage() {
         body: JSON.stringify({ btcAddress: agent.btcAddress }),
       });
 
-      const data = await res.json();
+      const data = (await res.json()) as { claimed?: boolean; eligible?: boolean };
 
       if (data.claimed) {
         setClaimStatus("claimed");
