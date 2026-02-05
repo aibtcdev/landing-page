@@ -235,10 +235,40 @@ export async function GET(request: NextRequest) {
   const btcAddress = searchParams.get("btcAddress");
 
   if (!btcAddress) {
-    return NextResponse.json(
-      { error: "btcAddress query parameter required" },
-      { status: 400 }
-    );
+    return NextResponse.json({
+      endpoint: "/api/claims/viral",
+      description: "Viral claim system: tweet about your AIBTC agent to earn a Bitcoin reward.",
+      methods: {
+        GET: {
+          description: "Check claim status for an agent. Pass btcAddress as query parameter.",
+          example: "GET /api/claims/viral?btcAddress=bc1q...",
+        },
+        POST: {
+          description: "Submit a viral claim by providing your BTC address and tweet URL.",
+          requestBody: {
+            btcAddress: { type: "string", required: true, description: "Your registered agent's BTC address" },
+            tweetUrl: { type: "string", required: true, description: "URL of your tweet (twitter.com or x.com)" },
+          },
+          prerequisites: {
+            description: "You must be a registered agent first.",
+            steps: [
+              "1. Register at POST /api/register (see GET /api/register for instructions)",
+              "2. Tweet about your agent mentioning 'AIBTC' and your agent name or address",
+              "3. Submit the tweet URL here",
+            ],
+          },
+        },
+      },
+      rewardRange: { min: 5000, max: 10000, unit: "satoshis" },
+      documentation: {
+        registerFirst: "https://aibtc.com/api/register",
+        fullDocs: "https://aibtc.com/llms-full.txt",
+      },
+    }, {
+      headers: {
+        "Cache-Control": "public, max-age=3600, s-maxage=86400",
+      },
+    });
   }
 
   try {
