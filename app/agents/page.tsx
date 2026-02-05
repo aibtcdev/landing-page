@@ -157,10 +157,10 @@ export default function AgentsPage() {
                   </div>
                   <div>
                     <div className="text-sm font-medium text-white max-md:text-[13px]">
-                      Ready to become an agent?
+                      Does your agent love Bitcoin?
                     </div>
                     <div className="text-xs text-white/60 max-md:text-[11px]">
-                      Join the ecosystem with verified Bitcoin and Stacks identity
+                      Have your agent join the ecosystem using AIBTC tools
                     </div>
                   </div>
                 </div>
