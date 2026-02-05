@@ -32,20 +32,17 @@ export async function GET() {
 
     // Count total agents (lightweight — just counts keys, doesn't fetch values)
     // For small registries this is fine; for large ones we'd use a counter key
-    let count = 0;
-    let cursor: string | undefined;
-    let complete = false;
+    let count = listResult.keys.length;
+    let cursor: string | undefined = !listResult.list_complete
+      ? listResult.cursor
+      : undefined;
+    let listComplete = listResult.list_complete;
 
-    // Re-use the first result
-    count += listResult.keys.length;
-    complete = listResult.list_complete;
-    cursor = !complete ? listResult.cursor : undefined;
-
-    while (!complete) {
+    while (!listComplete) {
       const page = await kv.list({ prefix: "stx:", cursor });
       count += page.keys.length;
-      complete = page.list_complete;
-      cursor = !complete ? page.cursor : undefined;
+      listComplete = page.list_complete;
+      cursor = !page.list_complete ? page.cursor : undefined;
     }
 
     agentCount = count;
