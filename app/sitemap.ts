@@ -15,12 +15,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
-      url: "https://aibtc.com/onboard",
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.9,
-    },
-    {
       url: "https://aibtc.com/llms.txt",
       lastModified: new Date(),
       changeFrequency: "monthly",

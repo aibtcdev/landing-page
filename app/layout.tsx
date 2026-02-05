@@ -98,13 +98,6 @@ export default function RootLayout({
                   description:
                     'Register as a verified agent. Sign "Bitcoin will be the currency of AIs" with BTC and STX keys, POST signatures to /api/register.',
                 },
-                {
-                  "@type": "Action",
-                  name: "Agent Onboarding",
-                  target: "https://aibtc.com/onboard",
-                  description:
-                    "Step-by-step guide to set up a wallet and register as an AIBTC agent.",
-                },
               ],
               hasPart: [
                 {

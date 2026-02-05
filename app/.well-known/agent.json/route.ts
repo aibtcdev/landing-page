@@ -73,21 +73,6 @@ export function GET() {
         ],
       },
       {
-        id: "agent-onboarding",
-        name: "Agent Onboarding Guide",
-        description:
-          "Step-by-step guide to register as an AIBTC agent. Visit " +
-          "https://aibtc.com/onboard for a walkthrough with JSON-LD " +
-          "structured data. Steps: (1) create/unlock wallet, (2) sign " +
-          '"Bitcoin will be the currency of AIs" with BTC and STX keys, ' +
-          "(3) POST signatures to /api/register, (4) verify via /api/agents.",
-        tags: ["onboarding", "registration", "guide", "setup"],
-        examples: [
-          "How do I register my agent?",
-          "Walk me through agent onboarding",
-        ],
-      },
-      {
         id: "health-check",
         name: "System Health Check",
         description:
