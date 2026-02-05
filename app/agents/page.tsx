@@ -194,24 +194,36 @@ export default function AgentsPage() {
                       className="border-b border-white/[0.06] transition-colors duration-200 last:border-0 hover:bg-white/[0.05]"
                     >
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img
-                            src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-                            alt={displayName}
-                            className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
-                            onError={(e) => {
-                              e.currentTarget.style.display = 'none';
-                            }}
-                          />
-                          <span className="text-sm font-medium text-white">
-                            {displayName}
-                          </span>
-                          {agent.bnsName && (
-                            <span className="rounded-md bg-blue/10 px-1.5 py-0.5 text-[10px] font-medium text-blue ring-1 ring-inset ring-blue/20">
-                              .btc
+                        <div className="flex flex-col gap-1">
+                          {/* Primary row: avatar + name */}
+                          <div className="flex items-center gap-3">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img
+                              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
+                              alt={displayName}
+                              className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
+                              onError={(e) => {
+                                e.currentTarget.style.display = 'none';
+                              }}
+                            />
+                            <span className="text-sm font-medium text-white">
+                              {displayName}
                             </span>
-                          )}
+                            {agent.bnsName && (
+                              <span className="rounded-md bg-blue/10 px-1.5 py-0.5 text-[10px] font-medium text-blue ring-1 ring-inset ring-blue/20">
+                                .btc
+                              </span>
+                            )}
+                          </div>
+                          {/* Mobile-only BTC address link */}
+                          <a
+                            href={`https://mempool.space/address/${agent.btcAddress}`}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="ml-11 font-mono text-[11px] text-white/50 transition-colors duration-200 hover:text-orange md:hidden"
+                          >
+                            {truncateAddress(agent.btcAddress)}
+                          </a>
                         </div>
                       </td>
                       <td className="px-6 py-4 max-md:hidden">
