@@ -11,8 +11,8 @@ export async function fetchGitHubScript(scriptPath: string): Promise<NextRespons
     const script = await response.text();
     return new NextResponse(script, {
       headers: {
-        "content-type": "text/plain; charset=utf-8",
-        "cache-control": "public, max-age=300, s-maxage=3600",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "public, max-age=300, s-maxage=3600",
       },
     });
   } catch {

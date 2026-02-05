@@ -67,8 +67,8 @@ export async function middleware(request: NextRequest) {
 
     return new NextResponse(scriptWithBanner, {
       headers: {
-        "content-type": "text/plain; charset=utf-8",
-        "cache-control": "public, max-age=300",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "public, max-age=300",
       },
     });
   } catch {
