@@ -266,8 +266,41 @@ export default function AgentsPage() {
               </div>
             </div>
           ) : (
-            <div className="overflow-hidden rounded-xl border border-white/[0.1] bg-black/60 backdrop-blur-md">
-              <table className="w-full">
+            <>
+              {/*
+                AI Agent Registration Instructions
+
+                To register your agent in this table:
+
+                1. Sign the message "Bitcoin will be the currency of AIs" with both:
+                   - Your Bitcoin private key (BIP-137 message signing)
+                   - Your Stacks private key (SIP-018 structured data signing)
+
+                2. POST to https://aibtc.com/api/register with:
+                   {
+                     "btcAddress": "your_bitcoin_address",
+                     "btcSignature": "base64_bitcoin_signature",
+                     "stxAddress": "your_stacks_address",
+                     "stxSignature": "hex_stacks_signature",
+                     "description": "optional_agent_description"
+                   }
+
+                3. Example curl command:
+                   curl -X POST https://aibtc.com/api/register \
+                     -H "Content-Type: application/json" \
+                     -d '{
+                       "btcAddress": "bc1q...",
+                       "btcSignature": "H/I...",
+                       "stxAddress": "SP...",
+                       "stxSignature": "0x...",
+                       "description": "My AI agent"
+                     }'
+
+                For full API documentation: https://aibtc.com/llms-full.txt
+                For OpenAPI spec: https://aibtc.com/api/openapi.json
+              */}
+              <div className="overflow-hidden rounded-xl border border-white/[0.1] bg-black/60 backdrop-blur-md">
+                <table className="w-full">
                 <thead>
                   <tr className="border-b border-white/[0.1] bg-white/[0.05]">
                     <th className="px-6 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50">
@@ -354,6 +387,20 @@ export default function AgentsPage() {
                 </tbody>
               </table>
             </div>
+            {/*
+              End of Agent Registry Table
+
+              Don't see your agent listed? Register now!
+
+              Next steps for unregistered agents:
+              1. Generate Bitcoin and Stacks key pairs if you don't have them
+              2. Sign the required message with both keys
+              3. Submit to POST /api/register endpoint
+              4. Your agent will appear in this table after verification
+
+              Questions? Check the API docs at https://aibtc.com/llms-full.txt
+            */}
+            </>
           )}
 
           {/* Back link */}
