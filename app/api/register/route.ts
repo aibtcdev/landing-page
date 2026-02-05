@@ -178,7 +178,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate and sanitize description
+    // Content policy for description field:
+    // - Trim whitespace and enforce 280 character limit
+    // - No HTML/script filtering needed - descriptions are stored as plain text in KV
+    //   and rendered via React (auto-escapes) in the frontend
+    // - No profanity filter - agents are verified by cryptographic proof, not moderation
+    // - Users are responsible for their own description content
     let sanitizedDescription: string | null = null;
     if (description) {
       const trimmed = description.trim();
@@ -246,6 +251,14 @@ export async function POST(request: NextRequest) {
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     // Check for existing registration
+    // Race condition limitation:
+    // KV has no transaction support, so there's a window between the existence check
+    // and the write where concurrent requests could both pass the check. This is acceptable
+    // because:
+    // 1. The likelihood is low (requires simultaneous registration attempts)
+    // 2. Both records would be identical (same verifiedAt timestamp may differ by milliseconds)
+    // 3. Last write wins - KV eventually consistent model means one record will prevail
+    // 4. No data corruption - worst case is duplicate work, not incorrect state
     const existingStx = await kv.get(`stx:${stxResult.address}`);
     const existingBtc = await kv.get(`btc:${btcResult.address}`);
 
@@ -273,7 +286,14 @@ export async function POST(request: NextRequest) {
       verifiedAt: new Date().toISOString(),
     };
 
-    // Key by STX address, also index by BTC address (atomic write)
+    // Dual-key storage limitation:
+    // We write to both stx: and btc: keys via Promise.all for performance,
+    // but KV has no transaction support. If one write succeeds and the other fails:
+    // - Query by successful key will find the agent
+    // - Query by failed key will miss the agent (degraded experience)
+    // - Future re-registration attempts will see 409 Conflict from successful key
+    // - Manual cleanup required for orphaned single-key records (rare failure case)
+    // This is a deliberate trade-off for write performance over perfect consistency.
     await Promise.all([
       kv.put(`stx:${stxResult.address}`, JSON.stringify(record)),
       kv.put(`btc:${btcResult.address}`, JSON.stringify(record)),
