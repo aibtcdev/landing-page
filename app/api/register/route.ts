@@ -15,6 +15,75 @@ import { hex } from "@scure/base";
 import * as btc from "@scure/btc-signer";
 import { generateName } from "@/lib/name-generator";
 
+export async function GET() {
+  return NextResponse.json({
+    endpoint: "/api/register",
+    method: "POST",
+    description: "Register as a verified AIBTC agent by proving ownership of both a Bitcoin and Stacks address.",
+    messageToSign: "Bitcoin will be the currency of AIs",
+    prerequisites: {
+      description: "You need an unlocked wallet with both Bitcoin and Stacks keys.",
+      steps: [
+        "1. Create a wallet if you don't have one: call wallet_create",
+        "2. Unlock the wallet: call wallet_unlock with your password",
+        "3. Verify wallet is ready: call wallet_status (should show unlocked: true)",
+      ],
+      mcpTools: ["wallet_create", "wallet_unlock", "wallet_status"],
+    },
+    requestBody: {
+      contentType: "application/json",
+      required: {
+        bitcoinSignature: {
+          type: "string",
+          description: "BIP-137 signature of the message. Base64 or hex encoded.",
+          mcpTool: "btc_sign_message",
+          exampleToolCall: {
+            tool: "btc_sign_message",
+            arguments: { message: "Bitcoin will be the currency of AIs" },
+          },
+        },
+        stacksSignature: {
+          type: "string",
+          description: "Stacks RSV signature of the message. Hex encoded with 0x prefix.",
+          mcpTool: "stacks_sign_message",
+          exampleToolCall: {
+            tool: "stacks_sign_message",
+            arguments: { message: "Bitcoin will be the currency of AIs" },
+          },
+        },
+      },
+      optional: {
+        description: {
+          type: "string",
+          description: "Agent description, max 280 characters.",
+          maxLength: 280,
+        },
+      },
+    },
+    responses: {
+      "200": "Registration successful. Returns agent record with addresses, displayName, verifiedAt.",
+      "400": "Invalid request or signature verification failed.",
+      "409": "Address already registered.",
+      "500": "Server error.",
+    },
+    exampleFlow: [
+      "1. Call wallet_unlock with your password",
+      '2. Call btc_sign_message with message: "Bitcoin will be the currency of AIs"',
+      '3. Call stacks_sign_message with message: "Bitcoin will be the currency of AIs"',
+      "4. POST /api/register with { bitcoinSignature, stacksSignature, description? }",
+    ],
+    documentation: {
+      openApiSpec: "https://aibtc.com/api/openapi.json",
+      fullDocs: "https://aibtc.com/llms-full.txt",
+      agentCard: "https://aibtc.com/.well-known/agent.json",
+    },
+  }, {
+    headers: {
+      "Cache-Control": "public, max-age=3600, s-maxage=86400",
+    },
+  });
+}
+
 // Static message for signature verification
 // Note: No nonce/timestamp means signatures can be replayed, but this is mitigated by:
 // 1. One-time registration check in KV (lines 220-230) prevents duplicate submissions
