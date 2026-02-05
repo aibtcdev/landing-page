@@ -334,7 +334,7 @@ export default function AgentProfilePage() {
               rel="noopener noreferrer"
               className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 md:px-4 md:py-3 transition-colors hover:border-white/[0.12] hover:bg-white/[0.06]"
             >
-              <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-widest text-white/50">BTC</div>
+              <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-widest text-white/50">Bitcoin (L1)</div>
               <div className="mt-0.5 font-mono text-[12px] md:text-sm text-orange">
                 <span className="hidden md:inline">{agent.btcAddress}</span>
                 <span className="md:hidden">{truncateAddress(agent.btcAddress)}</span>
@@ -346,7 +346,7 @@ export default function AgentProfilePage() {
               rel="noopener noreferrer"
               className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2.5 md:px-4 md:py-3 transition-colors hover:border-white/[0.12] hover:bg-white/[0.06]"
             >
-              <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-widest text-white/50">STX</div>
+              <div className="text-[10px] md:text-[11px] font-semibold uppercase tracking-widest text-white/50">Stacks (L2)</div>
               <div className="mt-0.5 font-mono text-[12px] md:text-sm text-purple">
                 <span className="hidden md:inline">{agent.stxAddress}</span>
                 <span className="md:hidden">{truncateAddress(agent.stxAddress)}</span>
