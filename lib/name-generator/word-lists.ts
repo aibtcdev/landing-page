@@ -28,9 +28,9 @@ export const ADJECTIVES = [
   "scarlet", "silver", "steel", "titanium", "topaz", "violet",
 
   // intensity / speed
-  "blazing", "bold", "brisk", "charged", "dashing", "eager",
+  "bold", "brisk", "charged", "dashing",
   "fierce", "flash", "flying", "furious", "hasty", "hyper",
-  "keen", "lightning", "lively", "mega", "nimble", "phantom",
+  "lightning", "lively", "mega", "nimble", "phantom",
   "prime", "quick", "rapid", "rushing", "sharp", "silent",
   "sleek", "snappy", "sonic", "speedy", "stark", "steady",
   "stealthy", "stormy", "super", "swift", "turbo", "ultra",
@@ -39,11 +39,11 @@ export const ADJECTIVES = [
   // personality / nature
   "ancient", "arcane", "austere", "brave", "bright", "calm",
   "clever", "cold", "cool", "crafty", "cunning", "daring",
-  "deep", "devoted", "eager", "elegant", "eternal", "fair",
+  "deep", "devoted", "elegant", "eternal", "fair",
   "fearless", "feral", "fiery", "firm", "floating", "fluid",
   "frosty", "gentle", "ghostly", "grim", "gusty", "hardy",
-  "hollow", "humble", "icy", "inner", "keen", "kind",
-  "lasting", "lean", "light", "lone", "lost", "lucid",
+  "humble", "icy", "inner", "kind",
+  "lasting", "light", "lone", "lost", "lucid",
   "luminous", "mighty", "misty", "modest", "mystic", "noble",
   "odd", "pale", "patient", "polar", "proud", "pure",
   "quiet", "rare", "regal", "rising", "roaming", "rough",
@@ -51,15 +51,15 @@ export const ADJECTIVES = [
   "serene", "shining", "sly", "sober", "solemn", "somber",
   "spare", "spectral", "spiral", "stable", "stoic", "strange",
   "subtle", "tidal", "true", "twilight", "twin", "valiant",
-  "vast", "veiled", "vigilant", "wandering", "warm", "watchful",
+  "veiled", "vigilant", "wandering", "warm", "watchful",
   "woven", "young", "zealous", "zen",
 
   // size / shape
   "broad", "compact", "dense", "dual", "giant", "grand",
-  "half", "heavy", "hex", "hollow", "huge", "jagged",
-  "lean", "little", "long", "micro", "mini", "narrow",
+  "half", "heavy", "hex", "huge", "jagged",
+  "little", "long", "micro", "mini", "narrow",
   "round", "small", "solid", "tall", "thin", "tiny",
-  "triple", "vast", "wide",
+  "triple", "wide",
 ] as const;
 
 /** Creature / object words -- second component of generated names */
