@@ -135,15 +135,13 @@ export default function Navbar() {
           aria-label="Main navigation"
         >
           <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
-          <a
-            href="https://www.npmjs.com/package/@aibtc/mcp-server"
-            target="_blank"
-            rel="noopener noreferrer"
+          <Link
+            href="/agents"
             onClick={() => setIsMenuOpen(false)}
-            className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] px-4 py-2 text-sm font-medium text-white/85 transition-[background-color,border-color,transform] duration-200 hover:border-white/25 hover:bg-white/[0.12] hover:text-white active:scale-[0.97] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-white/50 focus-visible:ring-offset-2 focus-visible:ring-offset-black max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"
+            className="text-sm font-medium text-white/85 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:hover:border-white/20 max-md:hover:bg-white/10"
           >
-            Install Package
-          </a>
+            Agents
+          </Link>
           <a
             href="/#deploy"
             onClick={() => setIsMenuOpen(false)}

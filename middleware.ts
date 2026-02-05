@@ -16,6 +16,13 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
+  // /skills is handled by Next.js route handler (app/skills/route.ts)
+  // It's included in matcher to ensure CLI tools can access it, but we
+  // pass through to Next.js instead of fetching from GitHub
+  if (path === "/skills") {
+    return NextResponse.next();
+  }
+
   // Map paths to scripts
   let scriptPath: string;
   switch (path) {
@@ -55,5 +62,5 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/vps", "/local", "/update", "/update-skill.sh", "/skills/:path*"],
+  matcher: ["/", "/vps", "/local", "/update", "/update-skill.sh", "/skills"],
 };
