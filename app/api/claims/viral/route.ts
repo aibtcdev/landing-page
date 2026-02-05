@@ -2,16 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { generateName } from "@/lib/name-generator";
 
-/**
- * Viral Claim API
- *
- * Flow:
- * 1. User tweets "My AIBTC agent is [name]" via the profile page
- * 2. User pastes their tweet URL back on the profile page
- * 3. POST verifies the tweet exists via oEmbed and contains expected text
- * 4. If valid, marks claim as verified and queues reward
- */
-
 interface ClaimRecord {
   btcAddress: string;
   displayName: string;
@@ -30,7 +20,6 @@ function getRandomReward(): number {
   return Math.floor(Math.random() * (MAX_REWARD_SATS - MIN_REWARD_SATS + 1)) + MIN_REWARD_SATS;
 }
 
-/** Normalize x.com / twitter.com URLs to a canonical form */
 function normalizeTweetUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
@@ -46,7 +35,6 @@ function normalizeTweetUrl(url: string): string | null {
   }
 }
 
-/** Fetch tweet text via Twitter's public oEmbed endpoint (no API key needed) */
 async function fetchTweetContent(tweetUrl: string): Promise<{ text: string; authorName: string; authorHandle: string } | null> {
   try {
     const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true`;

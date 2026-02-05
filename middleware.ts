@@ -1,7 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const GITHUB_RAW =
-  "https://raw.githubusercontent.com/aibtcdev/openclaw-aibtc/main";
+import { GITHUB_RAW } from "@/lib/github-proxy";
 
 function isCLI(request: NextRequest): boolean {
   const ua = request.headers.get("user-agent")?.toLowerCase() || "";
@@ -31,9 +29,6 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL("/llms.txt", request.url));
   }
 
-  // /skills is handled by Next.js route handler (app/skills/route.ts)
-  // It's included in matcher to ensure CLI tools can access it, but we
-  // pass through to Next.js instead of fetching from GitHub
   if (path === "/skills") {
     return NextResponse.next();
   }
@@ -56,7 +51,6 @@ export async function middleware(request: NextRequest) {
       newPath = "/install/openclaw/update";
       break;
     default:
-      // Unknown path, pass through
       return NextResponse.next();
   }
 

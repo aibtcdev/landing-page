@@ -1,17 +1,5 @@
 import { NextResponse } from "next/server";
 
-/**
- * Serves the OpenAPI 3.1 specification at GET /api/openapi.json.
- *
- * Describes the public API endpoints:
- *   - POST /api/register          — Agent registration with cryptographic verification
- *   - GET /api/agents             — List all verified agents
- *   - GET /api/health             — System health check
- *   - GET /api/verify/{address}   — Verify agent registration by address
- *
- * This enables AI agents to programmatically discover and understand the API
- * without reading human-oriented documentation.
- */
 export function GET() {
   const spec = {
     openapi: "3.1.0",

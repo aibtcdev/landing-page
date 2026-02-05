@@ -555,9 +555,7 @@ function TerminalWindow({
       setHasStarted(true);
       // If user prefers reduced motion, show all lines immediately
       if (prefersReducedMotion) {
-        setDisplayedLines(allLines.map(line =>
-          line.type === "claude-ui" ? line : { ...line, text: line.text }
-        ));
+        setDisplayedLines([...allLines]);
         setCurrentLineIndex(allLines.length);
       } else {
         setDisplayedLines([]);

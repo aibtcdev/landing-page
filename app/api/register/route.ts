@@ -84,41 +84,23 @@ export async function GET() {
   });
 }
 
-// Static message for signature verification
-// Note: No nonce/timestamp means signatures can be replayed, but this is mitigated by:
-// 1. One-time registration check in KV (lines 220-230) prevents duplicate submissions
-// 2. Each address can only register once (409 Conflict on re-registration)
-// 3. Replay attack only allows attacker to register on behalf of victim (who controls both addresses)
-// Trade-off: Adding nonce/timestamp would require per-session message generation, complicating UX
 const EXPECTED_MESSAGE = "Bitcoin will be the currency of AIs";
-
-// Bitcoin network configuration - explicitly mainnet only
-// This application only supports mainnet address verification
-const BTC_NETWORK = btc.NETWORK; // mainnet by default from @scure/btc-signer
+const BTC_NETWORK = btc.NETWORK;
 
 async function lookupBnsName(stxAddress: string): Promise<string | null> {
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 5000);
-
     const res = await fetch(
       `https://api.hiro.so/v1/addresses/stacks/${stxAddress}`,
-      { signal: controller.signal }
+      { signal: AbortSignal.timeout(5000) }
     );
-    clearTimeout(timeoutId);
-
     if (!res.ok) return null;
     const data = (await res.json()) as { names?: string[] };
-    if (data.names && data.names.length > 0) {
-      return data.names[0];
-    }
-    return null;
+    return data.names?.[0] ?? null;
   } catch {
     return null;
   }
 }
 
-// BIP-137 Bitcoin message prefix
 const BITCOIN_MSG_PREFIX = "\x18Bitcoin Signed Message:\n";
 
 function encodeVarInt(n: number): Uint8Array {
@@ -163,7 +145,6 @@ function verifyBitcoinSignature(signature: string): {
   address: string;
   publicKey: string;
 } {
-  // Parse hex or base64
   let sigBytes: Uint8Array;
   if (signature.length === 130 && /^[0-9a-fA-F]+$/.test(signature)) {
     sigBytes = hex.decode(signature);
@@ -186,10 +167,6 @@ function verifyBitcoinSignature(signature: string): {
   const r = BigInt("0x" + hex.encode(rBytes));
   const s = BigInt("0x" + hex.encode(sBytes));
 
-  // BIP-62: Signature malleability protection
-  // The @noble/curves/secp256k1 library automatically normalizes signatures to low-s values
-  // This prevents signature malleability attacks where (r, s) and (r, n-s) are both valid
-  // Reference: https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures
   const sig = new secp256k1.Signature(r, s).addRecoveryBit(recoveryId);
   const recoveredPoint = sig.recoverPublicKey(msgHash);
   const recoveredPubKey = recoveredPoint.toBytes(true);
@@ -247,12 +224,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Content policy for description field:
-    // - Trim whitespace and enforce 280 character limit
-    // - No HTML/script filtering needed - descriptions are stored as plain text in KV
-    //   and rendered via React (auto-escapes) in the frontend
-    // - No profanity filter - agents are verified by cryptographic proof, not moderation
-    // - Users are responsible for their own description content
     let sanitizedDescription: string | null = null;
     if (description) {
       const trimmed = description.trim();
@@ -265,7 +236,6 @@ export async function POST(request: NextRequest) {
       sanitizedDescription = trimmed;
     }
 
-    // Verify both signatures
     let btcResult;
     try {
       btcResult = verifyBitcoinSignature(bitcoinSignature);
@@ -300,34 +270,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Cryptographic link verification:
-    // Both signatures sign the same message ("Bitcoin will be the currency of AIs")
-    // and are verified independently. This proves that:
-    // 1. The submitter controls the Bitcoin private key (recovered btcResult.address)
-    // 2. The submitter controls the Stacks private key (recovered stxResult.address)
-    // 3. Therefore, the same entity controls both addresses
-    //
-    // Limitation: The signed message does not include the addresses themselves,
-    // so there's no on-chain cryptographic binding between the two addresses.
-    // This is a deliberate trade-off for UX simplicity - users sign a static message
-    // rather than a dynamic message containing both addresses.
-    //
-    // Security implication: An attacker cannot register someone else's addresses
-    // without having both private keys. The registration proves ownership of both.
-
     // Store in KV
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     // Check for existing registration
-    // Race condition limitation:
-    // KV has no transaction support, so there's a window between the existence check
-    // and the write where concurrent requests could both pass the check. This is acceptable
-    // because:
-    // 1. The likelihood is low (requires simultaneous registration attempts)
-    // 2. Both records would be identical (same verifiedAt timestamp may differ by milliseconds)
-    // 3. Last write wins - KV eventually consistent model means one record will prevail
-    // 4. No data corruption - worst case is duplicate work, not incorrect state
     const existingStx = await kv.get(`stx:${stxResult.address}`);
     const existingBtc = await kv.get(`btc:${btcResult.address}`);
 
@@ -340,7 +287,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Look up BNS name and generate deterministic display name
     const bnsName = await lookupBnsName(stxResult.address);
     const displayName = generateName(btcResult.address);
 
@@ -355,14 +301,6 @@ export async function POST(request: NextRequest) {
       verifiedAt: new Date().toISOString(),
     };
 
-    // Dual-key storage limitation:
-    // We write to both stx: and btc: keys via Promise.all for performance,
-    // but KV has no transaction support. If one write succeeds and the other fails:
-    // - Query by successful key will find the agent
-    // - Query by failed key will miss the agent (degraded experience)
-    // - Future re-registration attempts will see 409 Conflict from successful key
-    // - Manual cleanup required for orphaned single-key records (rare failure case)
-    // This is a deliberate trade-off for write performance over perfect consistency.
     await Promise.all([
       kv.put(`stx:${stxResult.address}`, JSON.stringify(record)),
       kv.put(`btc:${btcResult.address}`, JSON.stringify(record)),

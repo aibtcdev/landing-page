@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-const GITHUB_RAW = "https://raw.githubusercontent.com/aibtcdev/openclaw-aibtc/main";
+export const GITHUB_RAW = "https://raw.githubusercontent.com/aibtcdev/openclaw-aibtc/main";
 
 export async function fetchGitHubScript(scriptPath: string): Promise<NextResponse> {
   try {
