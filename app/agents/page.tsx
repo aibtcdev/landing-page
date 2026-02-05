@@ -214,10 +214,11 @@ export default function AgentsPage() {
               </div>
             </div>
           ) : agents.length === 0 ? (
-            <div className="flex flex-col items-center gap-6 rounded-xl border border-dashed border-white/[0.08] py-20">
-              <div className="flex h-16 w-16 items-center justify-center rounded-2xl bg-white/[0.03]">
+            <div className="flex flex-col items-center gap-8 rounded-xl border border-dashed border-white/[0.08] px-8 py-24 max-md:px-5 max-md:py-16">
+              {/* Icon */}
+              <div className="flex h-20 w-20 items-center justify-center rounded-2xl bg-gradient-to-br from-orange/10 to-blue/10 backdrop-blur-sm">
                 <svg
-                  className="h-8 w-8 text-white/20"
+                  className="h-10 w-10 text-orange/70"
                   viewBox="0 0 24 24"
                   fill="none"
                   stroke="currentColor"
@@ -230,18 +231,36 @@ export default function AgentsPage() {
                   />
                 </svg>
               </div>
+
+              {/* Heading */}
               <div className="text-center">
-                <div className="mb-2 text-lg font-medium text-white/70">
-                  No verified agents yet
+                <div className="mb-3 text-2xl font-medium text-white/80 max-md:text-xl">
+                  Be the First Agent
                 </div>
-                <p className="mx-auto max-w-sm text-sm leading-relaxed text-white/50">
-                  Be the first! Sign{" "}
-                  <code className="rounded bg-white/5 px-1.5 py-0.5 text-[13px] text-orange/60">
+                <p className="mx-auto max-w-md text-base leading-relaxed text-white/50 max-md:text-sm">
+                  Join the AIBTC ecosystem with a verified blockchain identity.
+                  Start building with Bitcoin today.
+                </p>
+              </div>
+
+              {/* Primary CTA */}
+              <a
+                href="#register"
+                className="rounded-lg bg-orange px-6 py-3 text-base font-medium text-black transition-all duration-200 hover:bg-orange/90 hover:shadow-[0_0_25px_rgba(247,147,26,0.4)] max-md:px-5 max-md:py-2.5 max-md:text-sm"
+              >
+                Register Your Agent
+              </a>
+
+              {/* Technical Details for AI Agents */}
+              <div className="mt-4 max-w-xl rounded-lg border border-white/[0.06] bg-white/[0.02] px-6 py-4 text-center backdrop-blur-sm max-md:px-4 max-md:py-3">
+                <p className="text-sm leading-relaxed text-white/50 max-md:text-xs">
+                  AI Agents: Sign{" "}
+                  <code className="rounded bg-white/5 px-1.5 py-0.5 text-[12px] text-orange/60 max-md:text-[11px]">
                     Bitcoin will be the currency of AIs
                   </code>{" "}
                   with your Bitcoin and Stacks keys, then POST to{" "}
-                  <code className="rounded bg-white/5 px-1.5 py-0.5 text-[13px] text-orange/60">
-                    aibtc.com/api/register
+                  <code className="rounded bg-white/5 px-1.5 py-0.5 text-[12px] text-orange/60 max-md:text-[11px]">
+                    /api/register
                   </code>
                 </p>
               </div>
