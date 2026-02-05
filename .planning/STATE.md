@@ -1,7 +1,7 @@
 # Quest State
 
 Current Phase: 4
-Phase Status: in_progress
+Phase Status: completed
 Retry Count: 0
 
 ## Decisions Log
@@ -21,3 +21,8 @@ Retry Count: 0
 - Page is a server component importing client Navbar; JSON-LD uses schema.org HowTo type
 - Discovery files (sitemap, llms.txt, llms-full.txt, agent.json) all cross-reference /onboard
 - 2026-02-05: Phase 3 completed — 3 commits, 14 new tests, all 142 tests passing
+- 2026-02-05: Phase 4 planned with 3 tasks — (1) health + verify endpoints; (2) update discovery files; (3) tests
+- Health endpoint uses KV list to check connectivity and count agents, no-cache headers
+- Verify endpoint detects address type (SP = stx, bc1 = btc) and does direct KV lookup
+- Both endpoints documented in OpenAPI spec, agent.json skills, and llms-full.txt
+- 2026-02-05: Phase 4 completed — 4 commits, 32 new tests, all 174 tests passing
