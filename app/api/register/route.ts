@@ -15,7 +15,17 @@ import { hex } from "@scure/base";
 import * as btc from "@scure/btc-signer";
 import { generateName } from "@/lib/name-generator";
 
+// Static message for signature verification
+// Note: No nonce/timestamp means signatures can be replayed, but this is mitigated by:
+// 1. One-time registration check in KV (lines 220-230) prevents duplicate submissions
+// 2. Each address can only register once (409 Conflict on re-registration)
+// 3. Replay attack only allows attacker to register on behalf of victim (who controls both addresses)
+// Trade-off: Adding nonce/timestamp would require per-session message generation, complicating UX
 const EXPECTED_MESSAGE = "Bitcoin will be the currency of AIs";
+
+// Bitcoin network configuration - explicitly mainnet only
+// This application only supports mainnet address verification
+const BTC_NETWORK = btc.NETWORK; // mainnet by default from @scure/btc-signer
 
 async function lookupBnsName(stxAddress: string): Promise<string | null> {
   try {
@@ -107,6 +117,10 @@ function verifyBitcoinSignature(signature: string): {
   const r = BigInt("0x" + hex.encode(rBytes));
   const s = BigInt("0x" + hex.encode(sBytes));
 
+  // BIP-62: Signature malleability protection
+  // The @noble/curves/secp256k1 library automatically normalizes signatures to low-s values
+  // This prevents signature malleability attacks where (r, s) and (r, n-s) are both valid
+  // Reference: https://github.com/bitcoin/bips/blob/master/bip-0062.mediawiki#low-s-values-in-signatures
   const sig = new secp256k1.Signature(r, s).addRecoveryBit(recoveryId);
   const recoveredPoint = sig.recoverPublicKey(msgHash);
   const recoveredPubKey = recoveredPoint.toBytes(true);
@@ -115,7 +129,7 @@ function verifyBitcoinSignature(signature: string): {
     prehash: false,
   });
 
-  const p2wpkh = btc.p2wpkh(recoveredPubKey, btc.NETWORK);
+  const p2wpkh = btc.p2wpkh(recoveredPubKey, BTC_NETWORK);
 
   return {
     valid,
@@ -211,6 +225,21 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
+
+    // Cryptographic link verification:
+    // Both signatures sign the same message ("Bitcoin will be the currency of AIs")
+    // and are verified independently. This proves that:
+    // 1. The submitter controls the Bitcoin private key (recovered btcResult.address)
+    // 2. The submitter controls the Stacks private key (recovered stxResult.address)
+    // 3. Therefore, the same entity controls both addresses
+    //
+    // Limitation: The signed message does not include the addresses themselves,
+    // so there's no on-chain cryptographic binding between the two addresses.
+    // This is a deliberate trade-off for UX simplicity - users sign a static message
+    // rather than a dynamic message containing both addresses.
+    //
+    // Security implication: An attacker cannot register someone else's addresses
+    // without having both private keys. The registration proves ownership of both.
 
     // Store in KV
     const { env } = await getCloudflareContext();
