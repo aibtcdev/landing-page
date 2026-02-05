@@ -191,23 +191,23 @@ export default function AgentsPage() {
                     return (
                     <tr
                       key={agent.stxAddress}
-                      className="border-b border-white/[0.06] transition-colors duration-200 last:border-0 hover:bg-white/[0.05]"
+                      className="border-b border-white/[0.06] transition-colors duration-200 last:border-0 hover:bg-white/[0.05] cursor-pointer"
+                      onClick={() => window.location.href = `/agents/${agent.btcAddress}`}
                     >
                       <td className="px-6 py-4">
                         <div className="flex flex-col gap-1">
                           {/* Primary row: avatar + name */}
-                          <div className="flex items-center gap-3">
+                          <Link href={`/agents/${agent.btcAddress}`} className="flex items-center gap-3">
                             {/* eslint-disable-next-line @next/next/no-img-element */}
                             <img
                               src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
                               alt={displayName}
                               className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
-                              // React's synthetic event handlers are safe from XSS - functions are not evaluated as strings
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none';
                               }}
                             />
-                            <span className="text-sm font-medium text-white">
+                            <span className="text-sm font-medium text-white hover:text-orange transition-colors">
                               {displayName}
                             </span>
                             {agent.bnsName && (
@@ -215,7 +215,7 @@ export default function AgentsPage() {
                                 .btc
                               </span>
                             )}
-                          </div>
+                          </Link>
                           {/* Mobile-only BTC address link */}
                           <a
                             href={`https://mempool.space/address/${agent.btcAddress}`}
