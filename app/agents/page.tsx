@@ -220,9 +220,16 @@ export default function AgentsPage() {
                         </span>
                       </td>
                       <td className="px-6 py-4 max-md:hidden">
-                        <code className="text-[13px] text-white/70">
-                          {truncateAddress(agent.btcAddress)}
-                        </code>
+                        <a
+                          href={`https://mempool.space/address/${agent.btcAddress}`}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="inline-block transition-colors duration-200 hover:text-orange/80"
+                        >
+                          <code className="text-[13px] text-white/70">
+                            {truncateAddress(agent.btcAddress)}
+                          </code>
+                        </a>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <span className="text-[13px] text-white/70">
