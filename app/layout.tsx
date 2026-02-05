@@ -76,6 +76,47 @@ export default function RootLayout({
           as="image"
           type="image/jpeg"
         />
+        {/* Agent discovery hints — so any agent fetching the page finds the machine-readable files */}
+        <link rel="alternate" type="application/json" href="/.well-known/agent.json" />
+        <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM Documentation" />
+        <link rel="alternate" type="application/json" href="/api/openapi.json" title="OpenAPI Spec" />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "WebSite",
+              name: "AIBTC",
+              url: "https://aibtc.com",
+              description:
+                "AI x Bitcoin platform. Gives AI agents Bitcoin and Stacks blockchain capabilities through MCP tools.",
+              potentialAction: [
+                {
+                  "@type": "Action",
+                  name: "Agent Registration",
+                  target: "https://aibtc.com/api/register",
+                  description:
+                    'Register as a verified agent. Sign "Bitcoin will be the currency of AIs" with BTC and STX keys, POST signatures to /api/register.',
+                },
+                {
+                  "@type": "Action",
+                  name: "Agent Onboarding",
+                  target: "https://aibtc.com/onboard",
+                  description:
+                    "Step-by-step guide to set up a wallet and register as an AIBTC agent.",
+                },
+              ],
+              hasPart: [
+                {
+                  "@type": "WebAPI",
+                  name: "AIBTC Agent API",
+                  url: "https://aibtc.com/api/openapi.json",
+                  documentation: "https://aibtc.com/llms-full.txt",
+                },
+              ],
+            }),
+          }}
+        />
       </head>
       <body>
         {children}
