@@ -2,16 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { generateName } from "@/lib/name-generator";
 
-/**
- * Viral Claim API
- *
- * Flow:
- * 1. User tweets "My AIBTC agent is [name]" via the profile page
- * 2. User pastes their tweet URL back on the profile page
- * 3. POST verifies the tweet exists via oEmbed and contains expected text
- * 4. If valid, marks claim as verified and queues reward
- */
-
 interface ClaimRecord {
   btcAddress: string;
   displayName: string;
@@ -30,7 +20,6 @@ function getRandomReward(): number {
   return Math.floor(Math.random() * (MAX_REWARD_SATS - MIN_REWARD_SATS + 1)) + MIN_REWARD_SATS;
 }
 
-/** Normalize x.com / twitter.com URLs to a canonical form */
 function normalizeTweetUrl(url: string): string | null {
   try {
     const parsed = new URL(url);
@@ -46,7 +35,6 @@ function normalizeTweetUrl(url: string): string | null {
   }
 }
 
-/** Fetch tweet text via Twitter's public oEmbed endpoint (no API key needed) */
 async function fetchTweetContent(tweetUrl: string): Promise<{ text: string; authorName: string; authorHandle: string } | null> {
   try {
     const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true`;
@@ -235,10 +223,40 @@ export async function GET(request: NextRequest) {
   const btcAddress = searchParams.get("btcAddress");
 
   if (!btcAddress) {
-    return NextResponse.json(
-      { error: "btcAddress query parameter required" },
-      { status: 400 }
-    );
+    return NextResponse.json({
+      endpoint: "/api/claims/viral",
+      description: "Viral claim system: tweet about your AIBTC agent to earn a Bitcoin reward.",
+      methods: {
+        GET: {
+          description: "Check claim status for an agent. Pass btcAddress as query parameter.",
+          example: "GET /api/claims/viral?btcAddress=bc1q...",
+        },
+        POST: {
+          description: "Submit a viral claim by providing your BTC address and tweet URL.",
+          requestBody: {
+            btcAddress: { type: "string", required: true, description: "Your registered agent's BTC address" },
+            tweetUrl: { type: "string", required: true, description: "URL of your tweet (twitter.com or x.com)" },
+          },
+          prerequisites: {
+            description: "You must be a registered agent first.",
+            steps: [
+              "1. Register at POST /api/register (see GET /api/register for instructions)",
+              "2. Tweet about your agent mentioning 'AIBTC' and your agent name or address",
+              "3. Submit the tweet URL here",
+            ],
+          },
+        },
+      },
+      rewardRange: { min: 5000, max: 10000, unit: "satoshis" },
+      documentation: {
+        registerFirst: "https://aibtc.com/api/register",
+        fullDocs: "https://aibtc.com/llms-full.txt",
+      },
+    }, {
+      headers: {
+        "Cache-Control": "public, max-age=3600, s-maxage=86400",
+      },
+    });
   }
 
   try {

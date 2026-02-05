@@ -1,11 +1,31 @@
 import { NextRequest, NextResponse } from "next/server";
-
-const GITHUB_RAW =
-  "https://raw.githubusercontent.com/aibtcdev/openclaw-aibtc/main";
+import { GITHUB_RAW } from "@/lib/github-proxy";
 
 function isCLI(request: NextRequest): boolean {
   const ua = request.headers.get("user-agent")?.toLowerCase() || "";
   return ua.includes("curl") || ua.includes("wget") || ua.includes("httpie");
+}
+
+function getDeprecationBanner(newPath: string): string {
+  const lines = [
+    "NOTICE: This URL is deprecated.",
+    `New URL: curl https://aibtc.com${newPath} | sh`,
+    "This path will continue to work but may be removed in future.",
+  ];
+
+  const innerWidth = Math.max(...lines.map((line) => line.length));
+  const topBorder = `# ┌${"─".repeat(innerWidth + 2)}┐`;
+  const bottomBorder = `# └${"─".repeat(innerWidth + 2)}┘`;
+
+  const content = lines
+    .map((line) => `# │ ${line.padEnd(innerWidth)} │`)
+    .join("\n");
+
+  return `${topBorder}
+${content}
+${bottomBorder}
+#
+`;
 }
 
 export async function middleware(request: NextRequest) {
@@ -16,29 +36,34 @@ export async function middleware(request: NextRequest) {
 
   const path = request.nextUrl.pathname;
 
-  // /skills is handled by Next.js route handler (app/skills/route.ts)
-  // It's included in matcher to ensure CLI tools can access it, but we
-  // pass through to Next.js instead of fetching from GitHub
+  // Root path: rewrite to serve public/llms.txt
+  if (path === "/") {
+    return NextResponse.rewrite(new URL("/llms.txt", request.url));
+  }
+
   if (path === "/skills") {
     return NextResponse.next();
   }
 
-  // Map paths to scripts
+  // Map deprecated paths to scripts and new install URLs
   let scriptPath: string;
+  let newPath: string;
   switch (path) {
-    case "/":
     case "/vps":
       scriptPath = "/vps-setup.sh";
+      newPath = "/install/openclaw";
       break;
     case "/local":
       scriptPath = "/local-setup.sh";
+      newPath = "/install/openclaw/local";
       break;
     case "/update":
+    case "/update-skill.sh":
       scriptPath = "/update-skill.sh";
+      newPath = "/install/openclaw/update";
       break;
     default:
-      // Pass through other paths (could be /update-skill.sh, etc.)
-      scriptPath = path;
+      return NextResponse.next();
   }
 
   try {
@@ -49,11 +74,13 @@ export async function middleware(request: NextRequest) {
     }
 
     const script = await response.text();
+    const banner = getDeprecationBanner(newPath);
+    const scriptWithBanner = banner + script;
 
-    return new NextResponse(script, {
+    return new NextResponse(scriptWithBanner, {
       headers: {
-        "content-type": "text/plain; charset=utf-8",
-        "cache-control": "public, max-age=300",
+        "Content-Type": "text/plain; charset=utf-8",
+        "Cache-Control": "public, max-age=300, s-maxage=3600",
       },
     });
   } catch {

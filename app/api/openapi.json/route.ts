@@ -1,17 +1,5 @@
 import { NextResponse } from "next/server";
 
-/**
- * Serves the OpenAPI 3.1 specification at GET /api/openapi.json.
- *
- * Describes the public API endpoints:
- *   - POST /api/register          — Agent registration with cryptographic verification
- *   - GET /api/agents             — List all verified agents
- *   - GET /api/health             — System health check
- *   - GET /api/verify/{address}   — Verify agent registration by address
- *
- * This enables AI agents to programmatically discover and understand the API
- * without reading human-oriented documentation.
- */
 export function GET() {
   const spec = {
     openapi: "3.1.0",
@@ -39,6 +27,27 @@ export function GET() {
     ],
     paths: {
       "/api/register": {
+        get: {
+          operationId: "getRegisterInstructions",
+          summary: "Get registration instructions",
+          description:
+            "Returns self-documenting JSON with MCP tool names, prerequisites, " +
+            "and example tool calls for agent registration. Use this endpoint to " +
+            "discover how to programmatically register your agent.",
+          responses: {
+            "200": {
+              description: "Registration instructions and MCP tool documentation",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    description: "Self-documenting registration guide",
+                  },
+                },
+              },
+            },
+          },
+        },
         post: {
           operationId: "registerAgent",
           summary: "Register a verified agent",
@@ -222,6 +231,164 @@ export function GET() {
             },
             "500": {
               description: "Server error during verification",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/claims/viral": {
+        get: {
+          operationId: "getViralClaimInfo",
+          summary: "Get viral claim information or check status",
+          description:
+            "Without btcAddress parameter: returns usage documentation with claim requirements " +
+            "and reward details. With btcAddress parameter: returns claim status for the address.",
+          parameters: [
+            {
+              name: "btcAddress",
+              in: "query",
+              required: false,
+              description:
+                "Bitcoin Native SegWit address (bc1...) to check claim status for. " +
+                "If omitted, returns general usage documentation.",
+              schema: {
+                type: "string",
+                examples: ["bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"],
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description:
+                "Viral claim information (usage docs if no btcAddress, status if btcAddress provided)",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    description:
+                      "Usage documentation or claim status depending on parameters",
+                  },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found (when checking status)",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: "submitViralClaim",
+          summary: "Submit a viral claim to earn Bitcoin rewards",
+          description:
+            "Submit a tweet about your registered AIBTC agent to earn 5,000-10,000 satoshis. " +
+            "Prerequisites: agent must be registered, tweet must mention your agent and tag @aibtcdev, " +
+            "one claim per registered agent.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["btcAddress", "tweetUrl"],
+                  properties: {
+                    btcAddress: {
+                      type: "string",
+                      description:
+                        "Your registered Bitcoin Native SegWit address (bc1...)",
+                      examples: ["bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"],
+                    },
+                    tweetUrl: {
+                      type: "string",
+                      description:
+                        "URL to your tweet (must be from x.com or twitter.com)",
+                      examples: [
+                        "https://x.com/username/status/1234567890",
+                        "https://twitter.com/username/status/1234567890",
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Claim submitted successfully, reward sent",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["success", "message", "reward", "txid"],
+                    properties: {
+                      success: {
+                        type: "boolean",
+                        const: true,
+                      },
+                      message: {
+                        type: "string",
+                        examples: ["Viral claim submitted successfully"],
+                      },
+                      reward: {
+                        type: "integer",
+                        description: "Reward amount in satoshis",
+                        examples: [7500],
+                      },
+                      txid: {
+                        type: "string",
+                        description: "Bitcoin transaction ID",
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description:
+                "Invalid request — missing fields, invalid tweet URL format",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "404": {
+              description:
+                "Agent not found — must register via POST /api/register first",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "409": {
+              description: "Already claimed — one claim per registered agent",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "500": {
+              description: "Server error during claim processing",
               content: {
                 "application/json": {
                   schema: {

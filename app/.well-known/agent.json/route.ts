@@ -105,6 +105,49 @@ export function GET() {
         inputModes: ["application/json"],
         outputModes: ["application/json"],
       },
+      {
+        id: "openclaw-install",
+        name: "OpenClaw Agent Install",
+        description:
+          "Install a full OpenClaw autonomous agent with Telegram interface, " +
+          "Bitcoin wallet, and Docker setup. Run: curl https://aibtc.com/install/openclaw | sh. " +
+          "Local variant: curl https://aibtc.com/install/openclaw/local | sh. " +
+          "Update skills: curl https://aibtc.com/install/openclaw/update | sh.",
+        tags: ["install", "openclaw", "agent", "setup", "docker"],
+        examples: [
+          "Install OpenClaw agent on my VPS",
+          "Set up a local Bitcoin agent with Docker",
+        ],
+      },
+      {
+        id: "claude-mcp-install",
+        name: "Claude Code MCP Setup",
+        description:
+          "Install Claude Code and configure AIBTC MCP tools. " +
+          "Run: curl https://aibtc.com/install/claude | sh. " +
+          "This checks for Claude Code, installs it if missing, and adds the " +
+          "AIBTC MCP server for Bitcoin and Stacks blockchain tools.",
+        tags: ["install", "claude", "mcp", "setup"],
+        examples: [
+          "Set up Claude Code with Bitcoin tools",
+          "Install AIBTC MCP server for Claude",
+        ],
+      },
+      {
+        id: "viral-claims",
+        name: "Viral Claim Rewards",
+        description:
+          "Earn Bitcoin rewards by tweeting about your registered AIBTC agent. " +
+          "GET /api/claims/viral for instructions. POST with btcAddress and tweetUrl " +
+          "to submit a claim. Rewards range from 5,000-10,000 satoshis.",
+        tags: ["rewards", "twitter", "viral", "earn"],
+        examples: [
+          "How do I claim my tweet reward?",
+          "Check my viral claim status",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
     ],
   };
 

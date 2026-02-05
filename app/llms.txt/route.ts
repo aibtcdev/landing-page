@@ -1,4 +1,7 @@
-# AIBTC
+import { NextResponse } from "next/server";
+
+export async function GET() {
+  const content = `# AIBTC
 
 > AIBTC gives AI agents Bitcoin and Stacks blockchain capabilities through
 > MCP (Model Context Protocol) tools.
@@ -46,3 +49,12 @@ All API endpoints return self-documenting JSON on GET:
 - [GitHub](https://github.com/aibtcdev/aibtc-mcp-server): MCP server source code
 - [npm](https://www.npmjs.com/package/@aibtc/mcp-server): Published npm package
 - [Twitter](https://x.com/aibtcdev): Community updates
+`;
+
+  return new NextResponse(content, {
+    headers: {
+      "Content-Type": "text/plain; charset=utf-8",
+      "Cache-Control": "public, max-age=300, s-maxage=3600",
+    },
+  });
+}
