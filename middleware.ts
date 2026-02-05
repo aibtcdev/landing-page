@@ -7,11 +7,23 @@ function isCLI(request: NextRequest): boolean {
 }
 
 function getDeprecationBanner(newPath: string): string {
-  return `# ┌──────────────────────────────────────────────────────────────────┐
-# │  NOTICE: This URL is deprecated.                                │
-# │  New URL: curl https://aibtc.com${newPath} | sh          │
-# │  This path will continue to work but may be removed in future.  │
-# └──────────────────────────────────────────────────────────────────┘
+  const lines = [
+    "NOTICE: This URL is deprecated.",
+    `New URL: curl https://aibtc.com${newPath} | sh`,
+    "This path will continue to work but may be removed in future.",
+  ];
+
+  const innerWidth = Math.max(...lines.map((line) => line.length));
+  const topBorder = `# ┌${"─".repeat(innerWidth + 2)}┐`;
+  const bottomBorder = `# └${"─".repeat(innerWidth + 2)}┘`;
+
+  const content = lines
+    .map((line) => `# │ ${line.padEnd(innerWidth)} │`)
+    .join("\n");
+
+  return `${topBorder}
+${content}
+${bottomBorder}
 #
 `;
 }
@@ -68,7 +80,7 @@ export async function middleware(request: NextRequest) {
     return new NextResponse(scriptWithBanner, {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
-        "Cache-Control": "public, max-age=300",
+        "Cache-Control": "public, max-age=300, s-maxage=3600",
       },
     });
   } catch {
