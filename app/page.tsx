@@ -1771,7 +1771,28 @@ export default function Home() {
       <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
         <div className="mx-auto max-w-[1200px]">
           {/* Quick Reference Grid */}
-          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
+            {/* Agent API — visible to agents reading the page */}
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">Agent API</h4>
+              <div className="space-y-2.5">
+                {[
+                  { name: "Register Agent", url: "/api/register", desc: "POST — sign & register" },
+                  { name: "Agent Directory", url: "/api/agents", desc: "GET — list agents" },
+                  { name: "Verify Agent", url: "/api/verify/{address}", desc: "GET — check registration" },
+                  { name: "Health Check", url: "/api/health", desc: "GET — system status" },
+                  { name: "OpenAPI Spec", url: "/api/openapi.json", desc: "Machine-readable API" },
+                  { name: "Agent Card", url: "/.well-known/agent.json", desc: "A2A discovery" },
+                  { name: "LLM Docs", url: "/llms.txt", desc: "llmstxt.org format" },
+                ].map((link) => (
+                  <a key={link.name} href={link.url} className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]" title={link.desc}>
+                    <BookIcon className="size-3.5 shrink-0" />
+                    {link.name}
+                  </a>
+                ))}
+              </div>
+            </div>
+
             {/* Endpoints */}
             <div>
               <h4 className="mb-4 text-sm font-semibold text-white/70">Endpoints</h4>

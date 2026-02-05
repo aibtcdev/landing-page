@@ -1,213 +1,33 @@
-# AIBTC Agent Skills
+# AIBTC
 
-Bitcoin and Stacks blockchain tools for AI agents.
+> AIBTC gives AI agents Bitcoin and Stacks blockchain capabilities through
+> MCP (Model Context Protocol) tools. Agents can manage wallets, transfer
+> tokens, interact with DeFi protocols, deploy smart contracts, and register
+> in the AIBTC agent directory.
 
----
+The AIBTC platform provides two integration paths:
+- **OpenClaw agent**: Full autonomous agent with Telegram interface (`curl https://aibtc.com | sh`)
+- **MCP server**: Standalone tools for any MCP-compatible agent (`npx @aibtc/mcp-server`)
 
-## Quick Start Options
+## API
 
-### Option A: One-Click Agent (OpenClaw)
+- [Agent Registration](https://aibtc.com/api/register): POST with bitcoinSignature and stacksSignature to register. Message to sign: "Bitcoin will be the currency of AIs"
+- [Agent Directory](https://aibtc.com/api/agents): GET to list all verified agents sorted by registration date
 
-Full autonomous agent with Telegram interface, memory, heartbeat, and social capabilities.
+## Documentation
 
-```bash
-curl https://aibtc.com | sh
-```
+- [Full Documentation](https://aibtc.com/llms-full.txt): Complete reference with MCP tool details, examples, and configuration
+- [OpenAPI Spec](https://aibtc.com/api/openapi.json): Machine-readable API specification (OpenAPI 3.1) for /api/register and /api/agents
+- [Agent Card](https://aibtc.com/.well-known/agent.json): Machine-readable agent capabilities (A2A protocol)
+- [GitHub Repository](https://github.com/aibtcdev/aibtc-mcp-server): MCP server source code
 
-Includes:
+## Setup
 
-- Bitcoin/Stacks wallet with password protection
-- Telegram bot interface
-- Moltbook social network integration
-- Automatic Docker setup
+- [MCP Configuration](https://aibtc.com/llms-full.txt): Add to your MCP settings: {"mcpServers":{"aibtc":{"command":"npx","args":["@aibtc/mcp-server"],"env":{"NETWORK":"mainnet"}}}}
+- [Claude Code Integration](https://github.com/aibtcdev/aibtc-mcp-server): Run npx @aibtc/mcp-server --install for automatic setup
 
-### Option B: Standalone MCP (Bring Your Own Agent)
+## Optional
 
-Add Bitcoin/Stacks tools to any MCP-compatible agent framework.
-
-```bash
-npx @aibtc/mcp-server
-```
-
-Configure your agent's MCP settings:
-
-```json
-{
-  "mcpServers": {
-    "aibtc": {
-      "command": "npx",
-      "args": ["@aibtc/mcp-server"],
-      "env": {
-        "NETWORK": "mainnet"
-      }
-    }
-  }
-}
-```
-
-Requires Node.js 18+ and npm.
-
-**Note:** for Claude Code users, run `npx @aibtc/mcp-server --install` to automatically set up MCP integration.
-
----
-
-## Available Capabilities
-
-Why install the AIBTC agent skills?
-
-**Features:**
-
-- Wallet Management (Bitcoin + Stacks)
-- Balance and Holdings Inspection
-- Transfers (BTC, STX, sBTC, SIP-010 tokens, SIP-009 NFTs)
-- DeFi Operations on Stacks (ALEX DEX, Zest Protocol)
-- BNS Naming Service
-- Bitcoin Inscriptions (Ordinals)
-- Smart Contract Deployment and Calls
-- Message Signing and Verification
-- x402 Paid APIs Access
-- Pillar Smart Wallet Integration
-
-**Addresses:**
-
-- Native SegWit (bc1...): BTC receives, inscriptions
-- Stacks (SP...): STX, sBTC, tokens, NFTs, contracts
-- Taproot (bc1p...): Ordinals, inscriptions
-
-## Configuration
-
-### Fee Estimation
-
-All transaction tools support:
-
-- Preset: `fast` (~10 min), `medium` (~30 min), `slow` (~1 hour)
-- Explicit: number in sat/vB (BTC) or micro-STX (Stacks)
-
-Default is `medium` if not specified.
-
-## Networks
-
-### Mainnet
-
-- Real Bitcoin and Stacks
-- Real fees, real value
-- ALEX DEX and Zest Protocol available
-- BNS registrations cost STX
-
-### Testnet
-
-- Test BTC and STX from faucets
-- Lower fees
-- Limited DeFi availability
-- Good for development and testing
-
-## Tool Reference
-
-### Wallet Lifecycle
-
-```
-Create → Unlock → [Operations] → Lock
-          ↑___________________|
-```
-
-Wallet must be unlocked for any signing operation (transfers, contract calls, etc.).
-
-### Transaction Flow
-
-1. **Quote/Estimate** - Check costs before committing
-2. **Confirm with user** - Show amounts, fees, recipients
-3. **Execute** - Sign and broadcast
-4. **Verify** - Check status with txid
-
-### Error Handling
-
-Common patterns:
-
-- `wallet_unlock` required before transfers
-- Insufficient balance includes fee estimation
-- Network errors: retry with higher fee
-- Contract errors: check function args match ABI
-
----
-
-## Examples
-
-### Check Balance and Send STX
-
-```javascript
-// Check balance
-const balance = await tools.get_stx_balance({});
-
-// Unlock wallet
-await tools.wallet_unlock({ password: "user-provided-password" });
-
-// Send STX
-const result = await tools.transfer_stx({
-  recipient: "SP2GHQRCRMYY4S8PMBR49BEKX144VR437YT42SF3B",
-  amount: "1000000", // 1 STX = 1,000,000 micro-STX
-  memo: "Thanks!",
-});
-
-// Lock wallet
-await tools.wallet_lock({});
-```
-
-### Swap Tokens on ALEX
-
-```javascript
-// Get quote
-const quote = await tools.alex_get_swap_quote({
-  tokenX: "SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-wstx-v2",
-  tokenY: "SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-wsbtc-v2",
-  amountIn: "1000000",
-});
-
-// Execute swap (wallet must be unlocked)
-const result = await tools.alex_swap({
-  tokenX: "SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-wstx-v2",
-  tokenY: "SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-wsbtc-v2",
-  amountIn: "1000000",
-  minAmountOut: quote.expectedOut, // Slippage protection
-});
-```
-
-### Inscribe Content to Bitcoin
-
-```javascript
-// Step 1: Estimate fee
-const estimate = await tools.estimate_inscription_fee({
-  contentType: "text/plain",
-  contentBase64: Buffer.from("Hello Bitcoin").toString("base64"),
-  feeRate: 10, // sat/vB
-});
-
-// Step 2: Commit (wallet must be unlocked)
-const commit = await tools.inscribe({
-  contentType: "text/plain",
-  contentBase64: Buffer.from("Hello Bitcoin").toString("base64"),
-  feeRate: "medium",
-});
-
-// Step 3: Wait for confirmation (~10-60 min), then reveal
-const inscription = await tools.inscribe_reveal({
-  commitTxid: commit.commitTxid,
-  contentType: "text/plain",
-  contentBase64: Buffer.from("Hello Bitcoin").toString("base64"),
-  revealAmount: commit.revealAmount,
-});
-```
-
-## Security Best Practices
-
-1. **Wallet Password** - Human holds password, agent requests it per transaction
-2. **Mnemonic Backup** - Generated on wallet creation, must be saved securely
-3. **Auto-lock** - Wallet locks automatically after timeout (configurable)
-4. **Cardinal vs Ordinal UTXOs** - Regular transfers use cardinal UTXOs only (safe)
-5. **Confirmation** - Always show transaction details before execution
-6. **Network Check** - Verify mainnet vs testnet before value transfers
-
-## Resources
-
-- **GitHub**: https://github.com/aibtcdev/aibtc-mcp-server
-- **npm**: `@aibtc/mcp-server`
-- **X**: @aibtcdev
+- [Agent Registry Page](https://aibtc.com/agents): Human-readable agent directory with display names and BTC addresses
+- [npm Package](https://www.npmjs.com/package/@aibtc/mcp-server): Published npm package for the MCP server
+- [Twitter](https://x.com/aibtcdev): Community updates and announcements
