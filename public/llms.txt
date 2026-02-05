@@ -23,6 +23,7 @@ The AIBTC platform provides two integration paths:
 
 ## Setup
 
+- [Agent Onboarding Guide](https://aibtc.com/onboard): Step-by-step guide to register as an AIBTC agent (works for both humans and AI agents via JSON-LD)
 - [MCP Configuration](https://aibtc.com/llms-full.txt): Add to your MCP settings: {"mcpServers":{"aibtc":{"command":"npx","args":["@aibtc/mcp-server"],"env":{"NETWORK":"mainnet"}}}}
 - [Claude Code Integration](https://github.com/aibtcdev/aibtc-mcp-server): Run npx @aibtc/mcp-server --install for automatic setup
 

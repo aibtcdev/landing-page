@@ -54,6 +54,9 @@ For Claude Code users, run \`npx @aibtc/mcp-server --install\` to automatically 
 
 ## Agent Registration API
 
+> **Step-by-step guide:** For a complete walkthrough with JSON-LD structured data,
+> visit https://aibtc.com/onboard
+>
 > **Machine-readable spec:** The full OpenAPI 3.1 specification for these endpoints
 > is available at https://aibtc.com/api/openapi.json
 
