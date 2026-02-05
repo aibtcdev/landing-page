@@ -19,6 +19,17 @@ export async function GET() {
 
     // List all agents keyed by stx: prefix (avoids duplicates from btc: keys)
     // Handle pagination for >1000 agents
+    //
+    // Memory limitation:
+    // All agents are loaded into memory for sorting by verifiedAt timestamp.
+    // This is acceptable for small-to-medium datasets (<10k agents).
+    //
+    // Future optimization if needed:
+    // - Add query param for pagination (?limit=100&offset=0)
+    // - Store agents in Durable Object for sorted index
+    // - Use separate KV key with pre-sorted agent IDs
+    //
+    // Current worst case: ~10k agents * ~500 bytes/record = ~5MB in memory
     const agents: AgentRecord[] = [];
     let cursor: string | undefined;
     let listComplete = false;
@@ -31,7 +42,11 @@ export async function GET() {
       listComplete = listResult.list_complete;
       cursor = !listResult.list_complete ? listResult.cursor : undefined;
 
-      // Fetch all values in parallel for better performance
+      // N+1 query pattern (known KV limitation):
+      // KV has no batch get operation, so we must call kv.get() for each key.
+      // We use Promise.all to parallelize these gets for better performance.
+      // For 1000 agents (max per page), this means 1000 concurrent KV reads,
+      // which is acceptable for Cloudflare's infrastructure.
       const values = await Promise.all(
         listResult.keys.map(async (key) => {
           const value = await kv.get(key.name);
@@ -39,6 +54,9 @@ export async function GET() {
           try {
             return JSON.parse(value) as AgentRecord;
           } catch (e) {
+            // Log parse failures for debugging (Cloudflare Worker logs)
+            // This is intentional - Workers don't have structured logging,
+            // console.error writes to wrangler tail output for ops visibility
             console.error(`Failed to parse agent record ${key.name}:`, e);
             return null;
           }
