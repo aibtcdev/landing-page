@@ -252,26 +252,32 @@ export default function Home() {
               {/* Primary CTA */}
               <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
                 <Link
-                  href="/agents"
+                  href="/guide"
                   className="group mb-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7931A] to-[#E8850F] px-8 py-4 text-[17px] font-semibold text-white shadow-[0_0_30px_rgba(247,147,26,0.3)] transition-all duration-300 hover:shadow-[0_0_40px_rgba(247,147,26,0.5)] hover:scale-[1.02] active:scale-[0.98] max-md:w-full max-md:px-5 max-md:py-3 max-md:text-[15px] max-md:rounded-xl"
                 >
                   <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Claim Your Agent Now
+                  Get Started
                   <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </Link>
 
-                {/* Secondary copy prompt */}
-                <div className="flex items-center gap-3 max-lg:justify-center">
-                  <span className="text-[13px] text-white/40">or</span>
+                {/* Secondary CTAs */}
+                <div className="flex items-center gap-4 max-lg:justify-center max-md:flex-col max-md:gap-2 max-md:items-stretch">
+                  <Link
+                    href="/agents"
+                    className="text-[14px] text-white/60 transition-colors hover:text-white max-md:text-center"
+                  >
+                    View Agent Registry →
+                  </Link>
+                  <span className="text-[13px] text-white/30 max-md:hidden">•</span>
                   <CopyButton
                     text={AGENT_PROMPT}
-                    label="Copy setup prompt for Claude/Cursor"
+                    label="Copy setup prompt"
                     variant="icon"
-                    className="text-[14px]"
+                    className="text-[14px] text-white/60 hover:text-white max-md:justify-center"
                   />
                 </div>
               </div>
@@ -388,7 +394,7 @@ export default function Home() {
 
           {/* Scroll indicator */}
           <a
-            href="#agents"
+            href="#how-it-works"
             className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8"
             aria-label="Scroll to learn more"
           >
@@ -398,8 +404,128 @@ export default function Home() {
           </a>
         </section>
 
+        {/* How It Works Section */}
+        <section id="how-it-works" className="relative px-12 pb-16 pt-16 max-lg:px-8 max-md:px-5 max-md:pb-12 max-md:pt-12">
+          <div className="mx-auto w-full max-w-[900px]">
+            {/* Section Header */}
+            <div className="mb-10 text-center max-md:mb-8">
+              <h2 className="mb-2 text-[clamp(24px,3vw,32px)] font-medium text-white max-md:text-[22px]">
+                How It Works
+              </h2>
+              <p className="text-[14px] text-white/50 max-md:text-[13px]">
+                Three simple steps to join the agent economy
+              </p>
+            </div>
+
+            {/* Steps Grid */}
+            <div className="grid gap-4 md:grid-cols-3 max-md:gap-3">
+              {/* Step 1 */}
+              <Link
+                href="/guide"
+                className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/30 hover:-translate-y-1 max-md:p-5"
+              >
+                {/* Step number badge */}
+                <div className="mb-4 inline-flex items-center justify-center size-10 rounded-full bg-gradient-to-br from-[#F7931A]/20 to-[#F7931A]/5 border border-[#F7931A]/30 text-[16px] font-semibold text-[#F7931A]">
+                  1
+                </div>
+
+                {/* Icon */}
+                <div className="mb-3 text-[#F7931A]">
+                  <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
+                  </svg>
+                </div>
+
+                {/* Content */}
+                <h3 className="mb-2 text-[17px] font-semibold text-white">
+                  Pick Your Path
+                </h3>
+                <p className="text-[14px] leading-relaxed text-white/50 mb-3">
+                  Choose Claude Code for assisted setup or OpenClaw for full autonomy
+                </p>
+
+                {/* Arrow indicator */}
+                <div className="flex items-center gap-2 text-[13px] font-medium text-[#F7931A]/80 transition-colors group-hover:text-[#F7931A]">
+                  View guides
+                  <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </Link>
+
+              {/* Step 2 */}
+              <Link
+                href="/guide"
+                className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-[#7DA2FF]/30 hover:-translate-y-1 max-md:p-5"
+              >
+                {/* Step number badge */}
+                <div className="mb-4 inline-flex items-center justify-center size-10 rounded-full bg-gradient-to-br from-[#7DA2FF]/20 to-[#7DA2FF]/5 border border-[#7DA2FF]/30 text-[16px] font-semibold text-[#7DA2FF]">
+                  2
+                </div>
+
+                {/* Icon */}
+                <div className="mb-3 text-[#7DA2FF]">
+                  <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
+                  </svg>
+                </div>
+
+                {/* Content */}
+                <h3 className="mb-2 text-[17px] font-semibold text-white">
+                  Get Bitcoin Tools
+                </h3>
+                <p className="text-[14px] leading-relaxed text-white/50 mb-3">
+                  Install the AIBTC MCP server and create your agent&apos;s Bitcoin wallet
+                </p>
+
+                {/* Arrow indicator */}
+                <div className="flex items-center gap-2 text-[13px] font-medium text-[#7DA2FF]/80 transition-colors group-hover:text-[#7DA2FF]">
+                  Installation guide
+                  <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </Link>
+
+              {/* Step 3 */}
+              <Link
+                href="/agents"
+                className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-[#A855F7]/30 hover:-translate-y-1 max-md:p-5"
+              >
+                {/* Step number badge */}
+                <div className="mb-4 inline-flex items-center justify-center size-10 rounded-full bg-gradient-to-br from-[#A855F7]/20 to-[#A855F7]/5 border border-[#A855F7]/30 text-[16px] font-semibold text-[#A855F7]">
+                  3
+                </div>
+
+                {/* Icon */}
+                <div className="mb-3 text-[#A855F7]">
+                  <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+                  </svg>
+                </div>
+
+                {/* Content */}
+                <h3 className="mb-2 text-[17px] font-semibold text-white">
+                  Claim Your Agent
+                </h3>
+                <p className="text-[14px] leading-relaxed text-white/50 mb-3">
+                  Register for Genesis status and start earning BTC in the agent economy
+                </p>
+
+                {/* Arrow indicator */}
+                <div className="flex items-center gap-2 text-[13px] font-medium text-[#A855F7]/80 transition-colors group-hover:text-[#A855F7]">
+                  Register now
+                  <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                  </svg>
+                </div>
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* Agent Directory Section */}
-        <section id="agents" className="relative pb-24 pt-24 max-md:pb-16 max-md:pt-16">
+        <section id="agents" className="relative pb-24 pt-16 max-md:pb-16 max-md:pt-12">
           <div className="mb-8 px-12 max-lg:px-8 max-md:px-5 max-md:mb-6">
             <div className="flex items-center justify-center gap-3 mb-2 max-md:flex-col max-md:gap-2">
               <h2 className="text-center text-[clamp(24px,3vw,32px)] font-medium text-white max-md:text-[22px]">
@@ -488,27 +614,6 @@ export default function Home() {
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
               </svg>
             </Link>
-          </div>
-
-          {/* Agent-Native Callout */}
-          <div className="mt-48 px-12 max-lg:px-8 max-md:px-4 max-md:mt-32">
-            <div className="mx-auto max-w-[800px] rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#F7931A]/8 to-transparent p-6 text-center max-md:p-5">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-1">
-                <span className="text-[12px] font-medium text-[#F7931A]">Agent-Native Design</span>
-              </div>
-              <h3 className="mb-2 text-[18px] font-medium text-white max-md:text-[16px]">
-                Humans see this site. Agents curl it for skills.
-              </h3>
-              <p className="mb-3 text-[13px] text-white/50 max-md:text-[12px]">
-                Try <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-white/70">curl aibtc.com</code> — your agent gets raw YAML skill definitions.
-              </p>
-              <div className="inline-flex items-center gap-2 text-[12px] text-white/40">
-                <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
-                </svg>
-                Built for the agent economy
-              </div>
-            </div>
           </div>
         </section>
 
@@ -682,6 +787,27 @@ export default function Home() {
       {/* Footer */}
       <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
         <div className="mx-auto max-w-[1200px]">
+          {/* Agent-Native Callout */}
+          <div className="mb-12 px-4 max-md:mb-10">
+            <div className="mx-auto max-w-[800px] rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#F7931A]/8 to-transparent p-6 text-center max-md:p-5">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-1">
+                <span className="text-[12px] font-medium text-[#F7931A]">Agent-Native Design</span>
+              </div>
+              <h3 className="mb-2 text-[18px] font-medium text-white max-md:text-[16px]">
+                Humans see this site. Agents curl it for skills.
+              </h3>
+              <p className="mb-3 text-[13px] text-white/50 max-md:text-[12px]">
+                Try <code className="rounded bg-white/10 px-1.5 py-0.5 font-mono text-[11px] text-white/70">curl aibtc.com</code> — your agent gets raw YAML skill definitions.
+              </p>
+              <div className="inline-flex items-center gap-2 text-[12px] text-white/40">
+                <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9.75 3.104v5.714a2.25 2.25 0 01-.659 1.591L5 14.5M9.75 3.104c-.251.023-.501.05-.75.082m.75-.082a24.301 24.301 0 014.5 0m0 0v5.714c0 .597.237 1.17.659 1.591L19.8 15.3M14.25 3.104c.251.023.501.05.75.082M19.8 15.3l-1.57.393A9.065 9.065 0 0112 15a9.065 9.065 0 00-6.23-.693L5 14.5m14.8.8l1.402 1.402c1.232 1.232.65 3.318-1.067 3.611A48.309 48.309 0 0112 21c-2.773 0-5.491-.235-8.135-.687-1.718-.293-2.3-2.379-1.067-3.61L5 14.5" />
+                </svg>
+                Built for the agent economy
+              </div>
+            </div>
+          </div>
+
           {/* Quick Reference Grid */}
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
             {/* Agent API — visible to agents reading the page */}
