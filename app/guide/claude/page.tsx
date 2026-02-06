@@ -135,8 +135,8 @@ export default function ClaudeGuide() {
         <div className="mx-auto max-w-[900px]">
           {/* Page Header */}
           <div className="mb-12 text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#7DA2FF]/30 bg-[#7DA2FF]/10 px-4 py-1.5">
-              <span className="text-[13px] font-medium text-[#7DA2FF]">Claude Code Integration</span>
+            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-4 py-1.5">
+              <span className="text-[13px] font-medium text-[#F7931A]">Claude Code Integration</span>
             </div>
             <h1 className="mb-4 text-[clamp(36px,4.5vw,56px)] font-medium leading-[1.1] text-white">
               Claude from Zero to Agent
@@ -156,7 +156,7 @@ export default function ClaudeGuide() {
                 {/* Step Header */}
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[rgba(125,162,255,0.3)] bg-gradient-to-br from-[rgba(125,162,255,0.2)] to-[rgba(125,162,255,0.05)] text-[18px] font-semibold text-[#7DA2FF]">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[#F7931A]/30 bg-gradient-to-br from-[#F7931A]/20 to-[#F7931A]/5 text-[18px] font-semibold text-[#F7931A]">
                       {step.id}
                     </div>
                     <div>
@@ -196,7 +196,7 @@ export default function ClaudeGuide() {
                         />
                       </div>
                       <div className="rounded-b-lg border border-t-0 border-white/[0.08] bg-black/40 px-4 py-3">
-                        <pre className="overflow-x-auto text-[13px] leading-relaxed text-[#7DA2FF]">
+                        <pre className="overflow-x-auto text-[13px] leading-relaxed text-[#F7931A]">
                           <code>{step.command}</code>
                         </pre>
                       </div>
@@ -222,12 +222,12 @@ export default function ClaudeGuide() {
                 {step.conversation && (
                   <div className="space-y-3">
                     {/* User message */}
-                    <div className="rounded-lg border border-[#7DA2FF]/20 bg-[#7DA2FF]/5 px-4 py-3">
+                    <div className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3">
                       <div className="mb-1 flex items-center gap-2">
-                        <svg className="size-4 text-[#7DA2FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <svg className="size-4 text-white/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                           <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
                         </svg>
-                        <span className="text-[12px] font-medium text-[#7DA2FF]">You</span>
+                        <span className="text-[12px] font-medium text-white/60">You</span>
                       </div>
                       <p className="text-[14px] leading-relaxed text-white/80">
                         {step.conversation.user}
@@ -235,12 +235,12 @@ export default function ClaudeGuide() {
                     </div>
 
                     {/* Claude response */}
-                    <div className="rounded-lg border border-[#A855F7]/20 bg-[#A855F7]/5 px-4 py-3">
+                    <div className="rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/5 px-4 py-3">
                       <div className="mb-1 flex items-center gap-2">
-                        <svg className="size-4 text-[#A855F7]" viewBox="0 0 24 24" fill="currentColor">
+                        <svg className="size-4 text-[#F7931A]" viewBox="0 0 24 24" fill="currentColor">
                           <path d="M3 12a9 9 0 0118 0 9 9 0 01-18 0zm9-7a7 7 0 00-7 7 7 7 0 0014 0 7 7 0 00-7-7zm0 2a5 5 0 110 10 5 5 0 010-10z" />
                         </svg>
-                        <span className="text-[12px] font-medium text-[#A855F7]">Claude</span>
+                        <span className="text-[12px] font-medium text-[#F7931A]">Claude</span>
                       </div>
                       <pre className="whitespace-pre-wrap text-[14px] leading-relaxed text-white/80">
                         {step.conversation.claude}
@@ -270,15 +270,15 @@ export default function ClaudeGuide() {
           </div>
 
           {/* What's Next */}
-          <div className="mt-12 rounded-xl border border-[rgba(168,85,247,0.25)] bg-gradient-to-br from-[rgba(168,85,247,0.1)] to-transparent px-6 py-5">
+          <div className="mt-12 rounded-xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent px-6 py-5">
             <h3 className="mb-3 text-[18px] font-semibold text-white">What&apos;s Next?</h3>
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
               <p>Once your agent has Bitcoin powers, you can:</p>
               <ul className="ml-5 list-disc space-y-1">
-                <li>Register your agent at <Link href="/agents" className="text-[#A855F7] hover:underline">aibtc.com/agents</Link> to earn Genesis rewards</li>
-                <li>Deploy your own OpenClaw agent with <Link href="/guide/openclaw" className="text-[#A855F7] hover:underline">one command</Link></li>
-                <li>Build payment-gated APIs with <a href="https://x402.org" target="_blank" rel="noopener noreferrer" className="text-[#A855F7] hover:underline">x402 protocol</a></li>
-                <li>Join the community on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#A855F7] hover:underline">Discord</a></li>
+                <li>Register your agent at <Link href="/agents" className="text-[#F7931A] hover:underline">aibtc.com/agents</Link> to earn Genesis rewards</li>
+                <li>Deploy your own OpenClaw agent with <Link href="/guide/openclaw" className="text-[#F7931A] hover:underline">one command</Link></li>
+                <li>Build payment-gated APIs with <a href="https://x402.org" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">x402 protocol</a></li>
+                <li>Join the community on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Discord</a></li>
               </ul>
             </div>
           </div>

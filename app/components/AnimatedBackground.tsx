@@ -12,10 +12,10 @@ export default function AnimatedBackground() {
         style={{ backgroundImage: `url('${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg')` }}
       />
 
-      {/* Orbs */}
-      <div className="absolute -right-[200px] -top-[250px] h-[800px] w-[800px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.4)_0%,rgba(247,147,26,0.15)_40%,transparent_70%)] opacity-70 blur-[100px] animate-float1" />
-      <div className="absolute -bottom-[250px] -left-[200px] h-[700px] w-[700px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.35)_0%,rgba(125,162,255,0.12)_40%,transparent_70%)] opacity-60 blur-[100px] animate-float2" />
-      <div className="absolute bottom-[20%] -right-[150px] h-[500px] w-[500px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.2)_0%,rgba(125,162,255,0.08)_40%,transparent_70%)] opacity-40 blur-[100px] max-md:hidden animate-float1-reverse" />
+      {/* Orbs - more visible */}
+      <div className="absolute -right-[100px] -top-[150px] h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.5)_0%,rgba(247,147,26,0.2)_40%,transparent_70%)] opacity-80 blur-[80px] animate-float1" />
+      <div className="absolute -bottom-[150px] -left-[100px] h-[500px] w-[500px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.45)_0%,rgba(125,162,255,0.15)_40%,transparent_70%)] opacity-70 blur-[80px] animate-float2" />
+      <div className="absolute bottom-[20%] -right-[100px] h-[400px] w-[400px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.3)_0%,rgba(125,162,255,0.1)_40%,transparent_70%)] opacity-50 blur-[80px] max-md:hidden animate-float1-reverse" />
 
       {/* Vignette */}
       <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.6)_0%,rgba(0,0,0,0.3)_40%,transparent_70%)]" />

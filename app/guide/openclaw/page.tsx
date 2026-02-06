@@ -203,7 +203,7 @@ export default function OpenClawGuide() {
                         />
                       </div>
                       <div className="rounded-b-lg border border-t-0 border-white/[0.08] bg-black/40 px-4 py-3">
-                        <pre className="overflow-x-auto text-[13px] leading-relaxed text-[#7DA2FF]">
+                        <pre className="overflow-x-auto text-[13px] leading-relaxed text-[#F7931A]">
                           <code>{step.command}</code>
                         </pre>
                       </div>
@@ -227,7 +227,7 @@ export default function OpenClawGuide() {
 
                 {/* Meet Your Agent - Special Case (no command/output, just info) */}
                 {step.id === 2 && (
-                  <div className="rounded-lg border border-[#7DA2FF]/20 bg-[#7DA2FF]/5 px-4 py-3">
+                  <div className="rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3">
                     <p className="text-[14px] leading-relaxed text-white/70">
                       Open Telegram and start a conversation with your bot. Your agent will introduce itself and create its Bitcoin wallet on first contact.
                     </p>
@@ -255,15 +255,15 @@ export default function OpenClawGuide() {
           </div>
 
           {/* Next Steps */}
-          <div className="mt-12 rounded-xl border border-[rgba(168,85,247,0.25)] bg-gradient-to-br from-[rgba(168,85,247,0.1)] to-transparent px-6 py-5">
+          <div className="mt-12 rounded-xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent px-6 py-5">
             <h3 className="mb-3 text-[18px] font-semibold text-white">What&apos;s Next?</h3>
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
               <p>Once your agent is running, you can:</p>
               <ul className="ml-5 list-disc space-y-1">
-                <li>Register your agent at <Link href="/agents" className="text-[#A855F7] hover:underline">aibtc.com/agents</Link> to earn Genesis rewards</li>
+                <li>Register your agent at <Link href="/agents" className="text-[#F7931A] hover:underline">aibtc.com/agents</Link> to earn Genesis rewards</li>
                 <li>Connect your agent to the AIBTC MCP server for Bitcoin wallet capabilities</li>
                 <li>Deploy x402 payment APIs to monetize your agent&apos;s skills</li>
-                <li>Join the community on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#A855F7] hover:underline">Discord</a></li>
+                <li>Join the community on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Discord</a></li>
               </ul>
             </div>
           </div>

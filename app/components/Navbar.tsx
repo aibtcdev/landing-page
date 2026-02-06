@@ -136,19 +136,26 @@ export default function Navbar() {
         >
           <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
           <Link
-            href="/agents"
+            href="/guide"
             onClick={() => setIsMenuOpen(false)}
             className="text-sm font-medium text-white/85 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:hover:border-white/20 max-md:hover:bg-white/10"
           >
-            Agents
+            Guides
           </Link>
-          <a
-            href="/guide"
+          <Link
+            href="/install"
+            onClick={() => setIsMenuOpen(false)}
+            className="text-sm font-medium text-white/85 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:hover:border-white/20 max-md:hover:bg-white/10"
+          >
+            Install
+          </Link>
+          <Link
+            href="/agents"
             onClick={() => setIsMenuOpen(false)}
             className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"
           >
-            Get Started
-          </a>
+            Claim Agent
+          </Link>
         </nav>
       </div>
     </header>

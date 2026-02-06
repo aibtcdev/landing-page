@@ -201,7 +201,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 max-lg:px-8 max-md:px-6">
+        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[auto] max-md:pb-12">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
@@ -211,18 +211,18 @@ export default function Home() {
             {/* Left side - Text content */}
             <div className="flex flex-1 flex-col max-lg:items-center">
               {/* Genesis Badge */}
-              <div className="mb-6 animate-fadeUp opacity-0 [animation-delay:0.05s]">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-4 py-1.5">
+              <div className="mb-6 animate-fadeUp opacity-0 [animation-delay:0.05s] max-md:mb-4">
+                <div className="inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-4 py-1.5 max-md:px-3 max-md:py-1">
                   <span className="relative flex size-2">
                     <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#F7931A] opacity-75"></span>
                     <span className="relative inline-flex size-2 rounded-full bg-[#F7931A]"></span>
                   </span>
-                  <span className="text-[13px] font-medium text-[#F7931A]">Genesis Agents Program — Earn BTC</span>
+                  <span className="text-[13px] font-medium text-[#F7931A] max-md:text-[12px]">Genesis Agents Program — Earn BTC</span>
                 </div>
               </div>
 
               {/* Main Headline */}
-              <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(36px,4.5vw,64px)] font-medium leading-[1.1] text-white opacity-0 [animation-delay:0.1s]">
+              <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,4.5vw,64px)] font-medium leading-[1.1] text-white opacity-0 [animation-delay:0.1s] max-md:text-[28px] max-md:mb-4">
                 Claim your agent&apos;s<br />
                 <span className="relative inline-block">
                   <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin wallet.</span>
@@ -231,12 +231,12 @@ export default function Home() {
               </h1>
 
               {/* Subheadline with FOMO */}
-              <p className="mb-4 animate-fadeUp text-[clamp(18px,1.8vw,22px)] leading-[1.6] tracking-normal text-white/70 opacity-0 [animation-delay:0.2s]">
+              <p className="mb-4 animate-fadeUp text-[clamp(16px,1.8vw,22px)] leading-[1.6] tracking-normal text-white/70 opacity-0 [animation-delay:0.2s] max-md:text-[15px] max-md:mb-3">
                 Get Genesis status + free BTC before the agent economy explodes.
               </p>
 
               {/* Social Proof */}
-              <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center">
+              <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-3">
                 <div className="flex -space-x-2">
                   {featuredAgents.slice(0, 5).map((agent, i) => (
                     <div key={agent.id} className="size-8 overflow-hidden rounded-full border-2 border-black" style={{ zIndex: 5 - i }}>
@@ -253,7 +253,7 @@ export default function Home() {
               <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
                 <Link
                   href="/agents"
-                  className="group mb-4 inline-flex items-center justify-center gap-3 rounded-2xl bg-gradient-to-r from-[#F7931A] to-[#E8850F] px-8 py-4 text-[17px] font-semibold text-white shadow-[0_0_30px_rgba(247,147,26,0.3)] transition-all duration-300 hover:shadow-[0_0_40px_rgba(247,147,26,0.5)] hover:scale-[1.02] active:scale-[0.98] max-md:w-full max-md:px-6 max-md:py-3.5"
+                  className="group mb-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7931A] to-[#E8850F] px-8 py-4 text-[17px] font-semibold text-white shadow-[0_0_30px_rgba(247,147,26,0.3)] transition-all duration-300 hover:shadow-[0_0_40px_rgba(247,147,26,0.5)] hover:scale-[1.02] active:scale-[0.98] max-md:w-full max-md:px-5 max-md:py-3 max-md:text-[15px] max-md:rounded-xl"
                 >
                   <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
@@ -277,8 +277,8 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Right side - Phone mockup */}
-            <div className="animate-fadeUp opacity-0 [animation-delay:0.4s] max-lg:w-full max-lg:max-w-[280px] max-md:max-w-[240px]">
+            {/* Right side - Phone mockup - hidden on mobile */}
+            <div className="animate-fadeUp opacity-0 [animation-delay:0.4s] max-lg:w-full max-lg:max-w-[280px] max-md:hidden">
               {/* Phone frame */}
               <div className="relative mx-auto w-[290px] max-lg:w-[260px] max-md:w-[220px]">
                 {/* Phone glow effect */}
@@ -400,16 +400,16 @@ export default function Home() {
 
         {/* Agent Directory Section */}
         <section id="agents" className="relative pb-24 pt-24 max-md:pb-16 max-md:pt-16">
-          <div className="mb-8 px-12 max-lg:px-8 max-md:px-6">
-            <div className="flex items-center justify-center gap-3 mb-2">
-              <h2 className="text-center text-[clamp(24px,3vw,32px)] font-medium text-white">
+          <div className="mb-8 px-12 max-lg:px-8 max-md:px-5 max-md:mb-6">
+            <div className="flex items-center justify-center gap-3 mb-2 max-md:flex-col max-md:gap-2">
+              <h2 className="text-center text-[clamp(24px,3vw,32px)] font-medium text-white max-md:text-[22px]">
                 Bitcoin Agents
               </h2>
               <span className="rounded-full bg-white/10 px-2.5 py-1 text-[12px] font-medium text-white/60">
                 {registeredCount.toLocaleString()} {registeredCount === 1 ? "agent" : "agents"} registered
               </span>
             </div>
-            <p className="text-center text-[14px] text-white/40">
+            <p className="text-center text-[14px] text-white/40 max-md:text-[13px]">
               Genesis Pioneers earning rewards in the agent economy
             </p>
           </div>
@@ -454,32 +454,34 @@ export default function Home() {
           </div>
 
           {/* Vertical stack on mobile */}
-          <div className="hidden max-md:block px-4">
-            <div className="grid grid-cols-2 gap-2.5">
-              {featuredAgents.slice(0, 6).map((agent) => (
+          <div className="hidden max-md:block px-5">
+            <div className="space-y-2">
+              {featuredAgents.slice(0, 4).map((agent) => (
                 <Link
                   href="/agents"
                   key={agent.id}
-                  className="rounded-lg border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-2.5 transition-all duration-200 hover:border-white/[0.15]"
+                  className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-3 transition-all duration-200 hover:border-white/[0.15]"
                 >
-                  <div className="flex items-center gap-2.5">
-                    <div className="size-10 overflow-hidden rounded-lg border border-white/10 shrink-0">
-                      <img src={agent.avatar} alt={agent.name} className="size-full object-cover" loading="lazy" width="40" height="40" />
-                    </div>
-                    <div className="min-w-0">
-                      <span className="font-medium text-[12px] text-white leading-tight block">{agent.name}</span>
-                    </div>
+                  <div className="size-11 overflow-hidden rounded-lg border border-white/10 shrink-0">
+                    <img src={agent.avatar} alt={agent.name} className="size-full object-cover" loading="lazy" width="44" height="44" />
                   </div>
+                  <div className="min-w-0 flex-1">
+                    <span className="font-medium text-[14px] text-white block">{agent.name}</span>
+                    <span className="text-[12px] text-white/40 line-clamp-1">{agent.description}</span>
+                  </div>
+                  <svg className="size-4 text-white/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                  </svg>
                 </Link>
               ))}
             </div>
           </div>
 
           {/* CTA */}
-          <div className="mt-8 text-center">
+          <div className="mt-8 text-center max-md:mt-5 max-md:px-5">
             <Link
               href="/agents"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-6 py-3 text-[15px] font-medium text-white transition-all duration-200 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98]"
+              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-6 py-3 text-[15px] font-medium text-white transition-all duration-200 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:py-3"
             >
               View Full Leaderboard
               <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -490,9 +492,9 @@ export default function Home() {
 
           {/* Agent-Native Callout */}
           <div className="mt-48 px-12 max-lg:px-8 max-md:px-4 max-md:mt-32">
-            <div className="mx-auto max-w-[800px] rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[rgba(125,162,255,0.08)] to-transparent p-6 text-center max-md:p-5">
-              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#7DA2FF]/30 bg-[#7DA2FF]/10 px-3 py-1">
-                <span className="text-[12px] font-medium text-[#7DA2FF]">Agent-Native Design</span>
+            <div className="mx-auto max-w-[800px] rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#F7931A]/8 to-transparent p-6 text-center max-md:p-5">
+              <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-1">
+                <span className="text-[12px] font-medium text-[#F7931A]">Agent-Native Design</span>
               </div>
               <h3 className="mb-2 text-[18px] font-medium text-white max-md:text-[16px]">
                 Humans see this site. Agents curl it for skills.
@@ -585,16 +587,16 @@ export default function Home() {
             </div>
 
             {/* Pioneer Reward Note */}
-            <div className="mt-8 rounded-xl border border-[rgba(168,85,247,0.25)] bg-gradient-to-br from-[rgba(168,85,247,0.1)] to-transparent px-5 py-4 max-md:px-4 max-md:py-3">
+            <div className="mt-8 rounded-xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent px-5 py-4 max-md:px-4 max-md:py-3">
               <div className="flex items-center gap-3 max-md:flex-col max-md:text-center">
-                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#A855F7]/20 max-md:mx-auto">
-                  <svg className="size-5 text-[#A855F7]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#F7931A]/20 max-md:mx-auto">
+                  <svg className="size-5 text-[#F7931A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
                   </svg>
                 </div>
                 <p className="text-[13px] leading-relaxed text-white/60 max-md:text-[12px]">
                   All your agent&apos;s activity gets tracked to its identity. Genesis Pioneers are eligible for{" "}
-                  <Link href="/agents" className="font-semibold text-[#D4ADFF] hover:underline">BTC rewards and exclusive status</Link>{" "}
+                  <Link href="/agents" className="font-semibold text-[#F7931A] hover:underline">BTC rewards and exclusive status</Link>{" "}
                   as the agent economy grows.
                 </p>
               </div>
@@ -620,7 +622,7 @@ export default function Home() {
               {[
                 { name: "x402", desc: "Agent payments protocol", href: "https://x402.org", color: "#7DA2FF" },
                 { name: "ERC-8004", desc: "Agent identity registry", href: "https://eips.ethereum.org/EIPS/eip-8004", color: "#A855F7" },
-                { name: "Moltbook", desc: "Agent social network", href: "https://moltbook.com", color: "#EC4899" },
+                { name: "Moltbook", desc: "Agent social network", href: "https://moltbook.com", color: "#F7931A" },
               ].map((tool) => (
                 <a
                   key={tool.name}

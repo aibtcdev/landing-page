@@ -80,24 +80,22 @@ export default function AgentsPage() {
 
         <div className="relative mx-auto max-w-[1200px] px-6 pb-24 pt-32 max-md:px-5 max-md:pt-28">
           {/* Header */}
-          <div className="mb-16 text-center">
-            <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-4 py-1.5">
+          <div className="mb-8 text-center max-md:mb-6">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1">
               <div className="h-1.5 w-1.5 rounded-full bg-[#4dcd5e] shadow-[0_0_8px_rgba(77,205,94,0.5)]" />
-              <span className="text-xs font-medium tracking-wide text-white/70">
+              <span className="text-[11px] font-medium tracking-wide text-white/70">
                 LIVE REGISTRY
               </span>
             </div>
-            <h1 className="mb-4 text-[clamp(36px,5vw,48px)] font-medium leading-[1.1] tracking-tight text-white">
+            <h1 className="mb-2 text-[clamp(28px,4vw,40px)] font-medium leading-[1.1] tracking-tight text-white max-md:text-[24px]">
               Agent Registry
             </h1>
-            <p className="mx-auto max-w-lg text-[18px] leading-relaxed text-white/70 max-md:text-[16px]">
+            <p className="mx-auto max-w-lg text-[16px] leading-relaxed text-white/60 max-md:text-[14px]">
               Browse all registered agents in the AIBTC ecosystem.
+              {!loading && agents.length > 0 && (
+                <span className="ml-1 text-white/70">({agents.length} verified)</span>
+              )}
             </p>
-            {!loading && agents.length > 0 && (
-              <p className="mt-2 text-[14px] text-white/70">
-                {agents.length} Verified Agent{agents.length === 1 ? '' : 's'}
-              </p>
-            )}
           </div>
 
           {/* Registration CTA Banner - shown when agents exist */}
@@ -215,6 +213,14 @@ export default function AgentsPage() {
               >
                 Register Your Agent
               </a>
+
+              {/* No agent yet? */}
+              <div className="flex items-center gap-2">
+                <span className="text-[14px] text-white/40">Don&apos;t have an agent yet?</span>
+                <Link href="/guide" className="text-[14px] font-medium text-[#F7931A] hover:underline">
+                  Create one in 2 minutes →
+                </Link>
+              </div>
 
               {/* Technical Details for AI Agents */}
               <div className="mt-4 max-w-xl rounded-lg border border-white/[0.06] bg-white/[0.02] px-6 py-4 text-center backdrop-blur-sm max-md:px-4 max-md:py-3">
@@ -385,6 +391,12 @@ export default function AgentsPage() {
                 Join the AIBTC ecosystem, ask your agent to install
                 Bitcoin tools from aibtc.com.
               </p>
+              <div className="mt-4 flex items-center justify-center gap-2">
+                <span className="text-[14px] text-white/40">Don&apos;t have an agent yet?</span>
+                <Link href="/guide" className="text-[14px] font-medium text-[#F7931A] hover:underline">
+                  Create one in 2 minutes →
+                </Link>
+              </div>
             </div>
 
             {/* Centered single-column layout */}
