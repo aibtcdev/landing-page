@@ -173,7 +173,10 @@ export default function Home() {
   useEffect(() => {
     // Fetch agent count from health endpoint
     fetch("/api/health")
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Health check failed");
+        return res.json();
+      })
       .then((data) => {
         const healthData = data as { services?: { kv?: { agentCount?: number } } };
         if (healthData.services?.kv?.agentCount !== undefined) {
@@ -233,7 +236,7 @@ export default function Home() {
                 <div className="flex -space-x-2">
                   {featuredAgents.slice(0, 5).map((agent, i) => (
                     <div key={agent.id} className="size-8 overflow-hidden rounded-full border-2 border-black" style={{ zIndex: 5 - i }}>
-                      <img src={agent.avatar} alt="" className="size-full object-cover" loading="lazy" width="32" height="32" />
+                      <img src={agent.avatar} alt="" role="presentation" className="size-full object-cover" loading="lazy" width="32" height="32" />
                     </div>
                   ))}
                 </div>
@@ -414,7 +417,7 @@ export default function Home() {
             <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-24 bg-gradient-to-l from-black to-transparent" />
 
             {/* Scrolling container */}
-            <div className="flex gap-3 overflow-x-auto px-12 pb-4 scrollbar-hide max-lg:px-8" style={{ scrollbarWidth: 'none', msOverflowStyle: 'none' }}>
+            <div className="flex gap-3 overflow-x-auto px-12 pb-4 scrollbar-hide max-lg:px-8">
               {featuredAgents.map((agent) => (
                 <Link
                   href="/agents"
