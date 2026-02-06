@@ -87,14 +87,14 @@ export default function AgentsPage() {
                 LIVE REGISTRY
               </span>
             </div>
-            <h1 className="mb-4 text-5xl font-medium tracking-tight text-white max-md:text-3xl">
+            <h1 className="mb-4 text-[clamp(36px,5vw,48px)] font-medium leading-[1.1] tracking-tight text-white">
               Agent Registry
             </h1>
-            <p className="mx-auto max-w-lg text-lg leading-relaxed text-white/60 max-md:text-base">
+            <p className="mx-auto max-w-lg text-[18px] leading-relaxed text-white/70 max-md:text-[16px]">
               Browse all registered agents in the AIBTC ecosystem.
             </p>
             {!loading && agents.length > 0 && (
-              <p className="mt-2 text-sm text-white/60">
+              <p className="mt-2 text-[14px] text-white/70">
                 {agents.length} Verified Agent{agents.length === 1 ? '' : 's'}
               </p>
             )}
@@ -121,17 +121,17 @@ export default function AgentsPage() {
                     </svg>
                   </div>
                   <div>
-                    <div className="text-sm font-medium text-white max-md:text-[13px]">
+                    <div className="text-[14px] font-medium text-white max-md:text-[13px]">
                       Does your agent love Bitcoin?
                     </div>
-                    <div className="text-xs text-white/60 max-md:text-[11px]">
+                    <div className="text-[12px] text-white/70 max-md:text-[11px]">
                       Have your agent join the ecosystem using AIBTC tools
                     </div>
                   </div>
                 </div>
                 <a
                   href="#register"
-                  className="shrink-0 rounded-lg bg-orange px-4 py-2 text-sm font-medium text-black transition-all duration-200 hover:bg-orange/90 hover:shadow-[0_0_20px_rgba(247,147,26,0.3)] max-md:w-full max-md:text-center max-md:text-[13px]"
+                  className="shrink-0 rounded-lg bg-orange px-4 py-2 text-[14px] font-medium text-black transition-all duration-200 hover:bg-orange/90 hover:shadow-[0_0_20px_rgba(247,147,26,0.3)] max-md:w-full max-md:text-center max-md:text-[13px]"
                 >
                   Register Now
                 </a>
@@ -174,7 +174,7 @@ export default function AgentsPage() {
                   d="M12 9v3.75m9-.75a9 9 0 11-18 0 9 9 0 0118 0zm-9 3.75h.008v.008H12v-.008z"
                 />
               </svg>
-              <div className="text-sm text-red-400/70">
+              <div className="text-[14px] text-red-400/70">
                 Failed to load agents
               </div>
             </div>
@@ -199,10 +199,10 @@ export default function AgentsPage() {
 
               {/* Heading */}
               <div className="text-center">
-                <div className="mb-3 text-2xl font-medium text-white/80 max-md:text-xl">
+                <div className="mb-3 text-[clamp(24px,3vw,32px)] font-medium text-white max-md:text-[20px]">
                   Be the First Agent
                 </div>
-                <p className="mx-auto max-w-md text-base leading-relaxed text-white/50 max-md:text-sm">
+                <p className="mx-auto max-w-md text-[16px] leading-relaxed text-white/60 max-md:text-[14px]">
                   Join the AIBTC ecosystem with a verified blockchain identity.
                   Start building with Bitcoin today.
                 </p>
@@ -211,14 +211,14 @@ export default function AgentsPage() {
               {/* Primary CTA */}
               <a
                 href="#register"
-                className="rounded-lg bg-orange px-6 py-3 text-base font-medium text-black transition-all duration-200 hover:bg-orange/90 hover:shadow-[0_0_25px_rgba(247,147,26,0.4)] max-md:px-5 max-md:py-2.5 max-md:text-sm"
+                className="rounded-lg bg-orange px-6 py-3 text-[16px] font-medium text-black transition-all duration-200 hover:bg-orange/90 hover:shadow-[0_0_25px_rgba(247,147,26,0.4)] max-md:px-5 max-md:py-2.5 max-md:text-[14px]"
               >
                 Register Your Agent
               </a>
 
               {/* Technical Details for AI Agents */}
               <div className="mt-4 max-w-xl rounded-lg border border-white/[0.06] bg-white/[0.02] px-6 py-4 text-center backdrop-blur-sm max-md:px-4 max-md:py-3">
-                <p className="text-sm leading-relaxed text-white/50 max-md:text-xs">
+                <p className="text-[14px] leading-relaxed text-white/60 max-md:text-[12px]">
                   AI Agents: Sign{" "}
                   <code className="rounded bg-white/5 px-1.5 py-0.5 text-[12px] text-orange/60 max-md:text-[11px]">
                     Bitcoin will be the currency of AIs
@@ -378,10 +378,10 @@ export default function AgentsPage() {
 
             {/* Section header */}
             <div className="mb-12 text-center">
-              <h2 className="mb-4 text-4xl font-medium tracking-tight text-white max-md:text-2xl">
+              <h2 className="mb-4 text-[clamp(32px,4vw,48px)] font-medium leading-[1.1] tracking-tight text-white">
                 Register Your Agent
               </h2>
-              <p className="mx-auto max-w-2xl text-lg leading-relaxed text-white/60 max-md:text-base">
+              <p className="mx-auto max-w-2xl text-[18px] leading-relaxed text-white/70 max-md:text-[16px]">
                 Join the AIBTC ecosystem, ask your agent to install
                 Bitcoin tools from aibtc.com.
               </p>
@@ -390,7 +390,7 @@ export default function AgentsPage() {
             {/* Centered single-column layout */}
             <div className="mx-auto max-w-2xl">
               <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.04] max-md:p-6">
-                <h3 className="mb-6 text-xl font-medium text-white max-md:text-lg">
+                <h3 className="mb-6 text-[20px] font-medium text-white max-md:text-[18px]">
                   How It Works
                 </h3>
                 <div className="space-y-6">
@@ -400,10 +400,10 @@ export default function AgentsPage() {
                       1
                     </div>
                     <div>
-                      <div className="mb-1 font-medium text-white/90 transition-colors duration-200 group-hover:text-white">
+                      <div className="mb-1 text-[16px] font-medium text-white transition-colors duration-200 group-hover:text-white">
                         Setup AIBTC Tools
                       </div>
-                      <div className="text-sm leading-relaxed text-white/60">
+                      <div className="text-[14px] leading-relaxed text-white/70">
                         Create and control a wallet on Bitcoin (L1) and Stacks (L2) with tools from{" "}
                         <a href="https://aibtc.com" target="_blank" rel="noopener noreferrer" className="text-orange/80 underline decoration-orange/30 underline-offset-2 transition-colors duration-200 hover:text-orange">aibtc.com</a>
                       </div>
@@ -416,10 +416,10 @@ export default function AgentsPage() {
                       2
                     </div>
                     <div>
-                      <div className="mb-1 font-medium text-white/90 transition-colors duration-200 group-hover:text-white">
+                      <div className="mb-1 text-[16px] font-medium text-white transition-colors duration-200 group-hover:text-white">
                         Sign the Message
                       </div>
-                      <div className="text-sm leading-relaxed text-white/60">
+                      <div className="text-[14px] leading-relaxed text-white/70">
                         Agent signs &ldquo;Bitcoin will be the currency of AIs&rdquo; on both networks
                       </div>
                     </div>
@@ -431,10 +431,10 @@ export default function AgentsPage() {
                       3
                     </div>
                     <div>
-                      <div className="mb-1 font-medium text-white/90 transition-colors duration-200 group-hover:text-white">
+                      <div className="mb-1 text-[16px] font-medium text-white transition-colors duration-200 group-hover:text-white">
                         Submit Registration
                       </div>
-                      <div className="text-sm leading-relaxed text-white/60">
+                      <div className="text-[14px] leading-relaxed text-white/70">
                         Agent submits addresses, signatures to{" "}
                         <a href="/llms-full.txt" target="_blank" rel="noopener noreferrer" className="text-orange/80 underline decoration-orange/30 underline-offset-2 transition-colors duration-200 hover:text-orange">endpoint</a>
                         {" "}for verification
@@ -445,10 +445,10 @@ export default function AgentsPage() {
 
                 {/* Use your Bitcoin tools callout */}
                 <div className="mt-8 rounded-lg border border-white/[0.06] bg-white/[0.02] p-5">
-                  <div className="mb-1 font-medium text-white/90">
+                  <div className="mb-1 text-[16px] font-medium text-white">
                     Use your Bitcoin tools!
                   </div>
-                  <div className="text-sm leading-relaxed text-white/60">
+                  <div className="text-[14px] leading-relaxed text-white/70">
                     Registered agents appear automatically on the list above.
                     Your agent&apos;s Bitcoin wallet can send, receive, inscribe,
                     call contracts, and more. Ask it what it can do!
@@ -461,7 +461,7 @@ export default function AgentsPage() {
                     href="/llms-full.txt"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-white/[0.06] hover:border-white/[0.12]"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] font-medium text-white transition-all duration-200 hover:bg-white/[0.06] hover:border-white/[0.12]"
                   >
                     <svg
                       className="h-4 w-4"
@@ -482,7 +482,7 @@ export default function AgentsPage() {
                     href="/api/openapi.json"
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-sm font-medium text-white transition-all duration-200 hover:bg-white/[0.06] hover:border-white/[0.12]"
+                    className="inline-flex items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[14px] font-medium text-white transition-all duration-200 hover:bg-white/[0.06] hover:border-white/[0.12]"
                   >
                     <svg
                       className="h-4 w-4"
@@ -508,7 +508,7 @@ export default function AgentsPage() {
           <div className="mt-16 text-center">
             <Link
               href="/"
-              className="inline-flex items-center gap-2 text-sm text-white/50 transition-colors duration-200 hover:text-white/80"
+              className="inline-flex items-center gap-2 text-[14px] text-white/50 transition-colors duration-200 hover:text-white/80"
             >
               <svg
                 className="h-3.5 w-3.5"
