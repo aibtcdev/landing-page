@@ -1,13 +1,10 @@
 "use client";
 
-import { useState } from "react";
-import Image from "next/image";
 import Link from "next/link";
 import AnimatedBackground from "../../components/AnimatedBackground";
+import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import CopyButton from "../../components/CopyButton";
-
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 interface DeployStep {
   id: number;
@@ -135,41 +132,10 @@ Then: bash update.sh`,
 ];
 
 export default function OpenClawGuide() {
-
   return (
     <>
       <AnimatedBackground />
-
-      {/* Header */}
-      <header className="fixed left-0 right-0 top-0 z-50 border-b border-white/[0.06] bg-[rgba(10,10,10,0.75)] px-12 pb-4 pt-4 backdrop-blur-2xl backdrop-saturate-150 max-lg:px-8 max-md:px-5 max-md:pb-3 max-md:pt-3">
-        <div className="mx-auto flex max-w-[1200px] items-center justify-between">
-          <Link href="/" className="group">
-            <Image
-              src={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
-              alt="AIBTC"
-              width={120}
-              height={32}
-              priority
-              className="h-8 w-auto transition-all duration-200 group-hover:drop-shadow-[0_0_20px_rgba(247,147,26,0.5)] max-md:h-7"
-            />
-          </Link>
-
-          <nav className="flex items-center gap-6">
-            <Link
-              href="/"
-              className="text-white/85 transition-all duration-200 hover:text-white"
-            >
-              Home
-            </Link>
-            <Link
-              href="/agents"
-              className="rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-all duration-200 hover:bg-[#E8850F]"
-            >
-              Claim Your Agent
-            </Link>
-          </nav>
-        </div>
-      </header>
+      <Navbar />
 
       {/* Main Content */}
       <main className="relative min-h-screen px-12 pb-24 pt-32 max-lg:px-8 max-md:px-6 max-md:pt-28">
