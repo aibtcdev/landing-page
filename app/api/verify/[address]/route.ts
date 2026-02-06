@@ -1,16 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-
-interface AgentRecord {
-  stxAddress: string;
-  btcAddress: string;
-  stxPublicKey: string;
-  btcPublicKey: string;
-  displayName?: string;
-  description?: string | null;
-  bnsName?: string | null;
-  verifiedAt: string;
-}
+import type { AgentRecord } from "@/lib/types";
 
 /**
  * Determine the address type from the format.
