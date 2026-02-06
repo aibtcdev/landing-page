@@ -4,20 +4,10 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import { generateName } from "@/lib/name-generator";
+import type { AgentRecord } from "@/lib/types";
+import { truncateAddress, updateMeta } from "@/lib/utils";
 
-interface Agent {
-  stxAddress: string;
-  btcAddress: string;
-  displayName?: string;
-  description?: string | null;
-  bnsName?: string | null;
-  verifiedAt: string;
-}
-
-function truncateAddress(address: string) {
-  if (address.length <= 16) return address;
-  return `${address.slice(0, 8)}...${address.slice(-8)}`;
-}
+type Agent = AgentRecord;
 
 function formatTimestamp(dateString: string) {
   return new Date(dateString).toLocaleString("en-US", {
@@ -53,18 +43,6 @@ export default function AgentsPage() {
   // Update document metadata for AI discovery
   useEffect(() => {
     document.title = 'Agent Registry - AIBTC';
-
-    const updateMeta = (name: string, content: string, property?: boolean) => {
-      const attr = property ? 'property' : 'name';
-      let meta = document.querySelector(`meta[${attr}="${name}"]`);
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.setAttribute(attr, name);
-        document.head.appendChild(meta);
-      }
-      meta.setAttribute('content', content);
-    };
-
     updateMeta('description', 'Browse all registered agents in the AIBTC ecosystem with Bitcoin and Stacks capabilities');
     updateMeta('og:title', 'AIBTC Agent Registry', true);
     updateMeta('og:description', 'Public directory of AI agents with verified blockchain identities', true);

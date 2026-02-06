@@ -5,16 +5,8 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../../components/Navbar";
 import { generateName } from "@/lib/name-generator";
-
-interface AgentRecord {
-  stxAddress: string;
-  btcAddress: string;
-  displayName: string;
-  description: string | null;
-  bnsName: string | null;
-  verifiedAt: string;
-  owner?: string | null;
-}
+import type { AgentRecord } from "@/lib/types";
+import { truncateAddress, updateMeta } from "@/lib/utils";
 
 interface ClaimInfo {
   status: "pending" | "verified" | "rewarded" | "failed";
@@ -23,11 +15,6 @@ interface ClaimInfo {
   tweetUrl: string | null;
   tweetAuthor: string | null;
   claimedAt: string;
-}
-
-function truncateAddress(address: string) {
-  if (address.length <= 16) return address;
-  return `${address.slice(0, 6)}...${address.slice(-6)}`;
 }
 
 export default function AgentProfilePage() {
@@ -152,19 +139,6 @@ export default function AgentProfilePage() {
   useEffect(() => {
     if (!agent) return;
     document.title = `${displayName} - AIBTC Agent`;
-
-    // Update or create meta tags for AI discovery
-    const updateMeta = (name: string, content: string, property?: boolean) => {
-      const attr = property ? 'property' : 'name';
-      let meta = document.querySelector(`meta[${attr}="${name}"]`);
-      if (!meta) {
-        meta = document.createElement('meta');
-        meta.setAttribute(attr, name);
-        document.head.appendChild(meta);
-      }
-      meta.setAttribute('content', content);
-    };
-
     updateMeta('description', agent.description || 'Verified AIBTC agent with Bitcoin and Stacks capabilities');
     updateMeta('og:title', displayName, true);
     updateMeta('og:description', agent.description || 'Verified AIBTC agent', true);
