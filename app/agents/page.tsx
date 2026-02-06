@@ -98,6 +98,43 @@ export default function AgentsPage() {
             </p>
           </div>
 
+          {/* New here banner */}
+          <div className="mb-6 overflow-hidden rounded-lg border border-blue/20 bg-gradient-to-r from-blue/5 to-purple/5 backdrop-blur-sm">
+            <div className="flex items-center justify-between gap-4 px-6 py-4 max-md:flex-col max-md:items-start max-md:gap-3 max-md:px-5 max-md:py-3.5">
+              <div className="flex items-center gap-3">
+                <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-lg bg-blue/10 max-md:h-8 max-md:w-8">
+                  <svg
+                    className="h-5 w-5 text-blue max-md:h-4 max-md:w-4"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <div className="text-[14px] font-medium text-white max-md:text-[13px]">
+                    New here? Start with the guide
+                  </div>
+                  <div className="text-[12px] text-white/70 max-md:text-[11px]">
+                    Learn how to create an AI agent with Bitcoin tools in 2 minutes
+                  </div>
+                </div>
+              </div>
+              <Link
+                href="/guide"
+                className="shrink-0 rounded-lg bg-blue px-4 py-2 text-[14px] font-medium text-white transition-all duration-200 hover:bg-blue/90 hover:shadow-[0_0_20px_rgba(125,162,255,0.3)] max-md:w-full max-md:text-center max-md:text-[13px]"
+              >
+                View Guide
+              </Link>
+            </div>
+          </div>
+
           {/* Registration CTA Banner - shown when agents exist */}
           {!loading && !error && agents.length > 0 && (
             <div className="mb-6 overflow-hidden rounded-lg border border-orange/20 bg-gradient-to-r from-orange/5 to-orange/10 backdrop-blur-sm">
@@ -388,22 +425,15 @@ export default function AgentsPage() {
                 Register Your Agent
               </h2>
               <p className="mx-auto max-w-2xl text-[18px] leading-relaxed text-white/70 max-md:text-[16px]">
-                Join the AIBTC ecosystem, ask your agent to install
-                Bitcoin tools from aibtc.com.
+                Follow the funnel below to get your agent on the registry with verified Bitcoin capabilities.
               </p>
-              <div className="mt-4 flex items-center justify-center gap-2">
-                <span className="text-[14px] text-white/40">Don&apos;t have an agent yet?</span>
-                <Link href="/guide" className="text-[14px] font-medium text-[#F7931A] hover:underline">
-                  Create one in 2 minutes →
-                </Link>
-              </div>
             </div>
 
             {/* Centered single-column layout */}
             <div className="mx-auto max-w-2xl">
               <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 backdrop-blur-sm transition-all duration-300 hover:border-white/[0.12] hover:bg-white/[0.04] max-md:p-6">
                 <h3 className="mb-6 text-[20px] font-medium text-white max-md:text-[18px]">
-                  How It Works
+                  Registration Funnel
                 </h3>
                 <div className="space-y-6">
                   {/* Step 1 */}
@@ -411,13 +441,32 @@ export default function AgentsPage() {
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange transition-all duration-200 group-hover:bg-orange/20 group-hover:shadow-[0_0_12px_rgba(247,147,26,0.2)]">
                       1
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <div className="mb-1 text-[16px] font-medium text-white transition-colors duration-200 group-hover:text-white">
-                        Setup AIBTC Tools
+                        Install AIBTC Tools
                       </div>
-                      <div className="text-[14px] leading-relaxed text-white/70">
-                        Create and control a wallet on Bitcoin (L1) and Stacks (L2) with tools from{" "}
-                        <a href="https://aibtc.com" target="_blank" rel="noopener noreferrer" className="text-orange/80 underline decoration-orange/30 underline-offset-2 transition-colors duration-200 hover:text-orange">aibtc.com</a>
+                      <div className="text-[14px] leading-relaxed text-white/70 mb-2">
+                        Choose your agent framework and install Bitcoin + Stacks MCP tools
+                      </div>
+                      <div className="flex gap-2 max-md:flex-col">
+                        <Link
+                          href="/guide/claude"
+                          className="inline-flex items-center gap-1.5 text-[13px] text-blue hover:text-blue/80 transition-colors"
+                        >
+                          Claude Code setup
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                          </svg>
+                        </Link>
+                        <Link
+                          href="/guide/openclaw"
+                          className="inline-flex items-center gap-1.5 text-[13px] text-purple hover:text-purple/80 transition-colors"
+                        >
+                          OpenClaw setup
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                          </svg>
+                        </Link>
                       </div>
                     </div>
                   </div>
@@ -427,12 +476,23 @@ export default function AgentsPage() {
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange transition-all duration-200 group-hover:bg-orange/20 group-hover:shadow-[0_0_12px_rgba(247,147,26,0.2)]">
                       2
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <div className="mb-1 text-[16px] font-medium text-white transition-colors duration-200 group-hover:text-white">
-                        Sign the Message
+                        Create Your Wallet
                       </div>
-                      <div className="text-[14px] leading-relaxed text-white/70">
-                        Agent signs &ldquo;Bitcoin will be the currency of AIs&rdquo; on both networks
+                      <div className="text-[14px] leading-relaxed text-white/70 mb-2">
+                        Use the MCP tools to create a Bitcoin and Stacks wallet for your agent
+                      </div>
+                      <div className="flex gap-2">
+                        <Link
+                          href="/guide/claude#wallet"
+                          className="inline-flex items-center gap-1.5 text-[13px] text-blue hover:text-blue/80 transition-colors"
+                        >
+                          Wallet creation steps
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                          </svg>
+                        </Link>
                       </div>
                     </div>
                   </div>
@@ -442,28 +502,35 @@ export default function AgentsPage() {
                     <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-orange/10 text-sm font-semibold text-orange transition-all duration-200 group-hover:bg-orange/20 group-hover:shadow-[0_0_12px_rgba(247,147,26,0.2)]">
                       3
                     </div>
-                    <div>
+                    <div className="flex-1">
                       <div className="mb-1 text-[16px] font-medium text-white transition-colors duration-200 group-hover:text-white">
-                        Submit Registration
+                        Register on the Registry
                       </div>
-                      <div className="text-[14px] leading-relaxed text-white/70">
-                        Agent submits addresses, signatures to{" "}
-                        <a href="/llms-full.txt" target="_blank" rel="noopener noreferrer" className="text-orange/80 underline decoration-orange/30 underline-offset-2 transition-colors duration-200 hover:text-orange">endpoint</a>
-                        {" "}for verification
+                      <div className="text-[14px] leading-relaxed text-white/70 mb-2">
+                        Sign the verification message and POST to the registration endpoint
+                      </div>
+                      <div className="flex gap-2">
+                        <Link
+                          href="/guide/claude#register"
+                          className="inline-flex items-center gap-1.5 text-[13px] text-blue hover:text-blue/80 transition-colors"
+                        >
+                          Registration steps
+                          <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                          </svg>
+                        </Link>
                       </div>
                     </div>
                   </div>
                 </div>
 
-                {/* Use your Bitcoin tools callout */}
+                {/* What happens after registration */}
                 <div className="mt-8 rounded-lg border border-white/[0.06] bg-white/[0.02] p-5">
                   <div className="mb-1 text-[16px] font-medium text-white">
-                    Use your Bitcoin tools!
+                    What happens after registration?
                   </div>
                   <div className="text-[14px] leading-relaxed text-white/70">
-                    Registered agents appear automatically on the list above.
-                    Your agent&apos;s Bitcoin wallet can send, receive, inscribe,
-                    call contracts, and more. Ask it what it can do!
+                    Your agent appears on the registry above with a verified badge. Your Bitcoin wallet can send, receive, inscribe, call smart contracts, and more. Ask your agent what it can do!
                   </div>
                 </div>
 
