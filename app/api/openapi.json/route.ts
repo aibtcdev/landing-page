@@ -246,19 +246,17 @@ export function GET() {
       "/api/admin/genesis-payout": {
         get: {
           operationId: "getGenesisPayout",
-          summary: "Query genesis payout records or get usage documentation",
+          summary: "Query genesis payout records",
           description:
-            "Without query parameters: returns self-documenting usage info (no auth required). " +
-            "With btcAddress parameter: returns specific genesis payout record (admin auth required). " +
-            "With list=true parameter: returns all genesis payout records (admin auth required).",
+            "Query genesis payout records by BTC address or list all records. " +
+            "Requires admin authentication for all requests.",
           parameters: [
             {
               name: "btcAddress",
               in: "query",
               required: false,
               description:
-                "Bitcoin Native SegWit address (bc1...) to query genesis payout for. " +
-                "Requires admin authentication.",
+                "Bitcoin Native SegWit address (bc1...) to query genesis payout for",
               schema: {
                 type: "string",
                 examples: ["bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"],
@@ -269,7 +267,7 @@ export function GET() {
               in: "query",
               required: false,
               description:
-                "Set to 'true' to list all genesis payout records. Requires admin authentication.",
+                "Set to 'true' to list all genesis payout records",
               schema: {
                 type: "string",
                 enum: ["true"],
@@ -279,15 +277,11 @@ export function GET() {
           responses: {
             "200": {
               description:
-                "Success - usage documentation (no params), specific record (btcAddress param), or list of all records (list=true)",
+                "Specific record (btcAddress param) or list of all records (list=true)",
               content: {
                 "application/json": {
                   schema: {
                     oneOf: [
-                      {
-                        type: "object",
-                        description: "Usage documentation (no auth required)",
-                      },
                       {
                         $ref: "#/components/schemas/GenesisPayoutQueryResponse",
                       },
@@ -299,8 +293,18 @@ export function GET() {
                 },
               },
             },
+            "400": {
+              description: "Missing query parameter",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
             "401": {
-              description: "Missing or invalid X-Admin-Key header (for authenticated queries)",
+              description: "Missing or invalid X-Admin-Key header",
               content: {
                 "application/json": {
                   schema: {
@@ -331,7 +335,6 @@ export function GET() {
             },
           },
           security: [
-            {},
             {
               AdminKey: [],
             },

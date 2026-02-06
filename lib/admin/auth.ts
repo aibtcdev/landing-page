@@ -1,45 +1,43 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 /**
- * Admin Authentication Result
- */
-export interface AuthResult {
-  authenticated: boolean;
-  error?: string;
-}
-
-/**
- * Authenticate admin request via X-Admin-Key header
+ * Authenticate an admin request via X-Admin-Key header.
  *
- * Checks the X-Admin-Key header against the ARC_ADMIN_API_KEY environment
- * variable. Used to protect admin endpoints from unauthorized access.
+ * Returns null on success, or a 401 NextResponse on failure.
+ * This lets callers short-circuit with a single guard:
  *
- * @param request - Next.js request object
- * @returns AuthResult with authentication status and error message if failed
+ *   const denied = await requireAdmin(request);
+ *   if (denied) return denied;
  */
-export async function authenticateAdmin(
+export async function requireAdmin(
   request: NextRequest
-): Promise<AuthResult> {
+): Promise<NextResponse | null> {
   const adminKey = request.headers.get("X-Admin-Key");
-
   if (!adminKey) {
-    return { authenticated: false, error: "Missing X-Admin-Key header" };
+    return NextResponse.json(
+      { error: "Missing X-Admin-Key header" },
+      { status: 401 }
+    );
   }
 
   const { env } = await getCloudflareContext();
   const expectedKey = env.ARC_ADMIN_API_KEY;
 
   if (!expectedKey) {
-    return {
-      authenticated: false,
-      error: "Server configuration error: ARC_ADMIN_API_KEY not set",
-    };
+    console.error("ARC_ADMIN_API_KEY is not configured");
+    return NextResponse.json(
+      { error: "Server configuration error" },
+      { status: 401 }
+    );
   }
 
   if (adminKey !== expectedKey) {
-    return { authenticated: false, error: "Invalid admin key" };
+    return NextResponse.json(
+      { error: "Invalid admin key" },
+      { status: 401 }
+    );
   }
 
-  return { authenticated: true };
+  return null;
 }
