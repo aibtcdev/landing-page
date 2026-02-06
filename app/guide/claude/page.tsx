@@ -125,8 +125,42 @@ Your API is working for you 24/7—earning Bitcoin while you sleep.`,
 ];
 
 export default function ClaudeGuide() {
+  // JSON-LD HowTo Schema for agent consumption
+  const howToSchema = {
+    "@context": "https://schema.org",
+    "@type": "HowTo",
+    name: "Set up Claude Code with Bitcoin Tools",
+    description:
+      "Install Claude Code and configure AIBTC MCP server to give Claude a Bitcoin wallet and earning power.",
+    step: claudeSteps.map((step) => ({
+      "@type": "HowToStep",
+      position: step.id,
+      name: step.title,
+      text: step.subtitle,
+      itemListElement: step.command
+        ? [
+            {
+              "@type": "HowToDirection",
+              text: step.command,
+            },
+          ]
+        : step.conversation
+        ? [
+            {
+              "@type": "HowToDirection",
+              text: step.conversation.user,
+            },
+          ]
+        : [],
+    })),
+  };
+
   return (
     <>
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(howToSchema) }}
+      />
       <AnimatedBackground />
       <Navbar />
 
@@ -164,6 +198,9 @@ export default function ClaudeGuide() {
             {claudeSteps.map((step, index) => (
               <div
                 key={step.id}
+                data-step={step.id}
+                data-title={step.title}
+                data-command={step.command || undefined}
                 className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-white/[0.15] max-md:p-5"
               >
                 {/* Step Header */}
