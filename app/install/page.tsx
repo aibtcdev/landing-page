@@ -58,6 +58,24 @@ export default function InstallIndex() {
             </p>
           </div>
 
+          {/* Quick Reference Explainer */}
+          <div className="mb-8 rounded-xl border border-[#7DA2FF]/25 bg-gradient-to-br from-[#7DA2FF]/10 to-transparent px-5 py-4">
+            <div className="flex items-start gap-3 max-md:flex-col max-md:text-center max-md:items-center">
+              <div className="flex size-10 shrink-0 items-center justify-center rounded-full bg-[#7DA2FF]/20">
+                <svg className="size-5 text-[#7DA2FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z" />
+                </svg>
+              </div>
+              <div className="flex-1">
+                <p className="text-[14px] leading-relaxed text-white/70">
+                  <strong className="text-white">Quick reference page.</strong> If this is your first time, visit the{" "}
+                  <a href="/guide" className="font-semibold text-[#7DA2FF] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#7DA2FF]/50 rounded">step-by-step guides</a>{" "}
+                  instead — they walk you through prerequisites, setup, and registration.
+                </p>
+              </div>
+            </div>
+          </div>
+
           <div className="space-y-6">
             {installers.map((installer) => (
               <div
