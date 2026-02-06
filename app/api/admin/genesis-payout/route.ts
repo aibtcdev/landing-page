@@ -33,33 +33,63 @@ export async function GET(request: NextRequest) {
         );
       }
 
-      return NextResponse.json({
-        success: true,
-        record: JSON.parse(recordData) as GenesisPayoutRecord,
-      });
+      try {
+        const record = JSON.parse(recordData) as GenesisPayoutRecord;
+        return NextResponse.json({ success: true, record });
+      } catch (e) {
+        console.error(
+          `Failed to parse genesis record for ${btcAddress}:`,
+          e
+        );
+        return NextResponse.json(
+          { error: `Stored genesis record for ${btcAddress} is corrupted` },
+          { status: 500 }
+        );
+      }
     }
 
-    // List all genesis records
+    // List all genesis records (paginated cursor loop with batched fetches)
     if (list === "true") {
-      const listResult = await kv.list({ prefix: "genesis:" });
       const records: GenesisPayoutRecord[] = [];
+      let cursor: string | undefined;
+      let listComplete = false;
 
-      for (const key of listResult.keys) {
-        const recordData = await kv.get(key.name);
-        if (recordData) {
-          try {
-            records.push(JSON.parse(recordData) as GenesisPayoutRecord);
-          } catch (e) {
-            console.error(`Failed to parse genesis record ${key.name}:`, e);
-          }
+      do {
+        const opts: KVNamespaceListOptions = { prefix: "genesis:" };
+        if (cursor) opts.cursor = cursor;
+        const page = await kv.list(opts);
+        const BATCH_SIZE = 20;
+
+        for (let i = 0; i < page.keys.length; i += BATCH_SIZE) {
+          const batch = page.keys.slice(i, i + BATCH_SIZE);
+          const batchData = await Promise.all(
+            batch.map((key) => kv.get(key.name))
+          );
+
+          batchData.forEach((recordData, index) => {
+            if (recordData) {
+              try {
+                records.push(
+                  JSON.parse(recordData) as GenesisPayoutRecord
+                );
+              } catch (e) {
+                console.error(
+                  `Failed to parse genesis record ${batch[index].name}:`,
+                  e
+                );
+              }
+            }
+          });
         }
-      }
+
+        listComplete = page.list_complete;
+        cursor = page.list_complete ? undefined : page.cursor;
+      } while (!listComplete);
 
       return NextResponse.json({
         success: true,
         count: records.length,
         records,
-        list_complete: listResult.list_complete,
       });
     }
 
@@ -88,7 +118,15 @@ export async function POST(request: NextRequest) {
   if (denied) return denied;
 
   try {
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Malformed JSON body" },
+        { status: 400 }
+      );
+    }
     const validation = validateGenesisPayoutBody(body);
 
     if (validation.errors) {
@@ -104,11 +142,28 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Check for existing genesis payout (prevent duplicates)
+    // Check for existing genesis payout — idempotent if payload matches
     const existingGenesis = await kv.get(`genesis:${btcAddress}`);
     if (existingGenesis) {
+      try {
+        const existing = JSON.parse(existingGenesis) as GenesisPayoutRecord;
+        if (
+          existing.rewardTxid === rewardTxid &&
+          existing.rewardSatoshis === rewardSatoshis &&
+          existing.paidAt === paidAt &&
+          existing.stxAddress === stxAddress
+        ) {
+          return NextResponse.json({
+            success: true,
+            message: "Genesis payout already recorded; returning existing record",
+            record: existing,
+          });
+        }
+      } catch (e) {
+        console.error("Failed to parse existing genesis record:", e);
+      }
       return NextResponse.json(
-        { error: "Genesis payout already recorded for this address" },
+        { error: "Genesis payout already recorded for this address with different details" },
         { status: 409 }
       );
     }

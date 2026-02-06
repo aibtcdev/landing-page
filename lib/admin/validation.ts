@@ -51,11 +51,16 @@ export function validateGenesisPayoutBody(body: unknown):
     errors.push("rewardSatoshis must be a positive integer");
   }
 
-  // paidAt — parseable date string
+  // paidAt — ISO 8601 date string, normalized to canonical form
   if (typeof b.paidAt !== "string") {
     errors.push("paidAt must be a string");
-  } else if (isNaN(new Date(b.paidAt).getTime())) {
-    errors.push("paidAt must be a valid ISO 8601 date string");
+  } else {
+    const parsed = new Date(b.paidAt);
+    if (isNaN(parsed.getTime()) || parsed.toISOString() !== b.paidAt) {
+      errors.push(
+        "paidAt must be a canonical ISO 8601 date string (e.g. 2026-02-06T19:00:00.000Z)"
+      );
+    }
   }
 
   // stxAddress (optional) — SP... base58, 40-41 chars
