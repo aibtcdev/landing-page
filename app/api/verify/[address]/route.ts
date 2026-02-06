@@ -93,6 +93,7 @@ export async function GET(
           description: agent.description,
           bnsName: agent.bnsName,
           verifiedAt: agent.verifiedAt,
+          owner: agent.owner,
         },
       },
       {

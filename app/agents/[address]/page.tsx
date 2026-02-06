@@ -35,18 +35,21 @@ export default function AgentProfilePage() {
   useEffect(() => {
     async function fetchAgent() {
       try {
-        const res = await fetch("/api/agents");
-        if (!res.ok) throw new Error("Failed to fetch agents");
-        const data = (await res.json()) as { agents: AgentRecord[] };
-        const found = data.agents.find(
-          (a: AgentRecord) =>
-            a.btcAddress === address ||
-            a.stxAddress === address ||
-            a.btcAddress.toLowerCase() === address.toLowerCase() ||
-            a.stxAddress.toLowerCase() === address.toLowerCase()
-        );
-        if (found) setAgent(found);
-        else setError("Agent not found");
+        const res = await fetch(`/api/verify/${encodeURIComponent(address)}`);
+        if (!res.ok) {
+          if (res.status === 404) {
+            setError("Agent not found");
+          } else {
+            throw new Error("Failed to fetch agent");
+          }
+        } else {
+          const data = (await res.json()) as { registered: boolean; agent: AgentRecord };
+          if (data.registered && data.agent) {
+            setAgent(data.agent);
+          } else {
+            setError("Agent not found");
+          }
+        }
       } catch (e) {
         setError((e as Error).message);
       } finally {
