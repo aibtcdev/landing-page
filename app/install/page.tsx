@@ -84,7 +84,7 @@ export default function InstallIndex() {
                 <div className="border-t border-white/5 bg-white/[0.01] px-6 py-3">
                   <a
                     href={installer.guideLink}
-                    className="inline-flex items-center gap-1.5 text-[14px] text-white/50 transition-colors hover:text-[#F7931A]"
+                    className="inline-flex items-center gap-1.5 text-[14px] text-white/50 transition-colors hover:text-[#F7931A] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded"
                   >
                     <span>View full guide</span>
                     <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -100,7 +100,7 @@ export default function InstallIndex() {
             <p className="text-[14px] leading-relaxed text-white/60">
               These scripts are open source and can be inspected before running.
               <br />
-              <a href="https://github.com/aibtcdev" className="text-[#F7931A] hover:underline">
+              <a href="https://github.com/aibtcdev" className="text-[#F7931A] hover:underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded">
                 View source on GitHub
               </a>
             </p>

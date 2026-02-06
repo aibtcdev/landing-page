@@ -55,7 +55,7 @@ export default function GuidesIndex() {
               <Link
                 key={guide.id}
                 href={guide.href}
-                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-8 transition-all duration-300 hover:border-[#F7931A]/50 hover:bg-white/[0.04]"
+                className="group relative overflow-hidden rounded-2xl border border-white/10 bg-white/[0.02] p-8 transition-all duration-200 hover:border-[#F7931A]/50 hover:bg-white/[0.04] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
               >
                 <div className="mb-4 inline-flex rounded-xl border border-white/10 bg-white/[0.05] p-3 text-[#F7931A] transition-colors group-hover:border-[#F7931A]/30 group-hover:bg-[#F7931A]/10">
                   {guide.icon}

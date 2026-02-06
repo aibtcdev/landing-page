@@ -59,7 +59,7 @@ export default function CopyButton({
       return (
         <button
           onClick={handleCopy}
-          className={`inline-flex items-center justify-center min-w-[44px] min-h-[44px] transition-colors ${variantStyles.icon} ${className}`}
+          className={`inline-flex items-center justify-center min-w-[44px] min-h-[44px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded ${variantStyles.icon} ${className}`}
         >
           <svg
             className="size-3.5 transition-all"
@@ -86,7 +86,7 @@ export default function CopyButton({
     return (
       <button
         onClick={handleCopy}
-        className={`inline-flex items-center gap-2 transition-colors ${variantStyles.icon} ${className}`}
+        className={`inline-flex items-center gap-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded ${variantStyles.icon} ${className}`}
       >
         <svg
           className="size-4 transition-all"
@@ -113,7 +113,7 @@ export default function CopyButton({
   return (
     <button
       onClick={handleCopy}
-      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-[13px] font-medium transition-all duration-300 ${variantStyles[variant]} ${className}`}
+      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 ${variantStyles[variant]} ${className}`}
     >
       {copied ? (
         <>

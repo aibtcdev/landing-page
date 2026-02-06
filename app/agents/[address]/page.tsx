@@ -174,7 +174,7 @@ export default function AgentProfilePage() {
             </svg>
           </div>
           <p className="text-sm text-white/40">Agent not found</p>
-          <Link href="/agents" className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors">
+          <Link href="/agents" className="inline-flex items-center gap-1.5 text-xs text-white/40 hover:text-white/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded">
             <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M12 19l-7-7 7-7" />
             </svg>
@@ -441,7 +441,7 @@ export default function AgentProfilePage() {
 
           {/* Back link */}
           <div className="mt-5 md:mt-6 text-center">
-            <Link href="/agents" className="inline-flex items-center gap-1.5 text-[12px] md:text-[14px] text-white/50 transition-colors hover:text-white/80">
+            <Link href="/agents" className="inline-flex items-center gap-1.5 text-[12px] md:text-[14px] text-white/50 transition-colors hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded">
               <svg className="h-3 w-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M19 12H5M12 19l-7-7 7-7" />
               </svg>

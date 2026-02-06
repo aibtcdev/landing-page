@@ -508,7 +508,7 @@ export default function AgentsPage() {
           <div className="mt-16 text-center">
             <Link
               href="/"
-              className="inline-flex items-center gap-2 text-[14px] text-white/50 transition-colors duration-200 hover:text-white/80"
+              className="inline-flex items-center gap-2 text-[14px] text-white/50 transition-colors duration-200 hover:text-white/80 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded"
             >
               <svg
                 className="h-3.5 w-3.5"
