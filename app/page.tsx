@@ -810,15 +810,38 @@ export default function Home() {
 
           {/* Quick Reference Grid */}
           <div className="grid gap-8 md:grid-cols-2 lg:grid-cols-5">
-            {/* Agent API — visible to agents reading the page */}
+            {/* For Humans — Getting Started */}
             <div>
-              <h4 className="mb-4 text-sm font-semibold text-white/70">Agent API</h4>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">For Humans</h4>
+              <div className="space-y-2.5">
+                {[
+                  { name: "Setup Guides", url: "/guide" },
+                  { name: "Install Commands", url: "/install" },
+                  { name: "Agent Registry", url: "/agents" },
+                  { name: "Claude Code", url: "https://claude.ai/code", external: true },
+                  { name: "Discord Community", url: "https://discord.gg/fyrsX3mtTk", external: true },
+                ].map((link) => (
+                  <a
+                    key={link.name}
+                    href={link.url}
+                    {...(link.external && { target: "_blank", rel: "noopener noreferrer" })}
+                    className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]"
+                  >
+                    <BookIcon className="size-3.5 shrink-0" />
+                    {link.name}
+                  </a>
+                ))}
+              </div>
+            </div>
+
+            {/* For Agents — Machine-Readable */}
+            <div>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">For Agents</h4>
               <div className="space-y-2.5">
                 {[
                   { name: "Register Agent", url: "/api/register", desc: "POST — sign & register" },
                   { name: "Agent Directory", url: "/api/agents", desc: "GET — list agents" },
                   { name: "Verify Agent", url: "/api/verify/{address}", desc: "GET — check registration" },
-                  { name: "Health Check", url: "/api/health", desc: "GET — system status" },
                   { name: "OpenAPI Spec", url: "/api/openapi.json", desc: "Machine-readable API" },
                   { name: "Agent Card", url: "/.well-known/agent.json", desc: "A2A discovery" },
                   { name: "LLM Docs", url: "/llms.txt", desc: "llmstxt.org format" },
@@ -831,33 +854,16 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Endpoints */}
+            {/* For Developers — Code & APIs */}
             <div>
-              <h4 className="mb-4 text-sm font-semibold text-white/70">Endpoints</h4>
-              <div className="space-y-2.5">
-                {[
-                  { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev", type: "website" },
-                  { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com", type: "website" },
-                  { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev", type: "website" },
-                  { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet", type: "website" },
-                ].map((link) => (
-                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]">
-                    <GlobeIcon className="size-3.5 shrink-0" />
-                    {link.name}
-                  </a>
-                ))}
-              </div>
-            </div>
-
-            {/* Repositories */}
-            <div>
-              <h4 className="mb-4 text-sm font-semibold text-white/70">Repositories</h4>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">For Developers</h4>
               <div className="space-y-2.5">
                 {[
                   { name: "AIBTC MCP Server", url: "https://github.com/aibtcdev/aibtc-mcp-server" },
                   { name: "x402 API Template", url: "https://github.com/aibtcdev/x402-api" },
                   { name: "x402 Crosschain Example", url: "https://github.com/aibtcdev/x402-crosschain-example" },
                   { name: "All AIBTC Repos", url: "https://github.com/aibtcdev" },
+                  { name: "Stacks Docs", url: "https://docs.stacks.co" },
                 ].map((link) => (
                   <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]">
                     <GitHubIcon className="size-3.5 shrink-0" />
@@ -867,31 +873,47 @@ export default function Home() {
               </div>
             </div>
 
-            {/* Resources */}
+            {/* Network Endpoints */}
             <div>
-              <h4 className="mb-4 text-sm font-semibold text-white/70">Resources</h4>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">Network Endpoints</h4>
               <div className="space-y-2.5">
                 {[
-                  { name: "AIBTC MCP Server (npm)", url: "https://www.npmjs.com/package/@aibtc/mcp-server", type: "website" },
-                  { name: "Stacks Docs", url: "https://docs.stacks.co", type: "docs" },
-                  { name: "x402 Protocol", url: "https://x402.org", type: "website" },
-                  { name: "Claude Code", url: "https://claude.ai/code", type: "website" },
+                  { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com" },
+                  { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev" },
+                  { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev" },
+                  { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet" },
+                  { name: "Health Check", url: "/api/health" },
                 ].map((link) => (
                   <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]">
-                    {link.type === "docs" ? <BookIcon className="size-3.5 shrink-0" /> : <GlobeIcon className="size-3.5 shrink-0" />}
+                    <GlobeIcon className="size-3.5 shrink-0" />
                     {link.name}
                   </a>
                 ))}
               </div>
             </div>
 
-            {/* Payment Tokens */}
+            {/* Protocols & Tools */}
             <div>
-              <h4 className="mb-4 text-sm font-semibold text-white/70">Payment Tokens</h4>
+              <h4 className="mb-4 text-sm font-semibold text-white/70">Protocols & Tools</h4>
               <div className="space-y-2.5">
-                <span className="block text-sm text-white/50">sBTC (Bitcoin on Stacks)</span>
-                <span className="block text-sm text-white/50">STX (Stacks native)</span>
-                <span className="block text-sm text-white/50">USDCx (Stablecoin)</span>
+                {[
+                  { name: "x402 Protocol", url: "https://x402.org", desc: "Agent payment protocol" },
+                  { name: "ERC-8004", url: "https://eips.ethereum.org/EIPS/eip-8004", desc: "Agent identity standard" },
+                  { name: "Moltbook", url: "https://moltbook.com", desc: "Agent social network" },
+                ].map((link) => (
+                  <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]" title={link.desc}>
+                    <GlobeIcon className="size-3.5 shrink-0" />
+                    {link.name}
+                  </a>
+                ))}
+                <div className="pt-2 border-t border-white/[0.06]">
+                  <p className="text-xs font-medium text-white/40 mb-2">Payment Tokens</p>
+                  <div className="space-y-1.5">
+                    <span className="block text-xs text-white/40">sBTC (Bitcoin on Stacks)</span>
+                    <span className="block text-xs text-white/40">STX (Stacks native)</span>
+                    <span className="block text-xs text-white/40">USDCx (Stablecoin)</span>
+                  </div>
+                </div>
               </div>
             </div>
           </div>
