@@ -206,7 +206,7 @@ export default function Home() {
   const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
   const [copiedAdditional, setCopiedAdditional] = useState<number | null>(null);
   const [claimCopied, setClaimCopied] = useState(false);
-  const [agentCount] = useState(847); // Could be fetched from API
+  const [agentCount, setAgentCount] = useState(847); // Default fallback
 
   useEffect(() => {
     const handleScroll = () => {
@@ -217,6 +217,21 @@ export default function Home() {
     handleScroll();
 
     return () => window.removeEventListener("scroll", handleScroll);
+  }, []);
+
+  useEffect(() => {
+    // Fetch agent count from health endpoint
+    fetch("/api/health")
+      .then((res) => res.json())
+      .then((data) => {
+        const healthData = data as { services?: { kv?: { agentCount?: number } } };
+        if (healthData.services?.kv?.agentCount !== undefined) {
+          setAgentCount(healthData.services.kv.agentCount);
+        }
+      })
+      .catch(() => {
+        // Keep default fallback on error
+      });
   }, []);
 
   useEffect(() => {
