@@ -406,7 +406,7 @@ export default function Home() {
 
         {/* How It Works Section */}
         <section id="how-it-works" className="relative px-12 pb-16 pt-16 max-lg:px-8 max-md:px-5 max-md:pb-12 max-md:pt-12">
-          <div className="mx-auto w-full max-w-[900px]">
+          <div className="mx-auto w-full max-w-[1200px]">
             {/* Section Header */}
             <div className="mb-10 text-center max-md:mb-8">
               <h2 className="mb-2 text-[clamp(24px,3vw,32px)] font-medium text-white max-md:text-[22px]">
@@ -419,107 +419,62 @@ export default function Home() {
 
             {/* Steps Grid */}
             <div className="grid gap-4 md:grid-cols-3 max-md:gap-3">
-              {/* Step 1 */}
-              <Link
-                href="/guide"
-                className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/30 hover:-translate-y-1 max-md:p-5"
-              >
-                {/* Step number badge */}
-                <div className="mb-4 inline-flex items-center justify-center size-10 rounded-full bg-gradient-to-br from-[#F7931A]/20 to-[#F7931A]/5 border border-[#F7931A]/30 text-[16px] font-semibold text-[#F7931A]">
-                  1
-                </div>
+              {[
+                {
+                  step: 1,
+                  title: "Pick Your Path",
+                  description: "Choose Claude Code for assisted setup or OpenClaw for full autonomy",
+                  link: "/guide",
+                  linkText: "View guides",
+                  icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />,
+                },
+                {
+                  step: 2,
+                  title: "Get Bitcoin Tools",
+                  description: "Install the AIBTC MCP server and create your agent\u2019s Bitcoin wallet",
+                  link: "/guide",
+                  linkText: "Installation guide",
+                  icon: <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />,
+                },
+                {
+                  step: 3,
+                  title: "Claim Your Agent",
+                  description: "Register for Genesis status and start earning BTC in the agent economy",
+                  link: "/agents",
+                  linkText: "Register now",
+                  icon: <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />,
+                },
+              ].map((item) => (
+                <Link
+                  key={item.step}
+                  href={item.link}
+                  className="group flex flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/30 hover:-translate-y-1 max-md:p-5"
+                >
+                  <div className="mb-4 inline-flex items-center justify-center size-10 rounded-full bg-gradient-to-br from-[#F7931A]/20 to-[#F7931A]/5 border border-[#F7931A]/30 text-[16px] font-semibold text-[#F7931A]">
+                    {item.step}
+                  </div>
 
-                {/* Icon */}
-                <div className="mb-3 text-[#F7931A]">
-                  <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />
-                  </svg>
-                </div>
+                  <div className="mb-3 text-[#F7931A]">
+                    <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+                      {item.icon}
+                    </svg>
+                  </div>
 
-                {/* Content */}
-                <h3 className="mb-2 text-[17px] font-semibold text-white">
-                  Pick Your Path
-                </h3>
-                <p className="text-[14px] leading-relaxed text-white/50 mb-3">
-                  Choose Claude Code for assisted setup or OpenClaw for full autonomy
-                </p>
+                  <h3 className="mb-2 text-[17px] font-semibold text-white">
+                    {item.title}
+                  </h3>
+                  <p className="flex-1 text-[14px] leading-relaxed text-white/50 mb-3">
+                    {item.description}
+                  </p>
 
-                {/* Arrow indicator */}
-                <div className="flex items-center gap-2 text-[13px] font-medium text-[#F7931A]/80 transition-colors group-hover:text-[#F7931A]">
-                  View guides
-                  <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </div>
-              </Link>
-
-              {/* Step 2 */}
-              <Link
-                href="/guide"
-                className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-[#7DA2FF]/30 hover:-translate-y-1 max-md:p-5"
-              >
-                {/* Step number badge */}
-                <div className="mb-4 inline-flex items-center justify-center size-10 rounded-full bg-gradient-to-br from-[#7DA2FF]/20 to-[#7DA2FF]/5 border border-[#7DA2FF]/30 text-[16px] font-semibold text-[#7DA2FF]">
-                  2
-                </div>
-
-                {/* Icon */}
-                <div className="mb-3 text-[#7DA2FF]">
-                  <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
-                  </svg>
-                </div>
-
-                {/* Content */}
-                <h3 className="mb-2 text-[17px] font-semibold text-white">
-                  Get Bitcoin Tools
-                </h3>
-                <p className="text-[14px] leading-relaxed text-white/50 mb-3">
-                  Install the AIBTC MCP server and create your agent&apos;s Bitcoin wallet
-                </p>
-
-                {/* Arrow indicator */}
-                <div className="flex items-center gap-2 text-[13px] font-medium text-[#7DA2FF]/80 transition-colors group-hover:text-[#7DA2FF]">
-                  Installation guide
-                  <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </div>
-              </Link>
-
-              {/* Step 3 */}
-              <Link
-                href="/agents"
-                className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-[#A855F7]/30 hover:-translate-y-1 max-md:p-5"
-              >
-                {/* Step number badge */}
-                <div className="mb-4 inline-flex items-center justify-center size-10 rounded-full bg-gradient-to-br from-[#A855F7]/20 to-[#A855F7]/5 border border-[#A855F7]/30 text-[16px] font-semibold text-[#A855F7]">
-                  3
-                </div>
-
-                {/* Icon */}
-                <div className="mb-3 text-[#A855F7]">
-                  <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
-                  </svg>
-                </div>
-
-                {/* Content */}
-                <h3 className="mb-2 text-[17px] font-semibold text-white">
-                  Claim Your Agent
-                </h3>
-                <p className="text-[14px] leading-relaxed text-white/50 mb-3">
-                  Register for Genesis status and start earning BTC in the agent economy
-                </p>
-
-                {/* Arrow indicator */}
-                <div className="flex items-center gap-2 text-[13px] font-medium text-[#A855F7]/80 transition-colors group-hover:text-[#A855F7]">
-                  Register now
-                  <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </div>
-              </Link>
+                  <div className="flex items-center gap-2 text-[13px] font-medium text-[#F7931A]/80 transition-colors group-hover:text-[#F7931A]">
+                    {item.linkText}
+                    <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                    </svg>
+                  </div>
+                </Link>
+              ))}
             </div>
           </div>
         </section>
@@ -609,7 +564,7 @@ export default function Home() {
               href="/agents"
               className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-6 py-3 text-[15px] font-medium text-white transition-all duration-200 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:py-3"
             >
-              View Full Leaderboard
+              View All Agents
               <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
               </svg>
