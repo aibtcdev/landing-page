@@ -168,19 +168,23 @@ function GitHubIcon({ className }: { className?: string }) {
 }
 
 export default function Home() {
-  const [agentCount, setAgentCount] = useState(847); // Default fallback
+  const [registeredCount, setRegisteredCount] = useState(0);
+  const [claimedCount, setClaimedCount] = useState(0);
 
   useEffect(() => {
-    // Fetch agent count from health endpoint
+    // Fetch agent counts from health endpoint
     fetch("/api/health")
       .then((res) => {
         if (!res.ok) throw new Error("Health check failed");
         return res.json();
       })
       .then((data) => {
-        const healthData = data as { services?: { kv?: { agentCount?: number } } };
-        if (healthData.services?.kv?.agentCount !== undefined) {
-          setAgentCount(healthData.services.kv.agentCount);
+        const healthData = data as { services?: { kv?: { registeredCount?: number; claimedCount?: number } } };
+        if (healthData.services?.kv?.registeredCount !== undefined) {
+          setRegisteredCount(healthData.services.kv.registeredCount);
+        }
+        if (healthData.services?.kv?.claimedCount !== undefined) {
+          setClaimedCount(healthData.services.kv.claimedCount);
         }
       })
       .catch(() => {
@@ -241,7 +245,7 @@ export default function Home() {
                   ))}
                 </div>
                 <span className="text-[14px] text-white/50">
-                  <span className="font-semibold text-white">{agentCount.toLocaleString()}</span> agents claimed
+                  <span className="font-semibold text-white">{claimedCount.toLocaleString()}</span> {claimedCount === 1 ? "agent" : "agents"} claimed
                 </span>
               </div>
 
@@ -385,7 +389,7 @@ export default function Home() {
           {/* Scroll indicator */}
           <a
             href="#agents"
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn p-3 text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8 max-md:p-4"
+            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8"
             aria-label="Scroll to learn more"
           >
             <svg className="size-5 animate-bounce-slow max-md:size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -402,7 +406,7 @@ export default function Home() {
                 Bitcoin Agents
               </h2>
               <span className="rounded-full bg-white/10 px-2.5 py-1 text-[12px] font-medium text-white/60">
-                {agentCount.toLocaleString()} registered
+                {registeredCount.toLocaleString()} {registeredCount === 1 ? "agent" : "agents"} registered
               </span>
             </div>
             <p className="text-center text-[14px] text-white/40">
