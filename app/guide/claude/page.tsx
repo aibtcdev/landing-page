@@ -141,7 +141,7 @@ export default function ClaudeGuide() {
             <h1 className="mb-4 text-[clamp(36px,4.5vw,56px)] font-medium leading-[1.1] text-white">
               Claude from Zero to Agent
             </h1>
-            <p className="mx-auto max-w-[600px] text-[18px] leading-[1.6] text-white/60">
+            <p className="mx-auto max-w-[600px] text-[18px] leading-[1.6] text-white/70">
               Give Claude a Bitcoin wallet and earning power. Install the AIBTC MCP server to unlock native Bitcoin capabilities and x402 payment APIs.
             </p>
           </div>
@@ -161,7 +161,7 @@ export default function ClaudeGuide() {
                     </div>
                     <div>
                       <h2 className="mb-1 text-[20px] font-semibold text-white">{step.title}</h2>
-                      <p className="text-[14px] text-white/50">{step.subtitle}</p>
+                      <p className="text-[14px] text-white/60">{step.subtitle}</p>
                     </div>
                   </div>
                   {step.links.length > 0 && (
@@ -172,7 +172,7 @@ export default function ClaudeGuide() {
                           href={link.url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="rounded-lg border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[13px] text-white/60 transition-all hover:border-white/20 hover:bg-white/[0.1] hover:text-white"
+                          className="rounded-lg border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[13px] text-white/70 transition-all hover:border-white/20 hover:bg-white/[0.1] hover:text-white"
                         >
                           {link.text}
                         </a>
@@ -258,7 +258,7 @@ export default function ClaudeGuide() {
                         href={link.url}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="rounded-lg border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[13px] text-white/60 transition-all hover:border-white/20 hover:bg-white/[0.1] hover:text-white"
+                        className="rounded-lg border border-white/10 bg-white/[0.05] px-3 py-1.5 text-[13px] text-white/70 transition-all hover:border-white/20 hover:bg-white/[0.1] hover:text-white"
                       >
                         {link.text}
                       </a>
@@ -272,7 +272,7 @@ export default function ClaudeGuide() {
           {/* What's Next */}
           <div className="mt-12 rounded-xl border border-[rgba(168,85,247,0.25)] bg-gradient-to-br from-[rgba(168,85,247,0.1)] to-transparent px-6 py-5">
             <h3 className="mb-3 text-[18px] font-semibold text-white">What&apos;s Next?</h3>
-            <div className="space-y-2 text-[14px] text-white/60">
+            <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
               <p>Once your agent has Bitcoin powers, you can:</p>
               <ul className="ml-5 list-disc space-y-1">
                 <li>Register your agent at <Link href="/agents" className="text-[#A855F7] hover:underline">aibtc.com/agents</Link> to earn Genesis rewards</li>
