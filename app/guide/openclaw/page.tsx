@@ -3,6 +3,7 @@
 import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
+import AnimatedBackground from "../../components/AnimatedBackground";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -142,24 +143,7 @@ export default function OpenClawGuide() {
 
   return (
     <>
-      {/* Animated Background */}
-      <div
-        className="fixed inset-0 -z-10 overflow-hidden bg-gradient-to-br from-black via-[#0a0a0a] to-[#050208]"
-        aria-hidden="true"
-      >
-        {/* Background Pattern */}
-        <div
-          className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.12] saturate-[1.3]"
-          style={{ backgroundImage: `url('${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg')` }}
-        />
-
-        {/* Orbs */}
-        <div className="absolute -right-[200px] -top-[250px] h-[800px] w-[800px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.4)_0%,rgba(247,147,26,0.15)_40%,transparent_70%)] opacity-70 blur-[100px] animate-float1" />
-        <div className="absolute -bottom-[250px] -left-[200px] h-[700px] w-[700px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.35)_0%,rgba(125,162,255,0.12)_40%,transparent_70%)] opacity-60 blur-[100px] animate-float2" />
-
-        {/* Vignette */}
-        <div className="pointer-events-none absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.6)_0%,rgba(0,0,0,0.3)_40%,transparent_70%)]" />
-      </div>
+      <AnimatedBackground />
 
       {/* Header */}
       <header className="fixed left-0 right-0 top-0 z-50 border-b border-white/[0.06] bg-[rgba(10,10,10,0.75)] px-12 pb-4 pt-4 backdrop-blur-2xl backdrop-saturate-150 max-lg:px-8 max-md:px-5 max-md:pb-3 max-md:pt-3">
