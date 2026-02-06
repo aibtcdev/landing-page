@@ -301,6 +301,9 @@ export default function AgentsPage() {
                               src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
                               alt={displayName}
                               className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
+                              loading="lazy"
+                              width="32"
+                              height="32"
                               onError={(e) => {
                                 e.currentTarget.style.display = 'none';
                               }}

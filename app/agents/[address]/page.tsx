@@ -246,6 +246,9 @@ export default function AgentProfilePage() {
               src={avatarUrl}
               alt={displayName}
               className="h-20 w-20 md:h-24 md:w-24 rounded-full border-2 border-orange/30 bg-white/[0.06]"
+              loading="lazy"
+              width="96"
+              height="96"
               onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
             <h1 className="mt-3 text-2xl md:text-3xl font-medium tracking-tight text-white">

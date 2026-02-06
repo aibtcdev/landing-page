@@ -233,7 +233,7 @@ export default function Home() {
                 <div className="flex -space-x-2">
                   {featuredAgents.slice(0, 5).map((agent, i) => (
                     <div key={agent.id} className="size-8 overflow-hidden rounded-full border-2 border-black" style={{ zIndex: 5 - i }}>
-                      <img src={agent.avatar} alt="" className="size-full object-cover" />
+                      <img src={agent.avatar} alt="" className="size-full object-cover" loading="lazy" width="32" height="32" />
                     </div>
                   ))}
                 </div>
@@ -298,6 +298,9 @@ export default function Home() {
                             src="https://bitcoinfaces.xyz/api/get-image?name=agentx"
                             alt="Agent X"
                             className="size-full object-cover"
+                            loading="lazy"
+                            width="44"
+                            height="44"
                           />
                         </div>
                         <div className="flex-1">
@@ -424,6 +427,9 @@ export default function Home() {
                       src={agent.avatar}
                       alt={agent.name}
                       className="size-full object-cover"
+                      loading="lazy"
+                      width="56"
+                      height="56"
                     />
                   </div>
 
@@ -451,7 +457,7 @@ export default function Home() {
                 >
                   <div className="flex items-center gap-2.5">
                     <div className="size-10 overflow-hidden rounded-lg border border-white/10 shrink-0">
-                      <img src={agent.avatar} alt={agent.name} className="size-full object-cover" />
+                      <img src={agent.avatar} alt={agent.name} className="size-full object-cover" loading="lazy" width="40" height="40" />
                     </div>
                     <div className="min-w-0">
                       <span className="font-medium text-[12px] text-white leading-tight block">{agent.name}</span>
