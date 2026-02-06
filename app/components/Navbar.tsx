@@ -150,11 +150,11 @@ export default function Navbar() {
             Install
           </Link>
           <Link
-            href="/agents"
+            href="/guide"
             onClick={() => setIsMenuOpen(false)}
             className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"
           >
-            Claim Agent
+            Get Started
           </Link>
         </nav>
       </div>
