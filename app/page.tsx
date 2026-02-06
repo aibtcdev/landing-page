@@ -575,7 +575,7 @@ export default function Home() {
                         text={upgrade.prompt}
                         label=""
                         variant="icon"
-                        className="size-3.5 -mr-1"
+                        className="-mr-1"
                       />
                     </div>
                     <p className="text-[11px] text-white/40">{upgrade.description}</p>

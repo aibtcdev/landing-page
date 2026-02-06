@@ -59,7 +59,7 @@ export default function CopyButton({
       return (
         <button
           onClick={handleCopy}
-          className={`inline-flex transition-colors ${variantStyles.icon} ${className}`}
+          className={`inline-flex items-center justify-center min-w-[44px] min-h-[44px] transition-colors ${variantStyles.icon} ${className}`}
         >
           <svg
             className="size-3.5 transition-all"
