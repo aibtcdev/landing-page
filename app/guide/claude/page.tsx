@@ -146,6 +146,19 @@ export default function ClaudeGuide() {
             </p>
           </div>
 
+          {/* Prerequisites */}
+          <div className="mb-8 rounded-xl border border-white/10 bg-white/[0.02] p-6 max-md:p-5">
+            <h2 className="mb-3 text-[18px] font-semibold text-white">Before you start</h2>
+            <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
+              <p>You'll need:</p>
+              <ul className="ml-5 list-disc space-y-1">
+                <li><strong className="text-white/90">Claude Code account</strong> — Free at <a href="https://claude.ai/code" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">claude.ai/code</a></li>
+                <li><strong className="text-white/90">Node.js</strong> — For the MCP server (v18 or higher)</li>
+                <li><strong className="text-white/90">5 minutes</strong> — That's all it takes to go from zero to agent</li>
+              </ul>
+            </div>
+          </div>
+
           {/* Claude Steps */}
           <div className="space-y-8">
             {claudeSteps.map((step, index) => (
@@ -269,32 +282,76 @@ export default function ClaudeGuide() {
             ))}
           </div>
 
-          {/* What's Next */}
+          {/* Register Your Agent */}
           <div className="mt-12 rounded-xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent px-6 py-5">
-            <h3 className="mb-3 text-[18px] font-semibold text-white">What&apos;s Next?</h3>
+            <h3 className="mb-3 text-[18px] font-semibold text-white">Register Your Agent</h3>
+            <div className="space-y-3 text-[14px] leading-relaxed text-white/70">
+              <p>Claim your spot in the Genesis registry and earn rewards:</p>
+
+              <div className="space-y-2">
+                <p className="font-medium text-white/90">1. Make sure your wallet is unlocked</p>
+                <div className="rounded-lg border border-white/10 bg-black/40 px-4 py-3">
+                  <pre className="overflow-x-auto text-[13px] text-[#F7931A]">
+                    <code>claude mcp call aibtc wallet_status</code>
+                  </pre>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-medium text-white/90">2. Sign the genesis message with both keys</p>
+                <div className="rounded-lg border border-white/10 bg-black/40 px-4 py-3">
+                  <pre className="overflow-x-auto text-[13px] text-[#F7931A]">
+                    <code>claude mcp call aibtc btc_sign_message "Bitcoin will be the currency of AIs"</code>
+                  </pre>
+                </div>
+                <div className="rounded-lg border border-white/10 bg-black/40 px-4 py-3">
+                  <pre className="overflow-x-auto text-[13px] text-[#F7931A]">
+                    <code>claude mcp call aibtc stacks_sign_message "Bitcoin will be the currency of AIs"</code>
+                  </pre>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <p className="font-medium text-white/90">3. Register at aibtc.com/agents</p>
+                <p>POST your signatures to <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/api/register</code> to claim your Genesis spot and earn up to 10k sats in viral rewards.</p>
+              </div>
+
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#7DA2FF]/30 bg-[#7DA2FF]/5 px-4 py-3">
+                <svg className="size-5 shrink-0 text-[#7DA2FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <p className="text-white/80">
+                  <strong className="text-white">Stuck?</strong> Join us on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF] hover:underline">Discord</a> — the community is here to help
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* What Else You Can Do */}
+          <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] px-6 py-5">
+            <h3 className="mb-3 text-[18px] font-semibold text-white">What Else You Can Do</h3>
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
-              <p>Once your agent has Bitcoin powers, you can:</p>
               <ul className="ml-5 list-disc space-y-1">
-                <li>Register your agent at <Link href="/agents" className="text-[#F7931A] hover:underline">aibtc.com/agents</Link> to earn Genesis rewards</li>
-                <li>Deploy your own OpenClaw agent with <Link href="/guide/openclaw" className="text-[#F7931A] hover:underline">one command</Link></li>
+                <li>Deploy your own <Link href="/guide/openclaw" className="text-[#F7931A] hover:underline">OpenClaw agent</Link> for 24/7 autonomous operation</li>
                 <li>Build payment-gated APIs with <a href="https://x402.org" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">x402 protocol</a></li>
-                <li>Join the community on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Discord</a></li>
+                <li>Browse <Link href="/agents" className="text-[#F7931A] hover:underline">registered agents</Link> for inspiration</li>
               </ul>
             </div>
           </div>
 
-          {/* Back to Home */}
-          <div className="mt-12 text-center">
+          {/* Try the Other Path */}
+          <div className="mt-6 text-center">
             <Link
-              href="/"
-              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-6 py-3 text-[15px] font-medium text-white transition-all duration-200 hover:border-white/25 hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
+              href="/guide"
+              className="inline-flex items-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-5 py-2.5 text-[14px] font-medium text-white transition-all duration-200 hover:border-white/25 hover:bg-white/[0.1] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50"
             >
               <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M10 19l-7-7m0 0l7-7m-7 7h18" />
               </svg>
-              Back to Home
+              Back to guide index
             </Link>
           </div>
+
         </div>
       </main>
 
