@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import AnimatedBackground from "./components/AnimatedBackground";
+import CopyButton from "./components/CopyButton";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -229,9 +230,6 @@ function SocialLinks({
 export default function Home() {
   const [isScrolled, setIsScrolled] = useState(false);
   const [isMenuOpen, setIsMenuOpen] = useState(false);
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-  const [copiedAdditional, setCopiedAdditional] = useState<number | null>(null);
-  const [claimCopied, setClaimCopied] = useState(false);
   const [agentCount, setAgentCount] = useState(847); // Default fallback
 
   useEffect(() => {
@@ -268,22 +266,6 @@ export default function Home() {
     }
   }, [isMenuOpen]);
 
-  const copyToClipboard = async (text: string, index: number, isAdditional = false) => {
-    await navigator.clipboard.writeText(text);
-    if (isAdditional) {
-      setCopiedAdditional(index);
-      setTimeout(() => setCopiedAdditional(null), 2000);
-    } else {
-      setCopiedIndex(index);
-      setTimeout(() => setCopiedIndex(null), 2000);
-    }
-  };
-
-  const copyClaimPrompt = async () => {
-    await navigator.clipboard.writeText(AGENT_PROMPT);
-    setClaimCopied(true);
-    setTimeout(() => setClaimCopied(false), 2000);
-  };
 
   return (
     <>
@@ -424,19 +406,12 @@ export default function Home() {
                 {/* Secondary copy prompt */}
                 <div className="flex items-center gap-3 max-lg:justify-center">
                   <span className="text-[13px] text-white/40">or</span>
-                  <button
-                    onClick={copyClaimPrompt}
-                    className="group inline-flex items-center gap-2 text-[14px] text-white/60 transition-colors hover:text-white"
-                  >
-                    <svg className={`size-4 transition-all ${claimCopied ? 'text-green-400' : ''}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      {claimCopied ? (
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                      ) : (
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                      )}
-                    </svg>
-                    <span>{claimCopied ? 'Copied!' : 'Copy setup prompt for Claude/Cursor'}</span>
-                  </button>
+                  <CopyButton
+                    text={AGENT_PROMPT}
+                    label="Copy setup prompt for Claude/Cursor"
+                    variant="icon"
+                    className="text-[14px]"
+                  />
                 </div>
               </div>
             </div>
@@ -707,30 +682,12 @@ export default function Home() {
                     </div>
 
                     {/* Copy button */}
-                    <button
-                      onClick={() => copyToClipboard(upgrade.prompt, index)}
-                      className={`shrink-0 flex items-center gap-2 rounded-lg border px-4 py-2 text-[13px] font-medium transition-all duration-300 max-md:w-full max-md:justify-center ${
-                        copiedIndex === index
-                          ? 'border-green-500/50 bg-green-500/10 text-green-400'
-                          : 'border-white/10 bg-white/[0.05] text-white/70 hover:border-[#F7931A]/50 hover:bg-[#F7931A]/10 hover:text-white'
-                      }`}
-                    >
-                      {copiedIndex === index ? (
-                        <>
-                          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                          <span>Copied!</span>
-                        </>
-                      ) : (
-                        <>
-                          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                          </svg>
-                          <span>Copy Prompt</span>
-                        </>
-                      )}
-                    </button>
+                    <CopyButton
+                      text={upgrade.prompt}
+                      label="Copy Prompt"
+                      variant="primary"
+                      className="shrink-0 max-md:w-full max-md:justify-center"
+                    />
                   </div>
                 </div>
               ))}
@@ -740,30 +697,22 @@ export default function Home() {
             <div className="mt-6">
               <p className="text-center text-[13px] text-white/40 mb-4">More capabilities</p>
               <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
-                {additionalUpgrades.map((upgrade, index) => (
-                  <button
+                {additionalUpgrades.map((upgrade) => (
+                  <div
                     key={upgrade.title}
-                    onClick={() => copyToClipboard(upgrade.prompt, index, true)}
-                    className={`group rounded-lg border p-3 text-left transition-all duration-300 ${
-                      copiedAdditional === index
-                        ? 'border-green-500/30 bg-green-500/5'
-                        : 'border-white/[0.08] bg-white/[0.02] hover:border-white/15 hover:bg-white/[0.04]'
-                    }`}
+                    className="group rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 text-left transition-all duration-200 hover:border-white/15 hover:bg-white/[0.04]"
                   >
                     <div className="flex items-center justify-between mb-1">
                       <span className="text-[13px] font-medium text-white">{upgrade.title}</span>
-                      {copiedAdditional === index ? (
-                        <svg className="size-3.5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                        </svg>
-                      ) : (
-                        <svg className="size-3.5 text-white/30 group-hover:text-white/50 transition-colors" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                        </svg>
-                      )}
+                      <CopyButton
+                        text={upgrade.prompt}
+                        label=""
+                        variant="icon"
+                        className="size-3.5 -mr-1"
+                      />
                     </div>
                     <p className="text-[11px] text-white/40">{upgrade.description}</p>
-                  </button>
+                  </div>
                 ))}
               </div>
             </div>

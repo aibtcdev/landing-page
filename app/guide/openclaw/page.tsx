@@ -5,6 +5,7 @@ import Image from "next/image";
 import Link from "next/link";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Footer from "../../components/Footer";
+import CopyButton from "../../components/CopyButton";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -134,13 +135,6 @@ Then: bash update.sh`,
 ];
 
 export default function OpenClawGuide() {
-  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
-
-  const copyToClipboard = async (text: string, index: number) => {
-    await navigator.clipboard.writeText(text);
-    setCopiedIndex(index);
-    setTimeout(() => setCopiedIndex(null), 2000);
-  };
 
   return (
     <>
@@ -235,30 +229,12 @@ export default function OpenClawGuide() {
                     <div className="relative">
                       <div className="flex items-center justify-between rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
                         <span className="text-[12px] font-medium text-white/40">Command</span>
-                        <button
-                          onClick={() => copyToClipboard(step.command!, index)}
-                          className={`flex items-center gap-1.5 rounded px-2 py-1 text-[12px] transition-all ${
-                            copiedIndex === index
-                              ? 'text-green-400'
-                              : 'text-white/50 hover:text-white'
-                          }`}
-                        >
-                          {copiedIndex === index ? (
-                            <>
-                              <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                              </svg>
-                              Copied
-                            </>
-                          ) : (
-                            <>
-                              <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                              </svg>
-                              Copy
-                            </>
-                          )}
-                        </button>
+                        <CopyButton
+                          text={step.command!}
+                          label="Copy"
+                          variant="icon"
+                          className="gap-1.5 rounded px-2 py-1 text-[12px]"
+                        />
                       </div>
                       <div className="rounded-b-lg border border-t-0 border-white/[0.08] bg-black/40 px-4 py-3">
                         <pre className="overflow-x-auto text-[13px] leading-relaxed text-[#7DA2FF]">
