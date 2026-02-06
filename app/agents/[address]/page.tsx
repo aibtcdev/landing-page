@@ -324,68 +324,128 @@ export default function AgentProfilePage() {
 
           {/* Claim */}
           {hasExistingClaim ? (
-            <div className="space-y-2.5 md:space-y-3 rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3 md:px-5 md:py-4">
-              {/* Header with verification icon */}
-              <div className="flex items-center gap-2">
-                <svg className="h-5 w-5 md:h-6 md:w-6 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                <span className="text-[14px] md:text-[16px] font-medium text-white">Agent Claimed</span>
-              </div>
+            <>
+              <div className="space-y-2.5 md:space-y-3 rounded-lg border border-white/[0.08] bg-white/[0.04] px-4 py-3 md:px-5 md:py-4">
+                {/* Header with verification icon */}
+                <div className="flex items-center gap-2">
+                  <svg className="h-5 w-5 md:h-6 md:w-6 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                  </svg>
+                  <span className="text-[14px] md:text-[16px] font-medium text-white">Agent Claimed</span>
+                </div>
 
-              {/* Claim details */}
-              <div className="space-y-1.5 md:space-y-2 text-[12px] md:text-[14px]">
-                {claim.tweetAuthor && (
+                {/* Claim details */}
+                <div className="space-y-1.5 md:space-y-2 text-[12px] md:text-[14px]">
+                  {claim.tweetAuthor && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-white/50">Claimed by:</span>
+                      <a
+                        href={`https://x.com/${claim.tweetAuthor}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-white/80 hover:text-blue transition-colors"
+                      >
+                        <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                        </svg>
+                        @{claim.tweetAuthor}
+                      </a>
+                    </div>
+                  )}
+
+                  {claim.claimedAt && (
+                    <div className="flex items-center gap-1.5">
+                      <span className="text-white/50">Claimed on:</span>
+                      <span className="text-white/80">{formatClaimDate(claim.claimedAt)}</span>
+                    </div>
+                  )}
+
                   <div className="flex items-center gap-1.5">
-                    <span className="text-white/50">Claimed by:</span>
+                    <span className="text-white/50">Reward:</span>
+                    <span className="text-orange font-medium">{claim.rewardSatoshis.toLocaleString()} sats</span>
+                  </div>
+
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-white/50">Status:</span>
+                    <span className={`inline-flex items-center gap-1 rounded-md ${getStatusStyle(claim.status).bg} px-2 py-0.5 text-[11px] md:text-xs font-medium ${getStatusStyle(claim.status).color} ring-1 ring-inset ${getStatusStyle(claim.status).ring}`}>
+                      {getStatusStyle(claim.status).text}
+                    </span>
+                  </div>
+                </div>
+
+                {/* View tweet button */}
+                {claim.tweetUrl && (
+                  <div className="pt-1">
                     <a
-                      href={`https://x.com/${claim.tweetAuthor}`}
+                      href={claim.tweetUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1 text-white/80 hover:text-blue transition-colors"
+                      className="inline-flex items-center gap-1.5 text-[12px] md:text-[14px] text-blue hover:text-blue/80 transition-colors"
                     >
-                      <svg className="h-3 w-3" fill="currentColor" viewBox="0 0 24 24">
-                        <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                      <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
                       </svg>
-                      @{claim.tweetAuthor}
+                      View tweet
                     </a>
                   </div>
                 )}
+              </div>
 
-                {claim.claimedAt && (
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-white/50">Claimed on:</span>
-                    <span className="text-white/80">{formatClaimDate(claim.claimedAt)}</span>
+              {/* What's next after claiming */}
+              {claim.status === "verified" || claim.status === "rewarded" ? (
+                <div className="mt-4 rounded-lg border border-blue/20 bg-gradient-to-r from-blue/5 to-purple/5 p-4 md:p-5">
+                  <div className="mb-2 flex items-center gap-2">
+                    <svg className="h-5 w-5 text-blue" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M9.879 7.519c1.171-1.025 3.071-1.025 4.242 0 1.172 1.025 1.172 2.687 0 3.712-.203.179-.43.326-.67.442-.745.361-1.45.999-1.45 1.827v.75M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9 5.25h.008v.008H12v-.008z" />
+                    </svg>
+                    <h4 className="text-[14px] md:text-[16px] font-medium text-white">
+                      {claim.status === "rewarded" ? "What's next?" : "What happens next?"}
+                    </h4>
                   </div>
-                )}
-
-                <div className="flex items-center gap-1.5">
-                  <span className="text-white/50">Status:</span>
-                  <span className={`inline-flex items-center gap-1 rounded-md ${getStatusStyle(claim.status).bg} px-2 py-0.5 text-[11px] md:text-xs font-medium ${getStatusStyle(claim.status).color} ring-1 ring-inset ${getStatusStyle(claim.status).ring}`}>
-                    {getStatusStyle(claim.status).text}
-                  </span>
+                  <div className="space-y-2 text-[12px] md:text-[13px] text-white/70">
+                    {claim.status === "verified" && (
+                      <p>Your Bitcoin reward ({claim.rewardSatoshis.toLocaleString()} sats) will be sent to this agent's wallet shortly. Check back soon or ask your agent to check its balance!</p>
+                    )}
+                    {claim.status === "rewarded" && (
+                      <p>Your Bitcoin reward has been sent! Your agent can now use these sats to interact with Bitcoin — send transactions, create inscriptions, and more.</p>
+                    )}
+                    <div className="mt-3 flex flex-col gap-2">
+                      <Link href="https://discord.gg/fyrsX3mtTk" className="inline-flex items-center gap-1.5 text-[12px] md:text-[13px] text-purple hover:text-purple/80 transition-colors">
+                        <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+                          <path d="M20.317 4.37a19.791 19.791 0 00-4.885-1.515.074.074 0 00-.079.037c-.21.375-.444.864-.608 1.25a18.27 18.27 0 00-5.487 0 12.64 12.64 0 00-.617-1.25.077.077 0 00-.079-.037A19.736 19.736 0 003.677 4.37a.07.07 0 00-.032.027C.533 9.046-.32 13.58.099 18.057a.082.082 0 00.031.057 19.9 19.9 0 005.993 3.03.078.078 0 00.084-.028c.462-.63.874-1.295 1.226-1.994a.076.076 0 00-.041-.106 13.107 13.107 0 01-1.872-.892.077.077 0 01-.008-.128 10.2 10.2 0 00.372-.292.074.074 0 01.077-.01c3.928 1.793 8.18 1.793 12.062 0a.074.074 0 01.078.01c.12.098.246.198.373.292a.077.077 0 01-.006.127 12.299 12.299 0 01-1.873.892.077.077 0 00-.041.107c.36.698.772 1.362 1.225 1.993a.076.076 0 00.084.028 19.839 19.839 0 006.002-3.03.077.077 0 00.032-.054c.5-5.177-.838-9.674-3.549-13.66a.061.061 0 00-.031-.03zM8.02 15.33c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.956-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.956 2.418-2.157 2.418zm7.975 0c-1.183 0-2.157-1.085-2.157-2.419 0-1.333.955-2.419 2.157-2.419 1.21 0 2.176 1.096 2.157 2.42 0 1.333-.946 2.418-2.157 2.418z"/>
+                        </svg>
+                        Join the Discord community
+                      </Link>
+                      <Link href="/" className="inline-flex items-center gap-1.5 text-[12px] md:text-[13px] text-blue hover:text-blue/80 transition-colors">
+                        <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 6.042A8.967 8.967 0 006 3.75c-1.052 0-2.062.18-3 .512v14.25A8.987 8.987 0 016 18c2.305 0 4.408.867 6 2.292m0-14.25a8.966 8.966 0 016-2.292c1.052 0 2.062.18 3 .512v14.25A8.987 8.987 0 0018 18a8.967 8.967 0 00-6 2.292m0-14.25v14.25" />
+                        </svg>
+                        Explore what your agent can do
+                      </Link>
+                    </div>
+                  </div>
+                </div>
+              ) : null}
+            </>
+          ) : (
+            <div className="space-y-2.5 md:space-y-3">
+              {/* Reward info banner */}
+              <div className="rounded-lg border border-orange/20 bg-gradient-to-r from-orange/5 to-orange/10 px-4 py-3 md:px-5 md:py-3.5 backdrop-blur-sm">
+                <div className="flex items-start gap-3">
+                  <svg className="h-5 w-5 shrink-0 text-orange mt-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M12 6v12m-3-2.818l.879.659c1.171.879 3.07.879 4.242 0 1.172-.879 1.172-2.303 0-3.182C13.536 12.219 12.768 12 12 12c-.725 0-1.45-.22-2.003-.659-1.106-.879-1.106-2.303 0-3.182s2.9-.879 4.006 0l.415.33M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                  </svg>
+                  <div>
+                    <div className="text-[13px] md:text-[14px] font-medium text-white mb-1">
+                      Claim 5,000-10,000 sats reward
+                    </div>
+                    <div className="text-[11px] md:text-[12px] text-white/70 leading-relaxed">
+                      Tweet about this agent to claim ownership and receive Bitcoin as a reward. The sats will be sent directly to the agent's wallet.
+                    </div>
+                  </div>
                 </div>
               </div>
 
-              {/* View tweet button */}
-              {claim.tweetUrl && (
-                <div className="pt-1">
-                  <a
-                    href={claim.tweetUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="inline-flex items-center gap-1.5 text-[12px] md:text-[14px] text-blue hover:text-blue/80 transition-colors"
-                  >
-                    <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 6H5.25A2.25 2.25 0 003 8.25v10.5A2.25 2.25 0 005.25 21h10.5A2.25 2.25 0 0018 18.75V10.5m-10.5 6L21 3m0 0h-5.25M21 3v5.25" />
-                    </svg>
-                    View tweet
-                  </a>
-                </div>
-              )}
-            </div>
-          ) : (
-            <div className="space-y-2.5 md:space-y-3">
               <div className="flex gap-2 md:gap-3">
                 <a
                   href={tweetIntentUrl}
@@ -434,10 +494,37 @@ export default function AgentProfilePage() {
                 <p className="text-[11px] md:text-[12px] text-red-400/80">{claimError}</p>
               )}
               <p className="text-center text-[11px] md:text-[12px] text-white/50">
-                Tweet about your agent, paste the URL, and claim ownership.
+                Tweet about your agent, paste the URL, and claim ownership + Bitcoin reward.
               </p>
             </div>
           )}
+
+          {/* Divider */}
+          <div className="my-5 md:my-6 h-px bg-white/[0.08]" />
+
+          {/* Create your own agent CTA */}
+          <div className="rounded-lg border border-orange/20 bg-gradient-to-r from-orange/5 to-orange/10 p-5 md:p-6 backdrop-blur-sm">
+            <div className="mb-3 flex items-center gap-2">
+              <svg className="h-5 w-5 text-orange" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9.813 15.904L9 18.75l-.813-2.846a4.5 4.5 0 00-3.09-3.09L2.25 12l2.846-.813a4.5 4.5 0 003.09-3.09L9 5.25l.813 2.846a4.5 4.5 0 003.09 3.09L15.75 12l-2.846.813a4.5 4.5 0 00-3.09 3.09zM18.259 8.715L18 9.75l-.259-1.035a3.375 3.375 0 00-2.455-2.456L14.25 6l1.036-.259a3.375 3.375 0 002.455-2.456L18 2.25l.259 1.035a3.375 3.375 0 002.456 2.456L21.75 6l-1.035.259a3.375 3.375 0 00-2.456 2.456zM16.894 20.567L16.5 21.75l-.394-1.183a2.25 2.25 0 00-1.423-1.423L13.5 18.75l1.183-.394a2.25 2.25 0 001.423-1.423l.394-1.183.394 1.183a2.25 2.25 0 001.423 1.423l1.183.394-1.183.394a2.25 2.25 0 00-1.423 1.423z" />
+              </svg>
+              <h3 className="text-[16px] md:text-[18px] font-medium text-white">
+                Want to create your own agent?
+              </h3>
+            </div>
+            <p className="mb-4 text-[13px] md:text-[14px] leading-relaxed text-white/70">
+              Follow our step-by-step guide to build an AI agent with Bitcoin tools. Choose between Claude Code (interactive, great for beginners) or OpenClaw (autonomous, for advanced users).
+            </p>
+            <Link
+              href="/guide"
+              className="inline-flex items-center gap-2 rounded-lg bg-orange px-4 py-2.5 text-[13px] md:text-[14px] font-medium text-black transition-all duration-200 hover:bg-orange/90 hover:shadow-[0_0_20px_rgba(247,147,26,0.3)]"
+            >
+              Get Started
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </Link>
+          </div>
 
           {/* Back link */}
           <div className="mt-5 md:mt-6 text-center">
