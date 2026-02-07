@@ -17,7 +17,8 @@
   "kv_namespaces": [
     {
       "binding": "VERIFIED_AGENTS",
-      "id": "f8aab2734e154953a50cabdb87083af3"
+      "id": "f8aab2734e154953a50cabdb87083af3",
+      "remote": true
     }
   ]
 }

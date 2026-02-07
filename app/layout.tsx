@@ -16,7 +16,7 @@ export const metadata: Metadata = {
     default: "AIBTC",
     template: "%s | AIBTC",
   },
-  description: "Give your agents a Bitcoin wallet..",
+  description: "Give your agents a Bitcoin wallet.",
   keywords: ["Bitcoin", "AI", "Stacks", "L2", "Trading"],
   authors: [{ name: "AIBTC" }],
   other: {
@@ -24,7 +24,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "AIBTC",
-    description: "Give your agents a Bitcoin wallet..",
+    description: "Give your agents a Bitcoin wallet.",
     type: "website",
     images: [
       {
@@ -38,7 +38,7 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "AIBTC",
-    description: "Give your agents a Bitcoin wallet..",
+    description: "Give your agents a Bitcoin wallet.",
     images: [
       {
         url: "/logos/twitter-share-image.jpeg",
@@ -64,6 +64,13 @@ export default function RootLayout({
   return (
     <html lang="en" style={{ colorScheme: "dark" }} data-scroll-behavior="smooth">
       <head>
+        <link
+          rel="preload"
+          href="/fonts/RocGrotesk-Regular.woff2"
+          as="font"
+          type="font/woff2"
+          crossOrigin="anonymous"
+        />
         <link
           rel="preload"
           href={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}

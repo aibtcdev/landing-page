@@ -1,16 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-
-interface AgentRecord {
-  stxAddress: string;
-  btcAddress: string;
-  stxPublicKey: string;
-  btcPublicKey: string;
-  displayName?: string;
-  description?: string | null;
-  bnsName?: string | null;
-  verifiedAt: string;
-}
+import type { AgentRecord } from "@/lib/types";
+import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
 
 export async function GET() {
   try {
@@ -65,13 +56,36 @@ export async function GET() {
       agents.push(...values.filter((v): v is AgentRecord => v !== null));
     }
 
+    // Look up claim status for each agent to compute levels
+    const claimLookups = await Promise.all(
+      agents.map(async (agent) => {
+        const claimData = await kv.get(`claim:${agent.btcAddress}`);
+        if (!claimData) return null;
+        try {
+          return JSON.parse(claimData) as ClaimStatus;
+        } catch {
+          return null;
+        }
+      })
+    );
+
+    // Attach level info to each agent
+    const agentsWithLevels = agents.map((agent, i) => {
+      const level = computeLevel(agent, claimLookups[i]);
+      return {
+        ...agent,
+        level,
+        levelName: LEVELS[level].name,
+      };
+    });
+
     // Sort by most recently verified
-    agents.sort(
+    agentsWithLevels.sort(
       (a, b) =>
         new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime()
     );
 
-    return NextResponse.json({ agents });
+    return NextResponse.json({ agents: agentsWithLevels });
   } catch (e) {
     return NextResponse.json(
       { error: `Failed to fetch agents: ${(e as Error).message}` },
