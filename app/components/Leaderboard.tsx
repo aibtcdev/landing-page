@@ -111,10 +111,10 @@ export default function Leaderboard({
             <Link
               key={agent.btcAddress}
               href={`/agents/${agent.btcAddress}`}
-              className="flex items-center gap-3 border-b border-white/[0.04] px-4 py-2.5 transition-colors duration-200 last:border-0 hover:bg-white/[0.03]"
+              className="flex items-center gap-3 border-b border-white/[0.04] px-5 py-3 transition-colors duration-200 last:border-0 hover:bg-white/[0.03] max-md:gap-2.5 max-md:px-3 max-md:py-2.5"
             >
               {/* Rank */}
-              <span className="w-6 text-center text-[13px] font-medium text-white/30">
+              <span className="w-7 text-center text-[13px] font-medium text-white/30 max-md:w-5 max-md:text-[12px]">
                 {agent.rank}
               </span>
 
@@ -126,10 +126,10 @@ export default function Leaderboard({
               <img
                 src={avatarUrl}
                 alt={name}
-                className="size-7 shrink-0 rounded-full bg-white/[0.06]"
+                className="size-8 shrink-0 rounded-full bg-white/[0.06] max-md:size-7"
                 loading="lazy"
-                width="28"
-                height="28"
+                width="32"
+                height="32"
                 onError={(e) => { e.currentTarget.style.display = "none"; }}
               />
 
@@ -138,14 +138,14 @@ export default function Leaderboard({
                 <span className="block truncate text-[14px] font-medium text-white">
                   {name}
                 </span>
-                <span className="block truncate font-mono text-[10px] text-[#F7931A]/50">
+                <span className="block truncate font-mono text-[11px] text-[#F7931A]/50 max-md:text-[10px]">
                   {agent.btcAddress}
                 </span>
               </div>
 
               {/* Level name */}
               <span
-                className="shrink-0 text-[11px] font-medium"
+                className="shrink-0 text-[12px] font-medium max-md:text-[11px]"
                 style={{ color: LEVELS[agent.level]?.color || "rgba(255,255,255,0.3)" }}
               >
                 {agent.levelName}

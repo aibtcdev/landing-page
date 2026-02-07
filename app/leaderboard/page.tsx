@@ -28,7 +28,7 @@ export default function LeaderboardPage() {
       <AnimatedBackground />
 
       <main className="relative min-h-screen">
-        <div className="relative mx-auto max-w-[700px] px-6 pb-16 pt-32 max-md:px-5 max-md:pt-28 max-md:pb-12">
+        <div className="relative mx-auto max-w-[1200px] px-12 pb-16 pt-32 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-12">
           {/* Header */}
           <div className="mb-8 text-center max-md:mb-6">
             <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1">
