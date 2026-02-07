@@ -39,8 +39,21 @@ export default function AgentProfilePage() {
   const [tweetUrlInput, setTweetUrlInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
+  const [codeInput, setCodeInput] = useState("");
+  const [codeValidated, setCodeValidated] = useState(false);
+  const [validatingCode, setValidatingCode] = useState(false);
 
   useEffect(() => {
+    // Reset state when address changes
+    setAgent(null);
+    setClaim(null);
+    setLoading(true);
+    setError(null);
+    setTweetUrlInput("");
+    setClaimError(null);
+    setCodeInput("");
+    setCodeValidated(false);
+
     async function fetchAgent() {
       try {
         const res = await fetch(`/api/verify/${encodeURIComponent(address)}`);
@@ -78,9 +91,12 @@ export default function AgentProfilePage() {
       .then((r) => r.json())
       .then((raw: unknown) => {
         const data = raw as { claim?: ClaimInfo };
-        if (data.claim) setClaim(data.claim);
+        setClaim(data.claim ?? null);
       })
-      .catch(() => {});
+      .catch((err) => {
+        console.error("Failed to fetch claim:", err);
+        setClaim(null);
+      });
   }, [agent]);
 
   const profileUrl = typeof window !== "undefined"
@@ -88,7 +104,7 @@ export default function AgentProfilePage() {
     : "";
   const displayName = agent ? generateName(agent.btcAddress) : "";
   const avatarUrl = agent ? `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}` : "";
-  const tweetText = agent ? `My AIBTC agent is ${displayName} 🤖₿\n\n${profileUrl}\n\n@aibtcdev` : "";
+  const tweetText = agent ? `My AIBTC agent is ${displayName} 🤖₿\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n@aibtcdev` : "";
   const tweetIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
@@ -96,6 +112,28 @@ export default function AgentProfilePage() {
     navigator.clipboard.writeText(profileUrl);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleValidateCode = async () => {
+    if (!agent || !codeInput.trim()) return;
+    setValidatingCode(true);
+    setClaimError(null);
+    try {
+      const res = await fetch(
+        `/api/claims/code?btcAddress=${encodeURIComponent(agent.btcAddress)}&code=${encodeURIComponent(codeInput.trim())}`
+      );
+      const data = (await res.json()) as { valid: boolean; reason?: string };
+      if (data.valid) {
+        setCodeValidated(true);
+        setClaimError(null);
+      } else {
+        setClaimError(data.reason || "Invalid code. Check with the agent that registered this address.");
+      }
+    } catch {
+      setClaimError("Network error. Please try again.");
+    } finally {
+      setValidatingCode(false);
+    }
   };
 
   const handleSubmitClaim = async () => {
@@ -164,7 +202,10 @@ export default function AgentProfilePage() {
     return (
       <><AnimatedBackground /><Navbar />
         <div className="flex min-h-[90vh] flex-col items-center justify-center gap-3 pt-24">
-          <p className="text-sm text-white/40">Agent not found</p>
+          <p className="text-sm text-white/40">This address is not registered</p>
+          <Link href="/guide" className="text-xs text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">
+            Register your agent →
+          </Link>
           <Link href="/agents" className="text-xs text-white/40 hover:text-white/70 transition-colors">
             ← Back to Registry
           </Link>
@@ -296,9 +337,10 @@ export default function AgentProfilePage() {
             className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3"
           />
 
-          {/* Claim section */}
+          {/* Claim section — tri-state: Claimed / Code input / Tweet flow */}
           <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
             {hasExistingClaim ? (
+              /* State: Claimed */
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
@@ -320,12 +362,50 @@ export default function AgentProfilePage() {
                   </a>
                 )}
               </div>
-            ) : (
+            ) : !codeValidated ? (
+              /* State: Code input — user must enter the claim code */
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
-                  <span className="text-[14px] font-medium text-white">Claim this agent</span>
+                  <span className="text-[14px] font-medium text-white">Enter claim code</span>
                   <span className="text-[12px] text-[#F7931A]">5,000–10,000 sats reward</span>
                 </div>
+                <p className="text-[12px] text-white/40">
+                  Enter the 6-character code from your agent&apos;s registration response.
+                </p>
+                <div className="flex gap-2">
+                  <input
+                    type="text"
+                    value={codeInput}
+                    onChange={(e) => { setCodeInput(e.target.value.toUpperCase()); setClaimError(null); }}
+                    placeholder="ABC123"
+                    maxLength={6}
+                    className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-[14px] tracking-widest text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#F7931A]/40 uppercase text-center"
+                  />
+                  <button
+                    onClick={handleValidateCode}
+                    disabled={validatingCode || codeInput.trim().length < 6}
+                    className="shrink-0 rounded-lg bg-[#F7931A] px-5 py-2 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
+                  >
+                    {validatingCode ? "..." : "Verify"}
+                  </button>
+                </div>
+                {claimError && <p className="text-[11px] text-red-400/80">{claimError}</p>}
+              </div>
+            ) : (
+              /* State: Code validated — show tweet flow */
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <svg className="h-4 w-4 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    <span className="text-[14px] font-medium text-white">Code verified</span>
+                  </div>
+                  <span className="text-[12px] text-[#F7931A]">5,000–10,000 sats reward</span>
+                </div>
+                <p className="text-[12px] text-white/40">
+                  Tweet about your agent (include your code <span className="font-mono text-white/60">{codeInput.trim().toUpperCase()}</span>) then paste the tweet URL below.
+                </p>
                 <div className="flex gap-2">
                   <a
                     href={tweetIntentUrl}
