@@ -103,8 +103,8 @@ export default function Leaderboard({
       )}
 
       {/* Agent table */}
-      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-md">
-        <table className="w-full border-collapse text-left text-[14px]">
+      <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-md">
+        <table className="w-full min-w-0 border-collapse text-left text-[14px]">
           <thead>
             <tr className="border-b border-white/[0.08] text-[12px] uppercase tracking-wider text-white/30">
               <th className="px-5 py-3 font-medium max-md:px-3">Name</th>
@@ -152,7 +152,7 @@ export default function Leaderboard({
                     <div className="flex items-center justify-end gap-2">
                       <LevelBadge level={agent.level} size="sm" />
                       <span
-                        className="text-[12px] font-medium max-md:text-[11px]"
+                        className="text-[12px] font-medium max-md:hidden"
                         style={{ color: LEVELS[agent.level]?.color || "rgba(255,255,255,0.3)" }}
                       >
                         {agent.levelName}
