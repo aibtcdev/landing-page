@@ -7,14 +7,13 @@ import {
 import {
   hashMessage,
   verifyMessageSignatureRsv,
-  hashSha256Sync,
 } from "@stacks/encryption";
 import { bytesToHex } from "@stacks/common";
-import { secp256k1 } from "@noble/curves/secp256k1.js";
-import { hex } from "@scure/base";
-import * as btc from "@scure/btc-signer";
 import { generateName } from "@/lib/name-generator";
 import { getNextLevel } from "@/lib/levels";
+import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { lookupBnsName } from "@/lib/bns";
+import { generateClaimCode } from "@/lib/claim-code";
 
 export async function GET() {
   return NextResponse.json({
@@ -136,7 +135,7 @@ export async function GET() {
     },
     responses: {
       "200": {
-        description: "Registration successful. Returns agent record with addresses, displayName, verifiedAt.",
+        description: "Registration successful. Returns agent record, claim code, and level info.",
         example: {
           success: true,
           agent: {
@@ -147,6 +146,8 @@ export async function GET() {
             bnsName: "myname.btc",
             verifiedAt: "2025-01-01T00:00:00.000Z",
           },
+          claimCode: "ABC123",
+          claimInstructions: "To claim, visit aibtc.com/agents/bc1q... and enter code: ABC123",
         },
       },
       "400": "Invalid request or signature verification failed.",
@@ -172,104 +173,6 @@ export async function GET() {
 }
 
 const EXPECTED_MESSAGE = "Bitcoin will be the currency of AIs";
-const BTC_NETWORK = btc.NETWORK;
-
-async function lookupBnsName(stxAddress: string): Promise<string | null> {
-  try {
-    const res = await fetch(
-      `https://api.hiro.so/v1/addresses/stacks/${stxAddress}`,
-      { signal: AbortSignal.timeout(5000) }
-    );
-    if (!res.ok) return null;
-    const data = (await res.json()) as { names?: string[] };
-    return data.names?.[0] ?? null;
-  } catch {
-    return null;
-  }
-}
-
-const BITCOIN_MSG_PREFIX = "\x18Bitcoin Signed Message:\n";
-
-function encodeVarInt(n: number): Uint8Array {
-  if (n < 0xfd) return new Uint8Array([n]);
-  if (n <= 0xffff) {
-    const buf = new Uint8Array(3);
-    buf[0] = 0xfd;
-    buf[1] = n & 0xff;
-    buf[2] = (n >> 8) & 0xff;
-    return buf;
-  }
-  throw new Error("Message too long");
-}
-
-function formatBitcoinMessage(message: string): Uint8Array {
-  const prefixBytes = new TextEncoder().encode(BITCOIN_MSG_PREFIX);
-  const messageBytes = new TextEncoder().encode(message);
-  const lengthBytes = encodeVarInt(messageBytes.length);
-  const result = new Uint8Array(
-    prefixBytes.length + lengthBytes.length + messageBytes.length
-  );
-  result.set(prefixBytes, 0);
-  result.set(lengthBytes, prefixBytes.length);
-  result.set(messageBytes, prefixBytes.length + lengthBytes.length);
-  return result;
-}
-
-function doubleSha256(data: Uint8Array): Uint8Array {
-  return hashSha256Sync(hashSha256Sync(data));
-}
-
-function getRecoveryIdFromHeader(header: number): number {
-  if (header >= 27 && header <= 30) return header - 27;
-  if (header >= 31 && header <= 34) return header - 31;
-  if (header >= 35 && header <= 38) return header - 35;
-  if (header >= 39 && header <= 42) return header - 39;
-  throw new Error(`Invalid BIP-137 header byte: ${header}`);
-}
-
-function verifyBitcoinSignature(signature: string): {
-  valid: boolean;
-  address: string;
-  publicKey: string;
-} {
-  let sigBytes: Uint8Array;
-  if (signature.length === 130 && /^[0-9a-fA-F]+$/.test(signature)) {
-    sigBytes = hex.decode(signature);
-  } else {
-    sigBytes = Uint8Array.from(Buffer.from(signature, "base64"));
-  }
-
-  if (sigBytes.length !== 65) {
-    throw new Error(`Invalid signature length: ${sigBytes.length}`);
-  }
-
-  const header = sigBytes[0];
-  const rBytes = sigBytes.slice(1, 33);
-  const sBytes = sigBytes.slice(33, 65);
-  const recoveryId = getRecoveryIdFromHeader(header);
-
-  const formattedMsg = formatBitcoinMessage(EXPECTED_MESSAGE);
-  const msgHash = doubleSha256(formattedMsg);
-
-  const r = BigInt("0x" + hex.encode(rBytes));
-  const s = BigInt("0x" + hex.encode(sBytes));
-
-  const sig = new secp256k1.Signature(r, s).addRecoveryBit(recoveryId);
-  const recoveredPoint = sig.recoverPublicKey(msgHash);
-  const recoveredPubKey = recoveredPoint.toBytes(true);
-
-  const valid = secp256k1.verify(sig.toBytes('compact'), msgHash, recoveredPubKey, {
-    prehash: false,
-  });
-
-  const p2wpkh = btc.p2wpkh(recoveredPubKey, BTC_NETWORK);
-
-  return {
-    valid,
-    address: p2wpkh.address!,
-    publicKey: hex.encode(recoveredPubKey),
-  };
-}
 
 function verifyStacksSignature(signature: string): {
   valid: boolean;
@@ -325,7 +228,7 @@ export async function POST(request: NextRequest) {
 
     let btcResult;
     try {
-      btcResult = verifyBitcoinSignature(bitcoinSignature);
+      btcResult = verifyBitcoinSignature(bitcoinSignature, EXPECTED_MESSAGE);
     } catch (e) {
       return NextResponse.json(
         { error: `Invalid Bitcoin signature: ${(e as Error).message}` },
@@ -388,9 +291,17 @@ export async function POST(request: NextRequest) {
       verifiedAt: new Date().toISOString(),
     };
 
+    // Generate claim code for the new agent
+    const claimCode = generateClaimCode();
+    const claimCodeRecord = {
+      code: claimCode,
+      createdAt: new Date().toISOString(),
+    };
+
     await Promise.all([
       kv.put(`stx:${stxResult.address}`, JSON.stringify(record)),
       kv.put(`btc:${btcResult.address}`, JSON.stringify(record)),
+      kv.put(`claim-code:${btcResult.address}`, JSON.stringify(claimCodeRecord)),
     ]);
 
     return NextResponse.json({
@@ -403,6 +314,8 @@ export async function POST(request: NextRequest) {
         bnsName: bnsName || undefined,
         verifiedAt: record.verifiedAt,
       },
+      claimCode,
+      claimInstructions: `To claim, visit aibtc.com/agents/${btcResult.address} and enter code: ${claimCode}`,
       level: 0,
       levelName: "Unverified",
       nextLevel: getNextLevel(0),
