@@ -4,11 +4,12 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
+import LevelBadge from "../components/LevelBadge";
 import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import { truncateAddress, updateMeta } from "@/lib/utils";
 
-type Agent = AgentRecord;
+type Agent = AgentRecord & { level?: number; levelName?: string };
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -137,6 +138,7 @@ export default function AgentsPage() {
                   <thead>
                     <tr className="border-b border-white/[0.08] bg-white/[0.03]">
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50">Agent</th>
+                      <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50">Level</th>
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50">BTC Address</th>
                       <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-white/50">Joined</th>
                     </tr>
@@ -172,6 +174,9 @@ export default function AgentsPage() {
                                 <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
                               )}
                             </Link>
+                          </td>
+                          <td className="px-5 py-3.5 text-center">
+                            <LevelBadge level={agent.level ?? 0} size="sm" />
                           </td>
                           <td className="px-5 py-3.5">
                             <a
@@ -225,6 +230,7 @@ export default function AgentsPage() {
                           {truncateAddress(agent.btcAddress)}
                         </span>
                       </div>
+                      <LevelBadge level={agent.level ?? 0} size="sm" />
                       <svg className="size-4 shrink-0 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                       </svg>
