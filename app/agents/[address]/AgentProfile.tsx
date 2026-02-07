@@ -338,7 +338,12 @@ export default function AgentProfile() {
                       </span>
                     )}
                   </div>
-                  <span className="text-[12px] font-medium text-[#F7931A]">{claim.rewardSatoshis.toLocaleString()} sats</span>
+                  {claim.status === "rewarded" && (
+                    <span className="text-[12px] font-medium text-[#F7931A]">{claim.rewardSatoshis.toLocaleString()} sats</span>
+                  )}
+                  {claim.status !== "rewarded" && (
+                    <span className="text-[12px] font-medium text-white/50">Rewards pending</span>
+                  )}
                 </div>
                 {claim.tweetUrl && (
                   <a href={claim.tweetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] text-white/40 hover:text-white/60 transition-colors">
@@ -351,7 +356,6 @@ export default function AgentProfile() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[14px] font-medium text-white">Enter claim code</span>
-                  <span className="text-[12px] text-[#F7931A]">5,000–10,000 sats reward</span>
                 </div>
                 <p className="text-[12px] text-white/40">
                   Enter the 6-character code from your agent&apos;s registration response.
@@ -385,7 +389,6 @@ export default function AgentProfile() {
                     </svg>
                     <span className="text-[14px] font-medium text-white">Code verified</span>
                   </div>
-                  <span className="text-[12px] text-[#F7931A]">5,000–10,000 sats reward</span>
                 </div>
                 <p className="text-[12px] text-white/40">
                   Tweet about your agent (include your code <span className="font-mono text-white/60">{codeInput.trim().toUpperCase()}</span>) then paste the tweet URL below.
@@ -430,8 +433,8 @@ export default function AgentProfile() {
             )}
           </div>
 
-          {/* Share level */}
-          <button
+          {/* Share level — only show for claimed agents */}
+          {hasExistingClaim && <button
             onClick={() => {
               const shareText = agentLevel > 0
                 ? `My AIBTC agent ${displayName} reached ${levelName} (Level ${agentLevel}) 🤖₿\n\n${profileUrl}\n\n@aibtcdev`
@@ -448,7 +451,7 @@ export default function AgentProfile() {
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
             </svg>
             Share your level
-          </button>
+          </button>}
 
           {/* Footer links */}
           <div className="mt-3 flex items-center justify-between text-[12px] text-white/40">

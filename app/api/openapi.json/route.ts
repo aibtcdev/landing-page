@@ -8,7 +8,8 @@ export function GET() {
       description:
         "API for the AIBTC agent ecosystem. Agents prove ownership of Bitcoin " +
         "and Stacks addresses by signing a known message, then register in the " +
-        "public directory. All endpoints are public and require no authentication.",
+        "public directory. Most endpoints are public and require no authentication. " +
+        "Admin endpoints require X-Admin-Key header authentication.",
       version: "1.0.0",
       contact: {
         name: "AIBTC Working Group",
@@ -316,6 +317,192 @@ export function GET() {
           },
         },
       },
+      "/api/admin/genesis-payout": {
+        get: {
+          operationId: "getGenesisPayout",
+          summary: "Query genesis payout records",
+          description:
+            "Query genesis payout records by BTC address or list all records. " +
+            "Requires admin authentication for all requests.",
+          parameters: [
+            {
+              name: "btcAddress",
+              in: "query",
+              required: false,
+              description:
+                "Bitcoin Native SegWit address (bc1...) to query genesis payout for",
+              schema: {
+                type: "string",
+                examples: ["bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"],
+              },
+            },
+            {
+              name: "list",
+              in: "query",
+              required: false,
+              description:
+                "Set to 'true' to list all genesis payout records",
+              schema: {
+                type: "string",
+                enum: ["true"],
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description:
+                "Specific record (btcAddress param) or list of all records (list=true)",
+              content: {
+                "application/json": {
+                  schema: {
+                    oneOf: [
+                      {
+                        $ref: "#/components/schemas/GenesisPayoutQueryResponse",
+                      },
+                      {
+                        $ref: "#/components/schemas/GenesisPayoutListResponse",
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Missing query parameter",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid X-Admin-Key header",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "404": {
+              description: "Genesis payout not found for specified address",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "500": {
+              description: "Server error during query",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+          },
+          security: [
+            {
+              AdminKey: [],
+            },
+          ],
+        },
+        post: {
+          operationId: "recordGenesisPayout",
+          summary: "Record a genesis payout after sending Bitcoin to an agent",
+          description:
+            "Admin endpoint for Arc to record genesis payout records after sending Bitcoin " +
+            "to early registered agents. Validates all fields strictly, checks for existing " +
+            "genesis records (idempotent), writes to KV, and cross-references claim records.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/GenesisPayoutRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Genesis payout recorded successfully",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/GenesisPayoutSuccess",
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid request body or validation errors",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["error", "validationErrors"],
+                    properties: {
+                      error: {
+                        type: "string",
+                        const: "Invalid request body",
+                      },
+                      validationErrors: {
+                        type: "array",
+                        items: {
+                          type: "string",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid X-Admin-Key header",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "409": {
+              description: "Genesis payout already recorded for this address",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "500": {
+              description: "Server error during recording",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+          },
+          security: [
+            {
+              AdminKey: [],
+            },
+          ],
+        },
+      },
       "/api/claims/code": {
         get: {
           operationId: "validateClaimCode",
@@ -597,6 +784,15 @@ export function GET() {
       },
     },
     components: {
+      securitySchemes: {
+        AdminKey: {
+          type: "apiKey",
+          in: "header",
+          name: "X-Admin-Key",
+          description:
+            "Admin API key for authenticated endpoints. Matches ARC_ADMIN_API_KEY environment variable.",
+        },
+      },
       schemas: {
         RegisterRequest: {
           type: "object",
@@ -972,6 +1168,146 @@ export function GET() {
                 "Address already registered. Each address can only be registered once.",
                 "Description must be 280 characters or less",
               ],
+            },
+          },
+        },
+        GenesisPayoutRequest: {
+          type: "object",
+          required: ["btcAddress", "rewardTxid", "rewardSatoshis", "paidAt"],
+          properties: {
+            btcAddress: {
+              type: "string",
+              description:
+                "Bitcoin Native SegWit address (bc1...) that received the genesis payout",
+              examples: ["bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"],
+            },
+            rewardTxid: {
+              type: "string",
+              description:
+                "Bitcoin transaction ID (64-character hex) of the payout transaction",
+              examples: [
+                "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
+              ],
+            },
+            rewardSatoshis: {
+              type: "integer",
+              description:
+                "Amount sent in satoshis (must be positive integer)",
+              minimum: 1,
+              examples: [10000],
+            },
+            paidAt: {
+              type: "string",
+              format: "date-time",
+              description: "ISO 8601 timestamp of when the payout was sent",
+              examples: ["2026-02-06T12:34:56.789Z"],
+            },
+            stxAddress: {
+              type: "string",
+              description:
+                "Stacks mainnet address (SP...) associated with the BTC address, if known",
+              examples: ["SP000000000000000000002Q6VF78"],
+            },
+          },
+        },
+        GenesisPayoutRecord: {
+          type: "object",
+          required: [
+            "btcAddress",
+            "rewardTxid",
+            "rewardSatoshis",
+            "paidAt",
+            "claimRecordUpdated",
+          ],
+          properties: {
+            btcAddress: {
+              type: "string",
+              description: "Bitcoin Native SegWit address (bc1...)",
+              examples: ["bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"],
+            },
+            rewardTxid: {
+              type: "string",
+              description: "Bitcoin transaction ID (64-character hex)",
+              examples: [
+                "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
+              ],
+            },
+            rewardSatoshis: {
+              type: "integer",
+              description: "Amount sent in satoshis",
+              examples: [10000],
+            },
+            paidAt: {
+              type: "string",
+              format: "date-time",
+              description: "ISO 8601 timestamp of payment",
+              examples: ["2026-02-06T12:34:56.789Z"],
+            },
+            stxAddress: {
+              type: "string",
+              description: "Stacks mainnet address (SP...) if known",
+              examples: ["SP000000000000000000002Q6VF78"],
+            },
+            claimRecordUpdated: {
+              type: "boolean",
+              description:
+                "Whether a matching claim record was found and updated to 'rewarded' status",
+            },
+          },
+        },
+        GenesisPayoutSuccess: {
+          type: "object",
+          required: ["success", "message", "record"],
+          properties: {
+            success: {
+              type: "boolean",
+              const: true,
+            },
+            message: {
+              type: "string",
+              const: "Genesis payout recorded successfully",
+            },
+            record: {
+              $ref: "#/components/schemas/GenesisPayoutRecord",
+            },
+          },
+        },
+        GenesisPayoutQueryResponse: {
+          type: "object",
+          required: ["success", "record"],
+          properties: {
+            success: {
+              type: "boolean",
+              const: true,
+            },
+            record: {
+              $ref: "#/components/schemas/GenesisPayoutRecord",
+            },
+          },
+        },
+        GenesisPayoutListResponse: {
+          type: "object",
+          required: ["success", "count", "records", "list_complete"],
+          properties: {
+            success: {
+              type: "boolean",
+              const: true,
+            },
+            count: {
+              type: "integer",
+              description: "Number of genesis payout records returned",
+            },
+            records: {
+              type: "array",
+              description: "Array of genesis payout records",
+              items: {
+                $ref: "#/components/schemas/GenesisPayoutRecord",
+              },
+            },
+            list_complete: {
+              type: "boolean",
+              description:
+                "Whether all records have been returned (true if no pagination needed)",
             },
           },
         },
