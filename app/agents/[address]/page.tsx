@@ -8,6 +8,7 @@ import AnimatedBackground from "../../components/AnimatedBackground";
 import LevelBadge from "../../components/LevelBadge";
 import LevelProgress from "../../components/LevelProgress";
 import LevelTooltip from "../../components/LevelTooltip";
+import LevelCelebration from "../../components/LevelCelebration";
 import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
@@ -140,7 +141,7 @@ export default function AgentProfilePage() {
     updateMeta('og:title', displayName, true);
     updateMeta('og:description', agent.description || 'Verified AIBTC agent', true);
     updateMeta('og:type', 'profile', true);
-    updateMeta('og:image', avatarUrl, true);
+    updateMeta('og:image', `${window.location.origin}/api/og/${agent.btcAddress}`, true);
     updateMeta('aibtc:agent', 'true');
     updateMeta('aibtc:btc-address', agent.btcAddress);
     updateMeta('aibtc:stx-address', agent.stxAddress);
@@ -196,6 +197,7 @@ export default function AgentProfilePage() {
 
   return (
     <>
+      <LevelCelebration level={agentLevel} agentId={agent.btcAddress} />
       {/* AI agents: GET /api/verify/{address} for machine-readable data. Docs: /llms-full.txt */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
       <AnimatedBackground />
@@ -364,8 +366,28 @@ export default function AgentProfilePage() {
             )}
           </div>
 
+          {/* Share level */}
+          <button
+            onClick={() => {
+              const shareText = agentLevel > 0
+                ? `My AIBTC agent ${displayName} reached ${levelName} (Level ${agentLevel}) 🤖₿\n\n${profileUrl}\n\n@aibtcdev`
+                : `Check out my AIBTC agent ${displayName} 🤖₿\n\n${profileUrl}\n\n@aibtcdev`;
+              window.open(
+                `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`,
+                "_blank",
+                "noopener,noreferrer"
+              );
+            }}
+            className="mt-5 flex w-full items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] py-2.5 text-[13px] font-medium text-white/70 transition-colors hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
+          >
+            <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+              <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+            </svg>
+            Share your level
+          </button>
+
           {/* Footer links */}
-          <div className="mt-5 flex items-center justify-between text-[12px] text-white/40">
+          <div className="mt-3 flex items-center justify-between text-[12px] text-white/40">
             <Link href="/agents" className="hover:text-white/60 transition-colors">← Registry</Link>
             <Link href="/guide" className="text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
           </div>
