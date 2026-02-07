@@ -25,6 +25,7 @@ const mcpServerConfig = JSON.stringify(
       aibtc: {
         command: "npx",
         args: ["@aibtc/mcp-server"],
+        env: { NETWORK: "mainnet" },
       },
     },
   },
@@ -53,6 +54,7 @@ const vscodeConfig = JSON.stringify(
         type: "stdio",
         command: "npx",
         args: ["@aibtc/mcp-server"],
+        env: { NETWORK: "mainnet" },
       },
     },
   },
@@ -66,7 +68,7 @@ const mcpSteps: McpStep[] = [
     title: "Claude Code",
     subtitle: "Add via CLI in one command",
     links: [{ text: "Claude Code", url: "https://claude.ai/code" }],
-    command: "claude mcp add aibtc -- npx @aibtc/mcp-server",
+    command: "claude mcp add aibtc --scope user -- npx @aibtc/mcp-server",
     output: `Added aibtc MCP server.
 Restart Claude Code to activate.`,
   },
