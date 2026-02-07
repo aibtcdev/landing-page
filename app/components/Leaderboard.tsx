@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import LevelBadge from "./LevelBadge";
 import { generateName } from "@/lib/name-generator";
+import { truncateAddress } from "@/lib/utils";
 import { LEVELS } from "@/lib/levels";
 
 interface LeaderboardAgent {
@@ -101,58 +102,68 @@ export default function Leaderboard({
         </div>
       )}
 
-      {/* Agent rows */}
+      {/* Agent table */}
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-md">
-        {agents.map((agent) => {
-          const name = agent.displayName || generateName(agent.btcAddress);
-          const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+        <table className="w-full border-collapse text-left text-[14px]">
+          <thead>
+            <tr className="border-b border-white/[0.08] text-[12px] uppercase tracking-wider text-white/30">
+              <th className="px-5 py-3 font-medium max-md:px-3">Name</th>
+              <th className="hidden px-5 py-3 font-medium md:table-cell">Bitcoin Address</th>
+              <th className="px-5 py-3 font-medium max-md:px-3">Joined</th>
+              <th className="px-5 py-3 text-right font-medium max-md:px-3">Level</th>
+            </tr>
+          </thead>
+          <tbody>
+            {agents.map((agent) => {
+              const name = agent.displayName || generateName(agent.btcAddress);
+              const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+              const joined = new Date(agent.verifiedAt).toLocaleDateString("en-US", {
+                month: "short",
+                day: "numeric",
+                year: "numeric",
+              });
 
-          return (
-            <Link
-              key={agent.btcAddress}
-              href={`/agents/${agent.btcAddress}`}
-              className="flex items-center gap-3 border-b border-white/[0.04] px-5 py-3 transition-colors duration-200 last:border-0 hover:bg-white/[0.03] max-md:gap-2.5 max-md:px-3 max-md:py-2.5"
-            >
-              {/* Rank */}
-              <span className="w-7 text-center text-[13px] font-medium text-white/30 max-md:w-5 max-md:text-[12px]">
-                {agent.rank}
-              </span>
-
-              {/* Level badge */}
-              <LevelBadge level={agent.level} size="sm" />
-
-              {/* Avatar */}
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={avatarUrl}
-                alt={name}
-                className="size-8 shrink-0 rounded-full bg-white/[0.06] max-md:size-7"
-                loading="lazy"
-                width="32"
-                height="32"
-                onError={(e) => { e.currentTarget.style.display = "none"; }}
-              />
-
-              {/* Name + Address */}
-              <div className="min-w-0 flex-1">
-                <span className="block truncate text-[14px] font-medium text-white">
-                  {name}
-                </span>
-                <span className="block truncate font-mono text-[11px] text-[#F7931A]/50 max-md:text-[10px]">
-                  {agent.btcAddress}
-                </span>
-              </div>
-
-              {/* Level name */}
-              <span
-                className="shrink-0 text-[12px] font-medium max-md:text-[11px]"
-                style={{ color: LEVELS[agent.level]?.color || "rgba(255,255,255,0.3)" }}
-              >
-                {agent.levelName}
-              </span>
-            </Link>
-          );
-        })}
+              return (
+                <tr key={agent.btcAddress} className="border-b border-white/[0.04] transition-colors duration-200 last:border-0 hover:bg-white/[0.03]">
+                  <td className="px-5 py-3 max-md:px-3">
+                    <Link href={`/agents/${agent.btcAddress}`} className="flex items-center gap-3 max-md:gap-2">
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={avatarUrl}
+                        alt={name}
+                        className="size-8 shrink-0 rounded-full bg-white/[0.06] max-md:size-7"
+                        loading="lazy"
+                        width="32"
+                        height="32"
+                        onError={(e) => { e.currentTarget.style.display = "none"; }}
+                      />
+                      <span className="truncate font-medium text-white">{name}</span>
+                    </Link>
+                  </td>
+                  <td className="hidden px-5 py-3 md:table-cell">
+                    <Link href={`/agents/${agent.btcAddress}`} className="font-mono text-[13px] text-[#F7931A]/50 hover:text-[#F7931A]/70">
+                      {truncateAddress(agent.btcAddress)}
+                    </Link>
+                  </td>
+                  <td className="px-5 py-3 text-[13px] text-white/40 max-md:px-3 max-md:text-[12px]">
+                    {joined}
+                  </td>
+                  <td className="px-5 py-3 text-right max-md:px-3">
+                    <div className="flex items-center justify-end gap-2">
+                      <LevelBadge level={agent.level} size="sm" />
+                      <span
+                        className="text-[12px] font-medium max-md:text-[11px]"
+                        style={{ color: LEVELS[agent.level]?.color || "rgba(255,255,255,0.3)" }}
+                      >
+                        {agent.levelName}
+                      </span>
+                    </div>
+                  </td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
       </div>
 
       {/* View all link */}
