@@ -1,322 +1,82 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
-import Link from "next/link";
-import Navbar from "../../components/Navbar";
-import AnimatedBackground from "../../components/AnimatedBackground";
-import { generateName } from "@/lib/name-generator";
+import type { Metadata } from "next";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
-import { truncateAddress, updateMeta } from "@/lib/utils";
+import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import { generateName } from "@/lib/name-generator";
+import AgentProfile from "./AgentProfile";
 
-interface ClaimInfo {
-  status: "pending" | "verified" | "rewarded" | "failed";
-  rewardSatoshis: number;
-  rewardTxid: string | null;
-  tweetUrl: string | null;
-  tweetAuthor: string | null;
-  claimedAt: string;
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ address: string }>;
+}): Promise<Metadata> {
+  const { address } = await params;
+
+  try {
+    const { env } = await getCloudflareContext();
+    const kv = env.VERIFIED_AGENTS as KVNamespace;
+
+    const prefix = address.startsWith("SP")
+      ? "stx"
+      : address.startsWith("bc1")
+        ? "btc"
+        : null;
+    if (!prefix) return { title: "Agent Not Found | AIBTC" };
+
+    const agentData = await kv.get(`${prefix}:${address}`);
+    if (!agentData) return { title: "Agent Not Found | AIBTC" };
+
+    const agent = JSON.parse(agentData) as AgentRecord;
+    const displayName = agent.displayName || generateName(agent.btcAddress);
+    const description =
+      agent.description || "Verified AIBTC agent with Bitcoin and Stacks capabilities";
+
+    // Compute level for richer description
+    const claimData = await kv.get(`claim:${agent.btcAddress}`);
+    let claim: ClaimStatus | null = null;
+    if (claimData) {
+      try {
+        claim = JSON.parse(claimData) as ClaimStatus;
+      } catch {
+        /* ignore */
+      }
+    }
+    const level = computeLevel(agent, claim);
+    const levelName = LEVELS[level].name;
+
+    const ogTitle = `${displayName} — ${levelName} Agent`;
+    const ogImage = `/api/og/${agent.btcAddress}`;
+
+    return {
+      title: `${displayName} | AIBTC`,
+      description,
+      openGraph: {
+        title: ogTitle,
+        description,
+        type: "profile",
+        images: [
+          {
+            url: ogImage,
+            width: 1200,
+            height: 630,
+            alt: ogTitle,
+          },
+        ],
+      },
+      twitter: {
+        card: "summary_large_image",
+        title: ogTitle,
+        description,
+        images: [ogImage],
+        creator: "@aibtcdev",
+        site: "@aibtcdev",
+      },
+    };
+  } catch {
+    return { title: "Agent | AIBTC" };
+  }
 }
 
 export default function AgentProfilePage() {
-  const params = useParams();
-  const address = params.address as string;
-
-  const [agent, setAgent] = useState<AgentRecord | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
-
-  const [claim, setClaim] = useState<ClaimInfo | null>(null);
-  const [tweetUrlInput, setTweetUrlInput] = useState("");
-  const [submitting, setSubmitting] = useState(false);
-  const [claimError, setClaimError] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function fetchAgent() {
-      try {
-        const res = await fetch(`/api/verify/${encodeURIComponent(address)}`);
-        if (!res.ok) {
-          setError(res.status === 404 ? "Agent not found" : "Failed to fetch agent");
-        } else {
-          const data = (await res.json()) as { registered: boolean; agent: AgentRecord };
-          if (data.registered && data.agent) setAgent(data.agent);
-          else setError("Agent not found");
-        }
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    if (address) fetchAgent();
-  }, [address]);
-
-  useEffect(() => {
-    if (!agent) return;
-    fetch(`/api/claims/viral?btcAddress=${encodeURIComponent(agent.btcAddress)}`)
-      .then((r) => r.json())
-      .then((raw: unknown) => {
-        const data = raw as { claim?: ClaimInfo };
-        if (data.claim) setClaim(data.claim);
-      })
-      .catch(() => {});
-  }, [agent]);
-
-  const profileUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/agents/${agent?.btcAddress}`
-    : "";
-  const displayName = agent ? generateName(agent.btcAddress) : "";
-  const avatarUrl = agent ? `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}` : "";
-  const tweetText = agent ? `My AIBTC agent is ${displayName} 🤖₿\n\n${profileUrl}\n\n@aibtcdev` : "";
-  const tweetIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
-  const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
-
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(profileUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
-  const handleSubmitClaim = async () => {
-    if (!agent || !tweetUrlInput.trim()) return;
-    setSubmitting(true);
-    setClaimError(null);
-    try {
-      const res = await fetch("/api/claims/viral", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ btcAddress: agent.btcAddress, tweetUrl: tweetUrlInput.trim() }),
-      });
-      const data = (await res.json()) as { error?: string; claim?: ClaimInfo };
-      if (!res.ok) {
-        setClaimError(data.error || "Verification failed");
-      } else if (data.claim) {
-        setClaim(data.claim);
-        setClaimError(null);
-        if (data.claim.tweetAuthor) {
-          setAgent((prev) => prev ? { ...prev, owner: data.claim!.tweetAuthor } : prev);
-        }
-      }
-    } catch {
-      setClaimError("Network error. Please try again.");
-    } finally {
-      setSubmitting(false);
-    }
-  };
-
-  useEffect(() => {
-    if (!agent) return;
-    document.title = `${displayName} - AIBTC Agent`;
-    updateMeta('description', agent.description || 'Verified AIBTC agent with Bitcoin and Stacks capabilities');
-    updateMeta('og:title', displayName, true);
-    updateMeta('og:description', agent.description || 'Verified AIBTC agent', true);
-    updateMeta('og:type', 'profile', true);
-    updateMeta('og:image', avatarUrl, true);
-    updateMeta('aibtc:agent', 'true');
-    updateMeta('aibtc:btc-address', agent.btcAddress);
-    updateMeta('aibtc:stx-address', agent.stxAddress);
-    updateMeta('aibtc:verified-at', agent.verifiedAt);
-  }, [agent, displayName, avatarUrl]);
-
-  if (loading) {
-    return (
-      <><AnimatedBackground /><Navbar />
-        <div className="flex min-h-[90vh] items-center justify-center pt-24">
-          <div className="animate-pulse text-sm text-white/40">Loading agent...</div>
-        </div>
-      </>
-    );
-  }
-
-  if (error || !agent) {
-    return (
-      <><AnimatedBackground /><Navbar />
-        <div className="flex min-h-[90vh] flex-col items-center justify-center gap-3 pt-24">
-          <p className="text-sm text-white/40">Agent not found</p>
-          <Link href="/agents" className="text-xs text-white/40 hover:text-white/70 transition-colors">
-            ← Back to Registry
-          </Link>
-        </div>
-      </>
-    );
-  }
-
-  const structuredData = {
-    "@context": "https://schema.org",
-    "@type": "Person",
-    "name": displayName,
-    "description": agent.description || "Verified AIBTC agent",
-    "identifier": [
-      { "@type": "PropertyValue", "name": "Bitcoin Address", "value": agent.btcAddress },
-      { "@type": "PropertyValue", "name": "Stacks Address", "value": agent.stxAddress },
-    ],
-    "url": `https://aibtc.com/agents/${agent.btcAddress}`,
-    "image": avatarUrl,
-    "sameAs": agent.owner ? [`https://x.com/${agent.owner}`] : [],
-  };
-
-  return (
-    <>
-      {/* AI agents: GET /api/verify/{address} for machine-readable data. Docs: /llms-full.txt */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
-      <AnimatedBackground />
-      <Navbar />
-
-      <div className="flex min-h-[90vh] items-center justify-center px-5 pt-24 pb-12 max-md:pt-20">
-        <div className="w-full max-w-[480px]">
-
-          {/* Identity */}
-          <div className="flex flex-col items-center text-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={avatarUrl}
-              alt={displayName}
-              className="h-20 w-20 rounded-full border-2 border-[#F7931A]/30 bg-white/[0.06]"
-              loading="lazy"
-              width="80"
-              height="80"
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
-            />
-            <h1 className="mt-3 text-[28px] font-medium tracking-tight text-white max-md:text-[24px]">
-              {displayName}
-            </h1>
-            <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
-              <span className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/60">
-                <svg className="h-3 w-3 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
-                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                </svg>
-                Verified
-              </span>
-              {agent.bnsName && (
-                <span className="rounded-md bg-[#7DA2FF]/10 px-2 py-0.5 text-[11px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">
-                  {agent.bnsName}
-                </span>
-              )}
-              {agent.owner && (
-                <a
-                  href={`https://x.com/${agent.owner}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/60 hover:text-white/80 transition-colors"
-                >
-                  <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 24 24">
-                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                  </svg>
-                  @{agent.owner}
-                </a>
-              )}
-            </div>
-            {agent.description && (
-              <p className="mt-2 text-[13px] leading-relaxed text-white/50">{agent.description}</p>
-            )}
-          </div>
-
-          {/* Addresses */}
-          <div className="mt-5 space-y-2">
-            <a
-              href={`https://mempool.space/address/${agent.btcAddress}`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-2.5 transition-colors hover:border-white/[0.12]"
-            >
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Bitcoin</span>
-              <span className="mt-0.5 block font-mono text-[13px] text-[#F7931A] max-md:text-[12px]">
-                <span className="hidden md:inline">{agent.btcAddress}</span>
-                <span className="md:hidden">{truncateAddress(agent.btcAddress)}</span>
-              </span>
-            </a>
-            <a
-              href={`https://explorer.hiro.so/address/${agent.stxAddress}?chain=mainnet`}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="block rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-2.5 transition-colors hover:border-white/[0.12]"
-            >
-              <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Stacks</span>
-              <span className="mt-0.5 block font-mono text-[13px] text-[#A855F7] max-md:text-[12px]">
-                <span className="hidden md:inline">{agent.stxAddress}</span>
-                <span className="md:hidden">{truncateAddress(agent.stxAddress)}</span>
-              </span>
-            </a>
-          </div>
-
-          {/* Claim section */}
-          <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-            {hasExistingClaim ? (
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <svg className="h-4 w-4 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                    </svg>
-                    <span className="text-[14px] font-medium text-white">Claimed</span>
-                    {claim.tweetAuthor && (
-                      <span className="text-[12px] text-white/50">
-                        by <a href={`https://x.com/${claim.tweetAuthor}`} target="_blank" rel="noopener noreferrer" className="text-white/70 hover:text-white transition-colors">@{claim.tweetAuthor}</a>
-                      </span>
-                    )}
-                  </div>
-                  <span className="text-[12px] font-medium text-[#F7931A]">{claim.rewardSatoshis.toLocaleString()} sats</span>
-                </div>
-                {claim.tweetUrl && (
-                  <a href={claim.tweetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] text-white/40 hover:text-white/60 transition-colors">
-                    View tweet →
-                  </a>
-                )}
-              </div>
-            ) : (
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <span className="text-[14px] font-medium text-white">Claim this agent</span>
-                  <span className="text-[12px] text-[#F7931A]">5,000–10,000 sats reward</span>
-                </div>
-                <div className="flex gap-2">
-                  <a
-                    href={tweetIntentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/[0.06] py-2.5 text-[13px] font-medium text-white transition-colors hover:bg-white/[0.1]"
-                  >
-                    <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                    </svg>
-                    Post on X
-                  </a>
-                  <button
-                    onClick={handleCopyLink}
-                    className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[13px] text-white/60 transition-colors hover:bg-white/[0.06]"
-                  >
-                    {copied ? "Copied!" : "Copy Link"}
-                  </button>
-                </div>
-                <div className="flex gap-2">
-                  <input
-                    type="url"
-                    value={tweetUrlInput}
-                    onChange={(e) => { setTweetUrlInput(e.target.value); setClaimError(null); }}
-                    placeholder="Paste tweet URL..."
-                    className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-[12px] text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#F7931A]/40"
-                  />
-                  <button
-                    onClick={handleSubmitClaim}
-                    disabled={submitting || !tweetUrlInput.trim()}
-                    className="shrink-0 rounded-lg bg-[#F7931A] px-5 py-2 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
-                  >
-                    {submitting ? "..." : "Claim"}
-                  </button>
-                </div>
-                {claimError && <p className="text-[11px] text-red-400/80">{claimError}</p>}
-              </div>
-            )}
-          </div>
-
-          {/* Footer links */}
-          <div className="mt-5 flex items-center justify-between text-[12px] text-white/40">
-            <Link href="/agents" className="hover:text-white/60 transition-colors">← Registry</Link>
-            <Link href="/guide" className="text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
-          </div>
-        </div>
-      </div>
-    </>
-  );
+  return <AgentProfile />;
 }

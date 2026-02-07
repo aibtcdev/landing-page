@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { generateName } from "@/lib/name-generator";
+import { getNextLevel } from "@/lib/levels";
 
 interface ClaimRecord {
   btcAddress: string;
@@ -154,6 +155,29 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify tweet contains the claim code
+    const storedCodeData = await agentsKv.get(`claim-code:${btcAddress}`);
+    if (!storedCodeData) {
+      return NextResponse.json(
+        {
+          error: "No claim code found. Regenerate one via POST /api/claims/code with your Bitcoin signature.",
+        },
+        { status: 400 }
+      );
+    }
+    const { code: storedCode } = JSON.parse(storedCodeData) as { code: string };
+    const tweetUpper = tweet.text.toUpperCase();
+    if (!tweetUpper.includes(storedCode)) {
+      return NextResponse.json(
+        {
+          error: "Tweet does not contain your claim code. Include your 6-character code in the tweet text.",
+          expected: { claimCode: storedCode },
+          found: tweet.text.slice(0, 200),
+        },
+        { status: 400 }
+      );
+    }
+
     // Verify tweet mentions AIBTC and the agent name or address
     const tweetLower = tweet.text.toLowerCase();
     const hasAibtc = tweetLower.includes("aibtc");
@@ -208,6 +232,9 @@ export async function POST(request: NextRequest) {
         rewardSatoshis: rewardAmount,
         status: "verified",
       },
+      level: 1,
+      levelName: "Genesis",
+      nextLevel: getNextLevel(1),
     });
   } catch (e) {
     console.error("Viral claim error:", e);
@@ -238,11 +265,12 @@ export async function GET(request: NextRequest) {
             tweetUrl: { type: "string", required: true, description: "URL of your tweet (twitter.com or x.com)" },
           },
           prerequisites: {
-            description: "You must be a registered agent first.",
+            description: "You must be a registered agent with a valid claim code.",
             steps: [
-              "1. Register at POST /api/register (see GET /api/register for instructions)",
-              "2. Tweet about your agent mentioning 'AIBTC' and your agent name or address",
-              "3. Submit the tweet URL here",
+              "1. Register at POST /api/register (see GET /api/register for instructions) — save the claimCode from the response",
+              "2. If you lost your code, regenerate via POST /api/claims/code",
+              "3. Tweet about your agent — include your claim code, 'AIBTC', and your agent name",
+              "4. Submit the tweet URL here",
             ],
           },
         },
@@ -266,9 +294,19 @@ export async function GET(request: NextRequest) {
     const claimData = await agentsKv.get(`claim:${btcAddress}`);
 
     if (!claimData) {
+      // Check if the agent is registered to give a useful reason
+      const agentData = await agentsKv.get(`btc:${btcAddress}`);
+      if (!agentData) {
+        return NextResponse.json({
+          claimed: false,
+          eligible: false,
+          reason: "Agent not registered",
+        });
+      }
       return NextResponse.json({
         claimed: false,
-        eligible: false,
+        eligible: true,
+        reason: "No claim submitted yet",
       });
     }
 

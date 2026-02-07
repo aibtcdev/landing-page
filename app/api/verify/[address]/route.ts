@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
+import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
+import { lookupBnsName } from "@/lib/bns";
 
 /**
  * Determine the address type from the format.
@@ -81,6 +83,33 @@ export async function GET(
       );
     }
 
+    // Lazy BNS refresh: if bnsName is missing, try to look it up
+    if (!agent.bnsName && agent.stxAddress) {
+      const bnsName = await lookupBnsName(agent.stxAddress);
+      if (bnsName) {
+        agent.bnsName = bnsName;
+        // Update both KV records in the background
+        const updated = JSON.stringify(agent);
+        await Promise.all([
+          kv.put(`stx:${agent.stxAddress}`, updated),
+          kv.put(`btc:${agent.btcAddress}`, updated),
+        ]);
+      }
+    }
+
+    // Look up claim status to compute level
+    const claimData = await kv.get(`claim:${agent.btcAddress}`);
+    let claim: ClaimStatus | null = null;
+    if (claimData) {
+      try {
+        claim = JSON.parse(claimData) as ClaimStatus;
+      } catch {
+        // ignore parse errors
+      }
+    }
+
+    const levelInfo = getAgentLevel(agent, claim);
+
     return NextResponse.json(
       {
         registered: true,
@@ -95,6 +124,7 @@ export async function GET(
           verifiedAt: agent.verifiedAt,
           owner: agent.owner,
         },
+        ...levelInfo,
       },
       {
         headers: {

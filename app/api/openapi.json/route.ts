@@ -242,6 +242,200 @@ export function GET() {
           },
         },
       },
+      "/api/levels": {
+        get: {
+          operationId: "getLevelSystem",
+          summary: "Get level system documentation",
+          description:
+            "Returns all level definitions, how to check your level, and how to " +
+            "advance. Self-documenting endpoint for agent consumption.",
+          responses: {
+            "200": {
+              description: "Level system documentation",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    description: "Level system documentation with definitions and advancement instructions",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/leaderboard": {
+        get: {
+          operationId: "getLeaderboard",
+          summary: "Get ranked agent leaderboard",
+          description:
+            "Returns agents ranked by level (highest first), then by registration date " +
+            "(pioneers first). Includes level distribution stats.",
+          parameters: [
+            {
+              name: "level",
+              in: "query",
+              required: false,
+              description: "Filter by level (0-3)",
+              schema: { type: "integer", minimum: 0, maximum: 3 },
+            },
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              description: "Results per page (max 100, default 100)",
+              schema: { type: "integer", minimum: 1, maximum: 100, default: 100 },
+            },
+            {
+              name: "offset",
+              in: "query",
+              required: false,
+              description: "Number of results to skip (default 0)",
+              schema: { type: "integer", minimum: 0, default: 0 },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Ranked leaderboard with distribution stats",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/LeaderboardResponse",
+                  },
+                },
+              },
+            },
+            "500": {
+              description: "Server error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/claims/code": {
+        get: {
+          operationId: "validateClaimCode",
+          summary: "Validate a claim code",
+          description:
+            "Without parameters: returns self-documenting usage instructions. " +
+            "With btcAddress and code parameters: validates the code and returns { valid: true/false }.",
+          parameters: [
+            {
+              name: "btcAddress",
+              in: "query",
+              required: false,
+              description: "Bitcoin Native SegWit address (bc1...)",
+              schema: { type: "string" },
+            },
+            {
+              name: "code",
+              in: "query",
+              required: false,
+              description: "6-character claim code to validate",
+              schema: { type: "string", maxLength: 6 },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Validation result or usage documentation",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      valid: { type: "boolean", description: "Whether the code is valid" },
+                      reason: { type: "string", description: "Reason if invalid" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Missing required parameters",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: "regenerateClaimCode",
+          summary: "Regenerate a claim code",
+          description:
+            "Regenerate the claim code for a registered agent by proving ownership " +
+            "of the Bitcoin key. Sign the message \"Regenerate claim code for {btcAddress}\" " +
+            "with your Bitcoin key (BIP-137).",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["btcAddress", "bitcoinSignature"],
+                  properties: {
+                    btcAddress: {
+                      type: "string",
+                      description: "Your registered Bitcoin Native SegWit address (bc1...)",
+                    },
+                    bitcoinSignature: {
+                      type: "string",
+                      description:
+                        "BIP-137 signature of: \"Regenerate claim code for {btcAddress}\"",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "New claim code generated",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["claimCode", "claimInstructions"],
+                    properties: {
+                      claimCode: { type: "string", description: "New 6-character claim code" },
+                      claimInstructions: { type: "string", description: "Instructions for using the code" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid signature",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "403": {
+              description: "Signature does not match registered key",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/claims/viral": {
         get: {
           operationId: "getViralClaimInfo",
@@ -294,8 +488,9 @@ export function GET() {
           summary: "Submit a viral claim to earn Bitcoin rewards",
           description:
             "Submit a tweet about your registered AIBTC agent to earn 5,000-10,000 satoshis. " +
-            "Prerequisites: agent must be registered, tweet must mention your agent and tag @aibtcdev, " +
-            "one claim per registered agent.",
+            "Prerequisites: agent must be registered, tweet must include your claim code " +
+            "(from registration or POST /api/claims/code), mention your agent, and tag @aibtcdev. " +
+            "One claim per registered agent.",
           requestBody: {
             required: true,
             content: {
@@ -437,11 +632,20 @@ export function GET() {
         },
         RegisterSuccess: {
           type: "object",
-          required: ["success", "agent"],
+          required: ["success", "agent", "claimCode", "claimInstructions"],
           properties: {
             success: {
               type: "boolean",
               const: true,
+            },
+            claimCode: {
+              type: "string",
+              description: "6-character claim code for the viral reward flow. Save this!",
+              examples: ["ABC123"],
+            },
+            claimInstructions: {
+              type: "string",
+              description: "Instructions for claiming with the code",
             },
             agent: {
               type: "object",
@@ -558,6 +762,17 @@ export function GET() {
               description: "ISO 8601 timestamp of registration",
               examples: ["2025-01-15T12:00:00.000Z"],
             },
+            level: {
+              type: "integer",
+              minimum: 0,
+              maximum: 3,
+              description: "Agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign). Included when listing agents.",
+            },
+            levelName: {
+              type: "string",
+              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              description: "Human-readable level name. Included when listing agents.",
+            },
           },
         },
         HealthResponse: {
@@ -608,7 +823,7 @@ export function GET() {
         },
         VerifySuccessResponse: {
           type: "object",
-          required: ["registered", "address", "addressType", "agent"],
+          required: ["registered", "address", "addressType", "agent", "level", "levelName", "nextLevel"],
           properties: {
             registered: {
               type: "boolean",
@@ -652,6 +867,72 @@ export function GET() {
                   format: "date-time",
                   description: "ISO 8601 timestamp of registration",
                 },
+              },
+            },
+            level: {
+              type: "integer",
+              minimum: 0,
+              maximum: 3,
+              description: "Current agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign)",
+            },
+            levelName: {
+              type: "string",
+              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              description: "Human-readable level name",
+            },
+            nextLevel: {
+              type: ["object", "null"],
+              description: "What to do to reach the next level. null if at max level (Sovereign).",
+              properties: {
+                level: { type: "integer", description: "Next level number" },
+                name: { type: "string", description: "Next level name" },
+                action: { type: "string", description: "Exact action to take" },
+                reward: { type: "string", description: "What you earn" },
+                endpoint: { type: "string", description: "API endpoint to call" },
+              },
+            },
+          },
+        },
+        LeaderboardResponse: {
+          type: "object",
+          required: ["leaderboard", "distribution", "pagination"],
+          properties: {
+            leaderboard: {
+              type: "array",
+              description: "Ranked agents, highest level first",
+              items: {
+                type: "object",
+                required: ["rank", "stxAddress", "btcAddress", "level", "levelName", "verifiedAt"],
+                properties: {
+                  rank: { type: "integer", description: "1-indexed rank" },
+                  stxAddress: { type: "string" },
+                  btcAddress: { type: "string" },
+                  displayName: { type: "string" },
+                  bnsName: { type: ["string", "null"] },
+                  verifiedAt: { type: "string", format: "date-time" },
+                  level: { type: "integer", minimum: 0, maximum: 3 },
+                  levelName: { type: "string", enum: ["Unverified", "Genesis", "Builder", "Sovereign"] },
+                },
+              },
+            },
+            distribution: {
+              type: "object",
+              description: "Count of agents at each level",
+              properties: {
+                sovereign: { type: "integer" },
+                builder: { type: "integer" },
+                genesis: { type: "integer" },
+                unverified: { type: "integer" },
+                total: { type: "integer" },
+              },
+            },
+            pagination: {
+              type: "object",
+              properties: {
+                total: { type: "integer" },
+                limit: { type: "integer" },
+                offset: { type: "integer" },
+                hasMore: { type: "boolean" },
               },
             },
           },
