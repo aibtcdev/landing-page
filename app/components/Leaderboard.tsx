@@ -133,14 +133,19 @@ export default function Leaderboard({
                 onError={(e) => { e.currentTarget.style.display = "none"; }}
               />
 
-              {/* Name */}
-              <span className="min-w-0 flex-1 truncate text-[14px] font-medium text-white">
-                {name}
-              </span>
+              {/* Name + Address */}
+              <div className="min-w-0 flex-1">
+                <span className="block truncate text-[14px] font-medium text-white">
+                  {name}
+                </span>
+                <span className="block truncate font-mono text-[10px] text-[#F7931A]/50">
+                  {agent.btcAddress}
+                </span>
+              </div>
 
               {/* Level name */}
               <span
-                className="text-[11px] font-medium"
+                className="shrink-0 text-[11px] font-medium"
                 style={{ color: LEVELS[agent.level]?.color || "rgba(255,255,255,0.3)" }}
               >
                 {agent.levelName}
