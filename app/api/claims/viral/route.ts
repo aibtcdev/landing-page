@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { generateName } from "@/lib/name-generator";
+import { getNextLevel } from "@/lib/levels";
 
 interface ClaimRecord {
   btcAddress: string;
@@ -208,6 +209,9 @@ export async function POST(request: NextRequest) {
         rewardSatoshis: rewardAmount,
         status: "verified",
       },
+      level: 1,
+      levelName: "Genesis",
+      nextLevel: getNextLevel(1),
     });
   } catch (e) {
     console.error("Viral claim error:", e);
