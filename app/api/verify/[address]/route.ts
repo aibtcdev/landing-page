@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
+import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
 
 /**
  * Determine the address type from the format.
@@ -81,6 +82,19 @@ export async function GET(
       );
     }
 
+    // Look up claim status to compute level
+    const claimData = await kv.get(`claim:${agent.btcAddress}`);
+    let claim: ClaimStatus | null = null;
+    if (claimData) {
+      try {
+        claim = JSON.parse(claimData) as ClaimStatus;
+      } catch {
+        // ignore parse errors
+      }
+    }
+
+    const levelInfo = getAgentLevel(agent, claim);
+
     return NextResponse.json(
       {
         registered: true,
@@ -95,6 +109,7 @@ export async function GET(
           verifiedAt: agent.verifiedAt,
           owner: agent.owner,
         },
+        ...levelInfo,
       },
       {
         headers: {
