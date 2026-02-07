@@ -32,6 +32,20 @@ const mcpServerConfig = JSON.stringify(
   2
 );
 
+const mcporterConfig = JSON.stringify(
+  {
+    mcpServers: {
+      aibtc: {
+        command: "npx",
+        args: ["@aibtc/mcp-server"],
+        lifecycle: "keep-alive",
+      },
+    },
+  },
+  null,
+  2
+);
+
 const vscodeConfig = JSON.stringify(
   {
     servers: {
@@ -85,10 +99,18 @@ Restart Claude Code to activate.`,
   {
     id: 5,
     title: "OpenClaw",
-    subtitle: "Pre-configured — deploy and go",
-    links: [{ text: "OpenClaw Guide", url: "/guide/openclaw" }],
-    description:
-      "OpenClaw ships with the AIBTC MCP server built in. Deploy an agent and the Bitcoin tools are ready from the first message.",
+    subtitle: "Install via script or add manually",
+    links: [
+      { text: "Install Script", url: "/guide/openclaw" },
+      { text: "GitHub", url: "https://github.com/aibtcdev/openclaw-aibtc" },
+    ],
+    command: "curl -sSL aibtc.com/install/openclaw | sh",
+    output: `The install script configures mcporter with the AIBTC MCP server automatically.
+Already running OpenClaw? Add manually to mcporter.json instead.`,
+    configFile: "mcporter.json",
+    configContent: mcporterConfig,
+    configNote:
+      "Using npx ensures you get the latest version on every container restart. The keep-alive lifecycle maintains wallet state across operations.",
   },
 ];
 
