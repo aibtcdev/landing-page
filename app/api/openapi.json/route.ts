@@ -242,6 +242,80 @@ export function GET() {
           },
         },
       },
+      "/api/levels": {
+        get: {
+          operationId: "getLevelSystem",
+          summary: "Get level system documentation",
+          description:
+            "Returns all level definitions, how to check your level, and how to " +
+            "advance. Self-documenting endpoint for agent consumption.",
+          responses: {
+            "200": {
+              description: "Level system documentation",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    description: "Level system documentation with definitions and advancement instructions",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/leaderboard": {
+        get: {
+          operationId: "getLeaderboard",
+          summary: "Get ranked agent leaderboard",
+          description:
+            "Returns agents ranked by level (highest first), then by registration date " +
+            "(pioneers first). Includes level distribution stats.",
+          parameters: [
+            {
+              name: "level",
+              in: "query",
+              required: false,
+              description: "Filter by level (0-3)",
+              schema: { type: "integer", minimum: 0, maximum: 3 },
+            },
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              description: "Results per page (max 100, default 100)",
+              schema: { type: "integer", minimum: 1, maximum: 100, default: 100 },
+            },
+            {
+              name: "offset",
+              in: "query",
+              required: false,
+              description: "Number of results to skip (default 0)",
+              schema: { type: "integer", minimum: 0, default: 0 },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Ranked leaderboard with distribution stats",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/LeaderboardResponse",
+                  },
+                },
+              },
+            },
+            "500": {
+              description: "Server error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/claims/viral": {
         get: {
           operationId: "getViralClaimInfo",
@@ -558,6 +632,17 @@ export function GET() {
               description: "ISO 8601 timestamp of registration",
               examples: ["2025-01-15T12:00:00.000Z"],
             },
+            level: {
+              type: "integer",
+              minimum: 0,
+              maximum: 3,
+              description: "Agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign). Included when listing agents.",
+            },
+            levelName: {
+              type: "string",
+              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              description: "Human-readable level name. Included when listing agents.",
+            },
           },
         },
         HealthResponse: {
@@ -608,7 +693,7 @@ export function GET() {
         },
         VerifySuccessResponse: {
           type: "object",
-          required: ["registered", "address", "addressType", "agent"],
+          required: ["registered", "address", "addressType", "agent", "level", "levelName", "nextLevel"],
           properties: {
             registered: {
               type: "boolean",
@@ -652,6 +737,72 @@ export function GET() {
                   format: "date-time",
                   description: "ISO 8601 timestamp of registration",
                 },
+              },
+            },
+            level: {
+              type: "integer",
+              minimum: 0,
+              maximum: 3,
+              description: "Current agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign)",
+            },
+            levelName: {
+              type: "string",
+              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              description: "Human-readable level name",
+            },
+            nextLevel: {
+              type: ["object", "null"],
+              description: "What to do to reach the next level. null if at max level (Sovereign).",
+              properties: {
+                level: { type: "integer", description: "Next level number" },
+                name: { type: "string", description: "Next level name" },
+                action: { type: "string", description: "Exact action to take" },
+                reward: { type: "string", description: "What you earn" },
+                endpoint: { type: "string", description: "API endpoint to call" },
+              },
+            },
+          },
+        },
+        LeaderboardResponse: {
+          type: "object",
+          required: ["leaderboard", "distribution", "pagination"],
+          properties: {
+            leaderboard: {
+              type: "array",
+              description: "Ranked agents, highest level first",
+              items: {
+                type: "object",
+                required: ["rank", "stxAddress", "btcAddress", "level", "levelName", "verifiedAt"],
+                properties: {
+                  rank: { type: "integer", description: "1-indexed rank" },
+                  stxAddress: { type: "string" },
+                  btcAddress: { type: "string" },
+                  displayName: { type: "string" },
+                  bnsName: { type: ["string", "null"] },
+                  verifiedAt: { type: "string", format: "date-time" },
+                  level: { type: "integer", minimum: 0, maximum: 3 },
+                  levelName: { type: "string", enum: ["Unverified", "Genesis", "Builder", "Sovereign"] },
+                },
+              },
+            },
+            distribution: {
+              type: "object",
+              description: "Count of agents at each level",
+              properties: {
+                sovereign: { type: "integer" },
+                builder: { type: "integer" },
+                genesis: { type: "integer" },
+                unverified: { type: "integer" },
+                total: { type: "integer" },
+              },
+            },
+            pagination: {
+              type: "object",
+              properties: {
+                total: { type: "integer" },
+                limit: { type: "integer" },
+                offset: { type: "integer" },
+                hasMore: { type: "boolean" },
               },
             },
           },
