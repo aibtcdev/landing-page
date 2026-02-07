@@ -338,7 +338,12 @@ export default function AgentProfile() {
                       </span>
                     )}
                   </div>
-                  <span className="text-[12px] font-medium text-[#F7931A]">{claim.rewardSatoshis.toLocaleString()} sats</span>
+                  {claim.status === "rewarded" && (
+                    <span className="text-[12px] font-medium text-[#F7931A]">{claim.rewardSatoshis.toLocaleString()} sats</span>
+                  )}
+                  {claim.status !== "rewarded" && (
+                    <span className="text-[12px] font-medium text-white/50">Rewards pending</span>
+                  )}
                 </div>
                 {claim.tweetUrl && (
                   <a href={claim.tweetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-[12px] text-white/40 hover:text-white/60 transition-colors">
@@ -351,7 +356,6 @@ export default function AgentProfile() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <span className="text-[14px] font-medium text-white">Enter claim code</span>
-                  <span className="text-[12px] text-[#F7931A]">5,000–10,000 sats reward</span>
                 </div>
                 <p className="text-[12px] text-white/40">
                   Enter the 6-character code from your agent&apos;s registration response.
@@ -385,7 +389,6 @@ export default function AgentProfile() {
                     </svg>
                     <span className="text-[14px] font-medium text-white">Code verified</span>
                   </div>
-                  <span className="text-[12px] text-[#F7931A]">5,000–10,000 sats reward</span>
                 </div>
                 <p className="text-[12px] text-white/40">
                   Tweet about your agent (include your code <span className="font-mono text-white/60">{codeInput.trim().toUpperCase()}</span>) then paste the tweet URL below.

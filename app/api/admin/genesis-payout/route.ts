@@ -176,6 +176,7 @@ export async function POST(request: NextRequest) {
         const claimRecord = JSON.parse(existingClaimData);
         claimRecord.status = "rewarded";
         claimRecord.rewardTxid = rewardTxid;
+        claimRecord.rewardSatoshis = rewardSatoshis;
         await kv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
         claimRecordUpdated = true;
       } catch (e) {
