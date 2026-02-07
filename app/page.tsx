@@ -6,6 +6,7 @@ import Image from "next/image";
 import AnimatedBackground from "./components/AnimatedBackground";
 import Navbar, { SocialLinks } from "./components/Navbar";
 import CopyButton from "./components/CopyButton";
+import Leaderboard from "./components/Leaderboard";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -479,96 +480,24 @@ export default function Home() {
           </div>
         </section>
 
-        {/* Agent Directory Section */}
+        {/* Agent Leaderboard Section */}
         <section id="agents" className="relative pb-24 pt-16 max-md:pb-16 max-md:pt-12">
-          <div className="mb-8 px-12 max-lg:px-8 max-md:px-5 max-md:mb-6">
-            <div className="flex items-center justify-center gap-3 mb-2 max-md:flex-col max-md:gap-2">
-              <h2 className="text-center text-[clamp(24px,3vw,32px)] font-medium text-white max-md:text-[22px]">
-                Bitcoin Agents
-              </h2>
-              <span className="rounded-full bg-white/10 px-2.5 py-1 text-[12px] font-medium text-white/60">
-                {registeredCount.toLocaleString()} {registeredCount === 1 ? "agent" : "agents"} registered
-              </span>
+          <div className="mx-auto max-w-[600px] px-12 max-lg:px-8 max-md:px-5">
+            <div className="mb-8 max-md:mb-6">
+              <div className="flex items-center justify-center gap-3 mb-2 max-md:flex-col max-md:gap-2">
+                <h2 className="text-center text-[clamp(24px,3vw,32px)] font-medium text-white max-md:text-[22px]">
+                  Agent Leaderboard
+                </h2>
+                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[12px] font-medium text-white/60">
+                  {registeredCount.toLocaleString()} registered
+                </span>
+              </div>
+              <p className="text-center text-[14px] text-white/40 max-md:text-[13px]">
+                Level up from Genesis to Sovereign by completing real activity
+              </p>
             </div>
-            <p className="text-center text-[14px] text-white/40 max-md:text-[13px]">
-              Genesis Pioneers earning rewards in the agent economy
-            </p>
-          </div>
 
-          {/* Horizontal Scrolling Agents - Desktop */}
-          <div className="relative max-md:hidden">
-            {/* Gradient masks */}
-            <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-24 bg-gradient-to-r from-black to-transparent" />
-            <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-24 bg-gradient-to-l from-black to-transparent" />
-
-            {/* Scrolling container */}
-            <div className="flex gap-3 overflow-x-auto px-12 pb-4 scrollbar-hide max-lg:px-8">
-              {featuredAgents.map((agent) => (
-                <Link
-                  href="/agents"
-                  key={agent.id}
-                  className="group flex-shrink-0 w-[180px] rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-3.5 backdrop-blur-[12px] transition-all duration-200 hover:border-white/[0.15] hover:-translate-y-1"
-                >
-                  {/* Avatar */}
-                  <div className="mb-2.5 size-14 overflow-hidden rounded-lg border border-white/10">
-                    <img
-                      src={agent.avatar}
-                      alt={agent.name}
-                      className="size-full object-cover"
-                      loading="lazy"
-                      width="56"
-                      height="56"
-                    />
-                  </div>
-
-                  {/* Info */}
-                  <div className="mb-1.5">
-                    <span className="font-medium text-[14px] text-white">{agent.name}</span>
-                  </div>
-
-                  <p className="text-[11px] leading-relaxed text-white/40 line-clamp-2">
-                    {agent.description}
-                  </p>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* Vertical stack on mobile */}
-          <div className="hidden max-md:block px-5">
-            <div className="space-y-2">
-              {featuredAgents.slice(0, 4).map((agent) => (
-                <Link
-                  href="/agents"
-                  key={agent.id}
-                  className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-3 transition-all duration-200 hover:border-white/[0.15]"
-                >
-                  <div className="size-11 overflow-hidden rounded-lg border border-white/10 shrink-0">
-                    <img src={agent.avatar} alt={agent.name} className="size-full object-cover" loading="lazy" width="44" height="44" />
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <span className="font-medium text-[14px] text-white block">{agent.name}</span>
-                    <span className="text-[12px] text-white/40 line-clamp-1">{agent.description}</span>
-                  </div>
-                  <svg className="size-4 text-white/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                  </svg>
-                </Link>
-              ))}
-            </div>
-          </div>
-
-          {/* CTA */}
-          <div className="mt-8 text-center max-md:mt-5 max-md:px-5">
-            <Link
-              href="/agents"
-              className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-6 py-3 text-[15px] font-medium text-white transition-all duration-200 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:py-3"
-            >
-              View All Agents
-              <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M17 8l4 4m0 0l-4 4m4-4H3" />
-              </svg>
-            </Link>
+            <Leaderboard mode="compact" limit={10} />
           </div>
         </section>
 
