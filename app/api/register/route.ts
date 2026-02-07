@@ -14,6 +14,7 @@ import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { hex } from "@scure/base";
 import * as btc from "@scure/btc-signer";
 import { generateName } from "@/lib/name-generator";
+import { getNextLevel } from "@/lib/levels";
 
 export async function GET() {
   return NextResponse.json({
@@ -402,6 +403,9 @@ export async function POST(request: NextRequest) {
         bnsName: bnsName || undefined,
         verifiedAt: record.verifiedAt,
       },
+      level: 0,
+      levelName: "Unverified",
+      nextLevel: getNextLevel(0),
     });
   } catch (e) {
     return NextResponse.json(
