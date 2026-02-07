@@ -50,8 +50,6 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     scroll-behavior: smooth;
-    /* Prevent overscroll bounce on mobile that causes background gaps */
-    overscroll-behavior: none;
   }
 
   body {
@@ -60,16 +58,6 @@
     overflow-x: hidden;
     line-height: 1.6;
     background: #000000;
-    /* Prevent overscroll/bounce revealing background gaps on mobile */
-    overscroll-behavior: none;
-    /* Ensure smooth scrolling on iOS */
-    -webkit-overflow-scrolling: touch;
-  }
-
-  /* Optimize touch interactions - removes 300ms tap delay and tap highlight */
-  a, button, [role="button"] {
-    touch-action: manipulation;
-    -webkit-tap-highlight-color: transparent;
   }
 }
 
@@ -107,16 +95,6 @@
   50% { transform: translateY(10px); opacity: 0.9; }
 }
 
-@keyframes shimmer {
-  0% { left: -100%; }
-  100% { left: 100%; }
-}
-
-@keyframes blink {
-  0%, 50% { opacity: 1; }
-  51%, 100% { opacity: 0; }
-}
-
 /* Animation classes */
 .animate-float1 {
   animation: float1 30s ease-in-out infinite;
@@ -142,74 +120,6 @@
   animation: bounce 2.5s ease-in-out infinite;
 }
 
-.animate-blink {
-  animation: blink 1s step-end infinite;
-}
-
-/* Shimmer effect for buttons */
-.btn-shimmer::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: -100%;
-  width: 100%;
-  height: 100%;
-  background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent);
-  transition: left 0.5s ease;
-}
-
-.btn-shimmer:hover::before {
-  left: 100%;
-}
-
-/* Card glow effect */
-.card-glow::after {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: radial-gradient(circle at var(--mouse-x, 50%) var(--mouse-y, 50%), var(--card-glow, rgba(247, 147, 26, 0.08)) 0%, transparent 60%);
-  opacity: 0;
-  transition: opacity 0.4s ease;
-  pointer-events: none;
-}
-
-.card-glow:hover::after {
-  opacity: 1;
-}
-
-/* Card top accent line */
-.card-accent::before {
-  content: '';
-  position: absolute;
-  top: 0;
-  left: 0;
-  right: 0;
-  height: 2px;
-  background: linear-gradient(90deg, var(--card-accent, var(--color-orange)), transparent);
-  opacity: 0;
-  transition: opacity 0.3s ease;
-}
-
-.card-accent:hover::before {
-  opacity: 1;
-}
-
-/* Section divider glow */
-.section-divider-glow::after {
-  content: '';
-  position: absolute;
-  top: -4px;
-  left: 50%;
-  transform: translateX(-50%);
-  width: 120px;
-  height: 8px;
-  background: radial-gradient(ellipse at center, rgba(247, 147, 26, 0.15) 0%, transparent 70%);
-  filter: blur(2px);
-}
-
 /* Accessibility */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -219,32 +129,11 @@
   }
 }
 
-/* Focus visible styles */
-.focus-ring:focus-visible {
-  outline: 2px solid var(--color-orange);
-  outline-offset: 3px;
+/* Hide scrollbar */
+.scrollbar-hide {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
 }
-
-/* Terminal scrollbar - prevent content shift on all devices */
-.terminal-content {
-  scrollbar-gutter: stable;
-}
-
-/* Custom scrollbar styling for terminal */
-.terminal-content::-webkit-scrollbar {
-  width: 8px;
-}
-
-.terminal-content::-webkit-scrollbar-track {
-  background: rgba(255, 255, 255, 0.05);
-  border-radius: 4px;
-}
-
-.terminal-content::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-.terminal-content::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
 }

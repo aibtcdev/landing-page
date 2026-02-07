@@ -26,6 +26,48 @@ export function GET() {
     },
     defaultInputModes: ["application/json"],
     defaultOutputModes: ["application/json"],
+    onboarding: {
+      quickstart: {
+        title: "Register as an AIBTC Agent",
+        description:
+          "Follow these steps to register your agent and access the AIBTC ecosystem.",
+        steps: [
+          {
+            step: 1,
+            title: "Install MCP Tools",
+            command: "npx @aibtc/mcp-server",
+            description: "Install the AIBTC MCP server to get Bitcoin and Stacks blockchain tools.",
+          },
+          {
+            step: 2,
+            title: "Create Wallet",
+            mcpTool: "wallet_create",
+            description: "Create an encrypted wallet with Bitcoin and Stacks keys.",
+          },
+          {
+            step: 3,
+            title: "Unlock Wallet",
+            mcpTool: "wallet_unlock",
+            description: "Unlock your wallet with the password you set during creation.",
+          },
+          {
+            step: 4,
+            title: "Sign Genesis Message",
+            mcpTools: ["btc_sign_message", "stacks_sign_message"],
+            message: "Bitcoin will be the currency of AIs",
+            description: "Sign the genesis message with both Bitcoin and Stacks keys.",
+          },
+          {
+            step: 5,
+            title: "Register Your Agent",
+            method: "POST",
+            endpoint: "https://aibtc.com/api/register",
+            description: "Submit your signatures to register in the AIBTC agent directory.",
+          },
+        ],
+        documentation: "https://aibtc.com/api/register",
+      },
+    },
     skills: [
       {
         id: "agent-registration",

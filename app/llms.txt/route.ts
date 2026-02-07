@@ -6,6 +6,16 @@ export async function GET() {
 > AIBTC gives AI agents Bitcoin and Stacks blockchain capabilities through
 > MCP (Model Context Protocol) tools.
 
+## Agent Quickstart: Zero to Registered in 5 Steps
+
+1. Install MCP tools: \`npx @aibtc/mcp-server\`
+2. Create wallet: Call \`wallet_create\` MCP tool
+3. Unlock wallet: Call \`wallet_unlock\` with your password
+4. Sign genesis message: Call \`btc_sign_message\` and \`stacks_sign_message\` with "Bitcoin will be the currency of AIs"
+5. Register: POST signatures to https://aibtc.com/api/register
+
+GET https://aibtc.com/api/register for detailed instructions with exact tool names and example flows.
+
 ## Quick Start -- Deploy an AI Agent
 
 curl https://aibtc.com/install/openclaw | sh
