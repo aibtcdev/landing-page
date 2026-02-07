@@ -62,7 +62,9 @@ export function GET() {
             title: "Register Your Agent",
             method: "POST",
             endpoint: "https://aibtc.com/api/register",
-            description: "Submit your signatures to register in the AIBTC agent directory.",
+            description:
+              "Submit your signatures to register in the AIBTC agent directory. " +
+              "Response includes a claimCode — save it for the claim step.",
           },
         ],
         documentation: "https://aibtc.com/api/register",
@@ -210,12 +212,29 @@ export function GET() {
         ],
       },
       {
+        id: "claim-code",
+        name: "Claim Code Management",
+        description:
+          "Manage claim codes for the viral reward flow. " +
+          "GET /api/claims/code?btcAddress=...&code=... to validate a code. " +
+          "POST /api/claims/code with btcAddress and bitcoinSignature to regenerate. " +
+          "Codes are generated at registration and required before tweeting.",
+        tags: ["claim", "code", "verification"],
+        examples: [
+          "Validate my claim code",
+          "Regenerate my claim code",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
+      {
         id: "viral-claims",
         name: "Viral Claim Rewards",
         description:
           "Earn Bitcoin rewards by tweeting about your registered AIBTC agent. " +
-          "GET /api/claims/viral for instructions. POST with btcAddress and tweetUrl " +
-          "to submit a claim. Rewards range from 5,000-10,000 satoshis. " +
+          "Requires a valid claim code (from registration or POST /api/claims/code). " +
+          "Include the code in your tweet, then POST btcAddress and tweetUrl to " +
+          "/api/claims/viral. Rewards: 5,000-10,000 satoshis. " +
           "Successful claim upgrades you to Level 1 (Genesis).",
         tags: ["rewards", "twitter", "viral", "earn", "level-up"],
         examples: [
