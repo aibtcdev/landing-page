@@ -5,8 +5,12 @@ import { useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
+import LevelBadge from "../../components/LevelBadge";
+import LevelProgress from "../../components/LevelProgress";
+import LevelTooltip from "../../components/LevelTooltip";
 import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
+import type { NextLevelInfo } from "@/lib/levels";
 import { truncateAddress, updateMeta } from "@/lib/utils";
 
 interface ClaimInfo {
@@ -28,6 +32,9 @@ export default function AgentProfilePage() {
   const [copied, setCopied] = useState(false);
 
   const [claim, setClaim] = useState<ClaimInfo | null>(null);
+  const [agentLevel, setAgentLevel] = useState(0);
+  const [levelName, setLevelName] = useState("Unverified");
+  const [nextLevel, setNextLevel] = useState<NextLevelInfo | null>(null);
   const [tweetUrlInput, setTweetUrlInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
@@ -39,9 +46,21 @@ export default function AgentProfilePage() {
         if (!res.ok) {
           setError(res.status === 404 ? "Agent not found" : "Failed to fetch agent");
         } else {
-          const data = (await res.json()) as { registered: boolean; agent: AgentRecord };
-          if (data.registered && data.agent) setAgent(data.agent);
-          else setError("Agent not found");
+          const data = (await res.json()) as {
+            registered: boolean;
+            agent: AgentRecord;
+            level?: number;
+            levelName?: string;
+            nextLevel?: NextLevelInfo | null;
+          };
+          if (data.registered && data.agent) {
+            setAgent(data.agent);
+            if (data.level !== undefined) setAgentLevel(data.level);
+            if (data.levelName) setLevelName(data.levelName);
+            if (data.nextLevel !== undefined) setNextLevel(data.nextLevel);
+          } else {
+            setError("Agent not found");
+          }
         }
       } catch (e) {
         setError((e as Error).message);
@@ -88,12 +107,21 @@ export default function AgentProfilePage() {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ btcAddress: agent.btcAddress, tweetUrl: tweetUrlInput.trim() }),
       });
-      const data = (await res.json()) as { error?: string; claim?: ClaimInfo };
+      const data = (await res.json()) as {
+        error?: string;
+        claim?: ClaimInfo;
+        level?: number;
+        levelName?: string;
+        nextLevel?: NextLevelInfo | null;
+      };
       if (!res.ok) {
         setClaimError(data.error || "Verification failed");
       } else if (data.claim) {
         setClaim(data.claim);
         setClaimError(null);
+        if (data.level !== undefined) setAgentLevel(data.level);
+        if (data.levelName) setLevelName(data.levelName);
+        if (data.nextLevel !== undefined) setNextLevel(data.nextLevel);
         if (data.claim.tweetAuthor) {
           setAgent((prev) => prev ? { ...prev, owner: data.claim!.tweetAuthor } : prev);
         }
@@ -117,7 +145,9 @@ export default function AgentProfilePage() {
     updateMeta('aibtc:btc-address', agent.btcAddress);
     updateMeta('aibtc:stx-address', agent.stxAddress);
     updateMeta('aibtc:verified-at', agent.verifiedAt);
-  }, [agent, displayName, avatarUrl]);
+    updateMeta('aibtc:level', String(agentLevel));
+    updateMeta('aibtc:level-name', levelName);
+  }, [agent, displayName, avatarUrl, agentLevel, levelName]);
 
   if (loading) {
     return (
@@ -142,6 +172,13 @@ export default function AgentProfilePage() {
     );
   }
 
+  const levelColors: Record<number, string> = {
+    0: "rgba(255,255,255,0.08)",
+    1: "rgba(247,147,26,0.25)",
+    2: "rgba(125,162,255,0.25)",
+    3: "rgba(168,85,247,0.25)",
+  };
+
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "Person",
@@ -150,6 +187,7 @@ export default function AgentProfilePage() {
     "identifier": [
       { "@type": "PropertyValue", "name": "Bitcoin Address", "value": agent.btcAddress },
       { "@type": "PropertyValue", "name": "Stacks Address", "value": agent.stxAddress },
+      { "@type": "PropertyValue", "name": "AIBTC Level", "value": `${agentLevel} (${levelName})` },
     ],
     "url": `https://aibtc.com/agents/${agent.btcAddress}`,
     "image": avatarUrl,
@@ -168,16 +206,25 @@ export default function AgentProfilePage() {
 
           {/* Identity */}
           <div className="flex flex-col items-center text-center">
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={avatarUrl}
-              alt={displayName}
-              className="h-20 w-20 rounded-full border-2 border-[#F7931A]/30 bg-white/[0.06]"
-              loading="lazy"
-              width="80"
-              height="80"
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
-            />
+            {/* Avatar with level badge */}
+            <div className="relative">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={avatarUrl}
+                alt={displayName}
+                className="h-20 w-20 rounded-full border-2 bg-white/[0.06]"
+                style={{ borderColor: levelColors[agentLevel] }}
+                loading="lazy"
+                width="80"
+                height="80"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+              />
+              <div className="absolute -bottom-1 -right-1">
+                <LevelTooltip level={agentLevel}>
+                  <LevelBadge level={agentLevel} size="sm" />
+                </LevelTooltip>
+              </div>
+            </div>
             <h1 className="mt-3 text-[28px] font-medium tracking-tight text-white max-md:text-[24px]">
               {displayName}
             </h1>
@@ -239,6 +286,13 @@ export default function AgentProfilePage() {
               </span>
             </a>
           </div>
+
+          {/* Level progress */}
+          <LevelProgress
+            level={agentLevel}
+            nextLevel={nextLevel}
+            className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3"
+          />
 
           {/* Claim section */}
           <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
