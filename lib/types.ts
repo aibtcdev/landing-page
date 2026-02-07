@@ -12,4 +12,6 @@ export interface AgentRecord {
   bnsName?: string | null;
   verifiedAt: string;
   owner?: string | null;
+  builderUnlockedAt?: string | null;
+  sovereignUnlockedAt?: string | null;
 }
