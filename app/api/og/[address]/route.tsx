@@ -5,8 +5,6 @@ import type { AgentRecord } from "@/lib/types";
 import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 
-export const runtime = "edge";
-
 const levelColors: Record<number, string> = {
   0: "rgba(255,255,255,0.3)",
   1: "#F7931A",
