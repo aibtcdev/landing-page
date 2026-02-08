@@ -229,10 +229,70 @@ async function handleUpdateDescription(
 }
 
 /**
+ * Action handler: update-owner
+ */
+async function handleUpdateOwner(
+  params: Record<string, unknown>,
+  agent: AgentRecord
+): Promise<ActionResult> {
+  const owner = params.owner as string | undefined;
+
+  if (owner === undefined) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Missing required parameter: owner",
+    };
+  }
+
+  const trimmed = owner.trim();
+
+  // Validate X handle format: 1-15 chars, alphanumeric + underscore
+  if (trimmed.length === 0) {
+    // Allow empty string to clear owner
+    const updated: AgentRecord = {
+      ...agent,
+      owner: null,
+    };
+    return {
+      success: true,
+      updated,
+    };
+  }
+
+  if (trimmed.length > 15) {
+    return {
+      success: false,
+      updated: agent,
+      error: "X handle must be 15 characters or less",
+    };
+  }
+
+  if (!/^[a-zA-Z0-9_]+$/.test(trimmed)) {
+    return {
+      success: false,
+      updated: agent,
+      error: "X handle can only contain letters, numbers, and underscores",
+    };
+  }
+
+  const updated: AgentRecord = {
+    ...agent,
+    owner: trimmed,
+  };
+
+  return {
+    success: true,
+    updated,
+  };
+}
+
+/**
  * Action router: maps action names to handlers.
  */
 const ACTION_HANDLERS: Record<string, ActionHandler> = {
   "update-description": handleUpdateDescription,
+  "update-owner": handleUpdateOwner,
 };
 
 /**
@@ -273,6 +333,17 @@ export function getAvailableActions(): Array<{
           type: "string",
           required: true,
           description: "New description (max 280 characters)",
+        },
+      },
+    },
+    {
+      name: "update-owner",
+      description: "Update your X/Twitter handle",
+      params: {
+        owner: {
+          type: "string",
+          required: true,
+          description: "X handle (1-15 chars, alphanumeric + underscore)",
         },
       },
     },
