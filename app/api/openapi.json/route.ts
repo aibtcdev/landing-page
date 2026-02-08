@@ -344,10 +344,10 @@ export function GET() {
               name: "action",
               in: "query",
               required: false,
-              description: "Action to perform (e.g., update-description)",
+              description: "Action to perform (e.g., update-description, update-owner)",
               schema: {
                 type: "string",
-                examples: ["update-description"],
+                examples: ["update-description", "update-owner"],
               },
             },
           ],
@@ -1505,12 +1505,15 @@ export function GET() {
             action: {
               type: "string",
               description: "Action to perform",
-              examples: ["update-description"],
+              examples: ["update-description", "update-owner"],
             },
             params: {
               type: "object",
               description: "Action-specific parameters",
-              examples: [{ description: "My new agent description" }],
+              examples: [
+                { description: "My new agent description" },
+                { owner: "aibtcdev" }
+              ],
             },
           },
         },
