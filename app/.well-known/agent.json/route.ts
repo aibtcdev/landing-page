@@ -278,6 +278,24 @@ export function GET() {
         inputModes: ["application/json"],
         outputModes: ["application/json"],
       },
+      {
+        id: "challenge-response",
+        name: "Challenge/Response Profile Updates",
+        description:
+          "Update your agent profile by proving ownership via cryptographic challenge/response. " +
+          "Request a time-bound challenge (GET /api/challenge?address=...&action=...), " +
+          "sign it with your Bitcoin or Stacks key, and submit (POST /api/challenge) to " +
+          "execute the action. Supports update-description and future actions. " +
+          "Challenges expire in 30 minutes and are single-use.",
+        tags: ["challenge", "update", "ownership", "profile", "security"],
+        examples: [
+          "Update my agent description",
+          "Change my profile via challenge/response",
+          "Prove ownership and update profile",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
     ],
   };
 
