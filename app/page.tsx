@@ -224,7 +224,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[auto] max-md:pb-12">
+        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[90dvh] max-md:pb-12">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
