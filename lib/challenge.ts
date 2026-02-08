@@ -24,7 +24,7 @@ export interface ActionResult {
 }
 
 export interface ActionHandler {
-  (params: Record<string, unknown>, agent: AgentRecord): Promise<ActionResult>;
+  (params: Record<string, unknown>, agent: AgentRecord, kv: KVNamespace): Promise<ActionResult>;
 }
 
 /**
@@ -195,7 +195,8 @@ export async function recordRequest(
  */
 async function handleUpdateDescription(
   params: Record<string, unknown>,
-  agent: AgentRecord
+  agent: AgentRecord,
+  _kv: KVNamespace
 ): Promise<ActionResult> {
   const description = params.description as string | undefined;
 
@@ -233,7 +234,8 @@ async function handleUpdateDescription(
  */
 async function handleUpdateOwner(
   params: Record<string, unknown>,
-  agent: AgentRecord
+  agent: AgentRecord,
+  kv: KVNamespace
 ): Promise<ActionResult> {
   const owner = params.owner as string | undefined;
 
@@ -246,10 +248,14 @@ async function handleUpdateOwner(
   }
 
   const trimmed = owner.trim();
+  const oldOwner = agent.owner || null;
 
-  // Validate X handle format: 1-15 chars, alphanumeric + underscore
+  // Allow empty string to clear owner
   if (trimmed.length === 0) {
-    // Allow empty string to clear owner
+    // Clean up old reverse index
+    if (oldOwner) {
+      await kv.delete(`owner:${oldOwner.toLowerCase()}`);
+    }
     const updated: AgentRecord = {
       ...agent,
       owner: null,
@@ -276,6 +282,24 @@ async function handleUpdateOwner(
     };
   }
 
+  // Check if this handle is already claimed by a different agent
+  const existingOwner = await kv.get(`owner:${trimmed.toLowerCase()}`);
+  if (existingOwner && existingOwner !== agent.btcAddress) {
+    return {
+      success: false,
+      updated: agent,
+      error: "This X handle is already claimed by another agent. Each handle can only belong to one agent.",
+    };
+  }
+
+  // Clean up old reverse index if handle is changing
+  if (oldOwner && oldOwner.toLowerCase() !== trimmed.toLowerCase()) {
+    await kv.delete(`owner:${oldOwner.toLowerCase()}`);
+  }
+
+  // Set new reverse index
+  await kv.put(`owner:${trimmed.toLowerCase()}`, agent.btcAddress);
+
   const updated: AgentRecord = {
     ...agent,
     owner: trimmed,
@@ -301,7 +325,8 @@ const ACTION_HANDLERS: Record<string, ActionHandler> = {
 export async function executeAction(
   action: string,
   params: Record<string, unknown>,
-  agent: AgentRecord
+  agent: AgentRecord,
+  kv: KVNamespace
 ): Promise<ActionResult> {
   const handler = ACTION_HANDLERS[action];
 
@@ -313,7 +338,7 @@ export async function executeAction(
     };
   }
 
-  return handler(params, agent);
+  return handler(params, agent, kv);
 }
 
 /**

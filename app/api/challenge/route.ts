@@ -347,7 +347,7 @@ export async function POST(request: NextRequest) {
     await deleteChallenge(kv, address);
 
     // Execute action
-    const actionResult = await executeAction(action, params, agent);
+    const actionResult = await executeAction(action, params, agent, kv);
 
     if (!actionResult.success) {
       return NextResponse.json(
