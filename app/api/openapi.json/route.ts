@@ -317,6 +317,157 @@ export function GET() {
           },
         },
       },
+      "/api/challenge": {
+        get: {
+          operationId: "getChallengeOrDocs",
+          summary: "Request a challenge or get usage docs",
+          description:
+            "Without parameters: returns self-documenting JSON with usage instructions, " +
+            "examples, and available actions. With address and action parameters: generates " +
+            "a time-bound challenge message (30-minute TTL) and stores it in KV. " +
+            "Rate limited to 6 requests per 10 minutes per IP.",
+          parameters: [
+            {
+              name: "address",
+              in: "query",
+              required: false,
+              description: "Your BTC or STX address",
+              schema: {
+                type: "string",
+                examples: [
+                  "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+                  "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+                ],
+              },
+            },
+            {
+              name: "action",
+              in: "query",
+              required: false,
+              description: "Action to perform (e.g., update-description, update-owner)",
+              schema: {
+                type: "string",
+                examples: ["update-description", "update-owner"],
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Challenge generated or usage documentation",
+              content: {
+                "application/json": {
+                  schema: {
+                    oneOf: [
+                      {
+                        type: "object",
+                        description: "Usage documentation (no params)",
+                        properties: {
+                          endpoint: { type: "string" },
+                          description: { type: "string" },
+                          flow: { type: "array" },
+                          availableActions: { type: "array" },
+                        },
+                      },
+                      {
+                        $ref: "#/components/schemas/ChallengeResponse",
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid address format or action",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limit exceeded",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["error", "retryAfter"],
+                    properties: {
+                      error: { type: "string" },
+                      retryAfter: {
+                        type: "integer",
+                        description: "Seconds until retry allowed",
+                      },
+                    },
+                  },
+                },
+              },
+              headers: {
+                "Retry-After": {
+                  description: "Seconds until retry allowed",
+                  schema: { type: "integer" },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: "submitChallenge",
+          summary: "Submit signed challenge to update profile",
+          description:
+            "Submit a signed challenge to prove ownership and execute an action. " +
+            "The challenge must match the one retrieved via GET, must not be expired, " +
+            "and is single-use (deleted after verification). Signature must be from " +
+            "the address that requested the challenge.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  $ref: "#/components/schemas/ChallengeSubmitRequest",
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Profile updated successfully",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ChallengeSubmitSuccess",
+                  },
+                },
+              },
+            },
+            "400": {
+              description:
+                "Invalid request — missing fields, invalid signature, " +
+                "expired challenge, or action validation failed",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "403": {
+              description: "Signature address mismatch",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Challenge not found or agent not registered",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/admin/genesis-payout": {
         get: {
           operationId: "getGenesisPayout",
@@ -1312,6 +1463,83 @@ export function GET() {
           },
         },
       },
+        ChallengeResponse: {
+          type: "object",
+          required: ["challenge"],
+          properties: {
+            challenge: {
+              type: "object",
+              required: ["message", "expiresAt"],
+              properties: {
+                message: {
+                  type: "string",
+                  description: "The challenge message to sign",
+                  examples: ["Challenge: update-description for bc1q... at 2026-02-08T12:00:00.000Z"],
+                },
+                expiresAt: {
+                  type: "string",
+                  format: "date-time",
+                  description: "ISO 8601 timestamp when challenge expires (30 minutes from creation)",
+                },
+              },
+            },
+          },
+        },
+        ChallengeSubmitRequest: {
+          type: "object",
+          required: ["address", "signature", "challenge", "action"],
+          properties: {
+            address: {
+              type: "string",
+              description: "Your BTC or STX address (must match challenge)",
+              examples: ["bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"],
+            },
+            signature: {
+              type: "string",
+              description: "BIP-137 (Bitcoin) or RSV (Stacks) signature of the challenge message",
+            },
+            challenge: {
+              type: "string",
+              description: "The exact challenge message you signed (from GET response)",
+            },
+            action: {
+              type: "string",
+              description: "Action to perform",
+              examples: ["update-description", "update-owner"],
+            },
+            params: {
+              type: "object",
+              description: "Action-specific parameters",
+              examples: [
+                { description: "My new agent description" },
+                { owner: "aibtcdev" }
+              ],
+            },
+          },
+        },
+        ChallengeSubmitSuccess: {
+          type: "object",
+          required: ["success", "message", "agent", "level", "levelName"],
+          properties: {
+            success: { type: "boolean", const: true },
+            message: { type: "string", examples: ["Profile updated successfully"] },
+            agent: {
+              type: "object",
+              properties: {
+                stxAddress: { type: "string" },
+                btcAddress: { type: "string" },
+                displayName: { type: "string" },
+                description: { type: ["string", "null"] },
+                bnsName: { type: ["string", "null"] },
+                verifiedAt: { type: "string", format: "date-time" },
+                owner: { type: ["string", "null"] },
+              },
+            },
+            level: { type: "integer", minimum: 0, maximum: 3 },
+            levelName: { type: "string", enum: ["Unverified", "Genesis", "Builder", "Sovereign"] },
+            nextLevel: { type: ["object", "null"] },
+          },
+        },
     },
   };
 

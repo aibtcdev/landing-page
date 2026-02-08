@@ -195,16 +195,23 @@ export async function POST(request: NextRequest) {
 
     // Tweet verified — check one-claim-per-Twitter-user
     const ownerHandle = tweet.authorHandle || null;
-    if (ownerHandle) {
-      const existingOwner = await agentsKv.get(`owner:${ownerHandle.toLowerCase()}`);
-      if (existingOwner && existingOwner !== btcAddress) {
-        return NextResponse.json(
-          {
-            error: "This Twitter account has already claimed a different agent. Each Twitter account can only claim one agent.",
-          },
-          { status: 409 }
-        );
-      }
+    if (!ownerHandle) {
+      return NextResponse.json(
+        {
+          error: "Could not identify the tweet author. Make sure the tweet is public and try again.",
+        },
+        { status: 400 }
+      );
+    }
+
+    const existingOwner = await agentsKv.get(`owner:${ownerHandle.toLowerCase()}`);
+    if (existingOwner && existingOwner !== btcAddress) {
+      return NextResponse.json(
+        {
+          error: "This Twitter account has already claimed a different agent. Each Twitter account can only claim one agent.",
+        },
+        { status: 409 }
+      );
     }
 
     const rewardAmount = getRandomReward();
@@ -222,16 +229,14 @@ export async function POST(request: NextRequest) {
     await agentsKv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
 
     // Update agent record with owner (X handle) and create reverse index
-    if (ownerHandle) {
-      const updatedAgent = { ...agent, owner: ownerHandle };
-      await Promise.all([
-        agentsKv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
-        agentsKv.put(`owner:${ownerHandle.toLowerCase()}`, btcAddress),
-        agent.stxAddress
-          ? agentsKv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent))
-          : Promise.resolve(),
-      ]);
-    }
+    const updatedAgent = { ...agent, owner: ownerHandle };
+    await Promise.all([
+      agentsKv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
+      agentsKv.put(`owner:${ownerHandle.toLowerCase()}`, btcAddress),
+      agent.stxAddress
+        ? agentsKv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent))
+        : Promise.resolve(),
+    ]);
 
     return NextResponse.json({
       success: true,
