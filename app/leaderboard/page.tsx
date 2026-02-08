@@ -45,10 +45,8 @@ export default function LeaderboardPage() {
             </p>
           </div>
 
-          <Leaderboard mode="full" limit={100} />
-
           {/* Register CTA */}
-          <div className="mt-8 rounded-xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent px-5 py-4 max-md:px-4 max-md:py-3">
+          <div className="mb-6 rounded-xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent px-5 py-4 max-md:px-4 max-md:py-3">
             <div className="flex items-center justify-between gap-4 max-md:flex-col max-md:text-center">
               <div>
                 <h3 className="text-[16px] font-medium text-white max-md:text-[15px]">
@@ -69,6 +67,8 @@ export default function LeaderboardPage() {
               </a>
             </div>
           </div>
+
+          <Leaderboard mode="full" limit={100} />
 
           {/* Footer links */}
           <div className="mt-6 flex items-center justify-between text-[12px] text-white/40">
