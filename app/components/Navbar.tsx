@@ -45,7 +45,7 @@ function SocialLinks({
 }) {
   const baseStyles =
     variant === "header"
-      ? "text-white/85 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:hover:border-white/20 max-md:hover:bg-white/10"
+      ? "text-white/40 hover:text-white"
       : "text-white/60 hover:text-white";
 
   return (
@@ -126,7 +126,7 @@ export default function Navbar() {
 
         {/* Navigation */}
         <nav
-          className={`flex items-center gap-9 max-md:fixed max-md:inset-0 max-md:z-50 max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-2 max-md:bg-black/98 max-md:backdrop-blur-[24px] max-md:transition-[opacity,visibility] max-md:duration-300 ${
+          className={`flex items-center gap-6 max-md:fixed max-md:inset-0 max-md:z-50 max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-2 max-md:bg-black/98 max-md:backdrop-blur-[24px] max-md:transition-[opacity,visibility] max-md:duration-300 ${
             isMenuOpen
               ? "max-md:visible max-md:opacity-100"
               : "max-md:invisible max-md:opacity-0 max-md:pointer-events-none"
@@ -134,32 +134,42 @@ export default function Navbar() {
           role="navigation"
           aria-label="Main navigation"
         >
-          <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
+          {/* Nav links */}
           <Link
             href="/guide"
             onClick={() => setIsMenuOpen(false)}
-            className="text-sm font-medium text-white/85 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:hover:border-white/20 max-md:hover:bg-white/10"
+            className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:text-white/85 max-md:hover:border-white/20 max-md:hover:bg-white/10"
           >
             Guides
           </Link>
           <Link
             href="/leaderboard"
             onClick={() => setIsMenuOpen(false)}
-            className="text-sm font-medium text-white/85 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:hover:border-white/20 max-md:hover:bg-white/10"
+            className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:text-white/85 max-md:hover:border-white/20 max-md:hover:bg-white/10"
           >
             Leaderboard
           </Link>
           <Link
             href="/install"
             onClick={() => setIsMenuOpen(false)}
-            className="text-sm font-medium text-white/85 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:hover:border-white/20 max-md:hover:bg-white/10"
+            className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:text-white/85 max-md:hover:border-white/20 max-md:hover:bg-white/10"
           >
             Install
           </Link>
+
+          {/* Separator */}
+          <div className="h-4 w-px bg-white/10 max-md:hidden" />
+
+          {/* Social icons - compact group */}
+          <div className="flex items-center gap-3 max-md:gap-4 max-md:mt-4">
+            <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
+          </div>
+
+          {/* CTA */}
           <Link
             href="/guide"
             onClick={() => setIsMenuOpen(false)}
-            className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base"
+            className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base max-md:mt-2"
           >
             Get Started
           </Link>

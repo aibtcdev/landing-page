@@ -89,10 +89,9 @@ const featuredAgents = [
   },
 ];
 
-// Core upgrades (streamlined to top 3)
-const coreUpgrades = [
+// Agent upgrades — prompt + copy cards
+const upgrades = [
   {
-    number: 1,
     title: "Bitcoin Wallet",
     description: "Your agent's own wallet with DeFi capabilities",
     prompt: "Set up a new Bitcoin wallet for this agent using the AIBTC MCP server. Generate a new wallet and show me the address.",
@@ -103,7 +102,6 @@ const coreUpgrades = [
     ),
   },
   {
-    number: 2,
     title: "Bitcoin Identity",
     description: "Register at aibtc.com to track progress & earn rewards",
     prompt: "Register this agent at aibtc.com. Set up its identity so all progress and contributions get tracked to this wallet.",
@@ -114,7 +112,6 @@ const coreUpgrades = [
     ),
   },
   {
-    number: 3,
     title: "Earning Power",
     description: "Enable x402 APIs to monetize your agent's skills",
     prompt: "List available x402 endpoints and show me how this agent can earn by providing services through payment-gated APIs.",
@@ -124,24 +121,35 @@ const coreUpgrades = [
       </svg>
     ),
   },
-];
-
-// Additional upgrades
-const additionalUpgrades = [
   {
     title: "Staking for Yield",
     description: "Put bitcoin to work earning DeFi yields",
     prompt: "Show me how to stake assets or supply to DeFi protocols to earn yield on this agent's holdings.",
+    icon: (
+      <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18L9 11.25l4.306 4.307a11.95 11.95 0 015.814-5.519l2.74-1.22m0 0l-5.94-2.28m5.94 2.28l-2.28 5.941" />
+      </svg>
+    ),
   },
   {
     title: "Smart Contracts",
-    description: "Deploy Clarity contracts (requires Clarinet)",
+    description: "Deploy Clarity contracts on Stacks",
     prompt: "Help me write and deploy a simple Clarity smart contract. Start with a basic counter contract as an example.",
+    icon: (
+      <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M17.25 6.75L22.5 12l-5.25 5.25m-10.5 0L1.5 12l5.25-5.25m7.5-3l-4.5 16.5" />
+      </svg>
+    ),
   },
   {
     title: "Inscribe Media",
     description: "Permanently inscribe on Bitcoin",
     prompt: "Help me inscribe media on Bitcoin. Show me how to create an inscription with an image or text file.",
+    icon: (
+      <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 15.75l5.159-5.159a2.25 2.25 0 013.182 0l5.159 5.159m-1.5-1.5l1.409-1.409a2.25 2.25 0 013.182 0l2.909 2.909M3.75 21h16.5a2.25 2.25 0 002.25-2.25V5.25a2.25 2.25 0 00-2.25-2.25H3.75A2.25 2.25 0 001.5 5.25v13.5A2.25 2.25 0 003.75 21z" />
+      </svg>
+    ),
   },
 ];
 
@@ -224,7 +232,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[85dvh] max-md:pb-12">
+        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-12 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[85dvh] max-md:pb-12">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
@@ -652,8 +660,8 @@ export default function Home() {
         </section>
 
         {/* Core Upgrades Section */}
-        <section className="relative px-12 pb-24 pt-24 max-lg:px-8 max-md:px-4 max-md:pb-16 max-md:pt-16" id="upgrades">
-          <div className="mx-auto w-full max-w-[900px]">
+        <section className="relative px-12 pb-24 pt-24 max-lg:px-8 max-md:px-5 max-md:pb-16 max-md:pt-16" id="upgrades">
+          <div className="mx-auto w-full max-w-[1200px]">
             {/* Section Header */}
             <div className="mb-10 text-center max-md:mb-8">
               <h2 className="mb-3 text-balance text-[clamp(28px,3.5vw,40px)] font-medium text-white max-md:text-[24px]">
@@ -664,65 +672,32 @@ export default function Home() {
               </p>
             </div>
 
-            {/* Core 3 Upgrades */}
-            <div className="grid gap-4 max-md:gap-3">
-              {coreUpgrades.map((upgrade, index) => (
+            {/* Upgrades Grid — 50/50 */}
+            <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1 max-md:gap-3">
+              {upgrades.map((upgrade) => (
                 <div
-                  key={upgrade.number}
+                  key={upgrade.title}
                   className="group relative overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-5 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/30 max-md:p-4"
                 >
-                  <div className="flex items-start gap-4 max-md:flex-col max-md:gap-3">
-                    {/* Icon & Number */}
-                    <div className="flex items-center gap-3 shrink-0">
-                      <div className="flex size-10 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.3)] bg-gradient-to-br from-[rgba(247,147,26,0.2)] to-[rgba(247,147,26,0.05)] text-[#F7931A]">
-                        {upgrade.icon}
-                      </div>
-                      <div className="max-md:block hidden">
-                        <h3 className="text-[15px] font-semibold text-white">{upgrade.title}</h3>
-                        <p className="text-[12px] text-white/50">{upgrade.description}</p>
-                      </div>
+                  <div className="flex items-start gap-4">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.3)] bg-gradient-to-br from-[rgba(247,147,26,0.2)] to-[rgba(247,147,26,0.05)] text-[#F7931A]">
+                      {upgrade.icon}
                     </div>
-
-                    {/* Content - Desktop */}
-                    <div className="flex-1 min-w-0 max-md:hidden">
-                      <h3 className="text-[16px] font-semibold text-white mb-1">{upgrade.title}</h3>
-                      <p className="text-[14px] text-white/50">{upgrade.description}</p>
+                    <div className="flex-1 min-w-0">
+                      <h3 className="text-[16px] font-semibold text-white mb-1 max-md:text-[15px]">{upgrade.title}</h3>
+                      <p className="text-[14px] text-white/50 max-md:text-[13px]">{upgrade.description}</p>
                     </div>
-
-                    {/* Copy button */}
+                  </div>
+                  <div className="mt-4">
                     <CopyButton
                       text={upgrade.prompt}
                       label="Copy Prompt"
                       variant="primary"
-                      className="shrink-0 max-md:w-full max-md:justify-center"
+                      className="w-full justify-center"
                     />
                   </div>
                 </div>
               ))}
-            </div>
-
-            {/* Additional Upgrades - Collapsed */}
-            <div className="mt-6">
-              <p className="text-center text-[13px] text-white/40 mb-4">More capabilities</p>
-              <div className="grid grid-cols-3 gap-3 max-md:grid-cols-1">
-                {additionalUpgrades.map((upgrade) => (
-                  <div
-                    key={upgrade.title}
-                    className="group rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 text-left transition-all duration-200 hover:border-white/15 hover:bg-white/[0.04]"
-                  >
-                    <div className="flex items-center justify-between mb-1">
-                      <span className="text-[13px] font-medium text-white">{upgrade.title}</span>
-                      <CopyButton
-                        text={upgrade.prompt}
-                        label=""
-                        variant="icon"
-                        className="-mr-1"
-                      />
-                    </div>
-                    <p className="text-[11px] text-white/40">{upgrade.description}</p>
-                  </div>
-                ))}
-              </div>
             </div>
 
             {/* Pioneer Reward Note */}
@@ -744,8 +719,8 @@ export default function Home() {
         </section>
 
         {/* Build with AIBTC Section */}
-        <section id="build" className="relative scroll-mt-24 px-12 pb-24 pt-24 max-lg:px-8 max-md:scroll-mt-20 max-md:px-4 max-md:pb-16 max-md:pt-16">
-          <div className="mx-auto w-full max-w-[900px]">
+        <section id="build" className="relative scroll-mt-24 px-12 pb-24 pt-24 max-lg:px-8 max-md:scroll-mt-20 max-md:px-5 max-md:pb-16 max-md:pt-16">
+          <div className="mx-auto w-full max-w-[1200px]">
             {/* Section Header */}
             <div className="mb-12 text-center max-md:mb-10">
               <h2 className="mb-4 text-balance text-[clamp(32px,4vw,48px)] font-medium text-white max-md:text-[28px]">
@@ -819,11 +794,11 @@ export default function Home() {
       </main>
 
       {/* Footer */}
-      <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-6 max-md:pb-10 max-md:pt-10">
+      <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-5 max-md:pb-10 max-md:pt-10">
         <div className="mx-auto max-w-[1200px]">
           {/* Agent-Native Callout */}
           <div className="mb-12 px-4 max-md:mb-10">
-            <div className="mx-auto max-w-[800px] rounded-2xl border border-white/[0.08] bg-gradient-to-br from-[#F7931A]/8 to-transparent p-6 text-center max-md:p-5">
+            <div className="mx-auto max-w-[800px] rounded-2xl bg-gradient-to-br from-[#F7931A]/8 to-transparent p-6 text-center max-md:p-5">
               <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-3 py-1">
                 <span className="text-[12px] font-medium text-[#F7931A]">Agent-Native Design</span>
               </div>
