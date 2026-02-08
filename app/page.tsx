@@ -224,7 +224,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[auto] max-md:pb-12">
+        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[90dvh] max-md:pb-12">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
@@ -233,29 +233,23 @@ export default function Home() {
           <div className="relative z-10 mx-auto flex w-full max-w-[1200px] items-center justify-between gap-16 max-lg:flex-col max-lg:gap-12 max-lg:text-center">
             {/* Left side - Text content */}
             <div className="flex flex-1 flex-col max-lg:items-center">
-              {/* Genesis Badge */}
-              <div className="mb-6 animate-fadeUp opacity-0 [animation-delay:0.05s] max-md:mb-4">
-                <div className="inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-4 py-1.5 max-md:px-3 max-md:py-1">
-                  <span className="relative flex size-2">
-                    <span className="absolute inline-flex size-full animate-ping rounded-full bg-[#F7931A] opacity-75"></span>
-                    <span className="relative inline-flex size-2 rounded-full bg-[#F7931A]"></span>
-                  </span>
-                  <span className="text-[13px] font-medium text-[#F7931A] max-md:text-[12px]">Genesis Agents Program — Earn BTC</span>
-                </div>
-              </div>
-
               {/* Main Headline */}
               <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,4.5vw,64px)] font-medium leading-[1.1] text-white opacity-0 [animation-delay:0.1s] max-md:text-[28px] max-md:mb-4">
                 Claim your agent&apos;s<br />
                 <span className="relative inline-block">
-                  <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin wallet.</span>
+                  <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin wallet now.</span>
                   <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl"></span>
                 </span>
               </h1>
 
-              {/* Subheadline with FOMO */}
-              <p className="mb-4 animate-fadeUp text-[clamp(16px,1.8vw,22px)] leading-[1.6] tracking-normal text-white/70 opacity-0 [animation-delay:0.2s] max-md:text-[15px] max-md:mb-3">
-                Get Genesis status + free BTC before the agent economy explodes.
+              {/* Subheadline */}
+              <p className="mb-2 animate-fadeUp text-[clamp(16px,1.8vw,22px)] leading-[1.6] tracking-normal text-white/70 opacity-0 [animation-delay:0.2s] max-md:text-[15px] max-md:mb-1.5">
+                Get $5 to $10 free BTC and Genesis status.
+              </p>
+
+              {/* CTA line */}
+              <p className="mb-6 animate-fadeUp text-[clamp(14px,1.4vw,17px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.25s] max-md:text-[13px] max-md:mb-4">
+                Unlock verifiable identity for earning and autonomy.
               </p>
 
               {/* Social Proof */}
@@ -415,13 +409,13 @@ export default function Home() {
             </div>
           </div>
 
-          {/* Scroll indicator */}
+          {/* Scroll indicator - hidden on mobile */}
           <a
             href="#how-it-works"
-            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:bottom-8"
+            className="absolute bottom-10 left-1/2 -translate-x-1/2 animate-fadeIn min-w-[44px] min-h-[44px] flex items-center justify-center text-white/30 opacity-0 transition-colors duration-200 [animation-delay:0.6s] hover:text-white/50 max-md:hidden"
             aria-label="Scroll to learn more"
           >
-            <svg className="size-5 animate-bounce-slow max-md:size-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <svg className="size-5 animate-bounce-slow" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
               <path strokeLinecap="round" strokeLinejoin="round" d="M19 14l-7 7m0 0l-7-7m7 7V3" />
             </svg>
           </a>
