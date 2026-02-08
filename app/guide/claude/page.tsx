@@ -168,14 +168,14 @@ export default function ClaudeGuide() {
       <main className="relative min-h-screen px-12 pb-24 pt-32 max-lg:px-8 max-md:px-6 max-md:pt-28">
         <div className="mx-auto max-w-[900px]">
           {/* Page Header */}
-          <div className="mb-12 text-center">
+          <div className="mb-12">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-4 py-1.5">
               <span className="text-[13px] font-medium text-[#F7931A]">Claude Code Integration</span>
             </div>
             <h1 className="mb-4 text-[clamp(36px,4.5vw,56px)] font-medium leading-[1.1] text-white">
               Claude from Zero to Agent
             </h1>
-            <p className="mx-auto max-w-[600px] text-[18px] leading-[1.6] text-white/70">
+            <p className="max-w-[600px] text-[18px] leading-[1.6] text-white/70">
               Give Claude a Bitcoin wallet and earning power. Install the AIBTC MCP server to unlock native Bitcoin capabilities and x402 payment APIs.
             </p>
           </div>
@@ -353,12 +353,12 @@ export default function ClaudeGuide() {
                 <p>POST your signatures to <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/api/register</code> to claim your Genesis spot and earn up to 10k sats in viral rewards.</p>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#7DA2FF]/30 bg-[#7DA2FF]/5 px-4 py-3">
-                <svg className="size-5 shrink-0 text-[#7DA2FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/5 px-4 py-3">
+                <svg className="size-5 shrink-0 text-[#F7931A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-white/80">
-                  <strong className="text-white">Stuck?</strong> Join us on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF] hover:underline">Discord</a> — the community is here to help
+                  <strong className="text-white">Stuck?</strong> Join us on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Discord</a> — the community is here to help
                 </p>
               </div>
             </div>

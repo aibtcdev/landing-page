@@ -224,7 +224,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[90dvh] max-md:pb-12">
+        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[85dvh] max-md:pb-12">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
@@ -243,12 +243,12 @@ export default function Home() {
               </h1>
 
               {/* Subheadline */}
-              <p className="mb-2 animate-fadeUp text-[clamp(16px,1.8vw,22px)] leading-[1.6] tracking-normal text-white/70 opacity-0 [animation-delay:0.2s] max-md:text-[15px] max-md:mb-1.5">
+              <p className="mb-4 animate-fadeUp text-[clamp(16px,1.8vw,22px)] leading-[1.6] tracking-normal text-white/70 opacity-0 [animation-delay:0.2s] max-md:text-[15px] max-md:mb-3">
                 Get $5 to $10 free BTC and Genesis status.
               </p>
 
               {/* CTA line */}
-              <p className="mb-6 animate-fadeUp text-[clamp(14px,1.4vw,17px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.25s] max-md:text-[13px] max-md:mb-4">
+              <p className="mb-8 animate-fadeUp text-[clamp(14px,1.4vw,17px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.25s] max-md:text-[13px] max-md:mb-6">
                 Unlock verifiable identity for earning and autonomy.
               </p>
 
@@ -465,30 +465,32 @@ export default function Home() {
                 <Link
                   key={item.step}
                   href={item.link}
-                  className="group flex flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/30 hover:-translate-y-1 max-md:p-5"
+                  className="group flex flex-col overflow-hidden rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-6 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/30 hover:-translate-y-1 max-md:flex-row max-md:items-start max-md:gap-3.5 max-md:p-4"
                 >
-                  <div className="mb-4 inline-flex items-center justify-center size-10 rounded-full bg-gradient-to-br from-[#F7931A]/20 to-[#F7931A]/5 border border-[#F7931A]/30 text-[16px] font-semibold text-[#F7931A]">
+                  <div className="mb-4 inline-flex items-center justify-center size-10 shrink-0 rounded-full bg-gradient-to-br from-[#F7931A]/20 to-[#F7931A]/5 border border-[#F7931A]/30 text-[16px] font-semibold text-[#F7931A] max-md:mb-0">
                     {item.step}
                   </div>
 
-                  <div className="mb-3 text-[#F7931A]">
+                  <div className="mb-3 text-[#F7931A] max-md:hidden">
                     <svg className="size-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                       {item.icon}
                     </svg>
                   </div>
 
-                  <h3 className="mb-2 text-[17px] font-semibold text-white">
-                    {item.title}
-                  </h3>
-                  <p className="flex-1 text-[14px] leading-relaxed text-white/50 mb-3">
-                    {item.description}
-                  </p>
+                  <div className="max-md:flex-1 max-md:min-w-0">
+                    <h3 className="mb-2 text-[17px] font-semibold text-white max-md:mb-1 max-md:text-[15px]">
+                      {item.title}
+                    </h3>
+                    <p className="flex-1 text-[14px] leading-relaxed text-white/50 mb-3 max-md:text-[13px] max-md:mb-2">
+                      {item.description}
+                    </p>
 
-                  <div className="flex items-center gap-2 text-[13px] font-medium text-[#F7931A]/80 transition-colors group-hover:text-[#F7931A]">
-                    {item.linkText}
-                    <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                    </svg>
+                    <div className="flex items-center gap-2 text-[13px] font-medium text-[#F7931A]/80 transition-colors group-hover:text-[#F7931A] max-md:text-[12px]">
+                      {item.linkText}
+                      <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                      </svg>
+                    </div>
                   </div>
                 </Link>
               ))}

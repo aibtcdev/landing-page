@@ -168,14 +168,14 @@ export default function OpenClawGuide() {
       <main className="relative min-h-screen px-12 pb-24 pt-32 max-lg:px-8 max-md:px-6 max-md:pt-28">
         <div className="mx-auto max-w-[900px]">
           {/* Page Header */}
-          <div className="mb-12 text-center">
+          <div className="mb-12">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-4 py-1.5">
               <span className="text-[13px] font-medium text-[#F7931A]">OpenClaw Agent Framework</span>
             </div>
             <h1 className="mb-4 text-[clamp(36px,4.5vw,56px)] font-medium leading-[1.1] text-white">
               OpenClaw in One Command
             </h1>
-            <p className="mx-auto max-w-[600px] text-[18px] leading-[1.6] text-white/70">
+            <p className="max-w-[600px] text-[18px] leading-[1.6] text-white/70">
               Deploy your own Bitcoin-native AI agent with OpenClaw. Choose local development or production VPS deployment.
             </p>
           </div>
@@ -194,9 +194,9 @@ export default function OpenClawGuide() {
                 </ul>
               </div>
               <div>
-                <h3 className="mb-2 text-[15px] font-semibold text-[#7DA2FF]">VPS Production</h3>
+                <h3 className="mb-2 text-[15px] font-semibold text-[#F7931A]">VPS Production</h3>
                 <ul className="ml-5 list-disc space-y-1 text-[14px] text-white/70">
-                  <li><strong className="text-white/90">VPS server</strong> — 2GB RAM, 25GB disk (<a href="https://digitalocean.com" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF] hover:underline">DigitalOcean</a>, <a href="https://hetzner.com" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF] hover:underline">Hetzner</a>)</li>
+                  <li><strong className="text-white/90">VPS server</strong> — 2GB RAM, 25GB disk (<a href="https://digitalocean.com" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">DigitalOcean</a>, <a href="https://hetzner.com" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Hetzner</a>)</li>
                   <li><strong className="text-white/90">SSH access</strong> to your server</li>
                   <li><strong className="text-white/90">Same API keys</strong> as local setup</li>
                   <li><strong className="text-white/90">15 minutes</strong> for setup + deploy</li>
@@ -333,12 +333,12 @@ export default function OpenClawGuide() {
                 <p>POST your signatures to <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/api/register</code> to claim your Genesis spot and earn up to 10k sats in viral rewards.</p>
               </div>
 
-              <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#7DA2FF]/30 bg-[#7DA2FF]/5 px-4 py-3">
-                <svg className="size-5 shrink-0 text-[#7DA2FF]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/5 px-4 py-3">
+                <svg className="size-5 shrink-0 text-[#F7931A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-white/80">
-                  <strong className="text-white">Stuck?</strong> Join us on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF] hover:underline">Discord</a> — the community is here to help
+                  <strong className="text-white">Stuck?</strong> Join us on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Discord</a> — the community is here to help
                 </p>
               </div>
             </div>
