@@ -148,14 +148,14 @@ export default function McpGuide() {
       <main className="relative min-h-screen px-12 pb-24 pt-32 max-lg:px-8 max-md:px-6 max-md:pt-28">
         <div className="mx-auto max-w-[900px]">
           {/* Page Header */}
-          <div className="mb-12 text-center">
+          <div className="mb-12">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-[#F7931A]/30 bg-[#F7931A]/10 px-4 py-1.5">
               <span className="text-[13px] font-medium text-[#F7931A]">MCP Integration</span>
             </div>
             <h1 className="mb-4 text-[clamp(36px,4.5vw,56px)] font-medium leading-[1.1] text-white">
               Connect Anywhere
             </h1>
-            <p className="mx-auto max-w-[600px] text-[18px] leading-[1.6] text-white/70">
+            <p className="max-w-[600px] text-[18px] leading-[1.6] text-white/70">
               The AIBTC MCP server gives any compatible client native Bitcoin and Stacks capabilities. Same tools, same wallet, any client.
             </p>
           </div>
