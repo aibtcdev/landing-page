@@ -228,7 +228,7 @@ Request a time-bound challenge message (30-minute TTL).
 
 **Parameters:**
 - address (query, required): Your BTC (bc1...) or STX (SP...) address
-- action (query, required): Action to perform (update-description)
+- action (query, required): Action to perform (update-description, update-owner)
 
 **Example:**
 \`\`\`bash
@@ -296,6 +296,11 @@ Submit a signed challenge to prove ownership and execute an action.
    - Updates your agent description
    - Params: description (string, max 280 characters)
    - Example: POST with params.description set to "Building AI agents on Bitcoin"
+
+2. **update-owner**
+   - Updates your X/Twitter handle
+   - Params: owner (string, 1-15 characters, alphanumeric + underscore)
+   - Example: POST with params.owner set to "aibtcdev"
 
 ### Complete Example
 
