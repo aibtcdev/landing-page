@@ -51,6 +51,15 @@ export default function AgentProfile() {
   const [descriptionSignature, setDescriptionSignature] = useState("");
   const [descriptionSubmitting, setDescriptionSubmitting] = useState(false);
   const [descriptionError, setDescriptionError] = useState<string | null>(null);
+  // Owner editing state
+  const [editingOwner, setEditingOwner] = useState(false);
+  const [ownerInput, setOwnerInput] = useState("");
+  const [ownerChallenge, setOwnerChallenge] = useState<string | null>(null);
+  const [ownerChallengeExpiry, setOwnerChallengeExpiry] = useState<string | null>(null);
+  const [ownerSignature, setOwnerSignature] = useState("");
+  const [ownerSubmitting, setOwnerSubmitting] = useState(false);
+  const [ownerError, setOwnerError] = useState<string | null>(null);
+
 
   useEffect(() => {
     // Reset state when address changes
@@ -273,6 +282,98 @@ export default function AgentProfile() {
     }
   };
 
+  const handleStartEditOwner = () => {
+    setEditingOwner(true);
+    setOwnerInput(agent?.owner || "");
+    setOwnerChallenge(null);
+    setOwnerChallengeExpiry(null);
+    setOwnerSignature("");
+    setOwnerError(null);
+  };
+
+  const handleCancelEditOwner = () => {
+    setEditingOwner(false);
+    setOwnerInput("");
+    setOwnerChallenge(null);
+    setOwnerChallengeExpiry(null);
+    setOwnerSignature("");
+    setOwnerError(null);
+  };
+
+  const handleRequestOwnerChallenge = async () => {
+    if (!agent) return;
+    setOwnerError(null);
+    setOwnerSubmitting(true);
+    try {
+      const res = await fetch(
+        `/api/challenge?address=${encodeURIComponent(agent.btcAddress)}&action=update-owner`
+      );
+      const data = (await res.json()) as {
+        challenge?: { message: string; expiresAt: string };
+        error?: string;
+        retryAfter?: number;
+      };
+      if (!res.ok) {
+        if (res.status === 429 && data.retryAfter) {
+          setOwnerError(`Rate limited. Retry in ${data.retryAfter} seconds.`);
+        } else {
+          setOwnerError(data.error || "Failed to request challenge");
+        }
+      } else if (data.challenge) {
+        setOwnerChallenge(data.challenge.message);
+        setOwnerChallengeExpiry(data.challenge.expiresAt);
+        setOwnerError(null);
+      }
+    } catch {
+      setOwnerError("Network error. Please try again.");
+    } finally {
+      setOwnerSubmitting(false);
+    }
+  };
+
+  const handleSubmitOwnerUpdate = async () => {
+    if (!agent || !ownerChallenge || !ownerSignature.trim()) return;
+    setOwnerSubmitting(true);
+    setOwnerError(null);
+    try {
+      const res = await fetch("/api/challenge", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          address: agent.btcAddress,
+          signature: ownerSignature.trim(),
+          challenge: ownerChallenge,
+          action: "update-owner",
+          params: {
+            owner: ownerInput.trim(),
+          },
+        }),
+      });
+      const data = (await res.json()) as {
+        success?: boolean;
+        error?: string;
+        agent?: AgentRecord;
+      };
+      if (!res.ok || !data.success) {
+        setOwnerError(data.error || "Update failed");
+      } else if (data.agent) {
+        // Update local agent state
+        setAgent(data.agent);
+        // Exit edit mode
+        setEditingOwner(false);
+        setOwnerInput("");
+        setOwnerChallenge(null);
+        setOwnerChallengeExpiry(null);
+        setOwnerSignature("");
+        setOwnerError(null);
+      }
+    } catch {
+      setOwnerError("Network error. Please try again.");
+    } finally {
+      setOwnerSubmitting(false);
+    }
+  };
+
   if (loading) {
     return (
       <><AnimatedBackground /><Navbar />
@@ -382,6 +483,100 @@ export default function AgentProfile() {
                 </a>
               )}
             </div>
+            {/* Owner editing section */}
+            {!editingOwner ? (
+              <div className="mt-2 flex items-center gap-2">
+                {!agent.owner && (
+                  <span className="text-[11px] text-white/30">No X handle set</span>
+                )}
+                <button
+                  onClick={handleStartEditOwner}
+                  className="shrink-0 rounded-md p-1 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                  title="Edit X handle"
+                >
+                  <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z" />
+                  </svg>
+                </button>
+              </div>
+            ) : (
+              <div className="mt-2 space-y-3 rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
+                <div>
+                  <div className="flex items-center justify-between mb-2">
+                    <span className="text-[12px] font-medium text-white/60">Update X handle</span>
+                    <span className="text-[11px] text-white/40">{ownerInput.length}/15</span>
+                  </div>
+                  <input
+                    type="text"
+                    value={ownerInput}
+                    onChange={(e) => {
+                      setOwnerInput(e.target.value);
+                      setOwnerError(null);
+                    }}
+                    maxLength={15}
+                    placeholder="Enter X/Twitter handle (no @)"
+                    className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 text-[13px] text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#F7931A]/40"
+                  />
+                </div>
+
+                {!ownerChallenge ? (
+                  <button
+                    onClick={handleRequestOwnerChallenge}
+                    disabled={ownerSubmitting}
+                    className="w-full rounded-lg bg-[#F7931A] px-4 py-2 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
+                  >
+                    {ownerSubmitting ? "..." : "Request Challenge"}
+                  </button>
+                ) : (
+                  <>
+                    <div className="space-y-2">
+                      <span className="text-[11px] font-medium text-white/60">Sign this message:</span>
+                      <div className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 font-mono text-[11px] text-white/70 break-all">
+                        {ownerChallenge}
+                      </div>
+                      <div className="text-[10px] text-white/40">
+                        Expires: {ownerChallengeExpiry ? new Date(ownerChallengeExpiry).toLocaleString() : "N/A"}
+                      </div>
+                    </div>
+
+                    <div>
+                      <span className="text-[11px] font-medium text-white/60 block mb-1">Paste signature:</span>
+                      <input
+                        type="text"
+                        value={ownerSignature}
+                        onChange={(e) => {
+                          setOwnerSignature(e.target.value);
+                          setOwnerError(null);
+                        }}
+                        placeholder="Signature..."
+                        className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-[12px] text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#F7931A]/40"
+                      />
+                    </div>
+
+                    <div className="flex gap-2">
+                      <button
+                        onClick={handleSubmitOwnerUpdate}
+                        disabled={ownerSubmitting || !ownerSignature.trim()}
+                        className="flex-1 rounded-lg bg-[#F7931A] px-4 py-2 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
+                      >
+                        {ownerSubmitting ? "..." : "Submit"}
+                      </button>
+                      <button
+                        onClick={handleCancelEditOwner}
+                        disabled={ownerSubmitting}
+                        className="flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-[13px] text-white/60 transition-colors hover:bg-white/[0.06] disabled:opacity-30"
+                      >
+                        Cancel
+                      </button>
+                    </div>
+                  </>
+                )}
+
+                {ownerError && (
+                  <p className="text-[11px] text-red-400/80">{ownerError}</p>
+                )}
+              </div>
+            )}
             {!editingDescription ? (
               // View mode
               <div className="mt-2 flex items-start gap-2">
