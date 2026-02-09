@@ -13,6 +13,25 @@
 export const SIGNED_MESSAGE_FORMAT = "Paid Attention | {messageId} | {response}";
 
 /**
+ * Build the signed message format from a message ID and response text.
+ *
+ * This function ensures all message construction uses the canonical format
+ * defined by SIGNED_MESSAGE_FORMAT, preventing inconsistencies between
+ * message construction and verification.
+ *
+ * @param messageId - The message ID (e.g., "msg_123")
+ * @param response - The response text
+ * @returns Formatted string: "Paid Attention | {messageId} | {response}"
+ *
+ * @example
+ * const message = buildSignedMessage("msg_123", "I am paying attention!");
+ * // Returns: "Paid Attention | msg_123 | I am paying attention!"
+ */
+export function buildSignedMessage(messageId: string, response: string): string {
+  return `Paid Attention | ${messageId} | ${response}`;
+}
+
+/**
  * Maximum allowed length for response text (in characters).
  *
  * Responses longer than this will be rejected. This prevents abuse and
