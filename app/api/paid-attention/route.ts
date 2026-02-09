@@ -117,7 +117,16 @@ export async function GET() {
 export async function POST(request: NextRequest) {
   try {
     // Parse and validate request body
-    const body = await request.json();
+    let body: unknown;
+    try {
+      body = await request.json();
+    } catch {
+      return NextResponse.json(
+        { error: "Malformed JSON body" },
+        { status: 400 }
+      );
+    }
+
     const validation = validateResponseBody(body);
 
     if (validation.errors) {
