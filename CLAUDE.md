@@ -195,6 +195,7 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `app/llms.txt/route.ts` — Quick-start guide
 - `app/llms-full.txt/route.ts` — Full reference documentation
 - `app/api/openapi.json/route.ts` — OpenAPI spec
+- `app/api/og/[address]/route.tsx` — Dynamic OG image generation for agent profiles
 
 ### Infrastructure
 - `middleware.ts` — CLI tool detection, deprecated path redirects, serves `/llms.txt` at `/` for curl/wget
