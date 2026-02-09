@@ -180,8 +180,17 @@ export async function POST(request: NextRequest) {
 
     const { address: btcAddress, publicKey: btcPublicKey } = btcResult;
 
+    // Parallelize independent KV reads for better performance
+    const responseKey = `${KV_PREFIXES.RESPONSE}${messageId}:${btcAddress}`;
+    const agentIndexKey = `${KV_PREFIXES.AGENT_INDEX}${btcAddress}`;
+
+    const [existingAgentData, existingResponseData, existingIndexData] = await Promise.all([
+      kv.get(`btc:${btcAddress}`),
+      kv.get(responseKey),
+      kv.get(agentIndexKey),
+    ]);
+
     // Check if agent exists or auto-register
-    const existingAgentData = await kv.get(`btc:${btcAddress}`);
     let agent: AgentRecord | PartialAgentRecord;
     let isNewAgent = false;
 
@@ -204,9 +213,6 @@ export async function POST(request: NextRequest) {
     }
 
     // Check if agent has already responded to this message
-    const responseKey = `${KV_PREFIXES.RESPONSE}${messageId}:${btcAddress}`;
-    const existingResponseData = await kv.get(responseKey);
-
     if (existingResponseData) {
       const existingResponse = JSON.parse(
         existingResponseData
@@ -234,8 +240,6 @@ export async function POST(request: NextRequest) {
     };
 
     // Update or create agent index
-    const agentIndexKey = `${KV_PREFIXES.AGENT_INDEX}${btcAddress}`;
-    const existingIndexData = await kv.get(agentIndexKey);
 
     let agentIndex: AttentionAgentIndex;
     if (existingIndexData) {
