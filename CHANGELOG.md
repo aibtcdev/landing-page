@@ -1,0 +1,30 @@
+# Changelog
+
+## [1.1.0](https://github.com/aibtcdev/landing-page/compare/v1.0.0...v1.1.0) (2026-02-09)
+
+
+### Features
+
+* **admin:** add genesis payout API endpoint ([#53](https://github.com/aibtcdev/landing-page/issues/53)) ([cca7065](https://github.com/aibtcdev/landing-page/commit/cca7065d3d72b39fdd0da0feee0c5a5fd7a29b09))
+* Bitcoin-first refresh for landing page ([#34](https://github.com/aibtcdev/landing-page/issues/34)) ([4bb5e02](https://github.com/aibtcdev/landing-page/commit/4bb5e0224db10943e94ab9463658fdb22ac28a7a))
+* challenge/response system for agent profile updates ([#59](https://github.com/aibtcdev/landing-page/issues/59)) ([e48a5da](https://github.com/aibtcdev/landing-page/commit/e48a5da0d0e09cbbd0100cd0111932b0d71a9db0))
+* dual-purpose URL architecture for agents and humans ([#45](https://github.com/aibtcdev/landing-page/issues/45)) ([bd801d9](https://github.com/aibtcdev/landing-page/commit/bd801d9248540d76f86b527e6c68b49fa91f9d0b))
+* **guide:** add MCP integration guide ([#54](https://github.com/aibtcdev/landing-page/issues/54)) ([a756cec](https://github.com/aibtcdev/landing-page/commit/a756cecbf7e6fd711e2a4cf0255d44165bd81b64))
+* improve Zero to Agent guide UX ([#32](https://github.com/aibtcdev/landing-page/issues/32)) ([1c67f58](https://github.com/aibtcdev/landing-page/commit/1c67f58a21c477a8a41d0cbc34e72a186db554ba))
+* Level/achievement system for agents ([#55](https://github.com/aibtcdev/landing-page/issues/55)) ([48ea3f9](https://github.com/aibtcdev/landing-page/commit/48ea3f929db00a15f38d92d5869f3b7b3158585d))
+* make aibtc.com agent-ready ([#42](https://github.com/aibtcdev/landing-page/issues/42)) ([78b9743](https://github.com/aibtcdev/landing-page/commit/78b9743affd8a53a2b2e8639fdcc8685e890a1b8))
+* **seo:** add structured data and meta tag for AI agent discovery ([#64](https://github.com/aibtcdev/landing-page/issues/64)) ([1da8e68](https://github.com/aibtcdev/landing-page/commit/1da8e68dfc31f9ee108e1f2083af1edb6079f336))
+* simplify homepage with guide pages ([#50](https://github.com/aibtcdev/landing-page/issues/50)) ([19c5029](https://github.com/aibtcdev/landing-page/commit/19c50299ea7e172bfecc33e2c9ab5f49776f56d0))
+* Viral claim system for agent registration rewards ([#40](https://github.com/aibtcdev/landing-page/issues/40)) ([fb5690e](https://github.com/aibtcdev/landing-page/commit/fb5690e423405c46a43f5dc5c3ece5ae06e2c066))
+
+
+### Bug Fixes
+
+* **attention:** address 15 review issues across paid attention system ([46b177f](https://github.com/aibtcdev/landing-page/commit/46b177f826a33032a8e420f3db53a6c3b212a5b7))
+* **attention:** address 15 review issues across paid attention system ([#66](https://github.com/aibtcdev/landing-page/issues/66)) ([46b177f](https://github.com/aibtcdev/landing-page/commit/46b177f826a33032a8e420f3db53a6c3b212a5b7))
+* **claims:** harden viral claim endpoint ([#56](https://github.com/aibtcdev/landing-page/issues/56)) ([b73781c](https://github.com/aibtcdev/landing-page/commit/b73781c83f255214e3d5f6026a99a22e66f355bf))
+* **ui:** clean up navbar, align sections, redesign upgrades grid ([#61](https://github.com/aibtcdev/landing-page/issues/61)) ([d2ab23d](https://github.com/aibtcdev/landing-page/commit/d2ab23d422398d250edcc0d2885012e589d004b4))
+* **ui:** improve hero and how-it-works mobile spacing ([#60](https://github.com/aibtcdev/landing-page/issues/60)) ([c8bfce6](https://github.com/aibtcdev/landing-page/commit/c8bfce6ccdfa3d03f8688ba789b3b171a206e2dc))
+* **ui:** improve leaderboard mobile layout ([#57](https://github.com/aibtcdev/landing-page/issues/57)) ([9f5253e](https://github.com/aibtcdev/landing-page/commit/9f5253ecfdeed77d28ba30715ac6bde6cd9d363f))
+* **ui:** remove profile editing UI and fix double title suffix ([#65](https://github.com/aibtcdev/landing-page/issues/65)) ([1ba31b3](https://github.com/aibtcdev/landing-page/commit/1ba31b36c470df032387ff737ad24d94db400331))
+* **ui:** update hero copy and add leaderboard register CTA ([#58](https://github.com/aibtcdev/landing-page/issues/58)) ([d3ce05a](https://github.com/aibtcdev/landing-page/commit/d3ce05abb55697d8a22f7999084a20dd010af473))
