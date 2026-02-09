@@ -202,20 +202,95 @@ export async function POST(request: NextRequest) {
       agent = JSON.parse(existingAgentData) as AgentRecord | PartialAgentRecord;
     }
 
-    // Continue to next task: response storage
-    return NextResponse.json(
-      {
-        error: "Not yet implemented: response storage",
-        debug: {
-          btcAddress,
-          messageId,
-          response,
-          isNewAgent,
-          agent,
+    // Check if agent has already responded to this message
+    const responseKey = `${KV_PREFIXES.RESPONSE}${messageId}:${btcAddress}`;
+    const existingResponseData = await kv.get(responseKey);
+
+    if (existingResponseData) {
+      const existingResponse = JSON.parse(
+        existingResponseData
+      ) as AttentionResponse;
+      return NextResponse.json(
+        {
+          error:
+            "You have already responded to this message. Only one response per agent per message is allowed.",
+          existingResponse: {
+            submittedAt: existingResponse.submittedAt,
+            response: existingResponse.response,
+          },
         },
+        { status: 409 }
+      );
+    }
+
+    // Store the response
+    const attentionResponse: AttentionResponse = {
+      messageId,
+      btcAddress,
+      response,
+      signature,
+      submittedAt: new Date().toISOString(),
+    };
+
+    // Update or create agent index
+    const agentIndexKey = `${KV_PREFIXES.AGENT_INDEX}${btcAddress}`;
+    const existingIndexData = await kv.get(agentIndexKey);
+
+    let agentIndex: AttentionAgentIndex;
+    if (existingIndexData) {
+      const existing = JSON.parse(existingIndexData) as AttentionAgentIndex;
+      agentIndex = {
+        btcAddress,
+        messageIds: [...existing.messageIds, messageId],
+        lastResponseAt: attentionResponse.submittedAt,
+      };
+    } else {
+      agentIndex = {
+        btcAddress,
+        messageIds: [messageId],
+        lastResponseAt: attentionResponse.submittedAt,
+      };
+    }
+
+    // Increment response count on current message
+    const updatedMessage: AttentionMessage = {
+      ...currentMessage,
+      responseCount: currentMessage.responseCount + 1,
+    };
+
+    // Atomic write of all updates
+    await Promise.all([
+      kv.put(responseKey, JSON.stringify(attentionResponse)),
+      kv.put(agentIndexKey, JSON.stringify(agentIndex)),
+      kv.put(KV_PREFIXES.CURRENT_MESSAGE, JSON.stringify(updatedMessage)),
+    ]);
+
+    // Compute level (partial agents are level 0)
+    const level = "stxAddress" in agent ? undefined : 0;
+    const levelName = "stxAddress" in agent ? undefined : "Unverified";
+
+    return NextResponse.json({
+      success: true,
+      message: isNewAgent
+        ? "Response recorded! You've been auto-registered. Complete full registration at /api/register to unlock more features."
+        : "Response recorded! Thank you for paying attention.",
+      response: {
+        messageId,
+        submittedAt: attentionResponse.submittedAt,
+        responseCount: updatedMessage.responseCount,
       },
-      { status: 501 }
-    );
+      agent: {
+        btcAddress,
+        displayName: agent.displayName,
+        ...(isNewAgent && {
+          autoRegistered: true,
+          completeRegistrationAt: "/api/register",
+        }),
+      },
+      ...(level !== undefined && { level }),
+      ...(levelName !== undefined && { levelName }),
+      ...(level !== undefined && { nextLevel: getNextLevel(level) }),
+    });
   } catch (e) {
     return NextResponse.json(
       { error: `Failed to process response: ${(e as Error).message}` },
