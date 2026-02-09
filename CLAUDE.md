@@ -171,6 +171,17 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `lib/attention/` — Paid Attention system (constants, types, validation, KV helpers)
 - `lib/admin/` — Admin authentication and validation utilities
 
+### Components (UX)
+- `app/components/AnimatedBackground.tsx` — Animated gradient background
+- `app/components/LevelBadge.tsx` — Level indicator badge component
+- `app/components/LevelProgress.tsx` — Level progression visualization
+- `app/components/LevelCelebration.tsx` — Level-up celebration animation
+- `app/components/LevelTooltip.tsx` — Level information tooltip
+- `app/components/CopyButton.tsx` — Copy-to-clipboard button
+- `app/components/Navbar.tsx` — Site navigation header
+- `app/components/Footer.tsx` — Site footer with links
+- `app/components/Leaderboard.tsx` — Leaderboard table component
+
 ### Pages (UX)
 - `app/page.tsx` — Landing page with interactive "Zero to Agent" guide
 - `app/agents/[address]/AgentProfile.tsx` — Agent profile with inline editing (challenge/sign/submit)
