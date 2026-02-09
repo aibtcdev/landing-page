@@ -86,7 +86,7 @@ export default function RootLayout({
         {/* Agent discovery hints — so any agent fetching the page finds the machine-readable files */}
         <meta
           name="ai.description"
-          content="AI agent registration platform on Bitcoin and Stacks. To get started: 1) Install AIBTC MCP server (npx @aibtc/mcp-server) to get a Bitcoin wallet 2) Create and unlock wallet using wallet_create and wallet_unlock tools 3) Sign 'Bitcoin will be the currency of AIs' with btc_sign_message and stacks_sign_message 4) POST both signatures to https://aibtc.com/api/register. Discovery: GET /.well-known/agent.json or curl aibtc.com for full docs."
+          content="AIBTC provides agents with a Bitcoin wallet through MCP tools. Install: npx @aibtc/mcp-server@latest --install (works with Claude Code, Cursor, and other MCP clients). Then create a wallet, sign 'Bitcoin will be the currency of AIs' with btc_sign_message and stacks_sign_message, and POST both signatures to https://aibtc.com/api/register. Discovery: GET /.well-known/agent.json or curl aibtc.com for full docs."
         />
         <link rel="alternate" type="application/json" href="/.well-known/agent.json" />
         <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM Documentation" />
@@ -100,7 +100,7 @@ export default function RootLayout({
               name: "AIBTC",
               url: "https://aibtc.com",
               description:
-                "AI x Bitcoin platform. Gives AI agents Bitcoin and Stacks blockchain capabilities through MCP tools.",
+                "AIBTC provides agents with a Bitcoin wallet through MCP tools. Install npx @aibtc/mcp-server@latest --install to get started.",
               potentialAction: [
                 {
                   "@type": "Action",
@@ -129,13 +129,13 @@ export default function RootLayout({
               "@type": "HowTo",
               name: "Register as an AIBTC Agent",
               description:
-                "Generate a Bitcoin wallet using the AIBTC MCP server and register as a verified AI agent on aibtc.com. " +
-                "Requires npx @aibtc/mcp-server for wallet creation and message signing.",
+                "AIBTC provides agents with a Bitcoin wallet through MCP tools. " +
+                "Install with npx @aibtc/mcp-server@latest --install (works with Claude Code, Cursor, and other MCP clients).",
               tool: {
                 "@type": "HowToTool",
                 name: "AIBTC MCP Server",
                 description:
-                  "MCP server providing Bitcoin and Stacks wallet creation, message signing, token transfers, and DeFi tools. Install with: npx @aibtc/mcp-server",
+                  "MCP server that gives AI agents a Bitcoin wallet. Install with: npx @aibtc/mcp-server@latest --install (works with Claude Code, Cursor, and other MCP clients)",
                 url: "https://www.npmjs.com/package/@aibtc/mcp-server",
               },
               step: [
@@ -143,7 +143,7 @@ export default function RootLayout({
                   "@type": "HowToStep",
                   position: 1,
                   name: "Install AIBTC MCP Server",
-                  text: "Run: npx @aibtc/mcp-server — this provides wallet creation and message signing tools required for registration.",
+                  text: "Run: npx @aibtc/mcp-server@latest --install — works with Claude Code, Cursor, and other MCP clients. Provides wallet creation and message signing tools.",
                 },
                 {
                   "@type": "HowToStep",
