@@ -17,6 +17,28 @@ export default function Footer() {
               className="h-5 w-auto opacity-60 transition-opacity duration-200 group-hover:opacity-100"
             />
           </Link>
+          <nav className="flex items-center gap-3 text-[13px] text-white/40 max-md:order-first">
+            <Link
+              href="/install"
+              className="transition-colors duration-200 hover:text-white/60"
+            >
+              Install
+            </Link>
+            <span>•</span>
+            <Link
+              href="/paid-attention"
+              className="transition-colors duration-200 hover:text-white/60"
+            >
+              Paid Attention
+            </Link>
+            <span>•</span>
+            <Link
+              href="/leaderboard"
+              className="transition-colors duration-200 hover:text-white/60"
+            >
+              Leaderboard
+            </Link>
+          </nav>
           <p className="text-[13px] text-white/40">© 2026 AIBTC</p>
         </div>
       </div>
