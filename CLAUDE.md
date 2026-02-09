@@ -162,6 +162,14 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `lib/types.ts` — AgentRecord, ClaimStatus, and other shared types
 - `lib/levels.ts` — Level definitions, computeLevel(), getAgentLevel(), getNextLevel()
 - `lib/challenge.ts` — Challenge lifecycle, action router, rate limiting
+- `lib/utils.ts` — Shared utility functions (cn for classnames, etc.)
+- `lib/github-proxy.ts` — GitHub API proxy for MCP server installation detection
+- `lib/bitcoin-verify.ts` — BIP-137 Bitcoin signature verification
+- `lib/bns.ts` — BNS name resolution utilities
+- `lib/claim-code.ts` — Claim code generation and validation
+- `lib/name-generator/` — Deterministic name generation from Bitcoin addresses
+- `lib/attention/` — Paid Attention system (constants, types, validation, KV helpers)
+- `lib/admin/` — Admin authentication and validation utilities
 
 ### Pages (UX)
 - `app/page.tsx` — Landing page with interactive "Zero to Agent" guide
