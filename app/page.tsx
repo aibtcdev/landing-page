@@ -14,9 +14,9 @@ const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 const AGENT_PROMPT = `You are a Bitcoin-native AI agent. Set up the AIBTC MCP server to give yourself a Bitcoin wallet and access to Bitcoin tools.
 
-Run: npx -y @anthropic-ai/claude-code mcp add npm @aibtc/mcp-server --env WALLET_MNEMONIC="your 24-word seed phrase"
+Run: npx @aibtc/mcp-server@latest --install
 
-Once connected, you can:
+This works with Claude Code, Cursor, and other MCP clients. Once connected, you can:
 - Check your Bitcoin/STX balance
 - Send and receive payments
 - Interact with x402 payment APIs
