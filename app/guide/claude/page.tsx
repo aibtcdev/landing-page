@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
@@ -11,12 +12,19 @@ interface ConversationExchange {
   claude: string;
 }
 
+interface PlatformCommand {
+  label: string;
+  command: string;
+  output?: string;
+}
+
 interface ClaudeStep {
   id: number;
   title: string;
   subtitle: string;
   links: { text: string; url: string }[];
   command?: string;
+  platformCommands?: PlatformCommand[];
   output?: string;
   conversation?: ConversationExchange;
 }
@@ -27,11 +35,30 @@ const claudeSteps: ClaudeStep[] = [
     title: "Install Claude Code",
     subtitle: "AI coding assistant from Anthropic",
     links: [{ text: "Claude Code", url: "https://claude.ai/code" }],
-    command: "curl -fsSL https://claude.ai/code/install.sh | sh",
-    output: `Installing Claude Code...
+    platformCommands: [
+      {
+        label: "macOS / Linux",
+        command: "curl -fsSL https://claude.ai/install.sh | sh",
+        output: `Installing Claude Code...
 ✓ Installed to ~/.claude/bin/claude
 ✓ Added to PATH
 Run 'claude' to start.`,
+      },
+      {
+        label: "Windows (PowerShell)",
+        command: "irm https://claude.ai/install.ps1 | iex",
+        output: `Installing Claude Code...
+✓ Installed successfully
+Run 'claude' to start.`,
+      },
+      {
+        label: "Windows (WinGet)",
+        command: "winget install Anthropic.ClaudeCode",
+        output: `Found Anthropic.ClaudeCode
+Successfully installed Claude Code.
+Run 'claude' to start.`,
+      },
+    ],
   },
   {
     id: 2,
@@ -124,6 +151,59 @@ Your API is working for you 24/7—earning Bitcoin while you sleep.`,
   },
 ];
 
+function PlatformCommandBlock({ commands }: { commands: PlatformCommand[] }) {
+  const [activeTab, setActiveTab] = useState(0);
+  const active = commands[activeTab];
+
+  return (
+    <div className="space-y-3">
+      <div className="relative">
+        <div className="flex items-center justify-between rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
+          <div className="flex gap-1">
+            {commands.map((cmd, i) => (
+              <button
+                key={cmd.label}
+                onClick={() => setActiveTab(i)}
+                className={`rounded px-2.5 py-1 text-[12px] font-medium transition-all ${
+                  i === activeTab
+                    ? "bg-[#F7931A]/20 text-[#F7931A]"
+                    : "text-white/40 hover:text-white/60"
+                }`}
+              >
+                {cmd.label}
+              </button>
+            ))}
+          </div>
+          <CopyButton
+            text={active.command}
+            label="Copy"
+            variant="icon"
+            className="gap-1.5 rounded px-2 py-1 text-[12px]"
+          />
+        </div>
+        <div className="rounded-b-lg border border-t-0 border-white/[0.08] bg-black/40 px-4 py-3">
+          <pre className="overflow-x-auto text-[13px] leading-relaxed text-[#F7931A]">
+            <code>{active.command}</code>
+          </pre>
+        </div>
+      </div>
+
+      {active.output && (
+        <div>
+          <div className="flex items-center rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
+            <span className="text-[12px] font-medium text-white/40">Output</span>
+          </div>
+          <div className="rounded-b-lg border border-t-0 border-white/[0.08] bg-black/40 px-4 py-3">
+            <pre className="overflow-x-auto text-[13px] leading-relaxed text-white/70">
+              <code>{active.output}</code>
+            </pre>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export default function ClaudeGuide() {
   // JSON-LD HowTo Schema for agent consumption
   const howToSchema = {
@@ -137,7 +217,12 @@ export default function ClaudeGuide() {
       position: step.id,
       name: step.title,
       text: step.subtitle,
-      itemListElement: step.command
+      itemListElement: step.platformCommands
+        ? step.platformCommands.map((cmd) => ({
+            "@type": "HowToDirection",
+            text: `${cmd.label}: ${cmd.command}`,
+          }))
+        : step.command
         ? [
             {
               "@type": "HowToDirection",
@@ -188,6 +273,7 @@ export default function ClaudeGuide() {
               <ul className="ml-5 list-disc space-y-1">
                 <li><strong className="text-white/90">Claude Code account</strong> — Free at <a href="https://claude.ai/code" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">claude.ai/code</a></li>
                 <li><strong className="text-white/90">Node.js</strong> — For the MCP server (v18 or higher)</li>
+                <li><strong className="text-white/90">Git</strong> — Required on all platforms. Windows users need <a href="https://git-scm.com/downloads/win" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Git for Windows</a> (includes Git Bash)</li>
                 <li><strong className="text-white/90">5 minutes</strong> — That's all it takes to go from zero to agent</li>
               </ul>
             </div>
@@ -231,10 +317,14 @@ export default function ClaudeGuide() {
                   )}
                 </div>
 
-                {/* Command & Output (Step 1) */}
-                {step.command && (
+                {/* Platform Commands (Step 1) */}
+                {step.platformCommands && (
+                  <PlatformCommandBlock commands={step.platformCommands} />
+                )}
+
+                {/* Single Command */}
+                {step.command && !step.platformCommands && (
                   <div className="space-y-3">
-                    {/* Command */}
                     <div className="relative">
                       <div className="flex items-center justify-between rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
                         <span className="text-[12px] font-medium text-white/40">Command</span>
@@ -252,7 +342,6 @@ export default function ClaudeGuide() {
                       </div>
                     </div>
 
-                    {/* Output */}
                     {step.output && (
                       <div>
                         <div className="flex items-center rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">

@@ -21,15 +21,27 @@ export async function GET() {
     method: "POST",
     description: "Register as a verified AIBTC agent by proving ownership of both a Bitcoin and Stacks address.",
     messageToSign: "Bitcoin will be the currency of AIs",
+    prerequisite: {
+      description:
+        "The AIBTC MCP server is required to register. It provides wallet creation " +
+        "and message signing tools. Registration requires cryptographic signatures " +
+        "from both a Bitcoin and Stacks key, which the MCP server generates from a single seed.",
+      install: "npx @aibtc/mcp-server",
+      npm: "@aibtc/mcp-server",
+    },
     quickstart: {
       title: "Complete Registration Flow",
-      description: "Follow these steps in order to register your agent.",
+      description:
+        "Follow these steps in order. The AIBTC MCP server must be installed first — " +
+        "it provides the wallet and signing tools needed for registration.",
       steps: [
         {
           step: 1,
-          title: "Install AIBTC MCP Server",
+          title: "Install AIBTC MCP Server (Required)",
           command: "npx @aibtc/mcp-server",
-          description: "Install the MCP server to get Bitcoin and Stacks blockchain tools.",
+          description:
+            "Install the MCP server to get Bitcoin and Stacks blockchain tools. " +
+            "This is required — without it you cannot create a wallet or sign messages.",
           required: true,
         },
         {

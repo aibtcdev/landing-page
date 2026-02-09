@@ -44,12 +44,17 @@ Discovery docs must be updated together when adding or changing endpoints.
 
 ## API Endpoints
 
+### Agent Registration Prerequisite
+
+Registration requires the AIBTC MCP server (`npx @aibtc/mcp-server`). It provides wallet creation and message signing tools — agents cannot register without it because registration requires cryptographic signatures from both a Bitcoin and Stacks key.
+
 ### Core Agent APIs
 | Route | Methods | Purpose |
 |-------|---------|---------|
-| `/api/register` | GET, POST | Register agent by signing with BTC + STX keys |
+| `/api/register` | GET, POST | Register agent by signing with BTC + STX keys (requires MCP server) |
 | `/api/verify/[address]` | GET | Look up agent by BTC or STX address |
 | `/api/agents` | GET | List all verified agents |
+| `/api/get-name` | GET | Deterministic name lookup for any BTC address |
 | `/api/health` | GET | System health + KV connectivity check |
 
 ### Level & Progression
