@@ -77,3 +77,22 @@ export interface PartialAgentRecord {
   builderUnlockedAt?: never;
   sovereignUnlockedAt?: never;
 }
+
+/**
+ * Type guard to check if an agent record is a partial registration.
+ *
+ * Partial records only have Bitcoin credentials (no stxAddress).
+ * Full records have both Bitcoin and Stacks credentials.
+ */
+export function isPartialAgentRecord(
+  agent: unknown
+): agent is PartialAgentRecord {
+  if (!agent || typeof agent !== "object") return false;
+  const record = agent as Record<string, unknown>;
+  return (
+    typeof record.btcAddress === "string" &&
+    typeof record.btcPublicKey === "string" &&
+    !("stxAddress" in record) &&
+    typeof record.verifiedAt === "string"
+  );
+}
