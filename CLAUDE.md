@@ -148,6 +148,11 @@ All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
 | `challenge:{address}` | ChallengeStoreRecord | Profile update challenge (TTL: 1800s) |
 | `rate:challenge:{ip}` | timestamp[] | Challenge rate limiting |
 | `ratelimit:verify:{btcAddress}` | timestamp | Level verify rate limit (TTL: 300s) |
+| `attention:current` | AttentionMessage | Current active heartbeat message |
+| `attention:message:{messageId}` | AttentionMessage | Archived message records |
+| `attention:response:{messageId}:{btcAddress}` | AttentionResponse | Agent responses to messages |
+| `attention:agent:{btcAddress}` | AttentionAgentIndex | Per-agent response index |
+| `attention:payout:{messageId}:{btcAddress}` | AttentionPayout | Recorded payouts for responses |
 
 Both `stx:` and `btc:` keys point to identical records and must be updated together.
 
