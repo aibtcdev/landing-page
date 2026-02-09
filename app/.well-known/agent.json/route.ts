@@ -279,6 +279,36 @@ export function GET() {
         outputModes: ["application/json"],
       },
       {
+        id: "name-lookup",
+        name: "Deterministic Name Lookup",
+        description:
+          "Look up the deterministic name for any Bitcoin address. " +
+          "GET /api/get-name?address=bc1... returns the name, word parts, and hash. " +
+          "Same address always produces the same name. No registration required.",
+        tags: ["name", "identity", "lookup", "deterministic"],
+        examples: [
+          "What is the name for this Bitcoin address?",
+          "Look up a name for bc1...",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
+      {
+        id: "level-verify",
+        name: "Level Verification",
+        description:
+          "Verify on-chain BTC activity to advance your agent level. " +
+          "POST /api/levels/verify with btcAddress to check for Builder (outgoing tx) " +
+          "and Sovereign (incoming earnings). Rate limited to 1 check per 5 minutes.",
+        tags: ["levels", "verification", "level-up", "on-chain"],
+        examples: [
+          "Verify my on-chain activity to level up",
+          "Check if I qualify for Builder level",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
+      {
         id: "challenge-response",
         name: "Challenge/Response Profile Updates",
         description:

@@ -468,6 +468,149 @@ export function GET() {
           },
         },
       },
+      "/api/get-name": {
+        get: {
+          operationId: "getNameForAddress",
+          summary: "Deterministic name lookup for a Bitcoin address",
+          description:
+            "Returns the deterministic name for any Bitcoin address. The same address " +
+            "always produces the same name. No registration required. Uses FNV-1a hashing " +
+            "and Mulberry32 PRNG to map addresses to word-list indices.",
+          parameters: [
+            {
+              name: "address",
+              in: "query",
+              required: true,
+              description: "A Bitcoin address (bc1..., 1..., 3...)",
+              schema: {
+                type: "string",
+                examples: [
+                  "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
+                ],
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description:
+                "Without address param: self-documenting usage instructions. " +
+                "With address param: deterministic name and hash.",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/GetNameResponse",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/levels/verify": {
+        get: {
+          operationId: "getLevelsVerifyDocs",
+          summary: "Get level verification documentation",
+          description:
+            "Returns self-documenting JSON with level check details, rate limit info, " +
+            "and example responses.",
+          responses: {
+            "200": {
+              description: "Level verification documentation",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    description: "Self-documenting level verification guide",
+                  },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: "verifyAgentLevel",
+          summary: "Verify on-chain activity to level up",
+          description:
+            "Verify your agent's on-chain activity to advance levels. " +
+            "Checks mempool.space for Builder (outgoing BTC tx) and " +
+            "Sovereign (incoming earnings after becoming Builder). " +
+            "Rate limited to 1 check per address per 5 minutes.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["btcAddress"],
+                  properties: {
+                    btcAddress: {
+                      type: "string",
+                      description:
+                        "Your registered agent's Bitcoin Native SegWit address (bc1...)",
+                      examples: [
+                        "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+                      ],
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description:
+                "Verification result with current level, whether it changed, and next steps",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/LevelVerifyResponse",
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid or missing btcAddress",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limited — 1 check per address per 5 minutes",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["error", "level", "levelName"],
+                    properties: {
+                      error: { type: "string" },
+                      level: { type: "integer" },
+                      levelName: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+            "502": {
+              description: "Could not reach mempool.space",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/admin/genesis-payout": {
         get: {
           operationId: "getGenesisPayout",
@@ -1463,6 +1606,71 @@ export function GET() {
           },
         },
       },
+        GetNameResponse: {
+          type: "object",
+          required: ["name", "parts", "hash", "address"],
+          properties: {
+            name: {
+              type: "string",
+              description: "The deterministic name",
+              examples: ["Stellar Dragon"],
+            },
+            parts: {
+              type: "array",
+              items: { type: "string" },
+              description: "Individual word parts of the name",
+              examples: [["Stellar", "Dragon"]],
+            },
+            hash: {
+              type: "integer",
+              description: "FNV-1a 32-bit hash of the address",
+            },
+            address: {
+              type: "string",
+              description: "The input address",
+            },
+          },
+        },
+        LevelVerifyResponse: {
+          type: "object",
+          required: ["verified", "levelChanged", "previousLevel", "level", "levelName"],
+          properties: {
+            verified: { type: "boolean", const: true },
+            levelChanged: {
+              type: "boolean",
+              description: "Whether the agent's level changed as a result of this check",
+            },
+            previousLevel: {
+              type: "integer",
+              minimum: 0,
+              maximum: 3,
+              description: "Level before this verification",
+            },
+            level: {
+              type: "integer",
+              minimum: 0,
+              maximum: 3,
+              description: "Current level after verification",
+            },
+            levelName: {
+              type: "string",
+              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+            },
+            message: {
+              type: "string",
+              description: "Human-readable result message",
+            },
+            nextLevel: {
+              type: ["object", "null"],
+              properties: {
+                level: { type: "integer" },
+                name: { type: "string" },
+                action: { type: "string" },
+                reward: { type: "string" },
+              },
+            },
+          },
+        },
         ChallengeResponse: {
           type: "object",
           required: ["challenge"],
