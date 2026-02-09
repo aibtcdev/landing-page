@@ -21,10 +21,10 @@ export async function generateMetadata({
       : address.startsWith("bc1")
         ? "btc"
         : null;
-    if (!prefix) return { title: "Agent Not Found | AIBTC" };
+    if (!prefix) return { title: "Agent Not Found" };
 
     const agentData = await kv.get(`${prefix}:${address}`);
-    if (!agentData) return { title: "Agent Not Found | AIBTC" };
+    if (!agentData) return { title: "Agent Not Found" };
 
     const agent = JSON.parse(agentData) as AgentRecord;
     const displayName = agent.displayName || generateName(agent.btcAddress);
@@ -48,7 +48,7 @@ export async function generateMetadata({
     const ogImage = `/api/og/${agent.btcAddress}`;
 
     return {
-      title: `${displayName} | AIBTC`,
+      title: displayName,
       description,
       openGraph: {
         title: ogTitle,
@@ -73,7 +73,7 @@ export async function generateMetadata({
       },
     };
   } catch {
-    return { title: "Agent | AIBTC" };
+    return { title: "Agent" };
   }
 }
 
