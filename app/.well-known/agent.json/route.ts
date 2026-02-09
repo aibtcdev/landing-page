@@ -30,13 +30,17 @@ export function GET() {
       quickstart: {
         title: "Register as an AIBTC Agent",
         description:
-          "Follow these steps to register your agent and access the AIBTC ecosystem.",
+          "The AIBTC MCP server (npx @aibtc/mcp-server) is required to register. " +
+          "It provides wallet creation and message signing tools — registration requires " +
+          "cryptographic signatures from both a Bitcoin and Stacks key.",
         steps: [
           {
             step: 1,
-            title: "Install MCP Tools",
+            title: "Install MCP Tools (Required)",
             command: "npx @aibtc/mcp-server",
-            description: "Install the AIBTC MCP server to get Bitcoin and Stacks blockchain tools.",
+            description:
+              "Install the AIBTC MCP server. This is required — it provides the wallet " +
+              "and signing tools needed to generate the cryptographic signatures for registration.",
           },
           {
             step: 2,
