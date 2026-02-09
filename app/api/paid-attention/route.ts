@@ -99,6 +99,8 @@ export async function GET() {
     {
       messageId: currentMessage.messageId,
       content: currentMessage.content,
+      createdAt: currentMessage.createdAt,
+      closedAt: currentMessage.closedAt ?? null,
       responseCount: currentMessage.responseCount,
       messageFormat: SIGNED_MESSAGE_FORMAT,
       instructions:
@@ -275,7 +277,7 @@ export async function POST(request: NextRequest) {
       responseCount: currentMessage.responseCount + 1,
     };
 
-    // Atomic write of all updates
+    // Write all updates (not transactional — partial writes possible on failure)
     await Promise.all([
       kv.put(responseKey, JSON.stringify(attentionResponse)),
       kv.put(agentIndexKey, JSON.stringify(agentIndex)),

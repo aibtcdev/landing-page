@@ -89,10 +89,13 @@ export function isPartialAgentRecord(
 ): agent is PartialAgentRecord {
   if (!agent || typeof agent !== "object") return false;
   const record = agent as Record<string, unknown>;
+  const hasStacksCredentials =
+    typeof record.stxAddress === "string" ||
+    typeof record.stxPublicKey === "string";
   return (
     typeof record.btcAddress === "string" &&
     typeof record.btcPublicKey === "string" &&
-    !("stxAddress" in record) &&
+    !hasStacksCredentials &&
     typeof record.verifiedAt === "string"
   );
 }

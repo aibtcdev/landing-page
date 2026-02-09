@@ -4,7 +4,7 @@
  * Follows the pattern from lib/admin/validation.ts:
  * - Returns { data: T } on success
  * - Returns { errors: string[] } on validation failure
- * - Normalizes data (lowercase hex, canonical ISO dates)
+ * - validatePayoutBody normalizes rewardTxid to lowercase hex
  */
 
 import { MAX_RESPONSE_LENGTH } from "./constants";

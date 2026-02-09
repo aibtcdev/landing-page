@@ -15,7 +15,6 @@ import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupBnsName } from "@/lib/bns";
 import { generateClaimCode } from "@/lib/claim-code";
 import { isPartialAgentRecord } from "@/lib/attention/types";
-import type { AgentRecord } from "@/lib/types";
 
 export async function GET() {
   return NextResponse.json({
@@ -294,7 +293,15 @@ export async function POST(request: NextRequest) {
 
     // If btc: key exists, check if it's a partial or full record
     if (existingBtc) {
-      const existingRecord = JSON.parse(existingBtc);
+      let existingRecord;
+      try {
+        existingRecord = JSON.parse(existingBtc);
+      } catch {
+        return NextResponse.json(
+          { error: "Existing record is corrupted. Contact support." },
+          { status: 500 }
+        );
+      }
 
       // If it's a partial record, allow upgrade to full registration
       if (isPartialAgentRecord(existingRecord)) {

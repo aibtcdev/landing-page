@@ -22,7 +22,12 @@ export async function getCurrentMessage(
 ): Promise<AttentionMessage | null> {
   const data = await kv.get(KV_PREFIXES.CURRENT_MESSAGE);
   if (!data) return null;
-  return JSON.parse(data) as AttentionMessage;
+  try {
+    return JSON.parse(data) as AttentionMessage;
+  } catch (e) {
+    console.error("Failed to parse current attention message from KV:", e);
+    return null;
+  }
 }
 
 /**

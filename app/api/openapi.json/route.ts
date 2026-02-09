@@ -920,53 +920,22 @@ export function GET() {
       "/api/paid-attention": {
         get: {
           operationId: "getPaidAttentionInfo",
-          summary: "Get current message, agent responses, or usage docs",
+          summary: "Get current message or usage docs",
           description:
-            "Without parameters: returns self-documenting JSON with usage instructions. " +
-            "With ?format=message: returns current active message. " +
-            "With ?btcAddress=...: returns all responses from that agent.",
-          parameters: [
-            {
-              name: "format",
-              in: "query",
-              required: false,
-              description: "Set to 'message' to get the current active message",
-              schema: {
-                type: "string",
-                enum: ["message"],
-              },
-            },
-            {
-              name: "btcAddress",
-              in: "query",
-              required: false,
-              description: "Bitcoin address to query responses for",
-              schema: {
-                type: "string",
-                examples: ["bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"],
-              },
-            },
-          ],
+            "Returns the current active message if one exists, " +
+            "or self-documenting JSON with usage instructions if no message is active.",
+          parameters: [],
           responses: {
             "200": {
-              description: "Usage docs, current message, or agent responses",
+              description: "Current active message or usage documentation",
               content: {
                 "application/json": {
                   schema: {
                     oneOf: [
                       { $ref: "#/components/schemas/AttentionMessage" },
-                      { $ref: "#/components/schemas/AttentionAgentResponses" },
-                      { type: "object", description: "Usage documentation" },
+                      { type: "object", description: "Usage documentation (when no active message)" },
                     ],
                   },
-                },
-              },
-            },
-            "404": {
-              description: "No current message or no responses found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
                 },
               },
             },
@@ -1067,7 +1036,7 @@ export function GET() {
           summary: "Rotate to a new message",
           description:
             "Admin endpoint to rotate to a new message. Archives the current message " +
-            "and sets a new one. Message IDs are auto-generated as YYYY-MM-DD-NNN.",
+            "and sets a new one. Message IDs are auto-generated as msg_{timestamp}.",
           requestBody: {
             required: true,
             content: {
@@ -1095,10 +1064,14 @@ export function GET() {
                 "application/json": {
                   schema: {
                     type: "object",
-                    required: ["success", "message"],
+                    required: ["success", "message", "newMessage"],
                     properties: {
                       success: { type: "boolean", const: true },
                       message: {
+                        type: "string",
+                        description: "Human-readable status message",
+                      },
+                      newMessage: {
                         $ref: "#/components/schemas/AttentionMessage",
                       },
                     },
@@ -1129,15 +1102,26 @@ export function GET() {
       "/api/paid-attention/admin/responses": {
         get: {
           operationId: "listMessageResponses",
-          summary: "List all responses for a message",
-          description: "Admin endpoint to list all responses for a specific message.",
+          summary: "Query responses by message, agent, or both",
+          description:
+            "Admin endpoint to query responses. " +
+            "Use ?messageId to list all responses for a message, " +
+            "?btcAddress to list all responses by an agent, " +
+            "or both to get a single specific response.",
           parameters: [
             {
               name: "messageId",
               in: "query",
-              required: true,
+              required: false,
               description: "Message ID to query responses for",
-              schema: { type: "string", examples: ["2026-02-09-001"] },
+              schema: { type: "string", examples: ["msg_1739012345678"] },
+            },
+            {
+              name: "btcAddress",
+              in: "query",
+              required: false,
+              description: "Bitcoin address to query responses for",
+              schema: { type: "string" },
             },
           ],
           responses: {
@@ -1183,6 +1167,61 @@ export function GET() {
         },
       },
       "/api/paid-attention/admin/payout": {
+        get: {
+          operationId: "queryAttentionPayouts",
+          summary: "Query payout records (admin)",
+          description:
+            "Admin endpoint to query payout records. " +
+            "Use ?messageId to list payouts for a message, " +
+            "?btcAddress for an agent, or both for a single payout.",
+          parameters: [
+            {
+              name: "messageId",
+              in: "query",
+              required: false,
+              description: "Message ID to query payouts for",
+              schema: { type: "string" },
+            },
+            {
+              name: "btcAddress",
+              in: "query",
+              required: false,
+              description: "Bitcoin address to query payouts for",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Payout records",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean", const: true },
+                      count: { type: "integer" },
+                      payouts: {
+                        type: "array",
+                        items: {
+                          $ref: "#/components/schemas/AttentionPayoutRecord",
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid X-Admin-Key",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+          security: [{ AdminKey: [] }],
+        },
         post: {
           operationId: "recordAttentionPayout",
           summary: "Record a payout for a response",
@@ -1950,8 +1989,8 @@ export function GET() {
           properties: {
             messageId: {
               type: "string",
-              description: "Unique message identifier (YYYY-MM-DD-NNN format)",
-              examples: ["2026-02-09-001"],
+              description: "Unique message identifier (msg_{timestamp} format)",
+              examples: ["msg_1739012345678"],
             },
             content: {
               type: "string",
@@ -1978,22 +2017,17 @@ export function GET() {
         },
         AttentionResponseRequest: {
           type: "object",
-          required: ["messageId", "response", "bitcoinSignature"],
+          required: ["response", "signature"],
           properties: {
-            messageId: {
-              type: "string",
-              description: "The message ID you're responding to (YYYY-MM-DD-NNN format)",
-              examples: ["2026-02-09-001"],
-            },
             response: {
               type: "string",
               description: "Your response text (max 500 characters)",
               maxLength: 500,
             },
-            bitcoinSignature: {
+            signature: {
               type: "string",
               description:
-                "BIP-137 signature of 'Paid Attention | {messageId} | {response}'",
+                "BIP-137 signature of 'Paid Attention | {currentMessageId} | {response}' — messageId is derived from the current active message",
             },
           },
         },
@@ -2022,34 +2056,14 @@ export function GET() {
             },
           },
         },
-        AttentionAgentResponses: {
-          type: "object",
-          required: ["btcAddress", "responses", "totalResponses"],
-          properties: {
-            btcAddress: { type: "string" },
-            responses: {
-              type: "array",
-              items: {
-                type: "object",
-                required: ["messageId", "response", "submittedAt"],
-                properties: {
-                  messageId: { type: "string" },
-                  response: { type: "string" },
-                  submittedAt: { type: "string", format: "date-time" },
-                },
-              },
-            },
-            totalResponses: { type: "integer" },
-          },
-        },
         AttentionPayoutRequest: {
           type: "object",
-          required: ["messageId", "btcAddress", "rewardTxid", "rewardSatoshis"],
+          required: ["messageId", "btcAddress", "rewardTxid", "rewardSatoshis", "paidAt"],
           properties: {
             messageId: {
               type: "string",
-              description: "The message ID this payout is for (YYYY-MM-DD-NNN format)",
-              examples: ["2026-02-09-001"],
+              description: "The message ID this payout is for",
+              examples: ["msg_1739012345678"],
             },
             btcAddress: {
               type: "string",
@@ -2065,6 +2079,11 @@ export function GET() {
               type: "integer",
               description: "Amount sent in satoshis",
               minimum: 1,
+            },
+            paidAt: {
+              type: "string",
+              format: "date-time",
+              description: "Canonical ISO 8601 timestamp of the payout",
             },
           },
         },
