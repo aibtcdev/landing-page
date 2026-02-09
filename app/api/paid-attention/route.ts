@@ -112,3 +112,88 @@ export async function GET() {
     }
   );
 }
+
+export async function POST(request: NextRequest) {
+  try {
+    // Parse and validate request body
+    const body = await request.json();
+    const validation = validateResponseBody(body);
+
+    if (validation.errors) {
+      return NextResponse.json(
+        { error: validation.errors.join(", ") },
+        { status: 400 }
+      );
+    }
+
+    const { signature, response } = validation.data;
+
+    // Fetch current message
+    const { env } = await getCloudflareContext();
+    const kv = env.VERIFIED_AGENTS as KVNamespace;
+
+    const currentMessageData = await kv.get(KV_PREFIXES.CURRENT_MESSAGE);
+
+    if (!currentMessageData) {
+      return NextResponse.json(
+        {
+          error:
+            "No active message. Check GET /api/paid-attention to see when a message becomes available.",
+        },
+        { status: 404 }
+      );
+    }
+
+    const currentMessage = JSON.parse(currentMessageData) as AttentionMessage;
+    const { messageId } = currentMessage;
+
+    // Construct the message that should have been signed
+    const messageToVerify = `Paid Attention | ${messageId} | ${response}`;
+
+    // Verify BIP-137 signature and recover address
+    let btcResult;
+    try {
+      btcResult = verifyBitcoinSignature(signature, messageToVerify);
+    } catch (e) {
+      return NextResponse.json(
+        {
+          error: `Invalid Bitcoin signature: ${(e as Error).message}`,
+          hint: "Use the AIBTC MCP server's btc_sign_message tool to sign the correct message format",
+          expectedFormat: SIGNED_MESSAGE_FORMAT,
+          expectedMessage: messageToVerify,
+        },
+        { status: 400 }
+      );
+    }
+
+    if (!btcResult.valid) {
+      return NextResponse.json(
+        {
+          error: "Bitcoin signature verification failed",
+          hint: "Ensure you signed the exact message format with your Bitcoin key",
+          expectedMessage: messageToVerify,
+        },
+        { status: 400 }
+      );
+    }
+
+    // Continue to next task: auto-registration and response storage
+    return NextResponse.json(
+      {
+        error: "Not yet implemented: auto-registration and response storage",
+        debug: {
+          btcAddress: btcResult.address,
+          btcPublicKey: btcResult.publicKey,
+          messageId,
+          response,
+        },
+      },
+      { status: 501 }
+    );
+  } catch (e) {
+    return NextResponse.json(
+      { error: `Failed to process response: ${(e as Error).message}` },
+      { status: 500 }
+    );
+  }
+}
