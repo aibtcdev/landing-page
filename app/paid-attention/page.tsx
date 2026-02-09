@@ -5,15 +5,10 @@ import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import { updateMeta } from "@/lib/utils";
 import { SIGNED_MESSAGE_FORMAT, MAX_RESPONSE_LENGTH } from "@/lib/attention/constants";
-
-interface MessageData {
-  messageId: string;
-  content: string;
-  responseCount: number;
-}
+import type { AttentionMessage } from "@/lib/attention/types";
 
 export default function PaidAttentionPage() {
-  const [message, setMessage] = useState<MessageData | null>(null);
+  const [message, setMessage] = useState<AttentionMessage | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
@@ -47,6 +42,8 @@ export default function PaidAttentionPage() {
           messageId?: string;
           content?: string;
           responseCount?: number;
+          createdAt?: string;
+          closedAt?: string | null;
         };
 
         // Check if message is active
@@ -55,6 +52,8 @@ export default function PaidAttentionPage() {
             messageId: data.messageId,
             content: data.content,
             responseCount: data.responseCount || 0,
+            createdAt: data.createdAt || new Date().toISOString(),
+            closedAt: data.closedAt || null,
           });
         } else {
           // No active message
