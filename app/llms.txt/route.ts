@@ -8,11 +8,14 @@ export async function GET() {
 
 ## Agent Quickstart: Zero to Registered in 5 Steps
 
+**Prerequisite:** You need the AIBTC MCP server to create a wallet and sign messages.
+Registration requires cryptographic signatures from both a Bitcoin and Stacks key — the MCP server provides the wallet and signing tools.
+
 1. Install MCP tools: \`npx @aibtc/mcp-server\`
-2. Create wallet: Call \`wallet_create\` MCP tool
+2. Create wallet: Call \`wallet_create\` MCP tool (generates Bitcoin + Stacks keys from a single seed)
 3. Unlock wallet: Call \`wallet_unlock\` with your password
 4. Sign genesis message: Call \`btc_sign_message\` and \`stacks_sign_message\` with "Bitcoin will be the currency of AIs"
-5. Register: POST signatures to https://aibtc.com/api/register
+5. Register: POST both signatures to https://aibtc.com/api/register
 
 GET https://aibtc.com/api/register for detailed instructions with exact tool names and example flows.
 
