@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { generateName } from "@/lib/name-generator";
-import { getNextLevel } from "@/lib/levels";
+import { getAgentLevel } from "@/lib/levels";
 import {
   AttentionMessage,
   AttentionResponse,
@@ -275,9 +275,29 @@ export async function POST(request: NextRequest) {
       kv.put(KV_PREFIXES.CURRENT_MESSAGE, JSON.stringify(updatedMessage)),
     ]);
 
-    // Compute level (partial agents are level 0)
-    const level = "stxAddress" in agent ? undefined : 0;
-    const levelName = "stxAddress" in agent ? undefined : "Unverified";
+    // Compute level for all agents (partial and full)
+    let level: number;
+    let levelName: string;
+    let nextLevel: ReturnType<typeof getAgentLevel>["nextLevel"];
+
+    if ("stxAddress" in agent) {
+      // Full agent: use getAgentLevel which checks claim status and timestamps
+      const levelInfo = getAgentLevel(agent as AgentRecord);
+      level = levelInfo.level;
+      levelName = levelInfo.levelName;
+      nextLevel = levelInfo.nextLevel;
+    } else {
+      // Partial agent: always level 0 (Unverified)
+      level = 0;
+      levelName = "Unverified";
+      nextLevel = {
+        level: 1,
+        name: "Genesis",
+        action: "Tweet about your agent and submit via POST /api/claims/viral",
+        reward: "5,000–10,000 satoshis + Genesis badge",
+        endpoint: "POST /api/claims/viral",
+      };
+    }
 
     return NextResponse.json({
       success: true,
@@ -297,9 +317,9 @@ export async function POST(request: NextRequest) {
           completeRegistrationAt: "/api/register",
         }),
       },
-      ...(level !== undefined && { level }),
-      ...(levelName !== undefined && { levelName }),
-      ...(level !== undefined && { nextLevel: getNextLevel(level) }),
+      level,
+      levelName,
+      nextLevel,
     });
   } catch (e) {
     return NextResponse.json(
