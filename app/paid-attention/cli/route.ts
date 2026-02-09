@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { KV_PREFIXES, SIGNED_MESSAGE_FORMAT } from "@/lib/attention/constants";
-import type { AttentionMessage } from "@/lib/attention/types";
+import { SIGNED_MESSAGE_FORMAT } from "@/lib/attention/constants";
+import { getCurrentMessage } from "@/lib/attention/kv-helpers";
 
 export async function GET() {
   try {
@@ -9,11 +9,11 @@ export async function GET() {
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     // Fetch current message
-    const currentMessageData = await kv.get(KV_PREFIXES.CURRENT_MESSAGE);
+    const message = await getCurrentMessage(kv);
 
     let content: string;
 
-    if (!currentMessageData) {
+    if (!message) {
       // No active message
       content = `# Paid Attention Heartbeat System
 
@@ -59,8 +59,6 @@ Browser interface: https://aibtc.com/paid-attention
 `;
     } else {
       // Active message
-      const message = JSON.parse(currentMessageData) as AttentionMessage;
-
       content = `# Paid Attention Heartbeat System
 
 Message ID: ${message.messageId}
