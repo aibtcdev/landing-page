@@ -13,6 +13,7 @@ import {
   KV_PREFIXES,
   SIGNED_MESSAGE_FORMAT,
   MAX_RESPONSE_LENGTH,
+  buildSignedMessage,
 } from "@/lib/attention/constants";
 import { validateResponseBody } from "@/lib/attention/validation";
 import type { AgentRecord } from "@/lib/types";
@@ -148,7 +149,7 @@ export async function POST(request: NextRequest) {
     const { messageId } = currentMessage;
 
     // Construct the message that should have been signed
-    const messageToVerify = `Paid Attention | ${messageId} | ${response}`;
+    const messageToVerify = buildSignedMessage(messageId, response);
 
     // Verify BIP-137 signature and recover address
     let btcResult;
