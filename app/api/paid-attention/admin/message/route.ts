@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { validateMessageBody } from "@/lib/attention/validation";
 import { AttentionMessage } from "@/lib/attention/types";
 import { KV_PREFIXES } from "@/lib/attention/constants";
+import { kvListAll } from "@/lib/attention/kv-helpers";
 
 /**
  * GET /api/paid-attention/admin/message
@@ -111,39 +112,7 @@ export async function GET(request: NextRequest) {
 
     // List all archived messages
     if (archived === "true") {
-      const messages: AttentionMessage[] = [];
-      let cursor: string | undefined;
-      let listComplete = false;
-
-      do {
-        const opts: KVNamespaceListOptions = { prefix: KV_PREFIXES.MESSAGE };
-        if (cursor) opts.cursor = cursor;
-        const page = await kv.list(opts);
-        const BATCH_SIZE = 20;
-
-        for (let i = 0; i < page.keys.length; i += BATCH_SIZE) {
-          const batch = page.keys.slice(i, i + BATCH_SIZE);
-          const batchData = await Promise.all(
-            batch.map((key) => kv.get(key.name))
-          );
-
-          batchData.forEach((messageData, index) => {
-            if (messageData) {
-              try {
-                messages.push(JSON.parse(messageData) as AttentionMessage);
-              } catch (e) {
-                console.error(
-                  `Failed to parse message ${batch[index].name}:`,
-                  e
-                );
-              }
-            }
-          });
-        }
-
-        listComplete = page.list_complete;
-        cursor = page.list_complete ? undefined : page.cursor;
-      } while (!listComplete);
+      const messages = await kvListAll<AttentionMessage>(kv, KV_PREFIXES.MESSAGE);
 
       return NextResponse.json({
         success: true,
