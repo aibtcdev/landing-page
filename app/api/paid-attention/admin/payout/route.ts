@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { validatePayoutBody } from "@/lib/attention/validation";
 import { AttentionPayout } from "@/lib/attention/types";
 import { KV_PREFIXES } from "@/lib/attention/constants";
+import { kvListAll } from "@/lib/attention/kv-helpers";
 
 /**
  * GET /api/paid-attention/admin/payout
@@ -110,38 +111,8 @@ export async function GET(request: NextRequest) {
 
     // List all payouts for a message
     if (messageId) {
-      const payouts: AttentionPayout[] = [];
-      let cursor: string | undefined;
-      let listComplete = false;
-
       const prefix = `${KV_PREFIXES.PAYOUT}${messageId}:`;
-
-      do {
-        const opts: KVNamespaceListOptions = { prefix };
-        if (cursor) opts.cursor = cursor;
-        const page = await kv.list(opts);
-        const BATCH_SIZE = 20;
-
-        for (let i = 0; i < page.keys.length; i += BATCH_SIZE) {
-          const batch = page.keys.slice(i, i + BATCH_SIZE);
-          const batchData = await Promise.all(
-            batch.map((key) => kv.get(key.name))
-          );
-
-          batchData.forEach((payoutData, index) => {
-            if (payoutData) {
-              try {
-                payouts.push(JSON.parse(payoutData) as AttentionPayout);
-              } catch (e) {
-                console.error(`Failed to parse payout ${batch[index].name}:`, e);
-              }
-            }
-          });
-        }
-
-        listComplete = page.list_complete;
-        cursor = page.list_complete ? undefined : page.cursor;
-      } while (!listComplete);
+      const payouts = await kvListAll<AttentionPayout>(kv, prefix);
 
       return NextResponse.json({
         success: true,
@@ -152,39 +123,8 @@ export async function GET(request: NextRequest) {
 
     // List all payouts for an agent (read all, filter in-memory)
     if (btcAddress) {
-      const payouts: AttentionPayout[] = [];
-      let cursor: string | undefined;
-      let listComplete = false;
-
-      do {
-        const opts: KVNamespaceListOptions = { prefix: KV_PREFIXES.PAYOUT };
-        if (cursor) opts.cursor = cursor;
-        const page = await kv.list(opts);
-        const BATCH_SIZE = 20;
-
-        for (let i = 0; i < page.keys.length; i += BATCH_SIZE) {
-          const batch = page.keys.slice(i, i + BATCH_SIZE);
-          const batchData = await Promise.all(
-            batch.map((key) => kv.get(key.name))
-          );
-
-          batchData.forEach((payoutData, index) => {
-            if (payoutData) {
-              try {
-                const payout = JSON.parse(payoutData) as AttentionPayout;
-                if (payout.btcAddress === btcAddress) {
-                  payouts.push(payout);
-                }
-              } catch (e) {
-                console.error(`Failed to parse payout ${batch[index].name}:`, e);
-              }
-            }
-          });
-        }
-
-        listComplete = page.list_complete;
-        cursor = page.list_complete ? undefined : page.cursor;
-      } while (!listComplete);
+      const allPayouts = await kvListAll<AttentionPayout>(kv, KV_PREFIXES.PAYOUT);
+      const payouts = allPayouts.filter((p) => p.btcAddress === btcAddress);
 
       return NextResponse.json({
         success: true,
