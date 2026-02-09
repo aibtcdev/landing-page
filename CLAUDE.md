@@ -14,6 +14,10 @@ npm run build        # Build for production
 npm run lint         # Run ESLint
 npm run preview      # Build and preview on Cloudflare Workers locally
 npm run deploy       # Deploy to Cloudflare Workers (requires .env with CF credentials)
+npm run deploy:dry-run  # Dry run deployment (verify build without publishing)
+npm run test         # Run tests once
+npm run test:watch   # Run tests in watch mode
+npm run cf-typegen   # Generate Cloudflare Workers TypeScript types
 ```
 
 ## Architecture
