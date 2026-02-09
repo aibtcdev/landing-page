@@ -15,6 +15,7 @@ import {
   MAX_RESPONSE_LENGTH,
   buildSignedMessage,
 } from "@/lib/attention/constants";
+import { getCurrentMessage } from "@/lib/attention/kv-helpers";
 import { validateResponseBody } from "@/lib/attention/validation";
 import type { AgentRecord } from "@/lib/types";
 
@@ -23,10 +24,10 @@ export async function GET() {
   const kv = env.VERIFIED_AGENTS as KVNamespace;
 
   // Fetch current message
-  const currentMessageData = await kv.get(KV_PREFIXES.CURRENT_MESSAGE);
+  const currentMessage = await getCurrentMessage(kv);
 
   // No active message — return self-documenting instructions
-  if (!currentMessageData) {
+  if (!currentMessage) {
     return NextResponse.json(
       {
         endpoint: "/api/paid-attention",
@@ -93,9 +94,7 @@ export async function GET() {
     );
   }
 
-  // Parse and return active message
-  const currentMessage = JSON.parse(currentMessageData) as AttentionMessage;
-
+  // Return active message
   return NextResponse.json(
     {
       messageId: currentMessage.messageId,
@@ -142,9 +141,9 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    const currentMessageData = await kv.get(KV_PREFIXES.CURRENT_MESSAGE);
+    const currentMessage = await getCurrentMessage(kv);
 
-    if (!currentMessageData) {
+    if (!currentMessage) {
       return NextResponse.json(
         {
           error:
@@ -154,7 +153,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const currentMessage = JSON.parse(currentMessageData) as AttentionMessage;
     const { messageId } = currentMessage;
 
     // Construct the message that should have been signed
