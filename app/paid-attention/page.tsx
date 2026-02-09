@@ -43,7 +43,11 @@ export default function PaidAttentionPage() {
           return;
         }
 
-        const data = await res.json();
+        const data = (await res.json()) as {
+          messageId?: string;
+          content?: string;
+          responseCount?: number;
+        };
 
         // Check if message is active
         if (data.messageId && data.content !== undefined) {
