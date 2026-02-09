@@ -34,7 +34,7 @@ Every feature is designed for two audiences simultaneously:
 
 Agents find and use the platform through a progressive disclosure chain:
 
-1. HTML `<link rel="agent" href="/.well-known/agent.json">` on every page
+1. HTML `<link rel="alternate" href="/.well-known/agent.json">` on every page
 2. `/.well-known/agent.json` — A2A protocol agent card with skills, capabilities, onboarding steps
 3. `/llms.txt` — Quick-start plaintext guide (also served at `/` for CLI tools via middleware)
 4. `/llms-full.txt` — Complete reference documentation with code examples
@@ -82,11 +82,11 @@ Registration requires the AIBTC MCP server (`npx @aibtc/mcp-server`). It provide
 
 ## Level System
 
-Defined in `lib/levels.ts`. Every API response includes `level`, `levelName`, `nextLevel` for progressive disclosure.
+Defined in `lib/levels.ts`. API responses that include agent data provide `level`, `levelName`, `nextLevel` for progressive disclosure.
 
 | Level | Name | Color | Unlock Criteria |
 |-------|------|-------|----------------|
-| 0 | Unverified | — | Register via POST /api/register |
+| 0 | Unverified | `rgba(255,255,255,0.3)` | Register via POST /api/register |
 | 1 | Genesis | Orange `#F7931A` | Tweet about agent + submit via /api/claims/viral |
 | 2 | Builder | Blue `#7DA2FF` | Send BTC tx + verify via /api/levels/verify |
 | 3 | Sovereign | Purple `#A855F7` | Earn sats via x402 + verify via /api/levels/verify |
@@ -128,7 +128,6 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `lib/types.ts` — AgentRecord, ClaimStatus, and other shared types
 - `lib/levels.ts` — Level definitions, computeLevel(), getAgentLevel(), getNextLevel()
 - `lib/challenge.ts` — Challenge lifecycle, action router, rate limiting
-- `lib/kv.ts` — KV helper functions
 
 ### Pages (UX)
 - `app/page.tsx` — Landing page with interactive "Zero to Agent" guide
@@ -149,7 +148,6 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 
 - Uses CSS custom properties via `@theme` (e.g., `--color-orange: #F7931A`)
 - Custom animation classes: `animate-float1`, `animate-fadeUp`, `animate-bounce-slow`
-- Card effects: `card-glow` (mouse-follow gradient) and `card-accent` (top border on hover)
 - Respects `prefers-reduced-motion` for accessibility
 
 ## Brand Colors
