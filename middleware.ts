@@ -41,6 +41,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL("/llms.txt", request.url));
   }
 
+  // Paid attention: rewrite to CLI route for curl/wget
+  if (path === "/paid-attention") {
+    return NextResponse.rewrite(new URL("/paid-attention/cli", request.url));
+  }
+
   if (path === "/skills") {
     return NextResponse.next();
   }
@@ -89,5 +94,13 @@ export async function middleware(request: NextRequest) {
 }
 
 export const config = {
-  matcher: ["/", "/vps", "/local", "/update", "/update-skill.sh", "/skills"],
+  matcher: [
+    "/",
+    "/vps",
+    "/local",
+    "/update",
+    "/update-skill.sh",
+    "/skills",
+    "/paid-attention",
+  ],
 };

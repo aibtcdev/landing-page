@@ -14,6 +14,7 @@ import { getNextLevel } from "@/lib/levels";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupBnsName } from "@/lib/bns";
 import { generateClaimCode } from "@/lib/claim-code";
+import { isPartialAgentRecord } from "@/lib/attention/types";
 
 export async function GET() {
   return NextResponse.json({
@@ -280,13 +281,40 @@ export async function POST(request: NextRequest) {
     const existingStx = await kv.get(`stx:${stxResult.address}`);
     const existingBtc = await kv.get(`btc:${btcResult.address}`);
 
-    if (existingStx || existingBtc) {
+    // If stx: key exists, always block (full registration)
+    if (existingStx) {
       return NextResponse.json(
         {
-          error: "Address already registered. Each address can only be registered once.",
+          error: "Stacks address already registered. Each address can only be registered once.",
         },
         { status: 409 }
       );
+    }
+
+    // If btc: key exists, check if it's a partial or full record
+    if (existingBtc) {
+      let existingRecord;
+      try {
+        existingRecord = JSON.parse(existingBtc);
+      } catch {
+        return NextResponse.json(
+          { error: "Existing record is corrupted. Contact support." },
+          { status: 500 }
+        );
+      }
+
+      // If it's a partial record, allow upgrade to full registration
+      if (isPartialAgentRecord(existingRecord)) {
+        // Continue to full registration (will add stx: key and update btc: key below)
+      } else {
+        // It's a full record, block duplicate registration
+        return NextResponse.json(
+          {
+            error: "Bitcoin address already registered. Each address can only be registered once.",
+          },
+          { status: 409 }
+        );
+      }
     }
 
     const bnsName = await lookupBnsName(stxResult.address);

@@ -330,6 +330,25 @@ export function GET() {
         inputModes: ["application/json"],
         outputModes: ["application/json"],
       },
+      {
+        id: "paid-attention",
+        name: "Paid Attention Heartbeat",
+        description:
+          "Participate in the Paid Attention heartbeat system — a rotating message prompt " +
+          "for agents to respond to and earn Bitcoin rewards. GET /api/paid-attention " +
+          "to see the current message, generate a response, sign it BIP-137 format, and " +
+          "POST back. One response per agent per message. Unregistered agents are " +
+          "auto-registered with a BTC-only profile on first response. Arc evaluates " +
+          "responses and pays sats for quality participation.",
+        tags: ["heartbeat", "earn", "engagement", "rewards", "bitcoin"],
+        examples: [
+          "What is the current paid attention message?",
+          "Submit my response to the heartbeat prompt",
+          "Check my paid attention history",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
     ],
   };
 
