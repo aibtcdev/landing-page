@@ -6,6 +6,7 @@ import {
   AttentionAgentIndex,
 } from "@/lib/attention/types";
 import { KV_PREFIXES } from "@/lib/attention/constants";
+import { kvListAll } from "@/lib/attention/kv-helpers";
 
 /**
  * GET /api/paid-attention/admin/responses
@@ -91,52 +92,22 @@ export async function GET(request: NextRequest) {
 
     // List all responses for a message
     if (messageId) {
-      const responses: (AttentionResponse & { hasPayout: boolean })[] = [];
-      let cursor: string | undefined;
-      let listComplete = false;
-
       const prefix = `${KV_PREFIXES.RESPONSE}${messageId}:`;
+      const responsesData = await kvListAll<AttentionResponse>(kv, prefix);
 
-      do {
-        const opts: KVNamespaceListOptions = { prefix };
-        if (cursor) opts.cursor = cursor;
-        const page = await kv.list(opts);
-        const BATCH_SIZE = 20;
+      // Batch check payout status for all responses
+      const payoutKeys = responsesData.map(
+        (r) => `${KV_PREFIXES.PAYOUT}${r.messageId}:${r.btcAddress}`
+      );
+      const payoutResults = await Promise.all(
+        payoutKeys.map((key) => kv.get(key))
+      );
 
-        for (let i = 0; i < page.keys.length; i += BATCH_SIZE) {
-          const batch = page.keys.slice(i, i + BATCH_SIZE);
-          const batchData = await Promise.all(
-            batch.map((key) => kv.get(key.name))
-          );
-
-          // For each response, check if payout exists
-          for (let j = 0; j < batchData.length; j++) {
-            const responseData = batchData[j];
-            if (responseData) {
-              try {
-                const response = JSON.parse(
-                  responseData
-                ) as AttentionResponse;
-
-                // Check for payout
-                const payoutKey = `${KV_PREFIXES.PAYOUT}${response.messageId}:${response.btcAddress}`;
-                const payoutData = await kv.get(payoutKey);
-                const hasPayout = !!payoutData;
-
-                responses.push({ ...response, hasPayout });
-              } catch (e) {
-                console.error(
-                  `Failed to parse response ${batch[j].name}:`,
-                  e
-                );
-              }
-            }
-          }
-        }
-
-        listComplete = page.list_complete;
-        cursor = page.list_complete ? undefined : page.cursor;
-      } while (!listComplete);
+      // Combine responses with payout status
+      const responses = responsesData.map((response, i) => ({
+        ...response,
+        hasPayout: !!payoutResults[i],
+      }));
 
       return NextResponse.json({
         success: true,
@@ -170,25 +141,32 @@ export async function GET(request: NextRequest) {
           responseKeys.map((key) => kv.get(key))
         );
 
-        const responses: (AttentionResponse & { hasPayout: boolean })[] = [];
-
+        // Parse responses
+        const parsedResponses: AttentionResponse[] = [];
         for (let i = 0; i < responseDataArray.length; i++) {
           const responseData = responseDataArray[i];
           if (responseData) {
             try {
-              const response = JSON.parse(responseData) as AttentionResponse;
-
-              // Check for payout
-              const payoutKey = `${KV_PREFIXES.PAYOUT}${response.messageId}:${response.btcAddress}`;
-              const payoutData = await kv.get(payoutKey);
-              const hasPayout = !!payoutData;
-
-              responses.push({ ...response, hasPayout });
+              parsedResponses.push(JSON.parse(responseData) as AttentionResponse);
             } catch (e) {
               console.error(`Failed to parse response for ${messageIds[i]}:`, e);
             }
           }
         }
+
+        // Batch check payout status
+        const payoutKeys = parsedResponses.map(
+          (r) => `${KV_PREFIXES.PAYOUT}${r.messageId}:${r.btcAddress}`
+        );
+        const payoutResults = await Promise.all(
+          payoutKeys.map((key) => kv.get(key))
+        );
+
+        // Combine responses with payout status
+        const responses = parsedResponses.map((response, i) => ({
+          ...response,
+          hasPayout: !!payoutResults[i],
+        }));
 
         return NextResponse.json({
           success: true,
