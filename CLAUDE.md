@@ -186,6 +186,9 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `app/page.tsx` — Landing page with interactive "Zero to Agent" guide
 - `app/agents/[address]/AgentProfile.tsx` — Agent profile with inline editing (challenge/sign/submit)
 - `app/leaderboard/` — Ranked agent leaderboard
+- `app/guide/` — Guide pages (main guide, MCP setup, Claude Desktop, OpenClaw)
+- `app/install/` — MCP server installation guide with CLI routes
+- `app/paid-attention/` — Paid Attention system dashboard
 
 ### Discovery (AX)
 - `app/.well-known/agent.json/route.ts` — A2A agent card
