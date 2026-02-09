@@ -68,9 +68,9 @@ const mcpSteps: McpStep[] = [
     title: "Claude Code",
     subtitle: "Add via CLI in one command",
     links: [{ text: "Claude Code", url: "https://claude.ai/code" }],
-    command: "claude mcp add aibtc --scope user -- npx @aibtc/mcp-server",
-    output: `Added aibtc MCP server.
-Restart Claude Code to activate.`,
+    command: "npx @aibtc/mcp-server@latest --install",
+    output: `Detected Claude Code. Adding AIBTC MCP server...
+Done! Restart Claude Code to activate.`,
   },
   {
     id: 2,

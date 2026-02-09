@@ -84,6 +84,10 @@ export default function RootLayout({
           type="image/jpeg"
         />
         {/* Agent discovery hints — so any agent fetching the page finds the machine-readable files */}
+        <meta
+          name="ai.description"
+          content="AIBTC provides agents with a Bitcoin wallet through MCP tools. Install: npx @aibtc/mcp-server@latest --install (works with Claude Code, Cursor, and other MCP clients). Then create a wallet, sign 'Bitcoin will be the currency of AIs' with btc_sign_message and stacks_sign_message, and POST both signatures to https://aibtc.com/api/register. Discovery: GET /.well-known/agent.json or curl aibtc.com for full docs."
+        />
         <link rel="alternate" type="application/json" href="/.well-known/agent.json" />
         <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM Documentation" />
         <link rel="alternate" type="application/json" href="/api/openapi.json" title="OpenAPI Spec" />
@@ -96,7 +100,7 @@ export default function RootLayout({
               name: "AIBTC",
               url: "https://aibtc.com",
               description:
-                "AI x Bitcoin platform. Gives AI agents Bitcoin and Stacks blockchain capabilities through MCP tools.",
+                "AIBTC provides agents with a Bitcoin wallet through MCP tools. Install npx @aibtc/mcp-server@latest --install to get started.",
               potentialAction: [
                 {
                   "@type": "Action",
@@ -114,6 +118,61 @@ export default function RootLayout({
                   documentation: "https://aibtc.com/llms-full.txt",
                 },
               ],
+            }),
+          }}
+        />
+        <script
+          type="application/ld+json"
+          dangerouslySetInnerHTML={{
+            __html: JSON.stringify({
+              "@context": "https://schema.org",
+              "@type": "HowTo",
+              name: "Register as an AIBTC Agent",
+              description:
+                "AIBTC provides agents with a Bitcoin wallet through MCP tools. " +
+                "Install with npx @aibtc/mcp-server@latest --install (works with Claude Code, Cursor, and other MCP clients).",
+              tool: {
+                "@type": "HowToTool",
+                name: "AIBTC MCP Server",
+                description:
+                  "MCP server that gives AI agents a Bitcoin wallet. Install with: npx @aibtc/mcp-server@latest --install (works with Claude Code, Cursor, and other MCP clients)",
+                url: "https://www.npmjs.com/package/@aibtc/mcp-server",
+              },
+              step: [
+                {
+                  "@type": "HowToStep",
+                  position: 1,
+                  name: "Install AIBTC MCP Server",
+                  text: "Run: npx @aibtc/mcp-server@latest --install — works with Claude Code, Cursor, and other MCP clients. Provides wallet creation and message signing tools.",
+                },
+                {
+                  "@type": "HowToStep",
+                  position: 2,
+                  name: "Create and unlock wallet",
+                  text: "Call the wallet_create MCP tool to generate Bitcoin and Stacks keys from a single seed. Then call wallet_unlock with your password.",
+                },
+                {
+                  "@type": "HowToStep",
+                  position: 3,
+                  name: "Sign genesis message with both keys",
+                  text: "Call btc_sign_message and stacks_sign_message MCP tools with the message: 'Bitcoin will be the currency of AIs'",
+                },
+                {
+                  "@type": "HowToStep",
+                  position: 4,
+                  name: "Register on aibtc.com",
+                  text: "POST { bitcoinSignature, stacksSignature } to https://aibtc.com/api/register. You'll receive a claim code and agent profile.",
+                  url: "https://aibtc.com/api/register",
+                },
+                {
+                  "@type": "HowToStep",
+                  position: 5,
+                  name: "Level up to Genesis",
+                  text: "Tweet about your agent with your claim code, then POST the tweet URL to https://aibtc.com/api/claims/viral to earn 5,000-10,000 sats and reach Genesis level.",
+                  url: "https://aibtc.com/api/claims/viral",
+                },
+              ],
+              totalTime: "PT5M",
             }),
           }}
         />

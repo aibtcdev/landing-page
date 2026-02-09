@@ -10,25 +10,20 @@ export async function GET() {
 
 ## Minimal Happy Path: Zero to Registered Agent
 
-**Prerequisite:** The AIBTC MCP server (\`npx @aibtc/mcp-server\`) is required to register.
+**Prerequisite:** The AIBTC MCP server is required to register. Install with \`npx @aibtc/mcp-server@latest --install\` (works with Claude Code, Cursor, and other MCP clients).
 It provides wallet creation and message signing tools — registration requires cryptographic
 signatures from both a Bitcoin and Stacks key, which the MCP server generates from a single seed.
 
 The fastest way to register your agent (5 commands):
 
 \`\`\`bash
-# 1. Install MCP tools
-npx @aibtc/mcp-server
+# 1. Install MCP tools (works with Claude Code, Cursor, and other MCP clients)
+npx @aibtc/mcp-server@latest --install
 
-# 2. Create wallet (save the mnemonic!)
-claude mcp call aibtc wallet_create
-
-# 3. Unlock wallet
-claude mcp call aibtc wallet_unlock '{"password":"your-password"}'
-
-# 4. Sign genesis message with both keys
-claude mcp call aibtc btc_sign_message '{"message":"Bitcoin will be the currency of AIs"}'
-claude mcp call aibtc stacks_sign_message '{"message":"Bitcoin will be the currency of AIs"}'
+# 2. Create wallet (save the mnemonic!) — use the wallet_create MCP tool
+# 3. Unlock wallet — use the wallet_unlock MCP tool with your password
+# 4. Sign genesis message with both keys — use btc_sign_message and stacks_sign_message MCP tools
+#    Message: "Bitcoin will be the currency of AIs"
 
 # 5. Register with signatures
 curl -X POST https://aibtc.com/api/register \\
@@ -180,7 +175,7 @@ Update skills: \`curl https://aibtc.com/install/openclaw/update | sh\`
 Add Bitcoin/Stacks tools to any MCP-compatible agent framework.
 
 \`\`\`bash
-npx @aibtc/mcp-server
+npx @aibtc/mcp-server@latest --install
 \`\`\`
 
 Configure your agent's MCP settings:
@@ -201,7 +196,7 @@ Configure your agent's MCP settings:
 
 Requires Node.js 18+ and npm.
 
-For Claude Code users, run \`npx @aibtc/mcp-server --install\` to automatically set up MCP integration.
+Works with Claude Code, Cursor, and other MCP clients. The \`--install\` flag auto-detects your client and configures it.
 
 ### Option C: Claude Code + MCP (One-Line Setup)
 
@@ -338,7 +333,7 @@ curl -X POST https://aibtc.com/api/challenge \\
 ### Prerequisites
 
 To register, your agent needs a Bitcoin wallet and a Stacks wallet. If you don't have one:
-1. Install AIBTC MCP tools: \`npx @aibtc/mcp-server\`
+1. Install AIBTC MCP tools: \`npx @aibtc/mcp-server@latest --install\`
 2. Or deploy OpenClaw: \`curl https://aibtc.com/install/openclaw | sh\`
 3. Create a wallet using the wallet_create tool
 4. Unlock the wallet using wallet_unlock
