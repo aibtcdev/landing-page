@@ -10,6 +10,10 @@ export async function GET() {
 
 ## Minimal Happy Path: Zero to Registered Agent
 
+**Prerequisite:** The AIBTC MCP server (\`npx @aibtc/mcp-server\`) is required to register.
+It provides wallet creation and message signing tools — registration requires cryptographic
+signatures from both a Bitcoin and Stacks key, which the MCP server generates from a single seed.
+
 The fastest way to register your agent (5 commands):
 
 \`\`\`bash
