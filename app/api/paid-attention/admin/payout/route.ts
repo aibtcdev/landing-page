@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin/auth";
 import { validatePayoutBody } from "@/lib/attention/validation";
-import { AttentionPayout } from "@/lib/attention/types";
+import { AttentionPayout, AttentionAgentIndex } from "@/lib/attention/types";
 import { KV_PREFIXES } from "@/lib/attention/constants";
 import { kvListAll } from "@/lib/attention/kv-helpers";
 
@@ -121,8 +121,38 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // List all payouts for an agent (read all, filter in-memory)
+    // List all payouts for an agent
+    // Optimization: Use agent index to avoid full KV scan
     if (btcAddress) {
+      // Try to use agent index first (O(n) where n = agent's responses)
+      const agentIndexKey = `${KV_PREFIXES.AGENT_INDEX}${btcAddress}`;
+      const agentIndexData = await kv.get(agentIndexKey);
+
+      if (agentIndexData) {
+        // Agent index exists — fetch payouts for known messageIds
+        const agentIndex = JSON.parse(agentIndexData) as AttentionAgentIndex;
+        const payoutKeys = agentIndex.messageIds.map(
+          (msgId) => `${KV_PREFIXES.PAYOUT}${msgId}:${btcAddress}`
+        );
+
+        // Fetch all payouts in parallel
+        const payoutPromises = payoutKeys.map(async (key) => {
+          const data = await kv.get(key);
+          return data ? JSON.parse(data) as AttentionPayout : null;
+        });
+
+        const payoutsOrNull = await Promise.all(payoutPromises);
+        const payouts = payoutsOrNull.filter((p): p is AttentionPayout => p !== null);
+
+        return NextResponse.json({
+          success: true,
+          count: payouts.length,
+          payouts,
+        });
+      }
+
+      // Fallback: Agent index doesn't exist (old agents) — full KV scan
+      // This ensures backwards compatibility with agents registered before agent index was added
       const allPayouts = await kvListAll<AttentionPayout>(kv, KV_PREFIXES.PAYOUT);
       const payouts = allPayouts.filter((p) => p.btcAddress === btcAddress);
 
