@@ -177,15 +177,41 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Continue to next task: auto-registration and response storage
+    const { address: btcAddress, publicKey: btcPublicKey } = btcResult;
+
+    // Check if agent exists or auto-register
+    const existingAgentData = await kv.get(`btc:${btcAddress}`);
+    let agent: AgentRecord | PartialAgentRecord;
+    let isNewAgent = false;
+
+    if (!existingAgentData) {
+      // Auto-register: create partial AgentRecord (BTC-only)
+      const displayName = generateName(btcAddress);
+      const partialAgent: PartialAgentRecord = {
+        btcAddress,
+        btcPublicKey,
+        displayName,
+        verifiedAt: new Date().toISOString(),
+      };
+
+      // Store partial record at btc: key only (no stx: key)
+      await kv.put(`btc:${btcAddress}`, JSON.stringify(partialAgent));
+      agent = partialAgent;
+      isNewAgent = true;
+    } else {
+      agent = JSON.parse(existingAgentData) as AgentRecord | PartialAgentRecord;
+    }
+
+    // Continue to next task: response storage
     return NextResponse.json(
       {
-        error: "Not yet implemented: auto-registration and response storage",
+        error: "Not yet implemented: response storage",
         debug: {
-          btcAddress: btcResult.address,
-          btcPublicKey: btcResult.publicKey,
+          btcAddress,
           messageId,
           response,
+          isNewAgent,
+          agent,
         },
       },
       { status: 501 }
