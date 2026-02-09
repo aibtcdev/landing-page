@@ -30,7 +30,7 @@ fi
 
 echo ""
 echo "Adding AIBTC MCP server to Claude Code..."
-claude mcp add aibtc --scope user -- npx @aibtc/mcp-server
+npx @aibtc/mcp-server@latest --install
 
 echo ""
 echo "=========================================="

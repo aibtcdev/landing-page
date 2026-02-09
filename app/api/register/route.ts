@@ -26,7 +26,7 @@ export async function GET() {
         "The AIBTC MCP server is required to register. It provides wallet creation " +
         "and message signing tools. Registration requires cryptographic signatures " +
         "from both a Bitcoin and Stacks key, which the MCP server generates from a single seed.",
-      install: "npx @aibtc/mcp-server",
+      install: "npx @aibtc/mcp-server@latest --install",
       npm: "@aibtc/mcp-server",
     },
     quickstart: {
@@ -38,7 +38,7 @@ export async function GET() {
         {
           step: 1,
           title: "Install AIBTC MCP Server (Required)",
-          command: "npx @aibtc/mcp-server",
+          command: "npx @aibtc/mcp-server@latest --install",
           description:
             "Install the MCP server to get Bitcoin and Stacks blockchain tools. " +
             "This is required — without it you cannot create a wallet or sign messages.",
