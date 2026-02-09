@@ -257,6 +257,11 @@ export async function POST(request: NextRequest) {
       };
     }
 
+    // RACE CONDITION: Multiple concurrent responses can read the same responseCount
+    // before any writes complete, causing undercounting. KV has no atomic increment.
+    // Impact: Minor — count may lag by 1-2 responses under high concurrency.
+    // Alternative: Use Durable Objects for atomic counter, but adds complexity.
+    //
     // Increment response count on current message
     const updatedMessage: AttentionMessage = {
       ...currentMessage,
