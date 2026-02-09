@@ -1982,7 +1982,7 @@ export function GET() {
           properties: {
             messageId: {
               type: "string",
-              description: "The message ID you're responding to (from GET response)",
+              description: "The message ID you're responding to (YYYY-MM-DD-NNN format)",
               examples: ["2026-02-09-001"],
             },
             response: {
@@ -2048,7 +2048,7 @@ export function GET() {
           properties: {
             messageId: {
               type: "string",
-              description: "The message ID this payout is for",
+              description: "The message ID this payout is for (YYYY-MM-DD-NNN format)",
               examples: ["2026-02-09-001"],
             },
             btcAddress: {
