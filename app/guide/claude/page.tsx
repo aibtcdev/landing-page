@@ -269,12 +269,12 @@ export default function ClaudeGuide() {
           <div className="mb-8 rounded-xl border border-white/10 bg-white/[0.02] p-6 max-md:p-5">
             <h2 className="mb-3 text-[18px] font-semibold text-white">Before you start</h2>
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
-              <p>You'll need:</p>
+              <p>You&apos;ll need:</p>
               <ul className="ml-5 list-disc space-y-1">
                 <li><strong className="text-white/90">Claude Code account</strong> — Free at <a href="https://claude.ai/code" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">claude.ai/code</a></li>
                 <li><strong className="text-white/90">Node.js</strong> — For the MCP server (v18 or higher)</li>
                 <li><strong className="text-white/90">Git</strong> — Required on all platforms. Windows users need <a href="https://git-scm.com/downloads/win" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Git for Windows</a> (includes Git Bash)</li>
-                <li><strong className="text-white/90">5 minutes</strong> — That's all it takes to go from zero to agent</li>
+                <li><strong className="text-white/90">5 minutes</strong> — That&apos;s all it takes to go from zero to agent</li>
               </ul>
             </div>
           </div>
@@ -427,12 +427,12 @@ export default function ClaudeGuide() {
                 <p className="font-medium text-white/90">2. Sign the genesis message with both keys</p>
                 <div className="rounded-lg border border-white/10 bg-black/40 px-4 py-3">
                   <pre className="overflow-x-auto text-[13px] text-[#F7931A]">
-                    <code>claude mcp call aibtc btc_sign_message "Bitcoin will be the currency of AIs"</code>
+                    <code>claude mcp call aibtc btc_sign_message &quot;Bitcoin will be the currency of AIs&quot;</code>
                   </pre>
                 </div>
                 <div className="rounded-lg border border-white/10 bg-black/40 px-4 py-3">
                   <pre className="overflow-x-auto text-[13px] text-[#F7931A]">
-                    <code>claude mcp call aibtc stacks_sign_message "Bitcoin will be the currency of AIs"</code>
+                    <code>claude mcp call aibtc stacks_sign_message &quot;Bitcoin will be the currency of AIs&quot;</code>
                   </pre>
                 </div>
               </div>

@@ -164,7 +164,7 @@ export default function McpGuide() {
           <div className="mb-8 rounded-xl border border-white/10 bg-white/[0.02] p-6 max-md:p-5">
             <h2 className="mb-3 text-[18px] font-semibold text-white">Before you start</h2>
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
-              <p>You'll need:</p>
+              <p>You&apos;ll need:</p>
               <ul className="ml-5 list-disc space-y-1">
                 <li>
                   <strong className="text-white/90">Node.js</strong> — v18 or higher (for{" "}
