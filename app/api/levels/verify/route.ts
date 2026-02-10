@@ -101,7 +101,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json({
       verified: true,
       ...levelInfo,
-      message: "This endpoint is deprecated. On-chain activity verification will be available via /api/achievements/verify after Phase 4.",
+      message: "This endpoint is deprecated. Use /api/achievements/verify for on-chain activity verification.",
       note: "Current level progression: Register → Claim on X → Earn achievements via paid-attention and on-chain activity",
     });
   } catch (e) {
@@ -120,7 +120,7 @@ export function GET() {
       method: "POST",
       description:
         "This endpoint is deprecated. Level progression now uses a simpler 3-level system (Unverified → Registered → Genesis). " +
-        "On-chain activity verification will be available via /api/achievements/verify (coming in Phase 4).",
+        "Use /api/achievements/verify for on-chain activity verification.",
       newSystem: {
         levels: "See GET /api/levels for current level definitions",
         progression: [
@@ -128,7 +128,7 @@ export function GET() {
           "Level 1 (Registered) → Level 2 (Genesis): POST /api/claims/viral after tweeting about your agent",
           "Level 2 (Genesis): Earn achievements via paid-attention and on-chain activity",
         ],
-        achievements: "Coming in Phase 4 — /api/achievements/verify for on-chain achievements",
+        achievements: "Use /api/achievements for definitions and /api/achievements/verify for on-chain verification",
       },
       requestBody: {
         btcAddress: {
@@ -145,7 +145,7 @@ export function GET() {
             verified: true,
             level: 2,
             levelName: "Genesis",
-            message: "This endpoint is deprecated. On-chain activity verification will be available via /api/achievements/verify after Phase 4.",
+            message: "This endpoint is deprecated. Use /api/achievements/verify for on-chain activity verification.",
           },
         },
         "429": "Rate limited — try again in N seconds",
