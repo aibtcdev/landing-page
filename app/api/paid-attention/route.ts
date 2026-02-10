@@ -222,9 +222,9 @@ export async function POST(request: NextRequest) {
 
     // Branch based on submission type
     if (isCheckIn) {
-      return handleCheckIn(body);
+      return await handleCheckIn(body);
     } else {
-      return handleTaskResponse(body);
+      return await handleTaskResponse(body);
     }
   } catch (e) {
     return NextResponse.json(
@@ -328,7 +328,14 @@ async function handleCheckIn(body: unknown) {
     agent = partialAgent;
     isNewAgent = true;
   } else {
-    agent = JSON.parse(existingAgentData) as AgentRecord | PartialAgentRecord;
+    try {
+      agent = JSON.parse(existingAgentData) as AgentRecord | PartialAgentRecord;
+    } catch {
+      return NextResponse.json(
+        { error: "Failed to parse stored agent data for this address." },
+        { status: 500 }
+      );
+    }
   }
 
   // Update check-in record
@@ -552,10 +559,11 @@ async function handleTaskResponse(body: unknown) {
       responseCount: currentMessage.responseCount + 1,
     };
 
-    // Update agent record with lastActiveAt
+    // Update agent record with lastActiveAt and checkInCount (both check-ins and task responses count)
     const updatedAgent = {
       ...agent,
       lastActiveAt: attentionResponse.submittedAt,
+      checkInCount: (agent.checkInCount || 0) + 1,
     };
 
     // Write all updates (not transactional — partial writes possible on failure)
