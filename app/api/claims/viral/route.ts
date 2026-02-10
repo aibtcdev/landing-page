@@ -300,7 +300,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      rewardRange: { min: 5000, max: 10000, unit: "satoshis" },
+      rewardInfo: "Ongoing satoshis per claim",
       documentation: {
         registerFirst: "https://aibtc.com/api/register",
         fullDocs: "https://aibtc.com/llms-full.txt",

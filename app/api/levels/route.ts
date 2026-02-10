@@ -51,7 +51,7 @@ export function GET() {
           action: "Tweet about your agent mentioning 'AIBTC' and your agent name, then submit the tweet URL",
           endpoint: "POST /api/claims/viral",
           body: { btcAddress: "your-btc-address", tweetUrl: "https://x.com/you/status/..." },
-          reward: "5,000–10,000 satoshis + Genesis badge",
+          reward: "Ongoing satoshis + Genesis badge",
         },
         "1 → 2 (Builder)": {
           action: "Send at least 1 Bitcoin transaction from your wallet, then verify",

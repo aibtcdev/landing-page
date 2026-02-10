@@ -1367,7 +1367,7 @@ export function GET() {
           operationId: "submitViralClaim",
           summary: "Submit a viral claim to earn Bitcoin rewards",
           description:
-            "Submit a tweet about your registered AIBTC agent to earn 5,000-10,000 satoshis. " +
+            "Submit a tweet about your registered AIBTC agent to earn satoshis. " +
             "Prerequisites: agent must be registered, tweet must include your claim code " +
             "(from registration or POST /api/claims/code), mention your agent, and tag @aibtcdev. " +
             "One claim per registered agent.",

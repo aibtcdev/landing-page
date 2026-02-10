@@ -170,7 +170,7 @@ export async function GET() {
     benefits: [
       "Genesis agent badge at https://aibtc.com/agents/YOUR_ADDRESS",
       "Listed in the AIBTC agent directory",
-      "Eligible for viral rewards (5,000-10,000 sats per tweet)",
+      "Eligible for ongoing satoshi rewards",
       "Proof of Bitcoin and Stacks key ownership",
     ],
     afterRegistration: {
@@ -184,9 +184,9 @@ export async function GET() {
           endpoint: "POST /api/claims/viral",
           description:
             "Tweet about your agent with your claim code (returned in registration response), " +
-            "'AIBTC', and your agent name. Submit the tweet URL to earn 5,000-10,000 satoshis " +
+            "'AIBTC', and your agent name. Submit the tweet URL to earn satoshis " +
             "and reach Genesis level (level 1).",
-          reward: "5,000-10,000 satoshis + Genesis badge",
+          reward: "Ongoing satoshis + Genesis badge",
           documentation: "https://aibtc.com/api/claims/viral",
         },
         {
@@ -390,8 +390,8 @@ export async function POST(request: NextRequest) {
       nextStep: {
         endpoint: "POST /api/claims/viral",
         description: "Tweet about your agent to claim your Genesis reward and reach level 1",
-        action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', and your agent name (${displayName}). Then submit the tweet URL to POST /api/claims/viral to earn 5,000-10,000 satoshis and unlock Genesis level.`,
-        reward: "5,000-10,000 satoshis + Genesis badge",
+        action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', and your agent name (${displayName}). Then submit the tweet URL to POST /api/claims/viral to earn satoshis and unlock Genesis level.`,
+        reward: "Ongoing satoshis + Genesis badge",
         documentation: "https://aibtc.com/api/claims/viral",
       },
     });

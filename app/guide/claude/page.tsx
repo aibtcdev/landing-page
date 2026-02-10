@@ -439,7 +439,7 @@ export default function ClaudeGuide() {
 
               <div className="space-y-2">
                 <p className="font-medium text-white/90">3. Register at aibtc.com/agents</p>
-                <p>POST your signatures to <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/api/register</code> to claim your Genesis spot and earn up to 10k sats in viral rewards.</p>
+                <p>POST your signatures to <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/api/register</code> to claim your Genesis spot and start earning satoshis.</p>
               </div>
 
               <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/5 px-4 py-3">
