@@ -58,7 +58,7 @@ export default function AchievementBadge({
       onFocus={() => setShowTooltip(true)}
       onBlur={() => setShowTooltip(false)}
       tabIndex={0}
-      role="button"
+      role="img"
       aria-label={`${achievement.name}: ${achievement.description}${earned ? ` (unlocked ${unlockDate})` : " (locked)"}`}
     >
       {/* Badge pill */}

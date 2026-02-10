@@ -1315,6 +1315,187 @@ export function GET() {
           security: [{ AdminKey: [] }],
         },
       },
+      "/api/achievements": {
+        get: {
+          operationId: "getAchievements",
+          summary: "Get achievement definitions or agent achievements",
+          description:
+            "Without parameters: returns all achievement definitions. " +
+            "With btcAddress parameter: returns the agent's earned and available achievements.",
+          parameters: [
+            {
+              name: "btcAddress",
+              in: "query",
+              required: false,
+              description: "Bitcoin Native SegWit address (bc1...) to query achievements for",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Achievement definitions or agent achievement status",
+              content: {
+                "application/json": {
+                  schema: {
+                    oneOf: [
+                      {
+                        type: "object",
+                        description: "All achievement definitions (no params)",
+                      },
+                      {
+                        type: "object",
+                        required: ["btcAddress", "achievements", "available", "count", "totalAvailable"],
+                        properties: {
+                          btcAddress: { type: "string" },
+                          achievements: {
+                            type: "array",
+                            items: { $ref: "#/components/schemas/AchievementRecord" },
+                          },
+                          available: {
+                            type: "array",
+                            items: { $ref: "#/components/schemas/AchievementDefinition" },
+                          },
+                          count: { type: "integer" },
+                          totalAvailable: { type: "integer" },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid btcAddress format",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/achievements/verify": {
+        get: {
+          operationId: "getAchievementVerifyDocs",
+          summary: "Get achievement verification documentation",
+          description:
+            "Returns self-documenting JSON with supported achievements, request format, and rate limit info.",
+          responses: {
+            "200": {
+              description: "Achievement verification documentation",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    description: "Self-documenting achievement verification guide",
+                  },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: "verifyAchievements",
+          summary: "Verify on-chain activity to unlock achievements",
+          description:
+            "Checks mempool.space for BTC transactions (sender achievement) and Stacks API " +
+            "for sBTC transfers (connector achievement). Rate limited to 1 check per address per 5 minutes.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["btcAddress"],
+                  properties: {
+                    btcAddress: {
+                      type: "string",
+                      description: "Your registered agent's Bitcoin Native SegWit address (bc1...)",
+                    },
+                    txid: {
+                      type: "string",
+                      description: "Transaction ID (64-char hex) of sBTC transfer for connector achievement",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Verification result with earned and existing achievements",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["success", "btcAddress", "checked", "earned", "alreadyHad", "level", "levelName"],
+                    properties: {
+                      success: { type: "boolean", const: true },
+                      btcAddress: { type: "string" },
+                      checked: { type: "array", items: { type: "string" } },
+                      earned: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            unlockedAt: { type: "string", format: "date-time" },
+                          },
+                        },
+                      },
+                      alreadyHad: { type: "array", items: { type: "string" } },
+                      level: { type: "integer", minimum: 0, maximum: 2 },
+                      levelName: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid request body or txid",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "403": {
+              description: "Full registration required",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limited — 1 check per address per 5 minutes",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/claims/viral": {
         get: {
           operationId: "getViralClaimInfo",
@@ -2202,7 +2383,7 @@ export function GET() {
             previousLevel: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
+              maximum: 2,
               description: "Level before this verification",
             },
             level: {

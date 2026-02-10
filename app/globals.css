@@ -131,27 +131,12 @@
   50% { filter: drop-shadow(0 0 10px rgba(125,162,255,0.8)); }
 }
 
-@keyframes corona-flare {
-  0%, 100% {
-    filter: drop-shadow(0 0 6px rgba(168,85,247,0.5));
-    transform: scale(1);
-  }
-  50% {
-    filter: drop-shadow(0 0 12px rgba(168,85,247,0.8));
-    transform: scale(1.03);
-  }
-}
-
-.level-badge-genesis {
+.level-badge-registered {
   animation: orbit-pulse 3s ease-in-out infinite;
 }
 
-.level-badge-builder {
+.level-badge-genesis {
   animation: orbit-spin-glow 4s ease-in-out infinite;
-}
-
-.level-badge-sovereign {
-  animation: corona-flare 5s ease-in-out infinite;
 }
 
 /* Accessibility */

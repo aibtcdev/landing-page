@@ -76,7 +76,7 @@ export function GET() {
       externalAPIs: {
         mempoolSpace: "https://mempool.space/api/address/{btcAddress}/txs",
         stacksAPI:
-          "https://api.hiro.so/extended/v1/address/{stxAddress}/transactions",
+          "https://api.hiro.so/extended/v1/tx/{txid}",
       },
       documentation: {
         achievements: "https://aibtc.com/api/achievements",

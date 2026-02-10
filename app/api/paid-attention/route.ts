@@ -530,9 +530,15 @@ async function handleTaskResponse(body: unknown) {
 
   // Check if agent has already responded to this message
   if (existingResponseData) {
-    const existingResponse = JSON.parse(
-      existingResponseData
-    ) as AttentionResponse;
+    let existingResponse: AttentionResponse;
+    try {
+      existingResponse = JSON.parse(existingResponseData) as AttentionResponse;
+    } catch {
+      return NextResponse.json(
+        { error: "Failed to parse existing response record" },
+        { status: 500 }
+      );
+    }
     return NextResponse.json(
       {
         error:
@@ -558,7 +564,15 @@ async function handleTaskResponse(body: unknown) {
   // Update or create agent index
   let agentIndex: AttentionAgentIndex;
   if (existingIndexData) {
-    const existing = JSON.parse(existingIndexData) as AttentionAgentIndex;
+    let existing: AttentionAgentIndex;
+    try {
+      existing = JSON.parse(existingIndexData) as AttentionAgentIndex;
+    } catch {
+      return NextResponse.json(
+        { error: "Failed to parse agent index record" },
+        { status: 500 }
+      );
+    }
     agentIndex = {
       btcAddress,
       messageIds: [...existing.messageIds, messageId],
@@ -583,11 +597,10 @@ async function handleTaskResponse(body: unknown) {
     responseCount: currentMessage.responseCount + 1,
   };
 
-  // Update agent record with lastActiveAt and checkInCount (both check-ins and task responses count)
+  // Update agent record with lastActiveAt (checkInCount only updated by check-in handler)
   const updatedAgent = {
     ...agent,
     lastActiveAt: attentionResponse.submittedAt,
-    checkInCount: (agent.checkInCount || 0) + 1,
   };
 
   // Write all updates (not transactional — partial writes possible on failure)
