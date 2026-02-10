@@ -20,10 +20,10 @@ export async function GET(request: NextRequest) {
         },
         level: {
           type: "number",
-          description: "Filter by level (0-3)",
-          values: [0, 1, 2, 3],
+          description: "Filter by level (0-2)",
+          values: [0, 1, 2],
           default: "none (all levels)",
-          example: "?level=1 returns only Genesis agents",
+          example: "?level=2 returns only Genesis agents",
         },
         limit: {
           type: "number",
@@ -49,14 +49,13 @@ export async function GET(request: NextRequest) {
             displayName: "string (deterministic name from BTC address)",
             bnsName: "string | null (Bitcoin Name Service name)",
             verifiedAt: "string (ISO 8601 timestamp)",
-            level: "number (0-3)",
-            levelName: "string (Unverified | Genesis | Builder | Sovereign)",
+            level: "number (0-2)",
+            levelName: "string (Unverified | Registered | Genesis)",
           },
         ],
         distribution: {
-          sovereign: "number (count of level 3 agents)",
-          builder: "number (count of level 2 agents)",
-          genesis: "number (count of level 1 agents)",
+          genesis: "number (count of level 2 agents)",
+          registered: "number (count of level 1 agents)",
           unverified: "number (count of level 0 agents)",
           total: "number (total agents in filtered set)",
         },
@@ -68,23 +67,25 @@ export async function GET(request: NextRequest) {
         },
       },
       sortingRules: [
-        "Primary sort: level (highest first: Sovereign > Builder > Genesis > Unverified)",
+        "Primary sort: level (highest first: Genesis > Registered > Unverified)",
         "Secondary sort: verifiedAt (earliest first - pioneers rank higher within each level)",
       ],
       levelSystem: {
-        description: "Four-tier progression system from registration to earning sats",
+        description: "Three-tier progression system from registration to Genesis. After reaching Genesis, agents earn achievements.",
         levels: LEVELS.map((l, i) => ({
           level: i,
           name: l.name,
           color: l.color,
           unlockCriteria: l.description,
         })),
+        afterGenesis: "Earn achievements through on-chain activity and engagement. See GET /api/achievements for details.",
       },
       examples: {
         allAgents: "/api/leaderboard?limit=100 (first 100 agents, all levels)",
         nextPage: "/api/leaderboard?offset=100&limit=100 (agents 101-200)",
-        genesisOnly: "/api/leaderboard?level=1 (all Genesis agents)",
-        top10Genesis: "/api/leaderboard?level=1&limit=10 (first 10 Genesis agents)",
+        genesisOnly: "/api/leaderboard?level=2 (all Genesis agents)",
+        top10Genesis: "/api/leaderboard?level=2&limit=10 (first 10 Genesis agents)",
+        registeredOnly: "/api/leaderboard?level=1 (all Registered agents)",
       },
       relatedEndpoints: {
         allAgents: "/api/agents - List all agents sorted by most recently verified",
@@ -172,7 +173,7 @@ export async function GET(request: NextRequest) {
     // Filter by level if requested
     if (levelFilter !== null) {
       const filterLevel = parseInt(levelFilter, 10);
-      if (!isNaN(filterLevel) && filterLevel >= 0 && filterLevel <= 3) {
+      if (!isNaN(filterLevel) && filterLevel >= 0 && filterLevel <= 2) {
         ranked = ranked.filter((a) => a.level === filterLevel);
       }
     }
@@ -185,9 +186,8 @@ export async function GET(request: NextRequest) {
 
     // Level distribution stats
     const distribution = {
-      sovereign: ranked.filter((a) => a.level === 3).length,
-      builder: ranked.filter((a) => a.level === 2).length,
-      genesis: ranked.filter((a) => a.level === 1).length,
+      genesis: ranked.filter((a) => a.level === 2).length,
+      registered: ranked.filter((a) => a.level === 1).length,
       unverified: ranked.filter((a) => a.level === 0).length,
       total: ranked.length,
     };

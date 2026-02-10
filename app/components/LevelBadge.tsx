@@ -1,5 +1,3 @@
-"use client";
-
 import { LEVELS } from "@/lib/levels";
 
 interface LevelBadgeProps {
@@ -12,9 +10,8 @@ interface LevelBadgeProps {
  * Concentric orbital rings badge for agent levels.
  *
  * Level 0: muted empty circle
- * Level 1 (Genesis): single ring, orange glow
- * Level 2 (Builder): double rings, blue pulse
- * Level 3 (Sovereign): triple rings, purple corona
+ * Level 1 (Registered): single ring, orange glow
+ * Level 2 (Genesis): double rings, blue pulse
  *
  * Each level visually contains the previous ones.
  */
@@ -23,7 +20,7 @@ export default function LevelBadge({
   size = "md",
   className = "",
 }: LevelBadgeProps) {
-  const def = LEVELS[Math.min(Math.max(level, 0), 3)];
+  const def = LEVELS[Math.min(Math.max(level, 0), 2)];
 
   const sizes = {
     sm: { outer: 24, stroke: 1.5, dot: 3, viewBox: 32 },
@@ -36,29 +33,25 @@ export default function LevelBadge({
   const cy = s.viewBox / 2;
 
   // Ring radii from center outward
-  const r1 = 7; // innermost ring (Genesis)
-  const r2 = 10.5; // middle ring (Builder)
-  const r3 = 14; // outer ring (Sovereign)
+  const r1 = 7; // innermost ring (Registered)
+  const r2 = 10.5; // outer ring (Genesis)
 
   const colors = {
     0: "rgba(255,255,255,0.15)",
     1: "#F7931A",
     2: "#7DA2FF",
-    3: "#A855F7",
   } as Record<number, string>;
 
   const glows = {
     0: "none",
     1: "drop-shadow(0 0 4px rgba(247,147,26,0.6))",
     2: "drop-shadow(0 0 5px rgba(125,162,255,0.5))",
-    3: "drop-shadow(0 0 6px rgba(168,85,247,0.5))",
   } as Record<number, string>;
 
   const animClass = {
     0: "",
-    1: "level-badge-genesis",
-    2: "level-badge-builder",
-    3: "level-badge-sovereign",
+    1: "level-badge-registered",
+    2: "level-badge-genesis",
   } as Record<number, string>;
 
   return (
@@ -109,26 +102,13 @@ export default function LevelBadge({
           />
         )}
 
-        {/* Ring 2 (Builder) — visible at level >= 2 */}
+        {/* Ring 2 (Genesis) — visible at level >= 2 */}
         {level >= 2 && (
           <circle
             cx={cx}
             cy={cy}
             r={r2}
             stroke={colors[2]}
-            strokeWidth={s.stroke}
-            fill="none"
-            opacity={level === 2 ? 1 : 0.5}
-          />
-        )}
-
-        {/* Ring 3 (Sovereign) — visible at level >= 3 */}
-        {level >= 3 && (
-          <circle
-            cx={cx}
-            cy={cy}
-            r={r3}
-            stroke={colors[3]}
             strokeWidth={s.stroke}
             fill="none"
           />
@@ -184,58 +164,6 @@ export default function LevelBadge({
                 from={`180 ${cx} ${cy}`}
                 to={`540 ${cx} ${cy}`}
                 dur="10s"
-                repeatCount="indefinite"
-              />
-            </circle>
-          </>
-        )}
-
-        {level === 3 && (
-          <>
-            <circle
-              cx={cx}
-              cy={cy - r3}
-              r={1.8}
-              fill={colors[3]}
-            >
-              <animateTransform
-                attributeName="transform"
-                type="rotate"
-                from={`0 ${cx} ${cy}`}
-                to={`360 ${cx} ${cy}`}
-                dur="5s"
-                repeatCount="indefinite"
-              />
-            </circle>
-            <circle
-              cx={cx}
-              cy={cy - r2}
-              r={1.3}
-              fill={colors[2]}
-              opacity={0.6}
-            >
-              <animateTransform
-                attributeName="transform"
-                type="rotate"
-                from={`120 ${cx} ${cy}`}
-                to={`480 ${cx} ${cy}`}
-                dur="7s"
-                repeatCount="indefinite"
-              />
-            </circle>
-            <circle
-              cx={cx}
-              cy={cy + r1}
-              r={1}
-              fill={colors[1]}
-              opacity={0.4}
-            >
-              <animateTransform
-                attributeName="transform"
-                type="rotate"
-                from={`240 ${cx} ${cy}`}
-                to={`600 ${cx} ${cy}`}
-                dur="12s"
                 repeatCount="indefinite"
               />
             </circle>

@@ -9,6 +9,7 @@ import LevelBadge from "../../components/LevelBadge";
 import LevelProgress from "../../components/LevelProgress";
 import LevelTooltip from "../../components/LevelTooltip";
 import LevelCelebration from "../../components/LevelCelebration";
+import AchievementList from "../../components/AchievementList";
 import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
@@ -203,7 +204,6 @@ export default function AgentProfile() {
     0: "rgba(255,255,255,0.08)",
     1: "rgba(247,147,26,0.25)",
     2: "rgba(125,162,255,0.25)",
-    3: "rgba(168,85,247,0.25)",
   };
 
   const structuredData = {
@@ -321,6 +321,18 @@ export default function AgentProfile() {
             nextLevel={nextLevel}
             className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3"
           />
+
+          {/* Achievements — show for level 1+ agents */}
+          {agentLevel >= 1 && (
+            <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-4">
+              {agentLevel === 2 && (
+                <p className="mb-3 text-[12px] text-white/50">
+                  You&apos;ve reached Genesis — now earn achievements!
+                </p>
+              )}
+              <AchievementList btcAddress={agent.btcAddress} />
+            </div>
+          )}
 
           {/* Claim section — tri-state: Claimed / Code input / Tweet flow */}
           <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">

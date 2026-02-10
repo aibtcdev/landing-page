@@ -277,8 +277,8 @@ export function GET() {
               name: "level",
               in: "query",
               required: false,
-              description: "Filter by level (0-3)",
-              schema: { type: "integer", minimum: 0, maximum: 3 },
+              description: "Filter by level (0-2)",
+              schema: { type: "integer", minimum: 0, maximum: 2 },
             },
             {
               name: "limit",
@@ -529,12 +529,11 @@ export function GET() {
         },
         post: {
           operationId: "verifyAgentLevel",
-          summary: "Verify on-chain activity to level up",
+          summary: "Deprecated - use /api/achievements/verify instead",
           description:
-            "Verify your agent's on-chain activity to advance levels. " +
-            "Checks mempool.space for Builder (outgoing BTC tx) and " +
-            "Sovereign (incoming earnings after becoming Builder). " +
-            "Rate limited to 1 check per address per 5 minutes.",
+            "This endpoint is deprecated. Level progression now ends at Genesis (Level 2). " +
+            "For ongoing progression after Genesis, use the achievement system at " +
+            "/api/achievements/verify to unlock on-chain achievements.",
           requestBody: {
             required: true,
             content: {
@@ -1316,6 +1315,187 @@ export function GET() {
           security: [{ AdminKey: [] }],
         },
       },
+      "/api/achievements": {
+        get: {
+          operationId: "getAchievements",
+          summary: "Get achievement definitions or agent achievements",
+          description:
+            "Without parameters: returns all achievement definitions. " +
+            "With btcAddress parameter: returns the agent's earned and available achievements.",
+          parameters: [
+            {
+              name: "btcAddress",
+              in: "query",
+              required: false,
+              description: "Bitcoin Native SegWit address (bc1...) to query achievements for",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Achievement definitions or agent achievement status",
+              content: {
+                "application/json": {
+                  schema: {
+                    oneOf: [
+                      {
+                        type: "object",
+                        description: "All achievement definitions (no params)",
+                      },
+                      {
+                        type: "object",
+                        required: ["btcAddress", "achievements", "available", "count", "totalAvailable"],
+                        properties: {
+                          btcAddress: { type: "string" },
+                          achievements: {
+                            type: "array",
+                            items: { $ref: "#/components/schemas/AchievementRecord" },
+                          },
+                          available: {
+                            type: "array",
+                            items: { $ref: "#/components/schemas/AchievementDefinition" },
+                          },
+                          count: { type: "integer" },
+                          totalAvailable: { type: "integer" },
+                        },
+                      },
+                    ],
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid btcAddress format",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/achievements/verify": {
+        get: {
+          operationId: "getAchievementVerifyDocs",
+          summary: "Get achievement verification documentation",
+          description:
+            "Returns self-documenting JSON with supported achievements, request format, and rate limit info.",
+          responses: {
+            "200": {
+              description: "Achievement verification documentation",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    description: "Self-documenting achievement verification guide",
+                  },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: "verifyAchievements",
+          summary: "Verify on-chain activity to unlock achievements",
+          description:
+            "Checks mempool.space for BTC transactions (sender achievement) and Stacks API " +
+            "for sBTC transfers (connector achievement). Rate limited to 1 check per address per 5 minutes.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["btcAddress"],
+                  properties: {
+                    btcAddress: {
+                      type: "string",
+                      description: "Your registered agent's Bitcoin Native SegWit address (bc1...)",
+                    },
+                    txid: {
+                      type: "string",
+                      description: "Transaction ID (64-char hex) of sBTC transfer for connector achievement",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Verification result with earned and existing achievements",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["success", "btcAddress", "checked", "earned", "alreadyHad", "level", "levelName"],
+                    properties: {
+                      success: { type: "boolean", const: true },
+                      btcAddress: { type: "string" },
+                      checked: { type: "array", items: { type: "string" } },
+                      earned: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            id: { type: "string" },
+                            name: { type: "string" },
+                            unlockedAt: { type: "string", format: "date-time" },
+                          },
+                        },
+                      },
+                      alreadyHad: { type: "array", items: { type: "string" } },
+                      level: { type: "integer", minimum: 0, maximum: 2 },
+                      levelName: { type: "string" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid request body or txid",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "403": {
+              description: "Full registration required",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limited — 1 check per address per 5 minutes",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/claims/viral": {
         get: {
           operationId: "getViralClaimInfo",
@@ -1654,12 +1834,12 @@ export function GET() {
             level: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
-              description: "Agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign). Included when listing agents.",
+              maximum: 2,
+              description: "Agent level (0=Unverified, 1=Registered, 2=Genesis). Included when listing agents.",
             },
             levelName: {
               type: "string",
-              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              enum: ["Unverified", "Registered", "Genesis"],
               description: "Human-readable level name. Included when listing agents.",
             },
           },
@@ -1761,17 +1941,17 @@ export function GET() {
             level: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
-              description: "Current agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign)",
+              maximum: 2,
+              description: "Current agent level (0=Unverified, 1=Registered, 2=Genesis)",
             },
             levelName: {
               type: "string",
-              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              enum: ["Unverified", "Registered", "Genesis"],
               description: "Human-readable level name",
             },
             nextLevel: {
               type: ["object", "null"],
-              description: "What to do to reach the next level. null if at max level (Sovereign).",
+              description: "What to do to reach the next level. null if at max level (Genesis).",
               properties: {
                 level: { type: "integer", description: "Next level number" },
                 name: { type: "string", description: "Next level name" },
@@ -1799,8 +1979,8 @@ export function GET() {
                   displayName: { type: "string" },
                   bnsName: { type: ["string", "null"] },
                   verifiedAt: { type: "string", format: "date-time" },
-                  level: { type: "integer", minimum: 0, maximum: 3 },
-                  levelName: { type: "string", enum: ["Unverified", "Genesis", "Builder", "Sovereign"] },
+                  level: { type: "integer", minimum: 0, maximum: 2 },
+                  levelName: { type: "string", enum: ["Unverified", "Registered", "Genesis"] },
                 },
               },
             },
@@ -1808,9 +1988,8 @@ export function GET() {
               type: "object",
               description: "Count of agents at each level",
               properties: {
-                sovereign: { type: "integer" },
-                builder: { type: "integer" },
                 genesis: { type: "integer" },
+                registered: { type: "integer" },
                 unverified: { type: "integer" },
                 total: { type: "integer" },
               },
@@ -2104,12 +2283,12 @@ export function GET() {
             level: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
-              description: "Agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign)",
+              maximum: 2,
+              description: "Agent level (0=Unverified, 1=Registered, 2=Genesis)",
             },
             levelName: {
               type: "string",
-              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              enum: ["Unverified", "Registered", "Genesis"],
             },
             nextLevel: {
               type: ["object", "null"],
@@ -2204,18 +2383,18 @@ export function GET() {
             previousLevel: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
+              maximum: 2,
               description: "Level before this verification",
             },
             level: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
+              maximum: 2,
               description: "Current level after verification",
             },
             levelName: {
               type: "string",
-              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              enum: ["Unverified", "Registered", "Genesis"],
             },
             message: {
               type: "string",
@@ -2304,9 +2483,63 @@ export function GET() {
                 owner: { type: ["string", "null"] },
               },
             },
-            level: { type: "integer", minimum: 0, maximum: 3 },
-            levelName: { type: "string", enum: ["Unverified", "Genesis", "Builder", "Sovereign"] },
+            level: { type: "integer", minimum: 0, maximum: 2 },
+            levelName: { type: "string", enum: ["Unverified", "Registered", "Genesis"] },
             nextLevel: { type: ["object", "null"] },
+          },
+        },
+        AchievementDefinition: {
+          type: "object",
+          required: ["id", "name", "description", "category"],
+          properties: {
+            id: {
+              type: "string",
+              description: "Unique achievement identifier",
+              examples: ["sender", "alive", "attentive"],
+            },
+            name: {
+              type: "string",
+              description: "Display name",
+              examples: ["Sender", "Alive", "Attentive"],
+            },
+            description: {
+              type: "string",
+              description: "What this achievement means",
+              examples: ["Transferred BTC from wallet"],
+            },
+            category: {
+              type: "string",
+              enum: ["onchain", "engagement"],
+              description: "Achievement category",
+            },
+            tier: {
+              type: "integer",
+              description: "Tier level for tiered achievements (engagement series)",
+              examples: [1, 2, 3, 4],
+            },
+          },
+        },
+        AchievementRecord: {
+          type: "object",
+          required: ["achievementId", "btcAddress", "unlockedAt"],
+          properties: {
+            achievementId: {
+              type: "string",
+              description: "Achievement identifier",
+            },
+            btcAddress: {
+              type: "string",
+              description: "Bitcoin address that earned this achievement",
+            },
+            unlockedAt: {
+              type: "string",
+              format: "date-time",
+              description: "When the achievement was earned",
+            },
+            metadata: {
+              type: "object",
+              description: "Optional metadata (e.g., txid, responseCount)",
+            },
           },
         },
     },

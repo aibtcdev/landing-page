@@ -9,7 +9,6 @@ const levelColors: Record<number, string> = {
   0: "rgba(255,255,255,0.3)",
   1: "#F7931A",
   2: "#7DA2FF",
-  3: "#A855F7",
 };
 
 export async function GET(
@@ -28,6 +27,8 @@ export async function GET(
       return new Response("Invalid address", { status: 400 });
     }
 
+    // Fetch agent and claim in parallel (claim needs btcAddress, but we can
+    // speculatively fetch if address is already btc; otherwise sequential)
     const agentData = await kv.get(`${prefix}:${address}`);
     if (!agentData) {
       return new Response("Agent not found", { status: 404 });
@@ -108,20 +109,6 @@ export async function GET(
                   height: "168px",
                   borderRadius: "50%",
                   border: `2px solid ${levelColors[2]}80`,
-                  display: "flex",
-                }}
-              />
-            )}
-            {level >= 3 && (
-              <div
-                style={{
-                  position: "absolute",
-                  top: "-36px",
-                  left: "-36px",
-                  width: "192px",
-                  height: "192px",
-                  borderRadius: "50%",
-                  border: `2px solid ${levelColors[3]}60`,
                   display: "flex",
                 }}
               />

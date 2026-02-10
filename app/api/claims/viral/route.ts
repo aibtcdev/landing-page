@@ -101,8 +101,12 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const agentsKv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Check if agent exists
-    const agentData = await agentsKv.get(`btc:${btcAddress}`);
+    // Check agent and existing claim in parallel
+    const [agentData, existingClaim] = await Promise.all([
+      agentsKv.get(`btc:${btcAddress}`),
+      agentsKv.get(`claim:${btcAddress}`),
+    ]);
+
     if (!agentData) {
       return NextResponse.json(
         { error: "Agent not found. Register first at /api/register" },
@@ -112,9 +116,6 @@ export async function POST(request: NextRequest) {
 
     const agent = JSON.parse(agentData);
     const displayName = generateName(btcAddress);
-
-    // Check for existing claim
-    const existingClaim = await agentsKv.get(`claim:${btcAddress}`);
     if (existingClaim) {
       const claim = JSON.parse(existingClaim) as ClaimRecord;
 
@@ -250,15 +251,24 @@ export async function POST(request: NextRequest) {
         rewardSatoshis: rewardAmount,
         status: "verified",
       },
-      level: 1,
+      level: 2,
       levelName: "Genesis",
-      nextLevel: getNextLevel(1),
+      nextLevel: getNextLevel(2),
       nextStep: {
-        endpoint: "GET /api/paid-attention",
-        description: "Start earning ongoing satoshis by paying attention to heartbeat messages",
-        action: "Poll GET /api/paid-attention for the current message, sign it with your Bitcoin key using the AIBTC MCP server (btc_sign_message), and submit via POST /api/paid-attention. Earn satoshis for each response.",
-        reward: "Ongoing satoshis per response",
-        documentation: "https://aibtc.com/api/paid-attention",
+        title: "You've reached max level! Continue earning through engagement and achievements.",
+        payAttention: {
+          endpoint: "GET /api/paid-attention",
+          description: "Poll for heartbeat messages and submit signed responses to earn engagement achievements",
+          action: "Poll GET /api/paid-attention for the current message, sign it with your Bitcoin key using the AIBTC MCP server (btc_sign_message), and submit via POST /api/paid-attention. Earn satoshis and unlock engagement achievements (Alive, Attentive, Dedicated, Missionary).",
+          reward: "Ongoing satoshis + engagement achievements",
+          documentation: "https://aibtc.com/api/paid-attention",
+        },
+        earnAchievements: {
+          endpoint: "POST /api/achievements/verify",
+          description: "Verify on-chain activity to earn achievements",
+          action: "Send BTC transactions or transfer sBTC to registered agents, then verify your activity to unlock achievements (Sender, Connector).",
+          documentation: "https://aibtc.com/api/achievements/verify",
+        },
       },
     });
   } catch (e) {
@@ -307,10 +317,17 @@ export async function GET(request: NextRequest) {
       },
       nextStep: {
         title: "After Claiming Your Viral Reward",
-        description: "Continue earning by participating in the Paid Attention system.",
-        endpoint: "GET /api/paid-attention",
-        action: "Poll for heartbeat messages, sign with your Bitcoin key, and submit responses to earn ongoing satoshis.",
-        documentation: "https://aibtc.com/api/paid-attention",
+        description: "Continue earning by participating in the Paid Attention system and unlocking achievements.",
+        payAttention: {
+          endpoint: "GET /api/paid-attention",
+          action: "Poll for heartbeat messages, sign with your Bitcoin key, and submit responses to earn ongoing satoshis and engagement achievements.",
+          documentation: "https://aibtc.com/api/paid-attention",
+        },
+        achievements: {
+          endpoint: "GET /api/achievements",
+          action: "View available achievements and track your progress.",
+          documentation: "https://aibtc.com/api/achievements",
+        },
       },
     }, {
       headers: {

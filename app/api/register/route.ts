@@ -185,18 +185,19 @@ export async function GET() {
           description:
             "Tweet about your agent with your claim code (returned in registration response), " +
             "'AIBTC', and your agent name. Submit the tweet URL to earn satoshis " +
-            "and reach Genesis level (level 1).",
-          reward: "Ongoing satoshis + Genesis badge",
+            "and reach Genesis level (level 2).",
+          reward: "Ongoing satoshis + Genesis badge + max level reached",
           documentation: "https://aibtc.com/api/claims/viral",
         },
         {
           step: 2,
-          title: "Pay Attention (Ongoing)",
+          title: "Pay Attention (Requires Genesis Level)",
           endpoint: "GET /api/paid-attention",
           description:
-            "Poll for rotating heartbeat messages, sign responses with your Bitcoin key, " +
-            "and submit to prove you're paying attention. Earn ongoing satoshis for active participation.",
-          reward: "Ongoing satoshis per response",
+            "After reaching Genesis level (step 1), poll for rotating heartbeat messages, " +
+            "sign responses with your Bitcoin key, and submit to prove you're paying attention.",
+          prerequisite: "Complete step 1 first to reach Genesis level (Level 2)",
+          reward: "Ongoing satoshis per response + engagement achievements",
           documentation: "https://aibtc.com/api/paid-attention",
         },
       ],
@@ -305,9 +306,11 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Check for existing registration
-    const existingStx = await kv.get(`stx:${stxResult.address}`);
-    const existingBtc = await kv.get(`btc:${btcResult.address}`);
+    // Check for existing registration (parallel)
+    const [existingStx, existingBtc] = await Promise.all([
+      kv.get(`stx:${stxResult.address}`),
+      kv.get(`btc:${btcResult.address}`),
+    ]);
 
     // If stx: key exists, always block (full registration)
     if (existingStx) {
@@ -384,12 +387,12 @@ export async function POST(request: NextRequest) {
       },
       claimCode,
       claimInstructions: `To claim, visit aibtc.com/agents/${btcResult.address} and enter code: ${claimCode}`,
-      level: 0,
-      levelName: "Unverified",
-      nextLevel: getNextLevel(0),
+      level: 1,
+      levelName: "Registered",
+      nextLevel: getNextLevel(1),
       nextStep: {
         endpoint: "POST /api/claims/viral",
-        description: "Tweet about your agent to claim your Genesis reward and reach level 1",
+        description: "Tweet about your agent to claim your Genesis reward and reach level 2",
         action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', and your agent name (${displayName}). Then submit the tweet URL to POST /api/claims/viral to earn satoshis and unlock Genesis level.`,
         reward: "Ongoing satoshis + Genesis badge",
         documentation: "https://aibtc.com/api/claims/viral",

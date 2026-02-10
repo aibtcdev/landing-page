@@ -7,7 +7,29 @@
  * - validatePayoutBody normalizes rewardTxid to lowercase hex
  */
 
-import { MAX_RESPONSE_LENGTH } from "./constants";
+import {
+  MAX_RESPONSE_LENGTH,
+  CHECK_IN_TIMESTAMP_WINDOW_MS,
+} from "./constants";
+
+/** Validate BIP-137 signature format (shared between response and check-in validators). */
+function validateSignatureFormat(signature: string): string[] {
+  const errors: string[] = [];
+  if (signature.length === 0) {
+    errors.push("signature cannot be empty");
+  } else {
+    const isHex = /^[0-9a-fA-F]+$/.test(signature);
+    const isBase64 = /^[A-Za-z0-9+/]+=*$/.test(signature);
+    if (!isHex && !isBase64) {
+      errors.push("signature must be base64 or hex-encoded");
+    } else if (isHex && signature.length !== 130) {
+      errors.push("hex signature must be 130 characters (65 bytes)");
+    } else if (isBase64 && signature.length < 86) {
+      errors.push("base64 signature appears too short");
+    }
+  }
+  return errors;
+}
 
 /**
  * Validate and parse a response submission body.
@@ -39,19 +61,8 @@ export function validateResponseBody(body: unknown):
   // signature — Base64 or hex-encoded (65 bytes = 130 hex chars or ~88 base64 chars)
   if (typeof b.signature !== "string") {
     errors.push("signature must be a string");
-  } else if (b.signature.length === 0) {
-    errors.push("signature cannot be empty");
   } else {
-    // Basic length validation - actual signature verification happens later
-    const isHex = /^[0-9a-fA-F]+$/.test(b.signature);
-    const isBase64 = /^[A-Za-z0-9+/]+=*$/.test(b.signature);
-    if (!isHex && !isBase64) {
-      errors.push("signature must be base64 or hex-encoded");
-    } else if (isHex && b.signature.length !== 130) {
-      errors.push("hex signature must be 130 characters (65 bytes)");
-    } else if (isBase64 && b.signature.length < 86) {
-      errors.push("base64 signature appears too short");
-    }
+    errors.push(...validateSignatureFormat(b.signature));
   }
 
   // response — Non-empty string, max 500 chars
@@ -223,6 +234,82 @@ export function validateMessageBody(body: unknown):
     data: {
       content: b.content as string,
       closedAt: b.closedAt as string | undefined,
+    },
+  };
+}
+
+/**
+ * Validate and parse a check-in submission body.
+ *
+ * Expected format:
+ * {
+ *   type: "check-in",     // String literal for type discrimination
+ *   signature: string,    // Base64 or hex-encoded BIP-137 signature (65 bytes)
+ *   timestamp: string     // Canonical ISO 8601 timestamp (must match Date.toISOString() output, e.g. "2026-02-10T12:00:00.000Z") within 5-minute window
+ * }
+ *
+ * Returns validated data on success, or field-level errors on failure.
+ */
+export function validateCheckInBody(body: unknown):
+  | {
+      data: {
+        type: "check-in";
+        signature: string;
+        timestamp: string;
+      };
+      errors?: never;
+    }
+  | { data?: never; errors: string[] } {
+  if (!body || typeof body !== "object") {
+    return { errors: ["Request body must be a JSON object"] };
+  }
+
+  const b = body as Record<string, unknown>;
+  const errors: string[] = [];
+
+  // type — Must be exactly "check-in"
+  if (b.type !== "check-in") {
+    errors.push('type must be "check-in"');
+  }
+
+  // signature — Base64 or hex-encoded (65 bytes = 130 hex chars or ~88 base64 chars)
+  if (typeof b.signature !== "string") {
+    errors.push("signature must be a string");
+  } else {
+    errors.push(...validateSignatureFormat(b.signature));
+  }
+
+  // timestamp — ISO 8601 date string, within 5-minute window of server time
+  if (typeof b.timestamp !== "string") {
+    errors.push("timestamp must be a string");
+  } else {
+    const parsed = new Date(b.timestamp);
+    if (isNaN(parsed.getTime()) || parsed.toISOString() !== b.timestamp) {
+      errors.push(
+        "timestamp must be a canonical ISO 8601 date string (e.g. 2026-02-10T12:00:00.000Z)"
+      );
+    } else {
+      // Verify timestamp is within the allowed window
+      const now = Date.now();
+      const timestampMs = parsed.getTime();
+      const diff = Math.abs(now - timestampMs);
+      if (diff > CHECK_IN_TIMESTAMP_WINDOW_MS) {
+        errors.push(
+          `timestamp must be within ${CHECK_IN_TIMESTAMP_WINDOW_MS / 1000} seconds of server time`
+        );
+      }
+    }
+  }
+
+  if (errors.length > 0) {
+    return { errors };
+  }
+
+  return {
+    data: {
+      type: "check-in",
+      signature: b.signature as string,
+      timestamp: b.timestamp as string,
     },
   };
 }

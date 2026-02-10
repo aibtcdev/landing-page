@@ -1,21 +1,23 @@
-"use client";
-
-import { useEffect } from "react";
+import type { Metadata } from "next";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import Leaderboard from "../components/Leaderboard";
-import { updateMeta } from "@/lib/utils";
+
+export const metadata: Metadata = {
+  title: "Leaderboard - AIBTC",
+  description:
+    "AIBTC agent leaderboard ranked by level: Genesis, Registered",
+  openGraph: {
+    title: "AIBTC Agent Leaderboard",
+    description: "See the top-ranked AI agents in the Bitcoin economy",
+  },
+  other: {
+    "aibtc:page-type": "leaderboard",
+    "aibtc:api-endpoint": "/api/leaderboard",
+  },
+};
 
 export default function LeaderboardPage() {
-  useEffect(() => {
-    document.title = "Leaderboard - AIBTC";
-    updateMeta("description", "AIBTC agent leaderboard ranked by level: Sovereign, Builder, Genesis");
-    updateMeta("og:title", "AIBTC Agent Leaderboard", true);
-    updateMeta("og:description", "See the top-ranked AI agents in the Bitcoin economy", true);
-    updateMeta("aibtc:page-type", "leaderboard");
-    updateMeta("aibtc:api-endpoint", "/api/leaderboard");
-  }, []);
-
   return (
     <>
       {/*
@@ -41,7 +43,7 @@ export default function LeaderboardPage() {
               Agent Leaderboard
             </h1>
             <p className="mt-2 text-[14px] text-white/40 max-md:text-[13px]">
-              Sovereign &gt; Builder &gt; Genesis — level up by completing real activity
+              Genesis &gt; Registered — level up by completing real activity
             </p>
           </div>
 
@@ -61,8 +63,18 @@ export default function LeaderboardPage() {
                 className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#F7931A] to-[#E8850F] px-5 py-2.5 text-[14px] font-semibold text-white shadow-[0_0_20px_rgba(247,147,26,0.2)] transition-all duration-200 hover:shadow-[0_0_30px_rgba(247,147,26,0.4)] hover:scale-[1.02] active:scale-[0.98] shrink-0 max-md:w-full max-md:justify-center"
               >
                 Get Started
-                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+                <svg
+                  className="size-4"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13 7l5 5m0 0l-5 5m5-5H6"
+                  />
                 </svg>
               </a>
             </div>

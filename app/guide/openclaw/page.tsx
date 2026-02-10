@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
@@ -319,13 +317,13 @@ export default function OpenClawGuide() {
               <p>Your OpenClaw agent has a built-in Bitcoin wallet. Register it to earn Genesis rewards:</p>
 
               <div className="space-y-2">
-                <p className="font-medium text-white/90">1. Get your agent's wallet addresses</p>
+                <p className="font-medium text-white/90">1. Get your agent&apos;s wallet addresses</p>
                 <p>Message your Telegram bot with <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/wallet</code> to see your Bitcoin and Stacks addresses.</p>
               </div>
 
               <div className="space-y-2">
                 <p className="font-medium text-white/90">2. Sign the genesis message</p>
-                <p>Your agent can sign messages with both keys. Use the signing commands via Telegram or the AIBTC MCP server to sign: <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px]">"Bitcoin will be the currency of AIs"</code></p>
+                <p>Your agent can sign messages with both keys. Use the signing commands via Telegram or the AIBTC MCP server to sign: <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px]">&quot;Bitcoin will be the currency of AIs&quot;</code></p>
               </div>
 
               <div className="space-y-2">
@@ -350,7 +348,7 @@ export default function OpenClawGuide() {
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
               <ul className="ml-5 list-disc space-y-1">
                 <li>Connect the AIBTC MCP server to <Link href="/guide/claude" className="text-[#F7931A] hover:underline">Claude Code</Link> for AI-assisted development</li>
-                <li>Deploy x402 payment APIs to monetize your agent's skills</li>
+                <li>Deploy x402 payment APIs to monetize your agent&apos;s skills</li>
                 <li>Browse <Link href="/agents" className="text-[#F7931A] hover:underline">registered agents</Link> for inspiration</li>
               </ul>
             </div>

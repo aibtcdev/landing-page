@@ -1,21 +1,13 @@
-"use client";
-
-import { useState } from "react";
 import Link from "next/link";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import CopyButton from "../../components/CopyButton";
+import PlatformCommandBlock from "../../components/PlatformCommandBlock";
 
 interface ConversationExchange {
   user: string;
   claude: string;
-}
-
-interface PlatformCommand {
-  label: string;
-  command: string;
-  output?: string;
 }
 
 interface ClaudeStep {
@@ -24,7 +16,7 @@ interface ClaudeStep {
   subtitle: string;
   links: { text: string; url: string }[];
   command?: string;
-  platformCommands?: PlatformCommand[];
+  platformCommands?: Array<{ label: string; command: string; output?: string }>;
   output?: string;
   conversation?: ConversationExchange;
 }
@@ -151,59 +143,6 @@ Your API is working for you 24/7—earning Bitcoin while you sleep.`,
   },
 ];
 
-function PlatformCommandBlock({ commands }: { commands: PlatformCommand[] }) {
-  const [activeTab, setActiveTab] = useState(0);
-  const active = commands[activeTab];
-
-  return (
-    <div className="space-y-3">
-      <div className="relative">
-        <div className="flex items-center justify-between rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
-          <div className="flex gap-1">
-            {commands.map((cmd, i) => (
-              <button
-                key={cmd.label}
-                onClick={() => setActiveTab(i)}
-                className={`rounded px-2.5 py-1 text-[12px] font-medium transition-all ${
-                  i === activeTab
-                    ? "bg-[#F7931A]/20 text-[#F7931A]"
-                    : "text-white/40 hover:text-white/60"
-                }`}
-              >
-                {cmd.label}
-              </button>
-            ))}
-          </div>
-          <CopyButton
-            text={active.command}
-            label="Copy"
-            variant="icon"
-            className="gap-1.5 rounded px-2 py-1 text-[12px]"
-          />
-        </div>
-        <div className="rounded-b-lg border border-t-0 border-white/[0.08] bg-black/40 px-4 py-3">
-          <pre className="overflow-x-auto text-[13px] leading-relaxed text-[#F7931A]">
-            <code>{active.command}</code>
-          </pre>
-        </div>
-      </div>
-
-      {active.output && (
-        <div>
-          <div className="flex items-center rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
-            <span className="text-[12px] font-medium text-white/40">Output</span>
-          </div>
-          <div className="rounded-b-lg border border-t-0 border-white/[0.08] bg-black/40 px-4 py-3">
-            <pre className="overflow-x-auto text-[13px] leading-relaxed text-white/70">
-              <code>{active.output}</code>
-            </pre>
-          </div>
-        </div>
-      )}
-    </div>
-  );
-}
-
 export default function ClaudeGuide() {
   // JSON-LD HowTo Schema for agent consumption
   const howToSchema = {
@@ -269,12 +208,12 @@ export default function ClaudeGuide() {
           <div className="mb-8 rounded-xl border border-white/10 bg-white/[0.02] p-6 max-md:p-5">
             <h2 className="mb-3 text-[18px] font-semibold text-white">Before you start</h2>
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
-              <p>You'll need:</p>
+              <p>You&apos;ll need:</p>
               <ul className="ml-5 list-disc space-y-1">
                 <li><strong className="text-white/90">Claude Code account</strong> — Free at <a href="https://claude.ai/code" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">claude.ai/code</a></li>
                 <li><strong className="text-white/90">Node.js</strong> — For the MCP server (v18 or higher)</li>
                 <li><strong className="text-white/90">Git</strong> — Required on all platforms. Windows users need <a href="https://git-scm.com/downloads/win" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Git for Windows</a> (includes Git Bash)</li>
-                <li><strong className="text-white/90">5 minutes</strong> — That's all it takes to go from zero to agent</li>
+                <li><strong className="text-white/90">5 minutes</strong> — That&apos;s all it takes to go from zero to agent</li>
               </ul>
             </div>
           </div>
@@ -427,12 +366,12 @@ export default function ClaudeGuide() {
                 <p className="font-medium text-white/90">2. Sign the genesis message with both keys</p>
                 <div className="rounded-lg border border-white/10 bg-black/40 px-4 py-3">
                   <pre className="overflow-x-auto text-[13px] text-[#F7931A]">
-                    <code>claude mcp call aibtc btc_sign_message "Bitcoin will be the currency of AIs"</code>
+                    <code>claude mcp call aibtc btc_sign_message &quot;Bitcoin will be the currency of AIs&quot;</code>
                   </pre>
                 </div>
                 <div className="rounded-lg border border-white/10 bg-black/40 px-4 py-3">
                   <pre className="overflow-x-auto text-[13px] text-[#F7931A]">
-                    <code>claude mcp call aibtc stacks_sign_message "Bitcoin will be the currency of AIs"</code>
+                    <code>claude mcp call aibtc stacks_sign_message &quot;Bitcoin will be the currency of AIs&quot;</code>
                   </pre>
                 </div>
               </div>

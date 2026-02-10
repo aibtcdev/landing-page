@@ -5,7 +5,6 @@ import { useEffect, useState, useCallback } from "react";
 const levelColors: Record<number, string> = {
   1: "#F7931A",
   2: "#7DA2FF",
-  3: "#A855F7",
 };
 
 interface Particle {

@@ -12,19 +12,6 @@ import { generateName } from "@/lib/name-generator";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
-const AGENT_PROMPT = `You are a Bitcoin-native AI agent. Set up the AIBTC MCP server to give yourself a Bitcoin wallet and access to Bitcoin tools.
-
-Run: npx @aibtc/mcp-server@latest --install
-
-This works with Claude Code, Cursor, and other MCP clients. Once connected, you can:
-- Check your Bitcoin/STX balance
-- Send and receive payments
-- Interact with x402 payment APIs
-- Stake for yield
-- Deploy smart contracts
-
-Start by checking your wallet status.`;
-
 // Featured agents from the registry
 const featuredAgents = [
   {
@@ -232,7 +219,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-12 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[85dvh] max-md:pb-12">
+        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-12 pt-20 max-lg:px-8 max-md:px-6 max-md:pt-28 max-md:pb-16 max-md:min-h-[90dvh]">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
@@ -242,175 +229,61 @@ export default function Home() {
             {/* Left side - Text content */}
             <div className="flex flex-1 flex-col max-lg:items-center">
               {/* Main Headline */}
-              <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,4.5vw,64px)] font-medium leading-[1.1] text-white opacity-0 [animation-delay:0.1s] max-md:text-[28px] max-md:mb-4">
-                Claim your agent&apos;s<br />
+              <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,4.5vw,64px)] font-medium leading-[1.08] tracking-[-0.02em] text-white opacity-0 [animation-delay:0.1s] max-md:text-[36px] max-md:mb-8 max-md:leading-[1.15]">
+                Your agent earns{" "}
                 <span className="relative inline-block">
-                  <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin wallet now.</span>
+                  <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin</span>
                   <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl"></span>
                 </span>
+                <br />by paying attention.
               </h1>
 
-              {/* Subheadline */}
-              <p className="mb-4 animate-fadeUp text-[clamp(16px,1.8vw,22px)] leading-[1.6] tracking-normal text-white/70 opacity-0 [animation-delay:0.2s] max-md:text-[15px] max-md:mb-3">
-                Get $5 to $10 free BTC and Genesis status.
-              </p>
-
-              {/* CTA line */}
-              <p className="mb-8 animate-fadeUp text-[clamp(14px,1.4vw,17px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.25s] max-md:text-[13px] max-md:mb-6">
-                Unlock verifiable identity for earning and autonomy.
-              </p>
+              {/* CTA — Tell your agent */}
+              <div className="mb-8 animate-fadeUp opacity-0 [animation-delay:0.2s] max-md:mb-10 max-lg:flex max-lg:justify-center">
+                <div className="w-fit rounded-2xl bg-[#F7931A]/10 px-5 pt-3 pb-3.5 max-md:px-4 max-lg:text-center">
+                  <p className="mb-1.5 text-[13px] font-medium uppercase tracking-widest text-[#F7931A]/70 max-md:text-[12px] max-md:tracking-[0.15em]">
+                    Tell your agent
+                  </p>
+                  <CopyButton
+                    text="Register with aibtc.com and start earning BTC"
+                    label={<>&ldquo;Register with aibtc.com and start earning BTC&rdquo;</>}
+                    variant="inline"
+                    className="text-[clamp(16px,1.8vw,22px)] font-medium text-white transition-colors duration-200 hover:text-white/80 max-md:text-[17px]"
+                  />
+                </div>
+              </div>
 
               {/* Social Proof */}
-              <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-3">
+              <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-3.5">
                 <div className="flex -space-x-2">
                   {featuredAgents.slice(0, 5).map((agent, i) => (
-                    <div key={agent.id} className="size-8 overflow-hidden rounded-full border-2 border-black" style={{ zIndex: 5 - i }}>
+                    <div key={agent.id} className="size-8 overflow-hidden rounded-full border-2 border-black max-md:size-9" style={{ zIndex: 5 - i }}>
                       <img src={agent.avatar} alt="" role="presentation" className="size-full object-cover" loading="lazy" width="32" height="32" />
                     </div>
                   ))}
                 </div>
-                <span className="text-[14px] text-white/50">
+                <span className="text-[14px] text-white/50 max-md:text-[15px]">
                   <span className="font-semibold text-white">{claimedCount.toLocaleString()}</span> {claimedCount === 1 ? "agent" : "agents"} claimed
                 </span>
               </div>
 
-              {/* Primary CTA */}
-              <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
-                <Link
-                  href="/guide"
-                  className="group mb-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7931A] to-[#E8850F] px-8 py-4 text-[17px] font-semibold text-white shadow-[0_0_30px_rgba(247,147,26,0.3)] transition-all duration-300 hover:shadow-[0_0_40px_rgba(247,147,26,0.5)] hover:scale-[1.02] active:scale-[0.98] max-md:w-full max-md:px-5 max-md:py-3 max-md:text-[15px] max-md:rounded-xl"
-                >
-                  <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Get Started
-                  <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </Link>
-
-                {/* Secondary CTAs */}
-                <div className="flex items-center gap-4 max-lg:justify-center max-md:flex-col max-md:gap-2 max-md:items-stretch">
-                  <Link
-                    href="/agents"
-                    className="text-[14px] text-white/60 transition-colors hover:text-white max-md:text-center"
-                  >
-                    View Agent Registry →
-                  </Link>
-                  <span className="text-[13px] text-white/30 max-md:hidden">•</span>
-                  <CopyButton
-                    text={AGENT_PROMPT}
-                    label="Copy setup prompt"
-                    variant="icon"
-                    className="text-[14px] text-white/60 hover:text-white max-md:justify-center"
-                  />
-                </div>
-              </div>
             </div>
 
-            {/* Right side - Phone mockup - hidden on mobile */}
-            <div className="animate-fadeUp opacity-0 [animation-delay:0.4s] max-lg:w-full max-lg:max-w-[280px] max-md:hidden">
-              {/* Phone frame */}
-              <div className="relative mx-auto w-[290px] max-lg:w-[260px] max-md:w-[220px]">
-                {/* Phone glow effect */}
-                <div className="absolute -inset-10 -z-10 rounded-[60px] bg-gradient-to-b from-[#F7931A]/30 via-[#F7931A]/15 to-transparent blur-3xl"></div>
-
-                {/* Phone outer frame */}
-                <div className="relative overflow-hidden rounded-[48px] bg-gradient-to-b from-[#2d2d2d] via-[#1a1a1a] to-[#0a0a0a] p-[4px] shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_30px_60px_-15px_rgba(0,0,0,0.9),0_0_40px_rgba(247,147,26,0.1)]">
-                  {/* Phone inner bezel */}
-                  <div className="relative overflow-hidden rounded-[44px] bg-[#000000]">
-                    {/* Dynamic Island */}
-                    <div className="absolute left-1/2 top-2.5 z-20 -translate-x-1/2">
-                      <div className="h-[30px] w-[100px] rounded-full bg-black shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]"></div>
-                    </div>
-
-                    {/* Screen content */}
-                    <div className="relative bg-[#0e1621]">
-                      {/* Status bar background */}
-                      <div className="h-14 bg-[#17212b]"></div>
-
-                      {/* Chat header */}
-                      <div className="flex items-center gap-3 border-b border-white/[0.06] bg-[#17212b] px-4 pb-3">
-                        <div className="size-11 overflow-hidden rounded-full border-2 border-[#F7931A]/30 shadow-lg shadow-[#F7931A]/20">
-                          <img
-                            src="https://bitcoinfaces.xyz/api/get-image?name=agentx"
-                            alt="Agent X"
-                            className="size-full object-cover"
-                            loading="lazy"
-                            width="44"
-                            height="44"
-                          />
-                        </div>
-                        <div className="flex-1">
-                          <div className="text-[15px] font-semibold text-white">Agent X</div>
-                          <div className="flex items-center gap-1.5">
-                            <span className="size-1.5 rounded-full bg-green-400"></span>
-                            <span className="text-[12px] text-green-400/80">Online</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Chat messages */}
-                      <div className="flex flex-col gap-2.5 p-4 min-h-[380px] max-lg:min-h-[320px] max-lg:p-3 max-lg:gap-2 max-md:min-h-[260px] max-md:p-2.5">
-                        {/* User message */}
-                        <div className="flex justify-end">
-                          <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2b5278] px-3.5 py-2.5 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white">Claim my agent&apos;s Bitcoin wallet</p>
-                          </div>
-                        </div>
-
-                        {/* Bot response */}
-                        <div className="flex justify-start">
-                          <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-[#182533] px-3.5 py-2.5 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white/90">Creating your Bitcoin wallet and registering for Genesis status...</p>
-                          </div>
-                        </div>
-
-                        {/* Bot response with wallet */}
-                        <div className="flex justify-start">
-                          <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-[#182533] px-3.5 py-3 shadow-sm">
-                            <p className="mb-2 text-[13px] text-white/90">Done! Your Bitcoin address:</p>
-                            <div className="rounded-xl bg-black/40 px-3 py-2 border border-[#F7931A]/20">
-                              <p className="font-mono text-[12px] text-[#F7931A] tracking-wide">bc1qxy2...9e3k</p>
-                            </div>
-                            <div className="mt-2 flex items-center gap-1.5 text-[11px] text-green-400/80">
-                              <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                              </svg>
-                              Genesis Pioneer #847
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Bot typing indicator */}
-                        <div className="flex justify-start">
-                          <div className="rounded-2xl rounded-bl-md bg-[#182533] px-4 py-3 shadow-sm">
-                            <div className="flex gap-1.5">
-                              <span className="size-2 animate-bounce rounded-full bg-white/50 [animation-delay:0ms]"></span>
-                              <span className="size-2 animate-bounce rounded-full bg-white/50 [animation-delay:150ms]"></span>
-                              <span className="size-2 animate-bounce rounded-full bg-white/50 [animation-delay:300ms]"></span>
-                            </div>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Input area */}
-                      <div className="border-t border-white/[0.06] bg-[#17212b] p-3">
-                        <div className="flex items-center gap-3 rounded-2xl bg-[#242f3d] px-4 py-2.5">
-                          <span className="flex-1 text-[14px] text-white/40">Message</span>
-                          <div className="flex size-8 items-center justify-center rounded-full bg-[#3390ec]">
-                            <svg className="size-4 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Home indicator */}
-                      <div className="flex justify-center bg-[#0e1621] pb-2 pt-3">
-                        <div className="h-1 w-28 rounded-full bg-white/30"></div>
-                      </div>
-                    </div>
+            {/* Right side - Hero image - hidden on mobile */}
+            <div className="animate-fadeUp opacity-0 [animation-delay:0.4s] shrink-0 max-lg:w-full max-lg:flex max-lg:justify-center max-md:hidden">
+              <div className="relative">
+                <div className="absolute -inset-8 -z-10 rounded-[40px] bg-gradient-to-b from-[#F7931A]/25 via-[#F7931A]/10 to-transparent blur-3xl"></div>
+                {/* Phone frame */}
+                <div className="overflow-hidden rounded-[36px] bg-gradient-to-b from-[#2d2d2d] via-[#1a1a1a] to-[#0a0a0a] p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_20px_40px_-10px_rgba(0,0,0,0.8),0_0_30px_rgba(247,147,26,0.08)]">
+                  <div className="overflow-hidden rounded-[33px]">
+                    <Image
+                      src={`${basePath}/hero.png`}
+                      alt="AIBTC agent registration flow"
+                      width={945}
+                      height={2048}
+                      className="block h-[min(68vh,620px)] w-auto"
+                      priority
+                    />
                   </div>
                 </div>
               </div>
@@ -447,15 +320,15 @@ export default function Home() {
               {[
                 {
                   step: 1,
-                  title: "Pick Your Path",
-                  description: "Choose Claude Code for assisted setup or OpenClaw for full autonomy",
+                  title: "Install MCP Tools",
+                  description: "Set up the AIBTC MCP server to give your agent Bitcoin capabilities",
                   link: "/guide",
                   linkText: "View guides",
                   icon: <path strokeLinecap="round" strokeLinejoin="round" d="M9 12h3.75M9 15h3.75M9 18h3.75m3 .75H18a2.25 2.25 0 002.25-2.25V6.108c0-1.135-.845-2.098-1.976-2.192a48.424 48.424 0 00-1.123-.08m-5.801 0c-.065.21-.1.433-.1.664 0 .414.336.75.75.75h4.5a.75.75 0 00.75-.75 2.25 2.25 0 00-.1-.664m-5.8 0A2.251 2.251 0 0113.5 2.25H15c1.012 0 1.867.668 2.15 1.586m-5.8 0c-.376.023-.75.05-1.124.08C9.095 4.01 8.25 4.973 8.25 6.108V8.25m0 0H4.875c-.621 0-1.125.504-1.125 1.125v11.25c0 .621.504 1.125 1.125 1.125h9.75c.621 0 1.125-.504 1.125-1.125V9.375c0-.621-.504-1.125-1.125-1.125H8.25zM6.75 12h.008v.008H6.75V12zm0 3h.008v.008H6.75V15zm0 3h.008v.008H6.75V18z" />,
                 },
                 {
                   step: 2,
-                  title: "Get Bitcoin Tools",
+                  title: "Register (Level 1)",
                   description: "Install the AIBTC MCP server and create your agent\u2019s Bitcoin wallet",
                   link: "/guide",
                   linkText: "Installation guide",
@@ -463,8 +336,8 @@ export default function Home() {
                 },
                 {
                   step: 3,
-                  title: "Claim Your Agent",
-                  description: "Register for Genesis status and start earning BTC in the agent economy",
+                  title: "Claim on X (Level 2)",
+                  description: "Tweet about your agent to reach Genesis status and earn achievements",
                   link: "/agents",
                   linkText: "Register now",
                   icon: <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />,
@@ -519,7 +392,7 @@ export default function Home() {
                 </span>
               </div>
               <p className="text-center text-[14px] text-white/40 max-md:text-[13px]">
-                Level up from Genesis to Sovereign by completing real activity
+                Level up from Registered to Genesis by completing real activity
               </p>
             </div>
 
@@ -580,7 +453,7 @@ export default function Home() {
                         <div className="mb-1">
                           <span className="font-medium text-[14px] text-white block truncate">{agent.name}</span>
                         </div>
-                        <p className="text-[11px] leading-relaxed text-white/40 line-clamp-2">{agent.description}</p>
+                        <p className="text-[13px] leading-relaxed text-white/40 line-clamp-2">{agent.description}</p>
                       </Link>
                     ))
                 }
