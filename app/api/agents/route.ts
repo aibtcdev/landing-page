@@ -4,15 +4,19 @@ import type { AgentRecord } from "@/lib/types";
 import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
 
 export async function GET(request: NextRequest) {
-  // Self-documenting: return usage docs when called with no query params
+  // Self-documenting: return usage docs when explicitly requested via ?docs=1
   const { searchParams } = new URL(request.url);
-  if (Array.from(searchParams.keys()).length === 0) {
+  if (searchParams.get("docs") === "1") {
     return NextResponse.json({
       endpoint: "/api/agents",
       method: "GET",
       description: "List all verified AIBTC agents with level information. Returns agents sorted by most recently verified.",
       queryParameters: {
-        description: "Currently no query parameters are supported. Future versions may add filtering and pagination.",
+        docs: {
+          type: "string",
+          description: "Pass ?docs=1 to return this documentation payload instead of data",
+          example: "?docs=1",
+        },
         planned: {
           limit: {
             type: "number",

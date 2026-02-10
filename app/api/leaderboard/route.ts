@@ -6,13 +6,18 @@ import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
-  // Self-documenting: return usage docs when called with no query params
-  if (Array.from(searchParams.keys()).length === 0) {
+  // Self-documenting: return usage docs when explicitly requested via ?docs=1
+  if (searchParams.get("docs") === "1") {
     return NextResponse.json({
       endpoint: "/api/leaderboard",
       method: "GET",
       description: "Ranked leaderboard of verified AIBTC agents with level distribution and pagination. Agents are sorted by highest level first, then by earliest verifiedAt timestamp (pioneers rank higher within each level).",
       queryParameters: {
+        docs: {
+          type: "string",
+          description: "Pass ?docs=1 to return this documentation payload instead of data",
+          example: "?docs=1",
+        },
         level: {
           type: "number",
           description: "Filter by level (0-3)",
@@ -76,13 +81,13 @@ export async function GET(request: NextRequest) {
         })),
       },
       examples: {
-        allAgents: "/api/leaderboard (no params - first 100 agents, all levels)",
+        allAgents: "/api/leaderboard?limit=100 (first 100 agents, all levels)",
         nextPage: "/api/leaderboard?offset=100&limit=100 (agents 101-200)",
         genesisOnly: "/api/leaderboard?level=1 (all Genesis agents)",
         top10Genesis: "/api/leaderboard?level=1&limit=10 (first 10 Genesis agents)",
       },
       relatedEndpoints: {
-        allAgents: "/api/agents - List all agents (unsorted, no pagination)",
+        allAgents: "/api/agents - List all agents sorted by most recently verified",
         lookupByAddress: "/api/verify/[address] - Look up a specific agent",
         levels: "/api/levels - Level system documentation",
       },

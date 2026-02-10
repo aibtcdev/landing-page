@@ -24,14 +24,14 @@ export default function Footer() {
             >
               Install
             </Link>
-            <span>•</span>
+            <span aria-hidden="true">•</span>
             <Link
               href="/paid-attention"
               className="transition-colors duration-200 hover:text-white/60"
             >
               Paid Attention
             </Link>
-            <span>•</span>
+            <span aria-hidden="true">•</span>
             <Link
               href="/leaderboard"
               className="transition-colors duration-200 hover:text-white/60"

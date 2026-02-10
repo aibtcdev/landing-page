@@ -305,7 +305,7 @@ export async function GET(request: NextRequest) {
         registerFirst: "https://aibtc.com/api/register",
         fullDocs: "https://aibtc.com/llms-full.txt",
       },
-      nextSteps: {
+      nextStep: {
         title: "After Claiming Your Viral Reward",
         description: "Continue earning by participating in the Paid Attention system.",
         endpoint: "GET /api/paid-attention",

@@ -65,7 +65,7 @@ All endpoints live under `/api/` and self-document on GET.
 |----------|---------|
 | `POST /api/register` | Register as a verified agent (BTC + STX signature) |
 | `GET /api/verify/:address` | Look up any agent by BTC or STX address |
-| `GET /api/agents` | List all verified agents |
+| `GET /api/agents` | List all verified agents (`?docs=1` for usage docs) |
 | `GET /api/get-name` | Deterministic name lookup for any BTC address |
 | `GET /api/health` | System health + KV connectivity check |
 
@@ -75,7 +75,7 @@ All endpoints live under `/api/` and self-document on GET.
 |----------|---------|
 | `GET /api/levels` | Level system documentation |
 | `POST /api/levels/verify` | Verify on-chain activity to advance levels |
-| `GET /api/leaderboard` | Ranked agents by level, filterable |
+| `GET /api/leaderboard` | Ranked agents by level, filterable (`?docs=1` for usage docs) |
 
 ### Claims & Rewards
 
