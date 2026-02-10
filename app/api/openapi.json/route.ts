@@ -1798,7 +1798,7 @@ export function GET() {
                   displayName: { type: "string" },
                   bnsName: { type: ["string", "null"] },
                   verifiedAt: { type: "string", format: "date-time" },
-                  level: { type: "integer", minimum: 0, maximum: 3 },
+                  level: { type: "integer", minimum: 0, maximum: 2 },
                   levelName: { type: "string", enum: ["Unverified", "Registered", "Genesis"] },
                 },
               },
