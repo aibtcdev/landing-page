@@ -73,7 +73,7 @@ export const LEVELS: LevelDefinition[] = [
  * Priority: Genesis (2) > Registered (1) > Unverified (0)
  */
 export function computeLevel(
-  agent: AgentRecord,
+  agent: AgentRecord | null,
   claim?: ClaimStatus | null
 ): number {
   // Level 2: agent exists AND has verified or rewarded claim
@@ -98,7 +98,7 @@ export function computeLevel(
  * Get the full level info including what to do next.
  */
 export function getAgentLevel(
-  agent: AgentRecord,
+  agent: AgentRecord | null,
   claim?: ClaimStatus | null
 ): AgentLevelInfo {
   const level = computeLevel(agent, claim);
