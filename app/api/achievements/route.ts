@@ -5,7 +5,7 @@ import {
   getAgentAchievements,
   getAchievementDefinition,
 } from "@/lib/achievements";
-import type { AchievementDefinition } from "@/lib/achievements";
+
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -123,12 +123,7 @@ export async function GET(request: NextRequest) {
 
     // Build available achievement list (not yet earned)
     const earnedIds = new Set(earnedRecords.map((r) => r.achievementId));
-    const available: Array<{
-      id: string;
-      name: string;
-      description: string;
-      category: "onchain" | "engagement";
-    }> = ACHIEVEMENTS.filter((a) => !earnedIds.has(a.id)).map((a) => ({
+    const available = ACHIEVEMENTS.filter((a) => !earnedIds.has(a.id)).map((a) => ({
       id: a.id,
       name: a.name,
       description: a.description,

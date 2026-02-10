@@ -1,5 +1,3 @@
-"use client";
-
 import { LEVELS } from "@/lib/levels";
 import type { NextLevelInfo } from "@/lib/levels";
 

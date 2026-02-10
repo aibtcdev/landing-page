@@ -123,8 +123,13 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Look up agent
-    const agentData = await kv.get(`btc:${btcAddress}`);
+    // Look up agent and check rate limit in parallel
+    const rateLimitKey = `ratelimit:achievement-verify:${btcAddress}`;
+    const [agentData, lastCheck] = await Promise.all([
+      kv.get(`btc:${btcAddress}`),
+      kv.get(rateLimitKey),
+    ]);
+
     if (!agentData) {
       return NextResponse.json(
         { error: "Agent not found. Register first at POST /api/register" },
@@ -152,10 +157,6 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
-
-    // Rate limit: check last verification time
-    const rateLimitKey = `ratelimit:achievement-verify:${btcAddress}`;
-    const lastCheck = await kv.get(rateLimitKey);
     if (lastCheck) {
       const elapsed = Date.now() - parseInt(lastCheck, 10);
       if (elapsed < RATE_LIMIT_MS) {
@@ -187,7 +188,9 @@ export async function POST(request: NextRequest) {
       try {
         // Query mempool.space for transactions
         const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
-        const mempoolResp = await fetch(mempoolUrl);
+        const mempoolResp = await fetch(mempoolUrl, {
+          signal: AbortSignal.timeout(10000),
+        });
 
         if (mempoolResp.ok) {
           const txs = (await mempoolResp.json()) as Array<{
@@ -229,7 +232,9 @@ export async function POST(request: NextRequest) {
         try {
           // Fetch transaction from Stacks API
           const txUrl = `https://api.hiro.so/extended/v1/tx/${txid}`;
-          const txResp = await fetch(txUrl);
+          const txResp = await fetch(txUrl, {
+            signal: AbortSignal.timeout(10000),
+          });
 
           if (!txResp.ok) {
             return NextResponse.json(

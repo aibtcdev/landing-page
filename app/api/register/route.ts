@@ -306,9 +306,11 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Check for existing registration
-    const existingStx = await kv.get(`stx:${stxResult.address}`);
-    const existingBtc = await kv.get(`btc:${btcResult.address}`);
+    // Check for existing registration (parallel)
+    const [existingStx, existingBtc] = await Promise.all([
+      kv.get(`stx:${stxResult.address}`),
+      kv.get(`btc:${btcResult.address}`),
+    ]);
 
     // If stx: key exists, always block (full registration)
     if (existingStx) {

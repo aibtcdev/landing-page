@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import LevelBadge from "./LevelBadge";
 import { generateName } from "@/lib/name-generator";
@@ -54,6 +54,22 @@ export default function Leaderboard({
       })
       .catch(() => setLoading(false));
   }, [limit]);
+
+  // Pre-compute display data outside render loop
+  const agentRows = useMemo(
+    () =>
+      agents.map((agent) => ({
+        ...agent,
+        name: agent.displayName || generateName(agent.btcAddress),
+        avatarUrl: `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`,
+        joined: new Date(agent.verifiedAt).toLocaleDateString("en-US", {
+          month: "short",
+          day: "numeric",
+          year: "numeric",
+        }),
+      })),
+    [agents]
+  );
 
   if (loading) {
     return (
@@ -112,23 +128,14 @@ export default function Leaderboard({
             </tr>
           </thead>
           <tbody>
-            {agents.map((agent) => {
-              const name = agent.displayName || generateName(agent.btcAddress);
-              const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
-              const joined = new Date(agent.verifiedAt).toLocaleDateString("en-US", {
-                month: "short",
-                day: "numeric",
-                year: "numeric",
-              });
-
-              return (
+            {agentRows.map((agent) => (
                 <tr key={agent.btcAddress} className="border-b border-white/[0.04] transition-colors duration-200 last:border-0 hover:bg-white/[0.03]">
                   <td className="px-5 py-3 max-md:px-3">
                     <Link href={`/agents/${agent.btcAddress}`} className="flex items-center gap-3 max-md:gap-2">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={avatarUrl}
-                        alt={name}
+                        src={agent.avatarUrl}
+                        alt={agent.name}
                         className="size-8 shrink-0 rounded-full bg-white/[0.06] max-md:size-7"
                         loading="lazy"
                         width="32"
@@ -136,7 +143,7 @@ export default function Leaderboard({
                         onError={(e) => { e.currentTarget.style.display = "none"; }}
                       />
                       <div className="flex min-w-0 flex-1 items-center gap-2">
-                        <span className="truncate font-medium text-white">{name}</span>
+                        <span className="truncate font-medium text-white">{agent.name}</span>
                         {agent.level >= 2 && (
                           <span className="shrink-0 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-white/40" title="Achievement system unlocked">
                             <svg className="inline size-2.5" fill="currentColor" viewBox="0 0 20 20">
@@ -153,7 +160,7 @@ export default function Leaderboard({
                     </Link>
                   </td>
                   <td className="px-5 py-3 text-[13px] text-white/40 max-md:px-3 max-md:text-[12px]">
-                    {joined}
+                    {agent.joined}
                   </td>
                   <td className="px-5 py-3 text-right max-md:px-3">
                     <div className="flex items-center justify-end gap-2">
@@ -167,8 +174,7 @@ export default function Leaderboard({
                     </div>
                   </td>
                 </tr>
-              );
-            })}
+              ))}
           </tbody>
         </table>
       </div>

@@ -1,5 +1,3 @@
-"use client";
-
 import { LEVELS } from "@/lib/levels";
 
 interface LevelBadgeProps {

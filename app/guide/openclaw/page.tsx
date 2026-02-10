@@ -1,5 +1,3 @@
-"use client";
-
 import Link from "next/link";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";

@@ -44,7 +44,11 @@ async function requireGenesisAgent(
   | { agent: AgentRecord; claim: ClaimStatus; level: 2 }
   | { error: NextResponse }
 > {
-  const agentData = await kv.get(`btc:${btcAddress}`);
+  // Fetch agent and claim in parallel
+  const [agentData, claimData] = await Promise.all([
+    kv.get(`btc:${btcAddress}`),
+    kv.get(`claim:${btcAddress}`),
+  ]);
 
   if (!agentData) {
     return {
@@ -100,7 +104,6 @@ async function requireGenesisAgent(
   }
 
   // Must have verified/rewarded claim (Genesis level)
-  const claimData = await kv.get(`claim:${btcAddress}`);
   let claim: ClaimStatus | null = null;
   if (claimData) {
     try {

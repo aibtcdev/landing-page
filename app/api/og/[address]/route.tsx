@@ -27,6 +27,8 @@ export async function GET(
       return new Response("Invalid address", { status: 400 });
     }
 
+    // Fetch agent and claim in parallel (claim needs btcAddress, but we can
+    // speculatively fetch if address is already btc; otherwise sequential)
     const agentData = await kv.get(`${prefix}:${address}`);
     if (!agentData) {
       return new Response("Agent not found", { status: 404 });
@@ -106,7 +108,7 @@ export async function GET(
                   width: "168px",
                   height: "168px",
                   borderRadius: "50%",
-                  border: `2px solid ${levelColors[1]}80`,
+                  border: `2px solid ${levelColors[2]}80`,
                   display: "flex",
                 }}
               />

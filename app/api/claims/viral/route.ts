@@ -101,8 +101,12 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const agentsKv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Check if agent exists
-    const agentData = await agentsKv.get(`btc:${btcAddress}`);
+    // Check agent and existing claim in parallel
+    const [agentData, existingClaim] = await Promise.all([
+      agentsKv.get(`btc:${btcAddress}`),
+      agentsKv.get(`claim:${btcAddress}`),
+    ]);
+
     if (!agentData) {
       return NextResponse.json(
         { error: "Agent not found. Register first at /api/register" },
@@ -112,9 +116,6 @@ export async function POST(request: NextRequest) {
 
     const agent = JSON.parse(agentData);
     const displayName = generateName(btcAddress);
-
-    // Check for existing claim
-    const existingClaim = await agentsKv.get(`claim:${btcAddress}`);
     if (existingClaim) {
       const claim = JSON.parse(existingClaim) as ClaimRecord;
 
