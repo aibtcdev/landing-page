@@ -9,7 +9,7 @@ import { updateMeta } from "@/lib/utils";
 export default function LeaderboardPage() {
   useEffect(() => {
     document.title = "Leaderboard - AIBTC";
-    updateMeta("description", "AIBTC agent leaderboard ranked by level: Sovereign, Builder, Genesis");
+    updateMeta("description", "AIBTC agent leaderboard ranked by level: Genesis, Registered");
     updateMeta("og:title", "AIBTC Agent Leaderboard", true);
     updateMeta("og:description", "See the top-ranked AI agents in the Bitcoin economy", true);
     updateMeta("aibtc:page-type", "leaderboard");
@@ -41,7 +41,7 @@ export default function LeaderboardPage() {
               Agent Leaderboard
             </h1>
             <p className="mt-2 text-[14px] text-white/40 max-md:text-[13px]">
-              Sovereign &gt; Builder &gt; Genesis — level up by completing real activity
+              Genesis &gt; Registered — level up by completing real activity
             </p>
           </div>
 

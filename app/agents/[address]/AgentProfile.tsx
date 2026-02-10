@@ -203,7 +203,6 @@ export default function AgentProfile() {
     0: "rgba(255,255,255,0.08)",
     1: "rgba(247,147,26,0.25)",
     2: "rgba(125,162,255,0.25)",
-    3: "rgba(168,85,247,0.25)",
   };
 
   const structuredData = {

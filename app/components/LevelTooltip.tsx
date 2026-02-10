@@ -23,7 +23,7 @@ export default function LevelTooltip({
   const triggerRef = useRef<HTMLDivElement>(null);
   const tooltipRef = useRef<HTMLDivElement>(null);
 
-  const def = LEVELS[Math.min(Math.max(level, 0), 3)];
+  const def = LEVELS[Math.min(Math.max(level, 0), 2)];
   const next = getNextLevel(level);
 
   useEffect(() => {
@@ -88,10 +88,10 @@ export default function LevelTooltip({
             </div>
           )}
 
-          {level === 3 && (
-            <div className="rounded-md border border-purple-500/20 bg-purple-500/5 px-2.5 py-2">
-              <span className="text-[11px] font-medium text-purple-400">
-                Max level reached
+          {level === 2 && !next && (
+            <div className="rounded-md border border-blue-500/20 bg-blue-500/5 px-2.5 py-2">
+              <span className="text-[11px] font-medium text-blue-400">
+                Max level reached — earn achievements!
               </span>
             </div>
           )}

@@ -18,13 +18,12 @@ export default function LevelProgress({
   nextLevel,
   className = "",
 }: LevelProgressProps) {
-  const def = LEVELS[Math.min(Math.max(level, 0), 3)];
+  const def = LEVELS[Math.min(Math.max(level, 0), 2)];
 
   const segmentColors = [
     "rgba(255,255,255,0.15)", // segment 0→1
-    "#F7931A", // segment 1 (Genesis)
-    "#7DA2FF", // segment 2 (Builder)
-    "#A855F7", // segment 3 (Sovereign)
+    "#F7931A", // segment 1 (Registered)
+    "#7DA2FF", // segment 2 (Genesis)
   ];
 
   return (
@@ -44,9 +43,9 @@ export default function LevelProgress({
         )}
       </div>
 
-      {/* Progress bar — 3 segments */}
+      {/* Progress bar — 2 segments */}
       <div className="flex gap-1">
-        {[1, 2, 3].map((seg) => (
+        {[1, 2].map((seg) => (
           <div
             key={seg}
             className="h-1 flex-1 rounded-full transition-all duration-500"

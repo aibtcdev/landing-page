@@ -19,9 +19,8 @@ interface LeaderboardAgent {
 }
 
 interface Distribution {
-  sovereign: number;
-  builder: number;
   genesis: number;
+  registered: number;
   unverified: number;
   total: number;
 }
@@ -88,9 +87,8 @@ export default function Leaderboard({
       {distribution && distribution.total > 0 && (
         <div className="mb-4 flex items-center justify-center gap-4 text-[12px] max-md:gap-2 max-md:flex-wrap">
           {[
-            { label: "Sovereign", count: distribution.sovereign, color: LEVELS[3].color },
-            { label: "Builder", count: distribution.builder, color: LEVELS[2].color },
-            { label: "Genesis", count: distribution.genesis, color: LEVELS[1].color },
+            { label: "Genesis", count: distribution.genesis, color: LEVELS[2].color },
+            { label: "Registered", count: distribution.registered, color: LEVELS[1].color },
           ].map((tier) => (
             <span key={tier.label} className="flex items-center gap-1.5">
               <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: tier.color }} />
