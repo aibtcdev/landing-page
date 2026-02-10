@@ -237,7 +237,7 @@ export function validateMessageBody(body: unknown):
  * {
  *   type: "check-in",     // String literal for type discrimination
  *   signature: string,    // Base64 or hex-encoded BIP-137 signature (65 bytes)
- *   timestamp: string     // ISO 8601 timestamp within 5-minute window of server time
+ *   timestamp: string     // Canonical ISO 8601 timestamp (must match Date.toISOString() output, e.g. "2026-02-10T12:00:00.000Z") within 5-minute window
  * }
  *
  * Returns validated data on success, or field-level errors on failure.
