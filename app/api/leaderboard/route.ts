@@ -54,9 +54,8 @@ export async function GET(request: NextRequest) {
           },
         ],
         distribution: {
-          sovereign: "number (count of level 3 agents)",
-          builder: "number (count of level 2 agents)",
-          genesis: "number (count of level 1 agents)",
+          genesis: "number (count of level 2 agents)",
+          registered: "number (count of level 1 agents)",
           unverified: "number (count of level 0 agents)",
           total: "number (total agents in filtered set)",
         },

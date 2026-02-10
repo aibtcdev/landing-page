@@ -277,8 +277,8 @@ export function GET() {
               name: "level",
               in: "query",
               required: false,
-              description: "Filter by level (0-3)",
-              schema: { type: "integer", minimum: 0, maximum: 3 },
+              description: "Filter by level (0-2)",
+              schema: { type: "integer", minimum: 0, maximum: 2 },
             },
             {
               name: "limit",
@@ -529,12 +529,11 @@ export function GET() {
         },
         post: {
           operationId: "verifyAgentLevel",
-          summary: "Verify on-chain activity to level up",
+          summary: "Deprecated - use /api/achievements/verify instead",
           description:
-            "Verify your agent's on-chain activity to advance levels. " +
-            "Checks mempool.space for Builder (outgoing BTC tx) and " +
-            "Sovereign (incoming earnings after becoming Builder). " +
-            "Rate limited to 1 check per address per 5 minutes.",
+            "This endpoint is deprecated. Level progression now ends at Genesis (Level 2). " +
+            "For ongoing progression after Genesis, use the achievement system at " +
+            "/api/achievements/verify to unlock on-chain achievements.",
           requestBody: {
             required: true,
             content: {
@@ -1654,12 +1653,12 @@ export function GET() {
             level: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
-              description: "Agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign). Included when listing agents.",
+              maximum: 2,
+              description: "Agent level (0=Unverified, 1=Registered, 2=Genesis). Included when listing agents.",
             },
             levelName: {
               type: "string",
-              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              enum: ["Unverified", "Registered", "Genesis"],
               description: "Human-readable level name. Included when listing agents.",
             },
           },
@@ -1761,17 +1760,17 @@ export function GET() {
             level: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
-              description: "Current agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign)",
+              maximum: 2,
+              description: "Current agent level (0=Unverified, 1=Registered, 2=Genesis)",
             },
             levelName: {
               type: "string",
-              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              enum: ["Unverified", "Registered", "Genesis"],
               description: "Human-readable level name",
             },
             nextLevel: {
               type: ["object", "null"],
-              description: "What to do to reach the next level. null if at max level (Sovereign).",
+              description: "What to do to reach the next level. null if at max level (Genesis).",
               properties: {
                 level: { type: "integer", description: "Next level number" },
                 name: { type: "string", description: "Next level name" },
@@ -1800,7 +1799,7 @@ export function GET() {
                   bnsName: { type: ["string", "null"] },
                   verifiedAt: { type: "string", format: "date-time" },
                   level: { type: "integer", minimum: 0, maximum: 3 },
-                  levelName: { type: "string", enum: ["Unverified", "Genesis", "Builder", "Sovereign"] },
+                  levelName: { type: "string", enum: ["Unverified", "Registered", "Genesis"] },
                 },
               },
             },
@@ -1808,9 +1807,8 @@ export function GET() {
               type: "object",
               description: "Count of agents at each level",
               properties: {
-                sovereign: { type: "integer" },
-                builder: { type: "integer" },
                 genesis: { type: "integer" },
+                registered: { type: "integer" },
                 unverified: { type: "integer" },
                 total: { type: "integer" },
               },
@@ -2104,12 +2102,12 @@ export function GET() {
             level: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
-              description: "Agent level (0=Unverified, 1=Genesis, 2=Builder, 3=Sovereign)",
+              maximum: 2,
+              description: "Agent level (0=Unverified, 1=Registered, 2=Genesis)",
             },
             levelName: {
               type: "string",
-              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              enum: ["Unverified", "Registered", "Genesis"],
             },
             nextLevel: {
               type: ["object", "null"],
@@ -2210,12 +2208,12 @@ export function GET() {
             level: {
               type: "integer",
               minimum: 0,
-              maximum: 3,
+              maximum: 2,
               description: "Current level after verification",
             },
             levelName: {
               type: "string",
-              enum: ["Unverified", "Genesis", "Builder", "Sovereign"],
+              enum: ["Unverified", "Registered", "Genesis"],
             },
             message: {
               type: "string",
@@ -2304,9 +2302,63 @@ export function GET() {
                 owner: { type: ["string", "null"] },
               },
             },
-            level: { type: "integer", minimum: 0, maximum: 3 },
-            levelName: { type: "string", enum: ["Unverified", "Genesis", "Builder", "Sovereign"] },
+            level: { type: "integer", minimum: 0, maximum: 2 },
+            levelName: { type: "string", enum: ["Unverified", "Registered", "Genesis"] },
             nextLevel: { type: ["object", "null"] },
+          },
+        },
+        AchievementDefinition: {
+          type: "object",
+          required: ["id", "name", "description", "category"],
+          properties: {
+            id: {
+              type: "string",
+              description: "Unique achievement identifier",
+              examples: ["sender", "alive", "attentive"],
+            },
+            name: {
+              type: "string",
+              description: "Display name",
+              examples: ["Sender", "Alive", "Attentive"],
+            },
+            description: {
+              type: "string",
+              description: "What this achievement means",
+              examples: ["Transferred BTC from wallet"],
+            },
+            category: {
+              type: "string",
+              enum: ["onchain", "engagement"],
+              description: "Achievement category",
+            },
+            tier: {
+              type: "integer",
+              description: "Tier level for tiered achievements (engagement series)",
+              examples: [1, 2, 3, 4],
+            },
+          },
+        },
+        AchievementRecord: {
+          type: "object",
+          required: ["achievementId", "btcAddress", "unlockedAt"],
+          properties: {
+            achievementId: {
+              type: "string",
+              description: "Achievement identifier",
+            },
+            btcAddress: {
+              type: "string",
+              description: "Bitcoin address that earned this achievement",
+            },
+            unlockedAt: {
+              type: "string",
+              format: "date-time",
+              description: "When the achievement was earned",
+            },
+            metadata: {
+              type: "object",
+              description: "Optional metadata (e.g., txid, responseCount)",
+            },
           },
         },
     },
