@@ -2065,7 +2065,7 @@ export function GET() {
         },
         AttentionResponseSuccess: {
           type: "object",
-          required: ["success", "message", "response", "agent", "level", "levelName"],
+          required: ["success", "message", "response", "agent", "level", "levelName", "nextLevel"],
           properties: {
             success: { type: "boolean", const: true },
             message: {
