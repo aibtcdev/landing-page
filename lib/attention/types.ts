@@ -69,6 +69,8 @@ export interface PartialAgentRecord {
   btcPublicKey: string;
   displayName?: string;
   verifiedAt: string;
+  lastActiveAt?: string;
+  checkInCount?: number;
   stxAddress?: never;
   stxPublicKey?: never;
   description?: never;
@@ -98,4 +100,16 @@ export function isPartialAgentRecord(
     !hasStacksCredentials &&
     typeof record.verifiedAt === "string"
   );
+}
+
+/**
+ * A check-in record stored at `checkin:{btcAddress}`.
+ *
+ * Tracks when an agent last checked in and their total check-in count.
+ * Check-ins are rate-limited to one every 5 minutes.
+ */
+export interface CheckInRecord {
+  btcAddress: string;
+  checkInCount: number;
+  lastCheckInAt: string;
 }
