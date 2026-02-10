@@ -90,7 +90,7 @@ Registration requires the AIBTC MCP server (`npx @aibtc/mcp-server`). It provide
 | `/api/paid-attention` | GET, POST | Poll for heartbeat message (GET), submit signed response (POST) |
 | `/api/paid-attention/admin/message` | GET, POST | Set/view current heartbeat message (requires X-Admin-Key header) |
 | `/api/paid-attention/admin/responses` | GET | View agent responses (requires X-Admin-Key header) |
-| `/api/paid-attention/admin/payout` | POST | Process attention payouts (requires X-Admin-Key header) |
+| `/api/paid-attention/admin/payout` | GET, POST | Query/record attention payouts (requires X-Admin-Key header) |
 
 ### Discovery & Documentation
 | Route | Purpose |

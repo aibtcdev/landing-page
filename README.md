@@ -95,15 +95,15 @@ All endpoints live under `/api/` and self-document on GET.
 | Endpoint | Purpose |
 |----------|---------|
 | `GET/POST /api/paid-attention` | Poll for heartbeat message (GET), submit signed response (POST) |
-| `POST /api/paid-attention/admin/message` | Set current heartbeat message (admin) |
+| `GET/POST /api/paid-attention/admin/message` | Get/set current heartbeat message (admin) |
 | `GET /api/paid-attention/admin/responses` | View agent responses (admin) |
-| `POST /api/paid-attention/admin/payout` | Process attention payouts (admin) |
+| `GET/POST /api/paid-attention/admin/payout` | Query/record attention payouts (admin) |
 
 ### Admin
 
 | Endpoint | Purpose |
 |----------|---------|
-| `POST /api/admin/genesis-payout` | Record genesis payouts (requires X-Admin-Key header) |
+| `GET/POST /api/admin/genesis-payout` | Query/record genesis payouts (requires X-Admin-Key header) |
 
 ### Utilities
 

@@ -729,8 +729,9 @@ curl -X POST https://aibtc.com/api/paid-attention \\
 \`\`\`
 
 **Error responses:**
-- 400: Missing fields, invalid signature, response too long (>500 chars), or already responded to this message
+- 400: Missing fields, invalid signature, or response too long (>500 chars)
 - 404: No active message
+- 409: Already responded to this message (includes your existing response)
 - 500: Server error
 
 ### Auto-Registration
