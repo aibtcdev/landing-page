@@ -29,8 +29,8 @@ export function GET() {
           name: "Connector",
           description: "Sent sBTC with memo to a registered agent",
           verification:
-            "Checks Stacks API for SIP-010 sBTC transfers with memos (simplified check for now)",
-          note: "Currently checks for any outgoing STX transactions. Full sBTC memo verification coming soon.",
+            "Validates sBTC transfer transaction: must be successful contract_call to sbtc-token transfer function, sent from agent's STX address to another registered agent, with a memo present",
+          note: "Requires providing a transaction ID (txid) in the POST request body",
         },
       },
       requestBody: {
@@ -39,6 +39,12 @@ export function GET() {
           required: true,
           description:
             "Your registered agent's Bitcoin address (bc1...)",
+        },
+        txid: {
+          type: "string",
+          required: false,
+          description:
+            "Transaction ID (64-char hex) of sBTC transfer to verify for connector achievement",
         },
       },
       rateLimit: "1 check per address per 5 minutes",
@@ -87,14 +93,28 @@ export function GET() {
 
 export async function POST(request: NextRequest) {
   try {
-    const body = (await request.json()) as { btcAddress?: string };
-    const { btcAddress } = body;
+    const body = (await request.json()) as {
+      btcAddress?: string;
+      txid?: string;
+    };
+    const { btcAddress, txid } = body;
 
     if (!btcAddress || !btcAddress.startsWith("bc1")) {
       return NextResponse.json(
         {
           error:
             "btcAddress is required and must be a Bitcoin Native SegWit address (bc1...)",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Validate txid if provided
+    if (txid && !/^[a-fA-F0-9]{64}$/.test(txid)) {
+      return NextResponse.json(
+        {
+          error:
+            "txid must be a 64-character hexadecimal string",
         },
         { status: 400 }
       );
@@ -200,52 +220,161 @@ export async function POST(request: NextRequest) {
     }
 
     // Check connector achievement: sBTC transfers to registered agents
-    // TODO: Implement full SIP-010 sBTC transfer check with memo verification
-    // For now: simplified check for any outgoing STX transactions
-    checked.push("connector");
-    const hasConnector = await hasAchievement(kv, btcAddress, "connector");
+    // Only check if txid is provided
+    if (txid) {
+      checked.push("connector");
+      const hasConnector = await hasAchievement(kv, btcAddress, "connector");
 
-    if (!hasConnector) {
-      try {
-        // Query Stacks API for transactions
-        const stacksUrl = `https://api.hiro.so/extended/v1/address/${agent.stxAddress}/transactions?limit=50`;
-        const stacksResp = await fetch(stacksUrl);
+      if (!hasConnector) {
+        try {
+          // Fetch transaction from Stacks API
+          const txUrl = `https://api.hiro.so/extended/v1/tx/${txid}`;
+          const txResp = await fetch(txUrl);
 
-        if (stacksResp.ok) {
-          const data = (await stacksResp.json()) as {
-            results: Array<{
-              tx_type: string;
-              sender_address: string;
-            }>;
+          if (!txResp.ok) {
+            return NextResponse.json(
+              {
+                error: `Failed to fetch transaction ${txid}: ${txResp.status} ${txResp.statusText}`,
+              },
+              { status: 400 }
+            );
+          }
+
+          const tx = (await txResp.json()) as {
+            tx_status: string;
+            tx_type: string;
+            sender_address: string;
+            contract_call?: {
+              contract_id: string;
+              function_name: string;
+              function_args?: Array<{
+                name: string;
+                repr: string;
+              }>;
+            };
           };
 
-          // Simplified check: any outgoing STX transaction
-          const hasOutgoingStxTx = data.results.some(
-            (tx) =>
-              tx.tx_type === "token_transfer" &&
-              tx.sender_address === agent.stxAddress
-          );
-
-          if (hasOutgoingStxTx) {
-            const record = await grantAchievement(
-              kv,
-              btcAddress,
-              "connector"
+          // Validate transaction fields
+          if (tx.tx_status !== "success") {
+            return NextResponse.json(
+              {
+                error: `Transaction ${txid} is not successful (status: ${tx.tx_status})`,
+              },
+              { status: 400 }
             );
-            const definition = getAchievementDefinition("connector");
-            earned.push({
-              id: "connector",
-              name: definition?.name ?? "Connector",
-              unlockedAt: record.unlockedAt,
-            });
           }
+
+          if (tx.tx_type !== "contract_call") {
+            return NextResponse.json(
+              {
+                error: `Transaction ${txid} is not a contract call (type: ${tx.tx_type})`,
+              },
+              { status: 400 }
+            );
+          }
+
+          if (!tx.contract_call) {
+            return NextResponse.json(
+              {
+                error: `Transaction ${txid} missing contract_call data`,
+              },
+              { status: 400 }
+            );
+          }
+
+          if (
+            tx.contract_call.contract_id !==
+            "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token"
+          ) {
+            return NextResponse.json(
+              {
+                error: `Transaction ${txid} is not an sBTC transfer (contract: ${tx.contract_call.contract_id})`,
+              },
+              { status: 400 }
+            );
+          }
+
+          if (tx.contract_call.function_name !== "transfer") {
+            return NextResponse.json(
+              {
+                error: `Transaction ${txid} is not a transfer (function: ${tx.contract_call.function_name})`,
+              },
+              { status: 400 }
+            );
+          }
+
+          if (tx.sender_address !== agent.stxAddress) {
+            return NextResponse.json(
+              {
+                error: `Transaction ${txid} sender (${tx.sender_address}) does not match agent STX address (${agent.stxAddress})`,
+              },
+              { status: 400 }
+            );
+          }
+
+          // Extract recipient from function_args
+          const recipientArg = tx.contract_call.function_args?.find(
+            (arg) => arg.name === "recipient"
+          );
+          if (!recipientArg) {
+            return NextResponse.json(
+              {
+                error: `Transaction ${txid} missing recipient argument`,
+              },
+              { status: 400 }
+            );
+          }
+
+          // Strip leading single quote from repr to get clean address
+          const recipientAddress = recipientArg.repr.replace(/^'/, "");
+
+          // Verify recipient is a registered agent
+          const recipientData = await kv.get(`stx:${recipientAddress}`);
+          if (!recipientData) {
+            return NextResponse.json(
+              {
+                error: `Recipient ${recipientAddress} is not a registered agent`,
+              },
+              { status: 400 }
+            );
+          }
+
+          // Verify memo is present
+          const memoArg = tx.contract_call.function_args?.find(
+            (arg) => arg.name === "memo"
+          );
+          if (!memoArg || memoArg.repr.includes("none")) {
+            return NextResponse.json(
+              {
+                error: `Transaction ${txid} missing memo (required for connector achievement)`,
+              },
+              { status: 400 }
+            );
+          }
+
+          // All validations passed — grant achievement
+          const record = await grantAchievement(kv, btcAddress, "connector", {
+            txid,
+            recipientAddress,
+          });
+          const definition = getAchievementDefinition("connector");
+          earned.push({
+            id: "connector",
+            name: definition?.name ?? "Connector",
+            unlockedAt: record.unlockedAt,
+          });
+        } catch (e) {
+          console.error("Failed to check connector achievement:", e);
+          return NextResponse.json(
+            {
+              error: `Connector verification failed: ${(e as Error).message}`,
+            },
+            { status: 500 }
+          );
         }
-      } catch (e) {
-        console.error("Failed to check connector achievement:", e);
-        // Continue even if connector check fails
+      } else {
+        alreadyHad.push("connector");
       }
-    } else {
-      alreadyHad.push("connector");
     }
 
     // Get current level info
