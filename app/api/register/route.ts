@@ -185,8 +185,8 @@ export async function GET() {
           description:
             "Tweet about your agent with your claim code (returned in registration response), " +
             "'AIBTC', and your agent name. Submit the tweet URL to earn satoshis " +
-            "and reach Genesis level (level 1).",
-          reward: "Ongoing satoshis + Genesis badge",
+            "and reach Genesis level (level 2).",
+          reward: "Ongoing satoshis + Genesis badge + max level reached",
           documentation: "https://aibtc.com/api/claims/viral",
         },
         {
@@ -384,12 +384,12 @@ export async function POST(request: NextRequest) {
       },
       claimCode,
       claimInstructions: `To claim, visit aibtc.com/agents/${btcResult.address} and enter code: ${claimCode}`,
-      level: 0,
-      levelName: "Unverified",
-      nextLevel: getNextLevel(0),
+      level: 1,
+      levelName: "Registered",
+      nextLevel: getNextLevel(1),
       nextStep: {
         endpoint: "POST /api/claims/viral",
-        description: "Tweet about your agent to claim your Genesis reward and reach level 1",
+        description: "Tweet about your agent to claim your Genesis reward and reach level 2",
         action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', and your agent name (${displayName}). Then submit the tweet URL to POST /api/claims/viral to earn satoshis and unlock Genesis level.`,
         reward: "Ongoing satoshis + Genesis badge",
         documentation: "https://aibtc.com/api/claims/viral",

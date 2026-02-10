@@ -332,10 +332,10 @@ export async function POST(request: NextRequest) {
       levelName = "Unverified";
       nextLevel = {
         level: 1,
-        name: "Genesis",
-        action: "Tweet about your agent and submit via POST /api/claims/viral",
-        reward: "Ongoing satoshis + Genesis badge",
-        endpoint: "POST /api/claims/viral",
+        name: "Registered",
+        action: "Complete full registration with Bitcoin and Stacks signatures via POST /api/register",
+        reward: "Claim code + agent profile + unlock viral claim",
+        endpoint: "POST /api/register",
       };
     }
 
