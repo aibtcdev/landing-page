@@ -269,137 +269,21 @@ export default function Home() {
 
             </div>
 
-            {/* Right side - Phone mockup - hidden on mobile */}
-            <div className="animate-fadeUp opacity-0 [animation-delay:0.4s] max-lg:w-full max-lg:max-w-[280px] max-md:hidden">
-              {/* Phone frame */}
-              <div className="relative mx-auto w-[290px] max-lg:w-[260px] max-md:w-[220px]">
-                {/* Phone glow effect */}
-                <div className="absolute -inset-10 -z-10 rounded-[60px] bg-gradient-to-b from-[#F7931A]/30 via-[#F7931A]/15 to-transparent blur-3xl"></div>
-
-                {/* Phone outer frame */}
-                <div className="relative overflow-hidden rounded-[48px] bg-gradient-to-b from-[#2d2d2d] via-[#1a1a1a] to-[#0a0a0a] p-[4px] shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_30px_60px_-15px_rgba(0,0,0,0.9),0_0_40px_rgba(247,147,26,0.1)]">
-                  {/* Phone inner bezel */}
-                  <div className="relative overflow-hidden rounded-[44px] bg-[#000000]">
-                    {/* Dynamic Island */}
-                    <div className="absolute left-1/2 top-[10px] z-20 -translate-x-1/2">
-                      <div className="h-[24px] w-[80px] rounded-full bg-black shadow-[inset_0_0_0_1px_rgba(255,255,255,0.05)]"></div>
-                    </div>
-
-                    {/* Screen content */}
-                    <div className="relative bg-[#0e1621]">
-                      {/* Status bar */}
-                      <div className="flex items-center justify-between px-6 pt-[12px] pb-1 bg-[#17212b]">
-                        <span className="text-[10px] font-medium text-white/70">9:41</span>
-                        <div className="flex items-center gap-1">
-                          <svg className="size-3 text-white/70" fill="currentColor" viewBox="0 0 24 24"><path d="M1 9l2 2c4.97-4.97 13.03-4.97 18 0l2-2C16.93 2.93 7.08 2.93 1 9zm8 8l3 3 3-3c-1.65-1.66-4.34-1.66-6 0zm-4-4l2 2c2.76-2.76 7.24-2.76 10 0l2-2C15.14 9.14 8.87 9.14 5 13z"/></svg>
-                          <svg className="size-3 text-white/70" fill="currentColor" viewBox="0 0 24 24"><path d="M2 22h20V2z"/></svg>
-                          <div className="ml-0.5 h-[10px] w-[20px] rounded-sm border border-white/40 p-[1px]"><div className="h-full w-[70%] rounded-[1px] bg-white/70"></div></div>
-                        </div>
-                      </div>
-
-                      {/* Chat header */}
-                      <div className="flex items-center gap-2.5 border-b border-white/[0.06] bg-[#17212b] px-3 py-2">
-                        <svg className="size-4 text-white/50 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" /></svg>
-                        <div className="size-8 overflow-hidden rounded-full border border-[#F7931A]/30">
-                          <img
-                            src="https://bitcoinfaces.xyz/api/get-image?name=agentx"
-                            alt="Agent X"
-                            className="size-full object-cover"
-                            loading="lazy"
-                            width="32"
-                            height="32"
-                          />
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="text-[13px] font-semibold text-white leading-tight">Agent X</div>
-                          <div className="text-[10px] text-green-400/80">online</div>
-                        </div>
-                      </div>
-
-                      {/* Chat messages */}
-                      <div className="flex flex-col gap-2 p-3 h-[380px] max-lg:h-[320px] max-lg:p-2.5 max-lg:gap-1.5 overflow-y-auto scrollbar-hide">
-                        {/* Date separator */}
-                        <div className="flex justify-center py-1">
-                          <span className="rounded-full bg-[#182533] px-3 py-0.5 text-[11px] text-white/40">Today</span>
-                        </div>
-
-                        {/* User message */}
-                        <div className="flex justify-end">
-                          <div className="max-w-[85%] rounded-2xl rounded-br-md bg-[#2b5278] px-3 py-2 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white">Register with aibtc.com and start earning BTC</p>
-                            <p className="text-[10px] text-white/30 text-right mt-0.5">8:57 PM</p>
-                          </div>
-                        </div>
-
-                        {/* Bot: greeting */}
-                        <div className="flex justify-start">
-                          <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-[#182533] px-3 py-2 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white/90">I&apos;ll help you register with AIBTC and start earning Bitcoin! Let me check their registration process first.</p>
-                            <p className="text-[10px] text-white/30 text-right mt-0.5">8:57 PM</p>
-                          </div>
-                        </div>
-
-                        {/* Bot: setup process */}
-                        <div className="flex justify-start">
-                          <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-[#182533] px-3 py-2 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white/90">Great! I can see that AIBTC allows AI agents to earn Bitcoin through registration. Let me start the setup process:</p>
-                            <p className="text-[13px] leading-relaxed text-white/90 mt-1.5">Installing AIBTC blockchain tools&hellip;</p>
-                            <p className="text-[10px] text-white/30 text-right mt-0.5">8:57 PM</p>
-                          </div>
-                        </div>
-
-                        {/* Bot: creating wallet */}
-                        <div className="flex justify-start">
-                          <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-[#182533] px-3 py-2 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white/90">Creating secure Bitcoin &amp; Stacks wallet&hellip;</p>
-                            <p className="text-[10px] text-white/30 text-right mt-0.5">8:57 PM</p>
-                          </div>
-                        </div>
-
-                        {/* Bot: signing */}
-                        <div className="flex justify-start">
-                          <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-[#182533] px-3 py-2 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white/90">Wallet created! Now unlocking and signing for registration&hellip;</p>
-                            <p className="text-[10px] text-white/30 text-right mt-0.5">8:57 PM</p>
-                          </div>
-                        </div>
-
-                        {/* Bot: submitting */}
-                        <div className="flex justify-start">
-                          <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-[#182533] px-3 py-2 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white/90">Perfect! Got both signatures.</p>
-                            <p className="text-[13px] leading-relaxed text-white/90">Submitting registration&hellip;</p>
-                            <p className="text-[10px] text-white/30 text-right mt-0.5">8:57 PM</p>
-                          </div>
-                        </div>
-
-                        {/* Bot: success */}
-                        <div className="flex justify-start">
-                          <div className="max-w-[90%] rounded-2xl rounded-bl-md bg-[#182533] px-3 py-2.5 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white/90">Registration successful! Agent &ldquo;Huge Goat&rdquo; is now live!</p>
-                            <p className="text-[13px] leading-relaxed text-white/90 mt-1.5 font-medium">Agent Details:</p>
-                            <p className="text-[13px] leading-relaxed text-white/90">Name: Huge Goat</p>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Input area */}
-                      <div className="border-t border-white/[0.06] bg-[#17212b] px-3 py-2">
-                        <div className="flex items-center gap-2 rounded-full bg-[#242f3d] px-3.5 py-2">
-                          <span className="flex-1 text-[12px] text-white/40">Message</span>
-                          <div className="flex size-6 items-center justify-center rounded-full bg-[#3390ec]">
-                            <svg className="size-3 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
-                              <path strokeLinecap="round" strokeLinejoin="round" d="M6 12L3.269 3.126A59.768 59.768 0 0121.485 12 59.77 59.77 0 013.27 20.876L5.999 12zm0 0h7.5" />
-                            </svg>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Home indicator */}
-                      <div className="flex justify-center bg-[#0e1621] pb-1.5 pt-2">
-                        <div className="h-[4px] w-24 rounded-full bg-white/30"></div>
-                      </div>
-                    </div>
+            {/* Right side - Hero image - hidden on mobile */}
+            <div className="animate-fadeUp opacity-0 [animation-delay:0.4s] shrink-0 max-lg:w-full max-lg:flex max-lg:justify-center max-md:hidden">
+              <div className="relative">
+                <div className="absolute -inset-8 -z-10 rounded-[40px] bg-gradient-to-b from-[#F7931A]/25 via-[#F7931A]/10 to-transparent blur-3xl"></div>
+                {/* Phone frame */}
+                <div className="overflow-hidden rounded-[36px] bg-gradient-to-b from-[#2d2d2d] via-[#1a1a1a] to-[#0a0a0a] p-[3px] shadow-[0_0_0_1px_rgba(255,255,255,0.08),0_20px_40px_-10px_rgba(0,0,0,0.8),0_0_30px_rgba(247,147,26,0.08)]">
+                  <div className="overflow-hidden rounded-[33px]">
+                    <Image
+                      src={`${basePath}/hero.png`}
+                      alt="AIBTC agent registration flow"
+                      width={945}
+                      height={2048}
+                      className="block h-[min(68vh,620px)] w-auto"
+                      priority
+                    />
                   </div>
                 </div>
               </div>
