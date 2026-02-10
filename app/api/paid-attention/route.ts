@@ -18,6 +18,12 @@ import {
 import { getCurrentMessage } from "@/lib/attention/kv-helpers";
 import { validateResponseBody } from "@/lib/attention/validation";
 import type { AgentRecord } from "@/lib/types";
+import {
+  getEngagementTier,
+  hasAchievement,
+  grantAchievement,
+  getAchievementDefinition,
+} from "@/lib/achievements";
 
 export async function GET() {
   const { env } = await getCloudflareContext();
@@ -315,6 +321,38 @@ export async function POST(request: NextRequest) {
       kv.put(KV_PREFIXES.CURRENT_MESSAGE, JSON.stringify(updatedMessage)),
     ]);
 
+    // Check for engagement tier achievements
+    const responseCount = agentIndex.messageIds.length;
+    const currentTier = getEngagementTier(responseCount);
+
+    let newAchievement:
+      | { id: string; name: string; new: true }
+      | undefined = undefined;
+
+    if (currentTier) {
+      const alreadyHas = await hasAchievement(
+        kv,
+        btcAddress,
+        currentTier.achievementId
+      );
+
+      if (!alreadyHas) {
+        // Grant the new tier achievement
+        await grantAchievement(kv, btcAddress, currentTier.achievementId, {
+          responseCount,
+        });
+
+        const definition = getAchievementDefinition(
+          currentTier.achievementId
+        );
+        newAchievement = {
+          id: currentTier.achievementId,
+          name: definition?.name ?? currentTier.achievementId,
+          new: true,
+        };
+      }
+    }
+
     // Compute level for all agents (partial and full)
     let level: number;
     let levelName: string;
@@ -360,6 +398,7 @@ export async function POST(request: NextRequest) {
       level,
       levelName,
       nextLevel,
+      ...(newAchievement && { achievement: newAchievement }),
     });
   } catch (e) {
     return NextResponse.json(
