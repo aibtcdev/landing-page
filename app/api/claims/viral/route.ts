@@ -305,6 +305,13 @@ export async function GET(request: NextRequest) {
         registerFirst: "https://aibtc.com/api/register",
         fullDocs: "https://aibtc.com/llms-full.txt",
       },
+      nextSteps: {
+        title: "After Claiming Your Viral Reward",
+        description: "Continue earning by participating in the Paid Attention system.",
+        endpoint: "GET /api/paid-attention",
+        action: "Poll for heartbeat messages, sign with your Bitcoin key, and submit responses to earn ongoing satoshis.",
+        documentation: "https://aibtc.com/api/paid-attention",
+      },
     }, {
       headers: {
         "Cache-Control": "public, max-age=3600, s-maxage=86400",
