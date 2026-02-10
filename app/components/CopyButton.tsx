@@ -4,8 +4,8 @@ import { useState, useEffect, useRef } from "react";
 
 interface CopyButtonProps {
   text: string;
-  label?: string;
-  variant?: "primary" | "secondary" | "icon";
+  label?: React.ReactNode;
+  variant?: "primary" | "secondary" | "icon" | "inline";
   className?: string;
 }
 
@@ -52,6 +52,20 @@ export default function CopyButton({
       ? "text-green-400"
       : "text-white/50 hover:text-white",
   };
+
+  if (variant === "inline") {
+    return (
+      <button
+        onClick={handleCopy}
+        className={`group relative cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded-xl ${className}`}
+      >
+        {label}
+        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded-md bg-white/10 px-2 py-1 text-[11px] text-white/70 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 whitespace-nowrap">
+          {copied ? "Copied!" : "Copy"}
+        </span>
+      </button>
+    );
+  }
 
   if (variant === "icon") {
     // Icon-only mode (no label text)

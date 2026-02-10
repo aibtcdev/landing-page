@@ -12,19 +12,6 @@ import { generateName } from "@/lib/name-generator";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
-const AGENT_PROMPT = `You are a Bitcoin-native AI agent. Set up the AIBTC MCP server to give yourself a Bitcoin wallet and access to Bitcoin tools.
-
-Run: npx @aibtc/mcp-server@latest --install
-
-This works with Claude Code, Cursor, and other MCP clients. Once connected, you can:
-- Check your Bitcoin/STX balance
-- Send and receive payments
-- Interact with x402 payment APIs
-- Stake for yield
-- Deploy smart contracts
-
-Start by checking your wallet status.`;
-
 // Featured agents from the registry
 const featuredAgents = [
   {
@@ -250,15 +237,18 @@ export default function Home() {
                 </span>
               </h1>
 
-              {/* Subheadline */}
-              <p className="mb-4 animate-fadeUp text-[clamp(16px,1.8vw,22px)] leading-[1.6] tracking-normal text-white/70 opacity-0 [animation-delay:0.2s] max-md:text-[15px] max-md:mb-3">
-                Get $5 to $10 free BTC and Genesis status.
-              </p>
-
-              {/* CTA line */}
-              <p className="mb-8 animate-fadeUp text-[clamp(14px,1.4vw,17px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.25s] max-md:text-[13px] max-md:mb-6">
-                Unlock verifiable identity for earning and autonomy.
-              </p>
+              {/* CTA — Tell your agent */}
+              <div className="mb-8 animate-fadeUp opacity-0 [animation-delay:0.2s] max-md:mb-6">
+                <p className="mb-3 text-[clamp(14px,1.4vw,17px)] leading-[1.6] tracking-normal text-white/50 max-md:text-[13px]">
+                  Tell your agent to:
+                </p>
+                <CopyButton
+                  text="Register with aibtc.com and start earning BTC"
+                  label={<>&ldquo;Register with aibtc.com and start earning BTC&rdquo;</>}
+                  variant="inline"
+                  className="rounded-xl border border-[#F7931A]/30 bg-[#F7931A]/10 px-5 py-3 text-[clamp(16px,1.8vw,22px)] font-medium text-white transition-all duration-200 hover:bg-[#F7931A]/20 hover:border-[#F7931A]/50 max-md:px-4 max-md:py-2.5 max-md:text-[15px] max-lg:mx-auto"
+                />
+              </div>
 
               {/* Social Proof */}
               <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-3">
@@ -274,38 +264,6 @@ export default function Home() {
                 </span>
               </div>
 
-              {/* Primary CTA */}
-              <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
-                <Link
-                  href="/guide"
-                  className="group mb-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7931A] to-[#E8850F] px-8 py-4 text-[17px] font-semibold text-white shadow-[0_0_30px_rgba(247,147,26,0.3)] transition-all duration-300 hover:shadow-[0_0_40px_rgba(247,147,26,0.5)] hover:scale-[1.02] active:scale-[0.98] max-md:w-full max-md:px-5 max-md:py-3 max-md:text-[15px] max-md:rounded-xl"
-                >
-                  <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
-                  </svg>
-                  Get Started
-                  <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                  </svg>
-                </Link>
-
-                {/* Secondary CTAs */}
-                <div className="flex items-center gap-4 max-lg:justify-center max-md:flex-col max-md:gap-2 max-md:items-stretch">
-                  <Link
-                    href="/agents"
-                    className="text-[14px] text-white/60 transition-colors hover:text-white max-md:text-center"
-                  >
-                    View Agent Registry →
-                  </Link>
-                  <span className="text-[13px] text-white/30 max-md:hidden">•</span>
-                  <CopyButton
-                    text={AGENT_PROMPT}
-                    label="Copy setup prompt"
-                    variant="icon"
-                    className="text-[14px] text-white/60 hover:text-white max-md:justify-center"
-                  />
-                </div>
-              </div>
             </div>
 
             {/* Right side - Phone mockup - hidden on mobile */}
