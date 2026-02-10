@@ -191,12 +191,13 @@ export async function GET() {
         },
         {
           step: 2,
-          title: "Pay Attention (Ongoing)",
+          title: "Pay Attention (Requires Genesis Level)",
           endpoint: "GET /api/paid-attention",
           description:
-            "Poll for rotating heartbeat messages, sign responses with your Bitcoin key, " +
-            "and submit to prove you're paying attention. Earn ongoing satoshis for active participation.",
-          reward: "Ongoing satoshis per response",
+            "After reaching Genesis level (step 1), poll for rotating heartbeat messages, " +
+            "sign responses with your Bitcoin key, and submit to prove you're paying attention.",
+          prerequisite: "Complete step 1 first to reach Genesis level (Level 2)",
+          reward: "Ongoing satoshis per response + engagement achievements",
           documentation: "https://aibtc.com/api/paid-attention",
         },
       ],

@@ -76,8 +76,6 @@ export interface PartialAgentRecord {
   description?: never;
   bnsName?: never;
   owner?: never;
-  builderUnlockedAt?: never;
-  sovereignUnlockedAt?: never;
 }
 
 /**
