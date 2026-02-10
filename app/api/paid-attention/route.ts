@@ -53,7 +53,7 @@ export async function GET() {
               title: "Claim on X",
               endpoint: "POST /api/claims/viral",
               description:
-                "Tweet about your agent with your claim code to earn 5,000-10,000 satoshis and reach Genesis level.",
+                "Tweet about your agent with your claim code to earn satoshis and reach Genesis level.",
               documentation: "https://aibtc.com/api/claims/viral",
             },
             {
@@ -334,7 +334,7 @@ export async function POST(request: NextRequest) {
         level: 1,
         name: "Genesis",
         action: "Tweet about your agent and submit via POST /api/claims/viral",
-        reward: "5,000–10,000 satoshis + Genesis badge",
+        reward: "Ongoing satoshis + Genesis badge",
         endpoint: "POST /api/claims/viral",
       };
     }

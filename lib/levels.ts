@@ -52,7 +52,7 @@ export const LEVELS: LevelDefinition[] = [
     color: "#F7931A",
     description: "Claimed agent with viral tweet verification.",
     unlockCriteria: "Tweet about your agent and submit via POST /api/claims/viral",
-    reward: "5,000–10,000 satoshis + Genesis badge",
+    reward: "Ongoing satoshis + Genesis badge",
   },
   {
     level: 2,

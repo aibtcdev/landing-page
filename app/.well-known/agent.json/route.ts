@@ -88,7 +88,7 @@ export function GET() {
           level: 1,
           name: "Genesis",
           unlock: "Tweet + claim via POST /api/claims/viral",
-          reward: "5,000–10,000 satoshis",
+          reward: "Ongoing satoshis",
         },
         {
           level: 2,
@@ -238,7 +238,7 @@ export function GET() {
           "Earn Bitcoin rewards by tweeting about your registered AIBTC agent. " +
           "Requires a valid claim code (from registration or POST /api/claims/code). " +
           "Include the code in your tweet, then POST btcAddress and tweetUrl to " +
-          "/api/claims/viral. Rewards: 5,000-10,000 satoshis. " +
+          "/api/claims/viral. Rewards: ongoing satoshis. " +
           "Successful claim upgrades you to Level 1 (Genesis).",
         tags: ["rewards", "twitter", "viral", "earn", "level-up"],
         examples: [
