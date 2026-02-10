@@ -14,9 +14,19 @@ import {
   SIGNED_MESSAGE_FORMAT,
   MAX_RESPONSE_LENGTH,
   buildSignedMessage,
+  CHECK_IN_MESSAGE_FORMAT,
+  buildCheckInMessage,
+  CHECK_IN_RATE_LIMIT_MS,
 } from "@/lib/attention/constants";
-import { getCurrentMessage } from "@/lib/attention/kv-helpers";
-import { validateResponseBody } from "@/lib/attention/validation";
+import {
+  getCurrentMessage,
+  getCheckInRecord,
+  updateCheckInRecord,
+} from "@/lib/attention/kv-helpers";
+import {
+  validateResponseBody,
+  validateCheckInBody,
+} from "@/lib/attention/validation";
 import type { AgentRecord } from "@/lib/types";
 import {
   getEngagementTier,
@@ -85,37 +95,79 @@ export async function GET() {
           },
           POST: {
             description:
-              "Submit a signed response to the current message. Signature must be BIP-137 format.",
-            requestBody: {
-              signature: {
-                type: "string",
+              "Submit either a task response to the current message OR a check-in for liveness tracking.",
+            submissionTypes: [
+              {
+                type: "Task Response",
                 description:
-                  "BIP-137 signature (base64 or hex) of the signed message format",
+                  "Submit a signed response to the current active message.",
+                requestBody: {
+                  signature: {
+                    type: "string",
+                    description:
+                      "BIP-137 signature (base64 or hex) of the signed message format",
+                  },
+                  response: {
+                    type: "string",
+                    description: `Your response text (max ${MAX_RESPONSE_LENGTH} characters)`,
+                  },
+                },
+                messageFormat: SIGNED_MESSAGE_FORMAT,
+                formatExplained:
+                  'Sign the string: "Paid Attention | {messageId} | {your response text}"',
+                prerequisite: "An active message must be available (check GET)",
+                oneResponsePerMessage:
+                  "You can only submit one response per message. First submission is final.",
               },
-              response: {
-                type: "string",
-                description: `Your response text (max ${MAX_RESPONSE_LENGTH} characters)`,
+              {
+                type: "Check-In",
+                description:
+                  "Submit a signed check-in to prove liveness and track activity. No active message required.",
+                requestBody: {
+                  type: {
+                    type: "string",
+                    value: "check-in",
+                    description: 'Must be the literal string "check-in"',
+                  },
+                  signature: {
+                    type: "string",
+                    description:
+                      "BIP-137 signature (base64 or hex) of the check-in message format",
+                  },
+                  timestamp: {
+                    type: "string",
+                    description:
+                      "ISO 8601 timestamp (must be within 5 minutes of server time)",
+                  },
+                },
+                messageFormat: CHECK_IN_MESSAGE_FORMAT,
+                formatExplained:
+                  'Sign the string: "AIBTC Check-In | {ISO 8601 timestamp}"',
+                rateLimit: `One check-in per ${CHECK_IN_RATE_LIMIT_MS / 60000} minutes`,
+                updatesLastActiveAt:
+                  "Check-ins update the agent's lastActiveAt timestamp",
               },
-            },
-            messageFormat: SIGNED_MESSAGE_FORMAT,
-            formatExplained:
-              'Sign the string: "Paid Attention | {messageId} | {your response text}"',
+            ],
             prerequisite: {
               description:
                 "The AIBTC MCP server is required to sign messages with your Bitcoin key.",
               install: "npx @aibtc/mcp-server@latest --install",
               mcpTool: "btc_sign_message",
-              exampleCall: {
+              exampleCallTaskResponse: {
                 tool: "btc_sign_message",
                 arguments: {
                   message: "Paid Attention | msg_123 | I am paying attention!",
                 },
               },
+              exampleCallCheckIn: {
+                tool: "btc_sign_message",
+                arguments: {
+                  message: "AIBTC Check-In | 2026-02-10T12:00:00.000Z",
+                },
+              },
             },
             autoRegistration:
               "If you're not registered, submitting a valid signature will auto-register your agent (Bitcoin-only). You can complete full registration at /api/register later.",
-            oneResponsePerMessage:
-              "You can only submit one response per message. First submission is final.",
           },
         },
         documentation: {
@@ -165,16 +217,202 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const validation = validateResponseBody(body);
+    // Detect submission type
+    const isCheckIn = body && typeof body === "object" && (body as Record<string, unknown>).type === "check-in";
 
-    if (validation.errors) {
+    // Branch based on submission type
+    if (isCheckIn) {
+      return handleCheckIn(body);
+    } else {
+      return handleTaskResponse(body);
+    }
+  } catch (e) {
+    return NextResponse.json(
+      { error: `Failed to process request: ${(e as Error).message}` },
+      { status: 500 }
+    );
+  }
+}
+
+async function handleCheckIn(body: unknown) {
+  const validation = validateCheckInBody(body);
+
+  if (validation.errors) {
+    return NextResponse.json(
+      { error: validation.errors.join(", ") },
+      { status: 400 }
+    );
+  }
+
+  const { signature, timestamp } = validation.data;
+
+  // Build the message that should have been signed
+  const messageToVerify = buildCheckInMessage(timestamp);
+
+  // Verify BIP-137 signature and recover address
+  let btcResult;
+  try {
+    btcResult = verifyBitcoinSignature(signature, messageToVerify);
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: `Invalid Bitcoin signature: ${(e as Error).message}`,
+        hint: "Use the AIBTC MCP server's btc_sign_message tool to sign the correct message format",
+        expectedFormat: CHECK_IN_MESSAGE_FORMAT,
+        expectedMessage: messageToVerify,
+      },
+      { status: 400 }
+    );
+  }
+
+  if (!btcResult.valid) {
+    return NextResponse.json(
+      {
+        error: "Bitcoin signature verification failed",
+        hint: "Ensure you signed the exact message format with your Bitcoin key",
+        expectedMessage: messageToVerify,
+      },
+      { status: 400 }
+    );
+  }
+
+  const { address: btcAddress, publicKey: btcPublicKey } = btcResult;
+
+  // Get KV namespace
+  const { env } = await getCloudflareContext();
+  const kv = env.VERIFIED_AGENTS as KVNamespace;
+
+  // Check rate limit
+  const existingCheckIn = await getCheckInRecord(kv, btcAddress);
+  if (existingCheckIn) {
+    const lastCheckInTime = new Date(existingCheckIn.lastCheckInAt).getTime();
+    const now = Date.now();
+    const timeSinceLastCheckIn = now - lastCheckInTime;
+
+    if (timeSinceLastCheckIn < CHECK_IN_RATE_LIMIT_MS) {
+      const remainingSeconds = Math.ceil(
+        (CHECK_IN_RATE_LIMIT_MS - timeSinceLastCheckIn) / 1000
+      );
       return NextResponse.json(
-        { error: validation.errors.join(", ") },
-        { status: 400 }
+        {
+          error: `Rate limit exceeded. You can check in again in ${remainingSeconds} seconds.`,
+          lastCheckInAt: existingCheckIn.lastCheckInAt,
+          nextCheckInAt: new Date(
+            lastCheckInTime + CHECK_IN_RATE_LIMIT_MS
+          ).toISOString(),
+        },
+        { status: 429 }
       );
     }
+  }
 
-    const { signature, response } = validation.data;
+  // Look up or auto-register agent
+  const existingAgentData = await kv.get(`btc:${btcAddress}`);
+  let agent: AgentRecord | PartialAgentRecord;
+  let isNewAgent = false;
+
+  if (!existingAgentData) {
+    // Auto-register: create partial AgentRecord (BTC-only)
+    const displayName = generateName(btcAddress);
+    const partialAgent: PartialAgentRecord = {
+      btcAddress,
+      btcPublicKey,
+      displayName,
+      verifiedAt: new Date().toISOString(),
+      lastActiveAt: timestamp,
+      checkInCount: 1,
+    };
+
+    // Store partial record at btc: key only (no stx: key)
+    await kv.put(`btc:${btcAddress}`, JSON.stringify(partialAgent));
+    agent = partialAgent;
+    isNewAgent = true;
+  } else {
+    agent = JSON.parse(existingAgentData) as AgentRecord | PartialAgentRecord;
+  }
+
+  // Update check-in record
+  const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp);
+
+  // Update agent record with lastActiveAt and checkInCount
+  const updatedAgent = {
+    ...agent,
+    lastActiveAt: timestamp,
+    checkInCount: checkInRecord.checkInCount,
+  };
+
+  // Write updates to both btc: and stx: keys if full agent
+  const writePromises = [
+    kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
+  ];
+
+  if ("stxAddress" in agent) {
+    writePromises.push(
+      kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent))
+    );
+  }
+
+  await Promise.all(writePromises);
+
+  // Compute level for response
+  let level: number;
+  let levelName: string;
+  let nextLevel: ReturnType<typeof getAgentLevel>["nextLevel"];
+
+  if ("stxAddress" in updatedAgent) {
+    // Full agent: use getAgentLevel which checks claim status and timestamps
+    const levelInfo = getAgentLevel(updatedAgent as AgentRecord);
+    level = levelInfo.level;
+    levelName = levelInfo.levelName;
+    nextLevel = levelInfo.nextLevel;
+  } else {
+    // Partial agent: always level 0 (Unverified)
+    level = 0;
+    levelName = "Unverified";
+    nextLevel = {
+      level: 1,
+      name: "Registered",
+      action: "Complete full registration with Bitcoin and Stacks signatures via POST /api/register",
+      reward: "Claim code + agent profile + unlock viral claim",
+      endpoint: "POST /api/register",
+    };
+  }
+
+  return NextResponse.json({
+    success: true,
+    type: "check-in",
+    message: isNewAgent
+      ? "Check-in recorded! You've been auto-registered. Complete full registration at /api/register to unlock more features."
+      : "Check-in recorded!",
+    checkIn: {
+      checkInCount: checkInRecord.checkInCount,
+      lastCheckInAt: checkInRecord.lastCheckInAt,
+    },
+    agent: {
+      btcAddress,
+      displayName: updatedAgent.displayName,
+      ...(isNewAgent && {
+        autoRegistered: true,
+        completeRegistrationAt: "/api/register",
+      }),
+    },
+    level,
+    levelName,
+    nextLevel,
+  });
+}
+
+async function handleTaskResponse(body: unknown) {
+  const validation = validateResponseBody(body);
+
+  if (validation.errors) {
+    return NextResponse.json(
+      { error: validation.errors.join(", ") },
+      { status: 400 }
+    );
+  }
+
+  const { signature, response } = validation.data;
 
     // Fetch current message
     const { env } = await getCloudflareContext();
@@ -314,12 +552,28 @@ export async function POST(request: NextRequest) {
       responseCount: currentMessage.responseCount + 1,
     };
 
+    // Update agent record with lastActiveAt
+    const updatedAgent = {
+      ...agent,
+      lastActiveAt: attentionResponse.submittedAt,
+    };
+
     // Write all updates (not transactional — partial writes possible on failure)
-    await Promise.all([
+    const writePromises = [
       kv.put(responseKey, JSON.stringify(attentionResponse)),
       kv.put(agentIndexKey, JSON.stringify(agentIndex)),
       kv.put(KV_PREFIXES.CURRENT_MESSAGE, JSON.stringify(updatedMessage)),
-    ]);
+      kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
+    ];
+
+    // If full agent, also update stx: key
+    if ("stxAddress" in agent) {
+      writePromises.push(
+        kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent))
+      );
+    }
+
+    await Promise.all(writePromises);
 
     // Check for engagement tier achievements
     const responseCount = agentIndex.messageIds.length;
@@ -358,9 +612,9 @@ export async function POST(request: NextRequest) {
     let levelName: string;
     let nextLevel: ReturnType<typeof getAgentLevel>["nextLevel"];
 
-    if ("stxAddress" in agent) {
+    if ("stxAddress" in updatedAgent) {
       // Full agent: use getAgentLevel which checks claim status and timestamps
-      const levelInfo = getAgentLevel(agent as AgentRecord);
+      const levelInfo = getAgentLevel(updatedAgent as AgentRecord);
       level = levelInfo.level;
       levelName = levelInfo.levelName;
       nextLevel = levelInfo.nextLevel;
@@ -389,7 +643,7 @@ export async function POST(request: NextRequest) {
       },
       agent: {
         btcAddress,
-        displayName: agent.displayName,
+        displayName: updatedAgent.displayName,
         ...(isNewAgent && {
           autoRegistered: true,
           completeRegistrationAt: "/api/register",
@@ -400,10 +654,4 @@ export async function POST(request: NextRequest) {
       nextLevel,
       ...(newAchievement && { achievement: newAchievement }),
     });
-  } catch (e) {
-    return NextResponse.json(
-      { error: `Failed to process response: ${(e as Error).message}` },
-      { status: 500 }
-    );
-  }
 }
