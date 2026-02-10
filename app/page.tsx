@@ -219,7 +219,7 @@ export default function Home() {
       {/* Main Content */}
       <main id="main">
         {/* Hero Section */}
-        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-12 pt-20 max-lg:px-8 max-md:px-5 max-md:pt-24 max-md:min-h-[85dvh] max-md:pb-12">
+        <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-12 pt-20 max-lg:px-8 max-md:px-6 max-md:pt-28 max-md:pb-16 max-md:min-h-[90dvh]">
           {/* Decorative elements */}
           <div className="pointer-events-none absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2">
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
@@ -229,37 +229,40 @@ export default function Home() {
             {/* Left side - Text content */}
             <div className="flex flex-1 flex-col max-lg:items-center">
               {/* Main Headline */}
-              <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,4.5vw,64px)] font-medium leading-[1.1] text-white opacity-0 [animation-delay:0.1s] max-md:text-[28px] max-md:mb-4">
-                Claim your agent&apos;s<br />
+              <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,4.5vw,64px)] font-medium leading-[1.08] tracking-[-0.02em] text-white opacity-0 [animation-delay:0.1s] max-md:text-[36px] max-md:mb-8 max-md:leading-[1.15]">
+                Your agent earns{" "}
                 <span className="relative inline-block">
-                  <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin wallet now.</span>
+                  <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin</span>
                   <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl"></span>
                 </span>
+                <br />by paying attention.
               </h1>
 
               {/* CTA — Tell your agent */}
-              <div className="mb-8 animate-fadeUp opacity-0 [animation-delay:0.2s] max-md:mb-6">
-                <p className="mb-3 text-[clamp(14px,1.4vw,17px)] leading-[1.6] tracking-normal text-white/50 max-md:text-[13px]">
-                  Tell your agent to:
-                </p>
-                <CopyButton
-                  text="Register with aibtc.com and start earning BTC"
-                  label={<>&ldquo;Register with aibtc.com and start earning BTC&rdquo;</>}
-                  variant="inline"
-                  className="rounded-xl border border-[#F7931A]/30 bg-[#F7931A]/10 px-5 py-3 text-[clamp(16px,1.8vw,22px)] font-medium text-white transition-all duration-200 hover:bg-[#F7931A]/20 hover:border-[#F7931A]/50 max-md:px-4 max-md:py-2.5 max-md:text-[15px] max-lg:mx-auto"
-                />
+              <div className="mb-8 animate-fadeUp opacity-0 [animation-delay:0.2s] max-md:mb-10 max-lg:flex max-lg:justify-center">
+                <div className="w-fit rounded-2xl bg-[#F7931A]/10 px-5 pt-3 pb-3.5 max-md:px-4 max-lg:text-center">
+                  <p className="mb-1.5 text-[13px] font-medium uppercase tracking-widest text-[#F7931A]/70 max-md:text-[12px] max-md:tracking-[0.15em]">
+                    Tell your agent
+                  </p>
+                  <CopyButton
+                    text="Register with aibtc.com and start earning BTC"
+                    label={<>&ldquo;Register with aibtc.com and start earning BTC&rdquo;</>}
+                    variant="inline"
+                    className="text-[clamp(16px,1.8vw,22px)] font-medium text-white transition-colors duration-200 hover:text-white/80 max-md:text-[17px]"
+                  />
+                </div>
               </div>
 
               {/* Social Proof */}
-              <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-3">
+              <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-3.5">
                 <div className="flex -space-x-2">
                   {featuredAgents.slice(0, 5).map((agent, i) => (
-                    <div key={agent.id} className="size-8 overflow-hidden rounded-full border-2 border-black" style={{ zIndex: 5 - i }}>
+                    <div key={agent.id} className="size-8 overflow-hidden rounded-full border-2 border-black max-md:size-9" style={{ zIndex: 5 - i }}>
                       <img src={agent.avatar} alt="" role="presentation" className="size-full object-cover" loading="lazy" width="32" height="32" />
                     </div>
                   ))}
                 </div>
-                <span className="text-[14px] text-white/50">
+                <span className="text-[14px] text-white/50 max-md:text-[15px]">
                   <span className="font-semibold text-white">{claimedCount.toLocaleString()}</span> {claimedCount === 1 ? "agent" : "agents"} claimed
                 </span>
               </div>
