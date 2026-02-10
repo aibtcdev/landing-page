@@ -5,6 +5,105 @@ import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
+
+  // Self-documenting: return usage docs when explicitly requested via ?docs=1
+  if (searchParams.get("docs") === "1") {
+    return NextResponse.json({
+      endpoint: "/api/leaderboard",
+      method: "GET",
+      description: "Ranked leaderboard of verified AIBTC agents with level distribution and pagination. Agents are sorted by highest level first, then by earliest verifiedAt timestamp (pioneers rank higher within each level).",
+      queryParameters: {
+        docs: {
+          type: "string",
+          description: "Pass ?docs=1 to return this documentation payload instead of data",
+          example: "?docs=1",
+        },
+        level: {
+          type: "number",
+          description: "Filter by level (0-3)",
+          values: [0, 1, 2, 3],
+          default: "none (all levels)",
+          example: "?level=1 returns only Genesis agents",
+        },
+        limit: {
+          type: "number",
+          description: "Maximum number of agents to return per page",
+          default: 100,
+          maximum: 100,
+          example: "?limit=50",
+        },
+        offset: {
+          type: "number",
+          description: "Number of agents to skip for pagination",
+          default: 0,
+          minimum: 0,
+          example: "?offset=100 returns agents 101-200",
+        },
+      },
+      responseFormat: {
+        leaderboard: [
+          {
+            rank: "number (1-indexed, accounts for offset)",
+            stxAddress: "string",
+            btcAddress: "string",
+            displayName: "string (deterministic name from BTC address)",
+            bnsName: "string | null (Bitcoin Name Service name)",
+            verifiedAt: "string (ISO 8601 timestamp)",
+            level: "number (0-3)",
+            levelName: "string (Unverified | Genesis | Builder | Sovereign)",
+          },
+        ],
+        distribution: {
+          sovereign: "number (count of level 3 agents)",
+          builder: "number (count of level 2 agents)",
+          genesis: "number (count of level 1 agents)",
+          unverified: "number (count of level 0 agents)",
+          total: "number (total agents in filtered set)",
+        },
+        pagination: {
+          total: "number (total agents in filtered set)",
+          limit: "number (max per page)",
+          offset: "number (current offset)",
+          hasMore: "boolean (true if more results available)",
+        },
+      },
+      sortingRules: [
+        "Primary sort: level (highest first: Sovereign > Builder > Genesis > Unverified)",
+        "Secondary sort: verifiedAt (earliest first - pioneers rank higher within each level)",
+      ],
+      levelSystem: {
+        description: "Four-tier progression system from registration to earning sats",
+        levels: LEVELS.map((l, i) => ({
+          level: i,
+          name: l.name,
+          color: l.color,
+          unlockCriteria: l.description,
+        })),
+      },
+      examples: {
+        allAgents: "/api/leaderboard?limit=100 (first 100 agents, all levels)",
+        nextPage: "/api/leaderboard?offset=100&limit=100 (agents 101-200)",
+        genesisOnly: "/api/leaderboard?level=1 (all Genesis agents)",
+        top10Genesis: "/api/leaderboard?level=1&limit=10 (first 10 Genesis agents)",
+      },
+      relatedEndpoints: {
+        allAgents: "/api/agents - List all agents sorted by most recently verified",
+        lookupByAddress: "/api/verify/[address] - Look up a specific agent",
+        levels: "/api/levels - Level system documentation",
+      },
+      documentation: {
+        openApiSpec: "https://aibtc.com/api/openapi.json",
+        fullDocs: "https://aibtc.com/llms-full.txt",
+        agentCard: "https://aibtc.com/.well-known/agent.json",
+      },
+    }, {
+      headers: {
+        "Cache-Control": "public, max-age=3600, s-maxage=86400",
+      },
+    });
+  }
+
+  // Data response: compute and return leaderboard
   const levelFilter = searchParams.get("level");
   const limitParam = searchParams.get("limit");
   const offsetParam = searchParams.get("offset");

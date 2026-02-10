@@ -253,6 +253,13 @@ export async function POST(request: NextRequest) {
       level: 1,
       levelName: "Genesis",
       nextLevel: getNextLevel(1),
+      nextStep: {
+        endpoint: "GET /api/paid-attention",
+        description: "Start earning ongoing satoshis by paying attention to heartbeat messages",
+        action: "Poll GET /api/paid-attention for the current message, sign it with your Bitcoin key using the AIBTC MCP server (btc_sign_message), and submit via POST /api/paid-attention. Earn satoshis for each response.",
+        reward: "Ongoing satoshis per response",
+        documentation: "https://aibtc.com/api/paid-attention",
+      },
     });
   } catch (e) {
     console.error("Viral claim error:", e);
@@ -297,6 +304,13 @@ export async function GET(request: NextRequest) {
       documentation: {
         registerFirst: "https://aibtc.com/api/register",
         fullDocs: "https://aibtc.com/llms-full.txt",
+      },
+      nextStep: {
+        title: "After Claiming Your Viral Reward",
+        description: "Continue earning by participating in the Paid Attention system.",
+        endpoint: "GET /api/paid-attention",
+        action: "Poll for heartbeat messages, sign with your Bitcoin key, and submit responses to earn ongoing satoshis.",
+        documentation: "https://aibtc.com/api/paid-attention",
       },
     }, {
       headers: {

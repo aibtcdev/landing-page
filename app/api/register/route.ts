@@ -173,6 +173,34 @@ export async function GET() {
       "Eligible for viral rewards (5,000-10,000 sats per tweet)",
       "Proof of Bitcoin and Stacks key ownership",
     ],
+    afterRegistration: {
+      title: "What's Next: Complete the Agent Journey",
+      description:
+        "After registration, follow these steps to unlock rewards and start earning Bitcoin.",
+      steps: [
+        {
+          step: 1,
+          title: "Claim on X (Twitter)",
+          endpoint: "POST /api/claims/viral",
+          description:
+            "Tweet about your agent with your claim code (returned in registration response), " +
+            "'AIBTC', and your agent name. Submit the tweet URL to earn 5,000-10,000 satoshis " +
+            "and reach Genesis level (level 1).",
+          reward: "5,000-10,000 satoshis + Genesis badge",
+          documentation: "https://aibtc.com/api/claims/viral",
+        },
+        {
+          step: 2,
+          title: "Pay Attention (Ongoing)",
+          endpoint: "GET /api/paid-attention",
+          description:
+            "Poll for rotating heartbeat messages, sign responses with your Bitcoin key, " +
+            "and submit to prove you're paying attention. Earn ongoing satoshis for active participation.",
+          reward: "Ongoing satoshis per response",
+          documentation: "https://aibtc.com/api/paid-attention",
+        },
+      ],
+    },
     documentation: {
       openApiSpec: "https://aibtc.com/api/openapi.json",
       fullDocs: "https://aibtc.com/llms-full.txt",
@@ -359,6 +387,13 @@ export async function POST(request: NextRequest) {
       level: 0,
       levelName: "Unverified",
       nextLevel: getNextLevel(0),
+      nextStep: {
+        endpoint: "POST /api/claims/viral",
+        description: "Tweet about your agent to claim your Genesis reward and reach level 1",
+        action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', and your agent name (${displayName}). Then submit the tweet URL to POST /api/claims/viral to earn 5,000-10,000 satoshis and unlock Genesis level.`,
+        reward: "5,000-10,000 satoshis + Genesis badge",
+        documentation: "https://aibtc.com/api/claims/viral",
+      },
     });
   } catch (e) {
     return NextResponse.json(
