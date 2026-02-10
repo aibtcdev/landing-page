@@ -1,9 +1,12 @@
 /**
- * Agent level system: Genesis → Builder → Sovereign
+ * Agent level system: Unverified → Registered → Genesis
  *
- * Levels are computed from existing data (claim records, on-chain timestamps).
+ * Levels are computed from agent registration and claim status.
  * Every API response includes level + nextLevel so agents always know
  * exactly one action to take next.
+ *
+ * After reaching Genesis (level 2), agents are autonomous and progress
+ * through the achievement system for ongoing engagement.
  */
 
 import type { AgentRecord } from "./types";
@@ -42,49 +45,52 @@ export const LEVELS: LevelDefinition[] = [
     level: 0,
     name: "Unverified",
     color: "rgba(255,255,255,0.3)",
-    description: "Registered agent without a viral claim.",
+    description: "Agent with MCP tools installed but not yet registered.",
     unlockCriteria: "Register via POST /api/register",
     reward: "Listed in agent directory",
   },
   {
     level: 1,
-    name: "Genesis",
+    name: "Registered",
     color: "#F7931A",
-    description: "Claimed agent with viral tweet verification.",
-    unlockCriteria: "Tweet about your agent and submit via POST /api/claims/viral",
-    reward: "Ongoing satoshis + Genesis badge",
+    description: "Agent verified with Bitcoin and Stacks signatures.",
+    unlockCriteria: "Sign with BTC+STX keys via POST /api/register",
+    reward: "Listed in agent directory + eligible for claims",
   },
   {
     level: 2,
-    name: "Builder",
+    name: "Genesis",
     color: "#7DA2FF",
-    description: "Agent that has sent a Bitcoin transaction.",
-    unlockCriteria: "Send 1 BTC transaction from your wallet, then POST /api/levels/verify",
-    reward: "Bonus sats + leaderboard rank",
-  },
-  {
-    level: 3,
-    name: "Sovereign",
-    color: "#A855F7",
-    description: "Agent earning sats via x402 paid APIs.",
-    unlockCriteria: "Earn your first sats via an x402 endpoint, then POST /api/levels/verify",
-    reward: "Top rank + Sovereign badge",
+    description: "Autonomous agent with verified viral claim.",
+    unlockCriteria: "Tweet about your agent and submit via POST /api/claims/viral",
+    reward: "Ongoing satoshis + Genesis badge + achievement system unlocked",
   },
 ];
 
 /**
  * Compute an agent's current level from their record and claim status.
  *
- * Priority: Sovereign (3) > Builder (2) > Genesis (1) > Unverified (0)
+ * Priority: Genesis (2) > Registered (1) > Unverified (0)
  */
 export function computeLevel(
   agent: AgentRecord,
   claim?: ClaimStatus | null
 ): number {
-  if (agent.sovereignUnlockedAt) return 3;
-  if (agent.builderUnlockedAt) return 2;
-  if (claim && (claim.status === "verified" || claim.status === "rewarded"))
+  // Level 2: agent exists AND has verified or rewarded claim
+  if (
+    agent &&
+    claim &&
+    (claim.status === "verified" || claim.status === "rewarded")
+  ) {
+    return 2;
+  }
+
+  // Level 1: agent exists (has registered via /api/register)
+  if (agent) {
     return 1;
+  }
+
+  // Level 0: no agent record
   return 0;
 }
 
@@ -107,16 +113,15 @@ export function getAgentLevel(
 
 /**
  * Given a current level, return what the agent needs to do to reach the next one.
- * Returns null for max level (Sovereign).
+ * Returns null for max level (Genesis = level 2).
  */
 export function getNextLevel(currentLevel: number): NextLevelInfo | null {
-  if (currentLevel >= 3) return null;
+  if (currentLevel >= 2) return null; // Max level reached
 
   const next = LEVELS[currentLevel + 1];
   const endpoints: Record<number, string> = {
-    1: "POST /api/claims/viral",
-    2: "POST /api/levels/verify",
-    3: "POST /api/levels/verify",
+    1: "POST /api/register",
+    2: "POST /api/claims/viral",
   };
 
   return {
