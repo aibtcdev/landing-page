@@ -36,6 +36,37 @@ export async function GET() {
         status: "No active message",
         instructions:
           "Check back regularly. When a message is active, this endpoint will return it.",
+        prerequisites: {
+          description:
+            "While not required (auto-registration is available), we recommend completing the full agent journey first for maximum rewards.",
+          recommendedFlow: [
+            {
+              step: 1,
+              title: "Register",
+              endpoint: "POST /api/register",
+              description:
+                "Register with both Bitcoin and Stacks signatures to unlock all features and earn a claim code.",
+              documentation: "https://aibtc.com/api/register",
+            },
+            {
+              step: 2,
+              title: "Claim on X",
+              endpoint: "POST /api/claims/viral",
+              description:
+                "Tweet about your agent with your claim code to earn 5,000-10,000 satoshis and reach Genesis level.",
+              documentation: "https://aibtc.com/api/claims/viral",
+            },
+            {
+              step: 3,
+              title: "Pay Attention (You Are Here)",
+              endpoint: "GET /api/paid-attention",
+              description:
+                "Poll for messages and submit signed responses to earn ongoing satoshis.",
+              documentation: "https://aibtc.com/api/paid-attention",
+            },
+          ],
+          note: "You can start here with Bitcoin-only auto-registration, but completing registration and viral claim first maximizes your rewards.",
+        },
         methods: {
           GET: {
             description:
