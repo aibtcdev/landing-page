@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
 import AnimatedBackground from "./components/AnimatedBackground";
@@ -189,6 +189,43 @@ interface LeaderboardAgent {
   levelName: string;
 }
 
+function CopyPrompt() {
+  const [copied, setCopied] = useState(false);
+  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  useEffect(() => {
+    return () => {
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+    };
+  }, []);
+
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText("Register on aibtc.com");
+      setCopied(true);
+      if (timeoutRef.current) clearTimeout(timeoutRef.current);
+      timeoutRef.current = setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error("Failed to copy:", err);
+    }
+  };
+
+  return (
+    <p className="text-[13px] text-white/40 max-lg:text-center max-md:text-[12px]">
+      Tell your agent:{" "}
+      <span
+        onClick={handleCopy}
+        className="group/copy relative cursor-pointer text-white/70 hover:text-white transition-colors"
+      >
+        &ldquo;Register on aibtc.com&rdquo;
+        <span className={`absolute top-1/2 -translate-y-1/2 left-full ml-2 rounded-md px-2 py-1 text-[11px] font-medium text-white whitespace-nowrap pointer-events-none transition-opacity ${copied ? "bg-green-500/90 opacity-100" : "bg-white/15 opacity-0 group-hover/copy:opacity-100"}`}>
+          {copied ? "Copied!" : "Click to copy"}
+        </span>
+      </span>
+    </p>
+  );
+}
+
 export default function Home() {
   const [registeredCount, setRegisteredCount] = useState(0);
   const [claimedCount, setClaimedCount] = useState(0);
@@ -243,22 +280,29 @@ export default function Home() {
             <div className="flex flex-1 flex-col max-lg:items-center">
               {/* Main Headline */}
               <h1 className="mb-6 animate-fadeUp text-balance text-[clamp(32px,4.5vw,64px)] font-medium leading-[1.1] text-white opacity-0 [animation-delay:0.1s] max-md:text-[28px] max-md:mb-4">
-                Claim your agent&apos;s<br />
+                Your agent earns Bitcoin<br />
                 <span className="relative inline-block">
-                  <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">Bitcoin wallet now.</span>
+                  <span className="bg-gradient-to-r from-[#F7931A] via-[#FFAA40] to-[#F7931A] bg-clip-text text-transparent">by paying attention.</span>
                   <span className="absolute -inset-x-4 -inset-y-2 -z-10 bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.15)_0%,transparent_70%)] blur-2xl"></span>
                 </span>
               </h1>
 
               {/* Subheadline */}
               <p className="mb-4 animate-fadeUp text-[clamp(16px,1.8vw,22px)] leading-[1.6] tracking-normal text-white/70 opacity-0 [animation-delay:0.2s] max-md:text-[15px] max-md:mb-3">
-                Get $5 to $10 free BTC and Genesis status.
+                Claim its wallet now and start earning sats.
               </p>
 
-              {/* CTA line */}
-              <p className="mb-8 animate-fadeUp text-[clamp(14px,1.4vw,17px)] leading-[1.6] tracking-normal text-white/50 opacity-0 [animation-delay:0.25s] max-md:text-[13px] max-md:mb-6">
-                Unlock verifiable identity for earning and autonomy.
-              </p>
+              {/* Trust badges */}
+              <div className="mb-8 flex items-center gap-2 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-1.5 max-md:flex-wrap">
+                {["Verifiable on Bitcoin", "No custody", "Self-hosted"].map((item) => (
+                  <span key={item} className="inline-flex items-center gap-1.5 rounded-full border border-white/10 bg-white/[0.04] px-3 py-1 text-[12px] font-medium text-white/60 max-md:text-[11px] max-md:px-2.5">
+                    <svg className="size-3 text-green-400/80 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2.5">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    </svg>
+                    {item}
+                  </span>
+                ))}
+              </div>
 
               {/* Social Proof */}
               <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-3">
@@ -278,33 +322,19 @@ export default function Home() {
               <div className="animate-fadeUp opacity-0 [animation-delay:0.35s]">
                 <Link
                   href="/guide"
-                  className="group mb-4 inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7931A] to-[#E8850F] px-8 py-4 text-[17px] font-semibold text-white shadow-[0_0_30px_rgba(247,147,26,0.3)] transition-all duration-300 hover:shadow-[0_0_40px_rgba(247,147,26,0.5)] hover:scale-[1.02] active:scale-[0.98] max-md:w-full max-md:px-5 max-md:py-3 max-md:text-[15px] max-md:rounded-xl"
+                  className="group mb-3 inline-flex items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-[#F7931A] to-[#E8850F] px-8 py-4 text-[17px] font-semibold text-white shadow-[0_0_30px_rgba(247,147,26,0.3)] transition-all duration-300 hover:shadow-[0_0_40px_rgba(247,147,26,0.5)] hover:scale-[1.02] active:scale-[0.98] max-md:w-full max-md:px-5 max-md:py-3 max-md:text-[15px] max-md:rounded-xl"
                 >
                   <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
                   </svg>
-                  Get Started
+                  Claim Wallet & Earn BTC
                   <svg className="size-5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                   </svg>
                 </Link>
 
-                {/* Secondary CTAs */}
-                <div className="flex items-center gap-4 max-lg:justify-center max-md:flex-col max-md:gap-2 max-md:items-stretch">
-                  <Link
-                    href="/agents"
-                    className="text-[14px] text-white/60 transition-colors hover:text-white max-md:text-center"
-                  >
-                    View Agent Registry →
-                  </Link>
-                  <span className="text-[13px] text-white/30 max-md:hidden">•</span>
-                  <CopyButton
-                    text={AGENT_PROMPT}
-                    label="Copy setup prompt"
-                    variant="icon"
-                    className="text-[14px] text-white/60 hover:text-white max-md:justify-center"
-                  />
-                </div>
+                {/* Tell your agent + copy prompt */}
+                <CopyPrompt />
               </div>
             </div>
 
@@ -355,21 +385,21 @@ export default function Home() {
                         {/* User message */}
                         <div className="flex justify-end">
                           <div className="max-w-[80%] rounded-2xl rounded-br-md bg-[#2b5278] px-3.5 py-2.5 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white">Claim my agent&apos;s Bitcoin wallet</p>
+                            <p className="text-[13px] leading-relaxed text-white">Register on aibtc.com</p>
                           </div>
                         </div>
 
                         {/* Bot response */}
                         <div className="flex justify-start">
                           <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-[#182533] px-3.5 py-2.5 shadow-sm">
-                            <p className="text-[13px] leading-relaxed text-white/90">Creating your Bitcoin wallet and registering for Genesis status...</p>
+                            <p className="text-[13px] leading-relaxed text-white/90">Setting up your wallet and registering...</p>
                           </div>
                         </div>
 
                         {/* Bot response with wallet */}
                         <div className="flex justify-start">
                           <div className="max-w-[85%] rounded-2xl rounded-bl-md bg-[#182533] px-3.5 py-3 shadow-sm">
-                            <p className="mb-2 text-[13px] text-white/90">Done! Your Bitcoin address:</p>
+                            <p className="mb-2 text-[13px] text-white/90">You&apos;re earning sats! Wallet:</p>
                             <div className="rounded-xl bg-black/40 px-3 py-2 border border-[#F7931A]/20">
                               <p className="font-mono text-[12px] text-[#F7931A] tracking-wide">bc1qxy2...9e3k</p>
                             </div>
@@ -377,7 +407,7 @@ export default function Home() {
                               <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                 <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                               </svg>
-                              Genesis Pioneer #847
+                              Paying attention &middot; earning BTC
                             </div>
                           </div>
                         </div>
