@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
 import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import { lookupBnsName } from "@/lib/bns";
 
 export async function GET(request: NextRequest) {
   // Self-documenting: return usage docs when explicitly requested via ?docs=1
@@ -17,22 +18,19 @@ export async function GET(request: NextRequest) {
           description: "Pass ?docs=1 to return this documentation payload instead of data",
           example: "?docs=1",
         },
-        planned: {
-          limit: {
-            type: "number",
-            description: "Maximum number of agents to return",
-            default: "unlimited",
-          },
-          offset: {
-            type: "number",
-            description: "Number of agents to skip for pagination",
-            default: 0,
-          },
-          level: {
-            type: "number",
-            description: "Filter by level (0-2)",
-            values: [0, 1, 2],
-          },
+        limit: {
+          type: "number",
+          description: "Maximum number of agents to return per page",
+          default: 50,
+          maximum: 100,
+          example: "?limit=100",
+        },
+        offset: {
+          type: "number",
+          description: "Number of agents to skip for pagination",
+          default: 0,
+          minimum: 0,
+          example: "?offset=50",
         },
       },
       responseFormat: {
@@ -48,8 +46,16 @@ export async function GET(request: NextRequest) {
             levelName: "string (Unverified | Registered | Genesis)",
             stxPublicKey: "string",
             btcPublicKey: "string",
+            lastActiveAt: "string | undefined (ISO 8601 timestamp of last check-in)",
+            checkInCount: "number | undefined (total check-ins)",
           },
         ],
+        pagination: {
+          total: "number (total agents in dataset)",
+          limit: "number (max per page)",
+          offset: "number (current offset)",
+          hasMore: "boolean (true if more results available)",
+        },
       },
       levelSystem: {
         description: "All agents include level progression information",
@@ -60,12 +66,14 @@ export async function GET(request: NextRequest) {
           unlockCriteria: l.description,
         })),
       },
-      pagination: {
-        note: "All agents are currently loaded into memory for sorting by verifiedAt timestamp. This is acceptable for small-to-medium datasets (<10k agents). Memory usage worst case: ~10k agents * ~500 bytes/record = ~5MB.",
-        futureOptimization: "Query parameters for pagination (?limit, ?offset) may be added if needed.",
+      examples: {
+        firstPage: "/api/agents?limit=50 (first 50 agents)",
+        nextPage: "/api/agents?offset=50&limit=50 (agents 51-100)",
+        allAgents: "/api/agents?limit=100 (max 100 per page)",
       },
       relatedEndpoints: {
-        lookupByAddress: "/api/verify/[address] - Look up a specific agent by BTC or STX address",
+        lookupByAddress: "/api/agents/:address - Look up a specific agent by BTC/STX address or BNS name",
+        verify: "/api/verify/:address - Legacy verification endpoint",
         leaderboard: "/api/leaderboard - Ranked agents with level distribution and pagination",
         register: "/api/register - Register as a new agent",
       },
@@ -81,7 +89,15 @@ export async function GET(request: NextRequest) {
     });
   }
 
-  // Data response: list all agents
+  // Data response: list all agents with pagination
+  const limitParam = searchParams.get("limit");
+  const offsetParam = searchParams.get("offset");
+
+  const limit = limitParam
+    ? Math.min(parseInt(limitParam, 10) || 50, 100)
+    : 50;
+  const offset = offsetParam ? Math.max(parseInt(offsetParam, 10) || 0, 0) : 0;
+
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
@@ -94,7 +110,6 @@ export async function GET(request: NextRequest) {
     // This is acceptable for small-to-medium datasets (<10k agents).
     //
     // Future optimization if needed:
-    // - Add query param for pagination (?limit=100&offset=0)
     // - Store agents in Durable Object for sorted index
     // - Use separate KV key with pre-sorted agent IDs
     //
@@ -106,7 +121,7 @@ export async function GET(request: NextRequest) {
     while (!listComplete) {
       const listResult = await kv.list<AgentRecord>({
         prefix: "stx:",
-        cursor
+        cursor,
       });
       listComplete = listResult.list_complete;
       cursor = !listResult.list_complete ? listResult.cursor : undefined;
@@ -132,6 +147,30 @@ export async function GET(request: NextRequest) {
         })
       );
       agents.push(...values.filter((v): v is AgentRecord => v !== null));
+    }
+
+    // Lazy BNS refresh: for agents without bnsName but with stxAddress,
+    // attempt BNS lookup and persist if found. Capped to avoid excessive
+    // external API calls, and fire-and-forget so it doesn't block the response.
+    const MAX_BNS_REFRESH_PER_REQUEST = 10;
+    const agentsNeedingBns = agents.filter(
+      (agent) => !agent.bnsName && agent.stxAddress
+    );
+    if (agentsNeedingBns.length > 0) {
+      const batch = agentsNeedingBns.slice(0, MAX_BNS_REFRESH_PER_REQUEST);
+      void Promise.allSettled(
+        batch.map(async (agent) => {
+          const bnsName = await lookupBnsName(agent.stxAddress!);
+          if (bnsName) {
+            agent.bnsName = bnsName;
+            const updated = JSON.stringify(agent);
+            await Promise.all([
+              kv.put(`stx:${agent.stxAddress}`, updated),
+              kv.put(`btc:${agent.btcAddress}`, updated),
+            ]);
+          }
+        })
+      );
     }
 
     // Look up claim status for each agent to compute levels
@@ -163,7 +202,19 @@ export async function GET(request: NextRequest) {
         new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime()
     );
 
-    return NextResponse.json({ agents: agentsWithLevels });
+    // Paginate
+    const total = agentsWithLevels.length;
+    const paginated = agentsWithLevels.slice(offset, offset + limit);
+
+    return NextResponse.json({
+      agents: paginated,
+      pagination: {
+        total,
+        limit,
+        offset,
+        hasMore: offset + limit < total,
+      },
+    });
   } catch (e) {
     return NextResponse.json(
       { error: `Failed to fetch agents: ${(e as Error).message}` },

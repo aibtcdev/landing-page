@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import LevelBadge from "./LevelBadge";
 import { generateName } from "@/lib/name-generator";
-import { truncateAddress } from "@/lib/utils";
+import { truncateAddress, formatRelativeTime, getActivityStatus, formatShortDate, ACTIVITY_COLORS } from "@/lib/utils";
 import { LEVELS } from "@/lib/levels";
 
 interface LeaderboardAgent {
@@ -16,6 +16,8 @@ interface LeaderboardAgent {
   verifiedAt: string;
   level: number;
   levelName: string;
+  lastActiveAt?: string;
+  checkInCount?: number;
 }
 
 interface Distribution {
@@ -23,6 +25,8 @@ interface Distribution {
   registered: number;
   unverified: number;
   total: number;
+  activeAgents?: number;
+  totalCheckIns?: number;
 }
 
 interface LeaderboardProps {
@@ -62,11 +66,7 @@ export default function Leaderboard({
         ...agent,
         name: agent.displayName || generateName(agent.btcAddress),
         avatarUrl: `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`,
-        joined: new Date(agent.verifiedAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        }),
+        joined: formatShortDate(agent.verifiedAt),
       })),
     [agents]
   );
@@ -113,6 +113,21 @@ export default function Leaderboard({
               </span>
             </span>
           ))}
+          {distribution.activeAgents !== undefined && distribution.activeAgents > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: ACTIVITY_COLORS.active }} />
+              <span className="text-white/40">
+                <span className="font-medium text-white/60">{distribution.activeAgents}</span> Active now
+              </span>
+            </span>
+          )}
+          {distribution.totalCheckIns !== undefined && distribution.totalCheckIns > 0 && (
+            <span className="flex items-center gap-1.5">
+              <span className="text-white/40">
+                <span className="font-medium text-white/60">{distribution.totalCheckIns.toLocaleString()}</span> Check-ins
+              </span>
+            </span>
+          )}
         </div>
       )}
 
@@ -124,6 +139,7 @@ export default function Leaderboard({
               <th className="px-5 py-3 font-medium max-md:px-3">Name</th>
               <th className="hidden px-5 py-3 font-medium md:table-cell">Bitcoin Address</th>
               <th className="px-5 py-3 font-medium max-md:px-3">Joined</th>
+              <th className="hidden px-5 py-3 font-medium lg:table-cell">Activity</th>
               <th className="px-5 py-3 text-right font-medium max-md:px-3">Level</th>
             </tr>
           </thead>
@@ -161,6 +177,21 @@ export default function Leaderboard({
                   </td>
                   <td className="px-5 py-3 text-[13px] text-white/40 max-md:px-3 max-md:text-[12px]">
                     {agent.joined}
+                  </td>
+                  <td className="hidden px-5 py-3 text-[13px] text-white/40 lg:table-cell">
+                    {agent.lastActiveAt ? (
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-1.5 w-1.5 rounded-full"
+                          style={{
+                            backgroundColor: getActivityStatus(agent.lastActiveAt).color,
+                          }}
+                        />
+                        <span>{formatRelativeTime(agent.lastActiveAt)}</span>
+                      </div>
+                    ) : (
+                      <span className="text-white/20">Never</span>
+                    )}
                   </td>
                   <td className="px-5 py-3 text-right max-md:px-3">
                     <div className="flex items-center justify-end gap-2">

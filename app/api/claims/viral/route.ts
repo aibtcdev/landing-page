@@ -205,6 +205,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Check if this agent already has a different owner set
+    if (agent.owner && agent.owner.toLowerCase() !== ownerHandle.toLowerCase()) {
+      return NextResponse.json(
+        {
+          error: `This agent is already claimed by X account @${agent.owner}. Each agent can only be claimed by one X account.`,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Check if this X handle is already claimed by a different agent
     const existingOwner = await agentsKv.get(`owner:${ownerHandle.toLowerCase()}`);
     if (existingOwner && existingOwner !== btcAddress) {
       return NextResponse.json(

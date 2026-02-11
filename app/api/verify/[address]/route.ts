@@ -123,6 +123,8 @@ export async function GET(
           bnsName: agent.bnsName,
           verifiedAt: agent.verifiedAt,
           owner: agent.owner,
+          lastActiveAt: agent.lastActiveAt,
+          checkInCount: agent.checkInCount,
         },
         ...levelInfo,
       },
