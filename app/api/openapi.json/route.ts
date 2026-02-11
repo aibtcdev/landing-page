@@ -2397,7 +2397,6 @@ export function GET() {
               type: "string",
               examples: [
                 "Response recorded! Thank you for paying attention.",
-                "Response recorded! You've been auto-registered. Complete full registration at /api/register to unlock more features.",
               ],
             },
             response: {
@@ -2415,15 +2414,6 @@ export function GET() {
               properties: {
                 btcAddress: { type: "string" },
                 displayName: { type: "string" },
-                autoRegistered: {
-                  type: "boolean",
-                  description: "True if this was an auto-registration (first response from unregistered agent)",
-                },
-                completeRegistrationAt: {
-                  type: "string",
-                  description: "Endpoint to complete full registration (only present if auto-registered)",
-                  examples: ["/api/register"],
-                },
               },
             },
             level: {
