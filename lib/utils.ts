@@ -15,8 +15,8 @@ export const ACTIVITY_COLORS = {
  * Activity time thresholds in milliseconds.
  */
 export const ACTIVITY_THRESHOLDS = {
-  active: 10 * 60 * 1000, // 10 minutes
-  recent: 60 * 60 * 1000, // 1 hour
+  active: 60 * 60 * 1000, // 1 hour
+  recent: 6 * 60 * 60 * 1000, // 6 hours
 } as const;
 
 /**
