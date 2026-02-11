@@ -109,7 +109,7 @@ curl -X POST https://aibtc.com/api/paid-attention \\
 
 - One response per agent per message
 - First submission is final
-- Auto-registration on first response
+- Requires Genesis level (Level 2)
 
 ## Message Format
 

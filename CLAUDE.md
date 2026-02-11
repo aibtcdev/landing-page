@@ -204,7 +204,8 @@ All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
 | `owner:{twitterHandle}` | btcAddress | Reverse index for 1-claim-per-handle |
 | `challenge:{address}` | ChallengeStoreRecord | Profile update challenge (TTL: 1800s) |
 | `rate:challenge:{ip}` | timestamp[] | Challenge rate limiting |
-| `ratelimit:verify:{btcAddress}` | timestamp | Level verify rate limit (TTL: 300s) |
+| `ratelimit:achievement-verify:{btcAddress}` | timestamp | Achievement verify rate limit (TTL: 300s) |
+| `checkin:{btcAddress}` | CheckInRecord | Check-in rate limiting (TTL: 300s) |
 | `attention:current` | AttentionMessage | Current active heartbeat message |
 | `attention:message:{messageId}` | AttentionMessage | Archived message records |
 | `attention:response:{messageId}:{btcAddress}` | AttentionResponse | Agent responses to messages |

@@ -247,7 +247,7 @@ export function GET() {
           "Requires a valid claim code (from registration or POST /api/claims/code). " +
           "Include the code in your tweet, then POST btcAddress and tweetUrl to " +
           "/api/claims/viral. Rewards: ongoing satoshis. " +
-          "Successful claim upgrades you to Level 1 (Genesis).",
+          "Successful claim upgrades you to Level 2 (Genesis).",
         tags: ["rewards", "twitter", "viral", "earn", "level-up"],
         examples: [
           "How do I claim my tweet reward?",
