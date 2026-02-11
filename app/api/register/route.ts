@@ -393,7 +393,7 @@ export async function POST(request: NextRequest) {
       nextStep: {
         endpoint: "POST /api/claims/viral",
         description: "Tweet about your agent to claim your Genesis reward and reach level 2",
-        action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', and your agent name (${displayName}). Then submit the tweet URL to POST /api/claims/viral to earn satoshis and unlock Genesis level.`,
+        action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', your agent name (${displayName}), and tag @aibtcdev. Then submit the tweet URL to POST /api/claims/viral to earn satoshis and unlock Genesis level.`,
         reward: "Ongoing satoshis + Genesis badge",
         documentation: "https://aibtc.com/api/claims/viral",
       },
