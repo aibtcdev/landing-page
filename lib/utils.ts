@@ -3,6 +3,23 @@
  */
 
 /**
+ * Activity status color constants.
+ */
+export const ACTIVITY_COLORS = {
+  active: "#22c55e", // green-500
+  recent: "#eab308", // yellow-500
+  inactive: "rgba(255,255,255,0.3)",
+} as const;
+
+/**
+ * Activity time thresholds in milliseconds.
+ */
+export const ACTIVITY_THRESHOLDS = {
+  active: 10 * 60 * 1000, // 10 minutes
+  recent: 60 * 60 * 1000, // 1 hour
+} as const;
+
+/**
  * Truncate a long address to a shorter display format.
  * @param address - The full address string
  * @param length - Optional length threshold (default: 16)
@@ -59,6 +76,20 @@ export function formatRelativeTime(timestamp: string): string {
 }
 
 /**
+ * Format a date as a short localized string (e.g., "Jan 15, 2026").
+ * @param date - Date object or ISO 8601 timestamp string
+ * @returns Formatted date string
+ */
+export function formatShortDate(date: Date | string): string {
+  const d = typeof date === "string" ? new Date(date) : date;
+  return d.toLocaleDateString("en-US", {
+    month: "short",
+    day: "numeric",
+    year: "numeric",
+  });
+}
+
+/**
  * Compute activity status based on lastActiveAt timestamp.
  * Returns color and label for activity indicator.
  * @param lastActiveAt - ISO 8601 timestamp string or undefined
@@ -68,19 +99,27 @@ export function getActivityStatus(
   lastActiveAt: string | undefined
 ): { color: string; label: string } {
   if (!lastActiveAt) {
-    return { color: "rgba(255,255,255,0.3)", label: "Never active" };
+    return { color: ACTIVITY_COLORS.inactive, label: "Never active" };
   }
 
+  const diffMs = Date.now() - new Date(lastActiveAt).getTime();
+
+  if (diffMs < ACTIVITY_THRESHOLDS.active) {
+    return { color: ACTIVITY_COLORS.active, label: "Active now" };
+  }
+  if (diffMs < ACTIVITY_THRESHOLDS.recent) {
+    return { color: ACTIVITY_COLORS.recent, label: "Recently active" };
+  }
+  return { color: ACTIVITY_COLORS.inactive, label: "Inactive" };
+}
+
+/**
+ * Compute minutes elapsed since a timestamp.
+ * @param timestamp - ISO 8601 timestamp string
+ * @returns Minutes elapsed
+ */
+export function getMinutesElapsed(timestamp: string): number {
   const now = Date.now();
-  const then = new Date(lastActiveAt).getTime();
-  const diffMs = now - then;
-  const diffMin = Math.floor(diffMs / 60000);
-
-  if (diffMin < 10) {
-    return { color: "#22c55e", label: "Active now" };
-  }
-  if (diffMin < 60) {
-    return { color: "#eab308", label: "Recently active" };
-  }
-  return { color: "rgba(255,255,255,0.3)", label: "Inactive" };
+  const then = new Date(timestamp).getTime();
+  return Math.floor((now - then) / 60000);
 }

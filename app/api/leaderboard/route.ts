@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
 import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -213,14 +214,14 @@ export async function GET(request: NextRequest) {
 
     // Level distribution stats with activity metrics
     const now = Date.now();
-    const oneHourAgo = now - 60 * 60 * 1000;
+    const activeThreshold = now - ACTIVITY_THRESHOLDS.recent;
     const distribution = {
       genesis: ranked.filter((a) => a.level === 2).length,
       registered: ranked.filter((a) => a.level === 1).length,
       unverified: ranked.filter((a) => a.level === 0).length,
       total: ranked.length,
       activeAgents: ranked.filter((a) =>
-        a.lastActiveAt && new Date(a.lastActiveAt).getTime() > oneHourAgo
+        a.lastActiveAt && new Date(a.lastActiveAt).getTime() > activeThreshold
       ).length,
       totalCheckIns: ranked.reduce((sum, a) => sum + (a.checkInCount || 0), 0),
     };

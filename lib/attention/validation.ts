@@ -31,6 +31,18 @@ function validateSignatureFormat(signature: string): string[] {
   return errors;
 }
 
+/** Validate ISO 8601 canonical format (shared between multiple validators). */
+function validateCanonicalISO8601(value: string, fieldName: string): string[] {
+  const errors: string[] = [];
+  const parsed = new Date(value);
+  if (isNaN(parsed.getTime()) || parsed.toISOString() !== value) {
+    errors.push(
+      `${fieldName} must be a canonical ISO 8601 date string (e.g. 2026-02-09T12:00:00.000Z)`
+    );
+  }
+  return errors;
+}
+
 /**
  * Validate and parse a response submission body.
  *
@@ -155,12 +167,7 @@ export function validatePayoutBody(body: unknown):
   if (typeof b.paidAt !== "string") {
     errors.push("paidAt must be a string");
   } else {
-    const parsed = new Date(b.paidAt);
-    if (isNaN(parsed.getTime()) || parsed.toISOString() !== b.paidAt) {
-      errors.push(
-        "paidAt must be a canonical ISO 8601 date string (e.g. 2026-02-09T12:00:00.000Z)"
-      );
-    }
+    errors.push(...validateCanonicalISO8601(b.paidAt, "paidAt"));
   }
 
   if (errors.length > 0) {
@@ -217,12 +224,7 @@ export function validateMessageBody(body: unknown):
     if (typeof b.closedAt !== "string") {
       errors.push("closedAt must be a string if provided");
     } else {
-      const parsed = new Date(b.closedAt);
-      if (isNaN(parsed.getTime()) || parsed.toISOString() !== b.closedAt) {
-        errors.push(
-          "closedAt must be a canonical ISO 8601 date string (e.g. 2026-02-09T12:00:00.000Z)"
-        );
-      }
+      errors.push(...validateCanonicalISO8601(b.closedAt, "closedAt"));
     }
   }
 
@@ -283,15 +285,13 @@ export function validateCheckInBody(body: unknown):
   if (typeof b.timestamp !== "string") {
     errors.push("timestamp must be a string");
   } else {
-    const parsed = new Date(b.timestamp);
-    if (isNaN(parsed.getTime()) || parsed.toISOString() !== b.timestamp) {
-      errors.push(
-        "timestamp must be a canonical ISO 8601 date string (e.g. 2026-02-10T12:00:00.000Z)"
-      );
-    } else {
-      // Verify timestamp is within the allowed window
+    const isoErrors = validateCanonicalISO8601(b.timestamp, "timestamp");
+    errors.push(...isoErrors);
+
+    // Only check time window if ISO format is valid
+    if (isoErrors.length === 0) {
       const now = Date.now();
-      const timestampMs = parsed.getTime();
+      const timestampMs = new Date(b.timestamp).getTime();
       const diff = Math.abs(now - timestampMs);
       if (diff > CHECK_IN_TIMESTAMP_WINDOW_MS) {
         errors.push(

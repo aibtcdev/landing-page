@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import LevelBadge from "./LevelBadge";
 import { generateName } from "@/lib/name-generator";
-import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
+import { truncateAddress, formatRelativeTime, getActivityStatus, formatShortDate, ACTIVITY_COLORS } from "@/lib/utils";
 import { LEVELS } from "@/lib/levels";
 
 interface LeaderboardAgent {
@@ -66,11 +66,7 @@ export default function Leaderboard({
         ...agent,
         name: agent.displayName || generateName(agent.btcAddress),
         avatarUrl: `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`,
-        joined: new Date(agent.verifiedAt).toLocaleDateString("en-US", {
-          month: "short",
-          day: "numeric",
-          year: "numeric",
-        }),
+        joined: formatShortDate(agent.verifiedAt),
       })),
     [agents]
   );
@@ -119,7 +115,7 @@ export default function Leaderboard({
           ))}
           {distribution.activeAgents !== undefined && distribution.activeAgents > 0 && (
             <span className="flex items-center gap-1.5">
-              <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: "#22c55e" }} />
+              <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: ACTIVITY_COLORS.active }} />
               <span className="text-white/40">
                 <span className="font-medium text-white/60">{distribution.activeAgents}</span> Active
               </span>
