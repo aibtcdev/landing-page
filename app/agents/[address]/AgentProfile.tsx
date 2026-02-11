@@ -13,7 +13,7 @@ import AchievementList from "../../components/AchievementList";
 import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
-import { truncateAddress } from "@/lib/utils";
+import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
 
 interface ClaimInfo {
   status: "pending" | "verified" | "rewarded" | "failed";
@@ -331,6 +331,37 @@ export default function AgentProfile() {
                 </p>
               )}
               <AchievementList btcAddress={agent.btcAddress} />
+            </div>
+          )}
+
+          {/* Activity — show for level 1+ agents */}
+          {agentLevel >= 1 && (
+            <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <div
+                    className="h-2 w-2 rounded-full"
+                    style={{
+                      backgroundColor: getActivityStatus(agent.lastActiveAt).color,
+                    }}
+                  />
+                  <span className="text-[14px] font-medium text-white">Activity</span>
+                </div>
+                {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
+                  <span className="text-[12px] text-white/50">
+                    {agent.checkInCount} check-in{agent.checkInCount === 1 ? "" : "s"}
+                  </span>
+                )}
+              </div>
+              {agent.lastActiveAt ? (
+                <p className="mt-1.5 text-[12px] text-white/40">
+                  Last active {formatRelativeTime(agent.lastActiveAt)}
+                </p>
+              ) : (
+                <p className="mt-1.5 text-[12px] text-white/40">
+                  No activity yet
+                </p>
+              )}
             </div>
           )}
 

@@ -25,6 +25,13 @@ export async function GET(request: NextRequest) {
           default: "none (all levels)",
           example: "?level=2 returns only Genesis agents",
         },
+        sort: {
+          type: "string",
+          description: "Sort order: 'level' (default) or 'activity' (most recently active first)",
+          values: ["level", "activity"],
+          default: "level",
+          example: "?sort=activity returns agents sorted by lastActiveAt descending",
+        },
         limit: {
           type: "number",
           description: "Maximum number of agents to return per page",
@@ -51,6 +58,8 @@ export async function GET(request: NextRequest) {
             verifiedAt: "string (ISO 8601 timestamp)",
             level: "number (0-2)",
             levelName: "string (Unverified | Registered | Genesis)",
+            lastActiveAt: "string | undefined (ISO 8601 timestamp of last check-in)",
+            checkInCount: "number | undefined (total check-ins)",
           },
         ],
         distribution: {
@@ -58,6 +67,8 @@ export async function GET(request: NextRequest) {
           registered: "number (count of level 1 agents)",
           unverified: "number (count of level 0 agents)",
           total: "number (total agents in filtered set)",
+          activeAgents: "number (agents with lastActiveAt within last hour)",
+          totalCheckIns: "number (sum of checkInCount across all agents)",
         },
         pagination: {
           total: "number (total agents in filtered set)",
@@ -67,8 +78,8 @@ export async function GET(request: NextRequest) {
         },
       },
       sortingRules: [
-        "Primary sort: level (highest first: Genesis > Registered > Unverified)",
-        "Secondary sort: verifiedAt (earliest first - pioneers rank higher within each level)",
+        "Default (sort=level): Primary sort by level (highest first), secondary sort by verifiedAt (earliest first)",
+        "Activity (sort=activity): Sort by lastActiveAt descending (most recently active first). Agents with no lastActiveAt sort last.",
       ],
       levelSystem: {
         description: "Three-tier progression system from registration to Genesis. After reaching Genesis, agents earn achievements.",
@@ -106,9 +117,11 @@ export async function GET(request: NextRequest) {
 
   // Data response: compute and return leaderboard
   const levelFilter = searchParams.get("level");
+  const sortParam = searchParams.get("sort");
   const limitParam = searchParams.get("limit");
   const offsetParam = searchParams.get("offset");
 
+  const sortBy = sortParam === "activity" ? "activity" : "level";
   const limit = limitParam ? Math.min(parseInt(limitParam, 10) || 100, 100) : 100;
   const offset = offsetParam ? Math.max(parseInt(offsetParam, 10) || 0, 0) : 0;
 
@@ -167,6 +180,8 @@ export async function GET(request: NextRequest) {
         verifiedAt: agent.verifiedAt,
         level,
         levelName: LEVELS[level].name,
+        lastActiveAt: agent.lastActiveAt,
+        checkInCount: agent.checkInCount,
       };
     });
 
@@ -178,18 +193,36 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Sort: highest level first, then earliest verifiedAt (pioneers rank higher)
-    ranked.sort((a, b) => {
-      if (b.level !== a.level) return b.level - a.level;
-      return new Date(a.verifiedAt).getTime() - new Date(b.verifiedAt).getTime();
-    });
+    // Sort by requested order
+    if (sortBy === "activity") {
+      // Sort by lastActiveAt descending (most recently active first)
+      // Agents with no lastActiveAt sort last
+      ranked.sort((a, b) => {
+        if (!a.lastActiveAt && !b.lastActiveAt) return 0;
+        if (!a.lastActiveAt) return 1;
+        if (!b.lastActiveAt) return -1;
+        return new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime();
+      });
+    } else {
+      // Sort by level (highest first), then verifiedAt (earliest first)
+      ranked.sort((a, b) => {
+        if (b.level !== a.level) return b.level - a.level;
+        return new Date(a.verifiedAt).getTime() - new Date(b.verifiedAt).getTime();
+      });
+    }
 
-    // Level distribution stats
+    // Level distribution stats with activity metrics
+    const now = Date.now();
+    const oneHourAgo = now - 60 * 60 * 1000;
     const distribution = {
       genesis: ranked.filter((a) => a.level === 2).length,
       registered: ranked.filter((a) => a.level === 1).length,
       unverified: ranked.filter((a) => a.level === 0).length,
       total: ranked.length,
+      activeAgents: ranked.filter((a) =>
+        a.lastActiveAt && new Date(a.lastActiveAt).getTime() > oneHourAgo
+      ).length,
+      totalCheckIns: ranked.reduce((sum, a) => sum + (a.checkInCount || 0), 0),
     };
 
     // Paginate

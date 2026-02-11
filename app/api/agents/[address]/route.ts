@@ -273,6 +273,8 @@ export async function GET(
           owner: agent.owner,
           stxPublicKey: agent.stxPublicKey,
           btcPublicKey: agent.btcPublicKey,
+          lastActiveAt: agent.lastActiveAt,
+          checkInCount: agent.checkInCount,
         },
         ...levelInfo,
         achievements,

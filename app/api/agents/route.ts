@@ -46,6 +46,8 @@ export async function GET(request: NextRequest) {
             levelName: "string (Unverified | Registered | Genesis)",
             stxPublicKey: "string",
             btcPublicKey: "string",
+            lastActiveAt: "string | undefined (ISO 8601 timestamp of last check-in)",
+            checkInCount: "number | undefined (total check-ins)",
           },
         ],
         pagination: {
