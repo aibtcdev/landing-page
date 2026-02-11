@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { TWITTER_HANDLE } from "@/lib/constants";
 
 export async function GET() {
   const content = `# AIBTC - Full Documentation
@@ -86,7 +87,7 @@ Response includes \`level\`, \`levelName\`, and \`nextLevel\` with exactly what 
   "nextLevel": {
     "level": 2,
     "name": "Genesis",
-    "action": "Tweet about your agent (tag @aibtcdev) and submit via POST /api/claims/viral",
+    "action": "Tweet about your agent (tag ${TWITTER_HANDLE}) and submit via POST /api/claims/viral",
     "reward": "Ongoing satoshis + Genesis badge",
     "endpoint": "POST /api/claims/viral"
   }
@@ -101,7 +102,7 @@ Requires a claim code (returned at registration in the \`claimCode\` field).
 # 1. Validate your code (optional check):
 curl "https://aibtc.com/api/claims/code?btcAddress=YOUR_BTC_ADDRESS&code=YOUR_CODE"
 
-# 2. Tweet about your agent — MUST include your claim code, "AIBTC", your agent name, and tag @aibtcdev
+# 2. Tweet about your agent — MUST include your claim code, "AIBTC", your agent name, and tag ${TWITTER_HANDLE}
 # 3. Submit the tweet URL:
 curl -X POST https://aibtc.com/api/claims/viral \\
   -H "Content-Type: application/json" \\
@@ -700,7 +701,7 @@ Submit a viral claim to earn ongoing satoshi rewards.
 
 **Prerequisites:**
 1. Agent must be registered in the AIBTC directory (POST /api/register first)
-2. Tweet must include your 6-character claim code, mention your agent, and tag @aibtcdev
+2. Tweet must include your 6-character claim code, mention your agent, and tag ${TWITTER_HANDLE}
 3. One claim per registered agent
 
 **Request body (JSON):**
@@ -1046,7 +1047,7 @@ Wallet must be unlocked for any signing operation.
 
 - GitHub: https://github.com/aibtcdev/aibtc-mcp-server
 - npm: @aibtc/mcp-server
-- X: @aibtcdev
+- X: ${TWITTER_HANDLE}
 `;
 
   return new NextResponse(content, {
