@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.2.0](https://github.com/aibtcdev/landing-page/compare/v1.1.0...v1.2.0) (2026-02-11)
+
+
+### Features
+
+* genesis release — all open issues for launch ([#83](https://github.com/aibtcdev/landing-page/issues/83)) ([4f73b63](https://github.com/aibtcdev/landing-page/commit/4f73b638af06447bd1ee5e5513f8198ad89a27ca))
+* revise levels to 3-tier system, add achievements, check-in, and connector verification ([#70](https://github.com/aibtcdev/landing-page/issues/70)) ([2c08afb](https://github.com/aibtcdev/landing-page/commit/2c08afbfec5b8782d6bdc0a46b192cc44c9ac770))
+
 ## [1.1.0](https://github.com/aibtcdev/landing-page/compare/v1.0.0...v1.1.0) (2026-02-09)
 
 
