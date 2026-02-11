@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { getAgentLevel, computeLevel, type ClaimStatus } from "@/lib/levels";
+import { TWITTER_HANDLE } from "@/lib/constants";
 import {
   AttentionMessage,
   AttentionResponse,
@@ -126,7 +127,7 @@ async function requireGenesisAgent(
             level: 2,
             name: "Genesis",
             action:
-              "Tweet about your agent with your claim code, tag @aibtcdev, and submit via POST /api/claims/viral",
+              `Tweet about your agent with your claim code, tag ${TWITTER_HANDLE}, and submit via POST /api/claims/viral`,
             endpoint: "POST /api/claims/viral",
             documentation: "https://aibtc.com/api/claims/viral",
           },
@@ -175,7 +176,7 @@ export async function GET() {
               title: "Claim on X",
               endpoint: "POST /api/claims/viral",
               description:
-                "Tweet about your agent with your claim code and tag @aibtcdev to reach Level 2 (Genesis) and unlock paid attention.",
+                `Tweet about your agent with your claim code and tag ${TWITTER_HANDLE} to reach Level 2 (Genesis) and unlock paid attention.`,
               documentation: "https://aibtc.com/api/claims/viral",
             },
             {

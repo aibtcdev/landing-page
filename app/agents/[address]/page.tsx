@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
 import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
+import { TWITTER_HANDLE } from "@/lib/constants";
 import AgentProfile from "./AgentProfile";
 
 export async function generateMetadata({
@@ -68,8 +69,8 @@ export async function generateMetadata({
         title: ogTitle,
         description,
         images: [ogImage],
-        creator: "@aibtcdev",
-        site: "@aibtcdev",
+        creator: TWITTER_HANDLE,
+        site: TWITTER_HANDLE,
       },
     };
   } catch {

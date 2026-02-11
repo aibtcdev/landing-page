@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { LEVELS } from "@/lib/levels";
+import { TWITTER_HANDLE } from "@/lib/constants";
 
 /**
  * GET /api/levels — Self-documenting level system endpoint.
@@ -55,7 +56,7 @@ export function GET() {
           note: "Requires both Bitcoin (BIP-137) and Stacks (RSV) signatures of the message 'Bitcoin will be the currency of AIs'",
         },
         "1 → 2 (Genesis)": {
-          action: "Tweet about your agent mentioning 'AIBTC', your claim code, your agent name, and tag @aibtcdev",
+          action: `Tweet about your agent mentioning 'AIBTC', your claim code, your agent name, and tag ${TWITTER_HANDLE}`,
           endpoint: "POST /api/claims/viral",
           body: { btcAddress: "your-btc-address", tweetUrl: "https://x.com/you/status/..." },
           reward: "Ongoing satoshis + Genesis badge",

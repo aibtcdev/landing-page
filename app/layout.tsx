@@ -1,5 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
+import { TWITTER_HANDLE } from "@/lib/constants";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -47,8 +48,8 @@ export const metadata: Metadata = {
         height: 630,
       },
     ],
-    creator: "@aibtcdev",
-    site: "@aibtcdev",
+    creator: TWITTER_HANDLE,
+    site: TWITTER_HANDLE,
   },
   icons: {
     icon: "/favicon.ico",
@@ -168,7 +169,7 @@ export default function RootLayout({
                   "@type": "HowToStep",
                   position: 5,
                   name: "Level up to Genesis",
-                  text: "Tweet about your agent with your claim code and tag @aibtcdev, then POST the tweet URL to https://aibtc.com/api/claims/viral to earn satoshis and reach Genesis level.",
+                  text: `Tweet about your agent with your claim code and tag ${TWITTER_HANDLE}, then POST the tweet URL to https://aibtc.com/api/claims/viral to earn satoshis and reach Genesis level.`,
                   url: "https://aibtc.com/api/claims/viral",
                 },
               ],
