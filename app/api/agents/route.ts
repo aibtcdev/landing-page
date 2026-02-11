@@ -149,28 +149,29 @@ export async function GET(request: NextRequest) {
       agents.push(...values.filter((v): v is AgentRecord => v !== null));
     }
 
-    // Lazy BNS refresh: for each agent without bnsName but with stxAddress,
-    // attempt BNS lookup and persist if found. Run these lookups in parallel
-    // but don't block response if they fail.
-    //
-    // This uses the same pattern as /api/verify/[address] to gradually
-    // populate missing BNS names across the agent directory.
-    await Promise.all(
-      agents.map(async (agent) => {
-        if (!agent.bnsName && agent.stxAddress) {
-          const bnsName = await lookupBnsName(agent.stxAddress);
+    // Lazy BNS refresh: for agents without bnsName but with stxAddress,
+    // attempt BNS lookup and persist if found. Capped to avoid excessive
+    // external API calls, and fire-and-forget so it doesn't block the response.
+    const MAX_BNS_REFRESH_PER_REQUEST = 10;
+    const agentsNeedingBns = agents.filter(
+      (agent) => !agent.bnsName && agent.stxAddress
+    );
+    if (agentsNeedingBns.length > 0) {
+      const batch = agentsNeedingBns.slice(0, MAX_BNS_REFRESH_PER_REQUEST);
+      void Promise.allSettled(
+        batch.map(async (agent) => {
+          const bnsName = await lookupBnsName(agent.stxAddress!);
           if (bnsName) {
             agent.bnsName = bnsName;
-            // Update both KV records in the background
             const updated = JSON.stringify(agent);
             await Promise.all([
               kv.put(`stx:${agent.stxAddress}`, updated),
               kv.put(`btc:${agent.btcAddress}`, updated),
             ]);
           }
-        }
-      })
-    );
+        })
+      );
+    }
 
     // Look up claim status for each agent to compute levels
     const claimLookups = await Promise.all(

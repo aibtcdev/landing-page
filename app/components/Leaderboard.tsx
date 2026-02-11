@@ -117,7 +117,7 @@ export default function Leaderboard({
             <span className="flex items-center gap-1.5">
               <span className="inline-block size-1.5 rounded-full" style={{ backgroundColor: ACTIVITY_COLORS.active }} />
               <span className="text-white/40">
-                <span className="font-medium text-white/60">{distribution.activeAgents}</span> Active
+                <span className="font-medium text-white/60">{distribution.activeAgents}</span> Active now
               </span>
             </span>
           )}

@@ -42,9 +42,11 @@ function getAddressTypeAndPrefix(
 /**
  * Look up agent by BNS name.
  *
- * Searches for BNS names in two ways:
- * 1. Direct match on agent.bnsName field
- * 2. Reverse lookup via Hiro API (if agent registered with STX address)
+ * Currently searches by scanning stored agents and matching the
+ * agent.bnsName field (case-insensitive).
+ *
+ * Note: reverse lookup via Hiro API / a dedicated BNS index is a
+ * potential future optimization; this function does not perform it.
  */
 async function findAgentByBns(
   kv: KVNamespace,
@@ -219,18 +221,19 @@ export async function GET(
       );
     }
 
-    // Lazy BNS refresh: if bnsName is missing, try to look it up
+    // Lazy BNS refresh: if bnsName is missing, try to look it up.
+    // Fire-and-forget so it doesn't block the response.
     if (!agent.bnsName && agent.stxAddress) {
-      const bnsName = await lookupBnsName(agent.stxAddress);
-      if (bnsName) {
-        agent.bnsName = bnsName;
-        // Update both KV records in the background
-        const updated = JSON.stringify(agent);
-        await Promise.all([
-          kv.put(`stx:${agent.stxAddress}`, updated),
-          kv.put(`btc:${agent.btcAddress}`, updated),
-        ]);
-      }
+      void lookupBnsName(agent.stxAddress).then((bnsName) => {
+        if (bnsName) {
+          agent.bnsName = bnsName;
+          const updated = JSON.stringify(agent);
+          Promise.all([
+            kv.put(`stx:${agent.stxAddress}`, updated),
+            kv.put(`btc:${agent.btcAddress}`, updated),
+          ]);
+        }
+      }).catch(() => {});
     }
 
     // Look up claim status to compute level

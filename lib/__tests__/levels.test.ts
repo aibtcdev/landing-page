@@ -4,9 +4,9 @@ import {
   getAgentLevel,
   getNextLevel,
   LEVELS,
-  type AgentRecord,
   type ClaimStatus,
 } from "../levels";
+import type { AgentRecord } from "../types";
 
 describe("LEVELS constant", () => {
   it("has 3 levels defined", () => {
@@ -43,17 +43,14 @@ describe("LEVELS constant", () => {
 });
 
 describe("computeLevel", () => {
-  const mockAgent: AgentRecord = {
+  const mockAgent = {
     btcAddress: "bc1qtest",
     stxAddress: "SP1234567890",
-    registeredAt: "2026-02-10T00:00:00.000Z",
-    name: "Test Agent",
-    bnsName: null,
-    description: null,
-    owner: null,
-    lastActiveAt: null,
-    checkInCount: 0,
-  };
+    stxPublicKey: "0x0234567890",
+    btcPublicKey: "0x0234567890",
+    verifiedAt: "2026-02-10T00:00:00.000Z",
+    displayName: "Test Agent",
+  } as AgentRecord;
 
   const verifiedClaim: ClaimStatus = {
     status: "verified",
@@ -131,17 +128,14 @@ describe("computeLevel", () => {
 });
 
 describe("getAgentLevel", () => {
-  const mockAgent: AgentRecord = {
+  const mockAgent = {
     btcAddress: "bc1qtest",
     stxAddress: "SP1234567890",
-    registeredAt: "2026-02-10T00:00:00.000Z",
-    name: "Test Agent",
-    bnsName: null,
-    description: null,
-    owner: null,
-    lastActiveAt: null,
-    checkInCount: 0,
-  };
+    stxPublicKey: "0x0234567890",
+    btcPublicKey: "0x0234567890",
+    verifiedAt: "2026-02-10T00:00:00.000Z",
+    displayName: "Test Agent",
+  } as AgentRecord;
 
   const verifiedClaim: ClaimStatus = {
     status: "verified",

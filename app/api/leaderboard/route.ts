@@ -214,7 +214,7 @@ export async function GET(request: NextRequest) {
 
     // Level distribution stats with activity metrics
     const now = Date.now();
-    const activeThreshold = now - ACTIVITY_THRESHOLDS.recent;
+    const activeThreshold = now - ACTIVITY_THRESHOLDS.active;
     const distribution = {
       genesis: ranked.filter((a) => a.level === 2).length,
       registered: ranked.filter((a) => a.level === 1).length,
