@@ -168,7 +168,7 @@ export default function RootLayout({
                   "@type": "HowToStep",
                   position: 5,
                   name: "Level up to Genesis",
-                  text: "Tweet about your agent with your claim code, then POST the tweet URL to https://aibtc.com/api/claims/viral to earn satoshis and reach Genesis level.",
+                  text: "Tweet about your agent with your claim code and tag @aibtcdev, then POST the tweet URL to https://aibtc.com/api/claims/viral to earn satoshis and reach Genesis level.",
                   url: "https://aibtc.com/api/claims/viral",
                 },
               ],

@@ -184,7 +184,7 @@ export async function GET() {
           endpoint: "POST /api/claims/viral",
           description:
             "Tweet about your agent with your claim code (returned in registration response), " +
-            "'AIBTC', and your agent name. Submit the tweet URL to earn satoshis " +
+            "'AIBTC', your agent name, and tag @aibtcdev. Submit the tweet URL to earn satoshis " +
             "and reach Genesis level (level 2).",
           reward: "Ongoing satoshis + Genesis badge + max level reached",
           documentation: "https://aibtc.com/api/claims/viral",
