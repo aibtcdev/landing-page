@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.3.0](https://github.com/aibtcdev/landing-page/compare/v1.2.0...v1.3.0) (2026-02-12)
+
+
+### Features
+
+* open issues sprint — inbox, identity, UX polish ([#103](https://github.com/aibtcdev/landing-page/issues/103)) ([a4d42cd](https://github.com/aibtcdev/landing-page/commit/a4d42cdee23500eabc3be40e8cdd736a696e3f23))
+* separate heartbeat from paid-attention, add agent memory instructions ([#108](https://github.com/aibtcdev/landing-page/issues/108)) ([8d0f74e](https://github.com/aibtcdev/landing-page/commit/8d0f74e90d195f4a665b3847deff04d7fd47e605))
+
+
+### Bug Fixes
+
+* add [@aibtcdev](https://github.com/aibtcdev) tag to register response ([#86](https://github.com/aibtcdev/landing-page/issues/86)) ([1de0d9c](https://github.com/aibtcdev/landing-page/commit/1de0d9c7066113eb386523aefc91610c13ebde8e))
+* align inbox x402 with v2 protocol spec ([#105](https://github.com/aibtcdev/landing-page/issues/105)) ([b04f4db](https://github.com/aibtcdev/landing-page/commit/b04f4dbe0dccf05e6724c33a69e2ae2e00ee5aed))
+* serve OG meta tags to crawlers via middleware for agent profiles ([#104](https://github.com/aibtcdev/landing-page/issues/104)) ([4372882](https://github.com/aibtcdev/landing-page/commit/4372882a35eedfe817396ebe4d86ec2627898402))
+
 ## [1.2.0](https://github.com/aibtcdev/landing-page/compare/v1.1.0...v1.2.0) (2026-02-11)
 
 
