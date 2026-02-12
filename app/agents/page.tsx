@@ -1,15 +1,23 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import LevelBadge from "../components/LevelBadge";
 import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
-import { truncateAddress, updateMeta } from "@/lib/utils";
+import { truncateAddress, updateMeta, formatRelativeTime, getActivityStatus } from "@/lib/utils";
 
-type Agent = AgentRecord & { level?: number; levelName?: string };
+type Agent = AgentRecord & {
+  level?: number;
+  levelName?: string;
+  checkInCount?: number;
+  lastActiveAt?: string;
+};
+
+type SortField = "level" | "checkIns" | "joined";
+type SortOrder = "asc" | "desc";
 
 function formatDate(dateString: string) {
   return new Date(dateString).toLocaleDateString("en-US", {
@@ -23,6 +31,8 @@ export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [sortBy, setSortBy] = useState<SortField>("level");
+  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
 
   useEffect(() => {
     fetch("/api/agents")
@@ -37,6 +47,47 @@ export default function AgentsPage() {
         setLoading(false);
       });
   }, []);
+
+  // Sorting logic
+  const sortedAgents = useMemo(() => {
+    const sorted = [...agents].sort((a, b) => {
+      let comparison = 0;
+
+      if (sortBy === "level") {
+        // Primary: level desc
+        comparison = (b.level ?? 0) - (a.level ?? 0);
+        // Secondary: check-ins desc (for same level)
+        if (comparison === 0) {
+          comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
+        }
+        // Tertiary: joined newest first (for same level and check-ins)
+        if (comparison === 0) {
+          comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
+        }
+      } else if (sortBy === "checkIns") {
+        comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
+        // Secondary: level desc
+        if (comparison === 0) {
+          comparison = (b.level ?? 0) - (a.level ?? 0);
+        }
+      } else if (sortBy === "joined") {
+        comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
+      }
+
+      return sortOrder === "asc" ? -comparison : comparison;
+    });
+
+    return sorted;
+  }, [agents, sortBy, sortOrder]);
+
+  const handleSort = (field: SortField) => {
+    if (sortBy === field) {
+      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
+    } else {
+      setSortBy(field);
+      setSortOrder("desc");
+    }
+  };
 
   useEffect(() => {
     document.title = 'Agent Registry - AIBTC';
@@ -138,13 +189,51 @@ export default function AgentsPage() {
                   <thead>
                     <tr className="border-b border-white/[0.08] bg-white/[0.03]">
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50">Agent</th>
-                      <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50">Level</th>
+                      <th
+                        className="cursor-pointer px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                        onClick={() => handleSort("level")}
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          Level
+                          {sortBy === "level" && (
+                            <svg className={`size-3 transition-transform ${sortOrder === "asc" ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          )}
+                        </div>
+                      </th>
+                      <th
+                        className="cursor-pointer px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                        onClick={() => handleSort("checkIns")}
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          Check-ins
+                          {sortBy === "checkIns" && (
+                            <svg className={`size-3 transition-transform ${sortOrder === "asc" ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          )}
+                        </div>
+                      </th>
                       <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50">BTC Address</th>
-                      <th className="px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-white/50">Joined</th>
+                      <th
+                        className="cursor-pointer px-5 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                        onClick={() => handleSort("joined")}
+                      >
+                        <div className="inline-flex items-center gap-1.5">
+                          Joined
+                          {sortBy === "joined" && (
+                            <svg className={`size-3 transition-transform ${sortOrder === "asc" ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                              <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                            </svg>
+                          )}
+                        </div>
+                      </th>
+                      <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50">Activity</th>
                     </tr>
                   </thead>
                   <tbody>
-                    {agents.map((agent) => {
+                    {sortedAgents.map((agent) => {
                       const displayName = generateName(agent.btcAddress);
                       return (
                         <tr
@@ -178,6 +267,13 @@ export default function AgentsPage() {
                           <td className="px-5 py-3.5 text-center">
                             <LevelBadge level={agent.level ?? 0} size="sm" />
                           </td>
+                          <td className="px-5 py-3.5 text-center">
+                            <span className="text-[13px] text-white/50">
+                              {agent.checkInCount !== undefined && agent.checkInCount > 0
+                                ? agent.checkInCount.toLocaleString()
+                                : "-"}
+                            </span>
+                          </td>
                           <td className="px-5 py-3.5">
                             <a
                               href={`https://mempool.space/address/${agent.btcAddress}`}
@@ -192,6 +288,21 @@ export default function AgentsPage() {
                           <td className="px-5 py-3.5 text-right">
                             <span className="text-[13px] text-white/50">{formatDate(agent.verifiedAt)}</span>
                           </td>
+                          <td className="px-5 py-3.5 text-center">
+                            {agent.lastActiveAt ? (
+                              <div className="inline-flex items-center gap-2">
+                                <div
+                                  className="h-1.5 w-1.5 rounded-full"
+                                  style={{
+                                    backgroundColor: getActivityStatus(agent.lastActiveAt).color,
+                                  }}
+                                />
+                                <span className="text-[13px] text-white/40">{formatRelativeTime(agent.lastActiveAt)}</span>
+                              </div>
+                            ) : (
+                              <span className="text-[13px] text-white/20">Never</span>
+                            )}
+                          </td>
                         </tr>
                       );
                     })}
@@ -201,7 +312,7 @@ export default function AgentsPage() {
 
               {/* Mobile list */}
               <div className="hidden max-md:block space-y-2">
-                {agents.map((agent) => {
+                {sortedAgents.map((agent) => {
                   const displayName = generateName(agent.btcAddress);
                   return (
                     <Link
@@ -241,7 +352,7 @@ export default function AgentsPage() {
 
               {/* Count + link below table */}
               <div className="mt-3 flex items-center justify-between text-[13px] text-white/40 max-md:flex-col max-md:gap-2 max-md:items-start">
-                <span>{agents.length} {agents.length === 1 ? "agent" : "agents"} registered</span>
+                <span>{sortedAgents.length} {sortedAgents.length === 1 ? "agent" : "agents"} registered</span>
                 <a
                   href="/api/agents"
                   target="_blank"
