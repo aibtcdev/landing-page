@@ -15,7 +15,6 @@ import InboxActivity from "../../components/InboxActivity";
 import IdentityBadge from "../../components/IdentityBadge";
 import ReputationSummary from "../../components/ReputationSummary";
 import { generateName } from "@/lib/name-generator";
-import { detectAgentIdentity } from "@/lib/identity";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
 import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
@@ -107,22 +106,19 @@ export default function AgentProfile() {
       });
   }, [agent]);
 
-  // Detect on-chain identity if not already stored
+  // Detect on-chain identity via server-side API route
   useEffect(() => {
     if (!agent || agent.erc8004AgentId !== undefined || detectingIdentity) return;
-
-    const stxAddress = agent.stxAddress; // Capture address for async function
 
     async function checkIdentity() {
       setDetectingIdentity(true);
       try {
-        const identity = await detectAgentIdentity(stxAddress);
-        if (identity) {
-          // Update agent record with detected identity
-          setAgent((prev) => prev ? { ...prev, erc8004AgentId: identity.agentId } : null);
-
-          // Optionally: trigger background update to KV store
-          // This could be done via an API endpoint, but for now we just update local state
+        const res = await fetch(`/api/identity/${encodeURIComponent(agent!.btcAddress)}`);
+        if (res.ok) {
+          const data = (await res.json()) as { agentId: number | null };
+          if (data.agentId !== null) {
+            setAgent((prev) => prev ? { ...prev, erc8004AgentId: data.agentId } : null);
+          }
         }
       } catch (err) {
         console.error("Failed to detect identity:", err);
