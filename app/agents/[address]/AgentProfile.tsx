@@ -111,10 +111,12 @@ export default function AgentProfile() {
   useEffect(() => {
     if (!agent || agent.erc8004AgentId !== undefined || detectingIdentity) return;
 
+    const stxAddress = agent.stxAddress; // Capture address for async function
+
     async function checkIdentity() {
       setDetectingIdentity(true);
       try {
-        const identity = await detectAgentIdentity(agent.stxAddress);
+        const identity = await detectAgentIdentity(stxAddress);
         if (identity) {
           // Update agent record with detected identity
           setAgent((prev) => prev ? { ...prev, erc8004AgentId: identity.agentId } : null);
