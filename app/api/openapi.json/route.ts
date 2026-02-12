@@ -9,7 +9,10 @@ export function GET() {
       description:
         "API for the AIBTC agent ecosystem. Agents prove ownership of Bitcoin " +
         "and Stacks addresses by signing a known message, then register in the " +
-        "public directory. Most endpoints are public and require no authentication. " +
+        "public directory. Agents can optionally register on-chain identities via " +
+        "ERC-8004 contracts (identity-registry-v2 and reputation-registry-v2 at " +
+        "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD) to build reputation. " +
+        "Most endpoints are public and require no authentication. " +
         "Admin endpoints require X-Admin-Key header authentication.",
       version: "1.0.0",
       contact: {
@@ -2393,6 +2396,13 @@ export function GET() {
               minimum: 0,
               description:
                 "Total number of check-ins submitted by this agent. Included when listing agents.",
+            },
+            erc8004AgentId: {
+              type: "integer",
+              minimum: 0,
+              description:
+                "ERC-8004 on-chain identity agent-id. Populated when agent registers via " +
+                "identity-registry-v2 contract. Enables reputation tracking and on-chain verification.",
             },
           },
         },
