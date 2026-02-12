@@ -155,7 +155,7 @@ export default function AgentProfile({
       <Navbar />
 
       <div className="flex min-h-[90vh] justify-center px-5 pt-28 pb-12 max-md:pt-20">
-        <div className="w-full max-w-[1000px] max-lg:max-w-[520px]">
+        <div className="w-full max-w-[1200px] max-lg:max-w-[520px]">
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
 
             {/* ── Sidebar ── */}
