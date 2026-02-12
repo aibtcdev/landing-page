@@ -100,15 +100,13 @@ export async function verifyInboxPayment(
     minAmount: paymentRequirements.amount,
   });
 
-  // Check if payment is in sBTC
+  // Check if payment is in sBTC (v2: check accepted.asset and payload.transaction)
   if (
-    paymentPayload.kind !== "stacks" ||
-    !paymentPayload.payload?.txHex ||
-    paymentPayload.asset !== expectedAsset
+    !paymentPayload.payload?.transaction ||
+    paymentPayload.accepted.asset !== expectedAsset
   ) {
     log.warn("Payment rejected: not sBTC", {
-      kind: paymentPayload.kind,
-      asset: paymentPayload.asset,
+      acceptedAsset: paymentPayload.accepted.asset,
       expectedAsset,
     });
     return {
@@ -118,21 +116,16 @@ export async function verifyInboxPayment(
     };
   }
 
-  // Extract message ID from payment memo (if present)
+  // Extract message ID from payment resource (if present in v2)
   let messageId: string | undefined;
-  try {
-    const parsedMemo = parsePaymentMemo(
-      paymentPayload.payload.memo || ""
-    );
-    messageId = parsedMemo.resource;
-    log.debug("Parsed payment memo", { messageId, memo: parsedMemo });
-  } catch (err) {
-    log.warn("Failed to parse payment memo", { error: String(err) });
-    // Non-fatal: continue without message ID
+  if (paymentPayload.resource?.url) {
+    // In v2, message ID might be in resource.url
+    messageId = paymentPayload.resource.url;
+    log.debug("Extracted resource from payload", { messageId });
   }
 
   // Determine if transaction is sponsored
-  const isSponsored = paymentPayload.payload.txHex.startsWith("0x80000005");
+  const isSponsored = paymentPayload.payload.transaction.startsWith("0x80000005");
 
   // Route sponsored transactions to relay, non-sponsored to facilitator
   let settleResult: SettlementResponseV2;
@@ -147,7 +140,7 @@ export async function verifyInboxPayment(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          txHex: paymentPayload.payload.txHex,
+          txHex: paymentPayload.payload.transaction,
           paymentRequirements,
         }),
       });

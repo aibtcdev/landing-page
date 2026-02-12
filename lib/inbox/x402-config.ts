@@ -30,7 +30,7 @@ export function getSBTCAsset(network: "mainnet" | "testnet"): string {
 export function buildInboxPaymentRequirements(
   recipientStxAddress: string,
   network: "mainnet" | "testnet",
-  networkCAIP2: string
+  networkCAIP2: `stacks:${string}`
 ) {
   const asset = getSBTCAsset(network);
 
