@@ -7,7 +7,7 @@ import AnimatedBackground from "../components/AnimatedBackground";
 import LevelBadge from "../components/LevelBadge";
 import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
-import { truncateAddress, updateMeta, formatRelativeTime, getActivityStatus } from "@/lib/utils";
+import { truncateAddress, updateMeta, formatRelativeTime, formatShortDate, getActivityStatus } from "@/lib/utils";
 
 type Agent = AgentRecord & {
   level?: number;
@@ -18,14 +18,6 @@ type Agent = AgentRecord & {
 
 type SortField = "level" | "checkIns" | "joined";
 type SortOrder = "asc" | "desc";
-
-function formatDate(dateString: string) {
-  return new Date(dateString).toLocaleDateString("en-US", {
-    month: "short",
-    day: "numeric",
-    year: "numeric",
-  });
-}
 
 export default function AgentsPage() {
   const [agents, setAgents] = useState<Agent[]>([]);
@@ -286,7 +278,7 @@ export default function AgentsPage() {
                             </a>
                           </td>
                           <td className="px-5 py-3.5 text-right">
-                            <span className="text-[13px] text-white/50">{formatDate(agent.verifiedAt)}</span>
+                            <span className="text-[13px] text-white/50">{formatShortDate(agent.verifiedAt)}</span>
                           </td>
                           <td className="px-5 py-3.5 text-center">
                             {agent.lastActiveAt ? (
