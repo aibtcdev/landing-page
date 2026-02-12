@@ -27,6 +27,12 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     description: "Sent sBTC with memo to a registered agent",
     category: "onchain",
   },
+  {
+    id: "communicator",
+    name: "Communicator",
+    description: "Sent a reply via x402 inbox",
+    category: "onchain",
+  },
 
   // Engagement achievements (tiered)
   {
