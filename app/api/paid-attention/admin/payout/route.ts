@@ -214,9 +214,13 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Check that response exists
+    // Check response and existing payout in parallel
     const responseKey = `${KV_PREFIXES.RESPONSE}${messageId}:${btcAddress}`;
-    const responseData = await kv.get(responseKey);
+    const payoutKey = `${KV_PREFIXES.PAYOUT}${messageId}:${btcAddress}`;
+    const [responseData, existingPayoutData] = await Promise.all([
+      kv.get(responseKey),
+      kv.get(payoutKey),
+    ]);
 
     if (!responseData) {
       return NextResponse.json(
@@ -226,10 +230,6 @@ export async function POST(request: NextRequest) {
         { status: 404 }
       );
     }
-
-    // Check for existing payout — idempotent if payload matches
-    const payoutKey = `${KV_PREFIXES.PAYOUT}${messageId}:${btcAddress}`;
-    const existingPayoutData = await kv.get(payoutKey);
 
     if (existingPayoutData) {
       try {

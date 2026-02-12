@@ -148,17 +148,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Fetch and verify tweet content via oEmbed
-    const tweet = await fetchTweetContent(normalizedUrl);
+    // Fetch tweet content and claim code in parallel (both independent)
+    const [tweet, storedCodeData] = await Promise.all([
+      fetchTweetContent(normalizedUrl),
+      agentsKv.get(`claim-code:${btcAddress}`),
+    ]);
+
     if (!tweet) {
       return NextResponse.json(
         { error: "Could not fetch tweet. Make sure the tweet is public and the URL is correct." },
         { status: 400 }
       );
     }
-
-    // Verify tweet contains the claim code
-    const storedCodeData = await agentsKv.get(`claim-code:${btcAddress}`);
     if (!storedCodeData) {
       return NextResponse.json(
         {

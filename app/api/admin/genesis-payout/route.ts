@@ -142,8 +142,12 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Check for existing genesis payout — idempotent if payload matches
-    const existingGenesis = await kv.get(`genesis:${btcAddress}`);
+    // Check for existing genesis payout and claim record in parallel
+    const [existingGenesis, existingClaimData] = await Promise.all([
+      kv.get(`genesis:${btcAddress}`),
+      kv.get(`claim:${btcAddress}`),
+    ]);
+
     if (existingGenesis) {
       try {
         const existing = JSON.parse(existingGenesis) as GenesisPayoutRecord;
@@ -168,9 +172,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Look up and update matching claim record if it exists
+    // Update matching claim record if it exists
     let claimRecordUpdated = false;
-    const existingClaimData = await kv.get(`claim:${btcAddress}`);
     if (existingClaimData) {
       try {
         const claimRecord = JSON.parse(existingClaimData);
