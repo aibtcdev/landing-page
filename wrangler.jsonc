@@ -20,5 +20,13 @@
       "id": "f8aab2734e154953a50cabdb87083af3",
       "remote": true
     }
+  ],
+  // Service binding for worker-logs RPC
+  "services": [
+    {
+      "binding": "LOGS",
+      "service": "worker-logs-production",
+      "entrypoint": "LogsRPC"
+    }
   ]
 }
