@@ -19,6 +19,7 @@ interface InboxResponse {
   };
   inbox: {
     messages: InboxMessageType[];
+    replies: Record<string, OutboxReply>;
     unreadCount: number;
     totalCount: number;
     pagination: {
@@ -43,7 +44,6 @@ export default function InboxPage() {
   const offset = parseInt(searchParams.get("offset") || "0", 10);
 
   const [data, setData] = useState<InboxResponse | null>(null);
-  const [replies, setReplies] = useState<Map<string, OutboxReply>>(new Map());
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -81,40 +81,8 @@ export default function InboxPage() {
         }
         return res.json() as Promise<InboxResponse>;
       })
-      .then(async (result) => {
+      .then((result) => {
         setData(result);
-
-        // Fetch replies for messages that have been replied to
-        const repliedMessageIds = result.inbox.messages
-          .filter((msg) => msg.repliedAt)
-          .map((msg) => msg.messageId);
-
-        if (repliedMessageIds.length > 0) {
-          const replyMap = new Map<string, OutboxReply>();
-
-          await Promise.all(
-            repliedMessageIds.map(async (messageId) => {
-              try {
-                const replyRes = await fetch(
-                  `/api/inbox/${encodeURIComponent(address)}/${messageId}`
-                );
-                if (replyRes.ok) {
-                  const { reply } = (await replyRes.json()) as {
-                    reply: OutboxReply | null;
-                  };
-                  if (reply) {
-                    replyMap.set(messageId, reply);
-                  }
-                }
-              } catch {
-                // Skip failed reply fetches
-              }
-            })
-          );
-
-          setReplies(replyMap);
-        }
-
         setLoading(false);
       })
       .catch((err) => {
@@ -158,7 +126,7 @@ export default function InboxPage() {
   }
 
   const { agent, inbox, howToSend } = data;
-  const { messages, unreadCount, totalCount, pagination } = inbox;
+  const { messages, replies, unreadCount, totalCount, pagination } = inbox;
   const displayName = agent.displayName || generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const hasMessages = totalCount > 0;
@@ -251,7 +219,7 @@ export default function InboxPage() {
                   key={message.messageId}
                   message={message}
                   showReply={true}
-                  reply={replies.get(message.messageId) || null}
+                  reply={replies[message.messageId] || null}
                 />
               ))}
             </div>
