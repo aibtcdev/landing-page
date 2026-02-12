@@ -4,9 +4,9 @@
 
 import {
   REPUTATION_REGISTRY_CONTRACT,
-  STACKS_API_BASE,
   WAD_DECIMALS,
 } from "./constants";
+import { callReadOnly, parseClarityValue } from "./stacks-api";
 import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback } from "./types";
 
 // Simple in-memory cache with 5-minute TTL
@@ -36,100 +36,6 @@ function setCache<T>(key: string, data: T): void {
 }
 
 /**
- * Call a read-only function on the reputation registry contract
- */
-async function callReadOnly(
-  functionName: string,
-  args: string[]
-): Promise<any> {
-  const [contractAddress, contractName] =
-    REPUTATION_REGISTRY_CONTRACT.split(".");
-  const url = `${STACKS_API_BASE}/v2/contracts/call-read/${contractAddress}/${contractName}/${functionName}`;
-
-  const response = await fetch(url, {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      sender: contractAddress,
-      arguments: args,
-    }),
-  });
-
-  if (!response.ok) {
-    throw new Error(
-      `Stacks API call failed: ${response.status} ${response.statusText}`
-    );
-  }
-
-  const data = await response.json();
-  return data;
-}
-
-/**
- * Parse a Clarity value from the API response
- */
-function parseClarityValue(result: any): any {
-  if (!result || !result.okay) {
-    return null;
-  }
-
-  const value = result.result;
-
-  // Handle different Clarity types
-  if (value.type === "uint") {
-    return parseInt(value.value, 10);
-  }
-
-  if (value.type === "int") {
-    return parseInt(value.value, 10);
-  }
-
-  if (value.type === "principal") {
-    return value.value;
-  }
-
-  if (value.type === "string-utf8" || value.type === "string-ascii") {
-    return value.value;
-  }
-
-  if (value.type === "bool") {
-    return value.value === "true";
-  }
-
-  if (value.type === "optional") {
-    if (value.value === null || value.value.type === "none") {
-      return null;
-    }
-    return parseClarityValue({ okay: true, result: value.value });
-  }
-
-  if (value.type === "response") {
-    if (value.value.success) {
-      return parseClarityValue({ okay: true, result: value.value.value });
-    }
-    return null;
-  }
-
-  if (value.type === "tuple") {
-    const tuple: any = {};
-    for (const [key, val] of Object.entries(value.value)) {
-      tuple[key] = parseClarityValue({ okay: true, result: val });
-    }
-    return tuple;
-  }
-
-  if (value.type === "list") {
-    return value.value.map((item: any) =>
-      parseClarityValue({ okay: true, result: item })
-    );
-  }
-
-  return null;
-}
-
-/**
  * Get reputation summary for an agent
  * Returns count and average score (WAD converted to decimal)
  */
@@ -141,7 +47,7 @@ export async function getReputationSummary(
   if (cached) return cached;
 
   try {
-    const result = await callReadOnly("get-summary", [`u${agentId}`]);
+    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [`u${agentId}`]);
     const summary = parseClarityValue(result);
 
     if (!summary || summary.count === 0) {
@@ -179,7 +85,7 @@ export async function getReputationFeedback(
   try {
     // read-all-feedback(agent-id, opt-tag1, opt-tag2, include-revoked, opt-cursor)
     const cursorArg = cursor ? `(some u${cursor})` : "none";
-    const result = await callReadOnly("read-all-feedback", [
+    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "read-all-feedback", [
       `u${agentId}`,
       "none", // opt-tag1
       "none", // opt-tag2

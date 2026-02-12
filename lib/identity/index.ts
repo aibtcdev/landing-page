@@ -5,5 +5,6 @@
 
 export * from "./types";
 export * from "./constants";
+export * from "./stacks-api";
 export * from "./detection";
 export * from "./reputation";
