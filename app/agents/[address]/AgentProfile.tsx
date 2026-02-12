@@ -117,7 +117,8 @@ export default function AgentProfile() {
         if (res.ok) {
           const data = (await res.json()) as { agentId: number | null };
           if (data.agentId !== null) {
-            setAgent((prev) => prev ? { ...prev, erc8004AgentId: data.agentId } : null);
+            const detectedId = data.agentId;
+            setAgent((prev) => prev ? { ...prev, erc8004AgentId: detectedId } : null);
           }
         }
       } catch (err) {
