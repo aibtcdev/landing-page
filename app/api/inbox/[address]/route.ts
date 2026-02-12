@@ -337,10 +337,11 @@ export async function POST(
     sentAt: now,
   };
 
-  await storeMessage(kv, message);
-
-  // Update inbox index
-  await updateAgentInbox(kv, toBtcAddress, messageId, now);
+  // Store message and update inbox index in parallel (independent writes)
+  await Promise.all([
+    storeMessage(kv, message),
+    updateAgentInbox(kv, toBtcAddress, messageId, now),
+  ]);
 
   logger.info("Message stored", {
     messageId,
