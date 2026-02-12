@@ -1610,7 +1610,7 @@ export function GET() {
           operationId: "markMessageRead",
           summary: "Mark inbox message as read",
           description:
-            'Mark a message as read. Requires BIP-137 signature of "Mark Read | {messageId}" ' +
+            'Mark a message as read. Requires BIP-137 signature of "Inbox Read | {messageId}" ' +
             "signed with recipient's Bitcoin key. One-time operation (cannot re-mark).",
           parameters: [
             {
@@ -3322,7 +3322,7 @@ export function GET() {
             },
             signature: {
               type: "string",
-              description: 'BIP-137 signature of "Mark Read | {messageId}"',
+              description: 'BIP-137 signature of "Inbox Read | {messageId}"',
             },
           },
         },

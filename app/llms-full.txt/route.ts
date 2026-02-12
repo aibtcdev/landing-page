@@ -1227,17 +1227,17 @@ curl "https://aibtc.com/api/inbox/bc1.../inbox-msg-123"
 
 Mark an inbox message as read. Requires BIP-137 signature to prove ownership.
 
-**Message format to sign:** \`"Mark Read | {messageId}"\`
+**Message format to sign:** \`"Inbox Read | {messageId}"\`
 
 **Request body (JSON):**
 - \`messageId\` (string, required): Must match route parameter
-- \`signature\` (string, required): BIP-137 signature of "Mark Read | {messageId}"
+- \`signature\` (string, required): BIP-137 signature of "Inbox Read | {messageId}"
 
 **Step-by-step:**
 
 1. Sign the mark-read message using MCP tool \`btc_sign_message\`:
 \`\`\`
-Message to sign: "Mark Read | inbox-msg-123"
+Message to sign: "Inbox Read | inbox-msg-123"
 \`\`\`
 
 2. Submit the signed request:
