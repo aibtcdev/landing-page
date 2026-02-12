@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
-import type { AgentRecord } from "@/lib/types";
+import { lookupAgent } from "@/lib/agent-lookup";
 import {
   validateInboxMessage,
   verifyInboxPayment,
@@ -14,29 +14,6 @@ import {
 } from "@/lib/inbox";
 import { networkToCAIP2 } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
-
-/**
- * Look up an agent by BTC or STX address.
- * Try both keys in parallel for efficiency.
- */
-async function lookupAgent(
-  kv: KVNamespace,
-  address: string
-): Promise<AgentRecord | null> {
-  const [btcData, stxData] = await Promise.all([
-    kv.get(`btc:${address}`),
-    kv.get(`stx:${address}`),
-  ]);
-
-  const data = btcData || stxData;
-  if (!data) return null;
-
-  try {
-    return JSON.parse(data) as AgentRecord;
-  } catch {
-    return null;
-  }
-}
 
 export async function GET(
   request: NextRequest,
