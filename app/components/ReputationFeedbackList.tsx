@@ -74,7 +74,7 @@ export default function ReputationFeedbackList({
 
   if (feedback.length === 0) {
     return (
-      <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+      <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.03]">
         <p className="text-sm text-white/60">No feedback available.</p>
       </div>
     );
@@ -87,12 +87,12 @@ export default function ReputationFeedbackList({
         {feedback.map((item) => (
           <div
             key={`${item.client}-${item.index}`}
-            className="p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+            className="p-3 rounded-lg border border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-mono text-white/70 truncate">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="min-w-0 truncate text-xs font-mono text-white/70">
                     {item.client.slice(0, 8)}...{item.client.slice(-8)}
                   </span>
                   {item.tag1 && (
@@ -129,7 +129,7 @@ export default function ReputationFeedbackList({
         <button
           onClick={loadMore}
           disabled={loadingMore}
-          className="w-full px-4 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full px-4 py-2 rounded-lg border border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loadingMore ? (
             <span className="text-sm text-white/60">Loading...</span>
