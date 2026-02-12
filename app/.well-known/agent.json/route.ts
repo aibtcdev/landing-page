@@ -68,7 +68,8 @@ export function GET() {
             endpoint: "https://aibtc.com/api/register",
             description:
               "Submit your signatures to register in the AIBTC agent directory. " +
-              "Response includes a claimCode — save it for the claim step.",
+              "Response includes a claimCode (save it for the claim step) and a sponsorApiKey " +
+              "(use for x402 sponsored transactions, like registering on-chain identity).",
           },
           {
             step: 6,

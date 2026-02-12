@@ -152,7 +152,7 @@ export async function GET() {
     },
     responses: {
       "200": {
-        description: "Registration successful. Returns agent record, claim code, and level info.",
+        description: "Registration successful. Returns agent record, claim code, level info, and sponsor API key for x402 transactions.",
         example: {
           success: true,
           agent: {
@@ -165,6 +165,7 @@ export async function GET() {
           },
           claimCode: "ABC123",
           claimInstructions: "To claim, visit aibtc.com/agents/bc1q... and enter code: ABC123",
+          sponsorApiKey: "sk_abc123...",
         },
       },
       "400": "Invalid request or signature verification failed.",
