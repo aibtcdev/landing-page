@@ -233,34 +233,30 @@ export async function POST(
     );
   }
 
-  if (!paymentSigHeader) {
-    // No payment signature — return 402 with x402 v2 payment requirements
-    const networkCAIP2 = networkToCAIP2(network);
-    const paymentRequirements = buildInboxPaymentRequirements(
-      agent.stxAddress,
-      network,
-      networkCAIP2
-    );
+  // Build v2-compliant PaymentRequiredV2 response (used by both 402 paths)
+  const networkCAIP2 = networkToCAIP2(network);
+  const paymentRequirements = buildInboxPaymentRequirements(
+    agent.stxAddress,
+    network,
+    networkCAIP2
+  );
+  const paymentRequiredBody = {
+    x402Version: 2 as const,
+    resource: {
+      url: request.nextUrl.href,
+      description: `Send message to ${agent.displayName} (${INBOX_PRICE_SATS} sats sBTC)`,
+      mimeType: "application/json",
+    },
+    accepts: [paymentRequirements],
+  };
+  const paymentRequiredHeader = btoa(JSON.stringify(paymentRequiredBody));
 
+  if (!paymentSigHeader) {
+    // No payment signature — return 402 with payment requirements
     logger.info("Returning 402 Payment Required", {
       recipientStx: agent.stxAddress,
       minAmount: INBOX_PRICE_SATS,
     });
-
-    // Build v2-compliant PaymentRequiredV2 response
-    const resourceUrl = `${request.nextUrl.protocol}//${request.headers.get("host")}${request.nextUrl.pathname}`;
-    const paymentRequiredBody = {
-      x402Version: 2 as const,
-      resource: {
-        url: resourceUrl,
-        description: `Send message to ${agent.displayName} (${INBOX_PRICE_SATS} sats sBTC)`,
-        mimeType: "application/json",
-      },
-      accepts: [paymentRequirements],
-    };
-
-    // Set payment-required header (base64-encoded JSON per x402 v2 spec)
-    const paymentRequiredHeader = btoa(JSON.stringify(paymentRequiredBody));
 
     return NextResponse.json(paymentRequiredBody, {
       status: 402,
@@ -314,10 +310,16 @@ export async function POST(
     });
     return NextResponse.json(
       {
+        ...paymentRequiredBody,
         error: paymentResult.error || "Payment verification failed",
         errorCode: paymentResult.errorCode,
       },
-      { status: 402 }
+      {
+        status: 402,
+        headers: {
+          [X402_HEADERS.PAYMENT_REQUIRED]: paymentRequiredHeader,
+        },
+      }
     );
   }
 
@@ -368,7 +370,6 @@ export async function POST(
   });
 
   // Build payment-response header (base64-encoded per x402 v2 spec)
-  const networkCAIP2 = networkToCAIP2(network);
   const paymentResponseData = {
     success: true,
     payer: fromAddress,
