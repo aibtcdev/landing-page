@@ -48,7 +48,6 @@ export default function AgentProfile() {
   const [codeInput, setCodeInput] = useState("");
   const [codeValidated, setCodeValidated] = useState(false);
   const [validatingCode, setValidatingCode] = useState(false);
-  const [detectingIdentity, setDetectingIdentity] = useState(false);
 
 
   useEffect(() => {
@@ -93,9 +92,13 @@ export default function AgentProfile() {
     if (address) fetchAgent();
   }, [address]);
 
+  // Stable derived values to avoid re-render loops from object reference changes
+  const agentBtcAddress = agent?.btcAddress;
+  const hasIdentity = agent?.erc8004AgentId !== undefined && agent?.erc8004AgentId !== null;
+
   useEffect(() => {
-    if (!agent) return;
-    fetch(`/api/claims/viral?btcAddress=${encodeURIComponent(agent.btcAddress)}`)
+    if (!agentBtcAddress) return;
+    fetch(`/api/claims/viral?btcAddress=${encodeURIComponent(agentBtcAddress)}`)
       .then((r) => r.json())
       .then((raw: unknown) => {
         const data = raw as { claim?: ClaimInfo };
@@ -105,32 +108,31 @@ export default function AgentProfile() {
         console.error("Failed to fetch claim:", err);
         setClaim(null);
       });
-  }, [agent]);
+  }, [agentBtcAddress]);
 
   // Detect on-chain identity via server-side API route
+  // Runs once when agent loads — uses btcAddress as stable dep to avoid re-render loops
   useEffect(() => {
-    if (!agent || (agent.erc8004AgentId !== undefined && agent.erc8004AgentId !== null) || detectingIdentity) return;
+    if (!agentBtcAddress || hasIdentity) return;
 
+    let cancelled = false;
     async function checkIdentity() {
-      setDetectingIdentity(true);
       try {
-        const res = await fetch(`/api/identity/${encodeURIComponent(agent!.btcAddress)}`);
-        if (res.ok) {
+        const res = await fetch(`/api/identity/${encodeURIComponent(agentBtcAddress!)}`);
+        if (res.ok && !cancelled) {
           const data = (await res.json()) as { agentId: number | null };
           if (data.agentId !== null) {
-            const detectedId = data.agentId;
-            setAgent((prev) => prev ? { ...prev, erc8004AgentId: detectedId } : null);
+            setAgent((prev) => prev ? { ...prev, erc8004AgentId: data.agentId! } : null);
           }
         }
       } catch (err) {
         console.error("Failed to detect identity:", err);
-      } finally {
-        setDetectingIdentity(false);
       }
     }
 
     checkIdentity();
-  }, [agent, detectingIdentity]);
+    return () => { cancelled = true; };
+  }, [agentBtcAddress, hasIdentity]);
 
   const profileUrl = typeof window !== "undefined"
     ? `${window.location.origin}/agents/${agent?.btcAddress}`
