@@ -75,6 +75,29 @@ describe("validateInboxMessage", () => {
       expect(result.errors).toBeUndefined();
       expect(result.data?.content).toBe("  spaced  text  ");
     });
+
+    it("accepts message without paymentTxid (initial 402 request)", () => {
+      const result = validateInboxMessage({
+        toBtcAddress: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+        toStxAddress: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        content: "Hello, this is a test message!",
+      });
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.paymentTxid).toBeUndefined();
+      expect(result.data?.paymentSatoshis).toBeUndefined();
+    });
+
+    it("accepts message without paymentSatoshis", () => {
+      const result = validateInboxMessage({
+        toBtcAddress: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+        toStxAddress: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        content: "Test",
+        paymentTxid: "a".repeat(64),
+      });
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.paymentTxid).toBe("a".repeat(64));
+      expect(result.data?.paymentSatoshis).toBeUndefined();
+    });
   });
 
   describe("validation errors", () => {

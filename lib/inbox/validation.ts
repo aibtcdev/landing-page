@@ -63,12 +63,16 @@ function validateTxid(txid: string, fieldName: string): string[] {
  *
  * Expected format:
  * {
- *   toBtcAddress: string,     // Recipient BTC address (bc1...)
- *   toStxAddress: string,     // Recipient STX address (SP/SM...)
- *   content: string,          // Message content (max 500 chars)
- *   paymentTxid: string,      // x402 payment transaction ID (64-char hex)
- *   paymentSatoshis: number   // Payment amount in satoshis (positive integer)
+ *   toBtcAddress: string,      // Recipient BTC address (bc1...)
+ *   toStxAddress: string,      // Recipient STX address (SP/SM...)
+ *   content: string,           // Message content (max 500 chars)
+ *   paymentTxid?: string,      // x402 payment transaction ID (64-char hex, optional for initial 402 request)
+ *   paymentSatoshis?: number   // Payment amount in satoshis (positive integer, optional for initial 402 request)
  * }
+ *
+ * The paymentTxid and paymentSatoshis fields are optional because the x402 flow
+ * returns 402 on the first POST before the sender has a txid. The handler checks
+ * for X-Payment-Signature first; if absent, only recipient + content are needed.
  *
  * Returns validated data on success, or field-level errors on failure.
  */
@@ -78,8 +82,8 @@ export function validateInboxMessage(body: unknown):
         toBtcAddress: string;
         toStxAddress: string;
         content: string;
-        paymentTxid: string;
-        paymentSatoshis: number;
+        paymentTxid?: string;
+        paymentSatoshis?: number;
       };
       errors?: never;
     }
@@ -116,18 +120,25 @@ export function validateInboxMessage(body: unknown):
     );
   }
 
-  // paymentTxid — 64-char hex
-  if (typeof b.paymentTxid !== "string") {
-    errors.push("paymentTxid must be a string");
-  } else {
-    errors.push(...validateTxid(b.paymentTxid, "paymentTxid"));
+  // paymentTxid — optional, but if provided must be 64-char hex
+  if (b.paymentTxid !== undefined) {
+    if (typeof b.paymentTxid !== "string") {
+      errors.push("paymentTxid must be a string");
+    } else {
+      errors.push(...validateTxid(b.paymentTxid, "paymentTxid"));
+    }
   }
 
-  // paymentSatoshis — positive integer
-  if (typeof b.paymentSatoshis !== "number") {
-    errors.push("paymentSatoshis must be a number");
-  } else if (!Number.isInteger(b.paymentSatoshis) || b.paymentSatoshis <= 0) {
-    errors.push("paymentSatoshis must be a positive integer");
+  // paymentSatoshis — optional, but if provided must be positive integer
+  if (b.paymentSatoshis !== undefined) {
+    if (typeof b.paymentSatoshis !== "number") {
+      errors.push("paymentSatoshis must be a number");
+    } else if (
+      !Number.isInteger(b.paymentSatoshis) ||
+      b.paymentSatoshis <= 0
+    ) {
+      errors.push("paymentSatoshis must be a positive integer");
+    }
   }
 
   if (errors.length > 0) {
@@ -139,8 +150,12 @@ export function validateInboxMessage(body: unknown):
       toBtcAddress: b.toBtcAddress as string,
       toStxAddress: b.toStxAddress as string,
       content: b.content as string,
-      paymentTxid: (b.paymentTxid as string).toLowerCase(),
-      paymentSatoshis: b.paymentSatoshis as number,
+      ...(typeof b.paymentTxid === "string" && {
+        paymentTxid: b.paymentTxid.toLowerCase(),
+      }),
+      ...(typeof b.paymentSatoshis === "number" && {
+        paymentSatoshis: b.paymentSatoshis as number,
+      }),
     },
   };
 }

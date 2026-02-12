@@ -193,7 +193,10 @@ export async function POST(
     );
   }
 
-  // Validate message body
+  // Check for x402 payment signature FIRST to determine flow
+  const paymentSigHeader = request.headers.get("X-Payment-Signature");
+
+  // Validate message body (paymentTxid/paymentSatoshis are optional for the initial 402 request)
   const validation = validateInboxMessage(body);
   if (validation.errors) {
     logger.warn("Validation failed", { errors: validation.errors });
@@ -227,9 +230,6 @@ export async function POST(
       { status: 400 }
     );
   }
-
-  // Check for x402 payment signature
-  const paymentSigHeader = request.headers.get("X-Payment-Signature");
 
   if (!paymentSigHeader) {
     // No payment signature — return 402 with payment requirements
@@ -332,8 +332,8 @@ export async function POST(
     toBtcAddress,
     toStxAddress,
     content,
-    paymentTxid: paymentResult.paymentTxid || paymentTxid,
-    paymentSatoshis,
+    paymentTxid: paymentResult.paymentTxid || paymentTxid || "",
+    paymentSatoshis: paymentSatoshis ?? INBOX_PRICE_SATS,
     sentAt: now,
   };
 
