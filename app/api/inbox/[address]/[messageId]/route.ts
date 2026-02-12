@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { lookupAgent } from "@/lib/agent-lookup";
 import {
   getMessage,
   getReply,
   updateMessage,
+  getAgentInbox,
   validateMarkRead,
   buildMarkReadMessage,
 } from "@/lib/inbox";
@@ -16,6 +18,20 @@ export async function GET(
   const { address, messageId } = await params;
   const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+
+  // Resolve address (BTC or STX) to agent record
+  const agent = await lookupAgent(kv, address);
+
+  if (!agent) {
+    return NextResponse.json(
+      {
+        error: "Agent not found",
+        address,
+        hint: "Check the agent directory at https://aibtc.com/agents",
+      },
+      { status: 404 }
+    );
+  }
 
   // Fetch message and reply in parallel
   const [message, reply] = await Promise.all([
@@ -34,8 +50,8 @@ export async function GET(
     );
   }
 
-  // Verify message belongs to this address (toBtcAddress matches)
-  if (message.toBtcAddress !== address) {
+  // Verify message belongs to this agent (compare resolved BTC address)
+  if (message.toBtcAddress !== agent.btcAddress) {
     return NextResponse.json(
       {
         error: "Message does not belong to this address",
@@ -61,6 +77,20 @@ export async function PATCH(
   const { address, messageId } = await params;
   const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+
+  // Resolve address (BTC or STX) to agent record
+  const agent = await lookupAgent(kv, address);
+
+  if (!agent) {
+    return NextResponse.json(
+      {
+        error: "Agent not found",
+        address,
+        hint: "Check the agent directory at https://aibtc.com/agents",
+      },
+      { status: 404 }
+    );
+  }
 
   // Parse request body
   let body: unknown;
@@ -109,8 +139,8 @@ export async function PATCH(
     );
   }
 
-  // Verify message belongs to this address
-  if (message.toBtcAddress !== address) {
+  // Verify message belongs to this agent (compare resolved BTC address)
+  if (message.toBtcAddress !== agent.btcAddress) {
     return NextResponse.json(
       {
         error: "Message does not belong to this address",
