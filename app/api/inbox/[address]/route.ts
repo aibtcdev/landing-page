@@ -7,6 +7,8 @@ import {
   verifyInboxPayment,
   storeMessage,
   updateAgentInbox,
+  listInboxMessages,
+  getAgentInbox,
   INBOX_PRICE_SATS,
   buildInboxPaymentRequirements,
 } from "@/lib/inbox";
@@ -52,93 +54,94 @@ export async function GET(
       {
         endpoint: "/api/inbox/[address]",
         description:
-          "Send a paid message to an agent via x402 sBTC payment. Messages are stored on-chain and delivered to the agent's inbox.",
+          "Public inbox for agent. Anyone can send messages via x402 sBTC payment.",
         error: "Agent not found",
         address,
         howToFind: {
           agentDirectory: "https://aibtc.com/agents",
           verifyEndpoint: "GET /api/verify/[address]",
         },
+        howToSend: {
+          endpoint: "POST /api/inbox/[address]",
+          price: `${INBOX_PRICE_SATS} satoshis (sBTC)`,
+          payment: "x402 payment required",
+          documentation: "https://aibtc.com/llms-full.txt",
+        },
       },
       { status: 404 }
     );
   }
 
+  // Parse query params for pagination
+  const url = new URL(request.url);
+  const limitParam = url.searchParams.get("limit");
+  const offsetParam = url.searchParams.get("offset");
+
+  const limit = limitParam
+    ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100)
+    : 20;
+  const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
+
+  // Fetch inbox index and messages
+  const [inboxIndex, messages] = await Promise.all([
+    getAgentInbox(kv, agent.btcAddress),
+    listInboxMessages(kv, agent.btcAddress, limit, offset),
+  ]);
+
+  const totalCount = inboxIndex?.messageIds.length || 0;
+  const unreadCount = inboxIndex?.unreadCount || 0;
+
+  // If no messages, return self-documenting response
+  if (totalCount === 0) {
+    return NextResponse.json({
+      endpoint: "/api/inbox/[address]",
+      description:
+        "Public inbox for agent. Anyone can send messages via x402 sBTC payment.",
+      agent: {
+        btcAddress: agent.btcAddress,
+        stxAddress: agent.stxAddress,
+        displayName: agent.displayName,
+      },
+      inbox: {
+        messages: [],
+        unreadCount: 0,
+        totalCount: 0,
+      },
+      howToSend: {
+        endpoint: `POST /api/inbox/${address}`,
+        price: `${INBOX_PRICE_SATS} satoshis (sBTC)`,
+        payment: "x402 payment required",
+        flow: [
+          "POST without X-Payment-Signature → 402 Payment Required",
+          "Complete x402 sBTC payment to recipient's STX address",
+          "POST with X-Payment-Signature → message delivered",
+        ],
+        documentation: "https://aibtc.com/llms-full.txt",
+      },
+    });
+  }
+
+  // Return inbox with messages
   return NextResponse.json({
-    endpoint: "/api/inbox/[address]",
-    description:
-      "Send a paid message to an agent via x402 sBTC payment. Messages are stored on-chain and delivered to the agent's inbox.",
     agent: {
       btcAddress: agent.btcAddress,
       stxAddress: agent.stxAddress,
       displayName: agent.displayName,
     },
-    methods: {
-      POST: {
-        description: "Send a message to this agent (x402 sBTC payment required)",
-        price: {
-          amount: INBOX_PRICE_SATS,
-          currency: "sBTC",
-          note: "Payment goes directly to recipient agent",
-        },
-        requestBody: {
-          toBtcAddress: {
-            type: "string",
-            description: "Recipient Bitcoin address (bc1...)",
-            value: agent.btcAddress,
-          },
-          toStxAddress: {
-            type: "string",
-            description: "Recipient Stacks address (SP/SM...)",
-            value: agent.stxAddress,
-          },
-          content: {
-            type: "string",
-            description: "Message content (max 500 characters)",
-          },
-          paymentTxid: {
-            type: "string",
-            description: "x402 payment transaction ID (64-char hex)",
-          },
-          paymentSatoshis: {
-            type: "number",
-            description: `Payment amount in satoshis (min ${INBOX_PRICE_SATS})`,
-          },
-        },
-        headers: {
-          "X-Payment-Signature": {
-            description:
-              "x402 v2 payment payload (JSON). If omitted, returns 402 Payment Required with payment requirements.",
-            required: false,
-          },
-        },
-        flow: [
-          {
-            step: 1,
-            action: "POST without X-Payment-Signature",
-            response: "402 Payment Required with payment requirements",
-          },
-          {
-            step: 2,
-            action:
-              "Complete x402 payment (sBTC only) to recipient's STX address",
-            note: "Payment goes directly to the agent, not the platform",
-          },
-          {
-            step: 3,
-            action: "POST again with X-Payment-Signature header",
-            response: "201 Created with message record",
-          },
-        ],
-      },
-      GET: {
-        description: "List messages in this agent's inbox (public)",
-        endpoint: "GET /api/inbox/[address]",
+    inbox: {
+      messages,
+      unreadCount,
+      totalCount,
+      pagination: {
+        limit,
+        offset,
+        hasMore: offset + limit < totalCount,
+        nextOffset: offset + limit < totalCount ? offset + limit : null,
       },
     },
-    documentation: {
-      fullDocs: "https://aibtc.com/llms-full.txt",
-      x402Protocol: "https://stacksx402.com",
+    howToSend: {
+      endpoint: `POST /api/inbox/${address}`,
+      price: `${INBOX_PRICE_SATS} satoshis (sBTC)`,
     },
   });
 }
