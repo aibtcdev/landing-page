@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect, useMemo } from "react";
+import { useMemo } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import LevelBadge from "./LevelBadge";
+import { fetcher } from "@/lib/fetcher";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, getActivityStatus, formatShortDate, ACTIVITY_COLORS } from "@/lib/utils";
 import { LEVELS } from "@/lib/levels";
@@ -40,24 +42,12 @@ export default function Leaderboard({
   limit = 10,
   className = "",
 }: LeaderboardProps) {
-  const [agents, setAgents] = useState<LeaderboardAgent[]>([]);
-  const [distribution, setDistribution] = useState<Distribution | null>(null);
-  const [loading, setLoading] = useState(true);
-
-  useEffect(() => {
-    fetch(`/api/leaderboard?limit=${limit}`)
-      .then((res) => res.json())
-      .then((data) => {
-        const result = data as {
-          leaderboard?: LeaderboardAgent[];
-          distribution?: Distribution;
-        };
-        setAgents(result.leaderboard || []);
-        setDistribution(result.distribution || null);
-        setLoading(false);
-      })
-      .catch(() => setLoading(false));
-  }, [limit]);
+  const { data, isLoading: loading } = useSWR<{
+    leaderboard?: LeaderboardAgent[];
+    distribution?: Distribution;
+  }>(`/api/leaderboard?limit=${limit}`, fetcher);
+  const agents = data?.leaderboard ?? [];
+  const distribution = data?.distribution ?? null;
 
   // Pre-compute display data outside render loop
   const agentRows = useMemo(
@@ -68,7 +58,7 @@ export default function Leaderboard({
         avatarUrl: `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`,
         joined: formatShortDate(agent.verifiedAt),
       })),
-    [agents]
+    [data?.leaderboard] // eslint-disable-line react-hooks/exhaustive-deps
   );
 
   if (loading) {

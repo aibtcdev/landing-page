@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import type { ReputationFeedback, ReputationFeedbackResponse } from "@/lib/identity";
+import { fetcher } from "@/lib/fetcher";
 
 interface ReputationFeedbackListProps {
   agentId: number;
@@ -14,31 +16,20 @@ export default function ReputationFeedbackList({
   address,
   initialCursor,
 }: ReputationFeedbackListProps) {
-  const [feedback, setFeedback] = useState<ReputationFeedback[]>([]);
+  const [extraFeedback, setExtraFeedback] = useState<ReputationFeedback[]>([]);
   const [cursor, setCursor] = useState<number | null>(initialCursor || null);
-  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    async function fetchFeedback() {
-      try {
-        setLoading(true);
-        const res = await fetch(
-          `/api/identity/${encodeURIComponent(address)}/reputation?type=feedback`
-        );
-        if (!res.ok) throw new Error("Failed to fetch feedback");
-        const data = (await res.json()) as { feedback: ReputationFeedbackResponse };
-        setFeedback(data.feedback.items);
-        setCursor(data.feedback.cursor);
-      } catch (err) {
-        console.error("Error fetching reputation feedback:", err);
-      } finally {
-        setLoading(false);
-      }
+  const { data, isLoading: loading } = useSWR<{ feedback: ReputationFeedbackResponse }>(
+    `/api/identity/${encodeURIComponent(address)}/reputation?type=feedback`,
+    fetcher,
+    {
+      onSuccess: (result) => {
+        setCursor(result.feedback.cursor);
+      },
     }
-
-    fetchFeedback();
-  }, [agentId, address]);
+  );
+  const feedback = [...(data?.feedback.items ?? []), ...extraFeedback];
 
   async function loadMore() {
     if (!cursor || loadingMore) return;
@@ -50,7 +41,7 @@ export default function ReputationFeedbackList({
       );
       if (!res.ok) throw new Error("Failed to load more feedback");
       const data = (await res.json()) as { feedback: ReputationFeedbackResponse };
-      setFeedback((prev) => [...prev, ...data.feedback.items]);
+      setExtraFeedback((prev) => [...prev, ...data.feedback.items]);
       setCursor(data.feedback.cursor);
     } catch (err) {
       console.error("Error loading more feedback:", err);

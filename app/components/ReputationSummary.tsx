@@ -1,7 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import type { ReputationSummary as ReputationSummaryType } from "@/lib/identity";
+import { fetcher } from "@/lib/fetcher";
 import ReputationFeedbackList from "./ReputationFeedbackList";
 
 interface ReputationSummaryProps {
@@ -13,33 +15,12 @@ export default function ReputationSummary({
   agentId,
   address,
 }: ReputationSummaryProps) {
-  const [summary, setSummary] = useState<ReputationSummaryType | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, isLoading: loading } = useSWR<{ summary: ReputationSummaryType | null }>(
+    `/api/identity/${encodeURIComponent(address)}/reputation?type=summary`,
+    fetcher
+  );
+  const summary = data?.summary ?? null;
   const [showFeedback, setShowFeedback] = useState(false);
-
-  useEffect(() => {
-    async function fetchSummary() {
-      try {
-        setLoading(true);
-        const res = await fetch(
-          `/api/identity/${encodeURIComponent(address)}/reputation?type=summary`
-        );
-        if (!res.ok) {
-          throw new Error("Failed to load reputation data");
-        }
-        const data = (await res.json()) as { summary: ReputationSummaryType | null };
-        setSummary(data.summary);
-      } catch (err) {
-        console.error("Error fetching reputation summary:", err);
-        setError("Failed to load reputation data");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchSummary();
-  }, [agentId, address]);
 
   if (loading) {
     return (
@@ -52,7 +33,7 @@ export default function ReputationSummary({
   if (error) {
     return (
       <div className="p-4 rounded-lg border border-red-500/20 bg-red-500/10">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-400">Failed to load reputation data</p>
       </div>
     );
   }
