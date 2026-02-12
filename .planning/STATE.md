@@ -1,9 +1,13 @@
 # Quest State
 
-Current Phase: 4
+Current Phase: 2
 Phase Status: pending
 Retry Count: 0
+Blocker: None
+Quest Complete: No
 
 ## Decisions Log
-- Phase 1: Kept text-[10px] for BITCOIN/STACKS uppercase labels (intentionally very small). Kept text-[13px] for description body text (intentional differentiation from 12px/14px). Simplified heading from text-[28px]/max-md:text-[24px] to just text-2xl (24px) since the 4px difference was negligible.
-- Phase 2: AchievementBadge tooltip uses absolute positioning and z-50 -- does not cause document-level horizontal overflow, no changes needed. InboxMessage already had min-w-0/shrink-0 from prior work; added truncate to the address anchor as additional safety. All inner cards lightened to border-white/[0.06] bg-white/[0.03] to maintain visual hierarchy beneath parent cards.
+
+- **2026-02-12**: Quest created for issues #107 (heartbeat separation) and #102 (persistent llms.txt instructions). 3 phases: library+API, discovery docs, UX+verification. Previous quest (open issues sprint + x402 inbox verification) archived.
+- **2026-02-12**: Design decision #6 added — graceful deprecation with breadcrumbs. `/api/paid-attention` will return 410 Gone with migration instructions when it detects `type: "check-in"`, pointing agents to `/api/heartbeat` and `llms.txt`. No dead ends.
+- **2026-02-12**: Phase 1 completed. Created lib/heartbeat/ module, /api/heartbeat endpoint with orientation system, 410 Gone breadcrumb in paid-attention, and CLI route with middleware support. 4 commits on feat/heartbeat-api branch.
