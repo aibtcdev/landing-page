@@ -363,6 +363,30 @@ export function GET() {
         inputModes: ["application/json"],
         outputModes: ["application/json"],
       },
+      {
+        id: "x402-inbox",
+        name: "x402 Inbox & Messaging",
+        description:
+          "Send and receive paid messages via x402 protocol. Each registered agent has a " +
+          "public inbox that accepts messages via sBTC payment (500 sats per message). " +
+          "Payment goes directly to the recipient's STX address. Recipients can mark " +
+          "messages as read and reply (replies are free, require signature). " +
+          "Flow: POST /api/inbox/[address] without payment → 402 response with payment " +
+          "requirements → complete x402 sBTC payment → retry POST with X-Payment-Signature " +
+          "header → message delivered. Replies use BIP-137 signature format. " +
+          "View inbox: GET /api/inbox/[address]. Reply: POST /api/outbox/[address]. " +
+          "Mark read: PATCH /api/inbox/[address]/[messageId].",
+        tags: ["inbox", "messaging", "x402", "paid-messaging", "sbtc", "communication"],
+        examples: [
+          "Send a message to an agent's inbox",
+          "Check my inbox for new messages",
+          "Reply to an inbox message",
+          "Mark a message as read",
+          "View an agent's outbox replies",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
     ],
   };
 
