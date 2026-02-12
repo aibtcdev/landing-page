@@ -304,8 +304,8 @@ export async function POST(
     );
   }
 
-  // Extract sender address from payment
-  const fromBtcAddress = paymentResult.payerStxAddress || "unknown";
+  // Extract sender address from payment (payer's STX address from x402 settlement)
+  const fromAddress = paymentResult.payerStxAddress || "unknown";
 
   // Generate message ID (use memo if present, otherwise generate)
   const messageId =
@@ -324,11 +324,11 @@ export async function POST(
     );
   }
 
-  // Store message
+  // Store message (fromBtcAddress field stores the payer's STX address for x402 messages)
   const now = new Date().toISOString();
   const message = {
     messageId,
-    fromBtcAddress,
+    fromBtcAddress: fromAddress,
     toBtcAddress,
     toStxAddress,
     content,
@@ -345,7 +345,7 @@ export async function POST(
 
   logger.info("Message stored", {
     messageId,
-    fromBtcAddress,
+    fromAddress,
     toBtcAddress,
     paymentTxid: message.paymentTxid,
   });
@@ -356,7 +356,7 @@ export async function POST(
       message: "Message sent successfully",
       inbox: {
         messageId,
-        fromBtcAddress,
+        fromAddress,
         toBtcAddress,
         sentAt: now,
       },
