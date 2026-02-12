@@ -11,6 +11,7 @@ import LevelProgress from "../../components/LevelProgress";
 import LevelTooltip from "../../components/LevelTooltip";
 import LevelCelebration from "../../components/LevelCelebration";
 import AchievementList from "../../components/AchievementList";
+import InboxActivity from "../../components/InboxActivity";
 import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
@@ -363,6 +364,13 @@ export default function AgentProfile() {
                   No activity yet
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Inbox — show for level 1+ agents */}
+          {agentLevel >= 1 && (
+            <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-4">
+              <InboxActivity btcAddress={agent.btcAddress} />
             </div>
           )}
 
