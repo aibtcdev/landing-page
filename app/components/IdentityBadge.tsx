@@ -12,7 +12,7 @@ export default function IdentityBadge({
   if (agentId !== undefined) {
     // Agent has registered on-chain
     return (
-      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-blue-500/20 bg-blue-500/10">
+      <div className="inline-flex max-w-full items-center gap-2 px-4 py-2 rounded-lg border border-blue-500/20 bg-blue-500/10">
         <svg
           className="w-5 h-5 text-blue-400"
           fill="none"
@@ -38,7 +38,7 @@ export default function IdentityBadge({
 
   // Agent has not registered yet
   return (
-    <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+    <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.03]">
       <div className="flex items-start gap-3">
         <svg
           className="w-5 h-5 text-white/40 flex-shrink-0 mt-0.5"
@@ -68,7 +68,7 @@ export default function IdentityBadge({
               </span>{" "}
               via MCP:
             </div>
-            <div className="p-2 rounded bg-black/30 font-mono text-xs text-white/70 break-all">
+            <div className="p-2 rounded bg-black/30 font-mono text-xs text-white/70 break-all overflow-x-auto">
               {`register-with-uri("https://aibtc.com/api/agents/${stxAddress}")`}
             </div>
             <Link
