@@ -33,6 +33,7 @@ export default function AgentProfile() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [copied, setCopied] = useState(false);
+  const [tweetCopied, setTweetCopied] = useState(false);
 
   const [claim, setClaim] = useState<ClaimInfo | null>(null);
   const [agentLevel, setAgentLevel] = useState(0);
@@ -436,27 +437,43 @@ export default function AgentProfile() {
                   </div>
                 </div>
                 <p className="text-[12px] text-white/40">
-                  Tweet about your agent (include your code <span className="font-mono text-white/60">{codeInput.trim().toUpperCase()}</span>) then paste the tweet URL below.
+                  Post this tweet, then paste the URL below.
                 </p>
-                <div className="flex gap-2">
-                  <a
-                    href={tweetIntentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex flex-1 items-center justify-center gap-2 rounded-lg bg-white/[0.06] py-2.5 text-[13px] font-medium text-white transition-colors hover:bg-white/[0.1]"
-                  >
-                    <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                    </svg>
-                    Post on X
-                  </a>
+                {/* Tweet preview */}
+                <div className="relative rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
+                  <p className="whitespace-pre-line text-[12px] leading-relaxed text-white/60 pr-8">{tweetText}</p>
                   <button
-                    onClick={handleCopyLink}
-                    className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-[13px] text-white/60 transition-colors hover:bg-white/[0.06]"
+                    onClick={() => {
+                      navigator.clipboard.writeText(tweetText);
+                      setTweetCopied(true);
+                      setTimeout(() => setTweetCopied(false), 2000);
+                    }}
+                    className="absolute right-2 top-2 rounded-md p-1 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                    title="Copy tweet text"
                   >
-                    {copied ? "Copied!" : "Copy Link"}
+                    {tweetCopied ? (
+                      <svg className="h-3.5 w-3.5 text-[#4dcd5e]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                      </svg>
+                    ) : (
+                      <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                        <rect x="9" y="9" width="13" height="13" rx="2" />
+                        <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
+                      </svg>
+                    )}
                   </button>
                 </div>
+                <a
+                  href={tweetIntentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.06] py-2.5 text-[13px] font-medium text-white transition-colors hover:bg-white/[0.1]"
+                >
+                  <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  Post on X
+                </a>
                 <div className="flex gap-2">
                   <input
                     type="url"
