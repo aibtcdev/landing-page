@@ -1,14 +1,15 @@
-"use client";
-
-import { useEffect, useState } from "react";
 import Link from "next/link";
 import Image from "next/image";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import AnimatedBackground from "./components/AnimatedBackground";
 import Navbar, { SocialLinks } from "./components/Navbar";
 import CopyButton from "./components/CopyButton";
-import LevelBadge from "./components/LevelBadge";
-import { LEVELS } from "@/lib/levels";
-import { generateName } from "@/lib/name-generator";
+import HomeHeroStats from "./components/HomeHeroStats";
+import HomeLeaderboard from "./components/HomeLeaderboard";
+import type { AgentRecord } from "@/lib/types";
+import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+
+export const dynamic = "force-dynamic";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -176,36 +177,109 @@ interface LeaderboardAgent {
   levelName: string;
 }
 
-export default function Home() {
-  const [registeredCount, setRegisteredCount] = useState(0);
-  const [topAgents, setTopAgents] = useState<LeaderboardAgent[]>([]);
+/**
+ * Fetch health data and leaderboard data from KV in parallel.
+ */
+async function fetchHomeData() {
+  try {
+    const { env } = await getCloudflareContext();
+    const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-  useEffect(() => {
-    // Fetch agent counts from health endpoint
-    fetch("/api/health")
-      .then((res) => {
-        if (!res.ok) throw new Error("Health check failed");
-        return res.json();
-      })
-      .then((data) => {
-        const healthData = data as { services?: { kv?: { registeredCount?: number; claimedCount?: number } } };
-        if (healthData.services?.kv?.registeredCount !== undefined) {
-          setRegisteredCount(healthData.services.kv.registeredCount);
+    // Count agents and load leaderboard data in parallel
+    const [registeredCount, topAgents] = await Promise.all([
+      countAgents(kv),
+      loadLeaderboard(kv, 12),
+    ]);
+
+    return { registeredCount, topAgents };
+  } catch {
+    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[] };
+  }
+}
+
+async function countAgents(kv: KVNamespace): Promise<number> {
+  let count = 0;
+  let cursor: string | undefined;
+  let complete = false;
+  while (!complete) {
+    const page = await kv.list({ prefix: "stx:", cursor });
+    count += page.keys.length;
+    complete = page.list_complete;
+    cursor = !page.list_complete ? page.cursor : undefined;
+  }
+  return count;
+}
+
+async function loadLeaderboard(kv: KVNamespace, limit: number): Promise<LeaderboardAgent[]> {
+  // Load all agents
+  const agents: AgentRecord[] = [];
+  let cursor: string | undefined;
+  let listComplete = false;
+
+  while (!listComplete) {
+    const listResult = await kv.list({ prefix: "stx:", cursor });
+    listComplete = listResult.list_complete;
+    cursor = !listResult.list_complete ? listResult.cursor : undefined;
+
+    const values = await Promise.all(
+      listResult.keys.map(async (key) => {
+        const value = await kv.get(key.name);
+        if (!value) return null;
+        try {
+          return JSON.parse(value) as AgentRecord;
+        } catch {
+          return null;
         }
       })
-      .catch(() => {});
-  }, []);
+    );
+    agents.push(...values.filter((v): v is AgentRecord => v !== null));
+  }
 
-  useEffect(() => {
-    fetch("/api/leaderboard?limit=12")
-      .then((res) => res.json())
-      .then((data) => {
-        const result = data as { leaderboard?: LeaderboardAgent[] };
-        setTopAgents(result.leaderboard || []);
-      })
-      .catch(() => {});
-  }, []);
+  // Look up claims in parallel
+  const claims = await Promise.all(
+    agents.map(async (agent) => {
+      const claimData = await kv.get(`claim:${agent.btcAddress}`);
+      if (!claimData) return null;
+      try {
+        return JSON.parse(claimData) as ClaimStatus;
+      } catch {
+        return null;
+      }
+    })
+  );
 
+  // Compute levels and sort
+  const agentsWithLevels = agents.map((agent, i) => {
+    const level = computeLevel(agent, claims[i]);
+    return {
+      stxAddress: agent.stxAddress,
+      btcAddress: agent.btcAddress,
+      displayName: agent.displayName,
+      bnsName: agent.bnsName,
+      verifiedAt: agent.verifiedAt,
+      level,
+      levelName: LEVELS[level].name,
+      lastActiveAt: agent.lastActiveAt,
+      checkInCount: agent.checkInCount,
+    };
+  });
+
+  // Sort: level desc, then check-ins desc, then recent first
+  agentsWithLevels.sort((a, b) => {
+    let cmp = (b.level ?? 0) - (a.level ?? 0);
+    if (cmp === 0) cmp = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
+    if (cmp === 0) cmp = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
+    return cmp;
+  });
+
+  return agentsWithLevels.slice(0, limit).map((agent, i) => ({
+    ...agent,
+    rank: i + 1,
+  }));
+}
+
+export default async function Home() {
+  const { registeredCount, topAgents } = await fetchHomeData();
 
   return (
     <>
@@ -258,9 +332,7 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-                <span className="text-[14px] text-white/50 max-md:text-[13px]">
-                  <span className="font-semibold text-white">{registeredCount.toLocaleString()}</span> {registeredCount === 1 ? "agent" : "agents"} registered
-                </span>
+                <HomeHeroStats count={registeredCount} />
               </div>
 
             </div>
@@ -376,157 +448,7 @@ export default function Home() {
         </section>
 
         {/* Agent Leaderboard Section */}
-        <section id="agents" className="relative pb-24 pt-16 max-md:pb-16 max-md:pt-12">
-          <div className="mx-auto max-w-[1200px]">
-            <div className="mb-8 px-12 max-lg:px-8 max-md:px-5 max-md:mb-6">
-              <div className="flex items-center justify-center gap-3 mb-2 max-md:flex-col max-md:gap-2">
-                <h2 className="text-center text-[clamp(24px,3vw,32px)] font-medium text-white max-md:text-[22px]">
-                  Agent Leaderboard
-                </h2>
-                <span className="rounded-full bg-white/10 px-2.5 py-1 text-[12px] font-medium text-white/60">
-                  {registeredCount.toLocaleString()} registered
-                </span>
-              </div>
-              <p className="text-center text-[14px] text-white/40 max-md:text-[13px]">
-                Level up from Registered to Genesis by completing real activity
-              </p>
-            </div>
-
-            {/* Horizontal Scrolling Agents - Desktop */}
-            <div className="relative max-md:hidden">
-              {/* Gradient masks */}
-              <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-24 bg-gradient-to-r from-black to-transparent" />
-              <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-24 bg-gradient-to-l from-black to-transparent" />
-
-              {/* Scrolling container */}
-              <div className="flex gap-3 overflow-x-auto px-12 pb-4 scrollbar-hide max-lg:px-8">
-                {topAgents.length > 0
-                  ? topAgents.map((agent) => {
-                      const name = agent.displayName || generateName(agent.btcAddress);
-                      const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
-                      const truncated = `${agent.btcAddress.slice(0, 8)}...${agent.btcAddress.slice(-4)}`;
-
-                      return (
-                        <Link
-                          href={`/agents/${agent.btcAddress}`}
-                          key={agent.btcAddress}
-                          className="group flex-shrink-0 w-[200px] rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-3.5 backdrop-blur-[12px] transition-all duration-200 hover:border-white/[0.15] hover:-translate-y-1"
-                        >
-                          <div className="relative mb-2.5 size-14">
-                            <div className="size-14 overflow-hidden rounded-lg border border-white/10">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={avatarUrl} alt={name} className="size-full object-cover" loading="lazy" width="56" height="56" />
-                            </div>
-                            <div className="absolute -bottom-1 -right-1">
-                              <LevelBadge level={agent.level} size="sm" />
-                            </div>
-                          </div>
-                          <div className="mb-1">
-                            <span className="font-medium text-[14px] text-white block truncate">{name}</span>
-                          </div>
-                          <span
-                            className="text-[11px] font-medium block mb-1.5"
-                            style={{ color: LEVELS[agent.level]?.color || "rgba(255,255,255,0.3)" }}
-                          >
-                            {agent.levelName}
-                          </span>
-                          <span className="font-mono text-[10px] text-[#F7931A]/60 block truncate">
-                            {truncated}
-                          </span>
-                        </Link>
-                      );
-                    })
-                  : featuredAgents.map((agent) => (
-                      <Link
-                        href="/agents"
-                        key={agent.id}
-                        className="group flex-shrink-0 w-[200px] rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-3.5 backdrop-blur-[12px] transition-all duration-200 hover:border-white/[0.15] hover:-translate-y-1"
-                      >
-                        <div className="mb-2.5 size-14 overflow-hidden rounded-lg border border-white/10">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={agent.avatar} alt={agent.name} className="size-full object-cover" loading="lazy" width="56" height="56" />
-                        </div>
-                        <div className="mb-1">
-                          <span className="font-medium text-[14px] text-white block truncate">{agent.name}</span>
-                        </div>
-                        <p className="text-[13px] leading-relaxed text-white/40 line-clamp-2">{agent.description}</p>
-                      </Link>
-                    ))
-                }
-              </div>
-            </div>
-
-            {/* Vertical stack on mobile */}
-            <div className="hidden max-md:block px-5">
-              <div className="space-y-2">
-                {topAgents.length > 0
-                  ? topAgents.slice(0, 6).map((agent) => {
-                      const name = agent.displayName || generateName(agent.btcAddress);
-                      const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
-                      const truncated = `${agent.btcAddress.slice(0, 8)}...${agent.btcAddress.slice(-4)}`;
-
-                      return (
-                        <Link
-                          href={`/agents/${agent.btcAddress}`}
-                          key={agent.btcAddress}
-                          className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-3 transition-all duration-200 hover:border-white/[0.15]"
-                        >
-                          <div className="relative size-11 shrink-0">
-                            <div className="size-11 overflow-hidden rounded-lg border border-white/10">
-                              {/* eslint-disable-next-line @next/next/no-img-element */}
-                              <img src={avatarUrl} alt={name} className="size-full object-cover" loading="lazy" width="44" height="44" />
-                            </div>
-                            <div className="absolute -bottom-1 -right-1">
-                              <LevelBadge level={agent.level} size="sm" />
-                            </div>
-                          </div>
-                          <div className="min-w-0 flex-1">
-                            <span className="font-medium text-[14px] text-white block">{name}</span>
-                            <span className="font-mono text-[10px] text-[#F7931A]/60 block">{truncated}</span>
-                          </div>
-                          <svg className="size-4 text-white/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                          </svg>
-                        </Link>
-                      );
-                    })
-                  : featuredAgents.slice(0, 4).map((agent) => (
-                      <Link
-                        href="/agents"
-                        key={agent.id}
-                        className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-3 transition-all duration-200 hover:border-white/[0.15]"
-                      >
-                        <div className="size-11 overflow-hidden rounded-lg border border-white/10 shrink-0">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={agent.avatar} alt={agent.name} className="size-full object-cover" loading="lazy" width="44" height="44" />
-                        </div>
-                        <div className="min-w-0 flex-1">
-                          <span className="font-medium text-[14px] text-white block">{agent.name}</span>
-                          <span className="text-[12px] text-white/40 line-clamp-1">{agent.description}</span>
-                        </div>
-                        <svg className="size-4 text-white/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                        </svg>
-                      </Link>
-                    ))
-                }
-              </div>
-            </div>
-
-            {/* CTA */}
-            <div className="mt-8 text-center max-md:mt-5 max-md:px-5">
-              <Link
-                href="/agents"
-                className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-6 py-3 text-[15px] font-medium text-white transition-all duration-200 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:py-3"
-              >
-                View All Agents
-                <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-                </svg>
-              </Link>
-            </div>
-          </div>
-        </section>
+        <HomeLeaderboard agents={topAgents} registeredCount={registeredCount} />
 
         {/* Core Upgrades Section */}
         <section className="relative px-12 pb-24 pt-24 max-lg:px-8 max-md:px-5 max-md:pb-16 max-md:pt-16" id="upgrades">
