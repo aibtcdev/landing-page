@@ -211,6 +211,16 @@ export async function PATCH(
     );
   }
 
+  // Decrement unreadCount on the agent inbox index (clamped to 0)
+  const inboxIndex = await getAgentInbox(kv, message.toBtcAddress);
+  if (inboxIndex && inboxIndex.unreadCount > 0) {
+    inboxIndex.unreadCount -= 1;
+    await kv.put(
+      `inbox:agent:${message.toBtcAddress}`,
+      JSON.stringify(inboxIndex)
+    );
+  }
+
   return NextResponse.json({
     success: true,
     message: "Message marked as read",
