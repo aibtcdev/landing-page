@@ -101,13 +101,7 @@ export function isPartialAgentRecord(
 }
 
 /**
- * A check-in record stored at `checkin:{btcAddress}`.
- *
- * Tracks when an agent last checked in and their total check-in count.
- * Check-ins are rate-limited to one every 5 minutes.
+ * Re-export CheckInRecord from heartbeat module for backward compatibility.
+ * Check-in logic has moved to /api/heartbeat.
  */
-export interface CheckInRecord {
-  btcAddress: string;
-  checkInCount: number;
-  lastCheckInAt: string;
-}
+export type { CheckInRecord } from "@/lib/heartbeat";
