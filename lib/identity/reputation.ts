@@ -39,9 +39,9 @@ function setCache<T>(key: string, data: T): void {
 /** Convert a WAD-scaled string to a display-friendly number using bigint math. */
 function wadToNumber(wadStr: string): number {
   const wad = BigInt(wadStr);
-  const divisor = 10n ** BigInt(WAD_DECIMALS);
+  const divisor = BigInt(10) ** BigInt(WAD_DECIMALS);
   // Keep 2 extra digits for rounding, then convert to Number
-  const scaled = (wad * 100n) / divisor;
+  const scaled = (wad * BigInt(100)) / divisor;
   return Number(scaled) / 100;
 }
 
