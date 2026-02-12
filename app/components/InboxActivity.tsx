@@ -62,7 +62,7 @@ export default function InboxActivity({
     );
   }
 
-  if (error || (!loading && !data)) {
+  if (error || !data) {
     return (
       <div className={`text-[12px] text-red-400/60 ${className}`}>
         Failed to load inbox

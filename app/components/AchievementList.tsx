@@ -55,7 +55,7 @@ export default function AchievementList({
     );
   }
 
-  if (error || (!loading && !data)) {
+  if (error || !data) {
     return (
       <div className={`text-[12px] text-red-400/60 ${className}`}>
         Failed to load achievements

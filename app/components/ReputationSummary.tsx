@@ -7,12 +7,10 @@ import { fetcher } from "@/lib/fetcher";
 import ReputationFeedbackList from "./ReputationFeedbackList";
 
 interface ReputationSummaryProps {
-  agentId: number;
   address: string;
 }
 
 export default function ReputationSummary({
-  agentId,
   address,
 }: ReputationSummaryProps) {
   const { data, error, isLoading: loading } = useSWR<{ summary: ReputationSummaryType | null }>(
@@ -92,7 +90,7 @@ export default function ReputationSummary({
         </button>
       </div>
 
-      {showFeedback && <ReputationFeedbackList agentId={agentId} address={address} />}
+      {showFeedback && <ReputationFeedbackList address={address} />}
     </div>
   );
 }

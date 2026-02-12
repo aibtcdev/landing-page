@@ -314,7 +314,7 @@ export default function AgentProfile({
                   <IdentityBadge agentId={agent.erc8004AgentId ?? undefined} stxAddress={agent.stxAddress} />
                   {agent.erc8004AgentId != null && (
                     <div className="mt-4">
-                      <ReputationSummary agentId={agent.erc8004AgentId} address={agent.btcAddress} />
+                      <ReputationSummary address={agent.btcAddress} />
                     </div>
                   )}
                 </div>

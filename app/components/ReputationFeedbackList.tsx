@@ -6,13 +6,11 @@ import type { ReputationFeedback, ReputationFeedbackResponse } from "@/lib/ident
 import { fetcher } from "@/lib/fetcher";
 
 interface ReputationFeedbackListProps {
-  agentId: number;
   address: string;
   initialCursor?: number;
 }
 
 export default function ReputationFeedbackList({
-  agentId,
   address,
   initialCursor,
 }: ReputationFeedbackListProps) {

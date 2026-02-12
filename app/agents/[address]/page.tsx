@@ -48,8 +48,11 @@ async function resolveAgent(
       const listResult = await kv.list({ prefix: "stx:", cursor });
       listComplete = listResult.list_complete;
       cursor = !listResult.list_complete ? listResult.cursor : undefined;
-      for (const key of listResult.keys) {
-        const value = await kv.get(key.name);
+      const values = await Promise.all(
+        listResult.keys.map((key) => kv.get(key.name))
+      );
+      for (let i = 0; i < listResult.keys.length; i++) {
+        const value = values[i];
         if (!value) continue;
         try {
           const record = JSON.parse(value) as AgentRecord;
@@ -69,7 +72,7 @@ async function resolveAgent(
 
   if (!agent) return null;
 
-  // Lazy BNS refresh (non-blocking — fire and forget on the await)
+  // Lazy BNS refresh (blocks this request but acceptable for correctness)
   if (!agent.bnsName && agent.stxAddress) {
     try {
       const bnsName = await lookupBnsName(agent.stxAddress);
