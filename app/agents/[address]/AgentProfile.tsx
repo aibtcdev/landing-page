@@ -1,7 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams } from "next/navigation";
+import { useState } from "react";
 import Link from "next/link";
 import { TWITTER_HANDLE } from "@/lib/constants";
 import Navbar from "../../components/Navbar";
@@ -28,20 +27,30 @@ interface ClaimInfo {
   claimedAt: string;
 }
 
-export default function AgentProfile() {
-  const params = useParams();
-  const address = params.address as string;
+interface AgentProfileProps {
+  agent: AgentRecord;
+  claim: ClaimInfo | null;
+  level: number;
+  levelName: string;
+  nextLevel: NextLevelInfo | null;
+}
 
-  const [agent, setAgent] = useState<AgentRecord | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-  const [copied, setCopied] = useState(false);
+export default function AgentProfile({
+  agent: initialAgent,
+  claim: initialClaim,
+  level: initialLevel,
+  levelName: initialLevelName,
+  nextLevel: initialNextLevel,
+}: AgentProfileProps) {
+  // Mutable state initialized from server props — updated by client-side claim submission
+  const [agent, setAgent] = useState<AgentRecord>(initialAgent);
+  const [claim, setClaim] = useState<ClaimInfo | null>(initialClaim);
+  const [agentLevel, setAgentLevel] = useState(initialLevel);
+  const [levelName, setLevelName] = useState(initialLevelName);
+  const [nextLevel, setNextLevel] = useState<NextLevelInfo | null>(initialNextLevel);
+
+  // UI interaction state
   const [tweetCopied, setTweetCopied] = useState(false);
-
-  const [claim, setClaim] = useState<ClaimInfo | null>(null);
-  const [agentLevel, setAgentLevel] = useState(0);
-  const [levelName, setLevelName] = useState("Unverified");
-  const [nextLevel, setNextLevel] = useState<NextLevelInfo | null>(null);
   const [tweetUrlInput, setTweetUrlInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
   const [claimError, setClaimError] = useState<string | null>(null);
@@ -49,108 +58,17 @@ export default function AgentProfile() {
   const [codeValidated, setCodeValidated] = useState(false);
   const [validatingCode, setValidatingCode] = useState(false);
 
-
-  useEffect(() => {
-    // Reset state when address changes
-    setAgent(null);
-    setClaim(null);
-    setLoading(true);
-    setError(null);
-    setTweetUrlInput("");
-    setClaimError(null);
-    setCodeInput("");
-    setCodeValidated(false);
-
-    async function fetchAgent() {
-      try {
-        const res = await fetch(`/api/verify/${encodeURIComponent(address)}`);
-        if (!res.ok) {
-          setError(res.status === 404 ? "Agent not found" : "Failed to fetch agent");
-        } else {
-          const data = (await res.json()) as {
-            registered: boolean;
-            agent: AgentRecord;
-            level?: number;
-            levelName?: string;
-            nextLevel?: NextLevelInfo | null;
-          };
-          if (data.registered && data.agent) {
-            setAgent(data.agent);
-            if (data.level !== undefined) setAgentLevel(data.level);
-            if (data.levelName) setLevelName(data.levelName);
-            if (data.nextLevel !== undefined) setNextLevel(data.nextLevel);
-          } else {
-            setError("Agent not found");
-          }
-        }
-      } catch (e) {
-        setError((e as Error).message);
-      } finally {
-        setLoading(false);
-      }
-    }
-    if (address) fetchAgent();
-  }, [address]);
-
-  // Stable derived values to avoid re-render loops from object reference changes
-  const agentBtcAddress = agent?.btcAddress;
-  const hasIdentity = agent?.erc8004AgentId !== undefined && agent?.erc8004AgentId !== null;
-
-  useEffect(() => {
-    if (!agentBtcAddress) return;
-    fetch(`/api/claims/viral?btcAddress=${encodeURIComponent(agentBtcAddress)}`)
-      .then((r) => r.json())
-      .then((raw: unknown) => {
-        const data = raw as { claim?: ClaimInfo };
-        setClaim(data.claim ?? null);
-      })
-      .catch((err) => {
-        console.error("Failed to fetch claim:", err);
-        setClaim(null);
-      });
-  }, [agentBtcAddress]);
-
-  // Detect on-chain identity via server-side API route
-  // Runs once when agent loads — uses btcAddress as stable dep to avoid re-render loops
-  useEffect(() => {
-    if (!agentBtcAddress || hasIdentity) return;
-
-    let cancelled = false;
-    async function checkIdentity() {
-      try {
-        const res = await fetch(`/api/identity/${encodeURIComponent(agentBtcAddress!)}`);
-        if (res.ok && !cancelled) {
-          const data = (await res.json()) as { agentId: number | null };
-          if (data.agentId !== null) {
-            setAgent((prev) => prev ? { ...prev, erc8004AgentId: data.agentId! } : null);
-          }
-        }
-      } catch (err) {
-        console.error("Failed to detect identity:", err);
-      }
-    }
-
-    checkIdentity();
-    return () => { cancelled = true; };
-  }, [agentBtcAddress, hasIdentity]);
-
   const profileUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/agents/${agent?.btcAddress}`
+    ? `${window.location.origin}/agents/${agent.btcAddress}`
     : "";
-  const displayName = agent ? generateName(agent.btcAddress) : "";
-  const avatarUrl = agent ? `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}` : "";
-  const tweetText = agent ? `My AIBTC agent is ${displayName} 🤖₿\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${TWITTER_HANDLE}` : "";
+  const displayName = generateName(agent.btcAddress);
+  const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+  const tweetText = `My AIBTC agent is ${displayName} \u{1F916}\u{20BF}\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${TWITTER_HANDLE}`;
   const tweetIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
-  const handleCopyLink = () => {
-    navigator.clipboard.writeText(profileUrl);
-    setCopied(true);
-    setTimeout(() => setCopied(false), 2000);
-  };
-
   const handleValidateCode = async () => {
-    if (!agent || !codeInput.trim()) return;
+    if (!codeInput.trim()) return;
     setValidatingCode(true);
     setClaimError(null);
     try {
@@ -172,7 +90,7 @@ export default function AgentProfile() {
   };
 
   const handleSubmitClaim = async () => {
-    if (!agent || !tweetUrlInput.trim()) return;
+    if (!tweetUrlInput.trim()) return;
     setSubmitting(true);
     setClaimError(null);
     try {
@@ -197,7 +115,7 @@ export default function AgentProfile() {
         if (data.levelName) setLevelName(data.levelName);
         if (data.nextLevel !== undefined) setNextLevel(data.nextLevel);
         if (data.claim.tweetAuthor) {
-          setAgent((prev) => prev ? { ...prev, owner: data.claim!.tweetAuthor } : prev);
+          setAgent((prev) => ({ ...prev, owner: data.claim!.tweetAuthor }));
         }
       }
     } catch {
@@ -206,32 +124,6 @@ export default function AgentProfile() {
       setSubmitting(false);
     }
   };
-
-  if (loading) {
-    return (
-      <><AnimatedBackground /><Navbar />
-        <div className="flex min-h-[90vh] items-center justify-center pt-24">
-          <div className="animate-pulse text-sm text-white/40">Loading agent...</div>
-        </div>
-      </>
-    );
-  }
-
-  if (error || !agent) {
-    return (
-      <><AnimatedBackground /><Navbar />
-        <div className="flex min-h-[90vh] flex-col items-center justify-center gap-3 pt-24">
-          <p className="text-sm text-white/40">This address is not registered</p>
-          <Link href="/guide" className="text-xs text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">
-            Register your agent →
-          </Link>
-          <Link href="/agents" className="text-xs text-white/40 hover:text-white/70 transition-colors">
-            ← Back to Registry
-          </Link>
-        </div>
-      </>
-    );
-  }
 
   const levelColors: Record<number, string> = {
     0: "rgba(255,255,255,0.08)",
@@ -434,21 +326,21 @@ export default function AgentProfile() {
                       <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                     <span className="text-sm font-medium text-white">Claimed</span>
-                    {claim.tweetAuthor && (
+                    {claim!.tweetAuthor && (
                       <span className="text-xs text-white/50">
-                        by <a href={`https://x.com/${claim.tweetAuthor}`} target="_blank" rel="noopener noreferrer" className="text-white/70 hover:text-white transition-colors">@{claim.tweetAuthor}</a>
+                        by <a href={`https://x.com/${claim!.tweetAuthor}`} target="_blank" rel="noopener noreferrer" className="text-white/70 hover:text-white transition-colors">@{claim!.tweetAuthor}</a>
                       </span>
                     )}
                   </div>
-                  {claim.status === "rewarded" && (
-                    <span className="text-xs font-medium text-[#F7931A]">{claim.rewardSatoshis.toLocaleString()} sats</span>
+                  {claim!.status === "rewarded" && (
+                    <span className="text-xs font-medium text-[#F7931A]">{claim!.rewardSatoshis.toLocaleString()} sats</span>
                   )}
-                  {claim.status !== "rewarded" && (
+                  {claim!.status !== "rewarded" && (
                     <span className="text-xs font-medium text-white/50">Rewards pending</span>
                   )}
                 </div>
-                {claim.tweetUrl && (
-                  <a href={claim.tweetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-white/40 hover:text-white/60 transition-colors">
+                {claim!.tweetUrl && (
+                  <a href={claim!.tweetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-white/40 hover:text-white/60 transition-colors">
                     View tweet →
                   </a>
                 )}
@@ -555,8 +447,8 @@ export default function AgentProfile() {
           {hasExistingClaim && <button
             onClick={() => {
               const shareText = agentLevel > 0
-                ? `My AIBTC agent ${displayName} reached ${levelName} (Level ${agentLevel}) 🤖₿\n\n${profileUrl}\n\n${TWITTER_HANDLE}`
-                : `Check out my AIBTC agent ${displayName} 🤖₿\n\n${profileUrl}\n\n${TWITTER_HANDLE}`;
+                ? `My AIBTC agent ${displayName} reached ${levelName} (Level ${agentLevel}) \u{1F916}\u{20BF}\n\n${profileUrl}\n\n${TWITTER_HANDLE}`
+                : `Check out my AIBTC agent ${displayName} \u{1F916}\u{20BF}\n\n${profileUrl}\n\n${TWITTER_HANDLE}`;
               window.open(
                 `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`,
                 "_blank",
