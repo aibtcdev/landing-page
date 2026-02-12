@@ -145,6 +145,13 @@ export async function POST(
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
 
+  // Extract network config once (used by both 402 response and payment verification)
+  const network = (env.X402_NETWORK as "mainnet" | "testnet") || "mainnet";
+  const facilitatorUrl =
+    env.X402_FACILITATOR_URL || "https://facilitator.stacksx402.com";
+  const sponsorRelayUrl =
+    env.X402_SPONSOR_RELAY_URL || "https://x402-relay.aibtc.com";
+
   logger.info("Inbox message submission", { address });
 
   // Look up recipient agent
@@ -226,7 +233,6 @@ export async function POST(
 
   if (!paymentSigHeader) {
     // No payment signature — return 402 with payment requirements
-    const network = (env.X402_NETWORK as "mainnet" | "testnet") || "mainnet";
     const networkCAIP2 = networkToCAIP2(network);
     const paymentRequirements = buildInboxPaymentRequirements(
       agent.stxAddress,
@@ -270,12 +276,6 @@ export async function POST(
   }
 
   // Verify x402 payment
-  const network = (env.X402_NETWORK as "mainnet" | "testnet") || "mainnet";
-  const facilitatorUrl =
-    env.X402_FACILITATOR_URL || "https://facilitator.stacksx402.com";
-  const sponsorRelayUrl =
-    env.X402_SPONSOR_RELAY_URL || "https://x402-relay.aibtc.com";
-
   logger.info("Verifying x402 payment", {
     network,
     recipientStx: agent.stxAddress,
