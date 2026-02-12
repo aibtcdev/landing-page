@@ -128,6 +128,24 @@ export async function POST(
     );
   }
 
+  // Verify path address resolves to the same agent as the signer
+  if (btcResult.address !== agent.btcAddress) {
+    logger.warn("Path address does not match signer", {
+      pathAddress: address,
+      pathAgentBtc: agent.btcAddress,
+      signerBtc: btcResult.address,
+    });
+    return NextResponse.json(
+      {
+        error:
+          "Path address does not match signer. Use your own outbox endpoint.",
+        expectedAddress: btcResult.address,
+        providedAddress: address,
+      },
+      { status: 403 }
+    );
+  }
+
   // Check if reply already exists
   const existingReply = await getReply(kv, messageId);
 
