@@ -36,12 +36,18 @@ function setCache<T>(key: string, data: T): void {
   cache.set(key, { data, timestamp: Date.now() });
 }
 
+/**
+ * WAD divisor: 10^18 as a BigInt.
+ * Pre-computed as a string literal to avoid BigInt exponentiation,
+ * which requires a higher TS target than ES2017.
+ */
+const WAD_DIVISOR = BigInt("1000000000000000000"); // 10^18
+
 /** Convert a WAD-scaled string to a display-friendly number using bigint math. */
 function wadToNumber(wadStr: string): number {
   const wad = BigInt(wadStr);
-  const divisor = BigInt(10) ** BigInt(WAD_DECIMALS);
   // Keep 2 extra digits for rounding, then convert to Number
-  const scaled = (wad * BigInt(100)) / divisor;
+  const scaled = (wad * BigInt(100)) / WAD_DIVISOR;
   return Number(scaled) / 100;
 }
 
