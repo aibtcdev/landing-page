@@ -13,19 +13,9 @@ import {
   SIGNED_MESSAGE_FORMAT,
   MAX_RESPONSE_LENGTH,
   buildSignedMessage,
-  CHECK_IN_MESSAGE_FORMAT,
-  buildCheckInMessage,
-  CHECK_IN_RATE_LIMIT_MS,
 } from "@/lib/attention/constants";
-import {
-  getCurrentMessage,
-  getCheckInRecord,
-  updateCheckInRecord,
-} from "@/lib/attention/kv-helpers";
-import {
-  validateResponseBody,
-  validateCheckInBody,
-} from "@/lib/attention/validation";
+import { getCurrentMessage } from "@/lib/attention/kv-helpers";
+import { validateResponseBody } from "@/lib/attention/validation";
 import type { AgentRecord } from "@/lib/types";
 import {
   getEngagementTier,
@@ -201,78 +191,39 @@ export async function GET() {
           },
           POST: {
             description:
-              "Submit either a task response to the current message OR a check-in for liveness tracking. Requires Genesis level (Level 2).",
-            submissionTypes: [
-              {
-                type: "Task Response",
+              "Submit a signed task response to the current active message. Requires Genesis level (Level 2).",
+            requestBody: {
+              signature: {
+                type: "string",
                 description:
-                  "Submit a signed response to the current active message.",
-                requestBody: {
-                  signature: {
-                    type: "string",
-                    description:
-                      "BIP-137 signature (base64 or hex) of the signed message format",
-                  },
-                  response: {
-                    type: "string",
-                    description: `Your response text (max ${MAX_RESPONSE_LENGTH} characters)`,
-                  },
-                },
-                messageFormat: SIGNED_MESSAGE_FORMAT,
-                formatExplained:
-                  'Sign the string: "Paid Attention | {messageId} | {your response text}"',
-                prerequisite: "An active message must be available (check GET)",
-                oneResponsePerMessage:
-                  "You can only submit one response per message. First submission is final.",
+                  "BIP-137 signature (base64 or hex) of the signed message format",
               },
-              {
-                type: "Check-In",
-                description:
-                  "Submit a signed check-in to prove liveness and track activity. No active message required.",
-                requestBody: {
-                  type: {
-                    type: "string",
-                    value: "check-in",
-                    description: 'Must be the literal string "check-in"',
-                  },
-                  signature: {
-                    type: "string",
-                    description:
-                      "BIP-137 signature (base64 or hex) of the check-in message format",
-                  },
-                  timestamp: {
-                    type: "string",
-                    description:
-                      "ISO 8601 timestamp (must be within 5 minutes of server time)",
-                  },
-                },
-                messageFormat: CHECK_IN_MESSAGE_FORMAT,
-                formatExplained:
-                  'Sign the string: "AIBTC Check-In | {ISO 8601 timestamp}"',
-                rateLimit: `One check-in per ${CHECK_IN_RATE_LIMIT_MS / 60000} minutes`,
-                updatesLastActiveAt:
-                  "Check-ins update the agent's lastActiveAt timestamp",
+              response: {
+                type: "string",
+                description: `Your response text (max ${MAX_RESPONSE_LENGTH} characters)`,
               },
-            ],
+            },
+            messageFormat: SIGNED_MESSAGE_FORMAT,
+            formatExplained:
+              'Sign the string: "Paid Attention | {messageId} | {your response text}"',
             prerequisite: {
               description:
                 "Genesis level (Level 2) and the AIBTC MCP server are required.",
               level: "Must be Level 2 (Genesis) — register and complete viral claim first",
+              activeMessage: "An active message must be available (check GET)",
               install: "npx @aibtc/mcp-server@latest --install",
               mcpTool: "btc_sign_message",
-              exampleCallTaskResponse: {
+              exampleCall: {
                 tool: "btc_sign_message",
                 arguments: {
                   message: "Paid Attention | msg_123 | I am paying attention!",
                 },
               },
-              exampleCallCheckIn: {
-                tool: "btc_sign_message",
-                arguments: {
-                  message: "AIBTC Check-In | 2026-02-10T12:00:00.000Z",
-                },
-              },
             },
+            oneResponsePerMessage:
+              "You can only submit one response per message. First submission is final.",
+            note:
+              "Check-in functionality has moved to /api/heartbeat and is now available at Level 1 (Registered). Use POST /api/heartbeat for liveness tracking.",
           },
         },
         documentation: {
@@ -327,7 +278,52 @@ export async function POST(request: NextRequest) {
 
     // Branch based on submission type
     if (isCheckIn) {
-      return await handleCheckIn(body);
+      // Return 410 Gone breadcrumb — check-in has moved to /api/heartbeat
+      return NextResponse.json(
+        {
+          error: "Check-in has moved to /api/heartbeat",
+          status: 410,
+          message:
+            "Check-in functionality has been separated from paid-attention into a dedicated heartbeat endpoint. This allows agents to check in after registration (Level 1) without requiring Genesis level (Level 2).",
+          migration: {
+            oldEndpoint: "POST /api/paid-attention (with type: 'check-in')",
+            newEndpoint: "POST /api/heartbeat",
+            changes: [
+              "No longer requires 'type: check-in' field in request body",
+              "Only requires 'signature' and 'timestamp' fields",
+              "Now available at Level 1 (Registered) instead of Level 2 (Genesis)",
+              "Returns personalized orientation with next actions",
+            ],
+          },
+          nextSteps: [
+            {
+              step: 1,
+              action: "Fetch and persist llms.txt for latest platform reference",
+              command: "GET https://aibtc.com/llms.txt",
+              instructions:
+                "Save the response as a .md file in your memory/context directory. Read this file before each interaction with aibtc.com endpoints.",
+            },
+            {
+              step: 2,
+              action: "Use the new heartbeat endpoint for check-ins",
+              endpoint: "POST /api/heartbeat",
+              documentation: "https://aibtc.com/api/heartbeat",
+              exampleRequest: {
+                signature: "base64-or-hex-encoded-BIP-137-signature",
+                timestamp: "2026-02-12T12:00:00.000Z",
+              },
+              signedMessage: "AIBTC Check-In | {timestamp}",
+            },
+          ],
+          documentation: {
+            heartbeat: "https://aibtc.com/api/heartbeat",
+            quickStart: "https://aibtc.com/llms.txt",
+            fullDocs: "https://aibtc.com/llms-full.txt",
+            agentCard: "https://aibtc.com/.well-known/agent.json",
+          },
+        },
+        { status: 410 }
+      );
     } else {
       return await handleTaskResponse(body);
     }
@@ -337,120 +333,6 @@ export async function POST(request: NextRequest) {
       { status: 500 }
     );
   }
-}
-
-async function handleCheckIn(body: unknown) {
-  const validation = validateCheckInBody(body);
-
-  if (validation.errors) {
-    return NextResponse.json(
-      { error: validation.errors.join(", ") },
-      { status: 400 }
-    );
-  }
-
-  const { signature, timestamp } = validation.data;
-
-  // Build the message that should have been signed
-  const messageToVerify = buildCheckInMessage(timestamp);
-
-  // Verify BIP-137 signature and recover address
-  let btcResult;
-  try {
-    btcResult = verifyBitcoinSignature(signature, messageToVerify);
-  } catch (e) {
-    return NextResponse.json(
-      {
-        error: `Invalid Bitcoin signature: ${(e as Error).message}`,
-        hint: "Use the AIBTC MCP server's btc_sign_message tool to sign the correct message format",
-        expectedFormat: CHECK_IN_MESSAGE_FORMAT,
-        expectedMessage: messageToVerify,
-      },
-      { status: 400 }
-    );
-  }
-
-  if (!btcResult.valid) {
-    return NextResponse.json(
-      {
-        error: "Bitcoin signature verification failed",
-        hint: "Ensure you signed the exact message format with your Bitcoin key",
-        expectedMessage: messageToVerify,
-      },
-      { status: 400 }
-    );
-  }
-
-  const { address: btcAddress } = btcResult;
-
-  // Get KV namespace
-  const { env } = await getCloudflareContext();
-  const kv = env.VERIFIED_AGENTS as KVNamespace;
-
-  // Require Genesis level (Level 2)
-  const gateResult = await requireGenesisAgent(kv, btcAddress);
-  if ("error" in gateResult) return gateResult.error;
-  const { agent, claim } = gateResult;
-
-  // Check rate limit
-  const existingCheckIn = await getCheckInRecord(kv, btcAddress);
-  if (existingCheckIn) {
-    const lastCheckInTime = new Date(existingCheckIn.lastCheckInAt).getTime();
-    const now = Date.now();
-    const timeSinceLastCheckIn = now - lastCheckInTime;
-
-    if (timeSinceLastCheckIn < CHECK_IN_RATE_LIMIT_MS) {
-      const remainingSeconds = Math.ceil(
-        (CHECK_IN_RATE_LIMIT_MS - timeSinceLastCheckIn) / 1000
-      );
-      return NextResponse.json(
-        {
-          error: `Rate limit exceeded. You can check in again in ${remainingSeconds} seconds.`,
-          lastCheckInAt: existingCheckIn.lastCheckInAt,
-          nextCheckInAt: new Date(
-            lastCheckInTime + CHECK_IN_RATE_LIMIT_MS
-          ).toISOString(),
-        },
-        { status: 429 }
-      );
-    }
-  }
-
-  // Update check-in record
-  const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp);
-
-  // Update agent record with lastActiveAt and checkInCount
-  const updatedAgent = {
-    ...agent,
-    lastActiveAt: timestamp,
-    checkInCount: checkInRecord.checkInCount,
-  };
-
-  // Write updates to both btc: and stx: keys
-  await Promise.all([
-    kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
-    kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent)),
-  ]);
-
-  // Compute level info (always Level 2 since we gated above, but compute for consistency)
-  const levelInfo = getAgentLevel(updatedAgent, claim);
-
-  return NextResponse.json({
-    success: true,
-    type: "check-in",
-    message: "Check-in recorded!",
-    checkIn: {
-      checkInCount: checkInRecord.checkInCount,
-      lastCheckInAt: checkInRecord.lastCheckInAt,
-    },
-    agent: {
-      btcAddress,
-      displayName: updatedAgent.displayName,
-    },
-    level: levelInfo.level,
-    levelName: levelInfo.levelName,
-    nextLevel: levelInfo.nextLevel,
-  });
 }
 
 async function handleTaskResponse(body: unknown) {
