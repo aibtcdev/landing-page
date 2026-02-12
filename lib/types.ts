@@ -14,4 +14,5 @@ export interface AgentRecord {
   owner?: string | null;
   lastActiveAt?: string;
   checkInCount?: number;
+  erc8004AgentId?: number;
 }

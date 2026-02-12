@@ -1,0 +1,134 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import { getReputationFeedback } from "@/lib/identity";
+import type { ReputationFeedback } from "@/lib/identity";
+
+interface ReputationFeedbackListProps {
+  agentId: number;
+  initialCursor?: number;
+}
+
+export default function ReputationFeedbackList({
+  agentId,
+  initialCursor,
+}: ReputationFeedbackListProps) {
+  const [feedback, setFeedback] = useState<ReputationFeedback[]>([]);
+  const [cursor, setCursor] = useState<number | null>(initialCursor || null);
+  const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
+
+  useEffect(() => {
+    async function fetchFeedback() {
+      try {
+        setLoading(true);
+        const data = await getReputationFeedback(agentId);
+        setFeedback(data.items);
+        setCursor(data.cursor);
+      } catch (err) {
+        console.error("Error fetching reputation feedback:", err);
+      } finally {
+        setLoading(false);
+      }
+    }
+
+    fetchFeedback();
+  }, [agentId]);
+
+  async function loadMore() {
+    if (!cursor || loadingMore) return;
+
+    try {
+      setLoadingMore(true);
+      const data = await getReputationFeedback(agentId, cursor);
+      setFeedback((prev) => [...prev, ...data.items]);
+      setCursor(data.cursor);
+    } catch (err) {
+      console.error("Error loading more feedback:", err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  if (loading) {
+    return (
+      <div className="space-y-2">
+        {Array.from({ length: 3 }).map((_, i) => (
+          <div
+            key={i}
+            className="h-24 bg-white/5 rounded-lg animate-pulse"
+          />
+        ))}
+      </div>
+    );
+  }
+
+  if (feedback.length === 0) {
+    return (
+      <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+        <p className="text-sm text-white/60">No feedback available.</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-3">
+      <h4 className="text-sm font-medium text-white/70">Feedback History</h4>
+      <div className="space-y-2">
+        {feedback.map((item) => (
+          <div
+            key={`${item.client}-${item.index}`}
+            className="p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+          >
+            <div className="flex items-start justify-between gap-3">
+              <div className="flex-1 min-w-0">
+                <div className="flex items-center gap-2 mb-1">
+                  <span className="text-xs font-mono text-white/70 truncate">
+                    {item.client.slice(0, 8)}...{item.client.slice(-8)}
+                  </span>
+                  {item.tag1 && (
+                    <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-white/60">
+                      {item.tag1}
+                    </span>
+                  )}
+                  {item.tag2 && (
+                    <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-white/60">
+                      {item.tag2}
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <span className="text-sm font-medium text-white/90">
+                    Score: {item.wadValue.toFixed(2)}
+                  </span>
+                  <span className="text-xs text-white/50">
+                    (index #{item.index})
+                  </span>
+                </div>
+              </div>
+              {item.isRevoked && (
+                <span className="px-2 py-1 rounded text-xs bg-red-500/20 text-red-400 flex-shrink-0">
+                  Revoked
+                </span>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {cursor && (
+        <button
+          onClick={loadMore}
+          disabled={loadingMore}
+          className="w-full px-4 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+        >
+          {loadingMore ? (
+            <span className="text-sm text-white/60">Loading...</span>
+          ) : (
+            <span className="text-sm text-white/90">Load More</span>
+          )}
+        </button>
+      )}
+    </div>
+  );
+}
