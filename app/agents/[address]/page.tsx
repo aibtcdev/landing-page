@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -144,6 +145,22 @@ async function fetchClaim(
   }
 }
 
+/**
+ * Cached wrappers so generateMetadata() and AgentProfilePage() share
+ * the same KV reads within a single request.
+ */
+const cachedResolveAgent = cache(async (address: string) => {
+  const { env } = await getCloudflareContext();
+  const kv = env.VERIFIED_AGENTS as KVNamespace;
+  return resolveAgent(kv, address);
+});
+
+const cachedFetchClaim = cache(async (btcAddress: string) => {
+  const { env } = await getCloudflareContext();
+  const kv = env.VERIFIED_AGENTS as KVNamespace;
+  return fetchClaim(kv, btcAddress);
+});
+
 export async function generateMetadata({
   params,
 }: {
@@ -152,10 +169,7 @@ export async function generateMetadata({
   const { address } = await params;
 
   try {
-    const { env } = await getCloudflareContext();
-    const kv = env.VERIFIED_AGENTS as KVNamespace;
-
-    const agent = await resolveAgent(kv, address);
+    const agent = await cachedResolveAgent(address);
     if (!agent) return { title: "Agent Not Found" };
 
     const displayName = agent.displayName || generateName(agent.btcAddress);
@@ -163,16 +177,10 @@ export async function generateMetadata({
       agent.description ||
       "Verified AIBTC agent with Bitcoin and Stacks capabilities";
 
-    // Compute level for richer description
-    const claimData = await kv.get(`claim:${agent.btcAddress}`);
-    let claim: ClaimStatus | null = null;
-    if (claimData) {
-      try {
-        claim = JSON.parse(claimData) as ClaimStatus;
-      } catch {
-        /* ignore */
-      }
-    }
+    const claimRecord = await cachedFetchClaim(agent.btcAddress);
+    const claim: ClaimStatus | null = claimRecord
+      ? { status: claimRecord.status, claimedAt: claimRecord.claimedAt, rewardSatoshis: claimRecord.rewardSatoshis }
+      : null;
     const level = computeLevel(agent, claim);
     const levelName = LEVELS[level].name;
 
@@ -220,8 +228,8 @@ export default async function AgentProfilePage({
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Resolve agent from KV (handles btc, stx, and BNS addresses)
-    const agent = await resolveAgent(kv, address);
+    // Use cached resolver (shared with generateMetadata)
+    const agent = await cachedResolveAgent(address);
 
     if (!agent) {
       return (
@@ -249,9 +257,9 @@ export default async function AgentProfilePage({
       );
     }
 
-    // Fetch claim and identity in parallel
+    // Fetch claim (cached, shared with generateMetadata) and identity in parallel
     const [claimRecord, agentWithIdentity] = await Promise.all([
-      fetchClaim(kv, agent.btcAddress),
+      cachedFetchClaim(agent.btcAddress),
       resolveIdentity(kv, agent),
     ]);
 
