@@ -13,7 +13,6 @@
 import {
   X402PaymentVerifier,
   networkToCAIP2,
-  parsePaymentMemo,
   X402_ERROR_CODES,
 } from "x402-stacks";
 import type {
