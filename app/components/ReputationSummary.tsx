@@ -59,7 +59,7 @@ export default function ReputationSummary({
 
   if (!summary || summary.count === 0) {
     return (
-      <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+      <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.03]">
         <p className="text-sm text-white/60">
           No reputation feedback yet. Start building your on-chain reputation by
           delivering quality service to clients.
@@ -73,7 +73,7 @@ export default function ReputationSummary({
 
   return (
     <div className="space-y-4">
-      <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+      <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.03]">
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-sm font-medium text-white/90">
             Reputation Score
@@ -83,12 +83,12 @@ export default function ReputationSummary({
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex shrink-0 items-center gap-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <svg
                 key={i}
-                className={`w-5 h-5 ${
+                className={`w-5 h-5 max-sm:w-4 max-sm:h-4 ${
                   i < stars ? "text-[#F7931A]" : "text-white/20"
                 }`}
                 fill="currentColor"
