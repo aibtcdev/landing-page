@@ -2,7 +2,6 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { provisionSponsorKey } from "../provision";
 import type { Logger } from "@/lib/logging";
 
-// Mock logger
 const mockLogger: Logger = {
   debug: vi.fn(),
   info: vi.fn(),
@@ -35,11 +34,10 @@ describe("provisionSponsorKey", () => {
         mockLogger
       );
 
-      expect(result.success).toBe(true);
-      expect(result.apiKey).toBe("sk_test_abc123");
+      expect(result).toEqual({ success: true, apiKey: "sk_test_abc123" });
       expect(mockFetch).toHaveBeenCalledWith(
         "https://x402-relay.aibtc.com/keys/provision",
-        {
+        expect.objectContaining({
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
@@ -47,7 +45,8 @@ describe("provisionSponsorKey", () => {
             signature: "H7sI1xVBBz...",
             message: "Bitcoin will be the currency of AIs",
           }),
-        }
+          signal: expect.any(AbortSignal),
+        })
       );
       expect(mockLogger.info).toHaveBeenCalledWith(
         "Sponsor key provisioned",
@@ -70,7 +69,7 @@ describe("provisionSponsorKey", () => {
         mockLogger
       );
 
-      expect(result.success).toBe(true);
+      expect(result).toEqual({ success: true, apiKey: "sk_prod_xyz789" });
       expect(mockFetch).toHaveBeenCalledWith(
         "https://custom-relay.example.com/keys/provision",
         expect.any(Object)
@@ -88,26 +87,18 @@ describe("provisionSponsorKey", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const result = await provisionSponsorKey(
-        "bc1qtest",
-        "bad-sig",
-        "message",
-        "https://relay.example.com",
-        mockLogger
+        "bc1qtest", "bad-sig", "message",
+        "https://relay.example.com", mockLogger
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("Invalid signature");
-      expect(result.status).toBe(400);
+      expect(result).toEqual({ success: false, error: "Invalid signature", status: 400 });
       expect(mockLogger.warn).toHaveBeenCalledWith(
         "Sponsor key provisioning failed",
-        expect.objectContaining({
-          status: 400,
-          error: "Invalid signature",
-        })
+        expect.objectContaining({ status: 400, error: "Invalid signature" })
       );
     });
 
-    it("returns error on 409 conflict (address already exists)", async () => {
+    it("returns error on 409 conflict", async () => {
       const mockFetch = vi.fn().mockResolvedValue({
         ok: false,
         status: 409,
@@ -116,16 +107,11 @@ describe("provisionSponsorKey", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const result = await provisionSponsorKey(
-        "bc1qexisting",
-        "sig",
-        "message",
-        "https://relay.example.com",
-        mockLogger
+        "bc1qexisting", "sig", "message",
+        "https://relay.example.com", mockLogger
       );
 
-      expect(result.success).toBe(false);
-      expect(result.error).toBe("Address already has a key");
-      expect(result.status).toBe(409);
+      expect(result).toEqual({ success: false, error: "Address already has a key", status: 409 });
     });
 
     it("returns error on 500 server error", async () => {
@@ -137,16 +123,48 @@ describe("provisionSponsorKey", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const result = await provisionSponsorKey(
-        "bc1qtest",
-        "sig",
-        "message",
-        "https://relay.example.com",
-        mockLogger
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
+      );
+
+      expect(result).toEqual({ success: false, error: "Internal server error", status: 500 });
+    });
+
+    it("returns error when relay returns unexpected response shape", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ key: "wrong-field-name" }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const result = await provisionSponsorKey(
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Internal server error");
-      expect(result.status).toBe(500);
+      if (!result.success) {
+        expect(result.error).toContain("Unexpected response");
+      }
+      expect(mockLogger.warn).toHaveBeenCalledWith(
+        "Sponsor relay returned unexpected response shape",
+        { btcAddress: "bc1qtest" }
+      );
+    });
+
+    it("returns error when relay returns null apiKey", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ apiKey: null }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      const result = await provisionSponsorKey(
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
+      );
+
+      expect(result.success).toBe(false);
     });
   });
 
@@ -156,20 +174,17 @@ describe("provisionSponsorKey", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const result = await provisionSponsorKey(
-        "bc1qtest",
-        "sig",
-        "message",
-        "https://relay.example.com",
-        mockLogger
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Network timeout");
+      if (!result.success) {
+        expect(result.error).toContain("Network timeout");
+      }
       expect(mockLogger.error).toHaveBeenCalledWith(
         "Sponsor key provisioning exception",
-        expect.objectContaining({
-          error: expect.stringContaining("Network timeout"),
-        })
+        expect.objectContaining({ error: expect.stringContaining("Network timeout") })
       );
     });
 
@@ -178,15 +193,14 @@ describe("provisionSponsorKey", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const result = await provisionSponsorKey(
-        "bc1qtest",
-        "sig",
-        "message",
-        "https://relay.example.com",
-        mockLogger
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("Failed to fetch");
+      if (!result.success) {
+        expect(result.error).toContain("Failed to fetch");
+      }
     });
 
     it("handles relay being unreachable", async () => {
@@ -194,15 +208,33 @@ describe("provisionSponsorKey", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       const result = await provisionSponsorKey(
-        "bc1qtest",
-        "sig",
-        "message",
-        "https://relay.example.com",
-        mockLogger
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
       );
 
       expect(result.success).toBe(false);
-      expect(result.error).toContain("ENOTFOUND");
+      if (!result.success) {
+        expect(result.error).toContain("ENOTFOUND");
+      }
+    });
+
+    it("handles AbortSignal timeout (slow relay)", async () => {
+      const mockFetch = vi.fn().mockRejectedValue(new DOMException("The operation was aborted", "TimeoutError"));
+      vi.stubGlobal("fetch", mockFetch);
+
+      const result = await provisionSponsorKey(
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
+      );
+
+      expect(result.success).toBe(false);
+      if (!result.success) {
+        expect(result.error).toContain("aborted");
+      }
+      expect(mockLogger.error).toHaveBeenCalledWith(
+        "Sponsor key provisioning exception",
+        expect.objectContaining({ btcAddress: "bc1qtest" })
+      );
     });
   });
 
@@ -215,11 +247,8 @@ describe("provisionSponsorKey", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       await provisionSponsorKey(
-        "bc1qtest",
-        "sig",
-        "message",
-        "https://relay.example.com",
-        mockLogger
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
       );
 
       expect(mockLogger.debug).toHaveBeenCalledWith(
@@ -233,20 +262,32 @@ describe("provisionSponsorKey", () => {
       vi.stubGlobal("fetch", mockFetch);
 
       await provisionSponsorKey(
-        "bc1qtest",
-        "sig",
-        "message",
-        "https://relay.example.com",
-        mockLogger
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
       );
 
       expect(mockLogger.error).toHaveBeenCalledWith(
         "Sponsor key provisioning exception",
-        {
-          error: "Error: Connection refused",
-          btcAddress: "bc1qtest",
-        }
+        { error: "Error: Connection refused", btcAddress: "bc1qtest" }
       );
+    });
+  });
+
+  describe("fetch options", () => {
+    it("passes AbortSignal.timeout to fetch", async () => {
+      const mockFetch = vi.fn().mockResolvedValue({
+        ok: true,
+        json: async () => ({ apiKey: "sk_test" }),
+      });
+      vi.stubGlobal("fetch", mockFetch);
+
+      await provisionSponsorKey(
+        "bc1qtest", "sig", "message",
+        "https://relay.example.com", mockLogger
+      );
+
+      const callArgs = mockFetch.mock.calls[0][1];
+      expect(callArgs.signal).toBeInstanceOf(AbortSignal);
     });
   });
 });

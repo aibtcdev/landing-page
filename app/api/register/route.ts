@@ -17,8 +17,7 @@ import { generateClaimCode } from "@/lib/claim-code";
 import { isPartialAgentRecord } from "@/lib/attention/types";
 import { TWITTER_HANDLE } from "@/lib/constants";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
-import { provisionSponsorKey } from "@/lib/sponsor";
-import { DEFAULT_SPONSOR_RELAY_URL } from "@/lib/inbox/x402-config";
+import { provisionSponsorKey, DEFAULT_SPONSOR_RELAY_URL } from "@/lib/sponsor";
 
 export async function GET() {
   return NextResponse.json({
@@ -314,38 +313,19 @@ export async function POST(request: NextRequest) {
       ? createLogger(env.LOGS, ctx, { rayId, path: "/api/register" })
       : createConsoleLogger({ rayId, path: "/api/register" });
 
-    // Provision sponsor API key (after signature verification, before KV storage)
-    const relayUrl = env.X402_SPONSOR_RELAY_URL || DEFAULT_SPONSOR_RELAY_URL;
-    const sponsorResult = await provisionSponsorKey(
-      btcResult.address,
-      bitcoinSignature,
-      EXPECTED_MESSAGE,
-      relayUrl,
-      log
-    );
-
-    // Graceful degradation: log failure but continue registration
-    let sponsorApiKey: string | undefined;
-    if (sponsorResult.success) {
-      sponsorApiKey = sponsorResult.apiKey;
-      log.info("Sponsor key included in response", { btcAddress: btcResult.address });
-    } else {
-      log.warn("Continuing registration without sponsor key", {
-        btcAddress: btcResult.address,
-        error: sponsorResult.error,
-      });
-    }
-
-    // Store in KV
+    // Parallelize independent network calls: sponsor provisioning, duplicate
+    // check, and BNS lookup have no data dependencies on each other
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const relayUrl = env.X402_SPONSOR_RELAY_URL || DEFAULT_SPONSOR_RELAY_URL;
 
-    // Check for existing registration (parallel)
-    const [existingStx, existingBtc] = await Promise.all([
+    const [sponsorResult, existingStx, existingBtc, bnsName] = await Promise.all([
+      provisionSponsorKey(btcResult.address, bitcoinSignature, EXPECTED_MESSAGE, relayUrl, log),
       kv.get(`stx:${stxResult.address}`),
       kv.get(`btc:${btcResult.address}`),
+      lookupBnsName(stxResult.address),
     ]);
 
-    // If stx: key exists, always block (full registration)
+    // Check for existing registration before processing sponsor result
     if (existingStx) {
       return NextResponse.json(
         {
@@ -355,7 +335,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If btc: key exists, check if it's a partial or full record
     if (existingBtc) {
       let existingRecord;
       try {
@@ -367,11 +346,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // If it's a partial record, allow upgrade to full registration
       if (isPartialAgentRecord(existingRecord)) {
-        // Continue to full registration (will add stx: key and update btc: key below)
+        // Partial record: allow upgrade to full registration
       } else {
-        // It's a full record, block duplicate registration
         return NextResponse.json(
           {
             error: "Bitcoin address already registered. Each address can only be registered once.",
@@ -381,7 +358,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const bnsName = await lookupBnsName(stxResult.address);
+    // Extract sponsor key (provisionSponsorKey already logs success/failure)
+    const sponsorApiKey = sponsorResult.success ? sponsorResult.apiKey : undefined;
     const displayName = generateName(btcResult.address);
 
     const record = {
