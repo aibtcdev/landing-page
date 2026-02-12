@@ -1,5 +1,3 @@
-"use client";
-
 import { truncateAddress, formatRelativeTime } from "@/lib/utils";
 import type { OutboxReply as OutboxReplyType } from "@/lib/inbox/types";
 
