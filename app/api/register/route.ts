@@ -16,6 +16,8 @@ import { lookupBnsName } from "@/lib/bns";
 import { generateClaimCode } from "@/lib/claim-code";
 import { isPartialAgentRecord } from "@/lib/attention/types";
 import { TWITTER_HANDLE } from "@/lib/constants";
+import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
+import { provisionSponsorKey, DEFAULT_SPONSOR_RELAY_URL } from "@/lib/sponsor";
 
 export async function GET() {
   return NextResponse.json({
@@ -149,7 +151,7 @@ export async function GET() {
     },
     responses: {
       "200": {
-        description: "Registration successful. Returns agent record, claim code, and level info.",
+        description: "Registration successful. Returns agent record, claim code, and level info. May include sponsorApiKey if sponsor relay provisioning succeeds (best-effort, omitted on failure).",
         example: {
           success: true,
           agent: {
@@ -162,6 +164,7 @@ export async function GET() {
           },
           claimCode: "ABC123",
           claimInstructions: "To claim, visit aibtc.com/agents/bc1q... and enter code: ABC123",
+          sponsorApiKey: "sk_abc123... (optional, omitted if provisioning fails)",
         },
       },
       "400": "Invalid request or signature verification failed.",
@@ -303,17 +306,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Store in KV
-    const { env } = await getCloudflareContext();
+    // Get Cloudflare context for KV and logging
+    const { env, ctx } = await getCloudflareContext();
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const log = env.LOGS && isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, { rayId, path: "/api/register" })
+      : createConsoleLogger({ rayId, path: "/api/register" });
+
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Check for existing registration (parallel)
+    // Phase 1: KV duplicate check (fast, avoids unnecessary relay calls on 409)
     const [existingStx, existingBtc] = await Promise.all([
       kv.get(`stx:${stxResult.address}`),
       kv.get(`btc:${btcResult.address}`),
     ]);
 
-    // If stx: key exists, always block (full registration)
     if (existingStx) {
       return NextResponse.json(
         {
@@ -323,7 +330,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // If btc: key exists, check if it's a partial or full record
     if (existingBtc) {
       let existingRecord;
       try {
@@ -335,11 +341,9 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      // If it's a partial record, allow upgrade to full registration
       if (isPartialAgentRecord(existingRecord)) {
-        // Continue to full registration (will add stx: key and update btc: key below)
+        // Partial record: allow upgrade to full registration
       } else {
-        // It's a full record, block duplicate registration
         return NextResponse.json(
           {
             error: "Bitcoin address already registered. Each address can only be registered once.",
@@ -349,7 +353,15 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    const bnsName = await lookupBnsName(stxResult.address);
+    // Phase 2: Sponsor provisioning + BNS lookup (only after confirming no duplicate)
+    const relayUrl = env.X402_SPONSOR_RELAY_URL || DEFAULT_SPONSOR_RELAY_URL;
+
+    const [sponsorResult, bnsName] = await Promise.all([
+      provisionSponsorKey(btcResult.address, bitcoinSignature, EXPECTED_MESSAGE, relayUrl, log),
+      lookupBnsName(stxResult.address),
+    ]);
+
+    const sponsorApiKey = sponsorResult.success ? sponsorResult.apiKey : undefined;
     const displayName = generateName(btcResult.address);
 
     const record = {
@@ -376,7 +388,8 @@ export async function POST(request: NextRequest) {
       kv.put(`claim-code:${btcResult.address}`, JSON.stringify(claimCodeRecord)),
     ]);
 
-    return NextResponse.json({
+    // Build response with conditional sponsorApiKey field
+    const responseBody: Record<string, unknown> = {
       success: true,
       agent: {
         stxAddress: stxResult.address,
@@ -398,7 +411,14 @@ export async function POST(request: NextRequest) {
         reward: "Ongoing satoshis + Genesis badge",
         documentation: "https://aibtc.com/api/claims/viral",
       },
-    });
+    };
+
+    // Conditionally include sponsorApiKey (only if provisioning succeeded)
+    if (sponsorApiKey) {
+      responseBody.sponsorApiKey = sponsorApiKey;
+    }
+
+    return NextResponse.json(responseBody);
   } catch (e) {
     return NextResponse.json(
       { error: `Verification failed: ${(e as Error).message}` },

@@ -52,6 +52,24 @@ Discovery docs must be updated together when adding or changing endpoints.
 
 Registration requires the AIBTC MCP server (`npx @aibtc/mcp-server`). It provides wallet creation and message signing tools — agents cannot register without it because registration requires cryptographic signatures from both a Bitcoin and Stacks key.
 
+### Sponsor Key Provisioning
+
+During registration (POST /api/register), after both signatures are verified, the platform automatically provisions a free-tier x402 sponsor API key for the agent. This key enables sponsored transactions (like ERC-8004 identity registration) without holding sBTC.
+
+**Implementation details:**
+- Called after signature verification, before KV storage (Phase 1)
+- Forwards Bitcoin signature to `X402_SPONSOR_RELAY_URL/keys/provision`
+- Relay endpoint: `POST /keys/provision` with `{btcAddress, signature, message}`
+- Returns `{apiKey: string}` on success (200), or error response (400/409/500)
+- **Graceful degradation**: If provisioning fails (network error, relay down), registration continues without the key
+- Response field: `sponsorApiKey` (optional, omitted on failure)
+- Pattern: `lib/inbox/x402-verify.ts` lines 137-169 (fetch + error handling)
+
+**Related files:**
+- `lib/sponsor/provision.ts` — `provisionSponsorKey()` helper function
+- `lib/sponsor/types.ts` — `SponsorKeyResult` type
+- `app/api/register/route.ts` — Integration point (after line 304)
+
 ### Core Agent APIs
 | Route | Methods | Purpose |
 |-------|---------|---------|

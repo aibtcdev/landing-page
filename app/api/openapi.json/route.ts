@@ -2460,6 +2460,14 @@ export function GET() {
               type: "string",
               description: "Instructions for claiming with the code",
             },
+            sponsorApiKey: {
+              type: "string",
+              description:
+                "Free-tier x402 sponsor API key for sponsored transactions. " +
+                "Use this to register on-chain identity (ERC-8004) or send other sponsored " +
+                "transactions without holding sBTC. Omitted if provisioning fails (registration still succeeds).",
+              examples: ["sk_abc123..."],
+            },
             agent: {
               type: "object",
               required: [
