@@ -83,22 +83,24 @@ export async function GET(
       );
     }
 
-    // Lazy BNS refresh: if bnsName is missing, try to look it up
-    if (!agent.bnsName && agent.stxAddress) {
-      const bnsName = await lookupBnsName(agent.stxAddress);
-      if (bnsName) {
-        agent.bnsName = bnsName;
-        // Update both KV records in the background
-        const updated = JSON.stringify(agent);
-        await Promise.all([
-          kv.put(`stx:${agent.stxAddress}`, updated),
-          kv.put(`btc:${agent.btcAddress}`, updated),
-        ]);
-      }
+    // Run BNS lookup and claim fetch in parallel (both independent)
+    const [bnsName, claimData] = await Promise.all([
+      !agent.bnsName && agent.stxAddress
+        ? lookupBnsName(agent.stxAddress)
+        : Promise.resolve(null),
+      kv.get(`claim:${agent.btcAddress}`),
+    ]);
+
+    // Apply BNS update if found
+    if (bnsName) {
+      agent.bnsName = bnsName;
+      const updated = JSON.stringify(agent);
+      await Promise.all([
+        kv.put(`stx:${agent.stxAddress}`, updated),
+        kv.put(`btc:${agent.btcAddress}`, updated),
+      ]);
     }
 
-    // Look up claim status to compute level
-    const claimData = await kv.get(`claim:${agent.btcAddress}`);
     let claim: ClaimStatus | null = null;
     if (claimData) {
       try {

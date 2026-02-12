@@ -1,8 +1,9 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import InboxMessage from "./InboxMessage";
+import { fetcher } from "@/lib/fetcher";
 import type { InboxMessage as InboxMessageType } from "@/lib/inbox/types";
 
 interface InboxResponse {
@@ -37,28 +38,10 @@ export default function InboxActivity({
   btcAddress,
   className = "",
 }: InboxActivityProps) {
-  const [data, setData] = useState<InboxResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-
-    fetch(`/api/inbox/${encodeURIComponent(btcAddress)}?limit=5`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch inbox");
-        return res.json() as Promise<InboxResponse>;
-      })
-      .then((result) => {
-        setData(result);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError((err as Error).message);
-        setLoading(false);
-      });
-  }, [btcAddress]);
+  const { data, error, isLoading: loading } = useSWR<InboxResponse>(
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5`,
+    fetcher
+  );
 
   if (loading) {
     return (
@@ -86,6 +69,8 @@ export default function InboxActivity({
       </div>
     );
   }
+
+  if (!data) return null;
 
   const { messages, unreadCount, totalCount } = data.inbox;
   const hasMessages = totalCount > 0;

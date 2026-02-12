@@ -58,8 +58,13 @@ export async function GET(request: NextRequest) {
 
     // Get single response (both params provided)
     if (messageId && btcAddress) {
+      // Fetch response and payout status in parallel
       const responseKey = `${KV_PREFIXES.RESPONSE}${messageId}:${btcAddress}`;
-      const responseData = await kv.get(responseKey);
+      const payoutKey = `${KV_PREFIXES.PAYOUT}${messageId}:${btcAddress}`;
+      const [responseData, payoutData] = await Promise.all([
+        kv.get(responseKey),
+        kv.get(payoutKey),
+      ]);
 
       if (!responseData) {
         return NextResponse.json(
@@ -70,10 +75,6 @@ export async function GET(request: NextRequest) {
 
       try {
         const response = JSON.parse(responseData) as AttentionResponse;
-
-        // Check if payout exists
-        const payoutKey = `${KV_PREFIXES.PAYOUT}${messageId}:${btcAddress}`;
-        const payoutData = await kv.get(payoutKey);
         const hasPayout = !!payoutData;
 
         return NextResponse.json({

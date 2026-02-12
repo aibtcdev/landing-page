@@ -1,45 +1,24 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import type { ReputationSummary as ReputationSummaryType } from "@/lib/identity";
+import { fetcher } from "@/lib/fetcher";
 import ReputationFeedbackList from "./ReputationFeedbackList";
 
 interface ReputationSummaryProps {
-  agentId: number;
   address: string;
 }
 
 export default function ReputationSummary({
-  agentId,
   address,
 }: ReputationSummaryProps) {
-  const [summary, setSummary] = useState<ReputationSummaryType | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const { data, error, isLoading: loading } = useSWR<{ summary: ReputationSummaryType | null }>(
+    `/api/identity/${encodeURIComponent(address)}/reputation?type=summary`,
+    fetcher
+  );
+  const summary = data?.summary ?? null;
   const [showFeedback, setShowFeedback] = useState(false);
-
-  useEffect(() => {
-    async function fetchSummary() {
-      try {
-        setLoading(true);
-        const res = await fetch(
-          `/api/identity/${encodeURIComponent(address)}/reputation?type=summary`
-        );
-        if (!res.ok) {
-          throw new Error("Failed to load reputation data");
-        }
-        const data = (await res.json()) as { summary: ReputationSummaryType | null };
-        setSummary(data.summary);
-      } catch (err) {
-        console.error("Error fetching reputation summary:", err);
-        setError("Failed to load reputation data");
-      } finally {
-        setLoading(false);
-      }
-    }
-
-    fetchSummary();
-  }, [agentId, address]);
 
   if (loading) {
     return (
@@ -52,14 +31,14 @@ export default function ReputationSummary({
   if (error) {
     return (
       <div className="p-4 rounded-lg border border-red-500/20 bg-red-500/10">
-        <p className="text-sm text-red-400">{error}</p>
+        <p className="text-sm text-red-400">Failed to load reputation data</p>
       </div>
     );
   }
 
   if (!summary || summary.count === 0) {
     return (
-      <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+      <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.03]">
         <p className="text-sm text-white/60">
           No reputation feedback yet. Start building your on-chain reputation by
           delivering quality service to clients.
@@ -73,7 +52,7 @@ export default function ReputationSummary({
 
   return (
     <div className="space-y-4">
-      <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+      <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.03]">
         <div className="flex items-center justify-between mb-3">
           <h4 className="text-sm font-medium text-white/90">
             Reputation Score
@@ -83,12 +62,12 @@ export default function ReputationSummary({
           </span>
         </div>
 
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1">
+        <div className="flex flex-wrap items-center gap-3">
+          <div className="flex shrink-0 items-center gap-1">
             {Array.from({ length: 5 }).map((_, i) => (
               <svg
                 key={i}
-                className={`w-5 h-5 ${
+                className={`w-5 h-5 max-sm:w-4 max-sm:h-4 ${
                   i < stars ? "text-[#F7931A]" : "text-white/20"
                 }`}
                 fill="currentColor"
@@ -111,7 +90,7 @@ export default function ReputationSummary({
         </button>
       </div>
 
-      {showFeedback && <ReputationFeedbackList agentId={agentId} address={address} />}
+      {showFeedback && <ReputationFeedbackList address={address} />}
     </div>
   );
 }

@@ -236,8 +236,13 @@ export async function GET(
       }).catch(() => {});
     }
 
-    // Look up claim status to compute level
-    const claimData = await kv.get(`claim:${agent.btcAddress}`);
+    // Look up claim, achievements, and check-in data in parallel
+    const [claimData, achievements, checkInRecord] = await Promise.all([
+      kv.get(`claim:${agent.btcAddress}`),
+      getAgentAchievements(kv, agent.btcAddress),
+      getCheckInRecord(kv, agent.btcAddress),
+    ]);
+
     let claim: ClaimStatus | null = null;
     if (claimData) {
       try {
@@ -248,12 +253,6 @@ export async function GET(
     }
 
     const levelInfo = getAgentLevel(agent, claim);
-
-    // Look up achievements
-    const achievements = await getAgentAchievements(kv, agent.btcAddress);
-
-    // Look up check-in data
-    const checkInRecord = await getCheckInRecord(kv, agent.btcAddress);
     const checkIn = checkInRecord
       ? {
           lastCheckInAt: checkInRecord.lastCheckInAt,

@@ -1,44 +1,33 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import type { ReputationFeedback, ReputationFeedbackResponse } from "@/lib/identity";
+import { fetcher } from "@/lib/fetcher";
 
 interface ReputationFeedbackListProps {
-  agentId: number;
   address: string;
   initialCursor?: number;
 }
 
 export default function ReputationFeedbackList({
-  agentId,
   address,
   initialCursor,
 }: ReputationFeedbackListProps) {
-  const [feedback, setFeedback] = useState<ReputationFeedback[]>([]);
+  const [extraFeedback, setExtraFeedback] = useState<ReputationFeedback[]>([]);
   const [cursor, setCursor] = useState<number | null>(initialCursor || null);
-  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
 
-  useEffect(() => {
-    async function fetchFeedback() {
-      try {
-        setLoading(true);
-        const res = await fetch(
-          `/api/identity/${encodeURIComponent(address)}/reputation?type=feedback`
-        );
-        if (!res.ok) throw new Error("Failed to fetch feedback");
-        const data = (await res.json()) as { feedback: ReputationFeedbackResponse };
-        setFeedback(data.feedback.items);
-        setCursor(data.feedback.cursor);
-      } catch (err) {
-        console.error("Error fetching reputation feedback:", err);
-      } finally {
-        setLoading(false);
-      }
+  const { data, isLoading: loading } = useSWR<{ feedback: ReputationFeedbackResponse }>(
+    `/api/identity/${encodeURIComponent(address)}/reputation?type=feedback`,
+    fetcher,
+    {
+      onSuccess: (result) => {
+        setCursor(result.feedback.cursor);
+      },
     }
-
-    fetchFeedback();
-  }, [agentId, address]);
+  );
+  const feedback = [...(data?.feedback.items ?? []), ...extraFeedback];
 
   async function loadMore() {
     if (!cursor || loadingMore) return;
@@ -50,7 +39,7 @@ export default function ReputationFeedbackList({
       );
       if (!res.ok) throw new Error("Failed to load more feedback");
       const data = (await res.json()) as { feedback: ReputationFeedbackResponse };
-      setFeedback((prev) => [...prev, ...data.feedback.items]);
+      setExtraFeedback((prev) => [...prev, ...data.feedback.items]);
       setCursor(data.feedback.cursor);
     } catch (err) {
       console.error("Error loading more feedback:", err);
@@ -74,7 +63,7 @@ export default function ReputationFeedbackList({
 
   if (feedback.length === 0) {
     return (
-      <div className="p-4 rounded-lg border border-white/10 bg-white/5">
+      <div className="p-4 rounded-lg border border-white/[0.06] bg-white/[0.03]">
         <p className="text-sm text-white/60">No feedback available.</p>
       </div>
     );
@@ -87,12 +76,12 @@ export default function ReputationFeedbackList({
         {feedback.map((item) => (
           <div
             key={`${item.client}-${item.index}`}
-            className="p-3 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors"
+            className="p-3 rounded-lg border border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] transition-colors"
           >
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="text-xs font-mono text-white/70 truncate">
+                <div className="flex flex-wrap items-center gap-2 mb-1">
+                  <span className="min-w-0 truncate text-xs font-mono text-white/70">
                     {item.client.slice(0, 8)}...{item.client.slice(-8)}
                   </span>
                   {item.tag1 && (
@@ -129,7 +118,7 @@ export default function ReputationFeedbackList({
         <button
           onClick={loadMore}
           disabled={loadingMore}
-          className="w-full px-4 py-2 rounded-lg border border-white/10 bg-white/5 hover:bg-white/10 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+          className="w-full px-4 py-2 rounded-lg border border-white/[0.06] bg-white/[0.03] hover:bg-white/[0.06] transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
         >
           {loadingMore ? (
             <span className="text-sm text-white/60">Loading...</span>

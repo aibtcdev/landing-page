@@ -1,7 +1,8 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import useSWR from "swr";
 import AchievementBadge from "./AchievementBadge";
+import { fetcher } from "@/lib/fetcher";
 import type { AchievementDefinition } from "@/lib/achievements";
 
 interface AchievementResponse {
@@ -31,28 +32,10 @@ export default function AchievementList({
   btcAddress,
   className = "",
 }: AchievementListProps) {
-  const [data, setData] = useState<AchievementResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    setLoading(true);
-    setError(null);
-
-    fetch(`/api/achievements?btcAddress=${encodeURIComponent(btcAddress)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch achievements");
-        return res.json() as Promise<AchievementResponse>;
-      })
-      .then((result) => {
-        setData(result);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError((err as Error).message);
-        setLoading(false);
-      });
-  }, [btcAddress]);
+  const { data, error, isLoading: loading } = useSWR<AchievementResponse>(
+    `/api/achievements?btcAddress=${encodeURIComponent(btcAddress)}`,
+    fetcher
+  );
 
   if (loading) {
     return (
@@ -79,6 +62,8 @@ export default function AchievementList({
       </div>
     );
   }
+
+  if (!data) return null;
 
   const hasEarnedAchievements = data.achievements.length > 0;
 

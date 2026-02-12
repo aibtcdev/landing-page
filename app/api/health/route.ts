@@ -28,31 +28,24 @@ export async function GET() {
 
     kvStatus = "connected";
 
-    // Count registered agents (stx: prefix)
-    let regCount = 0;
-    let regCursor: string | undefined;
-    let regComplete = false;
-
-    while (!regComplete) {
-      const page = await kv.list({ prefix: "stx:", cursor: regCursor });
-      regCount += page.keys.length;
-      regComplete = page.list_complete;
-      regCursor = !page.list_complete ? page.cursor : undefined;
+    async function countPrefix(ns: KVNamespace, prefix: string): Promise<number> {
+      let count = 0;
+      let cursor: string | undefined;
+      let complete = false;
+      while (!complete) {
+        const page = await ns.list({ prefix, cursor });
+        count += page.keys.length;
+        complete = page.list_complete;
+        cursor = !page.list_complete ? page.cursor : undefined;
+      }
+      return count;
     }
-    registeredCount = regCount;
 
-    // Count claimed agents (claim: prefix)
-    let claimCount = 0;
-    let claimCursor: string | undefined;
-    let claimComplete = false;
-
-    while (!claimComplete) {
-      const page = await kv.list({ prefix: "claim:", cursor: claimCursor });
-      claimCount += page.keys.length;
-      claimComplete = page.list_complete;
-      claimCursor = !page.list_complete ? page.cursor : undefined;
-    }
-    claimedCount = claimCount;
+    // Count registered and claimed agents in parallel
+    [registeredCount, claimedCount] = await Promise.all([
+      countPrefix(kv, "stx:"),
+      countPrefix(kv, "claim:"),
+    ]);
   } catch (e) {
     kvError = (e as Error).message;
   }

@@ -358,15 +358,14 @@ export async function POST(request: NextRequest) {
 
     const updatedAgent = actionResult.updated as AgentRecord;
 
-    // Update both KV records (btc and stx)
+    // Update both KV records and fetch claim status in parallel
     const updatedJson = JSON.stringify(updatedAgent);
-    await Promise.all([
+    const [, , claimData] = await Promise.all([
       kv.put(`btc:${updatedAgent.btcAddress}`, updatedJson),
       kv.put(`stx:${updatedAgent.stxAddress}`, updatedJson),
+      kv.get(`claim:${updatedAgent.btcAddress}`),
     ]);
 
-    // Look up claim status for level info
-    const claimData = await kv.get(`claim:${updatedAgent.btcAddress}`);
     let claim: ClaimStatus | null = null;
     if (claimData) {
       try {

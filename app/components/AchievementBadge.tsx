@@ -66,13 +66,13 @@ export default function AchievementBadge({
         className={`flex items-center gap-1.5 rounded-full px-3 py-1.5 text-[12px] font-medium transition-all ${
           earned
             ? "border border-white/10 shadow-sm"
-            : "border border-white/[0.05] opacity-40"
+            : "border border-white/[0.08] opacity-60"
         }`}
         style={{
           backgroundColor: earned
             ? `${color}15`
-            : "rgba(255,255,255,0.02)",
-          color: earned ? color : "rgba(255,255,255,0.3)",
+            : "rgba(255,255,255,0.04)",
+          color: earned ? color : "rgba(255,255,255,0.4)",
         }}
       >
         {/* Icon */}
