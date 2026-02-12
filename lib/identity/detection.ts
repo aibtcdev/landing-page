@@ -2,6 +2,7 @@
  * ERC-8004 identity detection utilities
  */
 
+import { uintCV } from "@stacks/transactions";
 import { IDENTITY_REGISTRY_CONTRACT } from "./constants";
 import { callReadOnly, parseClarityValue } from "./stacks-api";
 import type { AgentIdentity } from "./types";
@@ -16,7 +17,10 @@ export async function detectAgentIdentity(
   try {
     // First, get the last token ID to know the range
     const lastIdResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-last-token-id", []);
-    const lastId = parseClarityValue(lastIdResult);
+    const lastIdRaw = parseClarityValue(lastIdResult);
+
+    // parseClarityValue returns uint values as strings
+    const lastId = lastIdRaw !== null ? Number(lastIdRaw) : null;
 
     if (lastId === null || lastId < 0) {
       // No NFTs minted yet
@@ -28,14 +32,14 @@ export async function detectAgentIdentity(
     // In production, consider using an indexer or event logs
     for (let agentId = 0; agentId <= lastId; agentId++) {
       const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [
-        `u${agentId}`,
+        uintCV(agentId),
       ]);
       const owner = parseClarityValue(ownerResult);
 
       if (owner === stxAddress) {
         // Found a match! Get the URI
         const uriResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-token-uri", [
-          `u${agentId}`,
+          uintCV(agentId),
         ]);
         const uri = parseClarityValue(uriResult);
 
@@ -60,7 +64,7 @@ export async function detectAgentIdentity(
  */
 export async function hasIdentity(agentId: number): Promise<boolean> {
   try {
-    const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [`u${agentId}`]);
+    const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [uintCV(agentId)]);
     const owner = parseClarityValue(ownerResult);
     return owner !== null;
   } catch (error) {

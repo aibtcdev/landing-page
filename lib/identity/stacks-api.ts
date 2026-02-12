@@ -1,10 +1,18 @@
 /**
  * Shared Stacks API utilities for read-only contract calls.
  *
- * Used by both identity detection and reputation modules to avoid
- * duplicating callReadOnly() and parseClarityValue() logic.
+ * Uses @stacks/transactions for proper Clarity value serialization
+ * and deserialization. The Hiro /v2/contracts/call-read/ endpoint
+ * expects hex-encoded Clarity values as arguments and returns hex
+ * in the `result` field.
  */
 
+import {
+  type ClarityValue,
+  serializeCV,
+  deserializeCV,
+  cvToJSON,
+} from "@stacks/transactions";
 import { STACKS_API_BASE } from "./constants";
 
 /**
@@ -12,15 +20,19 @@ import { STACKS_API_BASE } from "./constants";
  *
  * @param contract - Fully-qualified contract identifier (e.g. "SP...address.contract-name")
  * @param functionName - The read-only function to call
- * @param args - Clarity-encoded arguments
+ * @param args - ClarityValue objects (will be serialized to hex for the API)
+ * @returns Parsed JSON representation of the Clarity return value, or null on error
  */
 export async function callReadOnly(
   contract: string,
   functionName: string,
-  args: string[]
+  args: ClarityValue[]
 ): Promise<any> {
   const [contractAddress, contractName] = contract.split(".");
   const url = `${STACKS_API_BASE}/v2/contracts/call-read/${contractAddress}/${contractName}/${functionName}`;
+
+  // Serialize each ClarityValue to a 0x-prefixed hex string
+  const hexArgs = args.map((cv) => `0x${serializeCV(cv)}`);
 
   const response = await fetch(url, {
     method: "POST",
@@ -29,7 +41,7 @@ export async function callReadOnly(
     },
     body: JSON.stringify({
       sender: contractAddress,
-      arguments: args,
+      arguments: hexArgs,
     }),
   });
 
@@ -46,64 +58,127 @@ export async function callReadOnly(
 /**
  * Parse a Clarity value from the Stacks API response.
  *
- * Handles: uint, int, principal, string-utf8, string-ascii,
- * bool, optional, response, tuple, and list types.
+ * The API returns { okay: true, result: "0x..." } where result is a
+ * hex-encoded Clarity value. We deserialize it and convert to a
+ * JSON-friendly representation using cvToJSON from @stacks/transactions.
  */
-export function parseClarityValue(result: any): any {
-  if (!result || !result.okay) {
+export function parseClarityValue(apiResponse: any): any {
+  if (!apiResponse || apiResponse.okay !== true) {
     return null;
   }
 
-  const value = result.result;
-
-  // Handle different Clarity types
-  if (value.type === "uint") {
-    return parseInt(value.value, 10);
+  try {
+    const cv = deserializeCV(apiResponse.result);
+    const json = cvToJSON(cv);
+    return unwrapCvJson(json);
+  } catch {
+    return null;
   }
+}
 
-  if (value.type === "int") {
-    return parseInt(value.value, 10);
-  }
+/**
+ * Recursively unwrap cvToJSON output into plain JS values.
+ *
+ * @stacks/transactions v7 cvToJSON returns typed wrappers with
+ * descriptive compound type strings. Examples:
+ *   - { type: "uint", value: "5" }
+ *   - { type: "(response (tuple ...) UnknownType)", value: {...}, success: true }
+ *   - { type: "(optional principal)", value: { type: "principal", value: "SP..." } }
+ *   - { type: "(optional none)", value: null }
+ *   - { type: "(tuple (count uint) ...)", value: { count: { type: "uint", value: "3" } } }
+ *
+ * This helper extracts the inner values for easier consumption.
+ * Numeric values (uint, int) are returned as strings to preserve
+ * full precision — callers decide whether to use Number or BigInt.
+ */
+function unwrapCvJson(node: any): any {
+  if (node === null || node === undefined) return null;
 
-  if (value.type === "principal") {
-    return value.value;
-  }
+  // cvToJSON wraps values with { type, value } objects
+  if (typeof node === "object" && "type" in node) {
+    const type: string = node.type;
+    const value = node.value;
 
-  if (value.type === "string-utf8" || value.type === "string-ascii") {
-    return value.value;
-  }
-
-  if (value.type === "bool") {
-    return value.value === "true";
-  }
-
-  if (value.type === "optional") {
-    if (value.value === null || value.value.type === "none") {
+    // Response: check `success` field (present on response types)
+    if ("success" in node) {
+      if (node.success) {
+        return unwrapCvJson(value);
+      }
       return null;
     }
-    return parseClarityValue({ okay: true, result: value.value });
-  }
 
-  if (value.type === "response") {
-    if (value.value.success) {
-      return parseClarityValue({ okay: true, result: value.value.value });
+    // None / optional none
+    if (type === "none" || type.includes("none")) {
+      if (value === null || value === undefined) return null;
+      // "(optional none)" has value: null
+      return null;
     }
-    return null;
-  }
 
-  if (value.type === "tuple") {
-    const tuple: any = {};
-    for (const [key, val] of Object.entries(value.value)) {
-      tuple[key] = parseClarityValue({ okay: true, result: val });
+    // Uint / int — return as string for precision
+    if (type === "uint" || type === "int") {
+      return value as string;
     }
-    return tuple;
+
+    // Bool
+    if (type === "bool") {
+      return value;
+    }
+
+    // Principal types
+    if (type === "principal" || type.includes("principal")) {
+      if (typeof value === "string") return value;
+      // Nested principal wrapper
+      if (typeof value === "object" && value !== null && "value" in value) {
+        return value.value;
+      }
+      return value;
+    }
+
+    // Buffer
+    if (type === "buff" || type.startsWith("(buff")) {
+      return value;
+    }
+
+    // String types
+    if (type.includes("string") || type.includes("ascii") || type.includes("utf8")) {
+      if (typeof value === "string") return value;
+      if (typeof value === "object" && value !== null && "value" in value) {
+        return value.value;
+      }
+      return value;
+    }
+
+    // Optional with value — unwrap the inner value
+    if (type.startsWith("(optional")) {
+      if (value === null || value === undefined) return null;
+      return unwrapCvJson(value);
+    }
+
+    // Tuple: value is an object of named fields
+    if (type.startsWith("(tuple")) {
+      if (typeof value === "object" && value !== null && !Array.isArray(value)) {
+        const out: Record<string, any> = {};
+        for (const [k, v] of Object.entries(value)) {
+          out[k] = unwrapCvJson(v);
+        }
+        return out;
+      }
+      return value;
+    }
+
+    // List: value is an array
+    if (type.startsWith("(list")) {
+      if (Array.isArray(value)) {
+        return value.map(unwrapCvJson);
+      }
+      return value;
+    }
+
+    // Fallback: try to unwrap value if it looks like a typed node
+    if (value !== undefined && value !== null) {
+      return unwrapCvJson(value);
+    }
   }
 
-  if (value.type === "list") {
-    return value.value.map((item: any) =>
-      parseClarityValue({ okay: true, result: item })
-    );
-  }
-
-  return null;
+  return node;
 }
