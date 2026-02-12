@@ -1,6 +1,6 @@
 # Quest State
 
-Current Phase: 3
+Current Phase: 4
 Phase Status: pending
 Retry Count: 0
 

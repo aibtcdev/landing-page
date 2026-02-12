@@ -469,12 +469,12 @@ export default function AgentProfile() {
                     onChange={(e) => { setCodeInput(e.target.value.toUpperCase()); setClaimError(null); }}
                     placeholder="ABC123"
                     maxLength={6}
-                    className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-sm tracking-widest text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#F7931A]/40 uppercase text-center"
+                    className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-sm tracking-wider text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#F7931A]/40 uppercase text-center"
                   />
                   <button
                     onClick={handleValidateCode}
                     disabled={validatingCode || codeInput.trim().length < 6}
-                    className="shrink-0 rounded-lg bg-[#F7931A] px-5 py-2 text-sm font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
+                    className="shrink-0 rounded-lg bg-[#F7931A] px-5 max-sm:px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
                   >
                     {validatingCode ? "..." : "Verify"}
                   </button>
@@ -523,7 +523,7 @@ export default function AgentProfile() {
                   href={tweetIntentUrl}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.06] py-2.5 text-sm font-medium text-white transition-colors hover:bg-white/[0.1]"
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.06] py-3 text-sm font-medium text-white transition-colors hover:bg-white/[0.1]"
                 >
                   <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
                     <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -541,7 +541,7 @@ export default function AgentProfile() {
                   <button
                     onClick={handleSubmitClaim}
                     disabled={submitting || !tweetUrlInput.trim()}
-                    className="shrink-0 rounded-lg bg-[#F7931A] px-5 py-2 text-sm font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
+                    className="shrink-0 rounded-lg bg-[#F7931A] px-5 max-sm:px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
                   >
                     {submitting ? "..." : "Claim"}
                   </button>
@@ -563,7 +563,7 @@ export default function AgentProfile() {
                 "noopener,noreferrer"
               );
             }}
-            className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] py-2.5 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
+            className="mt-6 flex w-full items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] py-3 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
           >
             <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
               <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
@@ -573,8 +573,8 @@ export default function AgentProfile() {
 
           {/* Footer links */}
           <div className="mt-6 flex items-center justify-between text-xs text-white/40">
-            <Link href="/agents" className="hover:text-white/60 transition-colors">← Registry</Link>
-            <Link href="/guide" className="text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
+            <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
+            <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
           </div>
         </div>
       </div>
