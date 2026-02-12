@@ -280,7 +280,7 @@ export default function AgentProfile({
 
           {/* Achievements — show for level 1+ agents */}
           {agentLevel >= 1 && (
-            <div className="mt-6 rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+            <div className="mt-6 rounded-lg border border-white/[0.08] bg-white/[0.04] p-4">
               {agentLevel === 2 && (
                 <p className="mb-3 text-xs text-white/50">
                   You&apos;ve reached Genesis — now earn achievements!
