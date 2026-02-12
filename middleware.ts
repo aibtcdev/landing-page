@@ -161,6 +161,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL("/llms.txt", request.url));
   }
 
+  // Heartbeat: rewrite to CLI route for curl/wget
+  if (path === "/heartbeat") {
+    return NextResponse.rewrite(new URL("/heartbeat/cli", request.url));
+  }
+
   // Paid attention: rewrite to CLI route for curl/wget
   if (path === "/paid-attention") {
     return NextResponse.rewrite(new URL("/paid-attention/cli", request.url));
@@ -222,6 +227,7 @@ export const config = {
     "/update",
     "/update-skill.sh",
     "/skills",
+    "/heartbeat",
     "/paid-attention",
   ],
 };

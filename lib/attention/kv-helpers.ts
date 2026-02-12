@@ -3,7 +3,7 @@
  */
 
 import { KV_PREFIXES } from "./constants";
-import type { AttentionMessage, CheckInRecord } from "./types";
+import type { AttentionMessage } from "./types";
 
 /**
  * Fetch the current active message from KV.
@@ -88,70 +88,3 @@ export async function kvListAll<T>(
   return records;
 }
 
-/**
- * Fetch the check-in record for a specific Bitcoin address.
- *
- * @param kv - Cloudflare KV namespace
- * @param btcAddress - Bitcoin address to look up
- * @returns CheckInRecord or null if no check-in record exists
- *
- * @example
- * const checkIn = await getCheckInRecord(kv, "bc1q...");
- * if (checkIn) {
- *   console.log(`Last check-in: ${checkIn.lastCheckInAt}`);
- * }
- */
-export async function getCheckInRecord(
-  kv: KVNamespace,
-  btcAddress: string
-): Promise<CheckInRecord | null> {
-  const key = `${KV_PREFIXES.CHECK_IN}${btcAddress}`;
-  const data = await kv.get(key);
-  if (!data) return null;
-  try {
-    return JSON.parse(data) as CheckInRecord;
-  } catch (e) {
-    console.error(`Failed to parse check-in record for ${btcAddress}:`, e);
-    return null;
-  }
-}
-
-/**
- * Update the check-in record for a Bitcoin address.
- *
- * If no record exists, creates a new one with checkInCount = 1.
- * If a record exists, increments checkInCount and updates lastCheckInAt.
- *
- * @param kv - Cloudflare KV namespace
- * @param btcAddress - Bitcoin address to update
- * @param timestamp - ISO 8601 timestamp of the check-in
- * @returns The updated CheckInRecord
- *
- * @example
- * const record = await updateCheckInRecord(kv, "bc1q...", "2026-02-10T12:00:00.000Z");
- * console.log(`Check-in count: ${record.checkInCount}`);
- */
-export async function updateCheckInRecord(
-  kv: KVNamespace,
-  btcAddress: string,
-  timestamp: string
-): Promise<CheckInRecord> {
-  const existing = await getCheckInRecord(kv, btcAddress);
-
-  const record: CheckInRecord = existing
-    ? {
-        btcAddress,
-        checkInCount: existing.checkInCount + 1,
-        lastCheckInAt: timestamp,
-      }
-    : {
-        btcAddress,
-        checkInCount: 1,
-        lastCheckInAt: timestamp,
-      };
-
-  const key = `${KV_PREFIXES.CHECK_IN}${btcAddress}`;
-  await kv.put(key, JSON.stringify(record));
-
-  return record;
-}

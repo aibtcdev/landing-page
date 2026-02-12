@@ -100,14 +100,3 @@ export function isPartialAgentRecord(
   );
 }
 
-/**
- * A check-in record stored at `checkin:{btcAddress}`.
- *
- * Tracks when an agent last checked in and their total check-in count.
- * Check-ins are rate-limited to one every 5 minutes.
- */
-export interface CheckInRecord {
-  btcAddress: string;
-  checkInCount: number;
-  lastCheckInAt: string;
-}

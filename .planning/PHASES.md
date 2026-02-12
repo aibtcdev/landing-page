@@ -1,21 +1,54 @@
 # Phases
 
-## Phase 1: Normalize Card Spacing, Typography, and Container Layout
-Goal: Establish consistent vertical rhythm, responsive typography scale, and uniform card padding in AgentProfile.tsx and LevelProgress.tsx
+## Phase 1: Create heartbeat library and API route
+Goal: Build `/api/heartbeat` for check-ins at Level 1+ and orientation context. Extract check-in logic from `/api/paid-attention` so that endpoint only handles task responses.
 Status: `completed`
-Files: `app/agents/[address]/AgentProfile.tsx`, `app/components/LevelProgress.tsx`
+Scope:
+- Create `lib/heartbeat/` module (types, constants, validation, kv-helpers, index)
+- Create `app/api/heartbeat/route.ts` — GET (self-documenting + personalized orientation), POST (signed check-in, Level 1+ required)
+- Replace check-in handling in `app/api/paid-attention/route.ts` POST with a **410 Gone breadcrumb**: when `type: "check-in"` is detected, return migration instructions pointing to `/api/heartbeat` and telling the agent to fetch + persist `llms.txt`
+- Move check-in KV helpers from `lib/attention/` to `lib/heartbeat/`, re-export for backward compat
+- Add heartbeat to middleware matcher and create CLI route
 
-## Phase 2: Fix Mobile Overflow in Child Components
-Goal: Prevent horizontal overflow at 320px-375px viewports in IdentityBadge, ReputationSummary, ReputationFeedbackList, InboxMessage, AchievementBadge
+Issues: #107
+
+Commits:
+- 4bcb81e: feat(heartbeat): create heartbeat library module
+- 2b2adae: feat(api): add /api/heartbeat endpoint
+- 7df2a0c: refactor(api): replace check-in in paid-attention with 410 Gone breadcrumb
+- 100e92f: feat(middleware): add heartbeat CLI route support
+
+## Phase 2: Update discovery docs and llms.txt content
+Goal: Update all 4 discovery docs to reference `/api/heartbeat` as the post-registration orientation step, add "save this as memory" instruction to llms.txt.
 Status: `completed`
-Files: `app/components/IdentityBadge.tsx`, `app/components/ReputationSummary.tsx`, `app/components/ReputationFeedbackList.tsx`, `app/components/InboxMessage.tsx`, `app/components/AchievementBadge.tsx`
+Scope:
+- Update `app/llms.txt/route.ts` — reorder journey (heartbeat before paid-attention), add memory persistence block
+- Update `app/llms-full.txt/route.ts` — add Heartbeat section, remove check-in from Paid Attention section
+- Update `app/.well-known/agent.json/route.ts` — add heartbeat skill, update onboarding steps
+- Update `app/api/openapi.json/route.ts` — add heartbeat endpoints, update paid-attention spec
+- Update `CLAUDE.md` with new endpoint and architecture
 
-## Phase 3: Refine Claim Section and Action Buttons
-Goal: Ensure claim flows, buttons, and footer links have proper touch targets (44px min) and don't overflow at 320px
+Issues: #102, #107
+
+Commits:
+- 573e8bf: docs(llms.txt): add memory instruction, reorder journey with heartbeat phase
+- 033ceb3: docs(llms-full.txt): add Heartbeat section, remove check-in from Paid Attention
+- da8fd44: docs(agent.json): add heartbeat skill and onboarding step
+- 3ddc59e: docs(openapi): add /api/heartbeat path, update paid-attention spec
+- 29f2f09: docs(CLAUDE): add Heartbeat System section, update Paid Attention
+
+## Phase 3: Update UX pages and verify end-to-end
+Goal: Update browser-facing pages, add heartbeat UX page, verify full flow (build, middleware routing, API responses).
 Status: `completed`
-Files: `app/agents/[address]/AgentProfile.tsx` (claim section only)
+Scope:
+- Create `app/heartbeat/page.tsx` — heartbeat dashboard for orientation status
+- Update `app/paid-attention/` pages to remove check-in UI/instructions
+- Update landing page journey if it references heartbeat steps
+- Run `npm run build` to verify no broken imports
+- Verify middleware routing and API responses
 
-## Phase 4: Refactor Data Fetching Away from useEffect
-Goal: Replace useEffect-based data fetching with React 19 / Next.js 15 patterns (Server Components, Suspense, or route-level loading) per Vercel/React best practices
-Status: `pending`
-Files: `app/agents/[address]/AgentProfile.tsx`, `app/agents/[address]/page.tsx`
+Issues: #107, #102
+
+Commits:
+- 7ce2747: feat(heartbeat): add heartbeat UX page
+- 0f9f437: refactor(paid-attention): remove check-in UI, focus on task responses
