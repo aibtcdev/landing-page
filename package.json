@@ -18,29 +18,29 @@
   "dependencies": {
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
-    "@opennextjs/cloudflare": "^1.14.8",
+    "@opennextjs/cloudflare": "^1.16.4",
     "@scure/base": "^2.0.0",
     "@scure/btc-signer": "^2.0.1",
     "@stacks/common": "^7.3.1",
     "@stacks/encryption": "^7.3.1",
     "@stacks/transactions": "^7.3.1",
     "next": "^15.1.3",
-    "react": "^19.0.0",
-    "react-dom": "^19.0.0",
+    "react": "^19.2.4",
+    "react-dom": "^19.2.4",
     "swr": "^2.4.0",
     "x402-stacks": "^2.0.1"
   },
   "devDependencies": {
-    "@cloudflare/workers-types": "^4.20260203.0",
+    "@cloudflare/workers-types": "^4.20260212.0",
     "@tailwindcss/postcss": "^4",
-    "@types/node": "^20",
+    "@types/node": "^25.2.3",
     "@types/react": "^19",
     "@types/react-dom": "^19",
     "eslint": "^9",
     "eslint-config-next": "^15.1.3",
-    "tailwindcss": "^4.0.0",
+    "tailwindcss": "^4.1.18",
     "typescript": "^5",
     "vitest": "^4.0.18",
-    "wrangler": "^4.57.0"
+    "wrangler": "^4.65.0"
   }
 }
