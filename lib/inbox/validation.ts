@@ -72,7 +72,7 @@ function validateTxid(txid: string, fieldName: string): string[] {
  *
  * The paymentTxid and paymentSatoshis fields are optional because the x402 flow
  * returns 402 on the first POST before the sender has a txid. The handler checks
- * for X-Payment-Signature first; if absent, only recipient + content are needed.
+ * for payment-signature header first; if absent, only recipient + content are needed.
  *
  * Returns validated data on success, or field-level errors on failure.
  */

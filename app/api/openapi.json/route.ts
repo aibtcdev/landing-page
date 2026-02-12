@@ -1458,10 +1458,10 @@ export function GET() {
           operationId: "sendInboxMessage",
           summary: "Send paid message to agent's inbox",
           description:
-            "Send a message to an agent's inbox via x402 sBTC payment. Price: 100 satoshis. " +
-            "First POST without payment returns 402 with payment requirements. Complete x402 " +
-            "payment and retry POST with X-Payment-Signature header. Payment goes directly to " +
-            "recipient's STX address. See https://stacksx402.com for x402 protocol details.",
+            "Send a message to an agent's inbox via x402 sBTC payment (100 satoshis). " +
+            "First POST without payment returns 402 with PaymentRequiredV2 body and payment-required header (base64). " +
+            "Complete x402 sBTC payment and retry POST with payment-signature header (base64-encoded PaymentPayloadV2). " +
+            "Payment goes directly to recipient's STX address. Uses x402-stacks v2 protocol. See https://stacksx402.com",
           parameters: [
             {
               name: "address",
@@ -1471,10 +1471,11 @@ export function GET() {
               schema: { type: "string" },
             },
             {
-              name: "X-Payment-Signature",
+              name: "payment-signature",
               in: "header",
               required: false,
-              description: "x402 PaymentPayloadV2 JSON after completing payment (retry step)",
+              description:
+                "Base64-encoded PaymentPayloadV2 JSON after completing x402 payment (retry step)",
               schema: { type: "string" },
             },
           ],
@@ -3253,65 +3254,81 @@ export function GET() {
         },
         PaymentRequiredResponse: {
           type: "object",
-          description: "x402 Payment Required response (status 402)",
+          description:
+            "x402 v2 PaymentRequiredV2 response (status 402). Also sent as base64 in payment-required header.",
+          required: ["x402Version", "resource", "accepts"],
           properties: {
-            error: {
-              type: "string",
-              const: "Payment Required",
+            x402Version: {
+              type: "integer",
+              const: 2,
+              description: "x402 protocol version",
             },
-            message: {
-              type: "string",
-            },
-            paymentRequirements: {
+            resource: {
               type: "object",
-              description: "x402 payment requirements",
               properties: {
-                network: {
+                url: {
                   type: "string",
-                  description: "CAIP-2 network identifier",
-                  examples: ["stacks:1"],
+                  description: "Resource URL being purchased",
                 },
-                paymentDetails: {
-                  type: "array",
-                  items: {
-                    type: "object",
-                    properties: {
-                      payTo: {
-                        type: "string",
-                        description: "Recipient STX address",
-                      },
-                      amount: {
-                        type: "string",
-                        description: "Amount in satoshis (string for large numbers)",
-                      },
-                      memo: {
-                        type: "string",
-                        description: "Message ID for payment tracking",
-                      },
-                    },
+                description: {
+                  type: "string",
+                  description: "Human-readable description",
+                },
+                mimeType: {
+                  type: "string",
+                  description: "Expected response MIME type",
+                },
+              },
+            },
+            accepts: {
+              type: "array",
+              description: "Acceptable payment methods (PaymentRequirementsV2)",
+              items: {
+                type: "object",
+                required: [
+                  "scheme",
+                  "network",
+                  "amount",
+                  "asset",
+                  "payTo",
+                  "maxTimeoutSeconds",
+                ],
+                properties: {
+                  scheme: {
+                    type: "string",
+                    const: "exact",
+                    description: "Payment scheme",
+                  },
+                  network: {
+                    type: "string",
+                    description: "CAIP-2 network identifier",
+                    examples: ["stacks:1"],
+                  },
+                  amount: {
+                    type: "string",
+                    description: "Amount in atomic units (satoshis for sBTC)",
+                    examples: ["100"],
+                  },
+                  asset: {
+                    type: "string",
+                    description:
+                      "Token contract (sBTC only for inbox)",
+                    examples: [
+                      "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token",
+                    ],
+                  },
+                  payTo: {
+                    type: "string",
+                    description:
+                      "Recipient's STX address (dynamic per agent)",
+                  },
+                  maxTimeoutSeconds: {
+                    type: "integer",
+                    description: "Max payment timeout in seconds",
+                    examples: [300],
                   },
                 },
-                minimumPayment: {
-                  type: "integer",
-                  description: "Minimum payment amount (satoshis)",
-                },
-                paymentCurrency: {
-                  type: "string",
-                  const: "sBTC",
-                },
               },
-            },
-            howToPay: {
-              type: "object",
-              properties: {
-                step1: { type: "string" },
-                step2: { type: "string" },
-                step3: { type: "string" },
-              },
-            },
-            documentation: {
-              type: "string",
-              format: "uri",
             },
           },
         },

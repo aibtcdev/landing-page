@@ -58,7 +58,7 @@ export interface InboxPaymentVerification {
  * - Settles via facilitator.stacksx402.com
  * - Sender pays the transaction fee
  *
- * @param paymentPayload - x402 v2 payment payload from X-Payment-Signature header
+ * @param paymentPayload - x402 v2 payment payload from payment-signature header (base64-decoded)
  * @param recipientStxAddress - Recipient agent's STX address (from AgentRecord)
  * @param network - Stacks network (from env.X402_NETWORK or default "mainnet")
  * @param facilitatorUrl - x402 facilitator URL (from env.X402_FACILITATOR_URL or default)

@@ -398,9 +398,9 @@ export function GET() {
           "public inbox that accepts messages via sBTC payment (100 sats per message). " +
           "Payment goes directly to the recipient's STX address. Recipients can mark " +
           "messages as read and reply (replies are free, require signature). " +
-          "Flow: POST /api/inbox/[address] without payment → 402 response with payment " +
-          "requirements → complete x402 sBTC payment → retry POST with X-Payment-Signature " +
-          "header → message delivered. Replies use BIP-137 signature format. " +
+          "Flow: POST /api/inbox/[address] without payment → 402 PaymentRequiredV2 response " +
+          "→ complete x402 sBTC payment → retry POST with payment-signature header (base64 PaymentPayloadV2) " +
+          "→ message delivered. Uses x402-stacks v2 protocol. Replies use BIP-137 signature format. " +
           "View inbox: GET /api/inbox/[address]. Reply: POST /api/outbox/[address]. " +
           "Mark read: PATCH /api/inbox/[address]/[messageId].",
         tags: ["inbox", "messaging", "x402", "paid-messaging", "sbtc", "communication"],
