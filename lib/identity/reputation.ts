@@ -1,0 +1,140 @@
+/**
+ * ERC-8004 reputation fetching utilities
+ */
+
+import { uintCV, noneCV, falseCV, someCV } from "@stacks/transactions";
+import {
+  REPUTATION_REGISTRY_CONTRACT,
+  WAD_DECIMALS,
+} from "./constants";
+import { callReadOnly, parseClarityValue } from "./stacks-api";
+import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback } from "./types";
+
+// Simple in-memory cache with 5-minute TTL
+interface CacheEntry<T> {
+  data: T;
+  timestamp: number;
+}
+
+const cache = new Map<string, CacheEntry<any>>();
+const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
+
+function getCached<T>(key: string): T | null {
+  const entry = cache.get(key);
+  if (!entry) return null;
+
+  const now = Date.now();
+  if (now - entry.timestamp > CACHE_TTL) {
+    cache.delete(key);
+    return null;
+  }
+
+  return entry.data;
+}
+
+function setCache<T>(key: string, data: T): void {
+  cache.set(key, { data, timestamp: Date.now() });
+}
+
+/**
+ * WAD divisor: 10^18 as a BigInt.
+ * Pre-computed as a string literal to avoid BigInt exponentiation,
+ * which requires a higher TS target than ES2017.
+ */
+const WAD_DIVISOR = BigInt("1000000000000000000"); // 10^18
+
+/** Convert a WAD-scaled string to a display-friendly number using bigint math. */
+function wadToNumber(wadStr: string): number {
+  const wad = BigInt(wadStr);
+  // Keep 2 extra digits for rounding, then convert to Number
+  const scaled = (wad * BigInt(100)) / WAD_DIVISOR;
+  return Number(scaled) / 100;
+}
+
+/**
+ * Get reputation summary for an agent
+ * Returns count and average score (WAD converted to decimal)
+ */
+export async function getReputationSummary(
+  agentId: number
+): Promise<ReputationSummary | null> {
+  const cacheKey = `summary:${agentId}`;
+  const cached = getCached<ReputationSummary>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [uintCV(agentId)]);
+    const summary = parseClarityValue(result);
+
+    if (!summary || Number(summary.count) === 0) {
+      return null;
+    }
+
+    // Convert WAD value to decimal using bigint for precision
+    const summaryValue = wadToNumber(summary["summary-value"]);
+
+    const reputationSummary: ReputationSummary = {
+      count: Number(summary.count),
+      summaryValue,
+      summaryValueDecimals: Number(summary["summary-value-decimals"]),
+    };
+
+    setCache(cacheKey, reputationSummary);
+    return reputationSummary;
+  } catch (error) {
+    console.error("Error fetching reputation summary:", error);
+    return null;
+  }
+}
+
+/**
+ * Get all feedback for an agent with pagination
+ */
+export async function getReputationFeedback(
+  agentId: number,
+  cursor?: number
+): Promise<ReputationFeedbackResponse> {
+  const cacheKey = `feedback:${agentId}:${cursor || 0}`;
+  const cached = getCached<ReputationFeedbackResponse>(cacheKey);
+  if (cached) return cached;
+
+  try {
+    // read-all-feedback(agent-id, opt-tag1, opt-tag2, include-revoked, opt-cursor)
+    const cursorArg = cursor !== undefined ? someCV(uintCV(cursor)) : noneCV();
+    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "read-all-feedback", [
+      uintCV(agentId),
+      noneCV(), // opt-tag1
+      noneCV(), // opt-tag2
+      falseCV(), // include-revoked
+      cursorArg,
+    ]);
+
+    const response = parseClarityValue(result);
+
+    if (!response || !response.items) {
+      return { items: [], cursor: null };
+    }
+
+    const items: ReputationFeedback[] = response.items.map((item: any) => ({
+      client: item.client,
+      index: Number(item.index),
+      value: Number(item.value),
+      valueDecimals: Number(item["value-decimals"]),
+      wadValue: wadToNumber(item["wad-value"]),
+      tag1: item.tag1,
+      tag2: item.tag2,
+      isRevoked: item["is-revoked"],
+    }));
+
+    const feedbackResponse: ReputationFeedbackResponse = {
+      items,
+      cursor: response.cursor !== null ? Number(response.cursor) : null,
+    };
+
+    setCache(cacheKey, feedbackResponse);
+    return feedbackResponse;
+  } catch (error) {
+    console.error("Error fetching reputation feedback:", error);
+    return { items: [], cursor: null };
+  }
+}

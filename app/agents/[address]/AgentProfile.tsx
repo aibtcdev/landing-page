@@ -11,6 +11,9 @@ import LevelProgress from "../../components/LevelProgress";
 import LevelTooltip from "../../components/LevelTooltip";
 import LevelCelebration from "../../components/LevelCelebration";
 import AchievementList from "../../components/AchievementList";
+import InboxActivity from "../../components/InboxActivity";
+import IdentityBadge from "../../components/IdentityBadge";
+import ReputationSummary from "../../components/ReputationSummary";
 import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
@@ -45,6 +48,7 @@ export default function AgentProfile() {
   const [codeInput, setCodeInput] = useState("");
   const [codeValidated, setCodeValidated] = useState(false);
   const [validatingCode, setValidatingCode] = useState(false);
+  const [detectingIdentity, setDetectingIdentity] = useState(false);
 
 
   useEffect(() => {
@@ -102,6 +106,31 @@ export default function AgentProfile() {
         setClaim(null);
       });
   }, [agent]);
+
+  // Detect on-chain identity via server-side API route
+  useEffect(() => {
+    if (!agent || (agent.erc8004AgentId !== undefined && agent.erc8004AgentId !== null) || detectingIdentity) return;
+
+    async function checkIdentity() {
+      setDetectingIdentity(true);
+      try {
+        const res = await fetch(`/api/identity/${encodeURIComponent(agent!.btcAddress)}`);
+        if (res.ok) {
+          const data = (await res.json()) as { agentId: number | null };
+          if (data.agentId !== null) {
+            const detectedId = data.agentId;
+            setAgent((prev) => prev ? { ...prev, erc8004AgentId: detectedId } : null);
+          }
+        }
+      } catch (err) {
+        console.error("Failed to detect identity:", err);
+      } finally {
+        setDetectingIdentity(false);
+      }
+    }
+
+    checkIdentity();
+  }, [agent, detectingIdentity]);
 
   const profileUrl = typeof window !== "undefined"
     ? `${window.location.origin}/agents/${agent?.btcAddress}`
@@ -336,6 +365,24 @@ export default function AgentProfile() {
             </div>
           )}
 
+          {/* Identity & Reputation — show for level 1+ agents */}
+          {agentLevel >= 1 && (
+            <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-4">
+              <div className="flex items-center gap-2 mb-3">
+                <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
+                </svg>
+                <span className="text-[14px] font-medium text-white">On-Chain Identity</span>
+              </div>
+              <IdentityBadge agentId={agent.erc8004AgentId ?? undefined} stxAddress={agent.stxAddress} />
+              {agent.erc8004AgentId != null && (
+                <div className="mt-4">
+                  <ReputationSummary agentId={agent.erc8004AgentId} address={agent.btcAddress} />
+                </div>
+              )}
+            </div>
+          )}
+
           {/* Activity — show for level 1+ agents */}
           {agentLevel >= 1 && (
             <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
@@ -364,6 +411,13 @@ export default function AgentProfile() {
                   No activity yet
                 </p>
               )}
+            </div>
+          )}
+
+          {/* Inbox — show for level 1+ agents */}
+          {agentLevel >= 1 && (
+            <div className="mt-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-4">
+              <InboxActivity btcAddress={agent.btcAddress} />
             </div>
           )}
 

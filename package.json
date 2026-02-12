@@ -26,7 +26,8 @@
     "@stacks/transactions": "^7.3.1",
     "next": "^15.1.3",
     "react": "^19.0.0",
-    "react-dom": "^19.0.0"
+    "react-dom": "^19.0.0",
+    "x402-stacks": "^2.0.1"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260203.0",

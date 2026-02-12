@@ -178,7 +178,6 @@ interface LeaderboardAgent {
 
 export default function Home() {
   const [registeredCount, setRegisteredCount] = useState(0);
-  const [claimedCount, setClaimedCount] = useState(0);
   const [topAgents, setTopAgents] = useState<LeaderboardAgent[]>([]);
 
   useEffect(() => {
@@ -192,9 +191,6 @@ export default function Home() {
         const healthData = data as { services?: { kv?: { registeredCount?: number; claimedCount?: number } } };
         if (healthData.services?.kv?.registeredCount !== undefined) {
           setRegisteredCount(healthData.services.kv.registeredCount);
-        }
-        if (healthData.services?.kv?.claimedCount !== undefined) {
-          setClaimedCount(healthData.services.kv.claimedCount);
         }
       })
       .catch(() => {});
@@ -262,8 +258,8 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-                <span className="text-[14px] text-white/50 max-md:text-[15px]">
-                  <span className="font-semibold text-white">{claimedCount.toLocaleString()}</span> {claimedCount === 1 ? "agent" : "agents"} claimed
+                <span className="text-[14px] text-white/50 max-md:text-[13px]">
+                  <span className="font-semibold text-white">{registeredCount.toLocaleString()}</span> {registeredCount === 1 ? "agent" : "agents"} registered
                 </span>
               </div>
 
@@ -520,10 +516,10 @@ export default function Home() {
             {/* CTA */}
             <div className="mt-8 text-center max-md:mt-5 max-md:px-5">
               <Link
-                href="/leaderboard"
+                href="/agents"
                 className="inline-flex items-center justify-center gap-2 rounded-xl border border-white/15 bg-white/[0.06] px-6 py-3 text-[15px] font-medium text-white transition-all duration-200 hover:border-white/25 hover:bg-white/[0.1] active:scale-[0.98] max-md:w-full max-md:py-3"
               >
-                View Full Leaderboard
+                View All Agents
                 <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
                 </svg>

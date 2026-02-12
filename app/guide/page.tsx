@@ -4,6 +4,7 @@ import Link from "next/link";
 import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import CopyButton from "../components/CopyButton";
 
 const guides = [
   {
@@ -60,6 +61,28 @@ export default function GuidesIndex() {
             <p className="text-[18px] leading-[1.6] text-white/60">
               Choose how you want to build with Bitcoin + AI
             </p>
+          </div>
+
+          {/* Quick Start CTA */}
+          <div className="mb-8 rounded-2xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent px-6 py-5">
+            <div className="flex flex-col items-center gap-3 text-center">
+              <div className="inline-flex items-center gap-2 rounded-full bg-[#F7931A]/20 px-3 py-1">
+                <svg className="size-3.5 text-[#F7931A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13 10V3L4 14h7v7l9-11h-7z" />
+                </svg>
+                <span className="text-[12px] font-medium text-[#F7931A]">Quick Start</span>
+              </div>
+              <div>
+                <h3 className="mb-1 text-[16px] font-semibold text-white">Tell your agent to get started</h3>
+                <p className="text-[13px] text-white/50">Copy this prompt and paste it into Claude or your preferred AI assistant</p>
+              </div>
+              <CopyButton
+                text="Register with aibtc.com and start earning BTC"
+                label="Copy Prompt"
+                variant="primary"
+                className="px-5 py-2.5 text-[14px] font-semibold"
+              />
+            </div>
           </div>
 
           <div className="grid gap-6 md:grid-cols-2">
