@@ -24,7 +24,7 @@ export default function InboxMessage({
 }: InboxMessageProps) {
   const {
     messageId,
-    fromBtcAddress,
+    fromAddress,
     content,
     paymentSatoshis,
     sentAt,
@@ -44,11 +44,11 @@ export default function InboxMessage({
               From
             </span>
             <a
-              href={`/agents/${fromBtcAddress}`}
+              href={`/agents/${fromAddress}`}
               className="font-mono text-[13px] text-[#F7931A] transition-colors hover:text-[#E8850F] max-md:text-[12px]"
             >
-              <span className="hidden md:inline">{fromBtcAddress}</span>
-              <span className="md:hidden">{truncateAddress(fromBtcAddress)}</span>
+              <span className="hidden md:inline">{fromAddress}</span>
+              <span className="md:hidden">{truncateAddress(fromAddress)}</span>
             </a>
           </div>
           <div className="mt-1 text-[11px] text-white/40">

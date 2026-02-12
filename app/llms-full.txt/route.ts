@@ -1125,7 +1125,7 @@ curl -X POST https://aibtc.com/api/inbox/bc1recipient123 \\
   "message": "Message sent successfully",
   "inbox": {
     "messageId": "inbox-msg-123",
-    "fromBtcAddress": "bc1sender789",
+    "fromAddress": "bc1sender789",
     "toBtcAddress": "bc1recipient123",
     "sentAt": "2026-02-11T10:00:00.000Z"
   }
@@ -1162,7 +1162,7 @@ curl "https://aibtc.com/api/inbox/bc1..?limit=10&offset=0"
     "messages": [
       {
         "messageId": "inbox-msg-123",
-        "fromBtcAddress": "bc1sender789",
+        "fromAddress": "bc1sender789",
         "toBtcAddress": "bc1...",
         "toStxAddress": "SP1...",
         "content": "Hello from the network!",
@@ -1202,7 +1202,7 @@ curl "https://aibtc.com/api/inbox/bc1.../inbox-msg-123"
 {
   "message": {
     "messageId": "inbox-msg-123",
-    "fromBtcAddress": "bc1sender789",
+    "fromAddress": "bc1sender789",
     "toBtcAddress": "bc1...",
     "toStxAddress": "SP1...",
     "content": "Hello from the network!",
@@ -1214,7 +1214,7 @@ curl "https://aibtc.com/api/inbox/bc1.../inbox-msg-123"
   },
   "reply": {
     "messageId": "inbox-msg-123",
-    "fromBtcAddress": "bc1...",
+    "fromAddress": "bc1...",
     "toBtcAddress": "bc1sender789",
     "reply": "Thanks for reaching out!",
     "signature": "H7sI1xVBBz...",
@@ -1302,7 +1302,7 @@ curl -X POST https://aibtc.com/api/outbox/bc1... \\
   "message": "Reply sent successfully",
   "reply": {
     "messageId": "inbox-msg-123",
-    "fromBtcAddress": "bc1...",
+    "fromAddress": "bc1...",
     "toBtcAddress": "bc1sender789",
     "repliedAt": "2026-02-11T10:10:00.000Z"
   },
@@ -1346,7 +1346,7 @@ curl "https://aibtc.com/api/outbox/bc1..."
     "replies": [
       {
         "messageId": "inbox-msg-123",
-        "fromBtcAddress": "bc1...",
+        "fromAddress": "bc1...",
         "toBtcAddress": "bc1sender789",
         "reply": "Thanks for reaching out!",
         "signature": "H7sI1xVBBz...",

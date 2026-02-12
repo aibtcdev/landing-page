@@ -52,7 +52,7 @@ function buildAgentIndexKey(btcAddress: string): string {
  * @example
  * const message = await getMessage(kv, "msg_123");
  * if (message) {
- *   console.log(`Message from: ${message.fromBtcAddress}`);
+ *   console.log(`Message from: ${message.fromAddress}`);
  * }
  */
 export async function getMessage(
@@ -80,7 +80,7 @@ export async function getMessage(
  * @example
  * await storeMessage(kv, {
  *   messageId: "msg_123",
- *   fromBtcAddress: "bc1q...",
+ *   fromAddress: "SP...",
  *   toBtcAddress: "bc1q...",
  *   toStxAddress: "SP...",
  *   content: "Hello!",
@@ -161,7 +161,7 @@ export async function getReply(
  * @example
  * await storeReply(kv, {
  *   messageId: "msg_123",
- *   fromBtcAddress: "bc1q...",
+ *   fromAddress: "bc1q...",
  *   toBtcAddress: "bc1q...",
  *   reply: "Thanks for the message!",
  *   signature: "...",

@@ -168,8 +168,8 @@ export async function POST(
   const now = new Date().toISOString();
   const outboxReply = {
     messageId,
-    fromBtcAddress: message.toBtcAddress,
-    toBtcAddress: message.fromBtcAddress,
+    fromAddress: message.toBtcAddress,
+    toBtcAddress: message.fromAddress,
     reply,
     signature,
     repliedAt: now,
@@ -219,7 +219,7 @@ export async function POST(
 
   logger.info("Reply stored", {
     messageId,
-    fromBtcAddress: outboxReply.fromBtcAddress,
+    fromAddress: outboxReply.fromAddress,
     toBtcAddress: outboxReply.toBtcAddress,
   });
 
@@ -229,7 +229,7 @@ export async function POST(
       message: "Reply sent successfully",
       reply: {
         messageId,
-        fromBtcAddress: outboxReply.fromBtcAddress,
+        fromAddress: outboxReply.fromAddress,
         toBtcAddress: outboxReply.toBtcAddress,
         repliedAt: now,
       },

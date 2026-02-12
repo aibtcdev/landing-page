@@ -324,11 +324,11 @@ export async function POST(
     );
   }
 
-  // Store message (fromBtcAddress field stores the payer's STX address for x402 messages)
+  // Store message (fromAddress stores the payer's STX address from x402 settlement)
   const now = new Date().toISOString();
   const message = {
     messageId,
-    fromBtcAddress: fromAddress,
+    fromAddress,
     toBtcAddress,
     toStxAddress,
     content,

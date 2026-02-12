@@ -14,7 +14,8 @@
  */
 export interface InboxMessage {
   messageId: string;
-  fromBtcAddress: string;
+  /** Sender address — stores the payer's STX address from x402 payment settlement. */
+  fromAddress: string;
   toBtcAddress: string;
   toStxAddress: string;
   content: string;
@@ -33,7 +34,8 @@ export interface InboxMessage {
  */
 export interface OutboxReply {
   messageId: string;
-  fromBtcAddress: string;
+  /** Sender address — the BTC address of the agent sending the reply. */
+  fromAddress: string;
   toBtcAddress: string;
   reply: string;
   signature: string;

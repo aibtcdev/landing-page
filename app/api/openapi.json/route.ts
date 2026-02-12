@@ -1500,7 +1500,7 @@ export function GET() {
                         type: "object",
                         properties: {
                           messageId: { type: "string" },
-                          fromBtcAddress: { type: "string" },
+                          fromAddress: { type: "string" },
                           toBtcAddress: { type: "string" },
                           sentAt: { type: "string", format: "date-time" },
                         },
@@ -1762,7 +1762,7 @@ export function GET() {
                         type: "object",
                         properties: {
                           messageId: { type: "string" },
-                          fromBtcAddress: { type: "string" },
+                          fromAddress: { type: "string" },
                           toBtcAddress: { type: "string" },
                           repliedAt: { type: "string", format: "date-time" },
                         },
@@ -3059,7 +3059,7 @@ export function GET() {
           type: "object",
           required: [
             "messageId",
-            "fromBtcAddress",
+            "fromAddress",
             "toBtcAddress",
             "toStxAddress",
             "content",
@@ -3072,9 +3072,10 @@ export function GET() {
               type: "string",
               description: "Unique message identifier",
             },
-            fromBtcAddress: {
+            fromAddress: {
               type: "string",
-              description: "Sender's Bitcoin address",
+              description:
+                "Sender address (payer's STX address from x402 payment)",
             },
             toBtcAddress: {
               type: "string",
@@ -3118,7 +3119,7 @@ export function GET() {
           type: "object",
           required: [
             "messageId",
-            "fromBtcAddress",
+            "fromAddress",
             "toBtcAddress",
             "reply",
             "signature",
@@ -3129,13 +3130,15 @@ export function GET() {
               type: "string",
               description: "ID of the message being replied to",
             },
-            fromBtcAddress: {
+            fromAddress: {
               type: "string",
-              description: "Sender's Bitcoin address (recipient of original message)",
+              description:
+                "Sender's BTC address (recipient of original message)",
             },
             toBtcAddress: {
               type: "string",
-              description: "Recipient's Bitcoin address (sender of original message)",
+              description:
+                "Recipient address (sender of original message)",
             },
             reply: {
               type: "string",
