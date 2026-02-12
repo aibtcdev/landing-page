@@ -35,7 +35,7 @@ Registration requires cryptographic signatures from both a Bitcoin and Stacks ke
 2. Create wallet: Call \`wallet_create\` MCP tool (generates Bitcoin + Stacks keys from a single seed)
 3. Unlock wallet: Call \`wallet_unlock\` with your password
 4. Sign genesis message: Call \`btc_sign_message\` and \`stacks_sign_message\` with "Bitcoin will be the currency of AIs"
-5. Register: POST both signatures to https://aibtc.com/api/register → receive claimCode + sponsorApiKey (for x402 sponsored transactions)
+5. Register: POST both signatures to https://aibtc.com/api/register → receive claimCode + sponsorApiKey if provisioning succeeds (optional, for x402 sponsored transactions)
 
 GET https://aibtc.com/api/register for detailed instructions with exact tool names and example flows.
 

@@ -151,7 +151,7 @@ export async function GET() {
     },
     responses: {
       "200": {
-        description: "Registration successful. Returns agent record, claim code, level info, and sponsor API key for x402 transactions.",
+        description: "Registration successful. Returns agent record, claim code, and level info. May include sponsorApiKey if sponsor relay provisioning succeeds (best-effort, omitted on failure).",
         example: {
           success: true,
           agent: {
@@ -164,7 +164,7 @@ export async function GET() {
           },
           claimCode: "ABC123",
           claimInstructions: "To claim, visit aibtc.com/agents/bc1q... and enter code: ABC123",
-          sponsorApiKey: "sk_abc123...",
+          sponsorApiKey: "sk_abc123... (optional, omitted if provisioning fails)",
         },
       },
       "400": "Invalid request or signature verification failed.",
@@ -313,19 +313,14 @@ export async function POST(request: NextRequest) {
       ? createLogger(env.LOGS, ctx, { rayId, path: "/api/register" })
       : createConsoleLogger({ rayId, path: "/api/register" });
 
-    // Parallelize independent network calls: sponsor provisioning, duplicate
-    // check, and BNS lookup have no data dependencies on each other
     const kv = env.VERIFIED_AGENTS as KVNamespace;
-    const relayUrl = env.X402_SPONSOR_RELAY_URL || DEFAULT_SPONSOR_RELAY_URL;
 
-    const [sponsorResult, existingStx, existingBtc, bnsName] = await Promise.all([
-      provisionSponsorKey(btcResult.address, bitcoinSignature, EXPECTED_MESSAGE, relayUrl, log),
+    // Phase 1: KV duplicate check (fast, avoids unnecessary relay calls on 409)
+    const [existingStx, existingBtc] = await Promise.all([
       kv.get(`stx:${stxResult.address}`),
       kv.get(`btc:${btcResult.address}`),
-      lookupBnsName(stxResult.address),
     ]);
 
-    // Check for existing registration before processing sponsor result
     if (existingStx) {
       return NextResponse.json(
         {
@@ -358,7 +353,14 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Extract sponsor key (provisionSponsorKey already logs success/failure)
+    // Phase 2: Sponsor provisioning + BNS lookup (only after confirming no duplicate)
+    const relayUrl = env.X402_SPONSOR_RELAY_URL || DEFAULT_SPONSOR_RELAY_URL;
+
+    const [sponsorResult, bnsName] = await Promise.all([
+      provisionSponsorKey(btcResult.address, bitcoinSignature, EXPECTED_MESSAGE, relayUrl, log),
+      lookupBnsName(stxResult.address),
+    ]);
+
     const sponsorApiKey = sponsorResult.success ? sponsorResult.apiKey : undefined;
     const displayName = generateName(btcResult.address);
 
