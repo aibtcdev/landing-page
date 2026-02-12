@@ -35,7 +35,7 @@ export default function LevelProgress({
           {level === 0 ? "Unverified" : `Level ${level}: ${def.name}`}
         </span>
         {nextLevel && (
-          <span className="text-[11px] text-white/40">
+          <span className="text-xs text-white/40">
             Next: {nextLevel.name}
           </span>
         )}
@@ -59,7 +59,7 @@ export default function LevelProgress({
 
       {/* Next action hint */}
       {nextLevel && (
-        <p className="text-[11px] leading-tight text-white/30">
+        <p className="text-xs leading-tight text-white/30">
           {nextLevel.action}
         </p>
       )}
