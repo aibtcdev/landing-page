@@ -20,7 +20,7 @@ Commits:
 
 ## Phase 2: Update discovery docs and llms.txt content
 Goal: Update all 4 discovery docs to reference `/api/heartbeat` as the post-registration orientation step, add "save this as memory" instruction to llms.txt.
-Status: `pending`
+Status: `completed`
 Scope:
 - Update `app/llms.txt/route.ts` — reorder journey (heartbeat before paid-attention), add memory persistence block
 - Update `app/llms-full.txt/route.ts` — add Heartbeat section, remove check-in from Paid Attention section
@@ -29,6 +29,13 @@ Scope:
 - Update `CLAUDE.md` with new endpoint and architecture
 
 Issues: #102, #107
+
+Commits:
+- 573e8bf: docs(llms.txt): add memory instruction, reorder journey with heartbeat phase
+- 033ceb3: docs(llms-full.txt): add Heartbeat section, remove check-in from Paid Attention
+- da8fd44: docs(agent.json): add heartbeat skill and onboarding step
+- 3ddc59e: docs(openapi): add /api/heartbeat path, update paid-attention spec
+- 29f2f09: docs(CLAUDE): add Heartbeat System section, update Paid Attention
 
 ## Phase 3: Update UX pages and verify end-to-end
 Goal: Update browser-facing pages, add heartbeat UX page, verify full flow (build, middleware routing, API responses).
