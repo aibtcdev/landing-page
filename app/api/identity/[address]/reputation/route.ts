@@ -90,7 +90,7 @@ export async function GET(
       );
     }
 
-    if (agent.erc8004AgentId === undefined) {
+    if (agent.erc8004AgentId === undefined || agent.erc8004AgentId === null) {
       return NextResponse.json(
         {
           error: "Agent has no on-chain identity",

@@ -108,7 +108,7 @@ export default function AgentProfile() {
 
   // Detect on-chain identity via server-side API route
   useEffect(() => {
-    if (!agent || agent.erc8004AgentId !== undefined || detectingIdentity) return;
+    if (!agent || (agent.erc8004AgentId !== undefined && agent.erc8004AgentId !== null) || detectingIdentity) return;
 
     async function checkIdentity() {
       setDetectingIdentity(true);
@@ -373,8 +373,8 @@ export default function AgentProfile() {
                 </svg>
                 <span className="text-[14px] font-medium text-white">On-Chain Identity</span>
               </div>
-              <IdentityBadge agentId={agent.erc8004AgentId} stxAddress={agent.stxAddress} />
-              {agent.erc8004AgentId !== undefined && (
+              <IdentityBadge agentId={agent.erc8004AgentId ?? undefined} stxAddress={agent.stxAddress} />
+              {agent.erc8004AgentId != null && (
                 <div className="mt-4">
                   <ReputationSummary agentId={agent.erc8004AgentId} address={agent.btcAddress} />
                 </div>
