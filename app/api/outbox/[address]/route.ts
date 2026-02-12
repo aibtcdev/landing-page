@@ -158,18 +158,14 @@ export async function POST(
     repliedAt: now,
   };
 
-  await storeReply(kv, outboxReply);
-
-  // Update message with repliedAt timestamp
-  await updateMessage(kv, messageId, { repliedAt: now });
+  // Store reply, update message, and check achievement in parallel
+  const [, , hasCommunicator] = await Promise.all([
+    storeReply(kv, outboxReply),
+    updateMessage(kv, messageId, { repliedAt: now }),
+    hasAchievement(kv, btcResult.address, "communicator"),
+  ]);
 
   // Grant "Communicator" achievement if not already earned
-  const hasCommunicator = await hasAchievement(
-    kv,
-    btcResult.address,
-    "communicator"
-  );
-
   let newAchievement:
     | { id: string; name: string; new: true }
     | undefined = undefined;
