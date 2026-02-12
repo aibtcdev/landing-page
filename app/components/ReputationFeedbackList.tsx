@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getReputationFeedback } from "@/lib/identity";
-import type { ReputationFeedback } from "@/lib/identity";
+import type { ReputationFeedback, ReputationFeedbackResponse } from "@/lib/identity";
 
 interface ReputationFeedbackListProps {
   agentId: number;
+  address: string;
   initialCursor?: number;
 }
 
 export default function ReputationFeedbackList({
   agentId,
+  address,
   initialCursor,
 }: ReputationFeedbackListProps) {
   const [feedback, setFeedback] = useState<ReputationFeedback[]>([]);
@@ -22,9 +23,13 @@ export default function ReputationFeedbackList({
     async function fetchFeedback() {
       try {
         setLoading(true);
-        const data = await getReputationFeedback(agentId);
-        setFeedback(data.items);
-        setCursor(data.cursor);
+        const res = await fetch(
+          `/api/identity/${encodeURIComponent(address)}/reputation?type=feedback`
+        );
+        if (!res.ok) throw new Error("Failed to fetch feedback");
+        const data = (await res.json()) as { feedback: ReputationFeedbackResponse };
+        setFeedback(data.feedback.items);
+        setCursor(data.feedback.cursor);
       } catch (err) {
         console.error("Error fetching reputation feedback:", err);
       } finally {
@@ -33,16 +38,20 @@ export default function ReputationFeedbackList({
     }
 
     fetchFeedback();
-  }, [agentId]);
+  }, [agentId, address]);
 
   async function loadMore() {
     if (!cursor || loadingMore) return;
 
     try {
       setLoadingMore(true);
-      const data = await getReputationFeedback(agentId, cursor);
-      setFeedback((prev) => [...prev, ...data.items]);
-      setCursor(data.cursor);
+      const res = await fetch(
+        `/api/identity/${encodeURIComponent(address)}/reputation?type=feedback&cursor=${cursor}`
+      );
+      if (!res.ok) throw new Error("Failed to load more feedback");
+      const data = (await res.json()) as { feedback: ReputationFeedbackResponse };
+      setFeedback((prev) => [...prev, ...data.feedback.items]);
+      setCursor(data.feedback.cursor);
     } catch (err) {
       console.error("Error loading more feedback:", err);
     } finally {

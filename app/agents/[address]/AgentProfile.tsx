@@ -375,7 +375,7 @@ export default function AgentProfile() {
               <IdentityBadge agentId={agent.erc8004AgentId} stxAddress={agent.stxAddress} />
               {agent.erc8004AgentId !== undefined && (
                 <div className="mt-4">
-                  <ReputationSummary agentId={agent.erc8004AgentId} />
+                  <ReputationSummary agentId={agent.erc8004AgentId} address={agent.btcAddress} />
                 </div>
               )}
             </div>

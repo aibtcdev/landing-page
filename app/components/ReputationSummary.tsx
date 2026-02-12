@@ -1,16 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { getReputationSummary } from "@/lib/identity";
 import type { ReputationSummary as ReputationSummaryType } from "@/lib/identity";
 import ReputationFeedbackList from "./ReputationFeedbackList";
 
 interface ReputationSummaryProps {
   agentId: number;
+  address: string;
 }
 
 export default function ReputationSummary({
   agentId,
+  address,
 }: ReputationSummaryProps) {
   const [summary, setSummary] = useState<ReputationSummaryType | null>(null);
   const [loading, setLoading] = useState(true);
@@ -21,8 +22,14 @@ export default function ReputationSummary({
     async function fetchSummary() {
       try {
         setLoading(true);
-        const data = await getReputationSummary(agentId);
-        setSummary(data);
+        const res = await fetch(
+          `/api/identity/${encodeURIComponent(address)}/reputation?type=summary`
+        );
+        if (!res.ok) {
+          throw new Error("Failed to load reputation data");
+        }
+        const data = (await res.json()) as { summary: ReputationSummaryType | null };
+        setSummary(data.summary);
       } catch (err) {
         console.error("Error fetching reputation summary:", err);
         setError("Failed to load reputation data");
@@ -32,7 +39,7 @@ export default function ReputationSummary({
     }
 
     fetchSummary();
-  }, [agentId]);
+  }, [agentId, address]);
 
   if (loading) {
     return (
@@ -104,7 +111,7 @@ export default function ReputationSummary({
         </button>
       </div>
 
-      {showFeedback && <ReputationFeedbackList agentId={agentId} />}
+      {showFeedback && <ReputationFeedbackList agentId={agentId} address={address} />}
     </div>
   );
 }
