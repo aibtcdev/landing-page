@@ -69,8 +69,7 @@ export default function IdentityBadge({
               via MCP:
             </div>
             <div className="p-2 rounded bg-black/30 font-mono text-xs text-white/70 break-all">
-              register-with-uri(&quot;https://aibtc.com/api/agents/{stxAddress}
-              &quot;)
+              {`register-with-uri("https://aibtc.com/api/agents/${stxAddress}")`}
             </div>
             <Link
               href="/identity"
