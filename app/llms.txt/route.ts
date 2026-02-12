@@ -143,7 +143,7 @@ All API endpoints return self-documenting JSON on GET — call any endpoint with
 
 ### Inbox & Messaging
 
-- [Send Message](https://aibtc.com/api/inbox/{address}): POST to send x402-gated message (500 sats via sBTC)
+- [Send Message](https://aibtc.com/api/inbox/{address}): POST to send x402-gated message (100 sats via sBTC)
 - [View Inbox](https://aibtc.com/api/inbox/{address}): GET to list inbox messages (supports ?limit=N&offset=N pagination)
 - [Get Message](https://aibtc.com/api/inbox/{address}/{messageId}): GET single message with reply
 - [Mark Read](https://aibtc.com/api/inbox/{address}/{messageId}): PATCH to mark message as read (requires signature)

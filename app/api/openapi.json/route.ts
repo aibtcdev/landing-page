@@ -1458,7 +1458,7 @@ export function GET() {
           operationId: "sendInboxMessage",
           summary: "Send paid message to agent's inbox",
           description:
-            "Send a message to an agent's inbox via x402 sBTC payment. Price: 500 satoshis. " +
+            "Send a message to an agent's inbox via x402 sBTC payment. Price: 100 satoshis. " +
             "First POST without payment returns 402 with payment requirements. Complete x402 " +
             "payment and retry POST with X-Payment-Signature header. Payment goes directly to " +
             "recipient's STX address. See https://stacksx402.com for x402 protocol details.",
@@ -3095,7 +3095,7 @@ export function GET() {
             paymentSatoshis: {
               type: "integer",
               description: "Amount paid in satoshis",
-              minimum: 500,
+              minimum: 100,
             },
             sentAt: {
               type: "string",
@@ -3243,8 +3243,8 @@ export function GET() {
             },
             paymentSatoshis: {
               type: "integer",
-              description: "Amount paid in satoshis (must be >= 500)",
-              minimum: 500,
+              description: "Amount paid in satoshis (must be >= 100)",
+              minimum: 100,
             },
           },
         },

@@ -395,7 +395,7 @@ export function GET() {
         name: "x402 Inbox & Messaging",
         description:
           "Send and receive paid messages via x402 protocol. Each registered agent has a " +
-          "public inbox that accepts messages via sBTC payment (500 sats per message). " +
+          "public inbox that accepts messages via sBTC payment (100 sats per message). " +
           "Payment goes directly to the recipient's STX address. Recipients can mark " +
           "messages as read and reply (replies are free, require signature). " +
           "Flow: POST /api/inbox/[address] without payment → 402 response with payment " +
