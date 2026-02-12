@@ -1,5 +1,25 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GITHUB_RAW } from "@/lib/github-proxy";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import type { AgentRecord } from "@/lib/types";
+import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import { generateName } from "@/lib/name-generator";
+import { TWITTER_HANDLE } from "@/lib/constants";
+
+const CRAWLER_UA_PATTERNS = [
+  "twitterbot",
+  "facebookexternalhit",
+  "linkedinbot",
+  "slackbot",
+  "discordbot",
+  "telegrambot",
+  "whatsapp",
+];
+
+function isCrawler(request: NextRequest): boolean {
+  const ua = request.headers.get("user-agent")?.toLowerCase() || "";
+  return CRAWLER_UA_PATTERNS.some((pattern) => ua.includes(pattern));
+}
 
 function isCLI(request: NextRequest): boolean {
   const ua = request.headers.get("user-agent")?.toLowerCase() || "";
@@ -28,13 +48,113 @@ ${bottomBorder}
 `;
 }
 
-export async function middleware(request: NextRequest) {
-  // Only intercept CLI tools
-  if (!isCLI(request)) {
+async function handleCrawlerAgentPage(
+  request: NextRequest,
+  path: string
+): Promise<NextResponse> {
+  const address = path.replace("/agents/", "").split("/")[0];
+  if (!address) {
     return NextResponse.next();
   }
 
+  const prefix = address.startsWith("SP")
+    ? "stx"
+    : address.startsWith("bc1")
+      ? "btc"
+      : null;
+  if (!prefix) {
+    return NextResponse.next();
+  }
+
+  try {
+    const { env } = await getCloudflareContext();
+    const kv = env.VERIFIED_AGENTS as KVNamespace;
+
+    const agentData = await kv.get(`${prefix}:${address}`);
+    if (!agentData) {
+      return NextResponse.next();
+    }
+
+    const agent = JSON.parse(agentData) as AgentRecord;
+    const displayName = agent.displayName || generateName(agent.btcAddress);
+    const description =
+      agent.description ||
+      "Verified AIBTC agent with Bitcoin and Stacks capabilities";
+
+    const claimData = await kv.get(`claim:${agent.btcAddress}`);
+    let claim: ClaimStatus | null = null;
+    if (claimData) {
+      try {
+        claim = JSON.parse(claimData) as ClaimStatus;
+      } catch {
+        /* ignore */
+      }
+    }
+
+    const level = computeLevel(agent, claim);
+    const levelName = LEVELS[level].name;
+    const ogTitle = `${displayName} — ${levelName} Agent`;
+    const ogImage = `https://aibtc.com/api/og/${agent.btcAddress}`;
+    const canonicalUrl = `https://aibtc.com/agents/${address}`;
+
+    const html = `<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<title>${escapeHtml(ogTitle)} | AIBTC</title>
+<meta property="og:title" content="${escapeAttr(ogTitle)}">
+<meta property="og:description" content="${escapeAttr(description)}">
+<meta property="og:type" content="profile">
+<meta property="og:url" content="${canonicalUrl}">
+<meta property="og:image" content="${ogImage}">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta property="og:site_name" content="AIBTC">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:site" content="${TWITTER_HANDLE}">
+<meta name="twitter:title" content="${escapeAttr(ogTitle)}">
+<meta name="twitter:description" content="${escapeAttr(description)}">
+<meta name="twitter:image" content="${ogImage}">
+<link rel="canonical" href="${canonicalUrl}">
+</head>
+<body></body>
+</html>`;
+
+    return new NextResponse(html, {
+      status: 200,
+      headers: {
+        "Content-Type": "text/html; charset=utf-8",
+        "Cache-Control": "public, max-age=300, s-maxage=3600",
+      },
+    });
+  } catch {
+    return NextResponse.next();
+  }
+}
+
+function escapeHtml(str: string): string {
+  return str
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function escapeAttr(str: string): string {
+  return escapeHtml(str).replace(/"/g, "&quot;");
+}
+
+export async function middleware(request: NextRequest) {
   const path = request.nextUrl.pathname;
+
+  // Crawlers on agent profile pages: return minimal HTML with OG tags in <head>
+  if (isCrawler(request) && path.startsWith("/agents/")) {
+    return handleCrawlerAgentPage(request, path);
+  }
+
+  // Only intercept CLI tools for remaining middleware logic
+  if (!isCLI(request)) {
+    return NextResponse.next();
+  }
 
   // Root path: rewrite to serve public/llms.txt
   if (path === "/") {
@@ -96,6 +216,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/",
+    "/agents/:path*",
     "/vps",
     "/local",
     "/update",
