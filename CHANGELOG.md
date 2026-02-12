@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/aibtcdev/landing-page/compare/v1.3.0...v1.4.0) (2026-02-12)
+
+
+### Features
+
+* sponsor key provisioning during registration ([#113](https://github.com/aibtcdev/landing-page/issues/113)) ([ccfc76d](https://github.com/aibtcdev/landing-page/commit/ccfc76ddf8d81e677c61911ff182df1d477a38d8))
+
 ## [1.3.0](https://github.com/aibtcdev/landing-page/compare/v1.2.0...v1.3.0) (2026-02-12)
 
 
