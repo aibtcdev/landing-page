@@ -250,29 +250,52 @@ export async function updateAgentInbox(
 }
 
 /**
+ * Options for listing inbox messages.
+ */
+export interface ListInboxOptions {
+  /** Include reply data inline with messages that have been replied to. */
+  includeReplies?: boolean;
+}
+
+/**
+ * Result of listing inbox messages, including the index for metadata.
+ */
+export interface ListInboxResult {
+  /** The agent inbox index (null if no inbox exists). */
+  index: InboxAgentIndex | null;
+  /** Paginated messages (newest first). */
+  messages: InboxMessage[];
+  /** Reply data keyed by messageId (only populated when includeReplies is true). */
+  replies: Map<string, OutboxReply>;
+}
+
+/**
  * List inbox messages for an agent with pagination.
  *
- * Fetches all messages from the agent's inbox index and applies limit/offset.
+ * Returns both the index (for totalCount/unreadCount) and messages in a single
+ * call to avoid redundant KV reads.
  *
  * @param kv - Cloudflare KV namespace
  * @param btcAddress - Bitcoin address
  * @param limit - Maximum number of messages to return (default 20)
  * @param offset - Number of messages to skip (default 0)
- * @returns Array of InboxMessages (newest first)
+ * @param options - Optional settings (e.g., includeReplies)
+ * @returns ListInboxResult with index, messages, and optional replies
  *
  * @example
- * const messages = await listInboxMessages(kv, "bc1q...", 10, 0);
- * console.log(`First 10 messages: ${messages.length}`);
+ * const { index, messages, replies } = await listInboxMessages(kv, "bc1q...", 10, 0, { includeReplies: true });
+ * console.log(`Total: ${index?.messageIds.length}, fetched: ${messages.length}`);
  */
 export async function listInboxMessages(
   kv: KVNamespace,
   btcAddress: string,
   limit = 20,
-  offset = 0
-): Promise<InboxMessage[]> {
+  offset = 0,
+  options: ListInboxOptions = {}
+): Promise<ListInboxResult> {
   const index = await getAgentInbox(kv, btcAddress);
   if (!index || index.messageIds.length === 0) {
-    return [];
+    return { index, messages: [], replies: new Map() };
   }
 
   // Reverse to get newest first
@@ -282,10 +305,29 @@ export async function listInboxMessages(
   const paginatedIds = messageIds.slice(offset, offset + limit);
 
   // Fetch all messages in parallel
-  const messages = await Promise.all(
+  const rawMessages = await Promise.all(
     paginatedIds.map((id) => getMessage(kv, id))
   );
 
   // Filter out nulls (messages that failed to parse or were deleted)
-  return messages.filter((m): m is InboxMessage => m !== null);
+  const messages = rawMessages.filter((m): m is InboxMessage => m !== null);
+
+  // Optionally fetch replies for messages that have been replied to
+  const replies = new Map<string, OutboxReply>();
+  if (options.includeReplies) {
+    const repliedMessages = messages.filter((msg) => msg.repliedAt);
+    if (repliedMessages.length > 0) {
+      const replyResults = await Promise.all(
+        repliedMessages.map((msg) => getReply(kv, msg.messageId))
+      );
+      repliedMessages.forEach((msg, i) => {
+        const reply = replyResults[i];
+        if (reply) {
+          replies.set(msg.messageId, reply);
+        }
+      });
+    }
+  }
+
+  return { index, messages, replies };
 }

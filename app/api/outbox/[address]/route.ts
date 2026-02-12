@@ -252,19 +252,17 @@ export async function GET(
     );
   }
 
-  // Fetch all messages in agent's inbox
-  const messages = await listInboxMessages(kv, agent.btcAddress, 100, 0);
-
-  // Filter for messages with replies
-  const repliedMessages = messages.filter((msg) => msg.repliedAt);
-
-  // Fetch all replies in parallel
-  const replies = await Promise.all(
-    repliedMessages.map((msg) => getReply(kv, msg.messageId))
+  // Fetch all messages with replies inline (single call, no N+1)
+  const { replies: replyMap } = await listInboxMessages(
+    kv,
+    agent.btcAddress,
+    100,
+    0,
+    { includeReplies: true }
   );
 
-  // Filter out nulls
-  const validReplies = replies.filter((r) => r !== null);
+  // Collect all replies
+  const validReplies = Array.from(replyMap.values());
 
   // If no replies, return self-documenting response
   if (validReplies.length === 0) {

@@ -8,7 +8,6 @@ import {
   storeMessage,
   updateAgentInbox,
   listInboxMessages,
-  getAgentInbox,
   INBOX_PRICE_SATS,
   buildInboxPaymentRequirements,
 } from "@/lib/inbox";
@@ -59,14 +58,23 @@ export async function GET(
     : 20;
   const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
 
-  // Fetch inbox index and messages
-  const [inboxIndex, messages] = await Promise.all([
-    getAgentInbox(kv, agent.btcAddress),
-    listInboxMessages(kv, agent.btcAddress, limit, offset),
-  ]);
+  // Single call returns index + messages + replies (eliminates redundant KV read)
+  const { index: inboxIndex, messages, replies } = await listInboxMessages(
+    kv,
+    agent.btcAddress,
+    limit,
+    offset,
+    { includeReplies: true }
+  );
 
   const totalCount = inboxIndex?.messageIds.length || 0;
   const unreadCount = inboxIndex?.unreadCount || 0;
+
+  // Serialize reply map as object for JSON response
+  const repliesObject: Record<string, unknown> = {};
+  for (const [messageId, reply] of replies) {
+    repliesObject[messageId] = reply;
+  }
 
   // If no messages, return self-documenting response
   if (totalCount === 0) {
@@ -81,6 +89,7 @@ export async function GET(
       },
       inbox: {
         messages: [],
+        replies: {},
         unreadCount: 0,
         totalCount: 0,
       },
@@ -98,7 +107,7 @@ export async function GET(
     });
   }
 
-  // Return inbox with messages
+  // Return inbox with messages and inline replies
   return NextResponse.json({
     agent: {
       btcAddress: agent.btcAddress,
@@ -107,6 +116,7 @@ export async function GET(
     },
     inbox: {
       messages,
+      replies: repliesObject,
       unreadCount,
       totalCount,
       pagination: {

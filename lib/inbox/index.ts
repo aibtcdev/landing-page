@@ -47,6 +47,7 @@ export {
 } from "./x402-config";
 
 // KV Helpers
+export type { ListInboxOptions, ListInboxResult } from "./kv-helpers";
 export {
   getMessage,
   storeMessage,
