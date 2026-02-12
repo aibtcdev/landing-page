@@ -11,7 +11,7 @@ import {
   INBOX_PRICE_SATS,
   buildInboxPaymentRequirements,
 } from "@/lib/inbox";
-import { networkToCAIP2 } from "x402-stacks";
+import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
 export async function GET(
@@ -98,9 +98,9 @@ export async function GET(
         price: `${INBOX_PRICE_SATS} satoshis (sBTC)`,
         payment: "x402 payment required",
         flow: [
-          "POST without X-Payment-Signature → 402 Payment Required",
+          "POST without payment-signature header → 402 Payment Required",
           "Complete x402 sBTC payment to recipient's STX address",
-          "POST with X-Payment-Signature → message delivered",
+          "POST with payment-signature header (base64 PaymentPayloadV2) → message delivered",
         ],
         documentation: "https://aibtc.com/llms-full.txt",
       },
@@ -193,8 +193,10 @@ export async function POST(
     );
   }
 
-  // Check for x402 payment signature FIRST to determine flow
-  const paymentSigHeader = request.headers.get("X-Payment-Signature");
+  // Check for x402 v2 payment signature (base64-encoded JSON in payment-signature header)
+  const paymentSigHeader =
+    request.headers.get(X402_HEADERS.PAYMENT_SIGNATURE) ||
+    request.headers.get("X-Payment-Signature"); // backwards compat
 
   // Validate message body (paymentTxid/paymentSatoshis are optional for the initial 402 request)
   const validation = validateInboxMessage(body);
@@ -232,7 +234,7 @@ export async function POST(
   }
 
   if (!paymentSigHeader) {
-    // No payment signature — return 402 with payment requirements
+    // No payment signature — return 402 with x402 v2 payment requirements
     const networkCAIP2 = networkToCAIP2(network);
     const paymentRequirements = buildInboxPaymentRequirements(
       agent.stxAddress,
@@ -245,34 +247,49 @@ export async function POST(
       minAmount: INBOX_PRICE_SATS,
     });
 
-    return NextResponse.json(
-      {
-        error: "Payment Required",
-        message: "x402 sBTC payment required to send inbox message",
-        paymentRequirements,
-        howToPay: {
-          step1: "Complete payment via x402 protocol",
-          step2: "Include payment proof in X-Payment-Signature header",
-          step3: "Retry this POST request with the header",
-        },
-        documentation: "https://stacksx402.com",
+    // Build v2-compliant PaymentRequiredV2 response
+    const resourceUrl = `${request.nextUrl.protocol}//${request.headers.get("host")}${request.nextUrl.pathname}`;
+    const paymentRequiredBody = {
+      x402Version: 2 as const,
+      resource: {
+        url: resourceUrl,
+        description: `Send message to ${agent.displayName} (${INBOX_PRICE_SATS} sats sBTC)`,
+        mimeType: "application/json",
       },
-      { status: 402 }
-    );
+      accepts: [paymentRequirements],
+    };
+
+    // Set payment-required header (base64-encoded JSON per x402 v2 spec)
+    const paymentRequiredHeader = btoa(JSON.stringify(paymentRequiredBody));
+
+    return NextResponse.json(paymentRequiredBody, {
+      status: 402,
+      headers: {
+        [X402_HEADERS.PAYMENT_REQUIRED]: paymentRequiredHeader,
+      },
+    });
   }
 
-  // Parse payment signature
+  // Parse payment signature (base64-encoded JSON per x402 v2, with plain JSON fallback)
   let paymentPayload: PaymentPayloadV2;
   try {
-    paymentPayload = JSON.parse(paymentSigHeader) as PaymentPayloadV2;
+    // Try base64 decode first (v2 standard)
+    const decoded = atob(paymentSigHeader);
+    paymentPayload = JSON.parse(decoded) as PaymentPayloadV2;
   } catch {
-    logger.error("Invalid payment signature format");
-    return NextResponse.json(
-      {
-        error: "Invalid X-Payment-Signature header (must be JSON)",
-      },
-      { status: 400 }
-    );
+    // Fallback: try plain JSON (backwards compat)
+    try {
+      paymentPayload = JSON.parse(paymentSigHeader) as PaymentPayloadV2;
+    } catch {
+      logger.error("Invalid payment signature format");
+      return NextResponse.json(
+        {
+          error:
+            "Invalid payment-signature header (expected base64-encoded JSON)",
+        },
+        { status: 400 }
+      );
+    }
   }
 
   // Verify x402 payment
@@ -350,6 +367,16 @@ export async function POST(
     paymentTxid: message.paymentTxid,
   });
 
+  // Build payment-response header (base64-encoded per x402 v2 spec)
+  const networkCAIP2 = networkToCAIP2(network);
+  const paymentResponseData = {
+    success: true,
+    payer: fromAddress,
+    transaction: message.paymentTxid,
+    network: networkCAIP2,
+  };
+  const paymentResponseHeader = btoa(JSON.stringify(paymentResponseData));
+
   return NextResponse.json(
     {
       success: true,
@@ -361,6 +388,11 @@ export async function POST(
         sentAt: now,
       },
     },
-    { status: 201 }
+    {
+      status: 201,
+      headers: {
+        [X402_HEADERS.PAYMENT_RESPONSE]: paymentResponseHeader,
+      },
+    }
   );
 }

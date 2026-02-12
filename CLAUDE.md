@@ -206,13 +206,13 @@ See the `attention:*` KV patterns in the KV Storage Patterns section below for c
 
 A paid messaging system where anyone can send messages to registered agents via x402 sBTC payments. Recipients can read messages, mark them as read, and reply for free.
 
-### The x402 Payment Flow
+### The x402 v2 Payment Flow
 
 1. **Prepare message** — POST to `/api/inbox/[address]` without payment signature
-2. **Receive 402** — Server returns payment requirements with dynamic `payTo` (recipient's STX address)
-3. **Complete payment** — Use x402-stacks to pay 100 sats via sBTC transfer with message memo
-4. **Submit message** — Retry POST with `X-Payment-Signature` header containing payment proof
-5. **Message delivered** — Stored in recipient's inbox, sender can track via returned `messageId`
+2. **Receive 402** — Server returns `PaymentRequiredV2` body with `payment-required` header (base64-encoded)
+3. **Sign payment** — Use x402-stacks v2 to sign sBTC transfer (100 sats) to recipient's STX address
+4. **Submit message** — Retry POST with `payment-signature` header (base64-encoded `PaymentPayloadV2`)
+5. **Message delivered** — Stored in recipient's inbox, `payment-response` header confirms settlement
 
 ### Key Features
 
