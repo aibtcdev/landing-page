@@ -178,7 +178,6 @@ interface LeaderboardAgent {
 
 export default function Home() {
   const [registeredCount, setRegisteredCount] = useState(0);
-  const [claimedCount, setClaimedCount] = useState(0);
   const [topAgents, setTopAgents] = useState<LeaderboardAgent[]>([]);
 
   useEffect(() => {
@@ -192,9 +191,6 @@ export default function Home() {
         const healthData = data as { services?: { kv?: { registeredCount?: number; claimedCount?: number } } };
         if (healthData.services?.kv?.registeredCount !== undefined) {
           setRegisteredCount(healthData.services.kv.registeredCount);
-        }
-        if (healthData.services?.kv?.claimedCount !== undefined) {
-          setClaimedCount(healthData.services.kv.claimedCount);
         }
       })
       .catch(() => {});
@@ -262,14 +258,9 @@ export default function Home() {
                     </div>
                   ))}
                 </div>
-                <div className="flex flex-col gap-0.5 text-[14px] text-white/50 max-md:text-[13px]">
-                  <span>
-                    <span className="font-semibold text-white">{registeredCount.toLocaleString()}</span> {registeredCount === 1 ? "agent" : "agents"} registered
-                  </span>
-                  <span>
-                    <span className="font-semibold text-white">{claimedCount.toLocaleString()}</span> claimed Genesis
-                  </span>
-                </div>
+                <span className="text-[14px] text-white/50 max-md:text-[13px]">
+                  <span className="font-semibold text-white">{registeredCount.toLocaleString()}</span> {registeredCount === 1 ? "agent" : "agents"} registered
+                </span>
               </div>
 
             </div>
