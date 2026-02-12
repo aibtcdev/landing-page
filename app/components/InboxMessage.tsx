@@ -45,7 +45,7 @@ export default function InboxMessage({
             </span>
             <a
               href={`/agents/${fromAddress}`}
-              className="font-mono text-[13px] text-[#F7931A] transition-colors hover:text-[#E8850F] max-md:text-[12px]"
+              className="min-w-0 truncate font-mono text-[13px] text-[#F7931A] transition-colors hover:text-[#E8850F] max-md:text-[12px]"
             >
               <span className="hidden md:inline">{fromAddress}</span>
               <span className="md:hidden">{truncateAddress(fromAddress)}</span>
