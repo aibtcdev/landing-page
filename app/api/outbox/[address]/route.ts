@@ -17,7 +17,6 @@ import {
   grantAchievement,
   getAchievementDefinition,
 } from "@/lib/achievements";
-import { createHash } from "crypto";
 
 export async function POST(
   request: NextRequest,
@@ -187,10 +186,12 @@ export async function POST(
     });
   }
 
-  // Generate reputationPayload (ERC-8004 feedbackHash)
-  const feedbackHash = createHash("sha256")
-    .update(`${messageId}${reply}${signature}`)
-    .digest("hex");
+  // Generate reputationPayload (ERC-8004 feedbackHash) using Web Crypto API
+  const hashData = new TextEncoder().encode(`${messageId}${reply}${signature}`);
+  const hashBuffer = await crypto.subtle.digest("SHA-256", hashData);
+  const feedbackHash = Array.from(new Uint8Array(hashBuffer))
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
 
   const reputationPayload = {
     feedbackHash,
