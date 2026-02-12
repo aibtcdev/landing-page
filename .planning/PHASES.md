@@ -39,7 +39,7 @@ Commits:
 
 ## Phase 3: Update UX pages and verify end-to-end
 Goal: Update browser-facing pages, add heartbeat UX page, verify full flow (build, middleware routing, API responses).
-Status: `pending`
+Status: `completed`
 Scope:
 - Create `app/heartbeat/page.tsx` — heartbeat dashboard for orientation status
 - Update `app/paid-attention/` pages to remove check-in UI/instructions
@@ -48,3 +48,7 @@ Scope:
 - Verify middleware routing and API responses
 
 Issues: #107, #102
+
+Commits:
+- 7ce2747: feat(heartbeat): add heartbeat UX page
+- 0f9f437: refactor(paid-attention): remove check-in UI, focus on task responses

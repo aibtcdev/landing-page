@@ -7,25 +7,7 @@
  */
 
 import { MAX_MESSAGE_LENGTH, MAX_REPLY_LENGTH } from "./constants";
-
-/** Validate BIP-137 signature format (shared across validators). */
-function validateSignatureFormat(signature: string): string[] {
-  const errors: string[] = [];
-  if (signature.length === 0) {
-    errors.push("signature cannot be empty");
-  } else {
-    const isHex = /^[0-9a-fA-F]+$/.test(signature);
-    const isBase64 = /^[A-Za-z0-9+/]+=*$/.test(signature);
-    if (!isHex && !isBase64) {
-      errors.push("signature must be base64 or hex-encoded");
-    } else if (isHex && signature.length !== 130) {
-      errors.push("hex signature must be 130 characters (65 bytes)");
-    } else if (isBase64 && signature.length < 86) {
-      errors.push("base64 signature appears too short");
-    }
-  }
-  return errors;
-}
+import { validateSignatureFormat } from "@/lib/validation/signature";
 
 /** Validate Bitcoin address format (Native SegWit). */
 function validateBtcAddress(address: string, fieldName: string): string[] {

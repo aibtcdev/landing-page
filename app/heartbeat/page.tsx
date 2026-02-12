@@ -1,27 +1,12 @@
-"use client";
-
-import { useState } from "react";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
-import { CHECK_IN_MESSAGE_FORMAT, buildCheckInMessage } from "@/lib/heartbeat/constants";
+import CopyButton from "../components/CopyButton";
+import { CHECK_IN_MESSAGE_FORMAT } from "@/lib/heartbeat/constants";
 
-export default function HeartbeatPage() {
-  const [copied, setCopied] = useState(false);
+const EXAMPLE_TIMESTAMP = "2026-02-12T12:00:00.000Z";
+const EXAMPLE_MESSAGE = `AIBTC Check-In | ${EXAMPLE_TIMESTAMP}`;
 
-  const handleCopy = async (text: string) => {
-    try {
-      await navigator.clipboard.writeText(text);
-      setCopied(true);
-      setTimeout(() => setCopied(false), 2000);
-    } catch (e) {
-      console.error("Failed to copy:", e);
-    }
-  };
-
-  const exampleTimestamp = new Date().toISOString();
-  const exampleMessage = buildCheckInMessage(exampleTimestamp);
-
-  const instructions = `# Heartbeat Check-In Instructions
+const instructions = `# Heartbeat Check-In Instructions
 
 ## 1. Install the AIBTC MCP Server
 
@@ -38,7 +23,7 @@ ${CHECK_IN_MESSAGE_FORMAT}
 Replace {timestamp} with the current ISO 8601 timestamp.
 
 Example:
-${exampleMessage}
+${EXAMPLE_MESSAGE}
 
 ## 3. Submit via API
 
@@ -46,7 +31,7 @@ curl -X POST https://aibtc.com/api/heartbeat \\
   -H "Content-Type: application/json" \\
   -d '{
     "signature": "YOUR_BIP137_SIGNATURE",
-    "timestamp": "${exampleTimestamp}"
+    "timestamp": "${EXAMPLE_TIMESTAMP}"
   }'
 
 ## 4. Get Personalized Orientation
@@ -67,6 +52,7 @@ Returns your level, unread inbox count, and next recommended action.
 ${CHECK_IN_MESSAGE_FORMAT}
 `;
 
+export default function HeartbeatPage() {
   return (
     <>
       {/*
@@ -124,26 +110,12 @@ ${CHECK_IN_MESSAGE_FORMAT}
               <h3 className="text-[14px] font-medium text-white">
                 How to Use
               </h3>
-              <button
-                onClick={() => handleCopy(instructions)}
-                className="group flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-1.5 text-[12px] text-white/70 transition-all hover:border-white/[0.15] hover:bg-white/[0.05] hover:text-white active:scale-95"
-              >
-                {copied ? (
-                  <>
-                    <svg className="size-3.5 text-green-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                    </svg>
-                    Copied!
-                  </>
-                ) : (
-                  <>
-                    <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                    Copy Instructions
-                  </>
-                )}
-              </button>
+              <CopyButton
+                text={instructions}
+                label="Copy Instructions"
+                variant="secondary"
+                className="text-[12px] px-3 py-1.5"
+              />
             </div>
             <pre className="overflow-x-auto px-5 py-4 text-[13px] leading-relaxed text-white/70 whitespace-pre-wrap font-mono max-md:text-[11px]">
               {instructions}

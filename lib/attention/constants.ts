@@ -32,17 +32,6 @@ export function buildSignedMessage(messageId: string, response: string): string 
 }
 
 /**
- * Re-export check-in constants from heartbeat module for backward compatibility.
- * Check-in logic has moved to /api/heartbeat.
- */
-export {
-  CHECK_IN_MESSAGE_FORMAT,
-  buildCheckInMessage,
-  CHECK_IN_RATE_LIMIT_MS,
-  CHECK_IN_TIMESTAMP_WINDOW_MS,
-} from "@/lib/heartbeat";
-
-/**
  * Maximum allowed length for response text (in characters).
  *
  * Responses longer than this will be rejected. This prevents abuse and
@@ -91,11 +80,4 @@ export const KV_PREFIXES = {
    * Value: AttentionPayout
    */
   PAYOUT: "attention:payout:",
-
-  /**
-   * Check-in records.
-   * Key: "checkin:{btcAddress}"
-   * Value: CheckInRecord
-   */
-  CHECK_IN: "checkin:",
 } as const;

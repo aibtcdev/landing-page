@@ -100,8 +100,3 @@ export function isPartialAgentRecord(
   );
 }
 
-/**
- * Re-export CheckInRecord from heartbeat module for backward compatibility.
- * Check-in logic has moved to /api/heartbeat.
- */
-export type { CheckInRecord } from "@/lib/heartbeat";

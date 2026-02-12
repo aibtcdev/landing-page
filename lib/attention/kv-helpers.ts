@@ -5,13 +5,6 @@
 import { KV_PREFIXES } from "./constants";
 import type { AttentionMessage } from "./types";
 
-// Re-export check-in helpers from heartbeat module for backward compatibility
-export {
-  getCheckInRecord,
-  updateCheckInRecord,
-  type CheckInRecord,
-} from "@/lib/heartbeat";
-
 /**
  * Fetch the current active message from KV.
  *

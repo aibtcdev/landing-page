@@ -42,6 +42,7 @@ export async function getCheckInRecord(
  * @param kv - Cloudflare KV namespace
  * @param btcAddress - Bitcoin address to update
  * @param timestamp - ISO 8601 timestamp of the check-in
+ * @param existing - Optional previously-fetched record to avoid a redundant KV read
  * @returns The updated CheckInRecord
  *
  * @example
@@ -51,14 +52,15 @@ export async function getCheckInRecord(
 export async function updateCheckInRecord(
   kv: KVNamespace,
   btcAddress: string,
-  timestamp: string
+  timestamp: string,
+  existing?: CheckInRecord | null
 ): Promise<CheckInRecord> {
-  const existing = await getCheckInRecord(kv, btcAddress);
+  const current = existing !== undefined ? existing : await getCheckInRecord(kv, btcAddress);
 
-  const record: CheckInRecord = existing
+  const record: CheckInRecord = current
     ? {
         btcAddress,
-        checkInCount: existing.checkInCount + 1,
+        checkInCount: current.checkInCount + 1,
         lastCheckInAt: timestamp,
       }
     : {

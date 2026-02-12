@@ -1,5 +1,5 @@
 /**
- * Validation functions for Paid Attention Heartbeat System request bodies.
+ * Validation functions for Paid Attention System request bodies.
  *
  * Follows the pattern from lib/admin/validation.ts:
  * - Returns { data: T } on success
@@ -8,43 +8,10 @@
  */
 
 import { MAX_RESPONSE_LENGTH } from "./constants";
-
-/**
- * Re-export validateCheckInBody from heartbeat module for backward compatibility.
- * Check-in logic has moved to /api/heartbeat.
- */
-export { validateCheckInBody } from "@/lib/heartbeat";
-
-/** Validate BIP-137 signature format (shared between response and check-in validators). */
-function validateSignatureFormat(signature: string): string[] {
-  const errors: string[] = [];
-  if (signature.length === 0) {
-    errors.push("signature cannot be empty");
-  } else {
-    const isHex = /^[0-9a-fA-F]+$/.test(signature);
-    const isBase64 = /^[A-Za-z0-9+/]+=*$/.test(signature);
-    if (!isHex && !isBase64) {
-      errors.push("signature must be base64 or hex-encoded");
-    } else if (isHex && signature.length !== 130) {
-      errors.push("hex signature must be 130 characters (65 bytes)");
-    } else if (isBase64 && signature.length < 86) {
-      errors.push("base64 signature appears too short");
-    }
-  }
-  return errors;
-}
-
-/** Validate ISO 8601 canonical format (shared between multiple validators). */
-function validateCanonicalISO8601(value: string, fieldName: string): string[] {
-  const errors: string[] = [];
-  const parsed = new Date(value);
-  if (isNaN(parsed.getTime()) || parsed.toISOString() !== value) {
-    errors.push(
-      `${fieldName} must be a canonical ISO 8601 date string (e.g. 2026-02-09T12:00:00.000Z)`
-    );
-  }
-  return errors;
-}
+import {
+  validateSignatureFormat,
+  validateCanonicalISO8601,
+} from "@/lib/validation/signature";
 
 /**
  * Validate and parse a response submission body.

@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
-import { getAgentLevel, computeLevel, type ClaimStatus } from "@/lib/levels";
+import { getAgentLevel } from "@/lib/levels";
+import { lookupAgentWithLevel } from "@/lib/agent-lookup";
 import { TWITTER_HANDLE } from "@/lib/constants";
 import {
   AttentionMessage,
@@ -16,119 +17,12 @@ import {
 } from "@/lib/attention/constants";
 import { getCurrentMessage } from "@/lib/attention/kv-helpers";
 import { validateResponseBody } from "@/lib/attention/validation";
-import type { AgentRecord } from "@/lib/types";
 import {
   getEngagementTier,
   hasAchievement,
   grantAchievement,
   getAchievementDefinition,
 } from "@/lib/achievements";
-
-/**
- * Look up an agent and verify they are Genesis level (Level 2).
- * Returns the agent, claim, and level info — or an error response.
- */
-async function requireGenesisAgent(
-  kv: KVNamespace,
-  btcAddress: string
-): Promise<
-  | { agent: AgentRecord; claim: ClaimStatus; level: 2 }
-  | { error: NextResponse }
-> {
-  // Fetch agent and claim in parallel
-  const [agentData, claimData] = await Promise.all([
-    kv.get(`btc:${btcAddress}`),
-    kv.get(`claim:${btcAddress}`),
-  ]);
-
-  if (!agentData) {
-    return {
-      error: NextResponse.json(
-        {
-          error:
-            "Agent not found. Register first to participate in paid attention.",
-          nextStep: {
-            level: 1,
-            name: "Registered",
-            action:
-              "Register with both Bitcoin and Stacks signatures via POST /api/register",
-            endpoint: "POST /api/register",
-            documentation: "https://aibtc.com/api/register",
-          },
-        },
-        { status: 403 }
-      ),
-    };
-  }
-
-  let agent: AgentRecord;
-  try {
-    agent = JSON.parse(agentData) as AgentRecord;
-  } catch {
-    return {
-      error: NextResponse.json(
-        { error: "Failed to parse stored agent data." },
-        { status: 500 }
-      ),
-    };
-  }
-
-  // Must have full registration (BTC + STX)
-  if (!agent.stxAddress) {
-    return {
-      error: NextResponse.json(
-        {
-          error:
-            "Full registration required. Complete registration with both Bitcoin and Stacks signatures to unlock paid attention.",
-          nextStep: {
-            level: 1,
-            name: "Registered",
-            action:
-              "Register with both Bitcoin and Stacks signatures via POST /api/register",
-            endpoint: "POST /api/register",
-            documentation: "https://aibtc.com/api/register",
-          },
-        },
-        { status: 403 }
-      ),
-    };
-  }
-
-  // Must have verified/rewarded claim (Genesis level)
-  let claim: ClaimStatus | null = null;
-  if (claimData) {
-    try {
-      claim = JSON.parse(claimData) as ClaimStatus;
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const level = computeLevel(agent, claim);
-  if (level < 2) {
-    return {
-      error: NextResponse.json(
-        {
-          error:
-            "Genesis level required. Complete your viral claim to unlock paid attention.",
-          level,
-          levelName: level === 1 ? "Registered" : "Unverified",
-          nextStep: {
-            level: 2,
-            name: "Genesis",
-            action:
-              `Tweet about your agent with your claim code, tag ${TWITTER_HANDLE}, and submit via POST /api/claims/viral`,
-            endpoint: "POST /api/claims/viral",
-            documentation: "https://aibtc.com/api/claims/viral",
-          },
-        },
-        { status: 403 }
-      ),
-    };
-  }
-
-  return { agent, claim: claim!, level: 2 };
-}
 
 export async function GET() {
   const { env } = await getCloudflareContext();
@@ -398,8 +292,13 @@ async function handleTaskResponse(body: unknown) {
   const { address: btcAddress } = btcResult;
 
   // Require Genesis level (Level 2)
-  const gateResult = await requireGenesisAgent(kv, btcAddress);
-  if ("error" in gateResult) return gateResult.error;
+  const gateResult = await lookupAgentWithLevel(kv, btcAddress, 2);
+  if ("error" in gateResult) {
+    return NextResponse.json(
+      { error: gateResult.error, ...(gateResult.nextStep && { nextStep: gateResult.nextStep }) },
+      { status: gateResult.status }
+    );
+  }
   const { agent, claim } = gateResult;
 
   // Parallelize independent KV reads

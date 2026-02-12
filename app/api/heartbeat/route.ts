@@ -1,10 +1,12 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
-import { getAgentLevel, computeLevel, type ClaimStatus } from "@/lib/levels";
+import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
+import { lookupAgentWithLevel } from "@/lib/agent-lookup";
 import { TWITTER_HANDLE } from "@/lib/constants";
 import type { AgentRecord } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
+import type { InboxAgentIndex } from "@/lib/inbox/types";
 import {
   CHECK_IN_MESSAGE_FORMAT,
   buildCheckInMessage,
@@ -16,150 +18,26 @@ import {
 } from "@/lib/heartbeat";
 
 /**
- * Look up an agent and verify they are at least Level 1 (Registered).
- * Returns the agent, claim, and level info — or an error response.
- */
-async function requireRegisteredAgent(
-  kv: KVNamespace,
-  btcAddress: string
-): Promise<
-  | { agent: AgentRecord; claim: ClaimStatus | null; level: number }
-  | { error: NextResponse }
-> {
-  // Fetch agent and claim in parallel
-  const [agentData, claimData] = await Promise.all([
-    kv.get(`btc:${btcAddress}`),
-    kv.get(`claim:${btcAddress}`),
-  ]);
-
-  if (!agentData) {
-    return {
-      error: NextResponse.json(
-        {
-          error:
-            "Agent not found. Register first to use the heartbeat endpoint.",
-          nextStep: {
-            level: 1,
-            name: "Registered",
-            action:
-              "Register with both Bitcoin and Stacks signatures via POST /api/register",
-            endpoint: "POST /api/register",
-            documentation: "https://aibtc.com/api/register",
-          },
-        },
-        { status: 403 }
-      ),
-    };
-  }
-
-  let agent: AgentRecord;
-  try {
-    agent = JSON.parse(agentData) as AgentRecord;
-  } catch {
-    return {
-      error: NextResponse.json(
-        { error: "Failed to parse stored agent data." },
-        { status: 500 }
-      ),
-    };
-  }
-
-  // Must have full registration (BTC + STX)
-  if (!agent.stxAddress) {
-    return {
-      error: NextResponse.json(
-        {
-          error:
-            "Full registration required. Complete registration with both Bitcoin and Stacks signatures to use heartbeat.",
-          nextStep: {
-            level: 1,
-            name: "Registered",
-            action:
-              "Register with both Bitcoin and Stacks signatures via POST /api/register",
-            endpoint: "POST /api/register",
-            documentation: "https://aibtc.com/api/register",
-          },
-        },
-        { status: 403 }
-      ),
-    };
-  }
-
-  // Parse claim if exists
-  let claim: ClaimStatus | null = null;
-  if (claimData) {
-    try {
-      claim = JSON.parse(claimData) as ClaimStatus;
-    } catch {
-      /* ignore */
-    }
-  }
-
-  const level = computeLevel(agent, claim);
-  if (level < 1) {
-    return {
-      error: NextResponse.json(
-        {
-          error:
-            "Registered level required. Complete registration to use heartbeat.",
-          level,
-          levelName: "Unverified",
-          nextStep: {
-            level: 1,
-            name: "Registered",
-            action:
-              "Register with both Bitcoin and Stacks signatures via POST /api/register",
-            endpoint: "POST /api/register",
-            documentation: "https://aibtc.com/api/register",
-          },
-        },
-        { status: 403 }
-      ),
-    };
-  }
-
-  return { agent, claim, level };
-}
-
-/**
  * Build personalized orientation data for an agent.
+ * Accepts pre-fetched data to avoid redundant KV reads.
  */
-async function getOrientation(
-  kv: KVNamespace,
+function getOrientation(
   agent: AgentRecord,
-  claim: ClaimStatus | null
-): Promise<HeartbeatOrientation> {
-  const level = computeLevel(agent, claim);
+  claim: ClaimStatus | null,
+  unreadCount: number
+): HeartbeatOrientation {
   const levelInfo = getAgentLevel(agent, claim);
   const displayName = agent.displayName || generateName(agent.btcAddress);
 
-  // Count unread messages
-  const inboxIndexKey = `inbox:agent:${agent.btcAddress}`;
-  const inboxIndexData = await kv.get(inboxIndexKey);
-  let unreadCount = 0;
-  if (inboxIndexData) {
-    try {
-      const inboxIndex = JSON.parse(inboxIndexData) as {
-        messageIds: string[];
-        unreadCount: number;
-      };
-      unreadCount = inboxIndex.unreadCount || 0;
-    } catch {
-      /* ignore */
-    }
-  }
-
   // Determine next action based on level
   let nextAction: HeartbeatOrientation["nextAction"];
-  if (level === 1) {
-    // Registered but not Genesis — need viral claim
+  if (levelInfo.level === 1) {
     nextAction = {
       step: "Complete Viral Claim",
       description: `Tweet about your agent with your claim code and tag ${TWITTER_HANDLE} to reach Level 2 (Genesis) and unlock paid attention.`,
       endpoint: "POST /api/claims/viral",
     };
-  } else if (level >= 2) {
-    // Genesis — can participate in paid attention
+  } else if (levelInfo.level >= 2) {
     if (unreadCount > 0) {
       nextAction = {
         step: "Check Inbox",
@@ -175,7 +53,6 @@ async function getOrientation(
       };
     }
   } else {
-    // Shouldn't reach here, but fallback to registration
     nextAction = {
       step: "Register",
       description:
@@ -196,6 +73,19 @@ async function getOrientation(
   };
 }
 
+/**
+ * Parse inbox index data to extract unread count.
+ */
+function parseUnreadCount(inboxIndexData: string | null): number {
+  if (!inboxIndexData) return 0;
+  try {
+    const inboxIndex = JSON.parse(inboxIndexData) as InboxAgentIndex;
+    return inboxIndex.unreadCount || 0;
+  } catch {
+    return 0;
+  }
+}
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const address = searchParams.get("address");
@@ -205,51 +95,21 @@ export async function GET(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    const prefix = address.startsWith("SP")
-      ? "stx"
-      : address.startsWith("bc1")
-        ? "btc"
-        : null;
-
-    if (!prefix) {
+    const result = await lookupAgentWithLevel(kv, address);
+    if ("error" in result) {
       return NextResponse.json(
-        { error: "Invalid address format. Must be a Bitcoin (bc1...) or Stacks (SP...) address." },
-        { status: 400 }
+        { error: result.error },
+        { status: result.status }
       );
     }
 
-    const agentData = await kv.get(`${prefix}:${address}`);
-    if (!agentData) {
-      return NextResponse.json(
-        {
-          error: "Agent not found. Register first at POST /api/register",
-          documentation: "https://aibtc.com/api/register",
-        },
-        { status: 404 }
-      );
-    }
+    const { agent, claim } = result;
 
-    let agent: AgentRecord;
-    try {
-      agent = JSON.parse(agentData) as AgentRecord;
-    } catch {
-      return NextResponse.json(
-        { error: "Failed to parse agent data." },
-        { status: 500 }
-      );
-    }
+    // Fetch inbox index in parallel (claim already fetched by lookupAgent)
+    const inboxIndexData = await kv.get(`inbox:agent:${agent.btcAddress}`);
+    const unreadCount = parseUnreadCount(inboxIndexData);
 
-    const claimData = await kv.get(`claim:${agent.btcAddress}`);
-    let claim: ClaimStatus | null = null;
-    if (claimData) {
-      try {
-        claim = JSON.parse(claimData) as ClaimStatus;
-      } catch {
-        /* ignore */
-      }
-    }
-
-    const orientation = await getOrientation(kv, agent, claim);
+    const orientation = getOrientation(agent, claim, unreadCount);
 
     return NextResponse.json(
       {
@@ -417,9 +277,14 @@ export async function POST(request: NextRequest) {
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     // Require Registered level (Level 1+)
-    const gateResult = await requireRegisteredAgent(kv, btcAddress);
-    if ("error" in gateResult) return gateResult.error;
-    const { agent, claim } = gateResult;
+    const result = await lookupAgentWithLevel(kv, btcAddress, 1);
+    if ("error" in result) {
+      return NextResponse.json(
+        { error: result.error, ...(result.nextStep && { nextStep: result.nextStep }) },
+        { status: result.status }
+      );
+    }
+    const { agent, claim } = result;
 
     // Check rate limit
     const existingCheckIn = await getCheckInRecord(kv, btcAddress);
@@ -445,8 +310,8 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update check-in record
-    const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp);
+    // Update check-in record (pass existing to avoid redundant KV read)
+    const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp, existingCheckIn);
 
     // Update agent record with lastActiveAt and checkInCount
     const updatedAgent = {
@@ -455,17 +320,16 @@ export async function POST(request: NextRequest) {
       checkInCount: checkInRecord.checkInCount,
     };
 
-    // Write updates to both btc: and stx: keys
-    await Promise.all([
+    // Write updates to both btc: and stx: keys, fetch inbox in parallel
+    const [, , inboxIndexData] = await Promise.all([
       kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
       kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent)),
+      kv.get(`inbox:agent:${btcAddress}`),
     ]);
 
-    // Get orientation for next action
-    const orientation = await getOrientation(kv, updatedAgent, claim);
-
-    // Compute level info
-    const levelInfo = getAgentLevel(updatedAgent, claim);
+    // Build orientation (level computed once inside getOrientation via getAgentLevel)
+    const unreadCount = parseUnreadCount(inboxIndexData);
+    const orientation = getOrientation(updatedAgent, claim, unreadCount);
 
     return NextResponse.json({
       success: true,
@@ -478,9 +342,9 @@ export async function POST(request: NextRequest) {
         btcAddress,
         displayName: updatedAgent.displayName || generateName(btcAddress),
       },
-      level: levelInfo.level,
-      levelName: levelInfo.levelName,
-      nextLevel: levelInfo.nextLevel,
+      level: orientation.level,
+      levelName: orientation.levelName,
+      nextLevel: getAgentLevel(updatedAgent, claim).nextLevel,
       orientation,
     });
   } catch (e) {

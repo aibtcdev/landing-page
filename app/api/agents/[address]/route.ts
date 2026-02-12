@@ -4,7 +4,7 @@ import type { AgentRecord } from "@/lib/types";
 import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
 import { getAgentAchievements } from "@/lib/achievements";
-import { getCheckInRecord } from "@/lib/attention/kv-helpers";
+import { getCheckInRecord } from "@/lib/heartbeat";
 
 /**
  * Determine the address type and KV prefix from the format.
