@@ -27,27 +27,28 @@ export async function detectAgentIdentity(
       return null;
     }
 
-    // Search through all token IDs to find one owned by this address
-    // Note: This is inefficient for large numbers of agents
-    // In production, consider using an indexer or event logs
-    for (let agentId = 0; agentId <= lastId; agentId++) {
-      const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [
-        uintCV(agentId),
-      ]);
-      const owner = parseClarityValue(ownerResult);
-
-      if (owner === stxAddress) {
-        // Found a match! Get the URI
+    // Search through all token IDs in parallel batches
+    const BATCH_SIZE = 5;
+    for (let i = 0; i <= lastId; i += BATCH_SIZE) {
+      const batch = Array.from(
+        { length: Math.min(BATCH_SIZE, lastId - i + 1) },
+        (_, j) => i + j
+      );
+      const results = await Promise.all(
+        batch.map(async (id) => {
+          const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [
+            uintCV(id),
+          ]);
+          return { id, owner: parseClarityValue(ownerResult) };
+        })
+      );
+      const match = results.find((r) => r.owner === stxAddress);
+      if (match) {
         const uriResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-token-uri", [
-          uintCV(agentId),
+          uintCV(match.id),
         ]);
         const uri = parseClarityValue(uriResult);
-
-        return {
-          agentId,
-          owner,
-          uri: uri || "",
-        };
+        return { agentId: match.id, owner: match.owner!, uri: uri || "" };
       }
     }
 
