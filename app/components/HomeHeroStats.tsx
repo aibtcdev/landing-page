@@ -1,4 +1,4 @@
-"use client";
+import Link from "next/link";
 
 interface HomeHeroStatsProps {
   count: number;
@@ -6,13 +6,13 @@ interface HomeHeroStatsProps {
 
 /**
  * Animated agent count display for the hero section.
- * Client component to enable future animated counting effects.
+ * Links to /agents directory.
  */
 export default function HomeHeroStats({ count }: HomeHeroStatsProps) {
   return (
-    <span className="text-[14px] text-white/50 max-md:text-[13px]">
+    <Link href="/agents" className="text-[14px] text-white/50 transition-colors hover:text-white/70 max-md:text-[13px]">
       <span className="font-semibold text-white">{count.toLocaleString()}</span>{" "}
       {count === 1 ? "agent" : "agents"} registered
-    </span>
+    </Link>
   );
 }
