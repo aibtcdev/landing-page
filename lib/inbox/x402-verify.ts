@@ -20,6 +20,7 @@ import type {
   SettlementResponseV2,
   PaymentRequirementsV2,
 } from "x402-stacks";
+import { deserializeTransaction, AuthType } from "@stacks/transactions";
 import {
   buildInboxPaymentRequirements,
   getSBTCAsset,
@@ -123,8 +124,10 @@ export async function verifyInboxPayment(
     log.debug("Extracted resource from payload", { messageId });
   }
 
-  // Determine if transaction is sponsored
-  const isSponsored = paymentPayload.payload.transaction.startsWith("0x80000005");
+  // Determine if transaction is sponsored using stacks.js deserialization
+  const txHex = paymentPayload.payload.transaction;
+  const tx = deserializeTransaction(txHex);
+  const isSponsored = tx.auth.authType === AuthType.Sponsored;
 
   // Route sponsored transactions to relay, non-sponsored to facilitator
   let settleResult: SettlementResponseV2;
@@ -139,8 +142,12 @@ export async function verifyInboxPayment(
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          txHex: paymentPayload.payload.transaction,
-          paymentRequirements,
+          transaction: paymentPayload.payload.transaction,
+          settle: {
+            expectedRecipient: recipientStxAddress,
+            minAmount: paymentRequirements.amount,
+            tokenType: "sBTC",
+          },
         }),
       });
 
@@ -157,8 +164,21 @@ export async function verifyInboxPayment(
         };
       }
 
-      settleResult = await relayResponse.json();
-      log.debug("Sponsor relay result", { settleResult });
+      // Map relay response to SettlementResponseV2 format.
+      // Relay returns {success, txid, settlement: {sender, recipient, amount, ...}}
+      // SettlementResponseV2 expects {success, transaction, payer, network}.
+      const relayData = (await relayResponse.json()) as {
+        success: boolean;
+        txid?: string;
+        settlement?: { sender?: string };
+      };
+      settleResult = {
+        success: relayData.success,
+        transaction: relayData.txid || "",
+        payer: relayData.settlement?.sender || "",
+        network: networkCAIP2,
+      };
+      log.debug("Sponsor relay result", { relayData, settleResult });
     } catch (error) {
       log.error("Sponsor relay exception", { error: String(error) });
       return {
