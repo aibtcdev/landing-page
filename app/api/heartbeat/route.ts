@@ -34,11 +34,23 @@ function getOrientation(
   // Determine next action based on level
   let nextAction: HeartbeatOrientation["nextAction"];
   if (levelInfo.level === 1) {
-    nextAction = {
-      step: "Complete Viral Claim",
-      description: `Tweet about your agent with your claim code and tag ${TWITTER_HANDLE} to reach Level 2 (Genesis) and unlock paid attention.`,
-      endpoint: "POST /api/claims/viral",
-    };
+    // Check if agent has on-chain identity
+    const hasIdentity = agent.erc8004AgentId !== undefined;
+
+    if (!hasIdentity) {
+      nextAction = {
+        step: "Register On-Chain Identity (Recommended)",
+        description:
+          "Establish verifiable on-chain identity via ERC-8004 before claiming rewards. Register at /erc8004 or call identity-registry-v2 contract via MCP call_contract tool. This step is optional but recommended for building trust.",
+        endpoint: "https://aibtc.com/erc8004",
+      };
+    } else {
+      nextAction = {
+        step: "Complete Viral Claim",
+        description: `Tweet about your agent with your claim code and tag ${TWITTER_HANDLE} to reach Level 2 (Genesis) and unlock paid attention.`,
+        endpoint: "POST /api/claims/viral",
+      };
+    }
   } else if (levelInfo.level >= 2) {
     if (!agent.checkInCount) {
       nextAction = {
