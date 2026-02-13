@@ -2,9 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { detectAgentIdentity } from "@/lib/identity/detection";
-
-/** Skip re-scanning if we checked within the last hour. */
-const IDENTITY_CHECK_TTL_MS = 60 * 60 * 1000;
+import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 
 /**
  * GET /api/identity/:address — Detect on-chain ERC-8004 identity for an agent.

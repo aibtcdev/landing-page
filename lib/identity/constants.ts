@@ -11,3 +11,9 @@ export const REPUTATION_REGISTRY_CONTRACT =
 export const STACKS_API_BASE = "https://api.mainnet.hiro.so";
 
 export const WAD_DECIMALS = 18;
+
+/**
+ * Cache TTL for identity checks (1 hour)
+ * Used by heartbeat and identity endpoints to prevent excessive on-chain queries
+ */
+export const IDENTITY_CHECK_TTL_MS = 60 * 60 * 1000;

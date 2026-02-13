@@ -17,6 +17,7 @@ import {
   type HeartbeatOrientation,
 } from "@/lib/heartbeat";
 import { detectAgentIdentity } from "@/lib/identity/detection";
+import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 
 /**
  * Build personalized orientation data for an agent.
@@ -321,21 +322,27 @@ export async function POST(request: NextRequest) {
     // Update check-in record (pass existing to avoid redundant KV read)
     const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp, existingCheckIn);
 
-    // Detect on-chain identity if not already stored or stale (24h cache)
+    // Detect on-chain identity if not already stored or stale (uses shared 1h cache)
     let identityAgentId = agent.erc8004AgentId;
+    let identityCheckPerformed = false;
     const shouldCheckIdentity =
-      !agent.erc8004AgentId ||
+      agent.erc8004AgentId == null ||
       !agent.lastIdentityCheck ||
-      Date.now() - new Date(agent.lastIdentityCheck).getTime() > 24 * 60 * 60 * 1000;
+      Date.now() - new Date(agent.lastIdentityCheck).getTime() > IDENTITY_CHECK_TTL_MS;
 
     if (shouldCheckIdentity) {
       try {
         const identity = await detectAgentIdentity(agent.stxAddress);
         if (identity) {
           identityAgentId = identity.agentId;
+        } else {
+          // Explicitly record that an identity check was performed but no identity was found
+          identityAgentId = null;
         }
+        identityCheckPerformed = true;
       } catch (error) {
         // Log error but don't fail check-in if identity detection fails
+        // Don't update lastIdentityCheck on error to allow retry on next heartbeat
         console.error("Identity detection failed during heartbeat:", error);
       }
     }
@@ -346,7 +353,7 @@ export async function POST(request: NextRequest) {
       lastActiveAt: timestamp,
       checkInCount: checkInRecord.checkInCount,
       erc8004AgentId: identityAgentId,
-      lastIdentityCheck: shouldCheckIdentity ? new Date().toISOString() : agent.lastIdentityCheck,
+      lastIdentityCheck: identityCheckPerformed ? new Date().toISOString() : agent.lastIdentityCheck,
     };
 
     // Write updates to both btc: and stx: keys, fetch inbox in parallel

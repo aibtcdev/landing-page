@@ -8,6 +8,7 @@ import { getAgentLevel, computeLevel, LEVELS, type ClaimStatus } from "@/lib/lev
 import { generateName } from "@/lib/name-generator";
 import { lookupBnsName } from "@/lib/bns";
 import { detectAgentIdentity } from "@/lib/identity/detection";
+import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import { TWITTER_HANDLE } from "@/lib/constants";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
@@ -25,8 +26,6 @@ interface ClaimRecord {
   status: "pending" | "verified" | "rewarded" | "failed";
 }
 
-/** TTL for negative identity checks (1 hour) */
-const IDENTITY_CHECK_TTL_MS = 60 * 60 * 1000;
 
 /**
  * Resolve an agent from KV by BTC address, STX address, or BNS name.
