@@ -5,6 +5,8 @@ import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
 import { getAgentAchievements } from "@/lib/achievements";
 import { getCheckInRecord } from "@/lib/heartbeat";
+import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
+import { getAgentInbox } from "@/lib/inbox/kv-helpers";
 
 /**
  * Determine the address type and KV prefix from the format.
@@ -144,6 +146,9 @@ export async function GET(
               nextLevel: "NextLevelInfo | null",
               achievements: "AchievementRecord[] (all unlocked achievements)",
               checkIn: "{ lastCheckInAt: string, checkInCount: number } | null",
+              trust: "Trust metrics (level, onChain identity, reputation)",
+              activity: "Activity metrics (check-ins, heartbeat, inbox)",
+              capabilities: "Enabled capabilities (heartbeat, inbox, x402, etc.)",
             },
             relatedEndpoints: {
               allAgents: "/api/agents - List all agents with pagination",
@@ -236,11 +241,13 @@ export async function GET(
       }).catch(() => {});
     }
 
-    // Look up claim, achievements, and check-in data in parallel
-    const [claimData, achievements, checkInRecord] = await Promise.all([
+    // Look up claim, achievements, check-in, identity, reputation, and inbox in parallel
+    const [claimData, achievements, checkInRecord, identity, inboxIndex] = await Promise.all([
       kv.get(`claim:${agent.btcAddress}`),
       getAgentAchievements(kv, agent.btcAddress),
       getCheckInRecord(kv, agent.btcAddress),
+      detectAgentIdentity(agent.stxAddress),
+      getAgentInbox(kv, agent.btcAddress),
     ]);
 
     let claim: ClaimStatus | null = null;
@@ -252,6 +259,9 @@ export async function GET(
       }
     }
 
+    // Fetch reputation summary if identity exists
+    const reputation = identity ? await getReputationSummary(identity.agentId) : null;
+
     const levelInfo = getAgentLevel(agent, claim);
     const checkIn = checkInRecord
       ? {
@@ -259,6 +269,40 @@ export async function GET(
           checkInCount: checkInRecord.checkInCount,
         }
       : null;
+
+    // Compute trust metrics
+    const trust = {
+      level: levelInfo.level,
+      levelName: levelInfo.levelName,
+      onChainIdentity: !!identity,
+      reputationScore: reputation?.summaryValue ?? null,
+      reputationCount: reputation?.count ?? 0,
+    };
+
+    // Compute activity metrics
+    const activity = {
+      lastActiveAt: agent.lastActiveAt ?? null,
+      checkInCount: agent.checkInCount ?? 0,
+      hasHeartbeat: !!checkInRecord,
+      inboxEnabled: !!inboxIndex,
+      unreadInboxCount: inboxIndex?.unreadCount ?? 0,
+    };
+
+    // Compute capabilities (derived from level and available features)
+    const capabilities: string[] = [];
+    if (levelInfo.level >= 1) {
+      capabilities.push("heartbeat");
+    }
+    if (inboxIndex) {
+      capabilities.push("inbox");
+      capabilities.push("x402");
+    }
+    if (identity) {
+      capabilities.push("reputation");
+    }
+    if (levelInfo.level >= 2) {
+      capabilities.push("paid-attention");
+    }
 
     return NextResponse.json(
       {
@@ -281,6 +325,9 @@ export async function GET(
         ...levelInfo,
         achievements,
         checkIn,
+        trust,
+        activity,
+        capabilities,
       },
       {
         headers: {
