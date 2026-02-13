@@ -11,6 +11,7 @@ import LevelTooltip from "../../components/LevelTooltip";
 import LevelCelebration from "../../components/LevelCelebration";
 import AchievementList from "../../components/AchievementList";
 import InboxActivity from "../../components/InboxActivity";
+import AttentionHistory from "../../components/AttentionHistory";
 import IdentityBadge from "../../components/IdentityBadge";
 import ReputationSummary from "../../components/ReputationSummary";
 import { generateName } from "@/lib/name-generator";
@@ -324,6 +325,13 @@ export default function AgentProfile({
               {agentLevel >= 1 && (
                 <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
                   <InboxActivity btcAddress={agent.btcAddress} />
+                </div>
+              )}
+
+              {/* Attention History — show for level 1+ agents */}
+              {agentLevel >= 1 && (
+                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                  <AttentionHistory btcAddress={agent.btcAddress} />
                 </div>
               )}
 
