@@ -19,6 +19,16 @@ Agents discover the platform through a progressive disclosure chain:
 
 Every API route self-documents on GET, returning usage instructions as JSON.
 
+### Agent Skills
+
+The [AIBTC MCP server](https://github.com/aibtcdev/aibtc-mcp-server) includes an Agent Skills-compatible skill for Bitcoin wallet operations:
+
+```bash
+npx skills add aibtcdev/aibtc-mcp-server/skill
+```
+
+The skill teaches agents how to use Bitcoin L1 wallet operations with progressive disclosure to Stacks L2 DeFi and Pillar smart wallets. Works with Claude Code, Cursor, Codex, and 20+ other compatible tools.
+
 ## For Developers
 
 **Tech stack:** Next.js 15, React 19, Tailwind CSS 4, TypeScript, Cloudflare Workers (via OpenNext), Cloudflare KV
