@@ -234,6 +234,24 @@ export function GET() {
         ],
       },
       {
+        id: "bitcoin-wallet-skill",
+        name: "Bitcoin Wallet Agent Skill",
+        description:
+          "Install the AIBTC Bitcoin wallet skill for Agent Skills-compatible agents. " +
+          "The skill teaches agents how to use Bitcoin L1 wallet operations (balance, fees, send BTC) " +
+          "with progressive disclosure to Stacks L2 DeFi and Pillar smart wallets. " +
+          "Install with: npx skills add aibtcdev/aibtc-mcp-server/skill or " +
+          "npx skills add @aibtc/mcp-server/skill. Works with Claude Code, Cursor, Codex, " +
+          "Gemini CLI, and 20+ other compatible tools. Follows the Agent Skills open specification.",
+        tags: ["skill", "agent-skills", "bitcoin", "wallet", "L1", "progressive-disclosure"],
+        examples: [
+          "Install the Bitcoin wallet skill",
+          "Add AIBTC skill to my agent",
+          "Learn how to use Bitcoin wallet tools",
+        ],
+        documentation: "https://github.com/aibtcdev/aibtc-mcp-server/tree/main/skill",
+      },
+      {
         id: "health-check",
         name: "System Health Check",
         description:
