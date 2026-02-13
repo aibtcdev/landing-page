@@ -1123,7 +1123,7 @@ curl -X DELETE https://aibtc.com/api/admin/delete-agent \\
     "core": ["btc:...", "stx:..."],
     "claims": ["claim:...", "claim-code:...", "owner:..."],
     "genesis": ["genesis:..."],
-    "challenges": [],
+    "challenges": ["challenge:...", "checkin:...", "ratelimit:achievement-verify:..."],
     "achievements": ["achievements:...", "achievement:...:sender"],
     "attention": [
       "attention:agent:...",
@@ -1137,12 +1137,12 @@ curl -X DELETE https://aibtc.com/api/admin/delete-agent \\
     ]
   },
   "summary": {
-    "totalKeys": 42,
+    "totalKeys": 17,
     "categories": {
       "core": 2,
       "claims": 3,
       "genesis": 1,
-      "challenges": 0,
+      "challenges": 3,
       "achievements": 5,
       "attention": 8,
       "inbox": 23

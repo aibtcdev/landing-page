@@ -76,9 +76,13 @@ export async function GET(request: NextRequest) {
         address: "bc1q...",
         deleted: {
           core: ["btc:...", "stx:..."],
-          claims: ["claim:...", "claim-code:..."],
+          claims: ["claim:...", "claim-code:...", "owner:..."],
           genesis: ["genesis:..."],
-          challenges: [],
+          challenges: [
+            "challenge:...",
+            "checkin:...",
+            "ratelimit:achievement-verify:...",
+          ],
           achievements: ["achievements:...", "achievement:...:sender"],
           attention: [
             "attention:agent:...",
@@ -92,15 +96,15 @@ export async function GET(request: NextRequest) {
           ],
         },
         summary: {
-          totalKeys: 42,
+          totalKeys: 17,
           categories: {
             core: 2,
             claims: 3,
             genesis: 1,
-            challenges: 0,
-            achievements: 5,
-            attention: 8,
-            inbox: 23,
+            challenges: 3,
+            achievements: 2,
+            attention: 3,
+            inbox: 3,
           },
         },
       },
@@ -160,15 +164,11 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Read index records in parallel to discover related keys
-    const [achievementData, attentionData, inboxData, ownerReverseData] =
-      await Promise.all([
-        kv.get(`achievements:${agent.btcAddress}`),
-        kv.get(`attention:agent:${agent.btcAddress}`),
-        kv.get(`inbox:agent:${agent.btcAddress}`),
-        agent.owner
-          ? kv.get(`owner:${agent.owner.toLowerCase()}`)
-          : Promise.resolve(null),
-      ]);
+    const [achievementData, attentionData, inboxData] = await Promise.all([
+      kv.get(`achievements:${agent.btcAddress}`),
+      kv.get(`attention:agent:${agent.btcAddress}`),
+      kv.get(`inbox:agent:${agent.btcAddress}`),
+    ]);
 
     const achievementIndex = safeParseJson<AchievementAgentIndex>(
       achievementData,
@@ -183,18 +183,53 @@ export async function DELETE(request: NextRequest) {
       "inbox index"
     );
 
+    // Fail if any index record exists but is corrupted — partial deletion is worse than no deletion
+    if (achievementData && !achievementIndex) {
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          details:
+            "Corrupted achievement index data; deletion cannot be safely completed.",
+        },
+        { status: 500 }
+      );
+    }
+    if (attentionData && !attentionIndex) {
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          details:
+            "Corrupted attention index data; deletion cannot be safely completed.",
+        },
+        { status: 500 }
+      );
+    }
+    if (inboxData && !inboxIndex) {
+      return NextResponse.json(
+        {
+          error: "Internal Server Error",
+          details:
+            "Corrupted inbox index data; deletion cannot be safely completed.",
+        },
+        { status: 500 }
+      );
+    }
+
     // Build categorized key lists
+    const coreKeys = [`btc:${agent.btcAddress}`];
+    if (
+      typeof agent.stxAddress === "string" &&
+      agent.stxAddress.trim() !== ""
+    ) {
+      coreKeys.push(`stx:${agent.stxAddress}`);
+    }
+
     const keysToDelete = {
-      core: [
-        `btc:${agent.btcAddress}`,
-        `stx:${agent.stxAddress}`,
-      ],
+      core: coreKeys,
       claims: [
         `claim:${agent.btcAddress}`,
         `claim-code:${agent.btcAddress}`,
-        ...(agent.owner && ownerReverseData
-          ? [`owner:${agent.owner.toLowerCase()}`]
-          : []),
+        ...(agent.owner ? [`owner:${agent.owner.toLowerCase()}`] : []),
       ],
       genesis: [`genesis:${agent.btcAddress}`],
       challenges: [
