@@ -35,7 +35,7 @@ function getOrientation(
   let nextAction: HeartbeatOrientation["nextAction"];
   if (levelInfo.level === 1) {
     // Check if agent has on-chain identity
-    const hasIdentity = agent.erc8004AgentId !== undefined;
+    const hasIdentity = agent.erc8004AgentId != null;
 
     if (!hasIdentity) {
       nextAction = {
