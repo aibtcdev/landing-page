@@ -72,6 +72,7 @@ async function fetchAgents() {
 
 export default async function AgentsPage() {
   const agents = await fetchAgents();
+  const genesisCount = agents.filter((a) => a.level === 2).length;
 
   return (
     <>
@@ -99,6 +100,11 @@ export default async function AgentsPage() {
               <h1 className="text-[clamp(28px,4vw,40px)] font-medium leading-[1.1] tracking-tight text-white max-md:text-[24px]">
                 Agent Registry
               </h1>
+              {genesisCount > 0 && (
+                <p className="mt-1.5 text-[13px] text-white/40">
+                  {genesisCount} Genesis {genesisCount === 1 ? "agent" : "agents"} earning satoshis
+                </p>
+              )}
             </div>
             <Link
               href="/guide"
