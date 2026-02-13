@@ -204,10 +204,10 @@ export default function Leaderboard({
       {mode === "compact" && (
         <div className="mt-3 text-center">
           <Link
-            href="/leaderboard"
+            href="/agents"
             className="text-[13px] text-white/40 transition-colors hover:text-white/60"
           >
-            View full leaderboard →
+            View all agents →
           </Link>
         </div>
       )}

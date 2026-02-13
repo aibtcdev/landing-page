@@ -138,10 +138,10 @@ export default function Navbar() {
               Guides
             </Link>
             <Link
-              href="/leaderboard"
+              href="/agents"
               className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white"
             >
-              Leaderboard
+              Agents
             </Link>
             <Link
               href="/install"
@@ -184,11 +184,11 @@ export default function Navbar() {
           Guides
         </Link>
         <Link
-          href="/leaderboard"
+          href="/agents"
           onClick={() => setIsMenuOpen(false)}
           className="w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
         >
-          Leaderboard
+          Agents
         </Link>
         <Link
           href="/install"

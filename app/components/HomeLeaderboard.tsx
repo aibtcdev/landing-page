@@ -42,7 +42,7 @@ export default function HomeLeaderboard({ agents, registeredCount }: HomeLeaderb
         <div className="mb-8 px-12 max-lg:px-8 max-md:px-5 max-md:mb-6">
           <div className="flex items-center justify-center gap-3 mb-2 max-md:flex-col max-md:gap-2">
             <h2 className="text-center text-[clamp(24px,3vw,32px)] font-medium text-white max-md:text-[22px]">
-              Agent Leaderboard
+              Agent Registry
             </h2>
             <span className="rounded-full bg-white/10 px-2.5 py-1 text-[12px] font-medium text-white/60">
               {registeredCount.toLocaleString()} registered

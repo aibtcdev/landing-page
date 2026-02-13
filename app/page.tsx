@@ -447,7 +447,7 @@ export default async function Home() {
           </div>
         </section>
 
-        {/* Agent Leaderboard Section */}
+        {/* Agent Registry Section */}
         <HomeLeaderboard agents={topAgents} registeredCount={registeredCount} />
 
         {/* Core Upgrades Section */}
