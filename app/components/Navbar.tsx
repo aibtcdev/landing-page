@@ -91,91 +91,126 @@ export default function Navbar() {
   }, [isMenuOpen]);
 
   return (
-    <header
-      className={`fixed left-0 right-0 top-0 z-50 px-12 pb-5 pt-5 transition-[background-color,border-color,padding,backdrop-filter] duration-200 ease-out max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
-        isScrolled
-          ? "border-b border-white/[0.06] bg-[rgba(10,10,10,0.75)] pb-4 pt-4 backdrop-blur-2xl backdrop-saturate-150 max-md:pb-3 max-md:pt-3"
-          : "border-b border-transparent"
-      }`}
-    >
-      <div className="mx-auto flex max-w-[1200px] items-center justify-between">
-        <Link href="/" className="group">
-          <Image
-            src={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
-            alt="AIBTC"
-            width={120}
-            height={32}
-            priority
-            className="h-8 w-auto transition-[filter] duration-200 group-hover:drop-shadow-[0_0_20px_rgba(247,147,26,0.5)] max-md:h-7"
-          />
+    <>
+      <header
+        className={`fixed left-0 right-0 top-0 z-[60] px-12 pb-5 pt-5 transition-[background-color,border-color,padding,backdrop-filter] duration-200 ease-out max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
+          isScrolled
+            ? "border-b border-white/[0.06] bg-[rgba(10,10,10,0.75)] pb-4 pt-4 backdrop-blur-2xl backdrop-saturate-150 max-md:pb-3 max-md:pt-3"
+            : "border-b border-transparent"
+        }`}
+      >
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between">
+          <Link href="/" className="group">
+            <Image
+              src={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
+              alt="AIBTC"
+              width={120}
+              height={32}
+              priority
+              className="h-8 w-auto transition-[filter] duration-200 group-hover:drop-shadow-[0_0_20px_rgba(247,147,26,0.5)] max-md:h-7"
+            />
+          </Link>
+
+          {/* Mobile Menu Button */}
+          <button
+            className="hidden size-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-[background-color,border-color] duration-200 hover:border-white/25 hover:bg-white/[0.12] max-md:flex"
+            aria-label={isMenuOpen ? "Close menu" : "Open menu"}
+            aria-expanded={isMenuOpen}
+            onClick={() => setIsMenuOpen(!isMenuOpen)}
+          >
+            <div className="flex size-5 flex-col items-center justify-center gap-[5px]">
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-[transform,opacity] duration-200 ${isMenuOpen ? "translate-y-[7px] rotate-45" : ""}`} />
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-opacity duration-200 ${isMenuOpen ? "opacity-0" : ""}`} />
+              <span className={`block h-[2px] w-5 rounded-full bg-white transition-[transform,opacity] duration-200 ${isMenuOpen ? "-translate-y-[7px] -rotate-45" : ""}`} />
+            </div>
+          </button>
+
+          {/* Desktop Navigation */}
+          <nav
+            className="flex items-center gap-6 max-md:hidden"
+            role="navigation"
+            aria-label="Main navigation"
+          >
+            <Link
+              href="/guide"
+              className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white"
+            >
+              Guides
+            </Link>
+            <Link
+              href="/leaderboard"
+              className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white"
+            >
+              Leaderboard
+            </Link>
+            <Link
+              href="/install"
+              className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white"
+            >
+              Install
+            </Link>
+
+            <div className="h-4 w-px bg-white/10" />
+
+            <div className="flex items-center gap-3">
+              <SocialLinks variant="header" />
+            </div>
+
+            <Link
+              href="/guide"
+              className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97]"
+            >
+              Get Started
+            </Link>
+          </nav>
+        </div>
+      </header>
+
+      {/* Mobile Menu Overlay — rendered outside header to avoid backdrop-filter containing block */}
+      <nav
+        className={`fixed inset-0 z-[55] hidden flex-col items-center justify-center gap-2 bg-black/98 backdrop-blur-[24px] transition-[opacity,visibility] duration-300 max-md:flex ${
+          isMenuOpen
+            ? "visible opacity-100"
+            : "invisible opacity-0 pointer-events-none"
+        }`}
+        role="navigation"
+        aria-label="Mobile navigation"
+      >
+        <Link
+          href="/guide"
+          onClick={() => setIsMenuOpen(false)}
+          className="w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
+        >
+          Guides
+        </Link>
+        <Link
+          href="/leaderboard"
+          onClick={() => setIsMenuOpen(false)}
+          className="w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
+        >
+          Leaderboard
+        </Link>
+        <Link
+          href="/install"
+          onClick={() => setIsMenuOpen(false)}
+          className="w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
+        >
+          Install
         </Link>
 
-        {/* Mobile Menu Button */}
-        <button
-          className={`relative z-[60] hidden size-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-[background-color,border-color] duration-200 hover:border-white/25 hover:bg-white/[0.12] max-md:flex`}
-          aria-label={isMenuOpen ? "Close menu" : "Open menu"}
-          aria-expanded={isMenuOpen}
-          onClick={() => setIsMenuOpen(!isMenuOpen)}
+        <div className="mt-4 flex items-center gap-4">
+          <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
+        </div>
+
+        <Link
+          href="/guide"
+          onClick={() => setIsMenuOpen(false)}
+          className="mt-2 inline-flex w-[280px] items-center justify-center rounded-xl bg-[#F7931A] py-3.5 text-base font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97]"
         >
-          <div className="flex size-5 flex-col items-center justify-center gap-[5px]">
-            <span className={`block h-[2px] w-5 rounded-full bg-white transition-[transform,opacity] duration-200 ${isMenuOpen ? "translate-y-[7px] rotate-45" : ""}`} />
-            <span className={`block h-[2px] w-5 rounded-full bg-white transition-opacity duration-200 ${isMenuOpen ? "opacity-0" : ""}`} />
-            <span className={`block h-[2px] w-5 rounded-full bg-white transition-[transform,opacity] duration-200 ${isMenuOpen ? "-translate-y-[7px] -rotate-45" : ""}`} />
-          </div>
-        </button>
-
-        {/* Navigation */}
-        <nav
-          className={`flex items-center gap-6 max-md:fixed max-md:inset-0 max-md:z-50 max-md:flex-col max-md:items-center max-md:justify-center max-md:gap-2 max-md:bg-black/98 max-md:backdrop-blur-[24px] max-md:transition-[opacity,visibility] max-md:duration-300 ${
-            isMenuOpen
-              ? "max-md:visible max-md:opacity-100"
-              : "max-md:invisible max-md:opacity-0 max-md:pointer-events-none"
-          }`}
-          role="navigation"
-          aria-label="Main navigation"
-        >
-          {/* Nav links */}
-          <Link
-            href="/guide"
-            onClick={() => setIsMenuOpen(false)}
-            className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:text-white/85 max-md:hover:border-white/20 max-md:hover:bg-white/10"
-          >
-            Guides
-          </Link>
-          <Link
-            href="/leaderboard"
-            onClick={() => setIsMenuOpen(false)}
-            className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:text-white/85 max-md:hover:border-white/20 max-md:hover:bg-white/10"
-          >
-            Leaderboard
-          </Link>
-          <Link
-            href="/install"
-            onClick={() => setIsMenuOpen(false)}
-            className="text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white max-md:w-[280px] max-md:rounded-xl max-md:border max-md:border-white/10 max-md:bg-white/5 max-md:px-6 max-md:py-4 max-md:text-center max-md:text-base max-md:text-white/85 max-md:hover:border-white/20 max-md:hover:bg-white/10"
-          >
-            Install
-          </Link>
-
-          {/* Separator */}
-          <div className="h-4 w-px bg-white/10 max-md:hidden" />
-
-          {/* Social icons - compact group */}
-          <div className="flex items-center gap-3 max-md:gap-4 max-md:mt-4">
-            <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
-          </div>
-
-          {/* CTA */}
-          <Link
-            href="/guide"
-            onClick={() => setIsMenuOpen(false)}
-            className="inline-flex items-center justify-center rounded-lg bg-[#F7931A] px-4 py-2 text-sm font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97] max-md:w-[280px] max-md:rounded-xl max-md:py-3.5 max-md:text-base max-md:mt-2"
-          >
-            Get Started
-          </Link>
-        </nav>
-      </div>
-    </header>
+          Get Started
+        </Link>
+      </nav>
+    </>
   );
 }
 
