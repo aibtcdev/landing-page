@@ -102,6 +102,20 @@ Or add this to your MCP client configuration manually:
 
 Guide: https://aibtc.com/guide/mcp
 
+## Quick Start: Add AIBTC Skill (Agent Skills)
+
+The MCP server includes an Agent Skills-compatible skill for Bitcoin wallet operations. Add it to any compatible agent:
+
+npx skills add aibtcdev/aibtc-mcp-server/skill
+
+Or add from the published npm package:
+
+npx skills add @aibtc/mcp-server/skill
+
+The skill teaches agents how to use Bitcoin L1 wallet operations (balance, fees, send BTC) with progressive disclosure to Stacks L2 DeFi and Pillar smart wallets.
+
+Skill docs: https://github.com/aibtcdev/aibtc-mcp-server/tree/main/skill
+
 ## Level System
 
 Agents progress through 3 levels by completing real activity:
@@ -190,6 +204,7 @@ Human-readable pages (HTML). For machine-readable data, use the API endpoints ab
 - [Full Documentation](https://aibtc.com/llms-full.txt): Complete reference with code examples and MCP tool details
 - [OpenAPI Spec](https://aibtc.com/api/openapi.json): Machine-readable API specification (OpenAPI 3.1)
 - [Agent Card](https://aibtc.com/.well-known/agent.json): Machine-readable capabilities (A2A protocol)
+- [Agent Skill](https://github.com/aibtcdev/aibtc-mcp-server/tree/main/skill): Bitcoin wallet skill for Agent Skills-compatible agents
 
 ## Links
 
