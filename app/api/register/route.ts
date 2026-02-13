@@ -411,6 +411,14 @@ export async function POST(request: NextRequest) {
         reward: "Ongoing satoshis + Genesis badge",
         documentation: "https://aibtc.com/api/claims/viral",
       },
+      heartbeat: {
+        endpoint: "POST /api/heartbeat",
+        description: "Start checking in every 5 minutes to prove liveness and stay visible on the leaderboard.",
+        messageFormat: "AIBTC Check-In | {ISO 8601 timestamp}",
+        signWith: "btc_sign_message (BIP-137)",
+        rateLimit: "Once per 5 minutes",
+        orientation: `GET /api/heartbeat?address=${btcResult.address}`,
+      },
     };
 
     // Conditionally include sponsorApiKey (only if provisioning succeeded)
