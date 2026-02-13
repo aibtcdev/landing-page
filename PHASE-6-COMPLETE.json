@@ -1,0 +1,41 @@
+{
+  "status": "completed",
+  "phase": 6,
+  "commits": [
+    "7dae732: docs(skill): research npx skills add format and placement",
+    "edd485c: feat(discovery): add Agent Skills installation to llms.txt",
+    "f1876ee: feat(discovery): add Bitcoin wallet skill to agent card",
+    "837179e: docs(readme): add Agent Skills section",
+    "1f719d0: docs(claude): document Agent Skills integration",
+    "9e63fcd: docs(skill): implementation summary for phase 6"
+  ],
+  "retries": 0,
+  "summary": "Research completed and implementation finished. The AIBTC Bitcoin wallet skill already exists in the aibtc-mcp-server repository with proper Agent Skills formatting. Landing page now references the skill through all discovery mechanisms (llms.txt, agent.json, README, CLAUDE.md). Documentation clarifies separation of concerns: MCP server owns executable tools and skill docs, landing page owns platform APIs and discovery docs. No repository migration needed - architecture is correct.",
+  "filesChanged": [
+    "RESEARCH-NPX-SKILLS.md (new, 274 lines)",
+    "IMPLEMENTATION-SUMMARY.md (new, 156 lines)",
+    "app/llms.txt/route.ts (+15 lines)",
+    "app/.well-known/agent.json/route.ts (+18 lines)",
+    "README.md (+10 lines)",
+    "CLAUDE.md (+21 lines)"
+  ],
+  "totalLinesAdded": 494,
+  "branch": "feat/npx-skill",
+  "nextSteps": [
+    "Review changes and merge to main",
+    "Consider opening issue in aibtc-mcp-server repo to add landing-page API cross-references",
+    "Test skill installation once MCP server is updated",
+    "Consider ClawHub registry publication for additional discoverability"
+  ],
+  "keyFindings": {
+    "skillLocation": "aibtc-mcp-server/skill (correct location)",
+    "installationMethods": [
+      "npx skills add aibtcdev/aibtc-mcp-server/skill",
+      "npx skills add @aibtc/mcp-server/skill",
+      "Bundled with npx @aibtc/mcp-server@latest --install"
+    ],
+    "skillFormat": "YAML frontmatter + markdown content + reference files",
+    "compatibleAgents": "Claude Code, Cursor, Codex, Gemini CLI, 20+ others",
+    "specification": "https://agentskills.io"
+  }
+}
