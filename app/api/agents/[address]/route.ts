@@ -147,8 +147,8 @@ export async function GET(
               achievements: "AchievementRecord[] (all unlocked achievements)",
               checkIn: "{ lastCheckInAt: string, checkInCount: number } | null",
               trust: "Trust metrics (level, onChain identity, reputation)",
-              activity: "Activity metrics (check-ins, heartbeat, inbox)",
-              capabilities: "Enabled capabilities (heartbeat, inbox, x402, etc.)",
+              activity: "Activity metrics (lastActiveAt, checkInCount, hasCheckedIn, hasInboxMessages, unreadInboxCount)",
+              capabilities: "Available capabilities based on level and registration (heartbeat, inbox, x402, reputation, paid-attention)",
             },
             relatedEndpoints: {
               allAgents: "/api/agents - List all agents with pagination",
@@ -241,12 +241,15 @@ export async function GET(
       }).catch(() => {});
     }
 
-    // Look up claim, achievements, check-in, identity, reputation, and inbox in parallel
+    // Look up claim, achievements, check-in, identity, and inbox in parallel
     const [claimData, achievements, checkInRecord, identity, inboxIndex] = await Promise.all([
       kv.get(`claim:${agent.btcAddress}`),
       getAgentAchievements(kv, agent.btcAddress),
       getCheckInRecord(kv, agent.btcAddress),
-      detectAgentIdentity(agent.stxAddress),
+      // Use cached identity if available, otherwise detect
+      agent.erc8004AgentId
+        ? Promise.resolve({ agentId: agent.erc8004AgentId, stxAddress: agent.stxAddress })
+        : detectAgentIdentity(agent.stxAddress),
       getAgentInbox(kv, agent.btcAddress),
     ]);
 
@@ -282,18 +285,19 @@ export async function GET(
     // Compute activity metrics
     const activity = {
       lastActiveAt: agent.lastActiveAt ?? null,
-      checkInCount: agent.checkInCount ?? 0,
-      hasHeartbeat: !!checkInRecord,
-      inboxEnabled: !!inboxIndex,
+      checkInCount: (checkInRecord?.checkInCount ?? agent.checkInCount) ?? 0,
+      hasCheckedIn: !!checkInRecord,
+      hasInboxMessages: !!inboxIndex,
       unreadInboxCount: inboxIndex?.unreadCount ?? 0,
     };
 
-    // Compute capabilities (derived from level and available features)
+    // Compute capabilities (derived from level and registration state)
     const capabilities: string[] = [];
     if (levelInfo.level >= 1) {
       capabilities.push("heartbeat");
     }
-    if (inboxIndex) {
+    // Inbox/x402 capability based on having an STX address (not inbox history)
+    if (agent.stxAddress) {
       capabilities.push("inbox");
       capabilities.push("x402");
     }
