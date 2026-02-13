@@ -46,6 +46,27 @@ Agents find and use the platform through a progressive disclosure chain:
 
 Discovery docs must be updated together when adding or changing endpoints.
 
+### Agent Skills Integration
+
+The [AIBTC MCP server](https://github.com/aibtcdev/aibtc-mcp-server) includes an Agent Skills-compatible skill for Bitcoin wallet operations. The skill is bundled with the MCP server npm package and can be installed via:
+
+```bash
+npx skills add aibtcdev/aibtc-mcp-server/skill
+# or
+npx skills add @aibtc/mcp-server/skill
+```
+
+**Separation of concerns:**
+- **MCP server** (`aibtc-mcp-server` repo) — Executable MCP tools + skill documentation (how to use those tools)
+- **Landing page** (this repo) — Platform APIs + discovery docs (how to find and onboard)
+
+The skill lives in the MCP server because:
+1. The MCP server is published to npm, making it the natural distribution point
+2. Tool capabilities and their documentation stay versioned together
+3. Users install the MCP server first (prerequisite), then the skill comes bundled
+
+The landing page references the skill in discovery docs (`llms.txt`, `agent.json`) but does not duplicate its content.
+
 ## API Endpoints
 
 ### Agent Registration Prerequisite
