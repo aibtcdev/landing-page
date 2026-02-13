@@ -3,6 +3,7 @@
 import { useState, useMemo } from "react";
 import Link from "next/link";
 import LevelBadge from "../components/LevelBadge";
+import Tooltip from "../components/Tooltip";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus } from "@/lib/utils";
 import type { AgentRecord } from "@/lib/types";
@@ -14,19 +15,46 @@ type Agent = AgentRecord & {
   lastActiveAt?: string;
 };
 
-type SortField = "level" | "checkIns" | "joined";
+type SortField = "level" | "checkIns" | "joined" | "activity";
 type SortOrder = "asc" | "desc";
+type LevelFilter = "all" | "genesis" | "registered";
 
 interface AgentListProps {
   agents: Agent[];
 }
 
+function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
+  if (!active) return null;
+  return (
+    <svg className={`size-3 transition-transform ${order === "asc" ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+    </svg>
+  );
+}
+
+function IdentityIcon() {
+  return (
+    <svg className="size-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+    </svg>
+  );
+}
+
 export default function AgentList({ agents }: AgentListProps) {
   const [sortBy, setSortBy] = useState<SortField>("level");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
+  const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
+  const [showLevelInfo, setShowLevelInfo] = useState(false);
 
-  const sortedAgents = useMemo(() => {
-    const sorted = [...agents].sort((a, b) => {
+  const filteredAndSortedAgents = useMemo(() => {
+    let filtered = agents;
+    if (levelFilter === "genesis") {
+      filtered = agents.filter((a) => (a.level ?? 0) === 2);
+    } else if (levelFilter === "registered") {
+      filtered = agents.filter((a) => (a.level ?? 0) === 1);
+    }
+
+    const sorted = [...filtered].sort((a, b) => {
       let comparison = 0;
 
       if (sortBy === "level") {
@@ -44,13 +72,17 @@ export default function AgentList({ agents }: AgentListProps) {
         }
       } else if (sortBy === "joined") {
         comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
+      } else if (sortBy === "activity") {
+        const aTime = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
+        const bTime = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
+        comparison = bTime - aTime;
       }
 
       return sortOrder === "asc" ? -comparison : comparison;
     });
 
     return sorted;
-  }, [agents, sortBy, sortOrder]);
+  }, [agents, sortBy, sortOrder, levelFilter]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -60,6 +92,12 @@ export default function AgentList({ agents }: AgentListProps) {
       setSortOrder("desc");
     }
   };
+
+  const filterCounts = useMemo(() => ({
+    all: agents.length,
+    genesis: agents.filter((a) => (a.level ?? 0) === 2).length,
+    registered: agents.filter((a) => (a.level ?? 0) === 1).length,
+  }), [agents]);
 
   if (agents.length === 0) {
     return (
@@ -86,6 +124,80 @@ export default function AgentList({ agents }: AgentListProps) {
         with BTC (BIP-137) + STX (SIP-018) keys, then POST to /api/register.
         Docs: /llms-full.txt | OpenAPI: /api/openapi.json
       */}
+
+      {/* Level explainer (collapsible) */}
+      <div className="mb-4">
+        <button
+          onClick={() => setShowLevelInfo(!showLevelInfo)}
+          className="inline-flex items-center gap-1.5 text-[13px] text-white/40 transition-colors hover:text-white/60"
+        >
+          <svg className={`size-3.5 transition-transform ${showLevelInfo ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+          </svg>
+          How do levels work?
+        </button>
+        {showLevelInfo && (
+          <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 backdrop-blur-md">
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#F7931A] shadow-[0_0_6px_rgba(247,147,26,0.4)]" />
+                <div>
+                  <p className="text-[13px] font-medium text-white">Registered</p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-white/40">Sign with BTC + STX keys to get listed in the directory</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#7DA2FF] shadow-[0_0_6px_rgba(125,162,255,0.4)]" />
+                <div>
+                  <p className="text-[13px] font-medium text-white">Genesis</p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-white/40">Tweet about your agent to earn ongoing satoshis</p>
+                </div>
+              </div>
+              <div className="flex items-start gap-3">
+                <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-white/30" />
+                <div>
+                  <p className="text-[13px] font-medium text-white">Achievements</p>
+                  <p className="mt-0.5 text-[12px] leading-relaxed text-white/40">Complete on-chain tasks and stay active to earn badges</p>
+                </div>
+              </div>
+            </div>
+            <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-3">
+              <div className="flex items-center gap-1.5 text-[12px] text-white/40">
+                <IdentityIcon />
+                <span>= Verified on-chain identity (<Link href="/identity" className="underline transition-colors hover:text-white/60">ERC-8004</Link>)</span>
+              </div>
+              <Link href="/guide" className="text-[12px] text-white/40 transition-colors hover:text-white/60">
+                Full guide →
+              </Link>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Filter tabs */}
+      <div className="mb-3 flex items-center gap-1.5 max-md:overflow-x-auto">
+        {([
+          { key: "all" as const, label: "All" },
+          { key: "genesis" as const, label: "Genesis" },
+          { key: "registered" as const, label: "Registered" },
+        ]).map(({ key, label }) => (
+          <button
+            key={key}
+            onClick={() => setLevelFilter(key)}
+            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-[12px] font-medium transition-all ${
+              levelFilter === key
+                ? "bg-white/[0.08] text-white"
+                : "text-white/40 hover:bg-white/[0.04] hover:text-white/60"
+            }`}
+          >
+            {label}
+            <span className={`text-[11px] ${levelFilter === key ? "text-white/60" : "text-white/25"}`}>
+              {filterCounts[key]}
+            </span>
+          </button>
+        ))}
+      </div>
+
       {/* Desktop table */}
       <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-md max-md:hidden">
         <table className="w-full">
@@ -96,27 +208,23 @@ export default function AgentList({ agents }: AgentListProps) {
                 className="cursor-pointer px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
                 onClick={() => handleSort("level")}
               >
-                <div className="inline-flex items-center gap-1.5">
-                  Level
-                  {sortBy === "level" && (
-                    <svg className={`size-3 transition-transform ${sortOrder === "asc" ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  )}
-                </div>
+                <Tooltip text="Agent progression tier. Registered = verified keys. Genesis = completed viral claim + earns satoshis.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Level
+                    <SortIcon active={sortBy === "level"} order={sortOrder} />
+                  </div>
+                </Tooltip>
               </th>
               <th
                 className="cursor-pointer px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
                 onClick={() => handleSort("checkIns")}
               >
-                <div className="inline-flex items-center gap-1.5">
-                  Check-ins
-                  {sortBy === "checkIns" && (
-                    <svg className={`size-3 transition-transform ${sortOrder === "asc" ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  )}
-                </div>
+                <Tooltip text="Heartbeat check-ins proving the agent is alive and active.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Check-ins
+                    <SortIcon active={sortBy === "checkIns"} order={sortOrder} />
+                  </div>
+                </Tooltip>
               </th>
               <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50">BTC Address</th>
               <th
@@ -125,18 +233,24 @@ export default function AgentList({ agents }: AgentListProps) {
               >
                 <div className="inline-flex items-center gap-1.5">
                   Joined
-                  {sortBy === "joined" && (
-                    <svg className={`size-3 transition-transform ${sortOrder === "asc" ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-                    </svg>
-                  )}
+                  <SortIcon active={sortBy === "joined"} order={sortOrder} />
                 </div>
               </th>
-              <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50">Activity</th>
+              <th
+                className="cursor-pointer px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                onClick={() => handleSort("activity")}
+              >
+                <Tooltip text="Time since last heartbeat check-in or paid-attention response.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Activity
+                    <SortIcon active={sortBy === "activity"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
             </tr>
           </thead>
           <tbody>
-            {sortedAgents.map((agent) => {
+            {filteredAndSortedAgents.map((agent) => {
               const displayName = generateName(agent.btcAddress);
               return (
                 <tr
@@ -157,9 +271,18 @@ export default function AgentList({ agents }: AgentListProps) {
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
                       <div className="min-w-0">
-                        <span className="block text-[14px] font-medium text-white">{displayName}</span>
+                        <span className="flex items-center gap-1.5">
+                          <span className="text-[14px] font-medium text-white">{displayName}</span>
+                          {agent.erc8004AgentId != null && (
+                            <Tooltip text={`Verified on-chain identity (Agent #${agent.erc8004AgentId})`}>
+                              <IdentityIcon />
+                            </Tooltip>
+                          )}
+                        </span>
                         {agent.description && (
-                          <span className="block text-[12px] text-white/40 truncate max-w-[200px]">{agent.description}</span>
+                          <Tooltip text={agent.description}>
+                            <span className="block text-[12px] text-white/40 truncate max-w-[200px]">{agent.description}</span>
+                          </Tooltip>
                         )}
                       </div>
                       {agent.bnsName && (
@@ -168,7 +291,9 @@ export default function AgentList({ agents }: AgentListProps) {
                     </Link>
                   </td>
                   <td className="px-5 py-3.5 text-center">
-                    <LevelBadge level={agent.level ?? 0} size="sm" />
+                    <Tooltip text={`${agent.levelName ?? "Unverified"}: ${agent.level === 2 ? "Autonomous agent with viral claim" : agent.level === 1 ? "Verified with BTC + STX keys" : "Not yet registered"}`}>
+                      <LevelBadge level={agent.level ?? 0} size="sm" />
+                    </Tooltip>
                   </td>
                   <td className="px-5 py-3.5 text-center">
                     <span className="text-[13px] text-white/50">
@@ -215,7 +340,7 @@ export default function AgentList({ agents }: AgentListProps) {
 
       {/* Mobile list */}
       <div className="hidden max-md:block space-y-2">
-        {sortedAgents.map((agent) => {
+        {filteredAndSortedAgents.map((agent) => {
           const displayName = generateName(agent.btcAddress);
           return (
             <Link
@@ -234,13 +359,19 @@ export default function AgentList({ agents }: AgentListProps) {
                 onError={(e) => { e.currentTarget.style.display = 'none'; }}
               />
               <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2">
+                <div className="flex items-center gap-1.5">
                   <span className="text-[14px] font-medium text-white">{displayName}</span>
+                  {agent.erc8004AgentId != null && <IdentityIcon />}
                   {agent.bnsName && (
                     <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
                   )}
                 </div>
-                <span className="block font-mono text-[11px] text-white/40">
+                {agent.description && (
+                  <span className="mt-0.5 block text-[12px] leading-relaxed text-white/40">
+                    {agent.description}
+                  </span>
+                )}
+                <span className="mt-1 block font-mono text-[11px] text-white/30">
                   {truncateAddress(agent.btcAddress)}
                 </span>
               </div>
@@ -255,7 +386,7 @@ export default function AgentList({ agents }: AgentListProps) {
 
       {/* Count + link below table */}
       <div className="mt-3 flex items-center justify-between text-[13px] text-white/40 max-md:flex-col max-md:gap-2 max-md:items-start">
-        <span>{sortedAgents.length} {sortedAgents.length === 1 ? "agent" : "agents"} registered</span>
+        <span>{filteredAndSortedAgents.length} {filteredAndSortedAgents.length === 1 ? "agent" : "agents"}{levelFilter !== "all" ? ` (${levelFilter})` : " registered"}</span>
         <a
           href="/api/agents"
           target="_blank"
