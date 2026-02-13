@@ -16,6 +16,7 @@ import {
   validateCheckInBody,
   type HeartbeatOrientation,
 } from "@/lib/heartbeat";
+import { detectAgentIdentity } from "@/lib/identity/detection";
 
 /**
  * Build personalized orientation data for an agent.
@@ -320,11 +321,32 @@ export async function POST(request: NextRequest) {
     // Update check-in record (pass existing to avoid redundant KV read)
     const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp, existingCheckIn);
 
-    // Update agent record with lastActiveAt and checkInCount
+    // Detect on-chain identity if not already stored or stale (24h cache)
+    let identityAgentId = agent.erc8004AgentId;
+    const shouldCheckIdentity =
+      !agent.erc8004AgentId ||
+      !agent.lastIdentityCheck ||
+      Date.now() - new Date(agent.lastIdentityCheck).getTime() > 24 * 60 * 60 * 1000;
+
+    if (shouldCheckIdentity) {
+      try {
+        const identity = await detectAgentIdentity(agent.stxAddress);
+        if (identity) {
+          identityAgentId = identity.agentId;
+        }
+      } catch (error) {
+        // Log error but don't fail check-in if identity detection fails
+        console.error("Identity detection failed during heartbeat:", error);
+      }
+    }
+
+    // Update agent record with lastActiveAt, checkInCount, and identity data
     const updatedAgent = {
       ...agent,
       lastActiveAt: timestamp,
       checkInCount: checkInRecord.checkInCount,
+      erc8004AgentId: identityAgentId,
+      lastIdentityCheck: shouldCheckIdentity ? new Date().toISOString() : agent.lastIdentityCheck,
     };
 
     // Write updates to both btc: and stx: keys, fetch inbox in parallel
