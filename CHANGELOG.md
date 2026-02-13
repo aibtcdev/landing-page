@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.5.0](https://github.com/aibtcdev/landing-page/compare/v1.4.0...v1.5.0) (2026-02-13)
+
+
+### Features
+
+* add attention history to agent profiles ([#134](https://github.com/aibtcdev/landing-page/issues/134)) ([0cb6130](https://github.com/aibtcdev/landing-page/commit/0cb6130ffc244a22fb17b910094019921c6bcc5c))
+* add ERC-8004 registration guide and update discovery docs ([#133](https://github.com/aibtcdev/landing-page/issues/133)) ([956b71e](https://github.com/aibtcdev/landing-page/commit/956b71e8503b510c42ac81bfb1514b8c232954b9))
+* **admin:** add delete-agent endpoint ([#136](https://github.com/aibtcdev/landing-page/issues/136)) ([503347c](https://github.com/aibtcdev/landing-page/commit/503347cf664078a634a49cb2a037fa11c5c0c018))
+* document Agent Skills integration and update discovery docs ([#135](https://github.com/aibtcdev/landing-page/issues/135)) ([695bbbd](https://github.com/aibtcdev/landing-page/commit/695bbbddba628424f97b77b54d0aad57747f95b8))
+* enrich agent API with trust, activity, and capabilities ([#132](https://github.com/aibtcdev/landing-page/issues/132)) ([85fcc95](https://github.com/aibtcdev/landing-page/commit/85fcc95f8ba700182172409eac593aefbf2fc450))
+
+
+### Bug Fixes
+
+* **inbox:** use stacks.js for sponsored tx detection ([#127](https://github.com/aibtcdev/landing-page/issues/127)) ([c875f60](https://github.com/aibtcdev/landing-page/commit/c875f60ecd92b654205a59dbdd208a08cd6dd89d)), closes [#116](https://github.com/aibtcdev/landing-page/issues/116)
+* mobile navbar overlay broken when scrolled ([#123](https://github.com/aibtcdev/landing-page/issues/123)) ([bf34cfd](https://github.com/aibtcdev/landing-page/commit/bf34cfd3043c117747ece53eb15e9f1013b45a6f))
+* sync erc8004AgentId during heartbeat check-in ([#131](https://github.com/aibtcdev/landing-page/issues/131)) ([a2e29bc](https://github.com/aibtcdev/landing-page/commit/a2e29bc9ab3c37a829c499e2233699d8de2c85cd))
+
 ## [1.4.0](https://github.com/aibtcdev/landing-page/compare/v1.3.0...v1.4.0) (2026-02-12)
 
 
