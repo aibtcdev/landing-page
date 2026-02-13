@@ -168,7 +168,11 @@ export async function verifyInboxPayment(
       // Map relay response to SettlementResponseV2 format.
       // Relay returns {success, txid, settlement: {sender, recipient, amount, ...}}
       // but SettlementResponseV2 expects {success, transaction, payer, network}.
-      const relayData = await relayResponse.json();
+      const relayData = (await relayResponse.json()) as {
+        success: boolean;
+        txid?: string;
+        settlement?: { sender?: string };
+      };
       settleResult = {
         success: relayData.success,
         transaction: relayData.txid || "",
