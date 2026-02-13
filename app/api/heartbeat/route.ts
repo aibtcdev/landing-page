@@ -38,7 +38,14 @@ function getOrientation(
       endpoint: "POST /api/claims/viral",
     };
   } else if (levelInfo.level >= 2) {
-    if (unreadCount > 0) {
+    if (!agent.checkInCount) {
+      nextAction = {
+        step: "Start Heartbeat Loop",
+        description:
+          "You have 0 check-ins. Start checking in every 5 minutes to prove liveness and earn engagement achievements. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
+        endpoint: "POST /api/heartbeat",
+      };
+    } else if (unreadCount > 0) {
       nextAction = {
         step: "Check Inbox",
         description: `You have ${unreadCount} unread message${unreadCount === 1 ? "" : "s"}. Check your inbox at /api/inbox/${agent.btcAddress}`,
