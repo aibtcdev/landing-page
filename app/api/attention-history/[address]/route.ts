@@ -49,12 +49,16 @@ export async function GET(
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const { address } = await context.params;
 
-    // Parse query params
+    // Parse query params with validation
     const { searchParams } = new URL(request.url);
-    const limit = Math.min(
-      parseInt(searchParams.get("limit") || "20", 10),
-      100
-    );
+    const limitParam = searchParams.get("limit");
+    let limit = 20;
+    if (limitParam !== null) {
+      const parsedLimit = parseInt(limitParam, 10);
+      if (!Number.isNaN(parsedLimit) && parsedLimit > 0) {
+        limit = Math.min(parsedLimit, 100);
+      }
+    }
 
     // Resolve agent by BTC or STX address
     const agent = await lookupAgent(kv, address);
@@ -79,7 +83,20 @@ export async function GET(
       });
     }
 
-    const index = JSON.parse(indexData) as AttentionAgentIndex;
+    let index: AttentionAgentIndex;
+    try {
+      index = JSON.parse(indexData) as AttentionAgentIndex;
+    } catch (e) {
+      console.error(
+        `Failed to parse AttentionAgentIndex for ${agent.btcAddress}:`,
+        e
+      );
+      return NextResponse.json(
+        { error: "Failed to parse agent attention index" },
+        { status: 500 }
+      );
+    }
+
     const messageIds = index.messageIds || [];
 
     if (messageIds.length === 0) {
@@ -95,21 +112,26 @@ export async function GET(
     // Process in reverse order (newest first)
     const reversedIds = [...messageIds].reverse().slice(0, limit);
 
-    const historyItems: AttentionHistoryItem[] = [];
-
-    for (const messageId of reversedIds) {
-      // Fetch response
+    // Parallelize KV fetches for all messageIds
+    const fetchPromises = reversedIds.map(async (messageId) => {
       const responseKey = `${KV_PREFIXES.RESPONSE}${messageId}:${agent.btcAddress}`;
-      const responseData = await kv.get(responseKey);
-
-      // Fetch payout (may not exist)
       const payoutKey = `${KV_PREFIXES.PAYOUT}${messageId}:${agent.btcAddress}`;
-      const payoutData = await kv.get(payoutKey);
-
-      // Fetch message content
       const messageKey = `${KV_PREFIXES.MESSAGE}${messageId}`;
-      const messageData = await kv.get(messageKey);
 
+      const [responseData, payoutData, messageData] = await Promise.all([
+        kv.get(responseKey),
+        kv.get(payoutKey),
+        kv.get(messageKey),
+      ]);
+
+      return { messageId, responseData, payoutData, messageData };
+    });
+
+    const fetchResults = await Promise.all(fetchPromises);
+    const historyItems: AttentionHistoryItem[] = [];
+    let failedParseCount = 0;
+
+    for (const { messageId, responseData, payoutData, messageData } of fetchResults) {
       if (!responseData) continue; // Skip if response is missing
 
       try {
@@ -145,9 +167,16 @@ export async function GET(
           });
         }
       } catch (e) {
+        failedParseCount++;
         console.error(`Failed to parse attention data for ${messageId}:`, e);
         continue;
       }
+    }
+
+    if (failedParseCount > 0) {
+      console.warn(
+        `Failed to parse ${failedParseCount} attention records for ${agent.btcAddress}`
+      );
     }
 
     // Sort by timestamp (newest first)

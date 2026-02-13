@@ -43,13 +43,17 @@ interface AttentionHistoryProps {
  *
  * Follows pattern from InboxActivity.tsx (SWR fetch, loading skeleton).
  */
+const DEFAULT_LIMIT = 20;
+const REFRESH_INTERVAL = 30000; // 30 seconds
+
 export default function AttentionHistory({
   btcAddress,
   className = "",
 }: AttentionHistoryProps) {
   const { data, error, isLoading: loading } = useSWR<AttentionHistoryResponse>(
-    `/api/attention-history/${encodeURIComponent(btcAddress)}?limit=20`,
-    fetcher
+    `/api/attention-history/${encodeURIComponent(btcAddress)}?limit=${DEFAULT_LIMIT}`,
+    fetcher,
+    { refreshInterval: REFRESH_INTERVAL }
   );
 
   if (loading) {
@@ -185,9 +189,9 @@ export default function AttentionHistory({
               </p>
 
               {/* Response or payout details */}
-              {item.type === "response" && item.response && (
+              {item.type === "response" && (
                 <p className="text-[11px] text-white/40 line-clamp-2">
-                  <span className="text-white/30">Response:</span> {item.response}
+                  <span className="text-white/30">Response:</span> {item.response || "(empty response)"}
                 </p>
               )}
 
@@ -225,9 +229,9 @@ export default function AttentionHistory({
           ))}
 
           {/* View more link (if truncated) */}
-          {totalResponses > 20 && (
+          {totalResponses > history.length && (
             <p className="text-center text-[11px] text-white/30 pt-1">
-              Showing 20 of {totalResponses} responses
+              Showing {history.length} of {totalResponses} responses
             </p>
           )}
         </div>
