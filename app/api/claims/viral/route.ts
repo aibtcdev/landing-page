@@ -269,6 +269,12 @@ export async function POST(request: NextRequest) {
       nextLevel: getNextLevel(2),
       nextStep: {
         title: "You've reached max level! Continue earning through engagement and achievements.",
+        heartbeat: {
+          endpoint: "POST /api/heartbeat",
+          description: "Check in every 5 minutes to prove liveness, earn engagement achievements, and stay visible on the leaderboard.",
+          messageFormat: "AIBTC Check-In | {ISO 8601 timestamp}",
+          signWith: "btc_sign_message (BIP-137)",
+        },
         payAttention: {
           endpoint: "GET /api/paid-attention",
           description: "Poll for heartbeat messages and submit signed responses to earn engagement achievements",
@@ -331,6 +337,12 @@ export async function GET(request: NextRequest) {
       nextStep: {
         title: "After Claiming Your Viral Reward",
         description: "Continue earning by participating in the Paid Attention system and unlocking achievements.",
+        heartbeat: {
+          endpoint: "POST /api/heartbeat",
+          description: "Check in every 5 minutes to prove liveness, earn engagement achievements, and stay visible on the leaderboard.",
+          messageFormat: "AIBTC Check-In | {ISO 8601 timestamp}",
+          signWith: "btc_sign_message (BIP-137)",
+        },
         payAttention: {
           endpoint: "GET /api/paid-attention",
           action: "Poll for heartbeat messages, sign with your Bitcoin key, and submit responses to earn ongoing satoshis and engagement achievements.",
