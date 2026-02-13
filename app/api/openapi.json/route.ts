@@ -1118,6 +1118,206 @@ export function GET() {
           ],
         },
       },
+      "/api/admin/delete-agent": {
+        get: {
+          operationId: "getDeleteAgentInstructions",
+          summary: "Get delete-agent endpoint documentation",
+          description:
+            "Returns self-documenting JSON explaining how to use the delete-agent " +
+            "admin endpoint. Lists all KV key patterns that will be deleted.",
+          responses: {
+            "200": {
+              description:
+                "Endpoint documentation with deleted key patterns and example responses",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    description:
+                      "Self-documenting endpoint description and usage guide",
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid X-Admin-Key header",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+          },
+          security: [
+            {
+              AdminKey: [],
+            },
+          ],
+        },
+        delete: {
+          operationId: "deleteAgent",
+          summary: "Delete an agent and all associated KV data",
+          description:
+            "Admin endpoint to fully remove an agent from the system. Use this for " +
+            "lost keys, test cleanup, or complete account removal. Deletes agent records, " +
+            "claims, achievements, attention responses, inbox messages, and all related data " +
+            "across 7 KV key categories.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["address"],
+                  properties: {
+                    address: {
+                      type: "string",
+                      description:
+                        "BTC (bc1...) or STX (SP...) address to delete. Will be resolved to full AgentRecord.",
+                      examples: ["bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq"],
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description:
+                "Agent deleted successfully with categorized summary of deleted keys",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["success", "address", "deleted", "summary"],
+                    properties: {
+                      success: {
+                        type: "boolean",
+                        const: true,
+                      },
+                      address: {
+                        type: "string",
+                        description: "BTC address of deleted agent",
+                      },
+                      deleted: {
+                        type: "object",
+                        description:
+                          "Categorized lists of deleted KV keys by type",
+                        properties: {
+                          core: {
+                            type: "array",
+                            items: { type: "string" },
+                            description:
+                              "Core agent records (btc:..., stx:...)",
+                          },
+                          claims: {
+                            type: "array",
+                            items: { type: "string" },
+                            description:
+                              "Claim records (claim:..., claim-code:..., owner:...)",
+                          },
+                          genesis: {
+                            type: "array",
+                            items: { type: "string" },
+                            description: "Genesis payout records (genesis:...)",
+                          },
+                          challenges: {
+                            type: "array",
+                            items: { type: "string" },
+                            description:
+                              "Challenge and rate limit records (challenge:..., checkin:..., ratelimit:...)",
+                          },
+                          achievements: {
+                            type: "array",
+                            items: { type: "string" },
+                            description:
+                              "Achievement records (achievements:..., achievement:...:...)",
+                          },
+                          attention: {
+                            type: "array",
+                            items: { type: "string" },
+                            description:
+                              "Paid attention records (attention:agent:..., attention:response:...:..., attention:payout:...:...)",
+                          },
+                          inbox: {
+                            type: "array",
+                            items: { type: "string" },
+                            description:
+                              "Inbox and message records (inbox:agent:..., inbox:message:..., inbox:reply:...)",
+                          },
+                        },
+                      },
+                      summary: {
+                        type: "object",
+                        required: ["totalKeys", "categories"],
+                        properties: {
+                          totalKeys: {
+                            type: "integer",
+                            description: "Total number of keys deleted",
+                          },
+                          categories: {
+                            type: "object",
+                            description:
+                              "Count of deleted keys per category (core, claims, genesis, challenges, achievements, attention, inbox)",
+                            additionalProperties: { type: "integer" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid request body or missing address field",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing or invalid X-Admin-Key header",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found for specified address",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "500": {
+              description: "Server error during deletion",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+          },
+          security: [
+            {
+              AdminKey: [],
+            },
+          ],
+        },
+      },
       "/api/claims/code": {
         get: {
           operationId: "validateClaimCode",

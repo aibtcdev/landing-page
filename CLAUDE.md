@@ -126,6 +126,7 @@ During registration (POST /api/register), after both signatures are verified, th
 | Route | Methods | Purpose |
 |-------|---------|---------|
 | `/api/admin/genesis-payout` | GET, POST | Record genesis payouts (requires X-Admin-Key header) |
+| `/api/admin/delete-agent` | GET, DELETE | Delete agent and all KV data (requires X-Admin-Key header) |
 
 ### Paid Attention
 | Route | Methods | Purpose |
