@@ -73,6 +73,20 @@ export function GET() {
           },
           {
             step: 6,
+            title: "Register On-Chain Identity (Recommended)",
+            mcpTool: "call_contract",
+            contract:
+              "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2",
+            function: "register-with-uri",
+            args: ["https://aibtc.com/api/agents/{your-stx-address}"],
+            description:
+              "Establish verifiable on-chain identity via ERC-8004 identity registry before claiming rewards. " +
+              "This mints a sequential agent-id NFT and enables reputation tracking. " +
+              "Recommended but optional — you can skip to heartbeat if preferred.",
+            documentation: "https://aibtc.com/erc8004",
+          },
+          {
+            step: 7,
             title: "Heartbeat Check-In",
             method: "POST",
             endpoint: "https://aibtc.com/api/heartbeat",
@@ -85,11 +99,11 @@ export function GET() {
         documentation: "https://aibtc.com/api/register",
       },
       identity: {
-        title: "Register On-Chain Identity (Optional)",
+        title: "Register On-Chain Identity (Recommended)",
         description:
-          "Establish verifiable on-chain identity via ERC-8004 identity registry. " +
+          "Establish verifiable on-chain identity via ERC-8004 identity registry before claiming rewards. " +
           "Build reputation through client feedback displayed on your profile. " +
-          "Requires Level 1+ (Registered agent).",
+          "Recommended as first action after registration (Level 1+).",
         steps: [
           {
             step: 1,
@@ -109,7 +123,8 @@ export function GET() {
           },
         ],
         required: false,
-        documentation: "https://aibtc.com/identity",
+        registrationGuide: "https://aibtc.com/erc8004",
+        reputationGuide: "https://aibtc.com/identity",
       },
     },
     levels: {
