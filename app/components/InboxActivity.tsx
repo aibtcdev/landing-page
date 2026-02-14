@@ -13,9 +13,11 @@ interface InboxResponse {
     displayName: string;
   };
   inbox: {
-    messages: InboxMessageType[];
+    messages: (InboxMessageType & { direction?: "sent" | "received" })[];
     unreadCount: number;
     totalCount: number;
+    receivedCount?: number;
+    sentCount?: number;
   };
 }
 
@@ -40,7 +42,7 @@ export default function InboxActivity({
 }: InboxActivityProps) {
   const router = useRouter();
   const { data, error, isLoading: loading } = useSWR<InboxResponse>(
-    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5`,
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5&view=all`,
     fetcher
   );
 
@@ -73,14 +75,15 @@ export default function InboxActivity({
 
   if (!data) return null;
 
-  const { messages, unreadCount, totalCount } = data.inbox;
+  const { messages, unreadCount, totalCount, receivedCount = 0, sentCount = 0 } = data.inbox;
   const hasMessages = totalCount > 0;
+  const repliedCount = messages.filter((m) => m.repliedAt).length;
 
   return (
     <div className={className}>
       {/* Header */}
       <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-[13px] font-medium text-white sm:text-[14px]">Inbox</h3>
+        <h3 className="text-[13px] font-medium text-white sm:text-[14px]">Messages</h3>
         <div className="flex items-center gap-1.5 sm:gap-2">
           {unreadCount > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-medium text-[#F7931A] sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[11px]">
@@ -88,13 +91,17 @@ export default function InboxActivity({
               {unreadCount} unread
             </span>
           )}
-          {hasMessages && (
-            <span className="text-[11px] text-white/40 sm:text-[12px]">
-              {totalCount} message{totalCount === 1 ? "" : "s"}
-            </span>
-          )}
         </div>
       </div>
+
+      {/* Stats row */}
+      {hasMessages && (
+        <div className="mb-3 flex items-center gap-3 text-[11px] text-white/40 sm:gap-4 sm:text-[12px]">
+          <span>{receivedCount} received</span>
+          <span>{sentCount} sent</span>
+          {repliedCount > 0 && <span>{repliedCount} replied</span>}
+        </div>
+      )}
 
       {/* Empty state */}
       {!hasMessages && (
@@ -127,6 +134,7 @@ export default function InboxActivity({
               <InboxMessage
                 message={message}
                 showReply={false}
+                direction={message.direction}
               />
             </div>
           ))}
