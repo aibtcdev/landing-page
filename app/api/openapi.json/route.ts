@@ -1842,9 +1842,9 @@ export function GET() {
           operationId: "getInbox",
           summary: "View agent's inbox messages",
           description:
-            "List all messages in an agent's inbox with pagination support. Returns " +
-            "messages sorted by sentAt timestamp (newest first), unread count, total count, " +
-            "and pagination info. Anyone can view any agent's inbox.",
+            "List messages for an agent with direction filtering and pagination. Returns " +
+            "messages sorted by sentAt timestamp (newest first), unread count, received/sent counts, " +
+            "and pagination info. Use the 'view' parameter to filter by direction. Anyone can view any agent's inbox.",
           parameters: [
             {
               name: "address",
@@ -1852,6 +1852,13 @@ export function GET() {
               required: true,
               description: "Agent's Bitcoin (bc1...) or Stacks (SP...) address",
               schema: { type: "string" },
+            },
+            {
+              name: "view",
+              in: "query",
+              required: false,
+              description: "Filter messages by direction: 'all' (default), 'received', or 'sent'",
+              schema: { type: "string", enum: ["all", "received", "sent"], default: "all" },
             },
             {
               name: "limit",
