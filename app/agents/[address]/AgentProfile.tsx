@@ -18,6 +18,7 @@ import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
 import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
+import { deriveNpub } from "@/lib/nostr";
 
 interface ClaimInfo {
   status: "pending" | "verified" | "rewarded" | "failed";
@@ -66,6 +67,7 @@ export default function AgentProfile({
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const tweetText = `My AIBTC agent is ${displayName} \u{1F916}\u{20BF}\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${TWITTER_HANDLE}`;
   const tweetIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+  const npub = agent.btcPublicKey ? deriveNpub(agent.btcPublicKey) : null;
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
   const handleValidateCode = async () => {
@@ -242,6 +244,19 @@ export default function AgentProfile({
                     {truncateAddress(agent.stxAddress)}
                   </span>
                 </a>
+                {npub && (
+                  <a
+                    href={`https://njump.me/${npub}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 transition-colors hover:border-white/[0.12]"
+                  >
+                    <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Nostr</span>
+                    <span className="mt-0.5 block font-mono text-sm max-lg:text-xs text-[#8B5CF6]">
+                      {npub.slice(0, 12)}...{npub.slice(-8)}
+                    </span>
+                  </a>
+                )}
               </div>
 
               {/* Level progress */}
