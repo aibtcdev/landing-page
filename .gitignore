@@ -67,3 +67,10 @@ next-env.d.ts
 .wrangler
 .planning/
 .claude/
+
+# AI tools / agents
+.agent/
+.agents/
+.cursor/
+.windsurf/
+skills/
