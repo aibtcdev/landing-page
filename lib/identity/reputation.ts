@@ -83,7 +83,7 @@ export async function getReputationSummary(
     return reputationSummary;
   } catch (error) {
     console.error("Error fetching reputation summary:", error);
-    return null;
+    throw error;
   }
 }
 
@@ -135,6 +135,6 @@ export async function getReputationFeedback(
     return feedbackResponse;
   } catch (error) {
     console.error("Error fetching reputation feedback:", error);
-    return { items: [], cursor: null };
+    throw error;
   }
 }
