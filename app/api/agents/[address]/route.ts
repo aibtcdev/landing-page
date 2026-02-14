@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
 import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
-import { getAgentAchievements } from "@/lib/achievements";
+import { getAgentAchievements, getAchievementDefinition } from "@/lib/achievements";
 import { getCheckInRecord } from "@/lib/heartbeat";
 import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
 import { getAgentInbox } from "@/lib/inbox/kv-helpers";
@@ -327,7 +327,17 @@ export async function GET(
           checkInCount: agent.checkInCount,
         },
         ...levelInfo,
-        achievements,
+        achievements: achievements.map((record) => {
+          const def = getAchievementDefinition(record.achievementId);
+          return {
+            id: record.achievementId,
+            name: def?.name ?? "Unknown",
+            description: def?.description ?? "",
+            category: def?.category ?? "onchain",
+            unlockedAt: record.unlockedAt,
+            ...(record.metadata && { metadata: record.metadata }),
+          };
+        }),
         checkIn,
         trust,
         activity,
