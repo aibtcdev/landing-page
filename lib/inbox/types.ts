@@ -54,3 +54,14 @@ export interface InboxAgentIndex {
   unreadCount: number;
   lastMessageAt: string;
 }
+
+/**
+ * Per-agent sent message index stored at `inbox:sent:{btcAddress}`.
+ *
+ * Tracks all messages sent by an agent, enabling sent message queries.
+ */
+export interface SentMessageIndex {
+  btcAddress: string;
+  messageIds: string[];
+  lastSentAt: string | null;
+}

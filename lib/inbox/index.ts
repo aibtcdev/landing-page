@@ -10,6 +10,7 @@ export type {
   InboxMessage,
   OutboxReply,
   InboxAgentIndex,
+  SentMessageIndex,
 } from "./types";
 
 // Constants
@@ -47,7 +48,7 @@ export {
 } from "./x402-config";
 
 // KV Helpers
-export type { ListInboxOptions, ListInboxResult } from "./kv-helpers";
+export type { ListInboxOptions, ListInboxResult, ListSentResult } from "./kv-helpers";
 export {
   getMessage,
   storeMessage,
@@ -56,5 +57,8 @@ export {
   storeReply,
   getAgentInbox,
   updateAgentInbox,
+  getSentIndex,
+  updateSentIndex,
   listInboxMessages,
+  listSentMessages,
 } from "./kv-helpers";

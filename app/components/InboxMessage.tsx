@@ -1,12 +1,13 @@
 "use client";
 
-import { truncateAddress, formatRelativeTime } from "@/lib/utils";
+import { formatRelativeTime } from "@/lib/utils";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
 interface InboxMessageProps {
   message: InboxMessage;
   showReply?: boolean;
   reply?: OutboxReply | null;
+  direction?: "sent" | "received";
   className?: string;
 }
 
@@ -20,11 +21,13 @@ export default function InboxMessage({
   message,
   showReply = false,
   reply = null,
+  direction,
   className = "",
 }: InboxMessageProps) {
   const {
     messageId,
     fromAddress,
+    toBtcAddress,
     content,
     paymentSatoshis,
     sentAt,
@@ -32,34 +35,56 @@ export default function InboxMessage({
     repliedAt,
   } = message;
 
+  const isSent = direction === "sent";
+  const directionLabel = isSent ? "To" : "From";
+  const directionAddress = isSent ? toBtcAddress : fromAddress;
+
   return (
     <div
-      className={`rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 transition-colors hover:border-white/[0.12] ${className}`}
+      className={`rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 transition-colors hover:border-white/[0.12] sm:p-4 ${className}`}
     >
       {/* Header: sender + timestamp */}
-      <div className="mb-3 flex items-start justify-between gap-3">
+      <div className="mb-2.5 flex items-start justify-between gap-2 sm:mb-3 sm:gap-3">
         <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-2">
-            <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">
-              From
-            </span>
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {direction && (
+              <span
+                className={`inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-widest sm:text-[10px] ${isSent ? "text-[#7DA2FF]/60" : "text-white/40"}`}
+              >
+                {isSent && (
+                  <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                  </svg>
+                )}
+                {!isSent && (
+                  <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
+                  </svg>
+                )}
+                {directionLabel}
+              </span>
+            )}
+            {!direction && (
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-white/40 sm:text-[10px]">
+                From
+              </span>
+            )}
             <a
-              href={`/agents/${fromAddress}`}
-              className="min-w-0 truncate font-mono text-[13px] text-[#F7931A] transition-colors hover:text-[#E8850F] max-md:text-[12px]"
+              href={`/agents/${directionAddress}`}
+              className={`min-w-0 truncate font-mono text-[11px] transition-colors sm:text-[13px] ${isSent ? "text-[#7DA2FF] hover:text-[#6B91EE]" : "text-[#F7931A] hover:text-[#E8850F]"}`}
             >
-              <span className="hidden md:inline">{fromAddress}</span>
-              <span className="md:hidden">{truncateAddress(fromAddress)}</span>
+              {directionAddress}
             </a>
           </div>
-          <div className="mt-1 text-[11px] text-white/40">
+          <div className="mt-0.5 text-[10px] text-white/40 sm:mt-1 sm:text-[11px]">
             {formatRelativeTime(sentAt)}
           </div>
         </div>
 
         {/* Payment badge */}
-        <div className="flex shrink-0 items-center gap-1.5 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/10 px-2.5 py-1">
+        <div className="flex shrink-0 items-center gap-1 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/10 px-2 py-0.5 sm:gap-1.5 sm:px-2.5 sm:py-1">
           <svg
-            className="size-3 text-[#F7931A]"
+            className="size-2.5 text-[#F7931A] sm:size-3"
             fill="currentColor"
             viewBox="0 0 20 20"
           >
@@ -70,20 +95,20 @@ export default function InboxMessage({
               clipRule="evenodd"
             />
           </svg>
-          <span className="text-[11px] font-medium text-[#F7931A]">
+          <span className="text-[10px] font-medium text-[#F7931A] sm:text-[11px]">
             {paymentSatoshis.toLocaleString()} sats
           </span>
         </div>
       </div>
 
       {/* Message content */}
-      <p className="text-[14px] leading-relaxed text-white/80">{content}</p>
+      <p className="text-[13px] leading-relaxed text-white/80 sm:text-[14px]">{content}</p>
 
       {/* Footer: status badges */}
-      <div className="mt-3 flex flex-wrap items-center gap-2">
+      <div className="mt-2.5 flex flex-wrap items-center gap-1.5 sm:mt-3 sm:gap-2">
         {readAt && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] px-2.5 py-1 text-[10px] text-white/50">
-            <svg className="size-3" fill="currentColor" viewBox="0 0 20 20">
+          <span className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.03] px-2 py-0.5 text-[9px] text-white/50 sm:px-2.5 sm:py-1 sm:text-[10px]">
+            <svg className="size-2.5 sm:size-3" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
                 d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
@@ -94,8 +119,8 @@ export default function InboxMessage({
           </span>
         )}
         {repliedAt && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-[#7DA2FF]/20 bg-[#7DA2FF]/10 px-2.5 py-1 text-[10px] font-medium text-[#7DA2FF]">
-            <svg className="size-3" fill="currentColor" viewBox="0 0 20 20">
+          <span className="inline-flex items-center gap-1 rounded-full border border-[#7DA2FF]/20 bg-[#7DA2FF]/10 px-2 py-0.5 text-[9px] font-medium text-[#7DA2FF] sm:px-2.5 sm:py-1 sm:text-[10px]">
+            <svg className="size-2.5 sm:size-3" fill="currentColor" viewBox="0 0 20 20">
               <path
                 fillRule="evenodd"
                 d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
@@ -105,17 +130,14 @@ export default function InboxMessage({
             Replied
           </span>
         )}
-        <span className="ml-auto font-mono text-[10px] text-white/30">
-          {messageId.slice(0, 12)}...
-        </span>
       </div>
 
       {/* Reply section (if requested and exists) */}
       {showReply && reply && (
-        <div className="mt-4 rounded-md border border-[#7DA2FF]/20 bg-[#7DA2FF]/5 p-3">
-          <div className="mb-2 flex items-center gap-2">
+        <div className="mt-3 rounded-md border border-[#7DA2FF]/20 bg-[#7DA2FF]/5 p-2.5 sm:mt-4 sm:p-3">
+          <div className="mb-1.5 flex items-center gap-1.5 sm:mb-2 sm:gap-2">
             <svg
-              className="size-3.5 text-[#7DA2FF]"
+              className="size-3 text-[#7DA2FF] sm:size-3.5"
               fill="currentColor"
               viewBox="0 0 20 20"
             >
@@ -125,14 +147,14 @@ export default function InboxMessage({
                 clipRule="evenodd"
               />
             </svg>
-            <span className="text-[11px] font-medium text-[#7DA2FF]">
+            <span className="text-[10px] font-medium text-[#7DA2FF] sm:text-[11px]">
               Reply
             </span>
-            <span className="ml-auto text-[10px] text-white/40">
+            <span className="ml-auto text-[9px] text-white/40 sm:text-[10px]">
               {formatRelativeTime(reply.repliedAt)}
             </span>
           </div>
-          <p className="text-[13px] leading-relaxed text-white/70">
+          <p className="text-[12px] leading-relaxed text-white/70 sm:text-[13px]">
             {reply.reply}
           </p>
         </div>

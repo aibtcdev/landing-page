@@ -1,7 +1,7 @@
 "use client";
 
 import useSWR from "swr";
-import Link from "next/link";
+import { useRouter } from "next/navigation";
 import InboxMessage from "./InboxMessage";
 import { fetcher } from "@/lib/fetcher";
 import type { InboxMessage as InboxMessageType } from "@/lib/inbox/types";
@@ -13,9 +13,11 @@ interface InboxResponse {
     displayName: string;
   };
   inbox: {
-    messages: InboxMessageType[];
+    messages: (InboxMessageType & { direction?: "sent" | "received" })[];
     unreadCount: number;
     totalCount: number;
+    receivedCount?: number;
+    sentCount?: number;
   };
 }
 
@@ -38,8 +40,9 @@ export default function InboxActivity({
   btcAddress,
   className = "",
 }: InboxActivityProps) {
+  const router = useRouter();
   const { data, error, isLoading: loading } = useSWR<InboxResponse>(
-    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5`,
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5&view=all`,
     fetcher
   );
 
@@ -72,28 +75,33 @@ export default function InboxActivity({
 
   if (!data) return null;
 
-  const { messages, unreadCount, totalCount } = data.inbox;
+  const { messages, unreadCount, totalCount, receivedCount = 0, sentCount = 0 } = data.inbox;
   const hasMessages = totalCount > 0;
+  const repliedCount = messages.filter((m) => m.repliedAt).length;
 
   return (
     <div className={className}>
       {/* Header */}
-      <div className="mb-3 flex items-center justify-between">
-        <h3 className="text-[14px] font-medium text-white">Inbox</h3>
-        <div className="flex items-center gap-2">
+      <div className="mb-3 flex items-center justify-between gap-2">
+        <h3 className="text-[13px] font-medium text-white sm:text-[14px]">Messages</h3>
+        <div className="flex items-center gap-1.5 sm:gap-2">
           {unreadCount > 0 && (
-            <span className="inline-flex items-center gap-1.5 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/10 px-2.5 py-1 text-[11px] font-medium text-[#F7931A]">
+            <span className="inline-flex items-center gap-1 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-medium text-[#F7931A] sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[11px]">
               <span className="size-1.5 rounded-full bg-[#F7931A]" />
               {unreadCount} unread
             </span>
           )}
-          {hasMessages && (
-            <span className="text-[12px] text-white/40">
-              {totalCount} message{totalCount === 1 ? "" : "s"}
-            </span>
-          )}
         </div>
       </div>
+
+      {/* Stats row */}
+      {hasMessages && (
+        <div className="mb-3 flex items-center gap-3 text-[11px] text-white/40 sm:gap-4 sm:text-[12px]">
+          <span>{receivedCount} received</span>
+          <span>{sentCount} sent</span>
+          {repliedCount > 0 && <span>{repliedCount} replied</span>}
+        </div>
+      )}
 
       {/* Empty state */}
       {!hasMessages && (
@@ -111,36 +119,25 @@ export default function InboxActivity({
         </div>
       )}
 
-      {/* Message list */}
+      {/* Message list — each message navigates to inbox page on click */}
       {hasMessages && (
         <div className="space-y-2">
           {messages.map((message) => (
-            <InboxMessage
+            <div
               key={message.messageId}
-              message={message}
-              showReply={false}
-            />
+              role="link"
+              tabIndex={0}
+              className="cursor-pointer"
+              onClick={() => router.push(`/inbox/${btcAddress}`)}
+              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") router.push(`/inbox/${btcAddress}`); }}
+            >
+              <InboxMessage
+                message={message}
+                showReply={false}
+                direction={message.direction}
+              />
+            </div>
           ))}
-
-          {/* View all link */}
-          {totalCount > 5 && (
-            <Link
-              href={`/inbox/${btcAddress}`}
-              className="block rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2.5 text-center text-[13px] text-white/60 transition-colors hover:border-white/[0.12] hover:bg-white/[0.06] hover:text-white/80"
-            >
-              View all {totalCount} messages →
-            </Link>
-          )}
-
-          {/* View inbox link (if less than 5) */}
-          {totalCount <= 5 && totalCount > 0 && (
-            <Link
-              href={`/inbox/${btcAddress}`}
-              className="block text-center text-[12px] text-white/40 hover:text-white/60 transition-colors"
-            >
-              View inbox →
-            </Link>
-          )}
         </div>
       )}
     </div>

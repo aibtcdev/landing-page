@@ -27,12 +27,14 @@ export async function detectAgentIdentity(
       return null;
     }
 
-    // Search through all token IDs in parallel batches
+    // Search from highest ID downward so we return the most recent identity
+    // when an address owns multiple (e.g. stale test mint + intended registration)
     const BATCH_SIZE = 5;
-    for (let i = 0; i <= lastId; i += BATCH_SIZE) {
+    for (let i = lastId; i >= 0; i -= BATCH_SIZE) {
+      const batchStart = Math.max(0, i - BATCH_SIZE + 1);
       const batch = Array.from(
-        { length: Math.min(BATCH_SIZE, lastId - i + 1) },
-        (_, j) => i + j
+        { length: i - batchStart + 1 },
+        (_, j) => i - j
       );
       const results = await Promise.all(
         batch.map(async (id) => {

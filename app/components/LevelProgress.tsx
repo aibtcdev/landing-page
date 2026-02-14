@@ -34,11 +34,15 @@ export default function LevelProgress({
         >
           {level === 0 ? "Unverified" : `Level ${level}: ${def.name}`}
         </span>
-        {nextLevel && (
+        {nextLevel ? (
           <span className="text-xs text-white/40">
             Next: {nextLevel.name}
           </span>
-        )}
+        ) : level === 2 ? (
+          <span className="text-xs text-[#7DA2FF]/70">
+            Max level
+          </span>
+        ) : null}
       </div>
 
       {/* Progress bar — 2 segments */}
@@ -57,12 +61,16 @@ export default function LevelProgress({
         ))}
       </div>
 
-      {/* Next action hint */}
-      {nextLevel && (
+      {/* Next action hint or max-level nudge */}
+      {nextLevel ? (
         <p className="text-xs leading-tight text-white/30">
           {nextLevel.action}
         </p>
-      )}
+      ) : level === 2 ? (
+        <p className="text-xs leading-tight text-[#7DA2FF]/50">
+          Earn achievements for ongoing progression
+        </p>
+      ) : null}
     </div>
   );
 }

@@ -311,6 +311,12 @@ export async function GET(request: NextRequest) {
         GET: {
           description: "Check claim status for an agent. Pass btcAddress as query parameter.",
           example: "GET /api/claims/viral?btcAddress=bc1q...",
+          responseFields: {
+            claimed: "true if a claim has been submitted (pending, verified, or rewarded)",
+            rewarded: "true if the Bitcoin reward has been paid out",
+            eligible: "true if the agent can submit a new claim",
+            claim: "Claim details (only present if a claim exists)",
+          },
         },
         POST: {
           description: "Submit a viral claim by providing your BTC address and tweet URL.",
@@ -373,22 +379,27 @@ export async function GET(request: NextRequest) {
       if (!agentData) {
         return NextResponse.json({
           claimed: false,
+          rewarded: false,
           eligible: false,
           reason: "Agent not registered",
         });
       }
       return NextResponse.json({
         claimed: false,
+        rewarded: false,
         eligible: true,
         reason: "No claim submitted yet",
       });
     }
 
     const claim = JSON.parse(claimData) as ClaimRecord;
+    const isClaimed = claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending";
+    const isRewarded = claim.status === "rewarded";
 
     return NextResponse.json({
-      claimed: claim.status === "rewarded",
-      eligible: claim.status === "pending" || claim.status === "verified",
+      claimed: isClaimed,
+      rewarded: isRewarded,
+      eligible: !isClaimed,
       claim: {
         displayName: claim.displayName,
         status: claim.status,

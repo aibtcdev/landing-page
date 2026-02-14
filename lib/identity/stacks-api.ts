@@ -107,52 +107,11 @@ function unwrapCvJson(node: any): any {
       return null;
     }
 
-    // None / optional none
-    if (type === "none" || type.includes("none")) {
-      if (value === null || value === undefined) return null;
-      // "(optional none)" has value: null
-      return null;
-    }
-
-    // Uint / int — return as string for precision
-    if (type === "uint" || type === "int") {
-      return value as string;
-    }
-
-    // Bool
-    if (type === "bool") {
-      return value;
-    }
-
-    // Principal types
-    if (type === "principal" || type.includes("principal")) {
-      if (typeof value === "string") return value;
-      // Nested principal wrapper
-      if (typeof value === "object" && value !== null && "value" in value) {
-        return value.value;
-      }
-      return value;
-    }
-
-    // Buffer
-    if (type === "buff" || type.startsWith("(buff")) {
-      return value;
-    }
-
-    // String types
-    if (type.includes("string") || type.includes("ascii") || type.includes("utf8")) {
-      if (typeof value === "string") return value;
-      if (typeof value === "object" && value !== null && "value" in value) {
-        return value.value;
-      }
-      return value;
-    }
-
-    // Optional with value — unwrap the inner value
-    if (type.startsWith("(optional")) {
-      if (value === null || value === undefined) return null;
-      return unwrapCvJson(value);
-    }
+    // --- Compound types first ---
+    // These must be checked before simple-type substring matches because
+    // compound type strings like "(tuple (cursor (optional none)) (items (list ...)))"
+    // contain substrings ("none", "string", "principal") that would incorrectly
+    // match simple-type checks.
 
     // Tuple: value is an object of named fields
     if (type.startsWith("(tuple")) {
@@ -170,6 +129,52 @@ function unwrapCvJson(node: any): any {
     if (type.startsWith("(list")) {
       if (Array.isArray(value)) {
         return value.map(unwrapCvJson);
+      }
+      return value;
+    }
+
+    // Optional with value — unwrap the inner value
+    if (type.startsWith("(optional")) {
+      if (value === null || value === undefined) return null;
+      return unwrapCvJson(value);
+    }
+
+    // --- Simple types ---
+
+    // None
+    if (type === "none") {
+      return null;
+    }
+
+    // Uint / int — return as string for precision
+    if (type === "uint" || type === "int") {
+      return value as string;
+    }
+
+    // Bool
+    if (type === "bool") {
+      return value;
+    }
+
+    // Principal types
+    if (type === "principal" || type.includes("principal")) {
+      if (typeof value === "string") return value;
+      if (typeof value === "object" && value !== null && "value" in value) {
+        return value.value;
+      }
+      return value;
+    }
+
+    // Buffer
+    if (type === "buff" || type.startsWith("(buff")) {
+      return value;
+    }
+
+    // String types
+    if (type.includes("string") || type.includes("ascii") || type.includes("utf8")) {
+      if (typeof value === "string") return value;
+      if (typeof value === "object" && value !== null && "value" in value) {
+        return value.value;
       }
       return value;
     }
