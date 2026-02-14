@@ -11,6 +11,8 @@ import { updateMeta } from "@/lib/utils";
 import { INBOX_PRICE_SATS } from "@/lib/inbox";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
 
+type ViewFilter = "all" | "received" | "sent";
+
 interface InboxResponse {
   agent: {
     btcAddress: string;
@@ -18,10 +20,13 @@ interface InboxResponse {
     displayName: string;
   };
   inbox: {
-    messages: InboxMessageType[];
+    messages: (InboxMessageType & { direction?: "sent" | "received" })[];
     replies: Record<string, OutboxReply>;
     unreadCount: number;
     totalCount: number;
+    receivedCount?: number;
+    sentCount?: number;
+    view?: ViewFilter;
     pagination: {
       limit: number;
       offset: number;
@@ -46,6 +51,7 @@ export default function InboxPage() {
   const [data, setData] = useState<InboxResponse | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [view, setView] = useState<ViewFilter>("all");
 
   useEffect(() => {
     if (!address) return;
@@ -71,7 +77,7 @@ export default function InboxPage() {
     setError(null);
 
     fetch(
-      `/api/inbox/${encodeURIComponent(address)}?limit=${limit}&offset=${offset}`
+      `/api/inbox/${encodeURIComponent(address)}?limit=${limit}&offset=${offset}&view=${view}`
     )
       .then((res) => {
         if (!res.ok) {
@@ -89,7 +95,7 @@ export default function InboxPage() {
         setError((err as Error).message);
         setLoading(false);
       });
-  }, [address, limit, offset]);
+  }, [address, limit, offset, view]);
 
   if (loading) {
     return (
@@ -171,7 +177,7 @@ export default function InboxPage() {
           {/* Inbox Stats */}
           <div className="mb-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3.5 sm:px-5 sm:py-4">
             <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[15px] font-medium text-white sm:text-[16px]">Inbox</h2>
+              <h2 className="text-[15px] font-medium text-white sm:text-[16px]">Messages</h2>
               <div className="flex items-center gap-2 sm:gap-3">
                 {unreadCount > 0 && (
                   <span className="inline-flex items-center gap-1 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/10 px-2 py-1 text-[11px] font-medium text-[#F7931A] sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-[12px]">
@@ -184,6 +190,29 @@ export default function InboxPage() {
                 </span>
               </div>
             </div>
+          </div>
+
+          {/* View Tabs */}
+          <div className="mb-4 flex gap-1 rounded-lg border border-white/[0.06] bg-white/[0.02] p-1">
+            {(["all", "received", "sent"] as const).map((tab) => (
+              <button
+                key={tab}
+                onClick={() => setView(tab)}
+                className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium capitalize transition-colors sm:text-[13px] ${
+                  view === tab
+                    ? "bg-white/[0.08] text-white"
+                    : "text-white/40 hover:text-white/60"
+                }`}
+              >
+                {tab}
+                {tab === "received" && inbox.receivedCount != null && (
+                  <span className="ml-1 text-white/30">({inbox.receivedCount})</span>
+                )}
+                {tab === "sent" && inbox.sentCount != null && (
+                  <span className="ml-1 text-white/30">({inbox.sentCount})</span>
+                )}
+              </button>
+            ))}
           </div>
 
           {/* Empty State */}
@@ -220,6 +249,7 @@ export default function InboxPage() {
                   message={message}
                   showReply={true}
                   reply={replies[message.messageId] || null}
+                  direction={message.direction}
                 />
               ))}
             </div>
