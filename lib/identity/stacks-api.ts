@@ -21,12 +21,14 @@ import { STACKS_API_BASE } from "./constants";
  * @param contract - Fully-qualified contract identifier (e.g. "SP...address.contract-name")
  * @param functionName - The read-only function to call
  * @param args - ClarityValue objects (will be serialized to hex for the API)
+ * @param hiroApiKey - Optional Hiro API key for authenticated requests
  * @returns Parsed JSON representation of the Clarity return value, or null on error
  */
 export async function callReadOnly(
   contract: string,
   functionName: string,
-  args: ClarityValue[]
+  args: ClarityValue[],
+  hiroApiKey?: string
 ): Promise<any> {
   const [contractAddress, contractName] = contract.split(".");
   const url = `${STACKS_API_BASE}/v2/contracts/call-read/${contractAddress}/${contractName}/${functionName}`;
@@ -34,11 +36,16 @@ export async function callReadOnly(
   // Serialize each ClarityValue to a 0x-prefixed hex string
   const hexArgs = args.map((cv) => `0x${serializeCV(cv)}`);
 
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+  };
+  if (hiroApiKey) {
+    headers["X-Hiro-API-Key"] = hiroApiKey;
+  }
+
   const response = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-    },
+    headers,
     body: JSON.stringify({
       sender: contractAddress,
       arguments: hexArgs,

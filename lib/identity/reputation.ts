@@ -56,14 +56,15 @@ function wadToNumber(wadStr: string): number {
  * Returns count and average score (WAD converted to decimal)
  */
 export async function getReputationSummary(
-  agentId: number
+  agentId: number,
+  hiroApiKey?: string
 ): Promise<ReputationSummary | null> {
   const cacheKey = `summary:${agentId}`;
   const cached = getCached<ReputationSummary>(cacheKey);
   if (cached) return cached;
 
   try {
-    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [uintCV(agentId)]);
+    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [uintCV(agentId)], hiroApiKey);
     const summary = parseClarityValue(result);
 
     if (!summary || Number(summary.count) === 0) {
@@ -92,7 +93,8 @@ export async function getReputationSummary(
  */
 export async function getReputationFeedback(
   agentId: number,
-  cursor?: number
+  cursor?: number,
+  hiroApiKey?: string
 ): Promise<ReputationFeedbackResponse> {
   const cacheKey = `feedback:${agentId}:${cursor || 0}`;
   const cached = getCached<ReputationFeedbackResponse>(cacheKey);
@@ -107,7 +109,7 @@ export async function getReputationFeedback(
       noneCV(), // opt-tag2
       falseCV(), // include-revoked
       cursorArg,
-    ]);
+    ], hiroApiKey);
 
     const response = parseClarityValue(result);
 
