@@ -44,10 +44,20 @@ export function GET() {
           type: "string",
           required: false,
           description:
-            "Transaction ID (64-char hex) of sBTC transfer to verify for connector achievement",
+            "Transaction ID (64-char hex) of sBTC transfer to verify for connector achievement. When omitted, only the sender achievement is checked.",
         },
       },
-      rateLimit: "1 check per address per 5 minutes",
+      behavior: {
+        sender:
+          "Always checked — queries mempool.space for outgoing BTC transactions from btcAddress",
+        connector:
+          "Only checked when txid is provided — validates the sBTC transfer to a registered agent",
+      },
+      rateLimit: {
+        description: "Per-achievement-type rate limit",
+        window: "5 minutes per achievement type per address",
+        header: "429 responses include Retry-After header (seconds)",
+      },
       responses: {
         "200": {
           description:
@@ -123,12 +133,8 @@ export async function POST(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Look up agent and check rate limit in parallel
-    const rateLimitKey = `ratelimit:achievement-verify:${btcAddress}`;
-    const [agentData, lastCheck] = await Promise.all([
-      kv.get(`btc:${btcAddress}`),
-      kv.get(rateLimitKey),
-    ]);
+    // Look up agent
+    const agentData = await kv.get(`btc:${btcAddress}`);
 
     if (!agentData) {
       return NextResponse.json(
@@ -157,75 +163,111 @@ export async function POST(request: NextRequest) {
         { status: 403 }
       );
     }
-    if (lastCheck) {
-      const elapsed = Date.now() - parseInt(lastCheck, 10);
-      if (elapsed < RATE_LIMIT_MS) {
-        const waitSecs = Math.ceil((RATE_LIMIT_MS - elapsed) / 1000);
 
-        return NextResponse.json(
-          {
-            error: `Rate limited. Try again in ${waitSecs} seconds.`,
-          },
-          { status: 429 }
-        );
+    // Per-achievement rate limit check
+    const achievementsToCheck = ["sender", ...(txid ? ["connector"] : [])];
+    const rateLimitKeys = achievementsToCheck.map(
+      (id) => `ratelimit:achievement-verify:${btcAddress}:${id}`
+    );
+    const rateLimitValues = await Promise.all(
+      rateLimitKeys.map((key) => kv.get(key))
+    );
+
+    // Determine which achievements are rate-limited
+    const rateLimited: string[] = [];
+    let maxWaitSecs = 0;
+    achievementsToCheck.forEach((id, i) => {
+      const lastCheck = rateLimitValues[i];
+      if (lastCheck) {
+        const elapsed = Date.now() - parseInt(lastCheck, 10);
+        if (elapsed < RATE_LIMIT_MS) {
+          rateLimited.push(id);
+          const waitSecs = Math.ceil((RATE_LIMIT_MS - elapsed) / 1000);
+          maxWaitSecs = Math.max(maxWaitSecs, waitSecs);
+        }
       }
-    }
-
-    // Store rate limit timestamp
-    await kv.put(rateLimitKey, String(Date.now()), {
-      expirationTtl: 300, // auto-expire after 5 minutes
     });
+
+    // If ALL requested checks are rate-limited, return 429
+    if (rateLimited.length === achievementsToCheck.length) {
+      return NextResponse.json(
+        {
+          error: `Rate limited. Try again in ${maxWaitSecs} seconds.`,
+          rateLimited,
+          retryAfter: maxWaitSecs,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(maxWaitSecs) },
+        }
+      );
+    }
 
     const checked: string[] = [];
     const earned: Array<{ id: string; name: string; unlockedAt: string }> = [];
     const alreadyHad: string[] = [];
+    const skipped: string[] = rateLimited;
 
-    // Check sender achievement: BTC transactions from agent's address
-    checked.push("sender");
-    const hasSender = await hasAchievement(kv, btcAddress, "sender");
+    // Check sender achievement (unless rate-limited)
+    if (!rateLimited.includes("sender")) {
+      checked.push("sender");
 
-    if (!hasSender) {
-      try {
-        // Query mempool.space for transactions
-        const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
-        const mempoolResp = await fetch(mempoolUrl, {
-          signal: AbortSignal.timeout(10000),
-        });
+      // Set rate limit for sender
+      await kv.put(
+        `ratelimit:achievement-verify:${btcAddress}:sender`,
+        String(Date.now()),
+        { expirationTtl: 300 }
+      );
 
-        if (mempoolResp.ok) {
-          const txs = (await mempoolResp.json()) as Array<{
-            vin: Array<{ prevout: { scriptpubkey_address: string } }>;
-          }>;
+      const hasSender = await hasAchievement(kv, btcAddress, "sender");
 
-          // Check if agent's address appears in any transaction's vin (outgoing tx)
-          const hasOutgoingTx = txs.some((tx) =>
-            tx.vin.some(
-              (input) => input.prevout.scriptpubkey_address === btcAddress
-            )
-          );
+      if (!hasSender) {
+        try {
+          const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
+          const mempoolResp = await fetch(mempoolUrl, {
+            signal: AbortSignal.timeout(10000),
+          });
 
-          if (hasOutgoingTx) {
-            const record = await grantAchievement(kv, btcAddress, "sender");
-            const definition = getAchievementDefinition("sender");
-            earned.push({
-              id: "sender",
-              name: definition?.name ?? "Sender",
-              unlockedAt: record.unlockedAt,
-            });
+          if (mempoolResp.ok) {
+            const txs = (await mempoolResp.json()) as Array<{
+              vin: Array<{ prevout: { scriptpubkey_address: string } }>;
+            }>;
+
+            const hasOutgoingTx = txs.some((tx) =>
+              tx.vin.some(
+                (input) => input.prevout.scriptpubkey_address === btcAddress
+              )
+            );
+
+            if (hasOutgoingTx) {
+              const record = await grantAchievement(kv, btcAddress, "sender");
+              const definition = getAchievementDefinition("sender");
+              earned.push({
+                id: "sender",
+                name: definition?.name ?? "Sender",
+                unlockedAt: record.unlockedAt,
+              });
+            }
           }
+        } catch (e) {
+          console.error("Failed to check sender achievement:", e);
         }
-      } catch (e) {
-        console.error("Failed to check sender achievement:", e);
-        // Continue to connector check even if sender fails
+      } else {
+        alreadyHad.push("sender");
       }
-    } else {
-      alreadyHad.push("sender");
     }
 
-    // Check connector achievement: sBTC transfers to registered agents
-    // Only check if txid is provided
-    if (txid) {
+    // Check connector achievement (only if txid provided and not rate-limited)
+    if (txid && !rateLimited.includes("connector")) {
       checked.push("connector");
+
+      // Set rate limit for connector
+      await kv.put(
+        `ratelimit:achievement-verify:${btcAddress}:connector`,
+        String(Date.now()),
+        { expirationTtl: 300 }
+      );
+
       const hasConnector = await hasAchievement(kv, btcAddress, "connector");
 
       if (!hasConnector) {
@@ -400,6 +442,7 @@ export async function POST(request: NextRequest) {
       checked,
       earned,
       alreadyHad,
+      ...(skipped.length > 0 && { skipped }),
       level: levelInfo.level,
       levelName: levelInfo.levelName,
       message:
