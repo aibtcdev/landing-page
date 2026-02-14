@@ -3,10 +3,7 @@
  */
 
 import { uintCV, noneCV, falseCV, someCV } from "@stacks/transactions";
-import {
-  REPUTATION_REGISTRY_CONTRACT,
-  WAD_DECIMALS,
-} from "./constants";
+import { REPUTATION_REGISTRY_CONTRACT } from "./constants";
 import { callReadOnly, parseClarityValue } from "./stacks-api";
 import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback } from "./types";
 

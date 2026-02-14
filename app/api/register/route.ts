@@ -358,7 +358,7 @@ export async function POST(request: NextRequest) {
 
     const [sponsorResult, bnsName] = await Promise.all([
       provisionSponsorKey(btcResult.address, bitcoinSignature, EXPECTED_MESSAGE, relayUrl, log),
-      lookupBnsName(stxResult.address),
+      lookupBnsName(stxResult.address, env.HIRO_API_KEY, kv),
     ]);
 
     const sponsorApiKey = sponsorResult.success ? sponsorResult.apiKey : undefined;

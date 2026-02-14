@@ -344,7 +344,7 @@ export async function POST(request: NextRequest) {
 
     if (shouldCheckIdentity) {
       try {
-        const identity = await detectAgentIdentity(agent.stxAddress);
+        const identity = await detectAgentIdentity(agent.stxAddress, env.HIRO_API_KEY, kv);
         if (identity) {
           identityAgentId = identity.agentId;
         } else {

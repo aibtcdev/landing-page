@@ -76,7 +76,7 @@ export async function GET(
     }
 
     // Run the identity scan server-side
-    const identity = await detectAgentIdentity(agent.stxAddress);
+    const identity = await detectAgentIdentity(agent.stxAddress, env.HIRO_API_KEY, kv);
 
     // Persist the result (positive or negative) to KV on both keys
     agent.erc8004AgentId = identity ? identity.agentId : null;

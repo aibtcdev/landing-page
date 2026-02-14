@@ -57,6 +57,7 @@ export async function GET(
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const hiroApiKey = env.HIRO_API_KEY;
 
     const key = `${addressType}:${address}`;
     const value = await kv.get(key);
@@ -86,7 +87,7 @@ export async function GET(
     // Run BNS lookup and claim fetch in parallel (both independent)
     const [bnsName, claimData] = await Promise.all([
       !agent.bnsName && agent.stxAddress
-        ? lookupBnsName(agent.stxAddress)
+        ? lookupBnsName(agent.stxAddress, hiroApiKey, kv)
         : Promise.resolve(null),
       kv.get(`claim:${agent.btcAddress}`),
     ]);

@@ -33,7 +33,8 @@ interface ClaimRecord {
  */
 async function resolveAgent(
   kv: KVNamespace,
-  address: string
+  address: string,
+  hiroApiKey?: string
 ): Promise<AgentRecord | null> {
   // Direct lookup by BTC or STX
   let agent = await lookupAgent(kv, address);
@@ -74,7 +75,7 @@ async function resolveAgent(
   // Lazy BNS refresh (blocks this request but acceptable for correctness)
   if (!agent.bnsName && agent.stxAddress) {
     try {
-      const bnsName = await lookupBnsName(agent.stxAddress);
+      const bnsName = await lookupBnsName(agent.stxAddress, hiroApiKey, kv);
       if (bnsName) {
         agent.bnsName = bnsName;
         const updated = JSON.stringify(agent);
@@ -97,7 +98,8 @@ async function resolveAgent(
  */
 async function resolveIdentity(
   kv: KVNamespace,
-  agent: AgentRecord
+  agent: AgentRecord,
+  hiroApiKey?: string
 ): Promise<AgentRecord> {
   // Cache check: skip scan only if we already have a positive result
   // Always re-check when erc8004AgentId is null (not found) so newly
@@ -112,7 +114,7 @@ async function resolveIdentity(
 
   // Run the O(N) identity scan server-side
   try {
-    const identity = await detectAgentIdentity(agent.stxAddress);
+    const identity = await detectAgentIdentity(agent.stxAddress, hiroApiKey, kv);
     agent.erc8004AgentId = identity ? identity.agentId : null;
     agent.lastIdentityCheck = new Date().toISOString();
     const updated = JSON.stringify(agent);
@@ -150,7 +152,7 @@ async function fetchClaim(
 const cachedResolveAgent = cache(async (address: string) => {
   const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
-  return resolveAgent(kv, address);
+  return resolveAgent(kv, address, env.HIRO_API_KEY);
 });
 
 const cachedFetchClaim = cache(async (btcAddress: string) => {
@@ -258,7 +260,7 @@ export default async function AgentProfilePage({
     // Fetch claim (cached, shared with generateMetadata) and identity in parallel
     const [claimRecord, agentWithIdentity] = await Promise.all([
       cachedFetchClaim(agent.btcAddress),
-      resolveIdentity(kv, agent),
+      resolveIdentity(kv, agent, env.HIRO_API_KEY),
     ]);
 
     // Compute level info

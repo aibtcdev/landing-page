@@ -80,6 +80,7 @@ export async function GET(
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const hiroApiKey = env.HIRO_API_KEY;
 
     const agent = await lookupAgent(kv, address);
 
@@ -103,7 +104,7 @@ export async function GET(
     const agentId = agent.erc8004AgentId;
 
     if (type === "summary") {
-      const summary = await getReputationSummary(agentId);
+      const summary = await getReputationSummary(agentId, hiroApiKey);
       return NextResponse.json(
         { summary },
         {
@@ -117,7 +118,7 @@ export async function GET(
     // type === "feedback"
     const cursorParam = url.searchParams.get("cursor");
     const cursor = cursorParam ? parseInt(cursorParam, 10) : undefined;
-    const feedback = await getReputationFeedback(agentId, cursor);
+    const feedback = await getReputationFeedback(agentId, cursor, hiroApiKey);
     return NextResponse.json(
       { feedback },
       {

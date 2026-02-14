@@ -152,6 +152,7 @@ export async function GET(request: NextRequest) {
     // Lazy BNS refresh: for agents without bnsName but with stxAddress,
     // attempt BNS lookup and persist if found. Capped to avoid excessive
     // external API calls, and fire-and-forget so it doesn't block the response.
+    const hiroApiKey = env.HIRO_API_KEY;
     const MAX_BNS_REFRESH_PER_REQUEST = 10;
     const agentsNeedingBns = agents.filter(
       (agent) => !agent.bnsName && agent.stxAddress
@@ -160,7 +161,7 @@ export async function GET(request: NextRequest) {
       const batch = agentsNeedingBns.slice(0, MAX_BNS_REFRESH_PER_REQUEST);
       void Promise.allSettled(
         batch.map(async (agent) => {
-          const bnsName = await lookupBnsName(agent.stxAddress!);
+          const bnsName = await lookupBnsName(agent.stxAddress!, hiroApiKey, kv);
           if (bnsName) {
             agent.bnsName = bnsName;
             const updated = JSON.stringify(agent);

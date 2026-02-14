@@ -185,6 +185,7 @@ export async function GET(
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const hiroApiKey = env.HIRO_API_KEY;
 
     // Look up agent by address type
     let agent: AgentRecord | null = null;
@@ -229,7 +230,7 @@ export async function GET(
     // Lazy BNS refresh: if bnsName is missing, try to look it up.
     // Fire-and-forget so it doesn't block the response.
     if (!agent.bnsName && agent.stxAddress) {
-      void lookupBnsName(agent.stxAddress).then((bnsName) => {
+      void lookupBnsName(agent.stxAddress, hiroApiKey, kv).then((bnsName) => {
         if (bnsName) {
           agent.bnsName = bnsName;
           const updated = JSON.stringify(agent);
@@ -250,7 +251,7 @@ export async function GET(
       // Note: use != null (not truthiness) because agent-id 0 is valid but falsy
       agent.erc8004AgentId != null
         ? Promise.resolve({ agentId: agent.erc8004AgentId, stxAddress: agent.stxAddress })
-        : detectAgentIdentity(agent.stxAddress),
+        : detectAgentIdentity(agent.stxAddress, hiroApiKey, kv),
       getAgentInbox(kv, agent.btcAddress),
       getSentIndex(kv, agent.btcAddress),
     ]);
@@ -265,7 +266,7 @@ export async function GET(
     }
 
     // Fetch reputation summary if identity exists
-    const reputation = identity ? await getReputationSummary(identity.agentId) : null;
+    const reputation = identity ? await getReputationSummary(identity.agentId, hiroApiKey) : null;
 
     const levelInfo = getAgentLevel(agent, claim);
     const checkIn = checkInRecord

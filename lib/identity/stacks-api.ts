@@ -15,6 +15,15 @@ import {
 } from "@stacks/transactions";
 import { STACKS_API_BASE } from "./constants";
 
+/** Build headers for Hiro API requests, optionally including an API key. */
+export function buildHiroHeaders(hiroApiKey?: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (hiroApiKey) {
+    headers["X-Hiro-API-Key"] = hiroApiKey;
+  }
+  return headers;
+}
+
 /**
  * Call a read-only function on a Stacks smart contract.
  *
@@ -36,12 +45,8 @@ export async function callReadOnly(
   // Serialize each ClarityValue to a 0x-prefixed hex string
   const hexArgs = args.map((cv) => `0x${serializeCV(cv)}`);
 
-  const headers: Record<string, string> = {
-    "Content-Type": "application/json",
-  };
-  if (hiroApiKey) {
-    headers["X-Hiro-API-Key"] = hiroApiKey;
-  }
+  const headers = buildHiroHeaders(hiroApiKey);
+  headers["Content-Type"] = "application/json";
 
   const response = await fetch(url, {
     method: "POST",
