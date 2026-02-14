@@ -15,12 +15,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.8,
     },
     {
-      url: "https://aibtc.com/leaderboard",
-      lastModified: new Date(),
-      changeFrequency: "daily",
-      priority: 0.8,
-    },
-    {
       url: "https://aibtc.com/paid-attention",
       lastModified: new Date(),
       changeFrequency: "daily",
