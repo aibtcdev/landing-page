@@ -6,17 +6,28 @@ import { uintCV } from "@stacks/transactions";
 import { IDENTITY_REGISTRY_CONTRACT } from "./constants";
 import { callReadOnly, parseClarityValue } from "./stacks-api";
 import type { AgentIdentity } from "./types";
+import { getCachedIdentity, setCachedIdentity } from "./kv-cache";
 
 /**
  * Detect if an agent has registered an on-chain identity
  * Searches for an NFT owned by the given Stacks address
+ *
+ * @param stxAddress - Stacks address to check
+ * @param hiroApiKey - Optional Hiro API key for authenticated requests
+ * @param kv - Optional KV namespace for persistent caching
  */
 export async function detectAgentIdentity(
-  stxAddress: string
+  stxAddress: string,
+  hiroApiKey?: string,
+  kv?: KVNamespace
 ): Promise<AgentIdentity | null> {
+  // Check KV cache first
+  const cached = await getCachedIdentity(stxAddress, kv);
+  if (cached) return cached;
+
   try {
     // First, get the last token ID to know the range
-    const lastIdResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-last-token-id", []);
+    const lastIdResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-last-token-id", [], hiroApiKey);
     const lastIdRaw = parseClarityValue(lastIdResult);
 
     // parseClarityValue returns uint values as strings
@@ -40,7 +51,7 @@ export async function detectAgentIdentity(
         batch.map(async (id) => {
           const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [
             uintCV(id),
-          ]);
+          ], hiroApiKey);
           return { id, owner: parseClarityValue(ownerResult) };
         })
       );
@@ -48,9 +59,12 @@ export async function detectAgentIdentity(
       if (match) {
         const uriResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-token-uri", [
           uintCV(match.id),
-        ]);
+        ], hiroApiKey);
         const uri = parseClarityValue(uriResult);
-        return { agentId: match.id, owner: match.owner!, uri: uri || "" };
+        const identity: AgentIdentity = { agentId: match.id, owner: match.owner!, uri: uri || "" };
+        // Cache the result
+        await setCachedIdentity(stxAddress, identity, kv);
+        return identity;
       }
     }
 
@@ -65,9 +79,9 @@ export async function detectAgentIdentity(
 /**
  * Check if an agent ID exists (has been minted)
  */
-export async function hasIdentity(agentId: number): Promise<boolean> {
+export async function hasIdentity(agentId: number, hiroApiKey?: string): Promise<boolean> {
   try {
-    const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [uintCV(agentId)]);
+    const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [uintCV(agentId)], hiroApiKey);
     const owner = parseClarityValue(ownerResult);
     return owner !== null;
   } catch (error) {

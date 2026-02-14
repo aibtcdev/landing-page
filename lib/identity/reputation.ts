@@ -3,38 +3,10 @@
  */
 
 import { uintCV, noneCV, falseCV, someCV } from "@stacks/transactions";
-import {
-  REPUTATION_REGISTRY_CONTRACT,
-  WAD_DECIMALS,
-} from "./constants";
+import { REPUTATION_REGISTRY_CONTRACT } from "./constants";
 import { callReadOnly, parseClarityValue } from "./stacks-api";
+import { getCachedReputation, setCachedReputation } from "./kv-cache";
 import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback } from "./types";
-
-// Simple in-memory cache with 5-minute TTL
-interface CacheEntry<T> {
-  data: T;
-  timestamp: number;
-}
-
-const cache = new Map<string, CacheEntry<any>>();
-const CACHE_TTL = 5 * 60 * 1000; // 5 minutes
-
-function getCached<T>(key: string): T | null {
-  const entry = cache.get(key);
-  if (!entry) return null;
-
-  const now = Date.now();
-  if (now - entry.timestamp > CACHE_TTL) {
-    cache.delete(key);
-    return null;
-  }
-
-  return entry.data;
-}
-
-function setCache<T>(key: string, data: T): void {
-  cache.set(key, { data, timestamp: Date.now() });
-}
 
 /**
  * WAD divisor: 10^18 as a BigInt.
@@ -56,17 +28,20 @@ function wadToNumber(wadStr: string): number {
  * Returns count and average score (WAD converted to decimal)
  */
 export async function getReputationSummary(
-  agentId: number
+  agentId: number,
+  hiroApiKey?: string,
+  kv?: KVNamespace
 ): Promise<ReputationSummary | null> {
   const cacheKey = `summary:${agentId}`;
-  const cached = getCached<ReputationSummary>(cacheKey);
-  if (cached) return cached;
+  const cached = await getCachedReputation<ReputationSummary>(cacheKey, kv);
+  if (cached.hit) return cached.value;
 
   try {
-    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [uintCV(agentId)]);
+    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [uintCV(agentId)], hiroApiKey);
     const summary = parseClarityValue(result);
 
     if (!summary || Number(summary.count) === 0) {
+      await setCachedReputation(cacheKey, null, kv);
       return null;
     }
 
@@ -79,11 +54,11 @@ export async function getReputationSummary(
       summaryValueDecimals: Number(summary["summary-value-decimals"]),
     };
 
-    setCache(cacheKey, reputationSummary);
+    await setCachedReputation(cacheKey, reputationSummary, kv);
     return reputationSummary;
   } catch (error) {
     console.error("Error fetching reputation summary:", error);
-    return null;
+    throw error;
   }
 }
 
@@ -92,11 +67,13 @@ export async function getReputationSummary(
  */
 export async function getReputationFeedback(
   agentId: number,
-  cursor?: number
+  cursor?: number,
+  hiroApiKey?: string,
+  kv?: KVNamespace
 ): Promise<ReputationFeedbackResponse> {
   const cacheKey = `feedback:${agentId}:${cursor || 0}`;
-  const cached = getCached<ReputationFeedbackResponse>(cacheKey);
-  if (cached) return cached;
+  const cached = await getCachedReputation<ReputationFeedbackResponse>(cacheKey, kv);
+  if (cached.hit) return cached.value ?? { items: [], cursor: null };
 
   try {
     // read-all-feedback(agent-id, opt-tag1, opt-tag2, include-revoked, opt-cursor)
@@ -107,12 +84,14 @@ export async function getReputationFeedback(
       noneCV(), // opt-tag2
       falseCV(), // include-revoked
       cursorArg,
-    ]);
+    ], hiroApiKey);
 
     const response = parseClarityValue(result);
 
     if (!response || !response.items) {
-      return { items: [], cursor: null };
+      const empty: ReputationFeedbackResponse = { items: [], cursor: null };
+      await setCachedReputation(cacheKey, empty, kv);
+      return empty;
     }
 
     const items: ReputationFeedback[] = response.items.map((item: any) => ({
@@ -131,10 +110,10 @@ export async function getReputationFeedback(
       cursor: response.cursor !== null ? Number(response.cursor) : null,
     };
 
-    setCache(cacheKey, feedbackResponse);
+    await setCachedReputation(cacheKey, feedbackResponse, kv);
     return feedbackResponse;
   } catch (error) {
     console.error("Error fetching reputation feedback:", error);
-    return { items: [], cursor: null };
+    throw error;
   }
 }
