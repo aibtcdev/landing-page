@@ -247,7 +247,8 @@ export async function GET(
       getAgentAchievements(kv, agent.btcAddress),
       getCheckInRecord(kv, agent.btcAddress),
       // Use cached identity if available, otherwise detect
-      agent.erc8004AgentId
+      // Note: use != null (not truthiness) because agent-id 0 is valid but falsy
+      agent.erc8004AgentId != null
         ? Promise.resolve({ agentId: agent.erc8004AgentId, stxAddress: agent.stxAddress })
         : detectAgentIdentity(agent.stxAddress),
       getAgentInbox(kv, agent.btcAddress),
