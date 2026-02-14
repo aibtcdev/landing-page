@@ -10,6 +10,7 @@ import type {
   InboxMessage,
   OutboxReply,
   InboxAgentIndex,
+  SentMessageIndex,
 } from "./types";
 
 /**
@@ -40,6 +41,16 @@ function buildReplyKey(messageId: string): string {
  */
 function buildAgentIndexKey(btcAddress: string): string {
   return `${KV_PREFIXES.AGENT_INDEX}${btcAddress}`;
+}
+
+/**
+ * Build KV key for agent sent message index.
+ *
+ * @param btcAddress - Bitcoin address
+ * @returns KV key: "inbox:sent:{btcAddress}"
+ */
+function buildSentIndexKey(btcAddress: string): string {
+  return `${KV_PREFIXES.SENT_INDEX}${btcAddress}`;
 }
 
 /**
@@ -250,6 +261,66 @@ export async function updateAgentInbox(
 }
 
 /**
+ * Get the agent sent message index.
+ *
+ * @param kv - Cloudflare KV namespace
+ * @param btcAddress - Bitcoin address
+ * @returns SentMessageIndex or null if not found
+ */
+export async function getSentIndex(
+  kv: KVNamespace,
+  btcAddress: string
+): Promise<SentMessageIndex | null> {
+  const key = buildSentIndexKey(btcAddress);
+  const data = await kv.get(key);
+  if (!data) return null;
+
+  try {
+    return JSON.parse(data) as SentMessageIndex;
+  } catch (e) {
+    console.error(`Failed to parse sent index ${key}:`, e);
+    return null;
+  }
+}
+
+/**
+ * Update the agent sent message index by adding a new message.
+ *
+ * Creates the index if it doesn't exist, or appends to the existing index.
+ *
+ * @param kv - Cloudflare KV namespace
+ * @param btcAddress - Sender's Bitcoin address
+ * @param messageId - Message ID to add
+ * @param timestamp - ISO timestamp for lastSentAt
+ */
+export async function updateSentIndex(
+  kv: KVNamespace,
+  btcAddress: string,
+  messageId: string,
+  timestamp: string
+): Promise<void> {
+  const key = buildSentIndexKey(btcAddress);
+  const existing = await getSentIndex(kv, btcAddress);
+
+  let index: SentMessageIndex;
+  if (existing) {
+    if (!existing.messageIds.includes(messageId)) {
+      existing.messageIds.push(messageId);
+    }
+    existing.lastSentAt = timestamp;
+    index = existing;
+  } else {
+    index = {
+      btcAddress,
+      messageIds: [messageId],
+      lastSentAt: timestamp,
+    };
+  }
+
+  await kv.put(key, JSON.stringify(index));
+}
+
+/**
  * Options for listing inbox messages.
  */
 export interface ListInboxOptions {
@@ -310,6 +381,73 @@ export async function listInboxMessages(
   );
 
   // Filter out nulls (messages that failed to parse or were deleted)
+  const messages = rawMessages.filter((m): m is InboxMessage => m !== null);
+
+  // Optionally fetch replies for messages that have been replied to
+  const replies = new Map<string, OutboxReply>();
+  if (options.includeReplies) {
+    const repliedMessages = messages.filter((msg) => msg.repliedAt);
+    if (repliedMessages.length > 0) {
+      const replyResults = await Promise.all(
+        repliedMessages.map((msg) => getReply(kv, msg.messageId))
+      );
+      repliedMessages.forEach((msg, i) => {
+        const reply = replyResults[i];
+        if (reply) {
+          replies.set(msg.messageId, reply);
+        }
+      });
+    }
+  }
+
+  return { index, messages, replies };
+}
+
+/**
+ * Result of listing sent messages, including the sent index for metadata.
+ */
+export interface ListSentResult {
+  /** The agent sent index (null if no sent messages). */
+  index: SentMessageIndex | null;
+  /** Paginated messages (newest first). */
+  messages: InboxMessage[];
+  /** Reply data keyed by messageId (only populated when includeReplies is true). */
+  replies: Map<string, OutboxReply>;
+}
+
+/**
+ * List sent messages for an agent with pagination.
+ *
+ * @param kv - Cloudflare KV namespace
+ * @param btcAddress - Sender's Bitcoin address
+ * @param limit - Maximum number of messages to return (default 20)
+ * @param offset - Number of messages to skip (default 0)
+ * @param options - Optional settings (e.g., includeReplies)
+ * @returns ListSentResult with index, messages, and optional replies
+ */
+export async function listSentMessages(
+  kv: KVNamespace,
+  btcAddress: string,
+  limit = 20,
+  offset = 0,
+  options: ListInboxOptions = {}
+): Promise<ListSentResult> {
+  const index = await getSentIndex(kv, btcAddress);
+  if (!index || index.messageIds.length === 0) {
+    return { index, messages: [], replies: new Map() };
+  }
+
+  // Reverse to get newest first
+  const messageIds = [...index.messageIds].reverse();
+
+  // Apply pagination
+  const paginatedIds = messageIds.slice(offset, offset + limit);
+
+  // Fetch all messages in parallel
+  const rawMessages = await Promise.all(
+    paginatedIds.map((id) => getMessage(kv, id))
+  );
+
   const messages = rawMessages.filter((m): m is InboxMessage => m !== null);
 
   // Optionally fetch replies for messages that have been replied to
