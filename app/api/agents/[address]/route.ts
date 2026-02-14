@@ -265,8 +265,15 @@ export async function GET(
       }
     }
 
-    // Fetch reputation summary if identity exists
-    const reputation = identity ? await getReputationSummary(identity.agentId, hiroApiKey, kv) : null;
+    // Fetch reputation summary if identity exists (non-critical, don't fail the whole response)
+    let reputation = null;
+    if (identity) {
+      try {
+        reputation = await getReputationSummary(identity.agentId, hiroApiKey, kv);
+      } catch {
+        // Reputation is optional metadata — continue without it
+      }
+    }
 
     const levelInfo = getAgentLevel(agent, claim);
     const checkIn = checkInRecord

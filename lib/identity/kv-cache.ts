@@ -11,6 +11,7 @@ import type { AgentIdentity } from "./types";
 
 // Cache TTLs in seconds
 const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours
+const BNS_NEGATIVE_CACHE_TTL = 60 * 60; // 1 hour for addresses with no BNS name
 const IDENTITY_CACHE_TTL = 6 * 60 * 60; // 6 hours
 const REPUTATION_CACHE_TTL = 5 * 60; // 5 minutes
 
@@ -56,6 +57,16 @@ export function setCachedBnsName(
   kv?: KVNamespace
 ): Promise<void> {
   return kvPut(kv, `cache:bns:${address}`, name, BNS_CACHE_TTL);
+}
+
+/** Sentinel value for negative BNS cache (address has no name). */
+export const BNS_NONE_SENTINEL = "__NONE__";
+
+export function setCachedBnsNegative(
+  address: string,
+  kv?: KVNamespace
+): Promise<void> {
+  return kvPut(kv, `cache:bns:${address}`, BNS_NONE_SENTINEL, BNS_NEGATIVE_CACHE_TTL);
 }
 
 export async function getCachedIdentity(

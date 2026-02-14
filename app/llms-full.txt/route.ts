@@ -1665,7 +1665,8 @@ This section provides a complete walkthrough of the x402 payment flow for sendin
 3. **Build sBTC transfer transaction**
    - Create sBTC transfer for 100 satoshis to recipient's STX address
    - Use Stacks.js or AIBTC MCP tools to build transaction
-   - Can be sponsored (via x402 relay) or non-sponsored (direct)
+   - Sponsored (via x402 relay, recommended) or self-signed (you sign, server broadcasts via facilitator)
+   - In both cases, submit the transaction via the inbox API — never broadcast directly to the blockchain
 
 4. **Wrap transaction in PaymentPayloadV2**
    - Create PaymentPayloadV2 object with transaction hex

@@ -67,10 +67,16 @@ export async function lookupBnsName(
 
     // Unwrap: response -> optional -> tuple
     const optional = json.value?.value;
-    if (!optional) return null;
+    if (!optional) {
+      await setCachedBnsNegative(stxAddress, kv);
+      return null;
+    }
 
     const tuple = optional.value;
-    if (!tuple?.name?.value || !tuple?.namespace?.value) return null;
+    if (!tuple?.name?.value || !tuple?.namespace?.value) {
+      await setCachedBnsNegative(stxAddress, kv);
+      return null;
+    }
 
     const name = bytesToUtf8(hexToBytes(tuple.name.value));
     const namespace = bytesToUtf8(hexToBytes(tuple.namespace.value));

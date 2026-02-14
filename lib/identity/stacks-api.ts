@@ -31,7 +31,8 @@ export function buildHiroHeaders(hiroApiKey?: string): Record<string, string> {
  * @param functionName - The read-only function to call
  * @param args - ClarityValue objects (will be serialized to hex for the API)
  * @param hiroApiKey - Optional Hiro API key for authenticated requests
- * @returns Parsed JSON representation of the Clarity return value, or null on error
+ * @returns Parsed JSON representation of the Clarity return value from the Stacks API.
+ * @throws Error if the Stacks API request fails (non-2xx HTTP response).
  */
 export async function callReadOnly(
   contract: string,

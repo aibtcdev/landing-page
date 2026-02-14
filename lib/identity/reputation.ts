@@ -88,7 +88,9 @@ export async function getReputationFeedback(
     const response = parseClarityValue(result);
 
     if (!response || !response.items) {
-      return { items: [], cursor: null };
+      const empty: ReputationFeedbackResponse = { items: [], cursor: null };
+      await setCachedReputation(cacheKey, empty, kv);
+      return empty;
     }
 
     const items: ReputationFeedback[] = response.items.map((item: any) => ({

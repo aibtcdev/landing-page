@@ -117,7 +117,17 @@ export async function GET(
 
     // type === "feedback"
     const cursorParam = url.searchParams.get("cursor");
-    const cursor = cursorParam ? parseInt(cursorParam, 10) : undefined;
+    let cursor: number | undefined;
+    if (cursorParam !== null) {
+      const parsedCursor = parseInt(cursorParam, 10);
+      if (Number.isNaN(parsedCursor) || parsedCursor < 0) {
+        return NextResponse.json(
+          { error: "Invalid cursor parameter. Must be a non-negative integer." },
+          { status: 400 }
+        );
+      }
+      cursor = parsedCursor;
+    }
     const feedback = await getReputationFeedback(agentId, cursor, hiroApiKey, kv);
     return NextResponse.json(
       { feedback },
