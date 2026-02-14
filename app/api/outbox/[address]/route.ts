@@ -11,6 +11,7 @@ import {
   updateMessage,
   buildReplyMessage,
   listInboxMessages,
+  getAgentInbox,
 } from "@/lib/inbox";
 import {
   hasAchievement,
@@ -175,12 +176,30 @@ export async function POST(
     repliedAt: now,
   };
 
-  // Store reply, update message, and check achievement in parallel
+  // Check if message is already read (to know if we need to decrement unread)
+  const wasUnread = !message.readAt;
+
+  // Store reply, update message (also mark as read), and check achievement in parallel
   const [, , hasCommunicator] = await Promise.all([
     storeReply(kv, outboxReply),
-    updateMessage(kv, messageId, { repliedAt: now }),
+    updateMessage(kv, messageId, {
+      repliedAt: now,
+      ...(!message.readAt && { readAt: now }),
+    }),
     hasAchievement(kv, btcResult.address, "communicator"),
   ]);
+
+  // Decrement unreadCount if message was unread
+  if (wasUnread) {
+    const inboxIndex = await getAgentInbox(kv, message.toBtcAddress);
+    if (inboxIndex && inboxIndex.unreadCount > 0) {
+      inboxIndex.unreadCount -= 1;
+      await kv.put(
+        `inbox:agent:${message.toBtcAddress}`,
+        JSON.stringify(inboxIndex)
+      );
+    }
+  }
 
   // Grant "Communicator" achievement if not already earned
   let newAchievement:
