@@ -1,9 +1,10 @@
 /**
- * KV-backed caching for stable data (BNS names, agent identities)
+ * KV-backed caching for stable data (BNS names, agent identities, reputation)
  *
  * Provides persistent caching across worker instances with appropriate TTLs:
  * - BNS names: 24 hours (very stable, rarely change)
  * - Agent identities: 6 hours (semi-stable, can change if re-registered)
+ * - Reputation data: 5 minutes (changes with new feedback)
  */
 
 import type { AgentIdentity } from "./types";
@@ -11,6 +12,7 @@ import type { AgentIdentity } from "./types";
 // Cache TTLs in seconds
 const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours
 const IDENTITY_CACHE_TTL = 6 * 60 * 60; // 6 hours
+const REPUTATION_CACHE_TTL = 5 * 60; // 5 minutes
 
 /** Safely read a string value from KV, returning null on miss or error. */
 async function kvGet(
@@ -75,4 +77,25 @@ export function setCachedIdentity(
   kv?: KVNamespace
 ): Promise<void> {
   return kvPut(kv, `cache:identity:${address}`, JSON.stringify(identity), IDENTITY_CACHE_TTL);
+}
+
+export async function getCachedReputation<T>(
+  key: string,
+  kv?: KVNamespace
+): Promise<T | null> {
+  const raw = await kvGet(kv, `cache:reputation:${key}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as T;
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedReputation(
+  key: string,
+  data: unknown,
+  kv?: KVNamespace
+): Promise<void> {
+  return kvPut(kv, `cache:reputation:${key}`, JSON.stringify(data), REPUTATION_CACHE_TTL);
 }

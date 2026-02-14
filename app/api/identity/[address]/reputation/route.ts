@@ -104,7 +104,7 @@ export async function GET(
     const agentId = agent.erc8004AgentId;
 
     if (type === "summary") {
-      const summary = await getReputationSummary(agentId, hiroApiKey);
+      const summary = await getReputationSummary(agentId, hiroApiKey, kv);
       return NextResponse.json(
         { summary },
         {
@@ -118,7 +118,7 @@ export async function GET(
     // type === "feedback"
     const cursorParam = url.searchParams.get("cursor");
     const cursor = cursorParam ? parseInt(cursorParam, 10) : undefined;
-    const feedback = await getReputationFeedback(agentId, cursor, hiroApiKey);
+    const feedback = await getReputationFeedback(agentId, cursor, hiroApiKey, kv);
     return NextResponse.json(
       { feedback },
       {

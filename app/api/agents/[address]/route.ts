@@ -266,7 +266,7 @@ export async function GET(
     }
 
     // Fetch reputation summary if identity exists
-    const reputation = identity ? await getReputationSummary(identity.agentId, hiroApiKey) : null;
+    const reputation = identity ? await getReputationSummary(identity.agentId, hiroApiKey, kv) : null;
 
     const levelInfo = getAgentLevel(agent, claim);
     const checkIn = checkInRecord
