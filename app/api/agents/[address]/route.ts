@@ -6,7 +6,7 @@ import { lookupBnsName } from "@/lib/bns";
 import { getAgentAchievements, getAchievementDefinition } from "@/lib/achievements";
 import { getCheckInRecord } from "@/lib/heartbeat";
 import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
-import { getAgentInbox } from "@/lib/inbox/kv-helpers";
+import { getAgentInbox, getSentIndex } from "@/lib/inbox/kv-helpers";
 
 /**
  * Determine the address type and KV prefix from the format.
@@ -241,8 +241,8 @@ export async function GET(
       }).catch(() => {});
     }
 
-    // Look up claim, achievements, check-in, identity, and inbox in parallel
-    const [claimData, achievements, checkInRecord, identity, inboxIndex] = await Promise.all([
+    // Look up claim, achievements, check-in, identity, inbox, and sent index in parallel
+    const [claimData, achievements, checkInRecord, identity, inboxIndex, sentIndex] = await Promise.all([
       kv.get(`claim:${agent.btcAddress}`),
       getAgentAchievements(kv, agent.btcAddress),
       getCheckInRecord(kv, agent.btcAddress),
@@ -252,6 +252,7 @@ export async function GET(
         ? Promise.resolve({ agentId: agent.erc8004AgentId, stxAddress: agent.stxAddress })
         : detectAgentIdentity(agent.stxAddress),
       getAgentInbox(kv, agent.btcAddress),
+      getSentIndex(kv, agent.btcAddress),
     ]);
 
     let claim: ClaimStatus | null = null;
@@ -290,6 +291,7 @@ export async function GET(
       hasCheckedIn: !!checkInRecord,
       hasInboxMessages: !!inboxIndex,
       unreadInboxCount: inboxIndex?.unreadCount ?? 0,
+      sentCount: sentIndex?.messageIds.length ?? 0,
     };
 
     // Compute capabilities (derived from level and registration state)
