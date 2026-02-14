@@ -7,6 +7,7 @@ interface InboxMessageProps {
   message: InboxMessage;
   showReply?: boolean;
   reply?: OutboxReply | null;
+  direction?: "sent" | "received";
   className?: string;
 }
 
@@ -20,17 +21,23 @@ export default function InboxMessage({
   message,
   showReply = false,
   reply = null,
+  direction,
   className = "",
 }: InboxMessageProps) {
   const {
     messageId,
     fromAddress,
+    toBtcAddress,
     content,
     paymentSatoshis,
     sentAt,
     readAt,
     repliedAt,
   } = message;
+
+  const isSent = direction === "sent";
+  const directionLabel = isSent ? "To" : "From";
+  const directionAddress = isSent ? toBtcAddress : fromAddress;
 
   return (
     <div
@@ -40,14 +47,33 @@ export default function InboxMessage({
       <div className="mb-2.5 flex items-start justify-between gap-2 sm:mb-3 sm:gap-3">
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className="text-[9px] font-semibold uppercase tracking-widest text-white/40 sm:text-[10px]">
-              From
-            </span>
+            {direction && (
+              <span
+                className={`inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-widest sm:text-[10px] ${isSent ? "text-[#7DA2FF]/60" : "text-white/40"}`}
+              >
+                {isSent && (
+                  <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                  </svg>
+                )}
+                {!isSent && (
+                  <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
+                  </svg>
+                )}
+                {directionLabel}
+              </span>
+            )}
+            {!direction && (
+              <span className="text-[9px] font-semibold uppercase tracking-widest text-white/40 sm:text-[10px]">
+                From
+              </span>
+            )}
             <a
-              href={`/agents/${fromAddress}`}
-              className="min-w-0 truncate font-mono text-[11px] text-[#F7931A] transition-colors hover:text-[#E8850F] sm:text-[13px]"
+              href={`/agents/${directionAddress}`}
+              className={`min-w-0 truncate font-mono text-[11px] transition-colors sm:text-[13px] ${isSent ? "text-[#7DA2FF] hover:text-[#6B91EE]" : "text-[#F7931A] hover:text-[#E8850F]"}`}
             >
-              {fromAddress}
+              {directionAddress}
             </a>
           </div>
           <div className="mt-0.5 text-[10px] text-white/40 sm:mt-1 sm:text-[11px]">
