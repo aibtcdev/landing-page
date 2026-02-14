@@ -90,16 +90,19 @@ export function setCachedIdentity(
   return kvPut(kv, `cache:identity:${address}`, JSON.stringify(identity), IDENTITY_CACHE_TTL);
 }
 
+/** Result from reputation cache: distinguishes miss from cached null. */
+export type CacheResult<T> = { hit: true; value: T | null } | { hit: false };
+
 export async function getCachedReputation<T>(
   key: string,
   kv?: KVNamespace
-): Promise<T | null> {
+): Promise<CacheResult<T>> {
   const raw = await kvGet(kv, `cache:reputation:${key}`);
-  if (!raw) return null;
+  if (raw === null) return { hit: false };
   try {
-    return JSON.parse(raw) as T;
+    return { hit: true, value: JSON.parse(raw) as T | null };
   } catch {
-    return null;
+    return { hit: false };
   }
 }
 

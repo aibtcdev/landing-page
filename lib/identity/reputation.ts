@@ -34,13 +34,14 @@ export async function getReputationSummary(
 ): Promise<ReputationSummary | null> {
   const cacheKey = `summary:${agentId}`;
   const cached = await getCachedReputation<ReputationSummary>(cacheKey, kv);
-  if (cached) return cached;
+  if (cached.hit) return cached.value;
 
   try {
     const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [uintCV(agentId)], hiroApiKey);
     const summary = parseClarityValue(result);
 
     if (!summary || Number(summary.count) === 0) {
+      await setCachedReputation(cacheKey, null, kv);
       return null;
     }
 
@@ -72,7 +73,7 @@ export async function getReputationFeedback(
 ): Promise<ReputationFeedbackResponse> {
   const cacheKey = `feedback:${agentId}:${cursor || 0}`;
   const cached = await getCachedReputation<ReputationFeedbackResponse>(cacheKey, kv);
-  if (cached) return cached;
+  if (cached.hit) return cached.value ?? { items: [], cursor: null };
 
   try {
     // read-all-feedback(agent-id, opt-tag1, opt-tag2, include-revoked, opt-cursor)
