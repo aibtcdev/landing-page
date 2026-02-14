@@ -1,9 +1,10 @@
 import {
   deserializeCV,
-  standardPrincipalCV,
+  principalCV,
   serializeCV,
   cvToJSON,
 } from "@stacks/transactions";
+import { hexToBytes, bytesToUtf8 } from "@stacks/common";
 
 const BNS_V2_CONTRACT = "SP2QEZ06AGJ3RKJPBV14SY1V5BBFNAW33D96YPGZF";
 const BNS_V2_NAME = "BNS-V2";
@@ -14,7 +15,7 @@ const HIRO_API = "https://api.hiro.so";
  */
 function hexBufferToString(hexValue: string): string {
   const hex = hexValue.startsWith("0x") ? hexValue.slice(2) : hexValue;
-  return Buffer.from(hex, "hex").toString("utf-8");
+  return bytesToUtf8(hexToBytes(hex));
 }
 
 /**
@@ -29,8 +30,8 @@ export async function lookupBnsName(
   stxAddress: string
 ): Promise<string | null> {
   try {
-    const principalCV = standardPrincipalCV(stxAddress);
-    const serialized = serializeCV(principalCV);
+    const principal = principalCV(stxAddress);
+    const serialized = serializeCV(principal);
 
     const res = await fetch(
       `${HIRO_API}/v2/contracts/call-read/${BNS_V2_CONTRACT}/${BNS_V2_NAME}/get-primary`,

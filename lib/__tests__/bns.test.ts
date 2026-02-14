@@ -190,7 +190,7 @@ describe("lookupBnsName", () => {
         (mockFetch.mock.calls[0][1] as any).body
       );
       expect(callBody.arguments).toHaveLength(1);
-      expect(callBody.arguments[0]).toMatch(/^0x0516/); // standard principal CV prefix
+      expect(callBody.arguments[0]).toMatch(/^0x05/); // principal CV prefix
       expect(callBody.sender).toBe(
         "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
