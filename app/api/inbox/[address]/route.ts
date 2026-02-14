@@ -7,10 +7,14 @@ import {
   verifyInboxPayment,
   storeMessage,
   updateAgentInbox,
+  updateSentIndex,
   listInboxMessages,
+  listSentMessages,
+  getSentIndex,
   INBOX_PRICE_SATS,
   buildInboxPaymentRequirements,
 } from "@/lib/inbox";
+import { lookupAgent as lookupSenderAgent } from "@/lib/agent-lookup";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
@@ -48,33 +52,97 @@ export async function GET(
     );
   }
 
-  // Parse query params for pagination
+  // Parse query params for pagination and view
   const url = new URL(request.url);
   const limitParam = url.searchParams.get("limit");
   const offsetParam = url.searchParams.get("offset");
+  const viewParam = url.searchParams.get("view") || "all";
 
   const limit = limitParam
     ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100)
     : 20;
   const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
 
-  // Single call returns index + messages + replies (eliminates redundant KV read)
-  const { index: inboxIndex, messages, replies } = await listInboxMessages(
-    kv,
-    agent.btcAddress,
-    limit,
-    offset,
-    { includeReplies: true }
+  // Validate view param
+  if (!["sent", "received", "all"].includes(viewParam)) {
+    return NextResponse.json(
+      {
+        error: "Invalid view parameter. Must be 'sent', 'received', or 'all'.",
+      },
+      { status: 400 }
+    );
+  }
+
+  const view = viewParam as "sent" | "received" | "all";
+
+  // Fetch data based on view param
+  const includeReceived = view === "received" || view === "all";
+  const includeSent = view === "sent" || view === "all";
+
+  const [receivedResult, sentResult] = await Promise.all([
+    includeReceived
+      ? listInboxMessages(kv, agent.btcAddress, view === "all" ? 100 : limit, view === "all" ? 0 : offset, { includeReplies: true })
+      : Promise.resolve(null),
+    includeSent
+      ? listSentMessages(kv, agent.btcAddress, view === "all" ? 100 : limit, view === "all" ? 0 : offset, { includeReplies: true })
+      : Promise.resolve(null),
+  ]);
+
+  // Build combined message list with direction
+  type DirectionMessage = { message: import("@/lib/inbox/types").InboxMessage; direction: "sent" | "received" };
+  let combined: DirectionMessage[] = [];
+
+  if (receivedResult) {
+    for (const msg of receivedResult.messages) {
+      combined.push({ message: msg, direction: "received" });
+    }
+  }
+  if (sentResult) {
+    for (const msg of sentResult.messages) {
+      combined.push({ message: msg, direction: "sent" });
+    }
+  }
+
+  // Sort by sentAt descending
+  combined.sort(
+    (a, b) =>
+      new Date(b.message.sentAt).getTime() -
+      new Date(a.message.sentAt).getTime()
   );
 
-  const totalCount = inboxIndex?.messageIds.length || 0;
-  const unreadCount = inboxIndex?.unreadCount || 0;
-
-  // Serialize reply map as object for JSON response
-  const repliesObject: Record<string, unknown> = {};
-  for (const [messageId, reply] of replies) {
-    repliesObject[messageId] = reply;
+  // Apply pagination for "all" view (others already paginated)
+  if (view === "all") {
+    combined = combined.slice(offset, offset + limit);
   }
+
+  // Merge reply maps
+  const repliesObject: Record<string, unknown> = {};
+  if (receivedResult) {
+    for (const [messageId, reply] of receivedResult.replies) {
+      repliesObject[messageId] = reply;
+    }
+  }
+  if (sentResult) {
+    for (const [messageId, reply] of sentResult.replies) {
+      repliesObject[messageId] = reply;
+    }
+  }
+
+  const receivedCount = receivedResult?.index?.messageIds.length ?? 0;
+  const sentCount = sentResult?.index?.messageIds.length ?? 0;
+  const unreadCount = receivedResult?.index?.unreadCount ?? 0;
+  const totalCount =
+    view === "all"
+      ? receivedCount + sentCount
+      : view === "received"
+        ? receivedCount
+        : sentCount;
+
+  // Build response messages with direction
+  const messages = combined.map(({ message, direction }) => ({
+    ...message,
+    direction,
+  }));
 
   // If no messages, return self-documenting response
   if (totalCount === 0) {
@@ -92,6 +160,9 @@ export async function GET(
         replies: {},
         unreadCount: 0,
         totalCount: 0,
+        receivedCount: 0,
+        sentCount: 0,
+        view,
       },
       howToSend: {
         endpoint: `POST /api/inbox/${address}`,
@@ -103,6 +174,11 @@ export async function GET(
           "POST with payment-signature header (base64 PaymentPayloadV2) → message delivered",
         ],
         documentation: "https://aibtc.com/llms-full.txt",
+      },
+      parameters: {
+        view: "Filter messages: 'sent', 'received', or 'all' (default: 'all')",
+        limit: "Max messages per page (1-100, default: 20)",
+        offset: "Number of messages to skip (default: 0)",
       },
     });
   }
@@ -119,6 +195,9 @@ export async function GET(
       replies: repliesObject,
       unreadCount,
       totalCount,
+      receivedCount,
+      sentCount,
+      view,
       pagination: {
         limit,
         offset,
@@ -356,16 +435,26 @@ export async function POST(
     sentAt: now,
   };
 
-  // Store message and update inbox index in parallel (independent writes)
+  // Resolve sender's BTC address from their STX address (for sent index)
+  const senderAgent =
+    fromAddress !== "unknown"
+      ? await lookupSenderAgent(kv, fromAddress)
+      : null;
+
+  // Store message, update recipient inbox, and update sender sent index in parallel
   await Promise.all([
     storeMessage(kv, message),
     updateAgentInbox(kv, toBtcAddress, messageId, now),
+    ...(senderAgent
+      ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
+      : []),
   ]);
 
   logger.info("Message stored", {
     messageId,
     fromAddress,
     toBtcAddress,
+    senderBtcAddress: senderAgent?.btcAddress ?? null,
     paymentTxid: message.paymentTxid,
   });
 
