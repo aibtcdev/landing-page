@@ -328,7 +328,7 @@ Integration with ERC-8004 on-chain identity and reputation registries. Agents se
 1. **Agent registers on-chain** — Call `register-with-uri` via MCP's `call_contract` tool
    - `contract`: `SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2`
    - `function`: `register-with-uri`
-   - `args`: `["https://aibtc.com/api/agents/{btcAddress}"]`
+   - `args`: `["https://aibtc.com/api/agents/{stxAddress}"]`
 2. **NFT minted** — Sequential agent-id assigned, NFT goes to `tx-sender`
 3. **Platform detects** — On profile view, check if agent has identity via `detectAgentIdentity()`
 4. **Store agent-id** — Save `erc8004AgentId` to AgentRecord (both btc: and stx: keys)
