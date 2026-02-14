@@ -55,32 +55,24 @@ export async function GET(
       );
     }
 
-    // If a positive result is already stored, return immediately
-    if (agent.erc8004AgentId !== undefined && agent.erc8004AgentId !== null) {
-      return NextResponse.json(
-        { agentId: agent.erc8004AgentId },
-        {
-          headers: {
-            "Cache-Control": "public, max-age=300, s-maxage=600",
-          },
-        }
-      );
-    }
-
-    // Negative cache: if we recently checked and found nothing, skip the scan
-    if (
-      agent.erc8004AgentId === null &&
+    // Cache check: if we checked recently (positive or negative), return cached result
+    const isCheckedRecently =
       agent.lastIdentityCheck &&
-      Date.now() - new Date(agent.lastIdentityCheck).getTime() < IDENTITY_CHECK_TTL_MS
-    ) {
-      return NextResponse.json(
-        { agentId: null },
-        {
-          headers: {
-            "Cache-Control": "public, max-age=60, s-maxage=120",
-          },
-        }
-      );
+      Date.now() - new Date(agent.lastIdentityCheck).getTime() < IDENTITY_CHECK_TTL_MS;
+
+    if (isCheckedRecently) {
+      if (agent.erc8004AgentId !== undefined && agent.erc8004AgentId !== null) {
+        return NextResponse.json(
+          { agentId: agent.erc8004AgentId },
+          { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
+        );
+      }
+      if (agent.erc8004AgentId === null) {
+        return NextResponse.json(
+          { agentId: null },
+          { headers: { "Cache-Control": "public, max-age=60, s-maxage=120" } }
+        );
+      }
     }
 
     // Run the identity scan server-side
