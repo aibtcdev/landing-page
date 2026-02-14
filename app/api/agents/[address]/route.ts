@@ -328,6 +328,7 @@ export async function GET(
           btcPublicKey: agent.btcPublicKey,
           lastActiveAt: agent.lastActiveAt,
           checkInCount: agent.checkInCount,
+          erc8004AgentId: identity?.agentId ?? agent.erc8004AgentId ?? null,
         },
         ...levelInfo,
         achievements: achievements.map((record) => {

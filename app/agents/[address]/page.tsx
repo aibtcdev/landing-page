@@ -99,12 +99,14 @@ async function resolveIdentity(
   kv: KVNamespace,
   agent: AgentRecord
 ): Promise<AgentRecord> {
-  // Cache check: skip scan if checked recently (positive or negative)
+  // Cache check: skip scan only if we already have a positive result
+  // Always re-check when erc8004AgentId is null (not found) so newly
+  // registered identities are picked up on the next page view.
   const isCheckedRecently =
     agent.lastIdentityCheck &&
     Date.now() - new Date(agent.lastIdentityCheck).getTime() < IDENTITY_CHECK_TTL_MS;
 
-  if (isCheckedRecently && agent.erc8004AgentId !== undefined) {
+  if (isCheckedRecently && agent.erc8004AgentId != null) {
     return agent;
   }
 
