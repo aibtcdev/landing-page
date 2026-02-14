@@ -11,14 +11,6 @@ const BNS_V2_NAME = "BNS-V2";
 const HIRO_API = "https://api.hiro.so";
 
 /**
- * Convert a hex-encoded buffer value (e.g. "0x636f636f61303037") to a UTF-8 string.
- */
-function hexBufferToString(hexValue: string): string {
-  const hex = hexValue.startsWith("0x") ? hexValue.slice(2) : hexValue;
-  return bytesToUtf8(hexToBytes(hex));
-}
-
-/**
  * Look up the BNS name for a Stacks address using BNS-V2.
  *
  * Calls the `get-primary` read-only function on the BNS-V2 contract,
@@ -65,8 +57,8 @@ export async function lookupBnsName(
     const tuple = optional.value;
     if (!tuple?.name?.value || !tuple?.namespace?.value) return null;
 
-    const name = hexBufferToString(tuple.name.value);
-    const namespace = hexBufferToString(tuple.namespace.value);
+    const name = bytesToUtf8(hexToBytes(tuple.name.value));
+    const namespace = bytesToUtf8(hexToBytes(tuple.namespace.value));
 
     return `${name}.${namespace}`;
   } catch {
