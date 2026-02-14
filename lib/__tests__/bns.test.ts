@@ -5,6 +5,45 @@ import { lookupBnsName } from "../bns";
 const mockFetch = vi.fn();
 global.fetch = mockFetch as any;
 
+/**
+ * Build a mock Hiro API response for BNS-V2 get-primary.
+ * Constructs the actual Clarity hex that @stacks/transactions can deserialize.
+ *
+ * Format: (ok (some { name: (buff N), namespace: (buff M) }))
+ * Hex:    07 0a 0c 00000002 04"name" 02{len}{data} 09"namespace" 02{len}{data}
+ */
+function mockV2Response(name: string, namespace: string) {
+  const nameBuf = Buffer.from(name, "utf-8").toString("hex");
+  const nsBuf = Buffer.from(namespace, "utf-8").toString("hex");
+  const nameLen = name.length.toString(16).padStart(8, "0");
+  const nsLen = namespace.length.toString(16).padStart(8, "0");
+
+  // Clarity tuple keys are length-prefixed ASCII
+  // "name" = 04 6e616d65, "namespace" = 09 6e616d657370616365
+  const result =
+    "0x07" + // response ok
+    "0a" + // some
+    "0c" + // tuple
+    "00000002" + // 2 fields
+    "04" + "6e616d65" + // key "name" (len=4)
+    "02" + nameLen + nameBuf + // buffer value
+    "09" + "6e616d657370616365" + // key "namespace" (len=9)
+    "02" + nsLen + nsBuf; // buffer value
+
+  return {
+    ok: true,
+    json: async () => ({ okay: true, result }),
+  };
+}
+
+function mockV2None() {
+  // (ok none) = 0x07 09
+  return {
+    ok: true,
+    json: async () => ({ okay: true, result: "0x0709" }),
+  };
+}
+
 describe("lookupBnsName", () => {
   beforeEach(() => {
     mockFetch.mockClear();
@@ -15,155 +54,84 @@ describe("lookupBnsName", () => {
   });
 
   describe("success cases", () => {
-    it("returns BNS name when API returns names array", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: ["alice.btc"] }),
-      });
+    it("returns BNS name from V2 contract", async () => {
+      mockFetch.mockResolvedValue(mockV2Response("alice", "btc"));
 
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
-      expect(result).toBe("alice.btc");
-      expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.hiro.so/v1/addresses/stacks/SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        expect.objectContaining({
-          signal: expect.any(AbortSignal),
-        })
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
-    });
-
-    it("returns first name when multiple names exist", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: ["alice.btc", "bob.btc", "charlie.btc"] }),
-      });
-
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
       expect(result).toBe("alice.btc");
     });
 
-    it("calls API with correct URL format", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: ["test.btc"] }),
-      });
-
-      const testAddress = "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE";
-      await lookupBnsName(testAddress);
-
-      expect(mockFetch).toHaveBeenCalledWith(
-        `https://api.hiro.so/v1/addresses/stacks/${testAddress}`,
-        expect.any(Object)
-      );
-    });
-
-    it("includes abort signal with timeout", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: ["test.btc"] }),
-      });
+    it("calls BNS-V2 contract read-only endpoint", async () => {
+      mockFetch.mockResolvedValue(mockV2Response("test", "btc"));
 
       await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
 
       expect(mockFetch).toHaveBeenCalledWith(
-        expect.any(String),
+        "https://api.hiro.so/v2/contracts/call-read/SP2QEZ06AGJ3RKJPBV14SY1V5BBFNAW33D96YPGZF/BNS-V2/get-primary",
         expect.objectContaining({
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
           signal: expect.any(AbortSignal),
         })
       );
     });
+
+    it("handles non-btc namespaces", async () => {
+      mockFetch.mockResolvedValue(mockV2Response("myname", "stx"));
+
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
+      expect(result).toBe("myname.stx");
+    });
   });
 
   describe("fallback to null cases", () => {
-    it("returns null when API returns empty names array", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: [] }),
-      });
+    it("returns null when V2 returns none (no primary name)", async () => {
+      mockFetch.mockResolvedValue(mockV2None());
 
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
-      expect(result).toBeNull();
-    });
-
-    it("returns null when API returns no names field", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({}),
-      });
-
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
-      expect(result).toBeNull();
-    });
-
-    it("returns null when API returns null names", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: null }),
-      });
-
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
       expect(result).toBeNull();
     });
 
     it("returns null when API response is not ok", async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 404,
-      });
+      mockFetch.mockResolvedValue({ ok: false, status: 404 });
 
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
       expect(result).toBeNull();
     });
 
     it("returns null when API response is 500", async () => {
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-      });
+      mockFetch.mockResolvedValue({ ok: false, status: 500 });
 
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
       expect(result).toBeNull();
     });
 
-    it("returns null when fetch throws network error", async () => {
-      mockFetch.mockRejectedValue(new Error("Network error"));
-
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
-      expect(result).toBeNull();
-    });
-
-    it("returns null when fetch times out", async () => {
-      mockFetch.mockRejectedValue(new DOMException("Aborted", "AbortError"));
-
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
-      expect(result).toBeNull();
-    });
-
-    it("returns null when JSON parsing fails", async () => {
+    it("returns null when okay is false", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => {
-          throw new Error("Invalid JSON");
-        },
+        json: async () => ({ okay: false, result: "some error" }),
       });
 
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
-      expect(result).toBeNull();
-    });
-
-    it("returns null when response structure is unexpected", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => "unexpected string response",
-      });
-
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
       expect(result).toBeNull();
     });
   });
 
   describe("error handling", () => {
     it("does not throw on network errors", async () => {
-      mockFetch.mockRejectedValue(new Error("ECONNREFUSED"));
+      mockFetch.mockRejectedValue(new Error("Network error"));
 
       await expect(
         lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7")
@@ -171,17 +139,32 @@ describe("lookupBnsName", () => {
     });
 
     it("does not throw on timeout", async () => {
-      mockFetch.mockRejectedValue(new DOMException("Timeout", "TimeoutError"));
+      mockFetch.mockRejectedValue(
+        new DOMException("Aborted", "AbortError")
+      );
 
       await expect(
         lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7")
       ).resolves.toBeNull();
     });
 
-    it("does not throw on invalid response", async () => {
+    it("does not throw on JSON parse failure", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
-        json: async () => null,
+        json: async () => {
+          throw new Error("Invalid JSON");
+        },
+      });
+
+      await expect(
+        lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7")
+      ).resolves.toBeNull();
+    });
+
+    it("does not throw on invalid Clarity value", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        json: async () => ({ okay: true, result: "0xdeadbeef" }),
       });
 
       await expect(
@@ -191,45 +174,26 @@ describe("lookupBnsName", () => {
   });
 
   describe("edge cases", () => {
-    it("handles testnet addresses", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: ["testnet.btc"] }),
-      });
-
-      const result = await lookupBnsName("ST1PQHQKV0RJXZFY1DGX8MNSNYVE3VGZJSRTPGZGM");
-      expect(result).toBe("testnet.btc");
-    });
-
-    it("handles very long BNS names", async () => {
-      const longName = "a".repeat(100) + ".btc";
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: [longName] }),
-      });
-
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
-      expect(result).toBe(longName);
-    });
-
-    it("handles special characters in BNS names", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: ["test-name_123.btc"] }),
-      });
-
-      const result = await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
-      expect(result).toBe("test-name_123.btc");
-    });
-
     it("makes only one API call per invocation", async () => {
-      mockFetch.mockResolvedValue({
-        ok: true,
-        json: async () => ({ names: ["test.btc"] }),
-      });
+      mockFetch.mockResolvedValue(mockV2Response("test", "btc"));
 
       await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
       expect(mockFetch).toHaveBeenCalledTimes(1);
+    });
+
+    it("sends serialized principal CV in arguments", async () => {
+      mockFetch.mockResolvedValue(mockV2Response("test", "btc"));
+
+      await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+
+      const callBody = JSON.parse(
+        (mockFetch.mock.calls[0][1] as any).body
+      );
+      expect(callBody.arguments).toHaveLength(1);
+      expect(callBody.arguments[0]).toMatch(/^0x0516/); // standard principal CV prefix
+      expect(callBody.sender).toBe(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
     });
   });
 });
