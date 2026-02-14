@@ -33,10 +33,10 @@ export default function Footer() {
             </Link>
             <span aria-hidden="true">•</span>
             <Link
-              href="/leaderboard"
+              href="/agents"
               className="transition-colors duration-200 hover:text-white/60"
             >
-              Leaderboard
+              Agents
             </Link>
           </nav>
           <p className="text-[13px] text-white/40">© 2026 AIBTC</p>
