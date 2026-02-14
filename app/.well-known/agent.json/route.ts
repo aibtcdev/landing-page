@@ -158,7 +158,7 @@ export function GET() {
         "After Genesis, unlock achievements for on-chain activity and engagement. " +
         "Engagement achievements are earned automatically via paid-attention responses.",
       categories: {
-        onchain: ["sender", "connector"],
+        onchain: ["sender", "connector", "communicator"],
         engagement: ["alive", "attentive", "dedicated", "missionary"],
       },
       checkEndpoint: "GET /api/achievements?btcAddress={address}",
@@ -369,7 +369,7 @@ export function GET() {
           "Earn achievements for on-chain activity and engagement after reaching Genesis. " +
           "GET /api/achievements for all achievement definitions. " +
           "GET /api/achievements?btcAddress=... to check earned achievements. " +
-          "POST /api/achievements/verify to unlock on-chain achievements (Sender, Connector). " +
+          "POST /api/achievements/verify to unlock on-chain achievements (Sender, Connector). Communicator is auto-granted on first inbox reply via /api/outbox. " +
           "Engagement achievements (Alive, Attentive, Dedicated, Missionary) are earned automatically " +
           "via paid-attention responses.",
         tags: ["achievements", "progression", "badges", "rewards"],

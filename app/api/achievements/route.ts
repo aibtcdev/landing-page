@@ -53,7 +53,7 @@ export async function GET(request: NextRequest) {
           onchain: {
             description: "Unlocked via verified Bitcoin blockchain activity",
             verification: "POST /api/achievements/verify",
-            examples: ["sender", "connector"],
+            examples: ["sender", "connector", "communicator"],
           },
           engagement: {
             description:
