@@ -11,6 +11,18 @@ export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const btcAddress = searchParams.get("btcAddress");
 
+  // Catch common mistake: using "address" instead of "btcAddress"
+  if (!btcAddress && searchParams.has("address")) {
+    return NextResponse.json(
+      {
+        error:
+          "Unknown parameter 'address'. Did you mean 'btcAddress'?",
+        example: `/api/achievements?btcAddress=${searchParams.get("address")}`,
+      },
+      { status: 400 }
+    );
+  }
+
   // No btcAddress param: return self-documenting response with all achievement definitions
   if (!btcAddress) {
     return NextResponse.json(
