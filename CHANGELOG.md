@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.1](https://github.com/aibtcdev/landing-page/compare/v1.5.0...v1.5.1) (2026-02-14)
+
+
+### Bug Fixes
+
+* API resilience, KV caching, and review feedback ([#165](https://github.com/aibtcdev/landing-page/issues/165)) ([1adea23](https://github.com/aibtcdev/landing-page/commit/1adea232918ce75b6a64d101064e2fcb12f82705))
+* use BNS-V2 contract for name lookups ([#164](https://github.com/aibtcdev/landing-page/issues/164)) ([5103481](https://github.com/aibtcdev/landing-page/commit/510348131f167c77be769fdc902665f9d9875fbb))
+
 ## [1.5.0](https://github.com/aibtcdev/landing-page/compare/v1.4.0...v1.5.0) (2026-02-13)
 
 
