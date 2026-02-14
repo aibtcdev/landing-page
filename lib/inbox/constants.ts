@@ -117,4 +117,11 @@ export const KV_PREFIXES = {
    * Value: InboxAgentIndex
    */
   AGENT_INDEX: "inbox:agent:",
+
+  /**
+   * Per-agent sent message index.
+   * Key: "inbox:sent:{btcAddress}"
+   * Value: SentMessageIndex
+   */
+  SENT_INDEX: "inbox:sent:",
 } as const;
