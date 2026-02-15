@@ -60,12 +60,28 @@ async function fetchAgents() {
     })
   );
 
+  // Fetch inbox indices for message counts and unread data
+  const inboxLookups = await Promise.all(
+    agents.map(async (agent) => {
+      const inboxData = await kv.get(`inbox:agent:${agent.btcAddress}`);
+      if (!inboxData) return null;
+      try {
+        return JSON.parse(inboxData) as { messageIds: string[]; unreadCount: number };
+      } catch {
+        return null;
+      }
+    })
+  );
+
   return agents.map((agent, i) => {
     const level = computeLevel(agent, claimLookups[i]);
+    const inbox = inboxLookups[i];
     return {
       ...agent,
       level,
       levelName: LEVELS[level].name,
+      messageCount: inbox?.messageIds.length ?? 0,
+      unreadCount: inbox?.unreadCount ?? 0,
     };
   });
 }

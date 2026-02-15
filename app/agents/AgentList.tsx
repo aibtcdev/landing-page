@@ -13,6 +13,8 @@ type Agent = AgentRecord & {
   levelName?: string;
   checkInCount?: number;
   lastActiveAt?: string;
+  messageCount?: number;
+  unreadCount?: number;
 };
 
 type SortField = "level" | "checkIns" | "joined" | "activity";
