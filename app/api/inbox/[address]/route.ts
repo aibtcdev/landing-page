@@ -138,6 +138,16 @@ export async function GET(
         ? receivedCount
         : sentCount;
 
+  // Compute economic stats from fetched messages
+  // NOTE: These are computed from the first 100 messages when view="all"
+  // For agents with >100 messages, these are approximate totals
+  const satsReceived = receivedResult?.messages.reduce(
+    (sum, msg) => sum + (msg.paymentSatoshis || 0), 0
+  ) ?? 0;
+  const satsSent = sentResult?.messages.reduce(
+    (sum, msg) => sum + (msg.paymentSatoshis || 0), 0
+  ) ?? 0;
+
   // Build response messages with direction
   const messages = combined.map(({ message, direction }) => ({
     ...message,
@@ -162,6 +172,11 @@ export async function GET(
         totalCount: 0,
         receivedCount: 0,
         sentCount: 0,
+        economics: {
+          satsReceived: 0,
+          satsSent: 0,
+          satsNet: 0,
+        },
         view,
       },
       howToSend: {
@@ -197,6 +212,11 @@ export async function GET(
       totalCount,
       receivedCount,
       sentCount,
+      economics: {
+        satsReceived,
+        satsSent,
+        satsNet: satsReceived - satsSent,
+      },
       view,
       pagination: {
         limit,
