@@ -404,6 +404,31 @@ export async function listInboxMessages(
 }
 
 /**
+ * Decrement the unread count for an agent's inbox.
+ *
+ * This is the canonical way to decrement unreadCount when marking a message
+ * as read (either explicitly via PATCH or implicitly via reply). It prevents
+ * the count from going negative.
+ *
+ * @param kv - Cloudflare KV namespace
+ * @param btcAddress - Bitcoin address
+ *
+ * @example
+ * await decrementUnreadCount(kv, "bc1q...");
+ */
+export async function decrementUnreadCount(
+  kv: KVNamespace,
+  btcAddress: string
+): Promise<void> {
+  const key = buildAgentIndexKey(btcAddress);
+  const index = await getAgentInbox(kv, btcAddress);
+  if (index && index.unreadCount > 0) {
+    index.unreadCount -= 1;
+    await kv.put(key, JSON.stringify(index));
+  }
+}
+
+/**
  * Result of listing sent messages, including the sent index for metadata.
  */
 export interface ListSentResult {

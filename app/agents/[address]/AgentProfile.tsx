@@ -11,6 +11,7 @@ import LevelTooltip from "../../components/LevelTooltip";
 import LevelCelebration from "../../components/LevelCelebration";
 import AchievementList from "../../components/AchievementList";
 import InboxActivity from "../../components/InboxActivity";
+import InteractionGraph from "../../components/InteractionGraph";
 import AttentionHistory from "../../components/AttentionHistory";
 import IdentityBadge from "../../components/IdentityBadge";
 import ReputationSummary from "../../components/ReputationSummary";
@@ -291,6 +292,20 @@ export default function AgentProfile({
 
             {/* ── Main content ── */}
             <main className="space-y-6 min-w-0">
+              {/* Inbox — show for level 1+ agents */}
+              {agentLevel >= 1 && (
+                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                  <InboxActivity btcAddress={agent.btcAddress} />
+                </div>
+              )}
+
+              {/* Interaction Graph — show for level 1+ agents */}
+              {agentLevel >= 1 && (
+                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                  <InteractionGraph btcAddress={agent.btcAddress} />
+                </div>
+              )}
+
               {/* Achievements — show for level 1+ agents */}
               {agentLevel >= 1 && (
                 <div className="rounded-lg border border-white/[0.08] bg-white/[0.04] p-4">
@@ -318,13 +333,6 @@ export default function AgentProfile({
                       <ReputationSummary address={agent.btcAddress} />
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* Inbox — show for level 1+ agents */}
-              {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-                  <InboxActivity btcAddress={agent.btcAddress} />
                 </div>
               )}
 

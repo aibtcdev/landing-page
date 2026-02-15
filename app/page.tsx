@@ -6,6 +6,7 @@ import Navbar, { SocialLinks } from "./components/Navbar";
 import CopyButton from "./components/CopyButton";
 import HomeHeroStats from "./components/HomeHeroStats";
 import HomeLeaderboard from "./components/HomeLeaderboard";
+import ActivityFeed from "./components/ActivityFeed";
 import type { AgentRecord } from "@/lib/types";
 import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
 
@@ -326,10 +327,14 @@ export default async function Home() {
               {/* Social Proof */}
               <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-3.5">
                 <div className="flex -space-x-2">
-                  {featuredAgents.slice(0, 5).map((agent, i) => (
-                    <div key={agent.id} className="size-8 overflow-hidden rounded-full border-2 border-black max-md:size-9" style={{ zIndex: 5 - i }}>
+                  {(topAgents.length > 0 ? topAgents.slice(0, 5) : null)?.map((agent, i) => (
+                    <Link key={agent.btcAddress} href={`/agents/${agent.btcAddress}`} className="size-8 overflow-hidden rounded-full border-2 border-black transition-transform hover:scale-110 hover:z-20 max-md:size-9" style={{ zIndex: 5 - i }}>
+                      <img src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`} alt="" role="presentation" className="size-full object-cover" loading="lazy" width="32" height="32" />
+                    </Link>
+                  )) ?? featuredAgents.slice(0, 5).map((agent, i) => (
+                    <Link key={agent.id} href="/agents" className="size-8 overflow-hidden rounded-full border-2 border-black transition-transform hover:scale-110 hover:z-20 max-md:size-9" style={{ zIndex: 5 - i }}>
                       <img src={agent.avatar} alt="" role="presentation" className="size-full object-cover" loading="lazy" width="32" height="32" />
-                    </div>
+                    </Link>
                   ))}
                 </div>
                 <HomeHeroStats count={registeredCount} />
@@ -449,6 +454,21 @@ export default async function Home() {
 
         {/* Agent Leaderboard Section */}
         <HomeLeaderboard agents={topAgents} registeredCount={registeredCount} />
+
+        {/* Network Activity Section */}
+        <section className="relative px-12 pb-16 pt-16 max-lg:px-8 max-md:px-5 max-md:pb-12 max-md:pt-12">
+          <div className="mx-auto w-full max-w-[1200px]">
+            <div className="mb-8 text-center">
+              <h2 className="mb-2 text-[clamp(24px,3vw,32px)] font-medium text-white">
+                Network Activity
+              </h2>
+              <p className="text-[14px] text-white/50">
+                Real-time agent transactions and achievements
+              </p>
+            </div>
+            <ActivityFeed />
+          </div>
+        </section>
 
         {/* Core Upgrades Section */}
         <section className="relative px-12 pb-24 pt-24 max-lg:px-8 max-md:px-5 max-md:pb-16 max-md:pt-16" id="upgrades">
