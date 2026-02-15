@@ -17,9 +17,9 @@ type Agent = AgentRecord & {
   unreadCount?: number;
 };
 
-type SortField = "level" | "checkIns" | "joined" | "activity";
+type SortField = "level" | "checkIns" | "joined" | "activity" | "messages";
 type SortOrder = "asc" | "desc";
-type LevelFilter = "all" | "genesis" | "registered";
+type LevelFilter = "all" | "genesis" | "registered" | "identity" | "active24h";
 
 interface AgentListProps {
   agents: Agent[];
@@ -43,7 +43,7 @@ function IdentityIcon() {
 }
 
 export default function AgentList({ agents }: AgentListProps) {
-  const [sortBy, setSortBy] = useState<SortField>("level");
+  const [sortBy, setSortBy] = useState<SortField>("activity");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
   const [showLevelInfo, setShowLevelInfo] = useState(false);
@@ -54,6 +54,13 @@ export default function AgentList({ agents }: AgentListProps) {
       filtered = agents.filter((a) => (a.level ?? 0) === 2);
     } else if (levelFilter === "registered") {
       filtered = agents.filter((a) => (a.level ?? 0) === 1);
+    } else if (levelFilter === "identity") {
+      filtered = agents.filter((a) => a.erc8004AgentId != null);
+    } else if (levelFilter === "active24h") {
+      const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+      filtered = agents.filter((a) =>
+        a.lastActiveAt && new Date(a.lastActiveAt).getTime() > oneDayAgo
+      );
     }
 
     const sorted = [...filtered].sort((a, b) => {
@@ -78,6 +85,8 @@ export default function AgentList({ agents }: AgentListProps) {
         const aTime = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
         const bTime = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
         comparison = bTime - aTime;
+      } else if (sortBy === "messages") {
+        comparison = (b.messageCount ?? 0) - (a.messageCount ?? 0);
       }
 
       return sortOrder === "asc" ? -comparison : comparison;
@@ -95,11 +104,18 @@ export default function AgentList({ agents }: AgentListProps) {
     }
   };
 
-  const filterCounts = useMemo(() => ({
-    all: agents.length,
-    genesis: agents.filter((a) => (a.level ?? 0) === 2).length,
-    registered: agents.filter((a) => (a.level ?? 0) === 1).length,
-  }), [agents]);
+  const filterCounts = useMemo(() => {
+    const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    return {
+      all: agents.length,
+      genesis: agents.filter((a) => (a.level ?? 0) === 2).length,
+      registered: agents.filter((a) => (a.level ?? 0) === 1).length,
+      identity: agents.filter((a) => a.erc8004AgentId != null).length,
+      active24h: agents.filter((a) =>
+        a.lastActiveAt && new Date(a.lastActiveAt).getTime() > oneDayAgo
+      ).length,
+    };
+  }, [agents]);
 
   if (agents.length === 0) {
     return (
@@ -182,6 +198,8 @@ export default function AgentList({ agents }: AgentListProps) {
           { key: "all" as const, label: "All" },
           { key: "genesis" as const, label: "Genesis" },
           { key: "registered" as const, label: "Registered" },
+          { key: "identity" as const, label: "Has Identity" },
+          { key: "active24h" as const, label: "Active 24h" },
         ]).map(({ key, label }) => (
           <button
             key={key}
@@ -225,6 +243,17 @@ export default function AgentList({ agents }: AgentListProps) {
                   <div className="inline-flex items-center gap-1.5">
                     Check-ins
                     <SortIcon active={sortBy === "checkIns"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
+              <th
+                className="cursor-pointer px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                onClick={() => handleSort("messages")}
+              >
+                <Tooltip text="Total inbox messages received by this agent.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Messages
+                    <SortIcon active={sortBy === "messages"} order={sortOrder} />
                   </div>
                 </Tooltip>
               </th>
@@ -301,6 +330,13 @@ export default function AgentList({ agents }: AgentListProps) {
                     <span className="text-[13px] text-white/50">
                       {agent.checkInCount !== undefined && agent.checkInCount > 0
                         ? agent.checkInCount.toLocaleString()
+                        : "-"}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5 text-center">
+                    <span className="text-[13px] text-white/50">
+                      {agent.messageCount !== undefined && agent.messageCount > 0
+                        ? agent.messageCount.toLocaleString()
                         : "-"}
                     </span>
                   </td>
