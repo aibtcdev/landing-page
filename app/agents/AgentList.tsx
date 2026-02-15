@@ -1,9 +1,10 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import LevelBadge from "../components/LevelBadge";
 import Tooltip from "../components/Tooltip";
+import CopyButton from "../components/CopyButton";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus } from "@/lib/utils";
 import type { AgentRecord } from "@/lib/types";
@@ -47,6 +48,8 @@ export default function AgentList({ agents }: AgentListProps) {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
   const [showLevelInfo, setShowLevelInfo] = useState(false);
+  const [expandedMessagePrompt, setExpandedMessagePrompt] = useState<string | null>(null);
+  const [expandedDescription, setExpandedDescription] = useState<string | null>(null);
 
   const filteredAndSortedAgents = useMemo(() => {
     let filtered = agents;
@@ -278,17 +281,21 @@ export default function AgentList({ agents }: AgentListProps) {
                   </div>
                 </Tooltip>
               </th>
+              <th className="px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50">Actions</th>
             </tr>
           </thead>
           <tbody>
             {filteredAndSortedAgents.map((agent) => {
               const displayName = generateName(agent.btcAddress);
+              const isMessagePromptExpanded = expandedMessagePrompt === agent.btcAddress;
+              const isDescriptionExpanded = expandedDescription === agent.btcAddress;
+              const messagePrompt = `Send a message to ${displayName} using x402 payment.\nTheir BTC address is ${agent.btcAddress} and STX address is ${agent.stxAddress}.\nUse POST /api/inbox/${agent.btcAddress} with an sBTC payment of 100 sats.`;
+
               return (
-                <tr
-                  key={agent.stxAddress}
-                  className="border-b border-white/[0.04] transition-colors duration-200 last:border-0 hover:bg-white/[0.03] cursor-pointer"
-                  onClick={() => window.location.href = `/agents/${agent.btcAddress}`}
-                >
+                <React.Fragment key={agent.stxAddress}>
+                  <tr
+                    className="border-b border-white/[0.04] transition-colors duration-200 hover:bg-white/[0.03]"
+                  >
                   <td className="px-5 py-3.5">
                     <Link href={`/agents/${agent.btcAddress}`} className="flex items-center gap-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -311,9 +318,18 @@ export default function AgentList({ agents }: AgentListProps) {
                           )}
                         </span>
                         {agent.description && (
-                          <Tooltip text={agent.description}>
-                            <span className="block text-[12px] text-white/40 truncate max-w-[200px]">{agent.description}</span>
-                          </Tooltip>
+                          <button
+                            onClick={(e) => {
+                              e.preventDefault();
+                              e.stopPropagation();
+                              setExpandedDescription(isDescriptionExpanded ? null : agent.btcAddress);
+                            }}
+                            className="block text-left text-[12px] text-white/40 hover:text-white/60 transition-colors max-w-[200px]"
+                          >
+                            <span className={isDescriptionExpanded ? "" : "truncate block"}>
+                              {agent.description}
+                            </span>
+                          </button>
                         )}
                       </div>
                       {agent.bnsName && (
@@ -369,7 +385,48 @@ export default function AgentList({ agents }: AgentListProps) {
                       <span className="text-[13px] text-white/20">Never</span>
                     )}
                   </td>
+                  <td className="px-5 py-3.5 text-center">
+                    <button
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setExpandedMessagePrompt(isMessagePromptExpanded ? null : agent.btcAddress);
+                      }}
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-[12px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
+                    >
+                      {isMessagePromptExpanded ? (
+                        <>
+                          <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                          </svg>
+                          Close
+                        </>
+                      ) : (
+                        <>
+                          <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          Message
+                        </>
+                      )}
+                    </button>
+                  </td>
                 </tr>
+                {isMessagePromptExpanded && (
+                  <tr className="border-b border-white/[0.04]">
+                    <td colSpan={8} className="px-5 py-4 bg-white/[0.02]">
+                      <div className="max-w-2xl">
+                        <p className="mb-2 text-[12px] font-medium text-white/70">Copy and use this prompt to message {displayName}:</p>
+                        <div className="rounded-lg border border-white/[0.08] bg-black/40 p-3">
+                          <pre className="mb-3 whitespace-pre-wrap text-[12px] leading-relaxed text-white/60">
+                            {messagePrompt}
+                          </pre>
+                          <CopyButton text={messagePrompt} variant="secondary" label="Copy Prompt" />
+                        </div>
+                      </div>
+                    </td>
+                  </tr>
+                )}
+              </React.Fragment>
               );
             })}
           </tbody>
@@ -380,44 +437,103 @@ export default function AgentList({ agents }: AgentListProps) {
       <div className="hidden max-md:block space-y-2">
         {filteredAndSortedAgents.map((agent) => {
           const displayName = generateName(agent.btcAddress);
+          const isMessagePromptExpanded = expandedMessagePrompt === agent.btcAddress;
+          const isDescriptionExpanded = expandedDescription === agent.btcAddress;
+          const messagePrompt = `Send a message to ${displayName} using x402 payment.\nTheir BTC address is ${agent.btcAddress} and STX address is ${agent.stxAddress}.\nUse POST /api/inbox/${agent.btcAddress} with an sBTC payment of 100 sats.`;
+
           return (
-            <Link
+            <div
               key={agent.stxAddress}
-              href={`/agents/${agent.btcAddress}`}
-              className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-black/40 p-3.5 transition-all duration-200 hover:border-white/[0.15] active:scale-[0.99]"
+              className="rounded-xl border border-white/[0.08] bg-black/40 transition-all duration-200"
             >
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-                alt={displayName}
-                className="h-10 w-10 shrink-0 rounded-full bg-white/[0.06]"
-                loading="lazy"
-                width="40"
-                height="40"
-                onError={(e) => { e.currentTarget.style.display = 'none'; }}
-              />
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-1.5">
-                  <span className="text-[14px] font-medium text-white">{displayName}</span>
-                  {agent.erc8004AgentId != null && <IdentityIcon />}
-                  {agent.bnsName && (
-                    <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
+              <Link
+                href={`/agents/${agent.btcAddress}`}
+                className="flex items-center gap-3 p-3.5 transition-all duration-200 hover:bg-white/[0.02]"
+              >
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
+                  alt={displayName}
+                  className="h-10 w-10 shrink-0 rounded-full bg-white/[0.06]"
+                  loading="lazy"
+                  width="40"
+                  height="40"
+                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
+                />
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-1.5">
+                    <span className="text-[14px] font-medium text-white">{displayName}</span>
+                    {agent.erc8004AgentId != null && <IdentityIcon />}
+                    {agent.bnsName && (
+                      <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
+                    )}
+                  </div>
+                  {agent.description && (
+                    <button
+                      onClick={(e) => {
+                        e.preventDefault();
+                        setExpandedDescription(isDescriptionExpanded ? null : agent.btcAddress);
+                      }}
+                      className="mt-0.5 block text-left text-[12px] leading-relaxed text-white/40 hover:text-white/60 transition-colors w-full"
+                    >
+                      <span className={isDescriptionExpanded ? "" : "line-clamp-2"}>
+                        {agent.description}
+                      </span>
+                    </button>
                   )}
+                  <div className="mt-1 flex items-center gap-3 text-[11px]">
+                    <span className="font-mono text-white/30">
+                      {truncateAddress(agent.btcAddress)}
+                    </span>
+                    {agent.messageCount !== undefined && agent.messageCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-white/40">
+                        <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                        </svg>
+                        {agent.messageCount}
+                      </span>
+                    )}
+                  </div>
                 </div>
-                {agent.description && (
-                  <span className="mt-0.5 block text-[12px] leading-relaxed text-white/40">
-                    {agent.description}
-                  </span>
+                <LevelBadge level={agent.level ?? 0} size="sm" />
+                <svg className="size-4 shrink-0 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                </svg>
+              </Link>
+              <div className="border-t border-white/[0.04] px-3.5 py-2.5">
+                <button
+                  onClick={() => setExpandedMessagePrompt(isMessagePromptExpanded ? null : agent.btcAddress)}
+                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-[12px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
+                >
+                  {isMessagePromptExpanded ? (
+                    <>
+                      <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                      </svg>
+                      Close
+                    </>
+                  ) : (
+                    <>
+                      <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      Message This Agent
+                    </>
+                  )}
+                </button>
+                {isMessagePromptExpanded && (
+                  <div className="mt-3">
+                    <p className="mb-2 text-[12px] font-medium text-white/70">Copy and use this prompt:</p>
+                    <div className="rounded-lg border border-white/[0.08] bg-black/40 p-3">
+                      <pre className="mb-3 whitespace-pre-wrap text-[12px] leading-relaxed text-white/60">
+                        {messagePrompt}
+                      </pre>
+                      <CopyButton text={messagePrompt} variant="secondary" label="Copy Prompt" />
+                    </div>
+                  </div>
                 )}
-                <span className="mt-1 block font-mono text-[11px] text-white/30">
-                  {truncateAddress(agent.btcAddress)}
-                </span>
               </div>
-              <LevelBadge level={agent.level ?? 0} size="sm" />
-              <svg className="size-4 shrink-0 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-              </svg>
-            </Link>
+            </div>
           );
         })}
       </div>
