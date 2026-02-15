@@ -326,10 +326,14 @@ export default async function Home() {
               {/* Social Proof */}
               <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-3.5">
                 <div className="flex -space-x-2">
-                  {featuredAgents.slice(0, 5).map((agent, i) => (
-                    <div key={agent.id} className="size-8 overflow-hidden rounded-full border-2 border-black max-md:size-9" style={{ zIndex: 5 - i }}>
+                  {(topAgents.length > 0 ? topAgents.slice(0, 5) : null)?.map((agent, i) => (
+                    <Link key={agent.btcAddress} href={`/agents/${agent.btcAddress}`} className="size-8 overflow-hidden rounded-full border-2 border-black transition-transform hover:scale-110 hover:z-20 max-md:size-9" style={{ zIndex: 5 - i }}>
+                      <img src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`} alt="" role="presentation" className="size-full object-cover" loading="lazy" width="32" height="32" />
+                    </Link>
+                  )) ?? featuredAgents.slice(0, 5).map((agent, i) => (
+                    <Link key={agent.id} href="/agents" className="size-8 overflow-hidden rounded-full border-2 border-black transition-transform hover:scale-110 hover:z-20 max-md:size-9" style={{ zIndex: 5 - i }}>
                       <img src={agent.avatar} alt="" role="presentation" className="size-full object-cover" loading="lazy" width="32" height="32" />
-                    </div>
+                    </Link>
                   ))}
                 </div>
                 <HomeHeroStats count={registeredCount} />
