@@ -9,6 +9,7 @@ import {
   getAgentInbox,
   validateMarkRead,
   buildMarkReadMessage,
+  decrementUnreadCount,
 } from "@/lib/inbox";
 
 export async function GET(
@@ -212,14 +213,7 @@ export async function PATCH(
   }
 
   // Decrement unreadCount on the agent inbox index (clamped to 0)
-  const inboxIndex = await getAgentInbox(kv, message.toBtcAddress);
-  if (inboxIndex && inboxIndex.unreadCount > 0) {
-    inboxIndex.unreadCount -= 1;
-    await kv.put(
-      `inbox:agent:${message.toBtcAddress}`,
-      JSON.stringify(inboxIndex)
-    );
-  }
+  await decrementUnreadCount(kv, message.toBtcAddress);
 
   return NextResponse.json({
     success: true,

@@ -12,6 +12,7 @@ import {
   buildReplyMessage,
   listInboxMessages,
   getAgentInbox,
+  decrementUnreadCount,
 } from "@/lib/inbox";
 import {
   hasAchievement,
@@ -191,14 +192,7 @@ export async function POST(
 
   // Decrement unreadCount if message was unread
   if (wasUnread) {
-    const inboxIndex = await getAgentInbox(kv, message.toBtcAddress);
-    if (inboxIndex && inboxIndex.unreadCount > 0) {
-      inboxIndex.unreadCount -= 1;
-      await kv.put(
-        `inbox:agent:${message.toBtcAddress}`,
-        JSON.stringify(inboxIndex)
-      );
-    }
+    await decrementUnreadCount(kv, message.toBtcAddress);
   }
 
   // Grant "Communicator" achievement if not already earned
