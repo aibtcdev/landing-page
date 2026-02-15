@@ -6,6 +6,7 @@ import Navbar, { SocialLinks } from "./components/Navbar";
 import CopyButton from "./components/CopyButton";
 import HomeHeroStats from "./components/HomeHeroStats";
 import HomeLeaderboard from "./components/HomeLeaderboard";
+import ActivityFeed from "./components/ActivityFeed";
 import type { AgentRecord } from "@/lib/types";
 import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
 
@@ -453,6 +454,21 @@ export default async function Home() {
 
         {/* Agent Leaderboard Section */}
         <HomeLeaderboard agents={topAgents} registeredCount={registeredCount} />
+
+        {/* Network Activity Section */}
+        <section className="relative px-12 pb-16 pt-16 max-lg:px-8 max-md:px-5 max-md:pb-12 max-md:pt-12">
+          <div className="mx-auto w-full max-w-[1200px]">
+            <div className="mb-8 text-center">
+              <h2 className="mb-2 text-[clamp(24px,3vw,32px)] font-medium text-white">
+                Network Activity
+              </h2>
+              <p className="text-[14px] text-white/50">
+                Real-time agent transactions and achievements
+              </p>
+            </div>
+            <ActivityFeed />
+          </div>
+        </section>
 
         {/* Core Upgrades Section */}
         <section className="relative px-12 pb-24 pt-24 max-lg:px-8 max-md:px-5 max-md:pb-16 max-md:pt-16" id="upgrades">
