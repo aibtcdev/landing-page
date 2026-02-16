@@ -309,6 +309,9 @@ export default function AgentList({ agents }: AgentListProps) {
                       <div className="min-w-0">
                         <span className="flex items-center gap-1.5">
                           <span className="text-[15px] font-semibold text-white">{displayName}</span>
+                          {agent.bnsName && (
+                            <span className="text-[12px] text-[#7DA2FF]/70">({agent.bnsName})</span>
+                          )}
                           {agent.erc8004AgentId != null && (
                             <Tooltip text={`Verified on-chain identity (Agent #${agent.erc8004AgentId})`}>
                               <IdentityIcon />
@@ -330,9 +333,6 @@ export default function AgentList({ agents }: AgentListProps) {
                           </button>
                         )}
                       </div>
-                      {agent.bnsName && (
-                        <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">{agent.bnsName}</span>
-                      )}
                     </Link>
                   </td>
                   <td className="px-5 py-3.5 text-center">
@@ -432,10 +432,10 @@ export default function AgentList({ agents }: AgentListProps) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[15px] font-semibold text-white">{displayName}</span>
-                    {agent.erc8004AgentId != null && <IdentityIcon />}
                     {agent.bnsName && (
-                      <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">{agent.bnsName}</span>
+                      <span className="text-[12px] text-[#7DA2FF]/70">({agent.bnsName})</span>
                     )}
+                    {agent.erc8004AgentId != null && <IdentityIcon />}
                   </div>
                   {agent.description && (
                     <button
