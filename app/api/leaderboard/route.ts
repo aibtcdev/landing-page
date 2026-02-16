@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord } from "@/lib/types";
-import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { computeLevel, LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
+import { getAchievementCount } from "@/lib/achievements";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -28,9 +29,9 @@ export async function GET(request: NextRequest) {
         },
         sort: {
           type: "string",
-          description: "Sort order: 'level' (default) or 'activity' (most recently active first)",
-          values: ["level", "activity"],
-          default: "level",
+          description: "Sort order: 'score' (default, composite activity score), 'registration' (pioneer priority), or 'activity' (most recently active first)",
+          values: ["score", "registration", "activity"],
+          default: "score",
           example: "?sort=activity returns agents sorted by lastActiveAt descending",
         },
         limit: {
@@ -61,6 +62,8 @@ export async function GET(request: NextRequest) {
             levelName: "string (Unverified | Registered | Genesis)",
             lastActiveAt: "string | undefined (ISO 8601 timestamp of last check-in)",
             checkInCount: "number | undefined (total check-ins)",
+            achievementCount: "number | undefined (total achievements unlocked)",
+            score: "number | undefined (composite activity score)",
           },
         ],
         distribution: {
@@ -79,7 +82,8 @@ export async function GET(request: NextRequest) {
         },
       },
       sortingRules: [
-        "Default (sort=level): Primary sort by level (highest first), secondary sort by verifiedAt (earliest first)",
+        "Default (sort=score): Composite activity score descending. Score = (level * 1000) + (achievements * 100) + checkIns + recency bonus (+50 active, +25 recent)",
+        "Registration (sort=registration): Primary sort by level (highest first), secondary sort by verifiedAt (earliest first, pioneer priority)",
         "Activity (sort=activity): Sort by lastActiveAt descending (most recently active first). Agents with no lastActiveAt sort last.",
       ],
       levelSystem: {
@@ -122,7 +126,7 @@ export async function GET(request: NextRequest) {
   const limitParam = searchParams.get("limit");
   const offsetParam = searchParams.get("offset");
 
-  const sortBy = sortParam === "activity" ? "activity" : "level";
+  const sortBy = sortParam === "registration" ? "registration" : sortParam === "activity" ? "activity" : "score";
   const limit = limitParam ? Math.min(parseInt(limitParam, 10) || 100, 100) : 100;
   const offset = offsetParam ? Math.max(parseInt(offsetParam, 10) || 0, 0) : 0;
 
@@ -170,9 +174,32 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Compute levels and build ranked list
+    // Fetch achievement counts for all agents
+    const achievementCounts = await Promise.all(
+      agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
+    );
+
+    // Compute levels and build ranked list with composite scores
+    const now = Date.now();
     let ranked = agents.map((agent, i) => {
       const level = computeLevel(agent, claims[i]);
+      const achievementCount = achievementCounts[i];
+      const checkInCount = agent.checkInCount || 0;
+
+      // Calculate recency bonus
+      let recencyBonus = 0;
+      if (agent.lastActiveAt) {
+        const timeSinceActive = now - new Date(agent.lastActiveAt).getTime();
+        if (timeSinceActive < ACTIVITY_THRESHOLDS.active) {
+          recencyBonus = 50; // Active within last hour
+        } else if (timeSinceActive < ACTIVITY_THRESHOLDS.recent) {
+          recencyBonus = 25; // Active within last 6 hours
+        }
+      }
+
+      // Composite score: (level * 1000) + (achievements * 100) + checkIns + recency
+      const score = (level * 1000) + (achievementCount * 100) + checkInCount + recencyBonus;
+
       return {
         stxAddress: agent.stxAddress,
         btcAddress: agent.btcAddress,
@@ -183,6 +210,8 @@ export async function GET(request: NextRequest) {
         levelName: LEVELS[level].name,
         lastActiveAt: agent.lastActiveAt,
         checkInCount: agent.checkInCount,
+        achievementCount,
+        score,
       };
     });
 
@@ -204,16 +233,18 @@ export async function GET(request: NextRequest) {
         if (!b.lastActiveAt) return -1;
         return new Date(b.lastActiveAt).getTime() - new Date(a.lastActiveAt).getTime();
       });
-    } else {
+    } else if (sortBy === "registration") {
       // Sort by level (highest first), then verifiedAt (earliest first)
       ranked.sort((a, b) => {
         if (b.level !== a.level) return b.level - a.level;
         return new Date(a.verifiedAt).getTime() - new Date(b.verifiedAt).getTime();
       });
+    } else {
+      // Sort by composite score descending (default)
+      ranked.sort((a, b) => b.score - a.score);
     }
 
     // Level distribution stats with activity metrics
-    const now = Date.now();
     const activeThreshold = now - ACTIVITY_THRESHOLDS.active;
     const distribution = {
       genesis: ranked.filter((a) => a.level === 2).length,

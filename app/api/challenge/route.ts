@@ -21,8 +21,8 @@ import {
   verifyMessageSignatureRsv,
 } from "@stacks/encryption";
 import { bytesToHex } from "@stacks/common";
-import type { AgentRecord } from "@/lib/types";
-import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { getAgentLevel } from "@/lib/levels";
 
 /**
  * Determine the address type from the format.

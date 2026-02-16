@@ -189,6 +189,29 @@ async function getAgentIndex(
 }
 
 /**
+ * Get the count of achievements unlocked by an agent.
+ *
+ * Lightweight alternative to getAgentAchievements() when you only need
+ * the count (e.g., for leaderboard ranking).
+ *
+ * @param kv - Cloudflare KV namespace
+ * @param btcAddress - Bitcoin address
+ * @returns Number of achievements unlocked (0 if none)
+ *
+ * @example
+ * const count = await getAchievementCount(kv, "bc1q...");
+ * console.log(`Agent has ${count} achievements`);
+ */
+export async function getAchievementCount(
+  kv: KVNamespace,
+  btcAddress: string
+): Promise<number> {
+  const index = await getAgentIndex(kv, btcAddress);
+  if (!index) return 0;
+  return index.achievementIds.length;
+}
+
+/**
  * Update the agent achievement index.
  *
  * Adds a new achievement ID to the index or creates the index if it doesn't exist.

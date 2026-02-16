@@ -3,17 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { generateName } from "@/lib/name-generator";
 import { getNextLevel } from "@/lib/levels";
 import { TWITTER_HANDLE } from "@/lib/constants";
-
-interface ClaimRecord {
-  btcAddress: string;
-  displayName: string;
-  tweetUrl: string;
-  tweetAuthor: string | null;
-  claimedAt: string;
-  rewardSatoshis: number;
-  rewardTxid: string | null;
-  status: "pending" | "verified" | "rewarded" | "failed";
-}
+import type { ClaimRecord } from "@/lib/types";
 
 const MIN_REWARD_SATS = 5000;
 const MAX_REWARD_SATS = 10000;

@@ -5,8 +5,8 @@
  * Used by inbox, outbox, heartbeat, paid-attention, and other API routes.
  */
 
-import { computeLevel, type ClaimStatus } from "@/lib/levels";
-import type { AgentRecord } from "@/lib/types";
+import { computeLevel } from "@/lib/levels";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
 
 /**
  * Look up an agent by BTC or STX address.

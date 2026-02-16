@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { GITHUB_RAW } from "@/lib/github-proxy";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord } from "@/lib/types";
-import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { TWITTER_HANDLE } from "@/lib/constants";
 

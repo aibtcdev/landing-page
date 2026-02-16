@@ -2,29 +2,24 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord } from "@/lib/types";
+import type { AgentRecord, ClaimStatus, ClaimRecord } from "@/lib/types";
 import { lookupAgent } from "@/lib/agent-lookup";
-import { getAgentLevel, computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import { getAgentLevel, computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { lookupBnsName } from "@/lib/bns";
 import { detectAgentIdentity } from "@/lib/identity/detection";
 import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import { TWITTER_HANDLE } from "@/lib/constants";
+import {
+  verifySenderAchievement,
+  checkRateLimit,
+  setRateLimit,
+  hasAchievement,
+  grantAchievement,
+} from "@/lib/achievements";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
-
-/** Claim record shape stored in KV at `claim:{btcAddress}` */
-interface ClaimRecord {
-  btcAddress: string;
-  displayName: string;
-  tweetUrl: string;
-  tweetAuthor: string | null;
-  claimedAt: string;
-  rewardSatoshis: number;
-  rewardTxid: string | null;
-  status: "pending" | "verified" | "rewarded" | "failed";
-}
 
 
 /**
@@ -257,10 +252,29 @@ export default async function AgentProfilePage({
       );
     }
 
-    // Fetch claim (cached, shared with generateMetadata) and identity in parallel
-    const [claimRecord, agentWithIdentity] = await Promise.all([
+    // Fetch claim, resolve identity, and proactively check sender achievement in parallel
+    const [claimRecord, agentWithIdentity, _senderCheck] = await Promise.all([
       cachedFetchClaim(agent.btcAddress),
       resolveIdentity(kv, agent, env.HIRO_API_KEY),
+      // Proactively check sender achievement (fire-and-forget, result unused)
+      (async () => {
+        try {
+          const rateLimit = await checkRateLimit(kv, agent.btcAddress, "sender");
+          if (rateLimit.allowed) {
+            const hasSender = await hasAchievement(kv, agent.btcAddress, "sender");
+            if (!hasSender) {
+              const hasOutgoingTx = await verifySenderAchievement(agent.btcAddress, kv);
+              if (hasOutgoingTx) {
+                await grantAchievement(kv, agent.btcAddress, "sender");
+              }
+            }
+            await setRateLimit(kv, agent.btcAddress, "sender");
+          }
+        } catch (error) {
+          // Best-effort: log and continue if achievement check fails
+          console.error("Failed to check sender achievement during profile load:", error);
+        }
+      })(),
     ]);
 
     // Compute level info

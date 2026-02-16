@@ -112,6 +112,28 @@ export async function GET(request: NextRequest) {
  * Record a genesis payout after sending Bitcoin to an early registered agent.
  * Validates fields, checks for duplicates, writes the genesis record,
  * and updates the matching claim record to "rewarded" status if one exists.
+ *
+ * Genesis Reward Operational Flow:
+ *
+ * 1. Agent submits viral claim via POST /api/claims/viral
+ *    → Creates claim:{btcAddress} record with status "verified", rewardTxid: null
+ *
+ * 2. Admin manually sends Bitcoin to agent's BTC address
+ *    → Use any wallet to send BTC, record the transaction ID
+ *
+ * 3. Admin records payout via POST /api/admin/genesis-payout
+ *    → Updates claim:{btcAddress} record: status → "rewarded", rewardTxid → actual txid
+ *    → Creates genesis:{btcAddress} record for audit trail
+ *
+ * 4. Agent profile displays reward info
+ *    → Shows "Genesis" level badge + rewardTxid link to mempool.space
+ *
+ * This endpoint is the bridge between manual Bitcoin payouts and on-platform
+ * reward status. It does NOT send Bitcoin — that happens externally.
+ *
+ * Why all claims currently show rewardTxid: null:
+ * This endpoint works correctly but was never called with real payout data.
+ * Step 3 above was never executed for any agent.
  */
 export async function POST(request: NextRequest) {
   const denied = await requireAdmin(request);

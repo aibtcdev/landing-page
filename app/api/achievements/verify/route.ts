@@ -5,10 +5,20 @@ import {
   hasAchievement,
   getAchievementDefinition,
 } from "@/lib/achievements";
-import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
-import type { AgentRecord } from "@/lib/types";
+import {
+  verifySenderAchievement,
+  setRateLimit,
+  ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,
+} from "@/lib/achievements/verify";
+import { getAgentLevel } from "@/lib/levels";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import {
+  getCachedTransaction,
+  setCachedTransaction,
+} from "@/lib/identity/kv-cache";
+import { buildHiroHeaders, detect429AndFallback } from "@/lib/identity/stacks-api";
 
-const RATE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes
+const RATE_LIMIT_MS = ACHIEVEMENT_VERIFY_RATE_LIMIT_MS;
 
 export function GET() {
   return NextResponse.json(
@@ -132,6 +142,7 @@ export async function POST(request: NextRequest) {
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const hiroApiKey = env.HIRO_API_KEY as string | undefined;
 
     // Look up agent
     const agentData = await kv.get(`btc:${btcAddress}`);
@@ -213,41 +224,22 @@ export async function POST(request: NextRequest) {
       checked.push("sender");
 
       // Set rate limit for sender
-      await kv.put(
-        `ratelimit:achievement-verify:${btcAddress}:sender`,
-        String(Date.now()),
-        { expirationTtl: 300 }
-      );
+      await setRateLimit(kv, btcAddress, "sender");
 
       const hasSender = await hasAchievement(kv, btcAddress, "sender");
 
       if (!hasSender) {
         try {
-          const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
-          const mempoolResp = await fetch(mempoolUrl, {
-            signal: AbortSignal.timeout(10000),
-          });
+          const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv);
 
-          if (mempoolResp.ok) {
-            const txs = (await mempoolResp.json()) as Array<{
-              vin: Array<{ prevout: { scriptpubkey_address: string } }>;
-            }>;
-
-            const hasOutgoingTx = txs.some((tx) =>
-              tx.vin.some(
-                (input) => input.prevout.scriptpubkey_address === btcAddress
-              )
-            );
-
-            if (hasOutgoingTx) {
-              const record = await grantAchievement(kv, btcAddress, "sender");
-              const definition = getAchievementDefinition("sender");
-              earned.push({
-                id: "sender",
-                name: definition?.name ?? "Sender",
-                unlockedAt: record.unlockedAt,
-              });
-            }
+          if (hasOutgoingTx) {
+            const record = await grantAchievement(kv, btcAddress, "sender");
+            const definition = getAchievementDefinition("sender");
+            earned.push({
+              id: "sender",
+              name: definition?.name ?? "Sender",
+              unlockedAt: record.unlockedAt,
+            });
           }
         } catch (e) {
           console.error("Failed to check sender achievement:", e);
@@ -262,32 +254,14 @@ export async function POST(request: NextRequest) {
       checked.push("connector");
 
       // Set rate limit for connector
-      await kv.put(
-        `ratelimit:achievement-verify:${btcAddress}:connector`,
-        String(Date.now()),
-        { expirationTtl: 300 }
-      );
+      await setRateLimit(kv, btcAddress, "connector");
 
       const hasConnector = await hasAchievement(kv, btcAddress, "connector");
 
       if (!hasConnector) {
         try {
-          // Fetch transaction from Stacks API
-          const txUrl = `https://api.hiro.so/extended/v1/tx/${txid}`;
-          const txResp = await fetch(txUrl, {
-            signal: AbortSignal.timeout(10000),
-          });
-
-          if (!txResp.ok) {
-            return NextResponse.json(
-              {
-                error: `Failed to fetch transaction ${txid}: ${txResp.status} ${txResp.statusText}`,
-              },
-              { status: 400 }
-            );
-          }
-
-          const tx = (await txResp.json()) as {
+          // Define the transaction type
+          type StacksTransaction = {
             tx_status: string;
             tx_type: string;
             sender_address: string;
@@ -300,6 +274,58 @@ export async function POST(request: NextRequest) {
               }>;
             };
           };
+
+          // Check cache first
+          let tx: StacksTransaction | null = await getCachedTransaction(txid, kv);
+
+          if (!tx) {
+            // Fetch transaction from Stacks API with API key
+            const txUrl = `https://api.hiro.so/extended/v1/tx/${txid}`;
+            const headers = buildHiroHeaders(hiroApiKey);
+            const txResp = await fetch(txUrl, {
+              headers,
+              signal: AbortSignal.timeout(10000),
+            });
+
+            // Check for rate limiting
+            const rateLimitCheck = detect429AndFallback(txResp);
+            if (rateLimitCheck.isRateLimited) {
+              return NextResponse.json(
+                {
+                  error: `Stacks API rate limited. Try again later.`,
+                  retryAfter: 60,
+                },
+                {
+                  status: 503,
+                  headers: { "Retry-After": "60" },
+                }
+              );
+            }
+
+            if (!txResp.ok) {
+              return NextResponse.json(
+                {
+                  error: `Failed to fetch transaction ${txid}: ${txResp.status} ${txResp.statusText}`,
+                },
+                { status: 400 }
+              );
+            }
+
+            tx = (await txResp.json()) as StacksTransaction;
+
+            // Cache the transaction
+            await setCachedTransaction(txid, tx, kv);
+          }
+
+          // Ensure we have a transaction
+          if (!tx) {
+            return NextResponse.json(
+              {
+                error: `Failed to fetch transaction ${txid}`,
+              },
+              { status: 500 }
+            );
+          }
 
           // Validate transaction fields
           if (tx.tx_status !== "success") {

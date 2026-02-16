@@ -9,7 +9,7 @@
  * through the achievement system for ongoing engagement.
  */
 
-import type { AgentRecord } from "./types";
+import type { AgentRecord, ClaimStatus } from "./types";
 
 export interface LevelDefinition {
   level: number;
@@ -32,12 +32,6 @@ export interface AgentLevelInfo {
   level: number;
   levelName: string;
   nextLevel: NextLevelInfo | null;
-}
-
-export interface ClaimStatus {
-  status: "pending" | "verified" | "rewarded" | "failed";
-  claimedAt: string;
-  rewardSatoshis?: number;
 }
 
 export const LEVELS: LevelDefinition[] = [
