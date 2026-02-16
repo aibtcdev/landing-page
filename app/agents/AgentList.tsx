@@ -294,7 +294,7 @@ export default function AgentList({ agents }: AgentListProps) {
               return (
                 <React.Fragment key={agent.stxAddress}>
                   <tr
-                    className="border-b border-white/[0.04] transition-colors duration-200 hover:bg-white/[0.03]"
+                    className="h-[60px] border-b border-white/[0.04] transition-colors duration-200 hover:bg-white/[0.03]"
                   >
                   <td className="px-5 py-3.5">
                     <Link href={`/agents/${agent.btcAddress}`} className="flex items-center gap-3">
@@ -302,15 +302,15 @@ export default function AgentList({ agents }: AgentListProps) {
                       <img
                         src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
                         alt={displayName}
-                        className="h-8 w-8 shrink-0 rounded-full bg-white/[0.06]"
+                        className="h-9 w-9 shrink-0 rounded-full bg-white/[0.06]"
                         loading="lazy"
-                        width="32"
-                        height="32"
+                        width="36"
+                        height="36"
                         onError={(e) => { e.currentTarget.style.display = 'none'; }}
                       />
                       <div className="min-w-0">
                         <span className="flex items-center gap-1.5">
-                          <span className="text-[14px] font-medium text-white">{displayName}</span>
+                          <span className="text-[15px] font-semibold text-white">{displayName}</span>
                           {agent.erc8004AgentId != null && (
                             <Tooltip text={`Verified on-chain identity (Agent #${agent.erc8004AgentId})`}>
                               <IdentityIcon />
@@ -324,7 +324,7 @@ export default function AgentList({ agents }: AgentListProps) {
                               e.stopPropagation();
                               setExpandedDescription(isDescriptionExpanded ? null : agent.btcAddress);
                             }}
-                            className="block text-left text-[12px] text-white/40 hover:text-white/60 transition-colors max-w-[200px]"
+                            className="block text-left text-[13px] text-white/50 hover:text-white/60 transition-colors max-w-[200px]"
                           >
                             <span className={isDescriptionExpanded ? "" : "truncate block"}>
                               {agent.description}
@@ -333,7 +333,7 @@ export default function AgentList({ agents }: AgentListProps) {
                         )}
                       </div>
                       {agent.bnsName && (
-                        <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
+                        <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
                       )}
                     </Link>
                   </td>
@@ -448,7 +448,7 @@ export default function AgentList({ agents }: AgentListProps) {
             >
               <Link
                 href={`/agents/${agent.btcAddress}`}
-                className="flex items-center gap-3 p-3.5 transition-all duration-200 hover:bg-white/[0.02]"
+                className="flex min-h-[64px] items-center gap-3 p-3.5 transition-all duration-200 hover:bg-white/[0.02]"
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -462,10 +462,10 @@ export default function AgentList({ agents }: AgentListProps) {
                 />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
-                    <span className="text-[14px] font-medium text-white">{displayName}</span>
+                    <span className="text-[15px] font-semibold text-white">{displayName}</span>
                     {agent.erc8004AgentId != null && <IdentityIcon />}
                     {agent.bnsName && (
-                      <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[10px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
+                      <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
                     )}
                   </div>
                   {agent.description && (
@@ -474,7 +474,7 @@ export default function AgentList({ agents }: AgentListProps) {
                         e.preventDefault();
                         setExpandedDescription(isDescriptionExpanded ? null : agent.btcAddress);
                       }}
-                      className="mt-0.5 block text-left text-[12px] leading-relaxed text-white/40 hover:text-white/60 transition-colors w-full"
+                      className="mt-0.5 block text-left text-[13px] leading-relaxed text-white/50 hover:text-white/60 transition-colors w-full"
                     >
                       <span className={isDescriptionExpanded ? "" : "line-clamp-2"}>
                         {agent.description}
