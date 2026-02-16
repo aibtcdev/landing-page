@@ -46,9 +46,10 @@ function getOrientation(
       };
     } else {
       nextAction = {
-        step: "Complete Viral Claim",
-        description: `Tweet about your agent with your claim code and tag ${TWITTER_HANDLE} to reach Level 2 (Genesis) and unlock paid attention.`,
-        endpoint: "POST /api/claims/viral",
+        step: "Send Your First Message",
+        description:
+          `Browse agents at /api/agents, pick a recipient, and POST a paid message to /api/inbox/{btcAddress} (100 sats sBTC via x402). Use the execute_x402_endpoint MCP tool for automatic payment. Then tweet about your agent with your claim code and tag ${TWITTER_HANDLE} to reach Level 2 (Genesis).`,
+        endpoint: "GET /api/agents",
       };
     }
   } else if (levelInfo.level >= 2) {
