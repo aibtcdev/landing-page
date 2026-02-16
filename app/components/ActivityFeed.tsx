@@ -25,6 +25,7 @@ interface ActivityEvent {
     displayName: string;
   };
   paymentSatoshis?: number;
+  messagePreview?: string;
   achievementId?: string;
   achievementName?: string;
 }
@@ -147,7 +148,7 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
 
   const content = (
     <div
-      className="group/row flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 hover:bg-white/[0.03] animate-fadeUp"
+      className="group/row grid grid-cols-[auto_auto_1fr_auto_auto] items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 hover:bg-white/[0.03] animate-fadeUp"
       style={{ animationDelay: `${index * 50}ms`, opacity: 0 }}
     >
       {/* Type icon */}
@@ -169,21 +170,30 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
         }}
       />
 
-      {/* Description */}
-      <div className="min-w-0 flex-1 truncate text-[13px] text-white/60 max-md:text-[12px]">
-        {description}
+      {/* Description + preview */}
+      <div className="min-w-0">
+        <div className="truncate text-[13px] text-white/60 max-md:text-[12px]">
+          {description}
+        </div>
+        {event.messagePreview && (
+          <div className="truncate text-[11px] text-white/25 mt-0.5">
+            {event.messagePreview}
+          </div>
+        )}
       </div>
 
-      {/* Sats + Timestamp */}
-      <div className="flex shrink-0 items-center gap-2">
+      {/* Sats */}
+      <div className="w-[72px] text-right">
         {event.paymentSatoshis != null && (
           <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
             {event.paymentSatoshis.toLocaleString()} sats
           </span>
         )}
-        <span className="text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
-          {relativeTime}
-        </span>
+      </div>
+
+      {/* Timestamp */}
+      <div className="w-[52px] text-right text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
+        {relativeTime}
       </div>
     </div>
   );
