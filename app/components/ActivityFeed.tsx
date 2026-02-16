@@ -117,8 +117,7 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
           <span className="font-medium text-white">{event.recipient?.displayName || "Unknown"}</span>
           {event.paymentSatoshis != null && (
             <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
-              <svg className="size-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 17.97L4.58 13.62 11.943 24l7.37-10.38-7.372 4.35h.003zM12.056 0L4.69 12.223l7.365 4.354 7.365-4.35L12.056 0z" /></svg>
-              {event.paymentSatoshis.toLocaleString()}
+              {event.paymentSatoshis.toLocaleString()} sats
             </span>
           )}
         </>
@@ -278,9 +277,7 @@ function StatsGrid({ stats }: { stats: NetworkStats }) {
         accent="bg-[#F7931A]"
         index={3}
         icon={
-          <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
-            <path d="M11.944 17.97L4.58 13.62 11.943 24l7.37-10.38-7.372 4.35h.003zM12.056 0L4.69 12.223l7.365 4.354 7.365-4.35L12.056 0z" />
-          </svg>
+          <span className="text-[11px] font-bold">sats</span>
         }
       />
     </div>
