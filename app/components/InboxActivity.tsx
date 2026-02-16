@@ -221,7 +221,7 @@ export default function InboxActivity({
       {/* Send Message Modal */}
       {sendModalOpen && (
         <SendMessageModal
-          isOpen={sendModalOpen}
+          isOpen={true}
           onClose={() => setSendModalOpen(false)}
           recipientBtcAddress={btcAddress}
           recipientStxAddress={resolvedStxAddress}
