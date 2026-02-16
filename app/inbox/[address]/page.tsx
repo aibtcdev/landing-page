@@ -132,7 +132,7 @@ export default function InboxPage() {
   }
 
   const { agent, inbox, howToSend } = data;
-  const { messages, replies, unreadCount, totalCount, pagination } = inbox;
+  const { messages, replies, unreadCount, totalCount, pagination = { hasMore: false, nextOffset: null, limit: 20, offset: 0 } } = inbox;
   const displayName = agent.displayName || generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const hasMessages = totalCount > 0;

@@ -297,6 +297,12 @@ export async function GET(
           satsNet: 0,
         },
         view,
+        pagination: {
+          limit,
+          offset,
+          hasMore: false,
+          nextOffset: null,
+        },
         ...(includePartners && { partners: [] }),
       },
       howToSend: {
