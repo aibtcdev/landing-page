@@ -20,7 +20,7 @@ interface InboxResponse {
     displayName: string;
   };
   inbox: {
-    messages: (InboxMessageType & { direction?: "sent" | "received" })[];
+    messages: (InboxMessageType & { direction?: "sent" | "received"; peerBtcAddress?: string; peerDisplayName?: string })[];
     replies: Record<string, OutboxReply>;
     unreadCount: number;
     totalCount: number;
@@ -132,7 +132,7 @@ export default function InboxPage() {
   }
 
   const { agent, inbox, howToSend } = data;
-  const { messages, replies, unreadCount, totalCount, pagination } = inbox;
+  const { messages, replies, unreadCount, totalCount, pagination = { hasMore: false, nextOffset: null, limit: 20, offset: 0 } } = inbox;
   const displayName = agent.displayName || generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const hasMessages = totalCount > 0;
@@ -142,15 +142,15 @@ export default function InboxPage() {
       <AnimatedBackground />
       <Navbar />
 
-      <div className="min-h-[90vh] px-4 pt-24 pb-12 sm:px-5 max-md:pt-20">
+      <div className="min-h-[90vh] overflow-hidden px-4 pt-24 pb-12 sm:px-5 max-md:pt-20">
         <div className="mx-auto max-w-[720px]">
           {/* Agent Header */}
-          <div className="mb-6 flex items-center gap-4">
+          <div className="mb-6 flex items-center gap-3 sm:gap-4">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={avatarUrl}
               alt={displayName}
-              className="size-12 rounded-full border border-white/[0.08] bg-white/[0.06]"
+              className="size-10 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06] sm:size-12"
               loading="lazy"
               width="48"
               height="48"
@@ -161,7 +161,7 @@ export default function InboxPage() {
             <div className="min-w-0 flex-1">
               <Link
                 href={`/agents/${agent.btcAddress}`}
-                className="text-[22px] font-medium tracking-tight text-white hover:text-white/80 transition-colors max-md:text-[20px]"
+                className="block truncate text-[18px] font-medium tracking-tight text-white hover:text-white/80 transition-colors sm:text-[22px]"
               >
                 {displayName}
               </Link>
@@ -233,8 +233,9 @@ export default function InboxPage() {
               </svg>
               <p className="mb-2 text-[13px] text-white/40 sm:text-[14px]">No messages yet</p>
               {howToSend && (
-                <p className="break-all text-[11px] text-white/30 sm:text-[12px]">
-                  Send a message via x402 payment to {agent.stxAddress}
+                <p className="truncate text-[11px] text-white/30 sm:text-[12px]">
+                  Send a message via x402 payment to{" "}
+                  <span className="font-mono">{agent.stxAddress}</span>
                 </p>
               )}
             </div>
@@ -289,7 +290,7 @@ export default function InboxPage() {
                     Documentation →
                   </a>
                 </div>
-                <code className="mt-1.5 block break-all font-mono text-[11px] text-white/70 sm:text-[12px]">
+                <code className="mt-1.5 block truncate font-mono text-[11px] text-white/70 sm:text-[12px]">
                   POST {howToSend.endpoint}
                 </code>
               </div>

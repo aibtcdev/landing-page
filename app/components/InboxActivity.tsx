@@ -13,11 +13,16 @@ interface InboxResponse {
     displayName: string;
   };
   inbox: {
-    messages: (InboxMessageType & { direction?: "sent" | "received" })[];
+    messages: (InboxMessageType & { direction?: "sent" | "received"; peerBtcAddress?: string; peerDisplayName?: string })[];
     unreadCount: number;
     totalCount: number;
     receivedCount?: number;
     sentCount?: number;
+    economics?: {
+      satsReceived: number;
+      satsSent: number;
+      satsNet: number;
+    };
   };
 }
 
@@ -100,6 +105,30 @@ export default function InboxActivity({
           <span>{receivedCount} received</span>
           <span>{sentCount} sent</span>
           {repliedCount > 0 && <span>{repliedCount} replied</span>}
+        </div>
+      )}
+
+      {/* Economic metrics */}
+      {hasMessages && data.inbox.economics && (
+        <div className="mb-3 grid grid-cols-3 gap-2">
+          <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
+            <span className="block text-[16px] font-semibold text-[#F7931A]">
+              {data.inbox.economics.satsReceived.toLocaleString()}
+            </span>
+            <span className="text-[10px] text-white/40">sats earned</span>
+          </div>
+          <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
+            <span className="block text-[16px] font-semibold text-white/70">
+              {data.inbox.economics.satsSent.toLocaleString()}
+            </span>
+            <span className="text-[10px] text-white/40">sats spent</span>
+          </div>
+          <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
+            <span className={`block text-[16px] font-semibold ${data.inbox.economics.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}`}>
+              {data.inbox.economics.satsNet.toLocaleString()}
+            </span>
+            <span className="text-[10px] text-white/40">net sats</span>
+          </div>
         </div>
       )}
 

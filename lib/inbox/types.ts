@@ -65,3 +65,18 @@ export interface SentMessageIndex {
   messageIds: string[];
   lastSentAt: string | null;
 }
+
+/**
+ * Summary of interactions with a partner agent.
+ *
+ * Used in the "Worked With" interaction graph on agent profiles.
+ * Partners are agents the user has exchanged messages with.
+ */
+export interface InboxPartner {
+  btcAddress: string;
+  stxAddress?: string;
+  displayName?: string;
+  messageCount: number;
+  lastInteractionAt: string;
+  direction: "sent" | "received" | "both";
+}

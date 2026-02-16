@@ -61,4 +61,5 @@ export {
   updateSentIndex,
   listInboxMessages,
   listSentMessages,
+  decrementUnreadCount,
 } from "./kv-helpers";

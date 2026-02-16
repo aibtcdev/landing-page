@@ -52,11 +52,12 @@ export async function GET(
     );
   }
 
-  // Parse query params for pagination and view
+  // Parse query params for pagination, view, and includes
   const url = new URL(request.url);
   const limitParam = url.searchParams.get("limit");
   const offsetParam = url.searchParams.get("offset");
   const viewParam = url.searchParams.get("view") || "all";
+  const includePartners = url.searchParams.get("include")?.includes("partners") ?? false;
 
   const limit = limitParam
     ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100)
@@ -138,11 +139,135 @@ export async function GET(
         ? receivedCount
         : sentCount;
 
-  // Build response messages with direction
-  const messages = combined.map(({ message, direction }) => ({
-    ...message,
-    direction,
-  }));
+  // Compute economic stats from index counts (not paginated messages)
+  // Each message costs INBOX_PRICE_SATS, so total = count * price
+  const satsReceived = receivedCount * INBOX_PRICE_SATS;
+  const satsSent = sentCount * INBOX_PRICE_SATS;
+
+  // Resolve sender/recipient agent info for display names and BTC addresses
+  const addressSet = new Set<string>();
+  for (const { message, direction } of combined) {
+    if (direction === "received") addressSet.add(message.fromAddress); // STX address
+    else addressSet.add(message.toBtcAddress); // BTC address
+  }
+  const agentLookupMap = new Map<string, import("@/lib/types").AgentRecord>();
+  await Promise.all(
+    Array.from(addressSet).map(async (addr) => {
+      const found = await lookupAgent(kv, addr);
+      if (found) agentLookupMap.set(addr, found);
+    })
+  );
+
+  // Build response messages with direction and resolved peer info
+  const messages = combined.map(({ message, direction }) => {
+    const peerAddress = direction === "received" ? message.fromAddress : message.toBtcAddress;
+    const peer = agentLookupMap.get(peerAddress);
+    return {
+      ...message,
+      direction,
+      peerBtcAddress: peer?.btcAddress ?? (direction === "sent" ? message.toBtcAddress : undefined),
+      peerDisplayName: peer?.displayName,
+    };
+  });
+
+  // Compute partner summary if requested
+  let partners: import("@/lib/inbox/types").InboxPartner[] | undefined;
+  if (includePartners && totalCount > 0) {
+    // Group messages by partner address
+    const partnerMap = new Map<string, {
+      btcAddress: string;
+      stxAddress?: string;
+      messageCount: number;
+      lastInteractionAt: string;
+      directions: Set<"sent" | "received">;
+    }>();
+
+    // Use all fetched messages (not just paginated subset) for complete partner view
+    const allMessages = [...(receivedResult?.messages ?? []), ...(sentResult?.messages ?? [])];
+
+    for (const msg of allMessages) {
+      // Determine partner address based on direction
+      let partnerStxAddress: string | undefined;
+      let partnerBtcAddress: string | undefined;
+      let direction: "sent" | "received";
+
+      // For received messages, partner is the sender (fromAddress = STX)
+      // Use message data (not reference equality) to determine direction
+      if (msg.toBtcAddress === agent.btcAddress) {
+        partnerStxAddress = msg.fromAddress;
+        direction = "received";
+      }
+      // For sent messages, partner is the recipient (toBtcAddress = BTC)
+      else {
+        partnerBtcAddress = msg.toBtcAddress;
+        direction = "sent";
+      }
+
+      // Skip if we can't identify the partner
+      if (!partnerStxAddress && !partnerBtcAddress) continue;
+
+      // Use a consistent key (prefer BTC address if available)
+      const partnerKey = partnerBtcAddress || partnerStxAddress!;
+
+      const existing = partnerMap.get(partnerKey);
+      if (existing) {
+        existing.messageCount++;
+        existing.directions.add(direction);
+        // Update last interaction if this message is more recent
+        if (new Date(msg.sentAt).getTime() > new Date(existing.lastInteractionAt).getTime()) {
+          existing.lastInteractionAt = msg.sentAt;
+        }
+      } else {
+        partnerMap.set(partnerKey, {
+          btcAddress: partnerBtcAddress || "",
+          stxAddress: partnerStxAddress,
+          messageCount: 1,
+          lastInteractionAt: msg.sentAt,
+          directions: new Set([direction]),
+        });
+      }
+    }
+
+    // Resolve partner addresses to agent records for display names
+    const partnerEntries = Array.from(partnerMap.entries());
+    const resolvedPartners = await Promise.all(
+      partnerEntries.map(async ([key, data]) => {
+        // Look up agent by STX or BTC address
+        const lookupAddress = data.stxAddress || data.btcAddress;
+        const partnerAgent = lookupAddress ? await lookupAgent(kv, lookupAddress) : null;
+
+        // Determine final direction
+        let finalDirection: "sent" | "received" | "both";
+        if (data.directions.has("sent") && data.directions.has("received")) {
+          finalDirection = "both";
+        } else if (data.directions.has("sent")) {
+          finalDirection = "sent";
+        } else {
+          finalDirection = "received";
+        }
+
+        return {
+          btcAddress: partnerAgent?.btcAddress || data.btcAddress,
+          stxAddress: partnerAgent?.stxAddress || data.stxAddress,
+          displayName: partnerAgent?.displayName,
+          messageCount: data.messageCount,
+          lastInteractionAt: data.lastInteractionAt,
+          direction: finalDirection,
+        };
+      })
+    );
+
+    // Sort by message count (descending), then by most recent interaction
+    resolvedPartners.sort((a, b) => {
+      if (b.messageCount !== a.messageCount) {
+        return b.messageCount - a.messageCount;
+      }
+      return new Date(b.lastInteractionAt).getTime() - new Date(a.lastInteractionAt).getTime();
+    });
+
+    // Limit to top 10 partners
+    partners = resolvedPartners.slice(0, 10);
+  }
 
   // If no messages, return self-documenting response
   if (totalCount === 0) {
@@ -162,7 +287,19 @@ export async function GET(
         totalCount: 0,
         receivedCount: 0,
         sentCount: 0,
+        economics: {
+          satsReceived: 0,
+          satsSent: 0,
+          satsNet: 0,
+        },
         view,
+        pagination: {
+          limit,
+          offset,
+          hasMore: false,
+          nextOffset: null,
+        },
+        ...(includePartners && { partners: [] }),
       },
       howToSend: {
         endpoint: `POST /api/inbox/${address}`,
@@ -197,6 +334,11 @@ export async function GET(
       totalCount,
       receivedCount,
       sentCount,
+      economics: {
+        satsReceived,
+        satsSent,
+        satsNet: satsReceived - satsSent,
+      },
       view,
       pagination: {
         limit,
@@ -204,6 +346,7 @@ export async function GET(
         hasMore: offset + limit < totalCount,
         nextOffset: offset + limit < totalCount ? offset + limit : null,
       },
+      ...(partners && { partners }),
     },
     howToSend: {
       endpoint: `POST /api/inbox/${address}`,
