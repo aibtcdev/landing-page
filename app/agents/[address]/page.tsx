@@ -253,10 +253,10 @@ export default async function AgentProfilePage({
     }
 
     // Fetch claim, resolve identity, and proactively check sender achievement in parallel
-    const [claimRecord, agentWithIdentity] = await Promise.all([
+    const [claimRecord, agentWithIdentity, _senderCheck] = await Promise.all([
       cachedFetchClaim(agent.btcAddress),
       resolveIdentity(kv, agent, env.HIRO_API_KEY),
-      // Proactively check sender achievement (best-effort, runs in background)
+      // Proactively check sender achievement (fire-and-forget, result unused)
       (async () => {
         try {
           const rateLimit = await checkRateLimit(kv, agent.btcAddress, "sender");

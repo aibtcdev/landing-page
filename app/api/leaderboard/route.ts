@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
-import { getAchievementCount } from "@/lib/achievements/kv";
+import { getAchievementCount } from "@/lib/achievements";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);

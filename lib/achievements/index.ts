@@ -22,6 +22,7 @@ export {
 export {
   getAgentAchievements,
   getAchievementRecord,
+  getAchievementCount,
   hasAchievement,
   grantAchievement,
 } from "./kv";

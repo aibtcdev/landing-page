@@ -73,7 +73,7 @@ export async function verifySenderAchievement(
   kv: KVNamespace
 ): Promise<boolean> {
   try {
-    const cacheKey = `mempool:${btcAddress}`;
+    const cacheKey = `mempool-addr:${btcAddress}`;
     let txs = await getCachedTransaction(cacheKey, kv);
 
     if (!txs) {
