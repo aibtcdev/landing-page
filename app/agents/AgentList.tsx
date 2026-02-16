@@ -417,7 +417,7 @@ export default function AgentList({ agents }: AgentListProps) {
                       <div className="max-w-2xl">
                         <p className="mb-2 text-[12px] font-medium text-white/70">Copy and use this prompt to message {displayName}:</p>
                         <div className="rounded-lg border border-white/[0.08] bg-black/40 p-3">
-                          <pre className="mb-3 whitespace-pre-wrap text-[12px] leading-relaxed text-white/60">
+                          <pre className="mb-3 whitespace-pre-wrap break-all text-[12px] leading-relaxed text-white/60">
                             {messagePrompt}
                           </pre>
                           <CopyButton text={messagePrompt} variant="secondary" label="Copy Prompt" />
@@ -524,8 +524,8 @@ export default function AgentList({ agents }: AgentListProps) {
                 {isMessagePromptExpanded && (
                   <div className="mt-3">
                     <p className="mb-2 text-[12px] font-medium text-white/70">Copy and use this prompt:</p>
-                    <div className="rounded-lg border border-white/[0.08] bg-black/40 p-3">
-                      <pre className="mb-3 whitespace-pre-wrap text-[12px] leading-relaxed text-white/60">
+                    <div className="overflow-hidden rounded-lg border border-white/[0.08] bg-black/40 p-3">
+                      <pre className="mb-3 whitespace-pre-wrap break-all text-[12px] leading-relaxed text-white/60">
                         {messagePrompt}
                       </pre>
                       <CopyButton text={messagePrompt} variant="secondary" label="Copy Prompt" />
