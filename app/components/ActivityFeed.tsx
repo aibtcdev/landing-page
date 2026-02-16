@@ -277,7 +277,9 @@ function StatsGrid({ stats }: { stats: NetworkStats }) {
         accent="bg-[#F7931A]"
         index={3}
         icon={
-          <span className="text-[11px] font-bold">sats</span>
+          <svg className="size-4" fill="currentColor" viewBox="0 0 24 24">
+            <path d="M13.5 3v2h2v2h-2v2h2v2h-2v2.5c2.5 0 4.5.5 4.5 3.25S16 20 13.5 20v2h-2v-2H10v2H8v-2H5v-2h1.5V6H5V4h3V2h2v2h1.5V2h2zM8.5 6v4H12c1.38 0 2.5-.5 2.5-2S13.38 6 12 6H8.5zm0 6v4.5H13c1.38 0 2.5-.62 2.5-2.25S14.38 12 13 12H8.5z" />
+          </svg>
         }
       />
     </div>
