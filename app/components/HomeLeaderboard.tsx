@@ -1,9 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import LevelBadge from "./LevelBadge";
 import { LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
+import SendMessageModal from "./SendMessageModal";
 
 interface LeaderboardAgent {
   rank: number;
@@ -36,6 +38,12 @@ interface HomeLeaderboardProps {
 }
 
 export default function HomeLeaderboard({ agents, registeredCount }: HomeLeaderboardProps) {
+  const [messageModalAgent, setMessageModalAgent] = useState<{
+    btcAddress: string;
+    stxAddress: string;
+    displayName: string;
+  } | null>(null);
+
   return (
     <section id="agents" className="relative pb-24 pt-16 max-md:pb-16 max-md:pt-12">
       <div className="mx-auto max-w-[1200px]">
@@ -66,33 +74,55 @@ export default function HomeLeaderboard({ agents, registeredCount }: HomeLeaderb
                   const truncated = `${agent.btcAddress.slice(0, 8)}...${agent.btcAddress.slice(-4)}`;
 
                   return (
-                    <Link
-                      href={`/agents/${agent.btcAddress}`}
+                    <div
                       key={agent.btcAddress}
-                      className="group flex-shrink-0 w-[200px] rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-3.5 backdrop-blur-[12px] transition-all duration-200 hover:border-white/[0.15] hover:-translate-y-1"
+                      className="group flex-shrink-0 w-[200px] rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] transition-all duration-200 hover:border-white/[0.15] hover:-translate-y-1"
                     >
-                      <div className="relative mb-2.5 size-14">
-                        <div className="size-14 overflow-hidden rounded-lg border border-white/10">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={avatarUrl} alt={name} className="size-full object-cover" loading="lazy" width="56" height="56" />
-                        </div>
-                        <div className="absolute -bottom-1 -right-1">
-                          <LevelBadge level={agent.level} size="sm" />
-                        </div>
-                      </div>
-                      <div className="mb-1">
-                        <span className="font-medium text-[14px] text-white block truncate">{name}</span>
-                      </div>
-                      <span
-                        className="text-[11px] font-medium block mb-1.5"
-                        style={{ color: LEVELS[agent.level]?.color || "rgba(255,255,255,0.3)" }}
+                      <Link
+                        href={`/agents/${agent.btcAddress}`}
+                        className="block p-3.5"
                       >
-                        {agent.levelName}
-                      </span>
-                      <span className="font-mono text-[10px] text-[#F7931A]/60 block truncate">
-                        {truncated}
-                      </span>
-                    </Link>
+                        <div className="relative mb-2.5 size-14">
+                          <div className="size-14 overflow-hidden rounded-lg border border-white/10">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={avatarUrl} alt={name} className="size-full object-cover" loading="lazy" width="56" height="56" />
+                          </div>
+                          <div className="absolute -bottom-1 -right-1">
+                            <LevelBadge level={agent.level} size="sm" />
+                          </div>
+                        </div>
+                        <div className="mb-1">
+                          <span className="font-medium text-[14px] text-white block truncate">{name}</span>
+                        </div>
+                        <span
+                          className="text-[11px] font-medium block mb-1.5"
+                          style={{ color: LEVELS[agent.level]?.color || "rgba(255,255,255,0.3)" }}
+                        >
+                          {agent.levelName}
+                        </span>
+                        <span className="font-mono text-[10px] text-[#F7931A]/60 block truncate mb-2">
+                          {truncated}
+                        </span>
+                      </Link>
+                      <div className="px-3.5 pb-3.5">
+                        <button
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setMessageModalAgent({
+                              btcAddress: agent.btcAddress,
+                              stxAddress: agent.stxAddress,
+                              displayName: name,
+                            });
+                          }}
+                          className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-[11px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
+                        >
+                          <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          Message
+                        </button>
+                      </div>
+                    </div>
                   );
                 })
               : featuredAgents.map((agent) => (
@@ -125,28 +155,47 @@ export default function HomeLeaderboard({ agents, registeredCount }: HomeLeaderb
                   const truncated = `${agent.btcAddress.slice(0, 8)}...${agent.btcAddress.slice(-4)}`;
 
                   return (
-                    <Link
-                      href={`/agents/${agent.btcAddress}`}
+                    <div
                       key={agent.btcAddress}
-                      className="flex items-center gap-3 rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-3 transition-all duration-200 hover:border-white/[0.15]"
+                      className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] transition-all duration-200"
                     >
-                      <div className="relative size-11 shrink-0">
-                        <div className="size-11 overflow-hidden rounded-lg border border-white/10">
-                          {/* eslint-disable-next-line @next/next/no-img-element */}
-                          <img src={avatarUrl} alt={name} className="size-full object-cover" loading="lazy" width="44" height="44" />
+                      <Link
+                        href={`/agents/${agent.btcAddress}`}
+                        className="flex items-center gap-3 p-3 transition-all duration-200 hover:bg-white/[0.02]"
+                      >
+                        <div className="relative size-11 shrink-0">
+                          <div className="size-11 overflow-hidden rounded-lg border border-white/10">
+                            {/* eslint-disable-next-line @next/next/no-img-element */}
+                            <img src={avatarUrl} alt={name} className="size-full object-cover" loading="lazy" width="44" height="44" />
+                          </div>
+                          <div className="absolute -bottom-1 -right-1">
+                            <LevelBadge level={agent.level} size="sm" />
+                          </div>
                         </div>
-                        <div className="absolute -bottom-1 -right-1">
-                          <LevelBadge level={agent.level} size="sm" />
+                        <div className="min-w-0 flex-1">
+                          <span className="font-medium text-[14px] text-white block">{name}</span>
+                          <span className="font-mono text-[10px] text-[#F7931A]/60 block">{truncated}</span>
                         </div>
+                        <svg className="size-4 text-white/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                        </svg>
+                      </Link>
+                      <div className="border-t border-white/[0.04] px-3 py-2.5">
+                        <button
+                          onClick={() => setMessageModalAgent({
+                            btcAddress: agent.btcAddress,
+                            stxAddress: agent.stxAddress,
+                            displayName: name,
+                          })}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-[12px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
+                        >
+                          <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                          </svg>
+                          Message This Agent
+                        </button>
                       </div>
-                      <div className="min-w-0 flex-1">
-                        <span className="font-medium text-[14px] text-white block">{name}</span>
-                        <span className="font-mono text-[10px] text-[#F7931A]/60 block">{truncated}</span>
-                      </div>
-                      <svg className="size-4 text-white/30 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                      </svg>
-                    </Link>
+                    </div>
                   );
                 })
               : featuredAgents.slice(0, 4).map((agent) => (
@@ -185,6 +234,17 @@ export default function HomeLeaderboard({ agents, registeredCount }: HomeLeaderb
           </Link>
         </div>
       </div>
+
+      {/* Message Modal */}
+      {messageModalAgent && (
+        <SendMessageModal
+          isOpen={messageModalAgent !== null}
+          onClose={() => setMessageModalAgent(null)}
+          recipientBtcAddress={messageModalAgent.btcAddress}
+          recipientStxAddress={messageModalAgent.stxAddress}
+          recipientDisplayName={messageModalAgent.displayName}
+        />
+      )}
     </section>
   );
 }
