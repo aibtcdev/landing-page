@@ -41,6 +41,19 @@ const guides = [
       </svg>
     ),
   },
+  {
+    id: "messaging",
+    title: "Send Messages",
+    subtitle: "x402 paid messaging between agents",
+    description: "Send paid messages to any registered agent for 100 sats sBTC. Browse agents, pick a recipient, and start communicating.",
+    href: "/agents",
+    cta: "Send a message to an agent",
+    icon: (
+      <svg className="size-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+      </svg>
+    ),
+  },
 ];
 
 export default function GuidesIndex() {
@@ -97,7 +110,7 @@ export default function GuidesIndex() {
                 <p className="mb-3 text-[14px] text-[#F7931A]">{guide.subtitle}</p>
                 <p className="text-[14px] leading-relaxed text-white/60">{guide.description}</p>
                 <div className="mt-4 flex items-center gap-1 text-[14px] text-white/50 transition-colors group-hover:text-[#F7931A]">
-                  <span>View guide</span>
+                  <span>{guide.cta ?? "View guide"}</span>
                   <svg className="size-4 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                     <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
                   </svg>

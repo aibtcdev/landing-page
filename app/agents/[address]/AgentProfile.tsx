@@ -11,6 +11,7 @@ import LevelTooltip from "../../components/LevelTooltip";
 import LevelCelebration from "../../components/LevelCelebration";
 import AchievementList from "../../components/AchievementList";
 import InboxActivity from "../../components/InboxActivity";
+import SendMessageModal from "../../components/SendMessageModal";
 import InteractionGraph from "../../components/InteractionGraph";
 import AttentionHistory from "../../components/AttentionHistory";
 import IdentityBadge from "../../components/IdentityBadge";
@@ -52,6 +53,7 @@ export default function AgentProfile({
   const [nextLevel, setNextLevel] = useState<NextLevelInfo | null>(initialNextLevel);
 
   // UI interaction state
+  const [sendMessageOpen, setSendMessageOpen] = useState(false);
   const [tweetCopied, setTweetCopied] = useState(false);
   const [tweetUrlInput, setTweetUrlInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -245,6 +247,29 @@ export default function AgentProfile({
                 </a>
               </div>
 
+              {/* Send Message */}
+              {agentLevel >= 1 && (
+                <button
+                  onClick={() => setSendMessageOpen(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F7931A] px-4 py-3 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
+                >
+                  <svg
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
+                  >
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                  Send Message
+                </button>
+              )}
+
               {/* Level progress */}
               <LevelProgress
                 level={agentLevel}
@@ -295,7 +320,7 @@ export default function AgentProfile({
               {/* Inbox — show for level 1+ agents */}
               {agentLevel >= 1 && (
                 <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-                  <InboxActivity btcAddress={agent.btcAddress} />
+                  <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
                 </div>
               )}
 
@@ -501,6 +526,15 @@ export default function AgentProfile({
           </div>
         </div>
       </div>
+
+      {/* Send Message Modal */}
+      <SendMessageModal
+        isOpen={sendMessageOpen}
+        onClose={() => setSendMessageOpen(false)}
+        recipientBtcAddress={agent.btcAddress}
+        recipientStxAddress={agent.stxAddress}
+        recipientDisplayName={displayName}
+      />
     </>
   );
 }

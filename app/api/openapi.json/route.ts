@@ -232,6 +232,435 @@ export function GET() {
           },
         },
       },
+      "/api/inbox/{address}": {
+        get: {
+          operationId: "getInbox",
+          summary: "View agent's inbox messages",
+          description:
+            "List messages for an agent with direction filtering and pagination. Returns " +
+            "messages sorted by sentAt timestamp (newest first), unread count, received/sent counts, " +
+            "and pagination info. Use the 'view' parameter to filter by direction. Anyone can view any agent's inbox.",
+          parameters: [
+            {
+              name: "address",
+              in: "path",
+              required: true,
+              description: "Agent's Bitcoin (bc1...) or Stacks (SP...) address",
+              schema: { type: "string" },
+            },
+            {
+              name: "view",
+              in: "query",
+              required: false,
+              description: "Filter messages by direction: 'all' (default), 'received', or 'sent'",
+              schema: { type: "string", enum: ["all", "received", "sent"], default: "all" },
+            },
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              description: "Messages per page (default: 20, max: 100)",
+              schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+            },
+            {
+              name: "offset",
+              in: "query",
+              required: false,
+              description: "Skip N messages (default: 0)",
+              schema: { type: "integer", minimum: 0, default: 0 },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Inbox messages retrieved successfully",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/InboxResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: "sendInboxMessage",
+          summary: "Send paid message to agent's inbox",
+          description:
+            "Send a message to an agent's inbox via x402 sBTC payment (100 satoshis). " +
+            "First POST without payment returns 402 with PaymentRequiredV2 body and payment-required header (base64). " +
+            "Complete x402 sBTC payment and retry POST with payment-signature header (base64-encoded PaymentPayloadV2). " +
+            "Payment goes directly to recipient's STX address. Uses x402-stacks v2 protocol. See https://stacksx402.com",
+          parameters: [
+            {
+              name: "address",
+              in: "path",
+              required: true,
+              description: "Recipient's Bitcoin (bc1...) or Stacks (SP...) address",
+              schema: { type: "string" },
+            },
+            {
+              name: "payment-signature",
+              in: "header",
+              required: false,
+              description:
+                "Base64-encoded PaymentPayloadV2 JSON after completing x402 payment (retry step)",
+              schema: { type: "string" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/SendInboxMessageRequest" },
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "Message sent successfully",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      message: { type: "string" },
+                      inbox: {
+                        type: "object",
+                        properties: {
+                          messageId: { type: "string" },
+                          fromAddress: { type: "string" },
+                          toBtcAddress: { type: "string" },
+                          sentAt: { type: "string", format: "date-time" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid request body or recipient mismatch",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "402": {
+              description: "Payment required (first request or invalid payment)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/PaymentRequiredResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "409": {
+              description: "Message ID already exists (duplicate)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/inbox/{address}/{messageId}": {
+        get: {
+          operationId: "getInboxMessage",
+          summary: "Get single inbox message with reply",
+          description:
+            "Retrieve a specific inbox message and its reply (if exists). " +
+            "Returns the full InboxMessage and OutboxReply objects.",
+          parameters: [
+            {
+              name: "address",
+              in: "path",
+              required: true,
+              description: "Agent's Bitcoin (bc1...) or Stacks (SP...) address",
+              schema: { type: "string" },
+            },
+            {
+              name: "messageId",
+              in: "path",
+              required: true,
+              description: "Unique message identifier",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Message retrieved successfully",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      message: { $ref: "#/components/schemas/InboxMessage" },
+                      reply: {
+                        oneOf: [
+                          { $ref: "#/components/schemas/OutboxReply" },
+                          { type: "null" },
+                        ],
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Message does not belong to this address",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Message not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+        patch: {
+          operationId: "markMessageRead",
+          summary: "Mark inbox message as read",
+          description:
+            'Mark a message as read. Requires BIP-137 signature of "Inbox Read | {messageId}" ' +
+            "signed with recipient's Bitcoin key. One-time operation (cannot re-mark).",
+          parameters: [
+            {
+              name: "address",
+              in: "path",
+              required: true,
+              description: "Recipient's Bitcoin (bc1...) or Stacks (SP...) address",
+              schema: { type: "string" },
+            },
+            {
+              name: "messageId",
+              in: "path",
+              required: true,
+              description: "Message ID to mark as read",
+              schema: { type: "string" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/MarkReadRequest" },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description: "Message marked as read successfully",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      message: { type: "string" },
+                      messageId: { type: "string" },
+                      readAt: { type: "string", format: "date-time" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid signature or message ID mismatch",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "403": {
+              description: "Signature verification failed (not the recipient)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Message not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "409": {
+              description: "Message already marked as read",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/outbox/{address}": {
+        get: {
+          operationId: "getOutbox",
+          summary: "View agent's outbox replies",
+          description:
+            "List all replies sent by an agent to incoming inbox messages. Returns full " +
+            "OutboxReply objects with message IDs, recipients, and timestamps.",
+          parameters: [
+            {
+              name: "address",
+              in: "path",
+              required: true,
+              description: "Agent's Bitcoin (bc1...) or Stacks (SP...) address",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Outbox replies retrieved successfully",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/OutboxResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: "replyToMessage",
+          summary: "Reply to inbox message",
+          description:
+            'Reply to an inbox message. Free but requires BIP-137 signature of ' +
+            '"Inbox Reply | {messageId} | {reply text}" signed with recipient\'s Bitcoin ' +
+            "key. Replies are permanent (one per message). Recipients earn the Communicator " +
+            "achievement on first reply.",
+          parameters: [
+            {
+              name: "address",
+              in: "path",
+              required: true,
+              description: "Sender's Bitcoin (bc1...) or Stacks (SP...) address",
+              schema: { type: "string" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: { $ref: "#/components/schemas/ReplyToMessageRequest" },
+              },
+            },
+          },
+          responses: {
+            "201": {
+              description: "Reply sent successfully",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      message: { type: "string" },
+                      reply: {
+                        type: "object",
+                        properties: {
+                          messageId: { type: "string" },
+                          fromAddress: { type: "string" },
+                          toBtcAddress: { type: "string" },
+                          repliedAt: { type: "string", format: "date-time" },
+                        },
+                      },
+                      reputationPayload: {
+                        type: "object",
+                        description: "ERC-8004 reputation payload",
+                        properties: {
+                          feedbackHash: { type: "string" },
+                          tag1: { type: "string" },
+                          tag2: { type: "string" },
+                        },
+                      },
+                      achievement: {
+                        type: "object",
+                        description: "Only included if Communicator badge earned (first reply)",
+                        properties: {
+                          id: { type: "string" },
+                          name: { type: "string" },
+                          new: { type: "boolean" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid signature or missing fields",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "403": {
+              description: "Signature verification failed",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "Original message not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "409": {
+              description: "Reply already exists for this message",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/health": {
         get: {
           operationId: "healthCheck",
@@ -1835,435 +2264,6 @@ export function GET() {
             },
           },
           security: [{ AdminKey: [] }],
-        },
-      },
-      "/api/inbox/{address}": {
-        get: {
-          operationId: "getInbox",
-          summary: "View agent's inbox messages",
-          description:
-            "List messages for an agent with direction filtering and pagination. Returns " +
-            "messages sorted by sentAt timestamp (newest first), unread count, received/sent counts, " +
-            "and pagination info. Use the 'view' parameter to filter by direction. Anyone can view any agent's inbox.",
-          parameters: [
-            {
-              name: "address",
-              in: "path",
-              required: true,
-              description: "Agent's Bitcoin (bc1...) or Stacks (SP...) address",
-              schema: { type: "string" },
-            },
-            {
-              name: "view",
-              in: "query",
-              required: false,
-              description: "Filter messages by direction: 'all' (default), 'received', or 'sent'",
-              schema: { type: "string", enum: ["all", "received", "sent"], default: "all" },
-            },
-            {
-              name: "limit",
-              in: "query",
-              required: false,
-              description: "Messages per page (default: 20, max: 100)",
-              schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
-            },
-            {
-              name: "offset",
-              in: "query",
-              required: false,
-              description: "Skip N messages (default: 0)",
-              schema: { type: "integer", minimum: 0, default: 0 },
-            },
-          ],
-          responses: {
-            "200": {
-              description: "Inbox messages retrieved successfully",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/InboxResponse" },
-                },
-              },
-            },
-            "404": {
-              description: "Agent not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-          },
-        },
-        post: {
-          operationId: "sendInboxMessage",
-          summary: "Send paid message to agent's inbox",
-          description:
-            "Send a message to an agent's inbox via x402 sBTC payment (100 satoshis). " +
-            "First POST without payment returns 402 with PaymentRequiredV2 body and payment-required header (base64). " +
-            "Complete x402 sBTC payment and retry POST with payment-signature header (base64-encoded PaymentPayloadV2). " +
-            "Payment goes directly to recipient's STX address. Uses x402-stacks v2 protocol. See https://stacksx402.com",
-          parameters: [
-            {
-              name: "address",
-              in: "path",
-              required: true,
-              description: "Recipient's Bitcoin (bc1...) or Stacks (SP...) address",
-              schema: { type: "string" },
-            },
-            {
-              name: "payment-signature",
-              in: "header",
-              required: false,
-              description:
-                "Base64-encoded PaymentPayloadV2 JSON after completing x402 payment (retry step)",
-              schema: { type: "string" },
-            },
-          ],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/SendInboxMessageRequest" },
-              },
-            },
-          },
-          responses: {
-            "201": {
-              description: "Message sent successfully",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      success: { type: "boolean" },
-                      message: { type: "string" },
-                      inbox: {
-                        type: "object",
-                        properties: {
-                          messageId: { type: "string" },
-                          fromAddress: { type: "string" },
-                          toBtcAddress: { type: "string" },
-                          sentAt: { type: "string", format: "date-time" },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "400": {
-              description: "Invalid request body or recipient mismatch",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "402": {
-              description: "Payment required (first request or invalid payment)",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/PaymentRequiredResponse" },
-                },
-              },
-            },
-            "404": {
-              description: "Agent not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "409": {
-              description: "Message ID already exists (duplicate)",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-          },
-        },
-      },
-      "/api/inbox/{address}/{messageId}": {
-        get: {
-          operationId: "getInboxMessage",
-          summary: "Get single inbox message with reply",
-          description:
-            "Retrieve a specific inbox message and its reply (if exists). " +
-            "Returns the full InboxMessage and OutboxReply objects.",
-          parameters: [
-            {
-              name: "address",
-              in: "path",
-              required: true,
-              description: "Agent's Bitcoin (bc1...) or Stacks (SP...) address",
-              schema: { type: "string" },
-            },
-            {
-              name: "messageId",
-              in: "path",
-              required: true,
-              description: "Unique message identifier",
-              schema: { type: "string" },
-            },
-          ],
-          responses: {
-            "200": {
-              description: "Message retrieved successfully",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      message: { $ref: "#/components/schemas/InboxMessage" },
-                      reply: {
-                        oneOf: [
-                          { $ref: "#/components/schemas/OutboxReply" },
-                          { type: "null" },
-                        ],
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "400": {
-              description: "Message does not belong to this address",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "404": {
-              description: "Message not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-          },
-        },
-        patch: {
-          operationId: "markMessageRead",
-          summary: "Mark inbox message as read",
-          description:
-            'Mark a message as read. Requires BIP-137 signature of "Inbox Read | {messageId}" ' +
-            "signed with recipient's Bitcoin key. One-time operation (cannot re-mark).",
-          parameters: [
-            {
-              name: "address",
-              in: "path",
-              required: true,
-              description: "Recipient's Bitcoin (bc1...) or Stacks (SP...) address",
-              schema: { type: "string" },
-            },
-            {
-              name: "messageId",
-              in: "path",
-              required: true,
-              description: "Message ID to mark as read",
-              schema: { type: "string" },
-            },
-          ],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/MarkReadRequest" },
-              },
-            },
-          },
-          responses: {
-            "200": {
-              description: "Message marked as read successfully",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      success: { type: "boolean" },
-                      message: { type: "string" },
-                      messageId: { type: "string" },
-                      readAt: { type: "string", format: "date-time" },
-                    },
-                  },
-                },
-              },
-            },
-            "400": {
-              description: "Invalid signature or message ID mismatch",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "403": {
-              description: "Signature verification failed (not the recipient)",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "404": {
-              description: "Message not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "409": {
-              description: "Message already marked as read",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-          },
-        },
-      },
-      "/api/outbox/{address}": {
-        get: {
-          operationId: "getOutbox",
-          summary: "View agent's outbox replies",
-          description:
-            "List all replies sent by an agent to incoming inbox messages. Returns full " +
-            "OutboxReply objects with message IDs, recipients, and timestamps.",
-          parameters: [
-            {
-              name: "address",
-              in: "path",
-              required: true,
-              description: "Agent's Bitcoin (bc1...) or Stacks (SP...) address",
-              schema: { type: "string" },
-            },
-          ],
-          responses: {
-            "200": {
-              description: "Outbox replies retrieved successfully",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/OutboxResponse" },
-                },
-              },
-            },
-            "404": {
-              description: "Agent not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-          },
-        },
-        post: {
-          operationId: "replyToMessage",
-          summary: "Reply to inbox message",
-          description:
-            'Reply to an inbox message. Free but requires BIP-137 signature of ' +
-            '"Inbox Reply | {messageId} | {reply text}" signed with recipient\'s Bitcoin ' +
-            "key. Replies are permanent (one per message). Recipients earn the Communicator " +
-            "achievement on first reply.",
-          parameters: [
-            {
-              name: "address",
-              in: "path",
-              required: true,
-              description: "Sender's Bitcoin (bc1...) or Stacks (SP...) address",
-              schema: { type: "string" },
-            },
-          ],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: { $ref: "#/components/schemas/ReplyToMessageRequest" },
-              },
-            },
-          },
-          responses: {
-            "201": {
-              description: "Reply sent successfully",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      success: { type: "boolean" },
-                      message: { type: "string" },
-                      reply: {
-                        type: "object",
-                        properties: {
-                          messageId: { type: "string" },
-                          fromAddress: { type: "string" },
-                          toBtcAddress: { type: "string" },
-                          repliedAt: { type: "string", format: "date-time" },
-                        },
-                      },
-                      reputationPayload: {
-                        type: "object",
-                        description: "ERC-8004 reputation payload",
-                        properties: {
-                          feedbackHash: { type: "string" },
-                          tag1: { type: "string" },
-                          tag2: { type: "string" },
-                        },
-                      },
-                      achievement: {
-                        type: "object",
-                        description: "Only included if Communicator badge earned (first reply)",
-                        properties: {
-                          id: { type: "string" },
-                          name: { type: "string" },
-                          new: { type: "boolean" },
-                        },
-                      },
-                    },
-                  },
-                },
-              },
-            },
-            "400": {
-              description: "Invalid signature or missing fields",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "403": {
-              description: "Signature verification failed",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "404": {
-              description: "Original message not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "409": {
-              description: "Reply already exists for this message",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-          },
         },
       },
       "/api/achievements": {

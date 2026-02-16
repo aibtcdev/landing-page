@@ -6,12 +6,13 @@ import Link from "next/link";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import InboxMessage from "../../components/InboxMessage";
+import SendMessageModal from "../../components/SendMessageModal";
 import { generateName } from "@/lib/name-generator";
 import { updateMeta } from "@/lib/utils";
 import { INBOX_PRICE_SATS } from "@/lib/inbox";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
 
-type ViewFilter = "all" | "received" | "sent";
+type ViewFilter = "all" | "received" | "sent" | "replied" | "awaiting";
 
 interface InboxResponse {
   agent: {
@@ -52,6 +53,7 @@ export default function InboxPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewFilter>("all");
+  const [sendModalOpen, setSendModalOpen] = useState(false);
 
   useEffect(() => {
     if (!address) return;
@@ -137,10 +139,28 @@ export default function InboxPage() {
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const hasMessages = totalCount > 0;
 
+  // Compute reply stats
+  const repliedMessages = allMessages.filter((m) => m.repliedAt || replies[m.messageId]);
+  const awaitingMessages = allMessages.filter((m) => m.direction === "received" && !m.repliedAt && !replies[m.messageId]);
+
   // Filter messages client-side based on selected tab
-  const messages = view === "all"
-    ? allMessages
-    : allMessages.filter((m) => m.direction === view);
+  let messages: typeof allMessages;
+  switch (view) {
+    case "received":
+      messages = allMessages.filter((m) => m.direction === "received");
+      break;
+    case "sent":
+      messages = allMessages.filter((m) => m.direction === "sent");
+      break;
+    case "replied":
+      messages = repliedMessages;
+      break;
+    case "awaiting":
+      messages = awaitingMessages;
+      break;
+    default:
+      messages = allMessages;
+  }
 
   return (
     <>
@@ -177,6 +197,17 @@ export default function InboxPage() {
                 {agent.btcAddress}
               </Link>
             </div>
+            {/* Send message button */}
+            <button
+              onClick={() => setSendModalOpen(true)}
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#F7931A] px-3.5 py-2 text-[12px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] sm:px-4 sm:py-2.5 sm:text-[13px] cursor-pointer"
+            >
+              <svg className="size-3.5 sm:size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              </svg>
+              <span className="hidden sm:inline">Send Message</span>
+              <span className="sm:hidden">Send</span>
+            </button>
           </div>
 
           {/* Inbox Stats */}
@@ -198,23 +229,26 @@ export default function InboxPage() {
           </div>
 
           {/* View Tabs */}
-          <div className="mb-4 flex gap-1 rounded-lg border border-white/[0.06] bg-white/[0.02] p-1">
-            {(["all", "received", "sent"] as const).map((tab) => (
+          <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border border-white/[0.06] bg-white/[0.02] p-1">
+            {([
+              { key: "all" as const, label: "All" },
+              { key: "received" as const, label: "Received", count: inbox.receivedCount },
+              { key: "sent" as const, label: "Sent", count: inbox.sentCount },
+              { key: "replied" as const, label: "Replied", count: repliedMessages.length },
+              { key: "awaiting" as const, label: "Awaiting", count: awaitingMessages.length },
+            ]).map(({ key, label, count }) => (
               <button
-                key={tab}
-                onClick={() => setView(tab)}
-                className={`flex-1 rounded-md px-3 py-1.5 text-[12px] font-medium capitalize transition-colors sm:text-[13px] ${
-                  view === tab
+                key={key}
+                onClick={() => setView(key)}
+                className={`shrink-0 rounded-md px-3 py-1.5 text-[12px] font-medium transition-colors sm:text-[13px] cursor-pointer ${
+                  view === key
                     ? "bg-white/[0.08] text-white"
                     : "text-white/40 hover:text-white/60"
                 }`}
               >
-                {tab}
-                {tab === "received" && inbox.receivedCount != null && (
-                  <span className="ml-1 text-white/30">({inbox.receivedCount})</span>
-                )}
-                {tab === "sent" && inbox.sentCount != null && (
-                  <span className="ml-1 text-white/30">({inbox.sentCount})</span>
+                {label}
+                {count != null && count > 0 && (
+                  <span className="ml-1 text-white/30">({count})</span>
                 )}
               </button>
             ))}
@@ -224,7 +258,7 @@ export default function InboxPage() {
           {messages.length === 0 && (
             <div className="rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02] px-4 py-10 text-center sm:px-6 sm:py-12">
               <svg
-                className="mx-auto mb-4 size-10 text-white/20 sm:size-12"
+                className="mx-auto mb-4 size-10 text-white/15 sm:size-12"
                 fill="none"
                 stroke="currentColor"
                 viewBox="0 0 24 24"
@@ -233,33 +267,62 @@ export default function InboxPage() {
                   strokeLinecap="round"
                   strokeLinejoin="round"
                   strokeWidth={1.5}
-                  d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
+                  d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
                 />
               </svg>
               <p className="mb-2 text-[13px] text-white/40 sm:text-[14px]">
-                {view === "all" ? "No messages yet" : `No ${view} messages`}
+                {view === "all"
+                  ? "No messages yet"
+                  : view === "awaiting"
+                    ? "No messages awaiting reply"
+                    : view === "replied"
+                      ? "No replied messages"
+                      : `No ${view} messages`}
               </p>
-              {view === "all" && howToSend && (
-                <p className="truncate text-[11px] text-white/30 sm:text-[12px]">
-                  Send a message via x402 payment to{" "}
-                  <span className="font-mono">{agent.stxAddress}</span>
-                </p>
+              {view === "all" && (
+                <div>
+                  <p className="mb-4 text-[11px] text-white/25 sm:text-[12px]">
+                    Be the first to start a conversation
+                  </p>
+                  <button
+                    onClick={() => setSendModalOpen(true)}
+                    className="inline-flex items-center gap-1.5 rounded-lg bg-[#F7931A] px-4 py-2 text-[12px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
+                  >
+                    <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Send Message
+                  </button>
+                </div>
               )}
             </div>
           )}
 
-          {/* Message List */}
+          {/* Message List — threaded with inline replies */}
           {messages.length > 0 && (
             <div className="space-y-3">
-              {messages.map((message) => (
-                <InboxMessage
-                  key={message.messageId}
-                  message={message}
-                  showReply={true}
-                  reply={replies[message.messageId] || null}
-                  direction={message.direction}
-                />
-              ))}
+              {messages.map((message) => {
+                const reply = replies[message.messageId] || null;
+                const isAwaiting = message.direction === "received" && !message.repliedAt && !reply;
+
+                return (
+                  <div key={message.messageId} className="relative">
+                    <InboxMessage
+                      message={message}
+                      showReply={!!reply}
+                      reply={reply}
+                      direction={message.direction}
+                    />
+                    {/* Awaiting reply indicator */}
+                    {isAwaiting && (
+                      <div className="mt-1.5 flex items-center gap-1.5 pl-3">
+                        <span className="size-1.5 rounded-full bg-[#F7931A]/50 animate-pulse" />
+                        <span className="text-[10px] text-white/30">Awaiting reply</span>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
           )}
 
@@ -270,36 +333,29 @@ export default function InboxPage() {
                 href={`/inbox/${address}?limit=${limit}&offset=${pagination.nextOffset}`}
                 className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-5 py-2.5 text-center text-[12px] text-white/60 transition-colors hover:border-white/[0.12] hover:bg-white/[0.06] hover:text-white/80 sm:w-auto sm:text-[13px]"
               >
-                Load more messages →
+                Load more messages
               </Link>
             </div>
           )}
 
-          {/* How to Send */}
+          {/* How to Send — replaced static block with modal trigger */}
           {howToSend && (
             <div className="mt-6 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3.5 sm:px-5 sm:py-4">
-              <h3 className="mb-2 text-[13px] font-medium text-white sm:text-[14px]">
-                Send a Message
-              </h3>
-              <p className="mb-3 text-[11px] leading-relaxed text-white/50 sm:text-[12px]">
-                Anyone can send messages to this agent via x402 sBTC payment.
-                Price: {INBOX_PRICE_SATS.toLocaleString()} satoshis per message.
-              </p>
-              <div className="overflow-hidden rounded-md border border-white/[0.06] bg-white/[0.03] px-3 py-2.5">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-medium text-white/40 sm:text-[11px]">
-                    API Endpoint
-                  </span>
-                  <a
-                    href="/llms-full.txt"
-                    className="text-[10px] text-[#F7931A]/70 hover:text-[#F7931A] transition-colors sm:text-[11px]"
-                  >
-                    Documentation →
-                  </a>
+              <div className="flex items-center justify-between gap-3">
+                <div>
+                  <h3 className="text-[13px] font-medium text-white sm:text-[14px]">
+                    Send a Message
+                  </h3>
+                  <p className="mt-1 text-[11px] text-white/40 sm:text-[12px]">
+                    {INBOX_PRICE_SATS} sats per message, paid directly to {displayName}
+                  </p>
                 </div>
-                <code className="mt-1.5 block truncate font-mono text-[11px] text-white/70 sm:text-[12px]">
-                  POST {howToSend.endpoint}
-                </code>
+                <button
+                  onClick={() => setSendModalOpen(true)}
+                  className="shrink-0 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3.5 py-2 text-[12px] font-medium text-white/60 transition-colors hover:border-[#F7931A]/30 hover:bg-[#F7931A]/10 hover:text-[#F7931A] sm:text-[13px] cursor-pointer"
+                >
+                  Compose
+                </button>
               </div>
             </div>
           )}
@@ -316,11 +372,20 @@ export default function InboxPage() {
               href="/agents"
               className="hover:text-white/60 transition-colors"
             >
-              Agent Registry →
+              Agent Registry
             </Link>
           </div>
         </div>
       </div>
+
+      {/* Send Message Modal */}
+      <SendMessageModal
+        isOpen={sendModalOpen}
+        onClose={() => setSendModalOpen(false)}
+        recipientBtcAddress={agent.btcAddress}
+        recipientStxAddress={agent.stxAddress}
+        recipientDisplayName={displayName}
+      />
     </>
   );
 }

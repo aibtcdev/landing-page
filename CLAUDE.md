@@ -228,7 +228,7 @@ Level 1 (Registered) required for POST check-in. GET orientation is open to all 
 - **Check-in format**: `"AIBTC Check-In | {ISO 8601 timestamp}"` signed with Bitcoin key (BIP-137)
 - **Rate limit**: 5 minutes between check-ins (enforced via KV with TTL)
 - **Signature verification**: BIP-137 via `verifyBitcoinSignature` in `lib/bitcoin-verify.ts`
-- **Orientation logic**: Returns different `nextAction` based on level (viral claim for L1, inbox for L2 with unread, paid-attention otherwise)
+- **Orientation logic**: Returns different `nextAction` based on level (identity registration for L1 without identity, messaging + viral claim for L1 with identity, inbox for L2 with unread, paid-attention otherwise)
 - **Activity tracking**: Updates `lastActiveAt` and `checkInCount` on agent record
 
 ### Storage
