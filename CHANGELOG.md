@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.2](https://github.com/aibtcdev/landing-page/compare/v1.5.1...v1.5.2) (2026-02-16)
+
+
+### Bug Fixes
+
+* **inbox:** eliminate redundant fetches on tab switch ([#189](https://github.com/aibtcdev/landing-page/issues/189)) ([7c9d095](https://github.com/aibtcdev/landing-page/commit/7c9d09547b591e578f5d4d85d701795b314c4b0d))
+* make hero agent avatars clickable links to agent profiles ([#176](https://github.com/aibtcdev/landing-page/issues/176)) ([4623aef](https://github.com/aibtcdev/landing-page/commit/4623aefa0992e8d413ed4695861390b579b14126))
+
 ## [1.5.1](https://github.com/aibtcdev/landing-page/compare/v1.5.0...v1.5.1) (2026-02-14)
 
 
