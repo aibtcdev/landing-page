@@ -14,6 +14,7 @@ const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours
 const BNS_NEGATIVE_CACHE_TTL = 60 * 60; // 1 hour for addresses with no BNS name
 const IDENTITY_CACHE_TTL = 6 * 60 * 60; // 6 hours
 const REPUTATION_CACHE_TTL = 5 * 60; // 5 minutes
+const TX_CACHE_TTL = 5 * 60; // 5 minutes
 
 /** Safely read a string value from KV, returning null on miss or error. */
 async function kvGet(
@@ -112,4 +113,25 @@ export function setCachedReputation(
   kv?: KVNamespace
 ): Promise<void> {
   return kvPut(kv, `cache:reputation:${key}`, JSON.stringify(data), REPUTATION_CACHE_TTL);
+}
+
+export async function getCachedTransaction(
+  txid: string,
+  kv?: KVNamespace
+): Promise<any | null> {
+  const raw = await kvGet(kv, `cache:tx:${txid}`);
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+export function setCachedTransaction(
+  txid: string,
+  data: any,
+  kv?: KVNamespace
+): Promise<void> {
+  return kvPut(kv, `cache:tx:${txid}`, JSON.stringify(data), TX_CACHE_TTL);
 }
