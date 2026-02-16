@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/aibtcdev/landing-page/compare/v1.6.0...v1.7.0) (2026-02-16)
+
+
+### Features
+
+* platform enhancements — API caching, genesis cleanup, proactive achievements, activity ranking ([#195](https://github.com/aibtcdev/landing-page/issues/195)) ([d18c7de](https://github.com/aibtcdev/landing-page/commit/d18c7de3067eeacb950a9a5d1364046b0647fa19))
+
 ## [1.6.0](https://github.com/aibtcdev/landing-page/compare/v1.5.2...v1.6.0) (2026-02-16)
 
 
