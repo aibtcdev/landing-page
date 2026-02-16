@@ -331,7 +331,7 @@ export default function AgentList({ agents }: AgentListProps) {
                         )}
                       </div>
                       {agent.bnsName && (
-                        <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
+                        <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">{agent.bnsName}</span>
                       )}
                     </Link>
                   </td>
@@ -434,7 +434,7 @@ export default function AgentList({ agents }: AgentListProps) {
                     <span className="text-[15px] font-semibold text-white">{displayName}</span>
                     {agent.erc8004AgentId != null && <IdentityIcon />}
                     {agent.bnsName && (
-                      <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">.btc</span>
+                      <span className="rounded-md bg-[#7DA2FF]/10 px-1.5 py-0.5 text-[11px] font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">{agent.bnsName}</span>
                     )}
                   </div>
                   {agent.description && (
