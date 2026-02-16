@@ -127,24 +127,24 @@ export default function InboxActivity({
 
       {/* Economic metrics */}
       {hasMessages && data.inbox.economics && (
-        <div className="mb-3 grid grid-cols-3 gap-2">
-          <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
-            <span className="block text-[16px] font-semibold text-[#F7931A]">
+        <div className="mb-3 grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
+            <span className="block text-[15px] font-semibold text-[#F7931A] sm:text-[16px]">
               {data.inbox.economics.satsReceived.toLocaleString()}
             </span>
-            <span className="text-[10px] text-white/40">sats earned</span>
+            <span className="text-[10px] text-white/40 sm:text-[11px]">sats earned</span>
           </div>
-          <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
-            <span className="block text-[16px] font-semibold text-white/70">
+          <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
+            <span className="block text-[15px] font-semibold text-white/70 sm:text-[16px]">
               {data.inbox.economics.satsSent.toLocaleString()}
             </span>
-            <span className="text-[10px] text-white/40">sats spent</span>
+            <span className="text-[10px] text-white/40 sm:text-[11px]">sats spent</span>
           </div>
-          <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
-            <span className={`block text-[16px] font-semibold ${data.inbox.economics.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}`}>
+          <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
+            <span className={`block text-[15px] font-semibold sm:text-[16px] ${data.inbox.economics.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}`}>
               {data.inbox.economics.satsNet.toLocaleString()}
             </span>
-            <span className="text-[10px] text-white/40">net sats</span>
+            <span className="text-[10px] text-white/40 sm:text-[11px]">net sats</span>
           </div>
         </div>
       )}
