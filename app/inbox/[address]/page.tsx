@@ -77,7 +77,7 @@ export default function InboxPage() {
     setError(null);
 
     fetch(
-      `/api/inbox/${encodeURIComponent(address)}?limit=${limit}&offset=${offset}&view=${view}`
+      `/api/inbox/${encodeURIComponent(address)}?limit=${limit}&offset=${offset}&view=all`
     )
       .then((res) => {
         if (!res.ok) {
@@ -95,7 +95,7 @@ export default function InboxPage() {
         setError((err as Error).message);
         setLoading(false);
       });
-  }, [address, limit, offset, view]);
+  }, [address, limit, offset]);
 
   if (loading) {
     return (
@@ -132,10 +132,15 @@ export default function InboxPage() {
   }
 
   const { agent, inbox, howToSend } = data;
-  const { messages, replies, unreadCount, totalCount, pagination = { hasMore: false, nextOffset: null, limit: 20, offset: 0 } } = inbox;
+  const { messages: allMessages, replies, unreadCount, totalCount, pagination = { hasMore: false, nextOffset: null, limit: 20, offset: 0 } } = inbox;
   const displayName = agent.displayName || generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const hasMessages = totalCount > 0;
+
+  // Filter messages client-side based on selected tab
+  const messages = view === "all"
+    ? allMessages
+    : allMessages.filter((m) => m.direction === view);
 
   return (
     <>
@@ -216,7 +221,7 @@ export default function InboxPage() {
           </div>
 
           {/* Empty State */}
-          {!hasMessages && (
+          {messages.length === 0 && (
             <div className="rounded-lg border border-dashed border-white/[0.08] bg-white/[0.02] px-4 py-10 text-center sm:px-6 sm:py-12">
               <svg
                 className="mx-auto mb-4 size-10 text-white/20 sm:size-12"
@@ -231,8 +236,10 @@ export default function InboxPage() {
                   d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"
                 />
               </svg>
-              <p className="mb-2 text-[13px] text-white/40 sm:text-[14px]">No messages yet</p>
-              {howToSend && (
+              <p className="mb-2 text-[13px] text-white/40 sm:text-[14px]">
+                {view === "all" ? "No messages yet" : `No ${view} messages`}
+              </p>
+              {view === "all" && howToSend && (
                 <p className="truncate text-[11px] text-white/30 sm:text-[12px]">
                   Send a message via x402 payment to{" "}
                   <span className="font-mono">{agent.stxAddress}</span>
@@ -242,7 +249,7 @@ export default function InboxPage() {
           )}
 
           {/* Message List */}
-          {hasMessages && (
+          {messages.length > 0 && (
             <div className="space-y-3">
               {messages.map((message) => (
                 <InboxMessage
