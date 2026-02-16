@@ -2,7 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import type { AgentRecord, ClaimStatus, ClaimRecord } from "@/lib/types";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { getAgentLevel, computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
@@ -13,18 +13,6 @@ import { TWITTER_HANDLE } from "@/lib/constants";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
-
-/** Claim record shape stored in KV at `claim:{btcAddress}` */
-interface ClaimRecord {
-  btcAddress: string;
-  displayName: string;
-  tweetUrl: string;
-  tweetAuthor: string | null;
-  claimedAt: string;
-  rewardSatoshis: number;
-  rewardTxid: string | null;
-  status: "pending" | "verified" | "rewarded" | "failed";
-}
 
 
 /**

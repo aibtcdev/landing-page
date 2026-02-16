@@ -19,13 +19,28 @@ export interface AgentRecord {
 }
 
 /**
- * Claim status record for viral tweet rewards.
- * Stored in KV at claim:{btcAddress}.
- * Used for level computation — agents with "verified" or "rewarded" status reach Genesis (Level 2).
+ * Claim status record for viral tweet rewards (minimal type for level computation).
+ * Used by computeLevel() to determine if an agent has reached Genesis (Level 2).
  */
 export interface ClaimStatus {
   status: "pending" | "verified" | "rewarded" | "failed";
   claimedAt: string;
   rewardSatoshis?: number;
   rewardTxid?: string | null;
+}
+
+/**
+ * Complete claim record stored in KV at claim:{btcAddress}.
+ * Includes all fields from viral tweet submission and payout tracking.
+ * Used by claim endpoints and profile pages.
+ */
+export interface ClaimRecord {
+  btcAddress: string;
+  displayName: string;
+  tweetUrl: string;
+  tweetAuthor: string | null;
+  claimedAt: string;
+  rewardSatoshis: number;
+  rewardTxid: string | null;
+  status: "pending" | "verified" | "rewarded" | "failed";
 }
