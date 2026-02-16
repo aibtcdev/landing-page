@@ -131,7 +131,7 @@ function EventRow({ event }: { event: ActivityEvent }) {
       <div className="flex-1">
         <div className="text-[13px] leading-snug text-white/80">{description}</div>
         {event.type === "message" && event.preview && (
-          <div className="mt-1 truncate text-[12px] text-white/40">
+          <div className="mt-1 text-[12px] leading-relaxed text-white/40">
             {event.preview}
           </div>
         )}
