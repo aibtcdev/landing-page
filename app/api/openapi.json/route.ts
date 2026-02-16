@@ -3805,7 +3805,7 @@ export function GET() {
             id: {
               type: "string",
               description: "Unique achievement identifier",
-              examples: ["sender", "alive", "attentive"],
+              examples: ["sender", "connector", "communicator", "alive", "attentive"],
             },
             name: {
               type: "string",
