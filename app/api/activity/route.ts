@@ -26,6 +26,7 @@ interface ActivityEvent {
     btcAddress: string;
     displayName: string;
   };
+  paymentSatoshis?: number;
   // For achievements
   achievementId?: string;
   achievementName?: string;
@@ -256,6 +257,7 @@ export async function GET(request: NextRequest) {
                 btcAddress: agent.btcAddress,
                 displayName: agent.displayName || agent.btcAddress,
               },
+              paymentSatoshis: message.paymentSatoshis,
             });
           }
         }

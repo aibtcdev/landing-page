@@ -41,43 +41,58 @@ export default function InboxMessage({
 
   return (
     <div
-      className={`rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 transition-colors hover:border-white/[0.12] sm:p-4 ${className}`}
+      className={`overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.02] p-3 transition-colors hover:border-white/[0.12] sm:p-4 ${className}`}
     >
       {/* Header: sender + timestamp */}
       <div className="mb-2.5 flex items-start justify-between gap-2 sm:mb-3 sm:gap-3">
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5 sm:gap-2">
-            {direction && (
-              <span
-                className={`inline-flex items-center gap-0.5 text-[9px] font-semibold uppercase tracking-widest sm:text-[10px] ${isSent ? "text-[#7DA2FF]/60" : "text-white/40"}`}
+        <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3">
+          {/* Bitcoin face avatar */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <a href={`/agents/${directionAddress}`} className="shrink-0">
+            <img
+              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(directionAddress)}`}
+              alt=""
+              className="size-8 rounded-full border border-white/[0.08] bg-white/[0.06] sm:size-9"
+              loading="lazy"
+              width="36"
+              height="36"
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
+            />
+          </a>
+          <div className="min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2">
+              {direction && (
+                <span
+                  className={`inline-flex shrink-0 items-center gap-0.5 text-[9px] font-semibold uppercase tracking-widest sm:text-[10px] ${isSent ? "text-[#7DA2FF]/60" : "text-white/40"}`}
+                >
+                  {isSent && (
+                    <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                    </svg>
+                  )}
+                  {!isSent && (
+                    <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
+                    </svg>
+                  )}
+                  {directionLabel}
+                </span>
+              )}
+              {!direction && (
+                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-widest text-white/40 sm:text-[10px]">
+                  From
+                </span>
+              )}
+              <a
+                href={`/agents/${directionAddress}`}
+                className={`min-w-0 truncate font-mono text-[11px] transition-colors sm:text-[13px] ${isSent ? "text-[#7DA2FF] hover:text-[#6B91EE]" : "text-[#F7931A] hover:text-[#E8850F]"}`}
               >
-                {isSent && (
-                  <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                  </svg>
-                )}
-                {!isSent && (
-                  <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
-                  </svg>
-                )}
-                {directionLabel}
-              </span>
-            )}
-            {!direction && (
-              <span className="text-[9px] font-semibold uppercase tracking-widest text-white/40 sm:text-[10px]">
-                From
-              </span>
-            )}
-            <a
-              href={`/agents/${directionAddress}`}
-              className={`min-w-0 truncate font-mono text-[11px] transition-colors sm:text-[13px] ${isSent ? "text-[#7DA2FF] hover:text-[#6B91EE]" : "text-[#F7931A] hover:text-[#E8850F]"}`}
-            >
-              {directionAddress}
-            </a>
-          </div>
-          <div className="mt-0.5 text-[10px] text-white/40 sm:mt-1 sm:text-[11px]">
-            {formatRelativeTime(sentAt)}
+                {directionAddress}
+              </a>
+            </div>
+            <div className="mt-0.5 text-[10px] text-white/40 sm:mt-1 sm:text-[11px]">
+              {formatRelativeTime(sentAt)}
+            </div>
           </div>
         </div>
 
@@ -102,7 +117,7 @@ export default function InboxMessage({
       </div>
 
       {/* Message content */}
-      <p className="text-[13px] leading-relaxed text-white/80 sm:text-[14px]">{content}</p>
+      <p className="break-words text-[13px] leading-relaxed text-white/80 sm:text-[14px]">{content}</p>
 
       {/* Footer: status badges */}
       <div className="mt-2.5 flex flex-wrap items-center gap-1.5 sm:mt-3 sm:gap-2">
@@ -154,7 +169,7 @@ export default function InboxMessage({
               {formatRelativeTime(reply.repliedAt)}
             </span>
           </div>
-          <p className="text-[12px] leading-relaxed text-white/70 sm:text-[13px]">
+          <p className="break-words text-[12px] leading-relaxed text-white/70 sm:text-[13px]">
             {reply.reply}
           </p>
         </div>
