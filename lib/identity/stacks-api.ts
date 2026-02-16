@@ -200,3 +200,28 @@ function unwrapCvJson(node: any): any {
 
   return node;
 }
+
+/**
+ * Detect 429 rate limit responses and determine if fallback is needed.
+ *
+ * @param response - Fetch Response object
+ * @returns Object with isRateLimited and shouldFallback flags
+ */
+export function detect429AndFallback(response: Response): {
+  isRateLimited: boolean;
+  shouldFallback: boolean;
+} {
+  const isRateLimited = response.status === 429;
+
+  if (isRateLimited) {
+    const cfRay = response.headers.get("cf-ray");
+    console.warn(
+      `Rate limit detected (429) on ${response.url}${cfRay ? ` [cf-ray: ${cfRay}]` : ""}`
+    );
+  }
+
+  return {
+    isRateLimited,
+    shouldFallback: isRateLimited,
+  };
+}
