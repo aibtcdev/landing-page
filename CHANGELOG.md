@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.6.0](https://github.com/aibtcdev/landing-page/compare/v1.5.2...v1.6.0) (2026-02-16)
+
+
+### Features
+
+* show Nostr npub on agent profile page ([#169](https://github.com/aibtcdev/landing-page/issues/169)) ([d1f4383](https://github.com/aibtcdev/landing-page/commit/d1f438387d96266f709900cdff276ba12b47e649)), closes [#168](https://github.com/aibtcdev/landing-page/issues/168)
+
 ## [1.5.2](https://github.com/aibtcdev/landing-page/compare/v1.5.1...v1.5.2) (2026-02-16)
 
 
