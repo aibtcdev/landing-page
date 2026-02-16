@@ -222,8 +222,8 @@ export default function AgentList({ agents }: AgentListProps) {
       </div>
 
       {/* Desktop table */}
-      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-md max-md:hidden">
-        <table className="w-full">
+      <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.02] backdrop-blur-md max-md:hidden">
+        <table className="w-full min-w-[900px]">
           <thead>
             <tr className="border-b border-white/[0.08] bg-white/[0.03]">
               <th className="px-5 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50">Agent</th>
