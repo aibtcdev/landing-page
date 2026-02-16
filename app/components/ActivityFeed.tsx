@@ -55,12 +55,17 @@ function formatNumber(num: number): string {
 }
 
 /**
- * Event type configuration: accent color, icon, bg tint.
+ * Event type configuration: accent color, icon, label.
  */
-const EVENT_CONFIG: Record<ActivityEventType, { accent: string; bgTint: string; icon: React.ReactElement }> = {
+const EVENT_CONFIG: Record<
+  ActivityEventType,
+  { accent: string; bgTint: string; ringColor: string; label: string; icon: React.ReactElement }
+> = {
   message: {
     accent: "text-[#F7931A]",
     bgTint: "bg-[#F7931A]/10",
+    ringColor: "ring-[#F7931A]/20",
+    label: "Message",
     icon: (
       <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
         <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
@@ -70,15 +75,19 @@ const EVENT_CONFIG: Record<ActivityEventType, { accent: string; bgTint: string; 
   achievement: {
     accent: "text-[#7DA2FF]",
     bgTint: "bg-[#7DA2FF]/10",
+    ringColor: "ring-[#7DA2FF]/20",
+    label: "Achievement",
     icon: (
       <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+        <path strokeLinecap="round" strokeLinejoin="round" d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
       </svg>
     ),
   },
   registration: {
     accent: "text-[#A855F7]",
     bgTint: "bg-[#A855F7]/10",
+    ringColor: "ring-[#A855F7]/20",
+    label: "New Agent",
     icon: (
       <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
         <path strokeLinecap="round" strokeLinejoin="round" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z" />
@@ -88,7 +97,7 @@ const EVENT_CONFIG: Record<ActivityEventType, { accent: string; bgTint: string; 
 };
 
 /**
- * Render an activity event row with type-specific accent color and icon.
+ * Render a single event row.
  */
 function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
   const relativeTime = formatRelativeTime(event.timestamp);
@@ -100,37 +109,40 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
   switch (event.type) {
     case "message":
       description = (
-        <span>
-          <span className="text-white/90">{event.agent.displayName}</span>
-          <span className="mx-1 text-white/30">&rarr;</span>
-          <span className="text-white/90">{event.recipient?.displayName || "Unknown"}</span>
+        <>
+          <span className="font-medium text-white">{event.agent.displayName}</span>
+          <svg className="mx-1.5 inline size-3 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
+          </svg>
+          <span className="font-medium text-white">{event.recipient?.displayName || "Unknown"}</span>
           {event.paymentSatoshis != null && (
-            <span className="ml-2 inline-flex items-center rounded-full bg-[#F7931A]/10 px-1.5 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A]">
-              {event.paymentSatoshis.toLocaleString()} sats
+            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
+              <svg className="size-2.5" viewBox="0 0 24 24" fill="currentColor"><path d="M11.944 17.97L4.58 13.62 11.943 24l7.37-10.38-7.372 4.35h.003zM12.056 0L4.69 12.223l7.365 4.354 7.365-4.35L12.056 0z" /></svg>
+              {event.paymentSatoshis.toLocaleString()}
             </span>
           )}
-        </span>
+        </>
       );
       href = event.recipient ? `/inbox/${event.recipient.btcAddress}` : null;
       break;
 
     case "achievement":
       description = (
-        <span>
-          <span className="text-white/90">{event.agent.displayName}</span>
-          <span className="text-white/50"> earned </span>
-          <span className="text-[#7DA2FF]">{event.achievementName}</span>
-        </span>
+        <>
+          <span className="font-medium text-white">{event.agent.displayName}</span>
+          <span className="text-white/40"> earned </span>
+          <span className="font-medium text-[#7DA2FF]">{event.achievementName}</span>
+        </>
       );
       href = `/agents/${event.agent.btcAddress}`;
       break;
 
     case "registration":
       description = (
-        <span>
-          <span className="text-white/90">{event.agent.displayName}</span>
-          <span className="text-white/50"> joined the registry</span>
-        </span>
+        <>
+          <span className="font-medium text-white">{event.agent.displayName}</span>
+          <span className="text-white/40"> joined the registry</span>
+        </>
       );
       href = `/agents/${event.agent.btcAddress}`;
       break;
@@ -141,11 +153,11 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
 
   const content = (
     <div
-      className={`animate-fadeUp flex items-center gap-3 rounded-md px-3 py-2.5 ${href ? "cursor-pointer transition-colors hover:bg-white/[0.04]" : ""}`}
-      style={{ animationDelay: `${index * 60}ms`, opacity: 0 }}
+      className="group/row flex items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 hover:bg-white/[0.03] animate-fadeUp"
+      style={{ animationDelay: `${index * 50}ms`, opacity: 0 }}
     >
-      {/* Type icon pill */}
-      <div className={`flex size-7 shrink-0 items-center justify-center rounded-full ${config.bgTint} ${config.accent}`}>
+      {/* Type icon */}
+      <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${config.bgTint} ${config.accent} ring-1 ring-inset ${config.ringColor}`}>
         {config.icon}
       </div>
 
@@ -154,44 +166,68 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
       <img
         src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(event.agent.btcAddress)}`}
         alt=""
-        className="size-7 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+        className="size-8 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
         loading="lazy"
-        width="28"
-        height="28"
-        onError={(e) => { e.currentTarget.style.display = "none"; }}
+        width="32"
+        height="32"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
       />
 
-      {/* Event description */}
-      <div className="min-w-0 flex-1 truncate text-[13px]">{description}</div>
+      {/* Description */}
+      <div className="min-w-0 flex-1 truncate text-[13px] text-white/60 max-md:text-[12px]">
+        {description}
+      </div>
 
       {/* Timestamp */}
-      <div className="shrink-0 text-[11px] tabular-nums text-white/25">{relativeTime}</div>
+      <div className="shrink-0 text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
+        {relativeTime}
+      </div>
     </div>
   );
 
   if (href) {
-    return <Link href={href} className="block">{content}</Link>;
+    return (
+      <Link href={href} className="block cursor-pointer">
+        {content}
+      </Link>
+    );
   }
   return content;
 }
 
 /**
- * Stat card with accent top border and tabular numbers.
+ * Single stat card with icon + accent.
  */
-function StatCard({ label, value, accent, index }: { label: string; value: string; accent?: string; index: number }) {
+function StatCard({
+  label,
+  value,
+  icon,
+  accent,
+  index,
+}: {
+  label: string;
+  value: string;
+  icon: React.ReactElement;
+  accent: string;
+  index: number;
+}) {
   return (
     <div
-      className="animate-fadeUp overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.02]"
+      className="animate-fadeUp rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] p-4 backdrop-blur-[12px] max-md:p-3.5"
       style={{ animationDelay: `${index * 80}ms`, opacity: 0 }}
     >
-      <div className={`h-0.5 ${accent ?? "bg-white/10"}`} />
-      <div className="px-4 py-3">
-        <div className="text-[11px] font-medium uppercase tracking-wider text-white/40">
+      <div className="mb-3 flex items-center gap-2 max-md:mb-2">
+        <div className={`flex size-7 items-center justify-center rounded-lg ${accent}/10`}>
+          <div className={`${accent.replace("bg-", "text-")}`}>{icon}</div>
+        </div>
+        <span className="text-[11px] font-medium uppercase tracking-wider text-white/35">
           {label}
-        </div>
-        <div className="mt-1 text-[20px] font-medium tabular-nums text-white">
-          {value}
-        </div>
+        </span>
+      </div>
+      <div className="text-[24px] font-semibold tabular-nums text-white max-md:text-[20px]">
+        {value}
       </div>
     </div>
   );
@@ -203,10 +239,50 @@ function StatCard({ label, value, accent, index }: { label: string; value: strin
 function StatsGrid({ stats }: { stats: NetworkStats }) {
   return (
     <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-      <StatCard label="Total Agents" value={formatNumber(stats.totalAgents)} accent="bg-[#F7931A]" index={0} />
-      <StatCard label="Active Agents" value={formatNumber(stats.activeAgents)} accent="bg-[#7DA2FF]" index={1} />
-      <StatCard label="Messages Sent" value={formatNumber(stats.totalMessages)} accent="bg-[#A855F7]" index={2} />
-      <StatCard label="Sats Transacted" value={formatNumber(stats.totalSatsTransacted)} accent="bg-[#F7931A]/60" index={3} />
+      <StatCard
+        label="Total Agents"
+        value={formatNumber(stats.totalAgents)}
+        accent="bg-[#F7931A]"
+        index={0}
+        icon={
+          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19.128a9.38 9.38 0 002.625.372 9.337 9.337 0 004.121-.952 4.125 4.125 0 00-7.533-2.493M15 19.128v-.003c0-1.113-.285-2.16-.786-3.07M15 19.128v.106A12.318 12.318 0 018.624 21c-2.331 0-4.512-.645-6.374-1.766l-.001-.109a6.375 6.375 0 0111.964-3.07M12 6.375a3.375 3.375 0 11-6.75 0 3.375 3.375 0 016.75 0zm8.25 2.25a2.625 2.625 0 11-5.25 0 2.625 2.625 0 015.25 0z" />
+          </svg>
+        }
+      />
+      <StatCard
+        label="Active (7d)"
+        value={formatNumber(stats.activeAgents)}
+        accent="bg-[#7DA2FF]"
+        index={1}
+        icon={
+          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+          </svg>
+        }
+      />
+      <StatCard
+        label="Messages"
+        value={formatNumber(stats.totalMessages)}
+        accent="bg-[#A855F7]"
+        index={2}
+        icon={
+          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M8 10h.01M12 10h.01M16 10h.01M9 16H5a2 2 0 01-2-2V6a2 2 0 012-2h14a2 2 0 012 2v8a2 2 0 01-2 2h-5l-5 5v-5z" />
+          </svg>
+        }
+      />
+      <StatCard
+        label="Sats Moved"
+        value={formatNumber(stats.totalSatsTransacted)}
+        accent="bg-[#F7931A]"
+        index={3}
+        icon={
+          <svg className="size-4" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M11.944 17.97L4.58 13.62 11.943 24l7.37-10.38-7.372 4.35h.003zM12.056 0L4.69 12.223l7.365 4.354 7.365-4.35L12.056 0z" />
+          </svg>
+        }
+      />
     </div>
   );
 }
@@ -234,19 +310,27 @@ export default function ActivityFeed() {
           {Array.from({ length: 4 }).map((_, i) => (
             <div
               key={i}
-              className="h-20 animate-pulse rounded-lg bg-white/[0.06]"
+              className="h-[88px] animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.03]"
             />
           ))}
         </div>
 
         {/* Events skeleton */}
-        <div className="space-y-1.5">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-12 animate-pulse rounded-md bg-white/[0.06]"
-            />
-          ))}
+        <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
+          <div className="mb-4 h-4 w-32 animate-pulse rounded bg-white/[0.06]" />
+          <div className="space-y-2">
+            {Array.from({ length: 6 }).map((_, i) => (
+              <div
+                key={i}
+                className="flex items-center gap-3 px-3 py-2.5"
+              >
+                <div className="size-8 animate-pulse rounded-lg bg-white/[0.06]" />
+                <div className="size-8 animate-pulse rounded-full bg-white/[0.06]" />
+                <div className="h-4 flex-1 animate-pulse rounded bg-white/[0.06]" />
+                <div className="h-3 w-12 animate-pulse rounded bg-white/[0.06]" />
+              </div>
+            ))}
+          </div>
         </div>
       </div>
     );
@@ -254,8 +338,11 @@ export default function ActivityFeed() {
 
   if (error || !data) {
     return (
-      <div className="text-center text-[13px] text-white/40">
-        Failed to load network activity
+      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-6 py-12 text-center">
+        <svg className="mx-auto mb-3 size-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
+        </svg>
+        <p className="text-[13px] text-white/40">Failed to load network activity</p>
       </div>
     );
   }
@@ -267,36 +354,64 @@ export default function ActivityFeed() {
     return (
       <div className="space-y-6">
         <StatsGrid stats={stats} />
-
-        <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-6 py-12 text-center">
-          <div className="text-[14px] text-white/40">
-            No recent activity. Be the first to send a message or earn an achievement!
-          </div>
+        <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-6 py-16 text-center">
+          <svg className="mx-auto mb-3 size-10 text-white/15" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z" />
+          </svg>
+          <p className="mb-1 text-[15px] font-medium text-white/60">No recent activity</p>
+          <p className="text-[13px] text-white/30">Be the first to send a message or earn an achievement</p>
         </div>
       </div>
     );
   }
 
+  // Group events by type for the legend
+  const typeCounts = events.reduce(
+    (acc, e) => {
+      acc[e.type] = (acc[e.type] || 0) + 1;
+      return acc;
+    },
+    {} as Record<string, number>
+  );
+
   return (
     <div className="space-y-6">
       <StatsGrid stats={stats} />
 
-      {/* Events */}
-      <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-4">
-        {/* Header with live pulse */}
-        <div className="mb-2 flex items-center gap-2 px-3">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-          </span>
-          <span className="text-[13px] font-medium uppercase tracking-wider text-white/40">
-            Recent Activity
-          </span>
+      {/* Events feed */}
+      <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px]">
+        {/* Header */}
+        <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3.5 max-md:px-4">
+          <div className="flex items-center gap-2.5">
+            <span className="relative flex size-2">
+              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+              <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+            </span>
+            <span className="text-[13px] font-medium text-white/60">
+              Recent Activity
+            </span>
+          </div>
+
+          {/* Type legend */}
+          <div className="flex items-center gap-3 max-md:hidden">
+            {(Object.keys(typeCounts) as ActivityEventType[]).map((type) => {
+              const config = EVENT_CONFIG[type];
+              return (
+                <div key={type} className="flex items-center gap-1.5">
+                  <div className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />
+                  <span className="text-[11px] text-white/30">
+                    {typeCounts[type]} {config.label}{typeCounts[type] !== 1 ? "s" : ""}
+                  </span>
+                </div>
+              );
+            })}
+          </div>
         </div>
 
-        <div className="space-y-0.5">
+        {/* Event list */}
+        <div className="divide-y divide-white/[0.03] px-2 py-1 max-md:px-1">
           {events.map((event, i) => (
-            <EventRow key={i} event={event} index={i} />
+            <EventRow key={`${event.type}-${event.timestamp}-${i}`} event={event} index={i} />
           ))}
         </div>
       </div>
