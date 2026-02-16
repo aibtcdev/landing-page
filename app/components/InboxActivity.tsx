@@ -124,7 +124,7 @@ export default function InboxActivity({
             <span className="text-[10px] text-white/40">sats spent</span>
           </div>
           <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
-            <span className="block text-[16px] font-semibold text-[#4dcd5e]">
+            <span className={`block text-[16px] font-semibold ${data.inbox.economics.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}`}>
               {data.inbox.economics.satsNet.toLocaleString()}
             </span>
             <span className="text-[10px] text-white/40">net sats</span>

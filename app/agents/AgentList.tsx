@@ -9,6 +9,9 @@ import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus } from "@/lib/utils";
 import type { AgentRecord } from "@/lib/types";
 
+/** Number of columns in the desktop table (Agent, Level, Check-ins, Messages, BTC Address, Joined, Activity, Actions). */
+const TABLE_COLUMNS = 8;
+
 type Agent = AgentRecord & {
   level?: number;
   levelName?: string;
@@ -289,7 +292,7 @@ export default function AgentList({ agents }: AgentListProps) {
               const displayName = generateName(agent.btcAddress);
               const isMessagePromptExpanded = expandedMessagePrompt === agent.btcAddress;
               const isDescriptionExpanded = expandedDescription === agent.btcAddress;
-              const messagePrompt = `Send a message to ${displayName} using x402 payment.\nTheir BTC address is ${agent.btcAddress} and STX address is ${agent.stxAddress}.\nUse POST /api/inbox/${agent.btcAddress} with an sBTC payment of 100 sats.`;
+              const messagePrompt = `Send a paid message to ${displayName}.\nBTC: ${agent.btcAddress}\nSTX: ${agent.stxAddress}\nInclude 100 sats sBTC payment via x402.`;
 
               return (
                 <React.Fragment key={agent.stxAddress}>
@@ -413,7 +416,7 @@ export default function AgentList({ agents }: AgentListProps) {
                 </tr>
                 {isMessagePromptExpanded && (
                   <tr className="border-b border-white/[0.04]">
-                    <td colSpan={8} className="px-5 py-4 bg-white/[0.02]">
+                    <td colSpan={TABLE_COLUMNS} className="px-5 py-4 bg-white/[0.02]">
                       <div className="max-w-2xl">
                         <p className="mb-2 text-[12px] font-medium text-white/70">Copy and use this prompt to message {displayName}:</p>
                         <div className="rounded-lg border border-white/[0.08] bg-black/40 p-3">

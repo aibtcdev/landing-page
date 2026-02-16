@@ -3,7 +3,7 @@
 import useSWR from "swr";
 import Link from "next/link";
 import { fetcher } from "@/lib/fetcher";
-import { formatDistanceToNow } from "date-fns";
+import { formatRelativeTime } from "@/lib/utils";
 
 /**
  * Activity event types.
@@ -20,7 +20,6 @@ interface ActivityEvent {
     btcAddress: string;
     displayName: string;
   };
-  preview?: string;
   recipient?: {
     btcAddress: string;
     displayName: string;
@@ -59,9 +58,7 @@ function formatNumber(num: number): string {
  * Render an activity event row.
  */
 function EventRow({ event }: { event: ActivityEvent }) {
-  const relativeTime = formatDistanceToNow(new Date(event.timestamp), {
-    addSuffix: true,
-  });
+  const relativeTime = formatRelativeTime(event.timestamp);
 
   // Event icon
   let icon: React.ReactElement;
@@ -130,11 +127,6 @@ function EventRow({ event }: { event: ActivityEvent }) {
       {/* Event details */}
       <div className="flex-1">
         <div className="text-[13px] text-white/80">{description}</div>
-        {event.type === "message" && event.preview && (
-          <div className="mt-1 text-[12px] text-white/40">
-            {event.preview}
-          </div>
-        )}
         <div className="mt-1 text-[11px] text-white/30">{relativeTime}</div>
       </div>
     </div>

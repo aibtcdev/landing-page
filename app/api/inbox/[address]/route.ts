@@ -139,15 +139,10 @@ export async function GET(
         ? receivedCount
         : sentCount;
 
-  // Compute economic stats from fetched messages
-  // NOTE: These are computed from the first 100 messages when view="all"
-  // For agents with >100 messages, these are approximate totals
-  const satsReceived = receivedResult?.messages.reduce(
-    (sum, msg) => sum + (msg.paymentSatoshis || 0), 0
-  ) ?? 0;
-  const satsSent = sentResult?.messages.reduce(
-    (sum, msg) => sum + (msg.paymentSatoshis || 0), 0
-  ) ?? 0;
+  // Compute economic stats from index counts (not paginated messages)
+  // Each message costs INBOX_PRICE_SATS, so total = count * price
+  const satsReceived = receivedCount * INBOX_PRICE_SATS;
+  const satsSent = sentCount * INBOX_PRICE_SATS;
 
   // Resolve sender/recipient agent info for display names and BTC addresses
   const addressSet = new Set<string>();
@@ -197,7 +192,8 @@ export async function GET(
       let direction: "sent" | "received";
 
       // For received messages, partner is the sender (fromAddress = STX)
-      if (receivedResult?.messages.includes(msg)) {
+      // Use message data (not reference equality) to determine direction
+      if (msg.toBtcAddress === agent.btcAddress) {
         partnerStxAddress = msg.fromAddress;
         direction = "received";
       }

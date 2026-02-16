@@ -21,7 +21,6 @@ interface ActivityEvent {
     displayName: string;
   };
   // For messages
-  preview?: string;
   recipient?: {
     btcAddress: string;
     displayName: string;
@@ -96,7 +95,6 @@ export async function GET(request: NextRequest) {
               btcAddress: "string",
               displayName: "string",
             },
-            preview: "string (for message events)",
             recipient: {
               btcAddress: "string",
               displayName: "string",
@@ -205,25 +203,42 @@ export async function GET(request: NextRequest) {
       })
       .slice(0, TOP_ACTIVE_AGENTS);
 
-    // Collect events from top active agents
-    const events: ActivityEvent[] = [];
+    // Compute network-wide totals from ALL agents' inbox indices
     let totalMessages = 0;
     let totalSatsTransacted = 0;
+
+    // TODO: Consider maintaining a pre-built activity index that updates
+    // incrementally in the inbox POST handler to avoid scanning all agents
+    // on cache miss. Current cost is O(N) KV reads where N = total agents.
+    const allInboxPromises = agents.map(async (agent) => {
+      const inboxIndex = await kv.get<InboxAgentIndex>(
+        `inbox:agent:${agent.btcAddress}`,
+        "json"
+      );
+      if (inboxIndex) {
+        totalMessages += inboxIndex.messageIds.length;
+        // Estimate sats from message count (each message costs INBOX_PRICE_SATS)
+        // This avoids fetching every message just for the total
+        totalSatsTransacted += inboxIndex.messageIds.length * 100;
+      }
+    });
+    await Promise.all(allInboxPromises);
+
+    // Collect events from top active agents
+    const events: ActivityEvent[] = [];
 
     // Fetch inbox and achievement indices for top active agents
     const eventPromises = sortedAgents.map(async (agent) => {
       const agentEvents: ActivityEvent[] = [];
 
-      // Fetch inbox index
+      // Fetch inbox index (may re-fetch for top agents, but cached by runtime)
       const inboxIndex = await kv.get<InboxAgentIndex>(
         `inbox:agent:${agent.btcAddress}`,
         "json"
       );
 
       if (inboxIndex && inboxIndex.messageIds.length > 0) {
-        totalMessages += inboxIndex.messageIds.length;
-
-        // Fetch most recent 3 messages
+        // Fetch most recent 3 messages for the event feed
         const recentMessageIds = inboxIndex.messageIds.slice(-3).reverse();
         const messages = await Promise.all(
           recentMessageIds.map(async (messageId) => {
@@ -238,7 +253,6 @@ export async function GET(request: NextRequest) {
         // Add message events
         for (const message of messages) {
           if (message) {
-            totalSatsTransacted += message.paymentSatoshis;
 
             // Find sender agent for display name
             const senderAgent = agents.find(
@@ -252,7 +266,6 @@ export async function GET(request: NextRequest) {
                 btcAddress: senderAgent?.btcAddress || message.fromAddress,
                 displayName: senderAgent?.displayName || "Unknown Agent",
               },
-              preview: message.content,
               recipient: {
                 btcAddress: agent.btcAddress,
                 displayName: agent.displayName || agent.btcAddress,
