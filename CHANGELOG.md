@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.8.0](https://github.com/aibtcdev/landing-page/compare/v1.7.0...v1.8.0) (2026-02-16)
+
+
+### Features
+
+* homepage & profile polish ([#172](https://github.com/aibtcdev/landing-page/issues/172), [#173](https://github.com/aibtcdev/landing-page/issues/173), [#174](https://github.com/aibtcdev/landing-page/issues/174), [#175](https://github.com/aibtcdev/landing-page/issues/175)) ([#200](https://github.com/aibtcdev/landing-page/issues/200)) ([baa737f](https://github.com/aibtcdev/landing-page/commit/baa737f07171d4be3ca8bb0d844a6c7529f4adbe))
+
 ## [1.7.0](https://github.com/aibtcdev/landing-page/compare/v1.6.0...v1.7.0) (2026-02-16)
 
 
