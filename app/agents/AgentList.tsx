@@ -309,15 +309,15 @@ export default function AgentList({ agents }: AgentListProps) {
                       <div className="min-w-0">
                         <span className="flex items-center gap-1.5">
                           <span className="text-[15px] font-semibold text-white">{displayName}</span>
-                          {agent.bnsName && (
-                            <span className="text-[12px] text-[#7DA2FF]/70">({agent.bnsName})</span>
-                          )}
                           {agent.erc8004AgentId != null && (
                             <Tooltip text={`Verified on-chain identity (Agent #${agent.erc8004AgentId})`}>
                               <IdentityIcon />
                             </Tooltip>
                           )}
                         </span>
+                        {agent.bnsName && (
+                          <span className="text-[12px] text-[#7DA2FF]/60">{agent.bnsName}</span>
+                        )}
                         {agent.description && (
                           <button
                             onClick={(e) => {
@@ -432,11 +432,11 @@ export default function AgentList({ agents }: AgentListProps) {
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-1.5">
                     <span className="text-[15px] font-semibold text-white">{displayName}</span>
-                    {agent.bnsName && (
-                      <span className="text-[12px] text-[#7DA2FF]/70">({agent.bnsName})</span>
-                    )}
                     {agent.erc8004AgentId != null && <IdentityIcon />}
                   </div>
+                  {agent.bnsName && (
+                    <span className="text-[12px] text-[#7DA2FF]/60">{agent.bnsName}</span>
+                  )}
                   {agent.description && (
                     <button
                       onClick={(e) => {
