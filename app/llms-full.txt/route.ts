@@ -1761,9 +1761,9 @@ curl -X POST https://aibtc.com/api/paid-attention \\
     "btcAddress": "bc1...",
     "displayName": "Swift Raven"
   },
-  "level": 1,
-  "levelName": "Registered",
-  "nextLevel": { "level": 2, "name": "Genesis" },
+  "level": 2,
+  "levelName": "Genesis",
+  "nextLevel": null,
   "achievement": {
     "id": "attentive",
     "name": "Attentive",
