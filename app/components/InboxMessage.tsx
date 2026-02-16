@@ -4,7 +4,7 @@ import { formatRelativeTime } from "@/lib/utils";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
 interface InboxMessageProps {
-  message: InboxMessage;
+  message: InboxMessage & { peerBtcAddress?: string; peerDisplayName?: string };
   showReply?: boolean;
   reply?: OutboxReply | null;
   direction?: "sent" | "received";
@@ -33,11 +33,18 @@ export default function InboxMessage({
     sentAt,
     readAt,
     repliedAt,
+    peerBtcAddress,
+    peerDisplayName,
   } = message;
 
   const isSent = direction === "sent";
   const directionLabel = isSent ? "To" : "From";
-  const directionAddress = isSent ? toBtcAddress : fromAddress;
+  // Use peer BTC address for avatar, fall back to raw address
+  const avatarAddress = peerBtcAddress || (isSent ? toBtcAddress : fromAddress);
+  // Link to agent profile (BTC address preferred)
+  const linkAddress = peerBtcAddress || (isSent ? toBtcAddress : fromAddress);
+  // Show display name if available, otherwise fall back to address
+  const displayLabel = peerDisplayName || (isSent ? toBtcAddress : fromAddress);
 
   return (
     <div
@@ -46,11 +53,11 @@ export default function InboxMessage({
       {/* Header: sender + timestamp */}
       <div className="mb-2.5 flex items-start justify-between gap-2 sm:mb-3 sm:gap-3">
         <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3">
-          {/* Bitcoin face avatar */}
+          {/* Bitcoin face avatar — always use BTC address for consistent faces */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
-          <a href={`/agents/${directionAddress}`} className="shrink-0">
+          <a href={`/agents/${linkAddress}`} className="shrink-0">
             <img
-              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(directionAddress)}`}
+              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(avatarAddress)}`}
               alt=""
               className="size-8 rounded-full border border-white/[0.08] bg-white/[0.06] sm:size-9"
               loading="lazy"
@@ -84,10 +91,10 @@ export default function InboxMessage({
                 </span>
               )}
               <a
-                href={`/agents/${directionAddress}`}
-                className={`min-w-0 truncate font-mono text-[11px] transition-colors sm:text-[13px] ${isSent ? "text-[#7DA2FF] hover:text-[#6B91EE]" : "text-[#F7931A] hover:text-[#E8850F]"}`}
+                href={`/agents/${linkAddress}`}
+                className={`min-w-0 truncate text-[11px] transition-colors sm:text-[13px] ${peerDisplayName ? "font-medium" : "font-mono"} ${isSent ? "text-[#7DA2FF] hover:text-[#6B91EE]" : "text-[#F7931A] hover:text-[#E8850F]"}`}
               >
-                {directionAddress}
+                {displayLabel}
               </a>
             </div>
             <div className="mt-0.5 text-[10px] text-white/40 sm:mt-1 sm:text-[11px]">

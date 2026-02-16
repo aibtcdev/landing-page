@@ -149,11 +149,31 @@ export async function GET(
     (sum, msg) => sum + (msg.paymentSatoshis || 0), 0
   ) ?? 0;
 
-  // Build response messages with direction
-  const messages = combined.map(({ message, direction }) => ({
-    ...message,
-    direction,
-  }));
+  // Resolve sender/recipient agent info for display names and BTC addresses
+  const addressSet = new Set<string>();
+  for (const { message, direction } of combined) {
+    if (direction === "received") addressSet.add(message.fromAddress); // STX address
+    else addressSet.add(message.toBtcAddress); // BTC address
+  }
+  const agentLookupMap = new Map<string, import("@/lib/types").AgentRecord>();
+  await Promise.all(
+    Array.from(addressSet).map(async (addr) => {
+      const found = await lookupAgent(kv, addr);
+      if (found) agentLookupMap.set(addr, found);
+    })
+  );
+
+  // Build response messages with direction and resolved peer info
+  const messages = combined.map(({ message, direction }) => {
+    const peerAddress = direction === "received" ? message.fromAddress : message.toBtcAddress;
+    const peer = agentLookupMap.get(peerAddress);
+    return {
+      ...message,
+      direction,
+      peerBtcAddress: peer?.btcAddress ?? (direction === "sent" ? message.toBtcAddress : undefined),
+      peerDisplayName: peer?.displayName,
+    };
+  });
 
   // Compute partner summary if requested
   let partners: import("@/lib/inbox/types").InboxPartner[] | undefined;

@@ -13,7 +13,7 @@ interface InboxResponse {
     displayName: string;
   };
   inbox: {
-    messages: (InboxMessageType & { direction?: "sent" | "received" })[];
+    messages: (InboxMessageType & { direction?: "sent" | "received"; peerBtcAddress?: string; peerDisplayName?: string })[];
     unreadCount: number;
     totalCount: number;
     receivedCount?: number;
