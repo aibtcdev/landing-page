@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import InboxMessage from "./InboxMessage";
-import SendMessageModal from "./SendMessageModal";
 import { fetcher } from "@/lib/fetcher";
 import { generateName } from "@/lib/name-generator";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
+
+const SendMessageModal = dynamic(() => import("./SendMessageModal"), {
+  ssr: false,
+});
 
 interface InboxResponse {
   agent: {
@@ -215,13 +219,15 @@ export default function InboxActivity({
       )}
 
       {/* Send Message Modal */}
-      <SendMessageModal
-        isOpen={sendModalOpen}
-        onClose={() => setSendModalOpen(false)}
-        recipientBtcAddress={btcAddress}
-        recipientStxAddress={resolvedStxAddress}
-        recipientDisplayName={displayName}
-      />
+      {sendModalOpen && (
+        <SendMessageModal
+          isOpen={sendModalOpen}
+          onClose={() => setSendModalOpen(false)}
+          recipientBtcAddress={btcAddress}
+          recipientStxAddress={resolvedStxAddress}
+          recipientDisplayName={displayName}
+        />
+      )}
     </div>
   );
 }

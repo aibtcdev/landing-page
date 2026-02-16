@@ -1,11 +1,15 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import LevelBadge from "./LevelBadge";
 import { LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
-import SendMessageModal from "./SendMessageModal";
+
+const SendMessageModal = dynamic(() => import("./SendMessageModal"), {
+  ssr: false,
+});
 
 interface LeaderboardAgent {
   rank: number;
@@ -106,14 +110,11 @@ export default function HomeLeaderboard({ agents, registeredCount }: HomeLeaderb
                       </Link>
                       <div className="px-3.5 pb-3.5">
                         <button
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setMessageModalAgent({
-                              btcAddress: agent.btcAddress,
-                              stxAddress: agent.stxAddress,
-                              displayName: name,
-                            });
-                          }}
+                          onClick={() => setMessageModalAgent({
+                            btcAddress: agent.btcAddress,
+                            stxAddress: agent.stxAddress,
+                            displayName: name,
+                          })}
                           className="w-full inline-flex items-center justify-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-[11px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
                         >
                           <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -238,7 +239,7 @@ export default function HomeLeaderboard({ agents, registeredCount }: HomeLeaderb
       {/* Message Modal */}
       {messageModalAgent && (
         <SendMessageModal
-          isOpen={messageModalAgent !== null}
+          isOpen={true}
           onClose={() => setMessageModalAgent(null)}
           recipientBtcAddress={messageModalAgent.btcAddress}
           recipientStxAddress={messageModalAgent.stxAddress}
