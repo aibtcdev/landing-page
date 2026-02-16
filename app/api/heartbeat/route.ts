@@ -18,6 +18,13 @@ import {
 } from "@/lib/heartbeat";
 import { detectAgentIdentity } from "@/lib/identity/detection";
 import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
+import {
+  verifySenderAchievement,
+  checkRateLimit,
+  setRateLimit,
+  hasAchievement,
+  grantAchievement,
+} from "@/lib/achievements";
 
 /**
  * Build personalized orientation data for an agent.
@@ -358,6 +365,24 @@ export async function POST(request: NextRequest) {
         // Don't update lastIdentityCheck on error to allow retry on next heartbeat
         console.error("Identity detection failed during heartbeat:", error);
       }
+    }
+
+    // Proactively check sender achievement (lightweight, best-effort)
+    try {
+      const rateLimit = await checkRateLimit(kv, btcAddress, "sender");
+      if (rateLimit.allowed) {
+        const hasSender = await hasAchievement(kv, btcAddress, "sender");
+        if (!hasSender) {
+          const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv);
+          if (hasOutgoingTx) {
+            await grantAchievement(kv, btcAddress, "sender");
+          }
+        }
+        await setRateLimit(kv, btcAddress, "sender");
+      }
+    } catch (error) {
+      // Best-effort: log and continue if achievement check fails
+      console.error("Failed to check sender achievement during heartbeat:", error);
     }
 
     // Update agent record with lastActiveAt, checkInCount, and identity data
