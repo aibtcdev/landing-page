@@ -115,11 +115,6 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
           </svg>
           <span className="font-medium text-white">{event.recipient?.displayName || "Unknown"}</span>
-          {event.paymentSatoshis != null && (
-            <span className="ml-2 inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
-              {event.paymentSatoshis.toLocaleString()} sats
-            </span>
-          )}
         </>
       );
       href = event.recipient ? `/inbox/${event.recipient.btcAddress}` : null;
@@ -179,9 +174,16 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
         {description}
       </div>
 
-      {/* Timestamp */}
-      <div className="shrink-0 text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
-        {relativeTime}
+      {/* Sats + Timestamp */}
+      <div className="flex shrink-0 items-center gap-2">
+        {event.paymentSatoshis != null && (
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
+            {event.paymentSatoshis.toLocaleString()} sats
+          </span>
+        )}
+        <span className="text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
+          {relativeTime}
+        </span>
       </div>
     </div>
   );
