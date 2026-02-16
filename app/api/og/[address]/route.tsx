@@ -1,8 +1,8 @@
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord } from "@/lib/types";
-import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 
 const levelColors: Record<number, string> = {

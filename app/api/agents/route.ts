@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord } from "@/lib/types";
-import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { computeLevel, LEVELS } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
 
 export async function GET(request: NextRequest) {

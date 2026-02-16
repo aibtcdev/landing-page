@@ -7,8 +7,8 @@ import CopyButton from "./components/CopyButton";
 import HomeHeroStats from "./components/HomeHeroStats";
 import HomeLeaderboard from "./components/HomeLeaderboard";
 import ActivityFeed from "./components/ActivityFeed";
-import type { AgentRecord } from "@/lib/types";
-import { computeLevel, LEVELS, type ClaimStatus } from "@/lib/levels";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { computeLevel, LEVELS } from "@/lib/levels";
 
 export const dynamic = "force-dynamic";
 

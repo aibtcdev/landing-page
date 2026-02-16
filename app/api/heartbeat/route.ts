@@ -1,10 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
-import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
+import { getAgentLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
 import { TWITTER_HANDLE } from "@/lib/constants";
-import type { AgentRecord } from "@/lib/types";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
 import type { InboxAgentIndex } from "@/lib/inbox/types";
 import {
