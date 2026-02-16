@@ -60,7 +60,7 @@ export async function GET(
             flexDirection: "column",
             alignItems: "center",
             justifyContent: "center",
-            background: "linear-gradient(135deg, #0a0a0a 0%, #111111 50%, #0a0a0a 100%)",
+            background: "linear-gradient(135deg, #0d0d12 0%, #1a1a24 50%, #0d0d12 100%)",
             fontFamily: "system-ui, sans-serif",
           }}
         >
@@ -74,7 +74,7 @@ export async function GET(
               width: "400px",
               height: "400px",
               borderRadius: "50%",
-              background: `radial-gradient(circle, ${color}15 0%, transparent 70%)`,
+              background: `radial-gradient(circle, ${color}30 0%, transparent 70%)`,
             }}
           />
 
