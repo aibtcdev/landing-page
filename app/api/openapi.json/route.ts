@@ -3303,6 +3303,16 @@ export function GET() {
                 endpoint: { type: "string" },
               },
             },
+            achievement: {
+              type: "object",
+              description: "Optional achievement object (only present if new achievement earned)",
+              required: ["id", "name", "new"],
+              properties: {
+                id: { type: "string", description: "Achievement ID (e.g., 'attentive')" },
+                name: { type: "string", description: "Achievement name (e.g., 'Attentive')" },
+                new: { type: "boolean", const: true, description: "Always true when present" },
+              },
+            },
           },
         },
         AttentionPayoutRequest: {
@@ -3609,8 +3619,29 @@ export function GET() {
                   type: "array",
                   items: { $ref: "#/components/schemas/InboxMessage" },
                 },
+                replies: {
+                  type: "object",
+                  description: "Map of messageId to OutboxReply",
+                  additionalProperties: { $ref: "#/components/schemas/OutboxReply" },
+                },
                 unreadCount: { type: "integer" },
                 totalCount: { type: "integer" },
+                receivedCount: { type: "integer" },
+                sentCount: { type: "integer" },
+                economics: {
+                  type: "object",
+                  description: "Inbox economics in satoshis",
+                  properties: {
+                    satsReceived: { type: "integer", description: "Total satoshis received" },
+                    satsSent: { type: "integer", description: "Total satoshis sent" },
+                    satsNet: { type: "integer", description: "Net satoshis (received - sent)" },
+                  },
+                },
+                view: {
+                  type: "string",
+                  enum: ["all", "received", "sent"],
+                  description: "Current view filter",
+                },
                 pagination: {
                   type: "object",
                   properties: {
