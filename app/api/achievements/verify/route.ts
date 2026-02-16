@@ -7,6 +7,11 @@ import {
 } from "@/lib/achievements";
 import { getAgentLevel, type ClaimStatus } from "@/lib/levels";
 import type { AgentRecord } from "@/lib/types";
+import {
+  getCachedTransaction,
+  setCachedTransaction,
+} from "@/lib/identity/kv-cache";
+import { buildHiroHeaders, detect429AndFallback } from "@/lib/identity/stacks-api";
 
 const RATE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes
 
@@ -132,6 +137,7 @@ export async function POST(request: NextRequest) {
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const hiroApiKey = env.HIRO_API_KEY as string | undefined;
 
     // Look up agent
     const agentData = await kv.get(`btc:${btcAddress}`);
@@ -223,19 +229,29 @@ export async function POST(request: NextRequest) {
 
       if (!hasSender) {
         try {
-          const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
-          const mempoolResp = await fetch(mempoolUrl, {
-            signal: AbortSignal.timeout(10000),
-          });
+          // Check cache first
+          const cacheKey = `mempool:${btcAddress}`;
+          let txs = await getCachedTransaction(cacheKey, kv);
 
-          if (mempoolResp.ok) {
-            const txs = (await mempoolResp.json()) as Array<{
-              vin: Array<{ prevout: { scriptpubkey_address: string } }>;
-            }>;
+          if (!txs) {
+            const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
+            const mempoolResp = await fetch(mempoolUrl, {
+              signal: AbortSignal.timeout(10000),
+            });
 
-            const hasOutgoingTx = txs.some((tx) =>
+            if (mempoolResp.ok) {
+              txs = (await mempoolResp.json()) as Array<{
+                vin: Array<{ prevout: { scriptpubkey_address: string } }>;
+              }>;
+              // Cache the result
+              await setCachedTransaction(cacheKey, txs, kv);
+            }
+          }
+
+          if (txs) {
+            const hasOutgoingTx = txs.some((tx: any) =>
               tx.vin.some(
-                (input) => input.prevout.scriptpubkey_address === btcAddress
+                (input: any) => input.prevout.scriptpubkey_address === btcAddress
               )
             );
 
@@ -272,22 +288,8 @@ export async function POST(request: NextRequest) {
 
       if (!hasConnector) {
         try {
-          // Fetch transaction from Stacks API
-          const txUrl = `https://api.hiro.so/extended/v1/tx/${txid}`;
-          const txResp = await fetch(txUrl, {
-            signal: AbortSignal.timeout(10000),
-          });
-
-          if (!txResp.ok) {
-            return NextResponse.json(
-              {
-                error: `Failed to fetch transaction ${txid}: ${txResp.status} ${txResp.statusText}`,
-              },
-              { status: 400 }
-            );
-          }
-
-          const tx = (await txResp.json()) as {
+          // Define the transaction type
+          type StacksTransaction = {
             tx_status: string;
             tx_type: string;
             sender_address: string;
@@ -300,6 +302,58 @@ export async function POST(request: NextRequest) {
               }>;
             };
           };
+
+          // Check cache first
+          let tx: StacksTransaction | null = await getCachedTransaction(txid, kv);
+
+          if (!tx) {
+            // Fetch transaction from Stacks API with API key
+            const txUrl = `https://api.hiro.so/extended/v1/tx/${txid}`;
+            const headers = buildHiroHeaders(hiroApiKey);
+            const txResp = await fetch(txUrl, {
+              headers,
+              signal: AbortSignal.timeout(10000),
+            });
+
+            // Check for rate limiting
+            const rateLimitCheck = detect429AndFallback(txResp);
+            if (rateLimitCheck.isRateLimited) {
+              return NextResponse.json(
+                {
+                  error: `Stacks API rate limited. Try again later.`,
+                  retryAfter: 60,
+                },
+                {
+                  status: 503,
+                  headers: { "Retry-After": "60" },
+                }
+              );
+            }
+
+            if (!txResp.ok) {
+              return NextResponse.json(
+                {
+                  error: `Failed to fetch transaction ${txid}: ${txResp.status} ${txResp.statusText}`,
+                },
+                { status: 400 }
+              );
+            }
+
+            tx = (await txResp.json()) as StacksTransaction;
+
+            // Cache the transaction
+            await setCachedTransaction(txid, tx, kv);
+          }
+
+          // Ensure we have a transaction
+          if (!tx) {
+            return NextResponse.json(
+              {
+                error: `Failed to fetch transaction ${txid}`,
+              },
+              { status: 500 }
+            );
+          }
 
           // Validate transaction fields
           if (tx.tx_status !== "success") {
