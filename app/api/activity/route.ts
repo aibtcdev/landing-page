@@ -252,7 +252,7 @@ export async function GET(request: NextRequest) {
                 btcAddress: senderAgent?.btcAddress || message.fromAddress,
                 displayName: senderAgent?.displayName || "Unknown Agent",
               },
-              preview: message.content.slice(0, 80) + (message.content.length > 80 ? "..." : ""),
+              preview: message.content,
               recipient: {
                 btcAddress: agent.btcAddress,
                 displayName: agent.displayName || agent.btcAddress,
