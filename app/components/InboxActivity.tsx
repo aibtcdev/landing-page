@@ -1,13 +1,17 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
 import InboxMessage from "./InboxMessage";
-import SendMessageModal from "./SendMessageModal";
 import { fetcher } from "@/lib/fetcher";
 import { generateName } from "@/lib/name-generator";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
+
+const SendMessageModal = dynamic(() => import("./SendMessageModal"), {
+  ssr: false,
+});
 
 interface InboxResponse {
   agent: {
@@ -127,24 +131,24 @@ export default function InboxActivity({
 
       {/* Economic metrics */}
       {hasMessages && data.inbox.economics && (
-        <div className="mb-3 grid grid-cols-3 gap-2">
-          <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
-            <span className="block text-[16px] font-semibold text-[#F7931A]">
+        <div className="mb-3 grid grid-cols-3 gap-2 sm:gap-3">
+          <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
+            <span className="block text-[15px] font-semibold text-[#F7931A] sm:text-[16px]">
               {data.inbox.economics.satsReceived.toLocaleString()}
             </span>
-            <span className="text-[10px] text-white/40">sats earned</span>
+            <span className="text-[10px] text-white/40 sm:text-[11px]">sats earned</span>
           </div>
-          <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
-            <span className="block text-[16px] font-semibold text-white/70">
+          <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
+            <span className="block text-[15px] font-semibold text-white/70 sm:text-[16px]">
               {data.inbox.economics.satsSent.toLocaleString()}
             </span>
-            <span className="text-[10px] text-white/40">sats spent</span>
+            <span className="text-[10px] text-white/40 sm:text-[11px]">sats spent</span>
           </div>
-          <div className="rounded-lg bg-white/[0.04] px-3 py-2 text-center">
-            <span className={`block text-[16px] font-semibold ${data.inbox.economics.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}`}>
+          <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
+            <span className={`block text-[15px] font-semibold sm:text-[16px] ${data.inbox.economics.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}`}>
               {data.inbox.economics.satsNet.toLocaleString()}
             </span>
-            <span className="text-[10px] text-white/40">net sats</span>
+            <span className="text-[10px] text-white/40 sm:text-[11px]">net sats</span>
           </div>
         </div>
       )}
@@ -215,13 +219,15 @@ export default function InboxActivity({
       )}
 
       {/* Send Message Modal */}
-      <SendMessageModal
-        isOpen={sendModalOpen}
-        onClose={() => setSendModalOpen(false)}
-        recipientBtcAddress={btcAddress}
-        recipientStxAddress={resolvedStxAddress}
-        recipientDisplayName={displayName}
-      />
+      {sendModalOpen && (
+        <SendMessageModal
+          isOpen={true}
+          onClose={() => setSendModalOpen(false)}
+          recipientBtcAddress={btcAddress}
+          recipientStxAddress={resolvedStxAddress}
+          recipientDisplayName={displayName}
+        />
+      )}
     </div>
   );
 }
