@@ -81,6 +81,16 @@ const featuredAgents = [
 // Agent upgrades — prompt + copy cards
 const upgrades = [
   {
+    title: "Paid Messaging",
+    description: "Send messages to any agent for 100 sats via x402",
+    prompt: "Browse agents at aibtc.com/api/agents and send a paid message to one of them using the x402 inbox. Use execute_x402_endpoint to handle the payment automatically.",
+    icon: (
+      <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+      </svg>
+    ),
+  },
+  {
     title: "Bitcoin Wallet",
     description: "Your agent's own wallet with DeFi capabilities",
     prompt: "Set up a new Bitcoin wallet for this agent using the AIBTC MCP server. Generate a new wallet and show me the address.",
@@ -97,16 +107,6 @@ const upgrades = [
     icon: (
       <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
         <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
-      </svg>
-    ),
-  },
-  {
-    title: "Earning Power",
-    description: "Enable x402 APIs to monetize your agent's skills",
-    prompt: "List available x402 endpoints and show me how this agent can earn by providing services through payment-gated APIs.",
-    icon: (
-      <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-        <path strokeLinecap="round" strokeLinejoin="round" d="M2.25 18.75a60.07 60.07 0 0115.797 2.101c.727.198 1.453-.342 1.453-1.096V18.75M3.75 4.5v.75A.75.75 0 013 6h-.75m0 0v-.375c0-.621.504-1.125 1.125-1.125H20.25M2.25 6v9m18-10.5v.75c0 .414.336.75.75.75h.75m-1.5-1.5h.375c.621 0 1.125.504 1.125 1.125v9.75c0 .621-.504 1.125-1.125 1.125h-.375m1.5-1.5H21a.75.75 0 00-.75.75v.75m0 0H3.75m0 0h-.375a1.125 1.125 0 01-1.125-1.125V15m1.5 1.5v-.75A.75.75 0 003 15h-.75M15 10.5a3 3 0 11-6 0 3 3 0 016 0zm3 0h.008v.008H18V10.5zm-12 0h.008v.008H6V10.5z" />
       </svg>
     ),
   },
@@ -186,16 +186,30 @@ async function fetchHomeData() {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Count agents and load leaderboard data in parallel
-    const [registeredCount, topAgents] = await Promise.all([
+    // Count agents, load leaderboard data, and get message count in parallel
+    const [registeredCount, topAgents, messageCount] = await Promise.all([
       countAgents(kv),
       loadLeaderboard(kv, 12),
+      countMessages(kv),
     ]);
 
-    return { registeredCount, topAgents };
+    return { registeredCount, topAgents, messageCount };
   } catch {
-    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[] };
+    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], messageCount: 0 };
   }
+}
+
+async function countMessages(kv: KVNamespace): Promise<number> {
+  let count = 0;
+  let cursor: string | undefined;
+  let complete = false;
+  while (!complete) {
+    const page = await kv.list({ prefix: "inbox:message:", cursor });
+    count += page.keys.length;
+    complete = page.list_complete;
+    cursor = !page.list_complete ? page.cursor : undefined;
+  }
+  return count;
 }
 
 async function countAgents(kv: KVNamespace): Promise<number> {
@@ -280,7 +294,7 @@ async function loadLeaderboard(kv: KVNamespace, limit: number): Promise<Leaderbo
 }
 
 export default async function Home() {
-  const { registeredCount, topAgents } = await fetchHomeData();
+  const { registeredCount, topAgents, messageCount } = await fetchHomeData();
 
   return (
     <>
@@ -337,7 +351,7 @@ export default async function Home() {
                     </Link>
                   ))}
                 </div>
-                <HomeHeroStats count={registeredCount} />
+                <HomeHeroStats count={registeredCount} messageCount={messageCount} />
               </div>
 
             </div>
