@@ -10,6 +10,13 @@ import { lookupBnsName } from "@/lib/bns";
 import { detectAgentIdentity } from "@/lib/identity/detection";
 import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import { TWITTER_HANDLE } from "@/lib/constants";
+import {
+  verifySenderAchievement,
+  checkRateLimit,
+  setRateLimit,
+  hasAchievement,
+  grantAchievement,
+} from "@/lib/achievements";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -245,10 +252,29 @@ export default async function AgentProfilePage({
       );
     }
 
-    // Fetch claim (cached, shared with generateMetadata) and identity in parallel
+    // Fetch claim, resolve identity, and proactively check sender achievement in parallel
     const [claimRecord, agentWithIdentity] = await Promise.all([
       cachedFetchClaim(agent.btcAddress),
       resolveIdentity(kv, agent, env.HIRO_API_KEY),
+      // Proactively check sender achievement (best-effort, runs in background)
+      (async () => {
+        try {
+          const rateLimit = await checkRateLimit(kv, agent.btcAddress, "sender");
+          if (rateLimit.allowed) {
+            const hasSender = await hasAchievement(kv, agent.btcAddress, "sender");
+            if (!hasSender) {
+              const hasOutgoingTx = await verifySenderAchievement(agent.btcAddress, kv);
+              if (hasOutgoingTx) {
+                await grantAchievement(kv, agent.btcAddress, "sender");
+              }
+            }
+            await setRateLimit(kv, agent.btcAddress, "sender");
+          }
+        } catch (error) {
+          // Best-effort: log and continue if achievement check fails
+          console.error("Failed to check sender achievement during profile load:", error);
+        }
+      })(),
     ]);
 
     // Compute level info
