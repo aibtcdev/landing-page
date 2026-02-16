@@ -52,54 +52,53 @@ export default function InboxMessage({
     >
       {/* Header: sender + timestamp */}
       <div className="mb-2.5 flex items-start justify-between gap-2 sm:mb-3 sm:gap-3">
-        <div className="flex min-w-0 flex-1 items-start gap-2.5 sm:gap-3">
-          {/* Bitcoin face avatar — always use BTC address for consistent faces */}
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <a href={`/agents/${linkAddress}`} className="shrink-0">
-            <img
-              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(avatarAddress)}`}
-              alt=""
-              className="size-8 rounded-full border border-white/[0.08] bg-white/[0.06] sm:size-9"
-              loading="lazy"
-              width="36"
-              height="36"
-              onError={(e) => { e.currentTarget.style.display = "none"; }}
-            />
-          </a>
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-1.5 sm:gap-2">
-              {direction && (
-                <span
-                  className={`inline-flex shrink-0 items-center gap-0.5 text-[9px] font-semibold uppercase tracking-widest sm:text-[10px] ${isSent ? "text-[#7DA2FF]/60" : "text-white/40"}`}
-                >
-                  {isSent && (
-                    <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
-                    </svg>
-                  )}
-                  {!isSent && (
-                    <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
-                    </svg>
-                  )}
-                  {directionLabel}
-                </span>
-              )}
-              {!direction && (
-                <span className="shrink-0 text-[9px] font-semibold uppercase tracking-widest text-white/40 sm:text-[10px]">
-                  From
-                </span>
-              )}
-              <a
-                href={`/agents/${linkAddress}`}
-                className={`min-w-0 truncate text-[11px] transition-colors sm:text-[13px] ${peerDisplayName ? "font-medium" : "font-mono"} ${isSent ? "text-[#7DA2FF] hover:text-[#6B91EE]" : "text-[#F7931A] hover:text-[#E8850F]"}`}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Direction label */}
+            {direction && (
+              <span
+                className={`inline-flex shrink-0 items-center gap-0.5 text-[9px] font-semibold uppercase tracking-widest sm:text-[10px] ${isSent ? "text-[#7DA2FF]/60" : "text-white/40"}`}
               >
-                {displayLabel}
-              </a>
-            </div>
-            <div className="mt-0.5 text-[10px] text-white/40 sm:mt-1 sm:text-[11px]">
-              {formatRelativeTime(sentAt)}
-            </div>
+                {isSent && (
+                  <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
+                  </svg>
+                )}
+                {!isSent && (
+                  <svg className="size-2.5 sm:size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
+                  </svg>
+                )}
+                {directionLabel}
+              </span>
+            )}
+            {!direction && (
+              <span className="shrink-0 text-[9px] font-semibold uppercase tracking-widest text-white/40 sm:text-[10px]">
+                From
+              </span>
+            )}
+            {/* Avatar + name inline */}
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <a href={`/agents/${linkAddress}`} className="shrink-0">
+              <img
+                src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(avatarAddress)}`}
+                alt=""
+                className="size-5 rounded-full border border-white/[0.08] bg-white/[0.06] sm:size-6"
+                loading="lazy"
+                width="24"
+                height="24"
+                onError={(e) => { e.currentTarget.style.display = "none"; }}
+              />
+            </a>
+            <a
+              href={`/agents/${linkAddress}`}
+              className={`min-w-0 truncate text-[11px] transition-colors sm:text-[13px] ${peerDisplayName ? "font-medium" : "font-mono"} ${isSent ? "text-[#7DA2FF] hover:text-[#6B91EE]" : "text-[#F7931A] hover:text-[#E8850F]"}`}
+            >
+              {displayLabel}
+            </a>
+          </div>
+          <div className="mt-0.5 text-[10px] text-white/40 sm:mt-1 sm:text-[11px]">
+            {formatRelativeTime(sentAt)}
           </div>
         </div>
 
