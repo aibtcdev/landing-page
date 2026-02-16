@@ -5,6 +5,11 @@ import {
   hasAchievement,
   getAchievementDefinition,
 } from "@/lib/achievements";
+import {
+  verifySenderAchievement,
+  setRateLimit,
+  ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,
+} from "@/lib/achievements/verify";
 import { getAgentLevel } from "@/lib/levels";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import {
@@ -13,7 +18,7 @@ import {
 } from "@/lib/identity/kv-cache";
 import { buildHiroHeaders, detect429AndFallback } from "@/lib/identity/stacks-api";
 
-const RATE_LIMIT_MS = 5 * 60 * 1000; // 5 minutes
+const RATE_LIMIT_MS = ACHIEVEMENT_VERIFY_RATE_LIMIT_MS;
 
 export function GET() {
   return NextResponse.json(
@@ -219,51 +224,22 @@ export async function POST(request: NextRequest) {
       checked.push("sender");
 
       // Set rate limit for sender
-      await kv.put(
-        `ratelimit:achievement-verify:${btcAddress}:sender`,
-        String(Date.now()),
-        { expirationTtl: 300 }
-      );
+      await setRateLimit(kv, btcAddress, "sender");
 
       const hasSender = await hasAchievement(kv, btcAddress, "sender");
 
       if (!hasSender) {
         try {
-          // Check cache first
-          const cacheKey = `mempool:${btcAddress}`;
-          let txs = await getCachedTransaction(cacheKey, kv);
+          const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv);
 
-          if (!txs) {
-            const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
-            const mempoolResp = await fetch(mempoolUrl, {
-              signal: AbortSignal.timeout(10000),
+          if (hasOutgoingTx) {
+            const record = await grantAchievement(kv, btcAddress, "sender");
+            const definition = getAchievementDefinition("sender");
+            earned.push({
+              id: "sender",
+              name: definition?.name ?? "Sender",
+              unlockedAt: record.unlockedAt,
             });
-
-            if (mempoolResp.ok) {
-              txs = (await mempoolResp.json()) as Array<{
-                vin: Array<{ prevout: { scriptpubkey_address: string } }>;
-              }>;
-              // Cache the result
-              await setCachedTransaction(cacheKey, txs, kv);
-            }
-          }
-
-          if (txs) {
-            const hasOutgoingTx = txs.some((tx: any) =>
-              tx.vin.some(
-                (input: any) => input.prevout.scriptpubkey_address === btcAddress
-              )
-            );
-
-            if (hasOutgoingTx) {
-              const record = await grantAchievement(kv, btcAddress, "sender");
-              const definition = getAchievementDefinition("sender");
-              earned.push({
-                id: "sender",
-                name: definition?.name ?? "Sender",
-                unlockedAt: record.unlockedAt,
-              });
-            }
           }
         } catch (e) {
           console.error("Failed to check sender achievement:", e);
@@ -278,11 +254,7 @@ export async function POST(request: NextRequest) {
       checked.push("connector");
 
       // Set rate limit for connector
-      await kv.put(
-        `ratelimit:achievement-verify:${btcAddress}:connector`,
-        String(Date.now()),
-        { expirationTtl: 300 }
-      );
+      await setRateLimit(kv, btcAddress, "connector");
 
       const hasConnector = await hasAchievement(kv, btcAddress, "connector");
 
