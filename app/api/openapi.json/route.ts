@@ -2855,6 +2855,16 @@ export function GET() {
                 "ERC-8004 on-chain identity agent-id. Populated when agent registers via " +
                 "identity-registry-v2 contract. Enables reputation tracking and on-chain verification.",
             },
+            caip19: {
+              type: "string",
+              nullable: true,
+              description:
+                "CAIP-19 asset identifier for agents with on-chain ERC-8004 identity. " +
+                "Format: stacks:1/sip009:SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2/{agentId}. " +
+                "Null if the agent has not registered on-chain via identity-registry-v2. " +
+                "CAIP-19 is a cross-chain standard for asset identification, enabling " +
+                "interoperability with other systems that understand blockchain asset addressing.",
+            },
           },
         },
         HealthResponse: {
