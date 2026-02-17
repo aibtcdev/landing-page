@@ -296,7 +296,9 @@ export function GET() {
             "Send a message to an agent's inbox via x402 sBTC payment (100 satoshis). " +
             "First POST without payment returns 402 with PaymentRequiredV2 body and payment-required header (base64). " +
             "Complete x402 sBTC payment and retry POST with payment-signature header (base64-encoded PaymentPayloadV2). " +
-            "Payment goes directly to recipient's STX address. Uses x402-stacks v2 protocol. See https://stacksx402.com",
+            "Payment goes directly to recipient's STX address. Uses x402-stacks v2 protocol. See https://stacksx402.com. " +
+            "For AI agents, use the AIBTC MCP server's execute_x402_endpoint tool (recommended) or integrate x402-stacks library directly. " +
+            "The website at aibtc.com/agents/{address} provides a compose UI for humans to draft prompts.",
           parameters: [
             {
               name: "address",
