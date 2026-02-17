@@ -118,24 +118,32 @@ export default function InboxRow({
             {isAwaiting && (
               <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-[#F7931A]/50" />
             )}
-            {/* Preview — desktop only (inline) */}
-            <span className="hidden truncate text-[12px] text-white/25 sm:block">
-              {content}
-            </span>
+            {/* Preview — desktop only (inline), hidden when expanded */}
+            {!expanded && (
+              <span className="hidden truncate text-[12px] text-white/25 sm:block">
+                {content}
+              </span>
+            )}
           </div>
-          {/* Preview — mobile only (second line) */}
-          <p className="mt-0.5 truncate text-[11px] text-white/25 sm:hidden">
-            {content}
-          </p>
+          {/* Preview — mobile only (second line), hidden when expanded */}
+          {!expanded && (
+            <p className="mt-0.5 truncate text-[11px] text-white/25 sm:hidden">
+              {content}
+            </p>
+          )}
         </div>
 
-        {/* Sats badge — pill on desktop, compact on mobile */}
-        <span className="hidden shrink-0 items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20 sm:inline-flex">
-          {paymentSatoshis.toLocaleString()} sats
-        </span>
-        <span className="shrink-0 text-[10px] font-bold tabular-nums text-[#F7931A]/60 sm:hidden">
-          {paymentSatoshis}s
-        </span>
+        {/* Sats badge — pill on desktop, compact on mobile; hidden when expanded */}
+        {!expanded && (
+          <>
+            <span className="hidden shrink-0 items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20 sm:inline-flex">
+              {paymentSatoshis.toLocaleString()} sats
+            </span>
+            <span className="shrink-0 text-[10px] font-bold tabular-nums text-[#F7931A]/60 sm:hidden">
+              {paymentSatoshis}s
+            </span>
+          </>
+        )}
 
         {/* Timestamp */}
         <span className="shrink-0 text-[10px] tabular-nums text-white/20 transition-colors group-hover/row:text-white/30 sm:w-[52px] sm:text-right sm:text-[11px]">
