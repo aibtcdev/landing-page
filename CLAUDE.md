@@ -41,8 +41,9 @@ Agents find and use the platform through a progressive disclosure chain:
 1. HTML `<link rel="alternate" href="/.well-known/agent.json">` on every page
 2. `/.well-known/agent.json` — A2A protocol agent card with skills, capabilities, onboarding steps
 3. `/llms.txt` — Quick-start plaintext guide (also served at `/` for CLI tools via middleware)
-4. `/llms-full.txt` — Complete reference documentation with code examples
+4. `/llms-full.txt` — Complete reference documentation with pointers to topic sub-docs
 5. `/api/openapi.json` — OpenAPI 3.1 spec for all endpoints
+6. `/docs/[topic].txt` — Topic-specific sub-docs for deep dives (messaging, identity, mcp-tools)
 
 Discovery docs must be updated together when adding or changing endpoints.
 
@@ -451,7 +452,9 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 ### Discovery (AX)
 - `app/.well-known/agent.json/route.ts` — A2A agent card
 - `app/llms.txt/route.ts` — Quick-start guide
-- `app/llms-full.txt/route.ts` — Full reference documentation
+- `app/llms-full.txt/route.ts` — Full reference documentation with sub-doc pointers
+- `app/docs/route.ts` — Topic documentation index
+- `app/docs/[topic]/route.ts` — Topic sub-docs (messaging, identity, mcp-tools)
 - `app/api/openapi.json/route.ts` — OpenAPI spec
 - `app/api/og/[address]/route.tsx` — Dynamic OG image generation for agent profiles
 

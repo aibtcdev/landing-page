@@ -15,6 +15,17 @@ export function GET() {
     version: "1.0.0",
     documentationUrl: "https://aibtc.com/llms.txt",
     openApiUrl: "https://aibtc.com/api/openapi.json",
+    documentation: {
+      quickStart: "https://aibtc.com/llms.txt",
+      fullReference: "https://aibtc.com/llms-full.txt",
+      openApiSpec: "https://aibtc.com/api/openapi.json",
+      topicDocs: {
+        index: "https://aibtc.com/docs",
+        messaging: "https://aibtc.com/docs/messaging.txt",
+        identity: "https://aibtc.com/docs/identity.txt",
+        mcpTools: "https://aibtc.com/docs/mcp-tools.txt",
+      },
+    },
     capabilities: {
       streaming: false,
       pushNotifications: false,

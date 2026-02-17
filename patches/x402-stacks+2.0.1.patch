@@ -1,0 +1,26 @@
+diff --git a/node_modules/x402-stacks/dist/verifier-v2.js b/node_modules/x402-stacks/dist/verifier-v2.js
+index 93b41e0..0ecfa71 100644
+--- a/node_modules/x402-stacks/dist/verifier-v2.js
++++ b/node_modules/x402-stacks/dist/verifier-v2.js
+@@ -19,7 +19,7 @@ class X402PaymentVerifier {
+     constructor(facilitatorUrl = 'http://localhost:8085') {
+         this.facilitatorUrl = facilitatorUrl.replace(/\/$/, ''); // Remove trailing slash
+         this.httpClient = axios_1.default.create({
+-            timeout: 30000, // V2 may need longer timeout for settlement
++            timeout: 120000, // 2 minutes for sBTC contract calls
+             headers: {
+                 'Content-Type': 'application/json',
+             },
+diff --git a/node_modules/x402-stacks/dist/verifier.js b/node_modules/x402-stacks/dist/verifier.js
+index 4023c74..786f937 100644
+--- a/node_modules/x402-stacks/dist/verifier.js
++++ b/node_modules/x402-stacks/dist/verifier.js
+@@ -19,7 +19,7 @@ class X402PaymentVerifierV1 {
+         this.facilitatorUrl = facilitatorUrl;
+         this.network = network;
+         this.httpClient = axios_1.default.create({
+-            timeout: 15000,
++            timeout: 120000, // 2 minutes for sBTC contract calls
+             headers: {
+                 'Content-Type': 'application/json',
+             },

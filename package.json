@@ -13,7 +13,8 @@
     "wrangler": "set -a && . ./.env && set +a && npx wrangler",
     "cf-typegen": "npm run wrangler -- types --env-interface CloudflareEnv cloudflare-env.d.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "postinstall": "patch-package"
   },
   "dependencies": {
     "@noble/curves": "^2.0.1",
@@ -33,6 +34,7 @@
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260212.0",
+    "patch-package": "^8.0.1",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/react": "^19",
