@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useParams, useSearchParams } from "next/navigation";
+import { useEffect, useState, useCallback } from "react";
+import { useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -13,6 +13,8 @@ import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/
 
 type ViewFilter = "all" | "received" | "sent" | "replied" | "awaiting";
 
+type MessageWithPeer = InboxMessageType & { direction?: "sent" | "received"; peerBtcAddress?: string; peerDisplayName?: string };
+
 interface InboxResponse {
   agent: {
     btcAddress: string;
@@ -20,7 +22,7 @@ interface InboxResponse {
     displayName: string;
   };
   inbox: {
-    messages: (InboxMessageType & { direction?: "sent" | "received"; peerBtcAddress?: string; peerDisplayName?: string })[];
+    messages: MessageWithPeer[];
     replies: Record<string, OutboxReply>;
     unreadCount: number;
     totalCount: number;
@@ -36,16 +38,24 @@ interface InboxResponse {
   };
 }
 
+const PAGE_SIZE = 20;
+
 export default function InboxPage() {
   const params = useParams();
-  const searchParams = useSearchParams();
   const address = params.address as string;
 
-  const limit = parseInt(searchParams.get("limit") || "20", 10);
-  const offset = parseInt(searchParams.get("offset") || "0", 10);
+  const [agent, setAgent] = useState<InboxResponse["agent"] | null>(null);
+  const [allMessages, setAllMessages] = useState<MessageWithPeer[]>([]);
+  const [replies, setReplies] = useState<Record<string, OutboxReply>>({});
+  const [unreadCount, setUnreadCount] = useState(0);
+  const [totalCount, setTotalCount] = useState(0);
+  const [receivedCount, setReceivedCount] = useState(0);
+  const [sentCount, setSentCount] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [nextOffset, setNextOffset] = useState<number | null>(null);
 
-  const [data, setData] = useState<InboxResponse | null>(null);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewFilter>("all");
   const [sendModalOpen, setSendModalOpen] = useState(false);
@@ -55,44 +65,67 @@ export default function InboxPage() {
 
     const displayName = generateName(address);
     document.title = `${displayName} Inbox - AIBTC`;
-    updateMeta(
-      "description",
-      `View inbox messages for ${displayName} on AIBTC`
-    );
+    updateMeta("description", `View inbox messages for ${displayName} on AIBTC`);
     updateMeta("og:title", `${displayName} Inbox`, true);
-    updateMeta(
-      "og:description",
-      `x402-gated inbox for ${displayName}`,
-      true
-    );
+    updateMeta("og:description", `x402-gated inbox for ${displayName}`, true);
   }, [address]);
 
+  // Initial fetch
   useEffect(() => {
     if (!address) return;
 
     setLoading(true);
     setError(null);
 
-    fetch(
-      `/api/inbox/${encodeURIComponent(address)}?limit=${limit}&offset=${offset}&view=all`
-    )
+    fetch(`/api/inbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=0&view=all`)
       .then((res) => {
-        if (!res.ok) {
-          throw new Error(
-            res.status === 404 ? "Agent not found" : "Failed to fetch inbox"
-          );
-        }
+        if (!res.ok) throw new Error(res.status === 404 ? "Agent not found" : "Failed to fetch inbox");
         return res.json() as Promise<InboxResponse>;
       })
       .then((result) => {
-        setData(result);
+        setAgent(result.agent);
+        setAllMessages(result.inbox.messages);
+        setReplies(result.inbox.replies);
+        setUnreadCount(result.inbox.unreadCount);
+        setTotalCount(result.inbox.totalCount);
+        setReceivedCount(result.inbox.receivedCount ?? 0);
+        setSentCount(result.inbox.sentCount ?? 0);
+        setHasMore(result.inbox.pagination.hasMore);
+        setNextOffset(result.inbox.pagination.nextOffset);
         setLoading(false);
       })
       .catch((err) => {
         setError((err as Error).message);
         setLoading(false);
       });
-  }, [address, limit, offset]);
+  }, [address]);
+
+  // Load more — appends to existing messages
+  const loadMore = useCallback(() => {
+    if (!address || nextOffset == null || loadingMore) return;
+
+    setLoadingMore(true);
+
+    fetch(`/api/inbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=${nextOffset}&view=all`)
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to load more");
+        return res.json() as Promise<InboxResponse>;
+      })
+      .then((result) => {
+        setAllMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.messageId));
+          const newMessages = result.inbox.messages.filter((m) => !existingIds.has(m.messageId));
+          return [...prev, ...newMessages];
+        });
+        setReplies((prev) => ({ ...prev, ...result.inbox.replies }));
+        setHasMore(result.inbox.pagination.hasMore);
+        setNextOffset(result.inbox.pagination.nextOffset);
+        setLoadingMore(false);
+      })
+      .catch(() => {
+        setLoadingMore(false);
+      });
+  }, [address, nextOffset, loadingMore]);
 
   if (loading) {
     return (
@@ -108,7 +141,7 @@ export default function InboxPage() {
     );
   }
 
-  if (error || !data) {
+  if (error || !agent) {
     return (
       <>
         <AnimatedBackground />
@@ -128,8 +161,6 @@ export default function InboxPage() {
     );
   }
 
-  const { agent, inbox } = data;
-  const { messages: allMessages, replies, unreadCount, totalCount, pagination = { hasMore: false, nextOffset: null, limit: 20, offset: 0 } } = inbox;
   const displayName = agent.displayName || generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const hasMessages = totalCount > 0;
@@ -208,8 +239,8 @@ export default function InboxPage() {
           <div className="mb-4 flex gap-1 overflow-x-auto rounded-lg border border-white/[0.06] bg-white/[0.02] p-1">
             {([
               { key: "all" as const, label: "All" },
-              { key: "received" as const, label: "Received", count: inbox.receivedCount },
-              { key: "sent" as const, label: "Sent", count: inbox.sentCount },
+              { key: "received" as const, label: "Received", count: receivedCount },
+              { key: "sent" as const, label: "Sent", count: sentCount },
               { key: "replied" as const, label: "Replied", count: repliedMessages.length },
               { key: "awaiting" as const, label: "Awaiting", count: awaitingMessages.length },
             ]).map(({ key, label, count }) => (
@@ -281,15 +312,16 @@ export default function InboxPage() {
             </div>
           )}
 
-          {/* Pagination */}
-          {pagination.hasMore && (
+          {/* Load More */}
+          {hasMore && (
             <div className="mt-4 flex justify-center sm:mt-5">
-              <Link
-                href={`/inbox/${address}?limit=${limit}&offset=${pagination.nextOffset}`}
-                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-5 py-2.5 text-center text-[12px] text-white/60 transition-colors hover:border-white/[0.12] hover:bg-white/[0.06] hover:text-white/80 sm:w-auto sm:text-[13px]"
+              <button
+                onClick={loadMore}
+                disabled={loadingMore}
+                className="w-full rounded-lg border border-white/[0.08] bg-white/[0.03] px-5 py-2.5 text-center text-[12px] text-white/60 transition-colors hover:border-white/[0.12] hover:bg-white/[0.06] hover:text-white/80 disabled:opacity-50 sm:w-auto sm:text-[13px] cursor-pointer"
               >
-                Load more messages
-              </Link>
+                {loadingMore ? "Loading..." : "Load more messages"}
+              </button>
             </div>
           )}
 
