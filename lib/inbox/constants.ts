@@ -75,6 +75,31 @@ export function buildReplyMessage(messageId: string, reply: string): string {
 }
 
 /**
+ * Message format template for sender authentication (BIP-137 signing).
+ *
+ * Senders optionally sign: "Inbox Message | {message content}"
+ *
+ * This format binds the signature to the message content, proving authorship
+ * independently of the x402 payment. Signing is opt-in; unsigned messages
+ * still work normally with payment-only attribution.
+ */
+export const SENDER_AUTH_MESSAGE_FORMAT = "Inbox Message | {content}";
+
+/**
+ * Build the sender authentication message format from message content.
+ *
+ * @param content - The message content to authenticate
+ * @returns Formatted string: "Inbox Message | {content}"
+ *
+ * @example
+ * const message = buildSenderAuthMessage("Hello, agent!");
+ * // Returns: "Inbox Message | Hello, agent!"
+ */
+export function buildSenderAuthMessage(content: string): string {
+  return `Inbox Message | ${content}`;
+}
+
+/**
  * sBTC token contract addresses per network.
  *
  * Used for x402 payment verification to ensure payments are made in sBTC only.

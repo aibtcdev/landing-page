@@ -98,6 +98,41 @@ describe("validateInboxMessage", () => {
       expect(result.data?.paymentTxid).toBe("a".repeat(64));
       expect(result.data?.paymentSatoshis).toBeUndefined();
     });
+
+    it("accepts message without signature (unchanged behavior)", () => {
+      const result = validateInboxMessage({
+        toBtcAddress: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+        toStxAddress: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        content: "Hello, this is a test message!",
+        paymentTxid: "a".repeat(64),
+        paymentSatoshis: 100,
+      });
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.signature).toBeUndefined();
+    });
+
+    it("accepts message with valid hex signature", () => {
+      const result = validateInboxMessage({
+        toBtcAddress: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+        toStxAddress: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        content: "Hello, agent!",
+        signature: "a".repeat(130), // 65 bytes hex
+      });
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.signature).toBe("a".repeat(130));
+    });
+
+    it("accepts message with valid base64 signature", () => {
+      const result = validateInboxMessage({
+        toBtcAddress: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+        toStxAddress: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        content: "Hello, agent!",
+        signature:
+          "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IHNpZ25hdHVyZSBmb3IgQklQLTEzNyB2YWxpZGF0aW9uLiBUaGlzIGlzIGEgY29tcGxldGUgdmFsaWQgc2lnbmF0dXJlLg==",
+      });
+      expect(result.errors).toBeUndefined();
+      expect(result.data?.signature).toBeDefined();
+    });
   });
 
   describe("validation errors", () => {
@@ -246,6 +281,30 @@ describe("validateInboxMessage", () => {
       });
       expect(result.errors).toContain(
         "paymentSatoshis must be a positive integer"
+      );
+    });
+
+    it("rejects invalid signature format", () => {
+      const result = validateInboxMessage({
+        toBtcAddress: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+        toStxAddress: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        content: "Test message",
+        signature: "not-valid-encoding!@#$",
+      });
+      expect(result.errors).toContain(
+        "signature must be base64 or hex-encoded"
+      );
+    });
+
+    it("rejects hex signature with wrong length", () => {
+      const result = validateInboxMessage({
+        toBtcAddress: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+        toStxAddress: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        content: "Test message",
+        signature: "a".repeat(64), // Too short — 32 bytes instead of 65
+      });
+      expect(result.errors).toContain(
+        "hex signature must be 130 characters (65 bytes)"
       );
     });
 

@@ -49,12 +49,17 @@ function validateTxid(txid: string, fieldName: string): string[] {
  *   toStxAddress: string,      // Recipient STX address (SP/SM...)
  *   content: string,           // Message content (max 500 chars)
  *   paymentTxid?: string,      // x402 payment transaction ID (64-char hex, optional for initial 402 request)
- *   paymentSatoshis?: number   // Payment amount in satoshis (positive integer, optional for initial 402 request)
+ *   paymentSatoshis?: number,  // Payment amount in satoshis (positive integer, optional for initial 402 request)
+ *   signature?: string         // BIP-137 signature over "Inbox Message | {content}" (optional, sender authentication)
  * }
  *
  * The paymentTxid and paymentSatoshis fields are optional because the x402 flow
  * returns 402 on the first POST before the sender has a txid. The handler checks
  * for payment-signature header first; if absent, only recipient + content are needed.
+ *
+ * The signature field is optional. When present, the handler verifies it as a BIP-137
+ * signature over "Inbox Message | {content}" and stores the recovered address as
+ * senderBtcAddress on the message. Unsigned messages continue to work unchanged.
  *
  * Returns validated data on success, or field-level errors on failure.
  */
@@ -66,6 +71,7 @@ export function validateInboxMessage(body: unknown):
         content: string;
         paymentTxid?: string;
         paymentSatoshis?: number;
+        signature?: string;
       };
       errors?: never;
     }
@@ -123,6 +129,16 @@ export function validateInboxMessage(body: unknown):
     }
   }
 
+  // signature — optional BIP-137 sender authentication signature
+  // Signed message format: "Inbox Message | {content}"
+  if (b.signature !== undefined) {
+    if (typeof b.signature !== "string") {
+      errors.push("signature must be a string");
+    } else {
+      errors.push(...validateSignatureFormat(b.signature));
+    }
+  }
+
   if (errors.length > 0) {
     return { errors };
   }
@@ -137,6 +153,9 @@ export function validateInboxMessage(body: unknown):
       }),
       ...(typeof b.paymentSatoshis === "number" && {
         paymentSatoshis: b.paymentSatoshis as number,
+      }),
+      ...(typeof b.signature === "string" && {
+        signature: b.signature,
       }),
     },
   };

@@ -20,10 +20,12 @@ export {
   MAX_REPLY_LENGTH,
   MARK_READ_MESSAGE_FORMAT,
   REPLY_MESSAGE_FORMAT,
+  SENDER_AUTH_MESSAGE_FORMAT,
   SBTC_CONTRACTS,
   KV_PREFIXES,
   buildMarkReadMessage,
   buildReplyMessage,
+  buildSenderAuthMessage,
 } from "./constants";
 
 // Validation
