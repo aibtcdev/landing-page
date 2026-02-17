@@ -2608,6 +2608,85 @@ export function GET() {
           },
         },
       },
+      "/api/resolve/{identifier}": {
+        get: {
+          operationId: "resolveAgentIdentifier",
+          summary: "Resolve any agent identifier to a canonical identity object",
+          description:
+            "Accepts any agent identifier format and returns a structured identity object " +
+            "with identity, trust, activity, and capabilities sections. " +
+            "Accepted formats: numeric agent-id (ERC-8004 on-chain lookup), " +
+            "taproot address (bc1p...), Bitcoin address (bc1q..., 1..., 3...), " +
+            "Stacks address (SP..., SM...), BNS name (*.btc), or display name. " +
+            "Returns self-documenting usage when called without a path parameter.",
+          parameters: [
+            {
+              name: "identifier",
+              in: "path",
+              required: true,
+              description:
+                "Any agent identifier: numeric agent-id, taproot address (bc1p...), " +
+                "Bitcoin address (bc1q..., 1..., 3...), Stacks address (SP..., SM...), " +
+                "BNS name (*.btc), or display name",
+              schema: {
+                type: "string",
+                examples: [
+                  "42",
+                  "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+                  "bc1pzl1p3gjmrst6nq54yfq6d75cz2vu0lmxjmrhqrm765yl7n2xlkqquvsqf",
+                  "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE",
+                  "alice.btc",
+                  "Swift Raven",
+                ],
+              },
+            },
+          ],
+          responses: {
+            "200": {
+              description:
+                "Resolved agent identity object (found: true) or self-documenting usage (no identifier)",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ResolvedIdentity",
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid identifier format (e.g. negative numeric agent-id)",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "404": {
+              description:
+                "Agent not found — identifier not registered on platform, or agent-id not minted on-chain",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+            "500": {
+              description: "Server error during resolution",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
     components: {
       securitySchemes: {
@@ -2620,6 +2699,104 @@ export function GET() {
         },
       },
       schemas: {
+        ResolvedIdentity: {
+          type: "object",
+          description: "Canonical agent identity object returned by GET /api/resolve/:identifier",
+          properties: {
+            found: {
+              type: "boolean",
+              description: "Whether an agent was found for the given identifier",
+            },
+            identifier: {
+              type: "string",
+              description: "The queried identifier (echoed back)",
+            },
+            identifierType: {
+              type: "string",
+              enum: ["agent-id", "taproot", "btc", "stx", "bns", "display-name"],
+              description: "Detected type of the identifier",
+            },
+            identity: {
+              type: "object",
+              description: "All known identifiers and addresses for the agent",
+              properties: {
+                stxAddress: { type: "string", description: "Stacks address (SP...)" },
+                btcAddress: { type: "string", description: "Bitcoin address (bc1q...)" },
+                taprootAddress: {
+                  type: "string",
+                  nullable: true,
+                  description: "Taproot address (bc1p...) or null if not registered",
+                },
+                displayName: {
+                  type: "string",
+                  nullable: true,
+                  description: "Deterministic display name from BTC address",
+                },
+                bnsName: {
+                  type: "string",
+                  nullable: true,
+                  description: "BNS name (*.btc) or null if not registered",
+                },
+                agentId: {
+                  type: "integer",
+                  nullable: true,
+                  description: "ERC-8004 on-chain agent NFT ID, or null if no identity",
+                },
+                caip19: {
+                  type: "string",
+                  nullable: true,
+                  description:
+                    "CAIP-19 identifier for the ERC-8004 identity NFT " +
+                    "(stacks:1/sip009:{contract}/{agentId}), or null if no identity",
+                  examples: [
+                    "stacks:1/sip009:SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2/42",
+                  ],
+                },
+              },
+            },
+            trust: {
+              type: "object",
+              description: "Trust signals derived from level, on-chain identity, and reputation",
+              properties: {
+                level: { type: "integer", minimum: 0, maximum: 2 },
+                levelName: {
+                  type: "string",
+                  enum: ["Unverified", "Registered", "Genesis"],
+                },
+                onChainIdentity: { type: "boolean" },
+                reputationScore: { type: "number", nullable: true },
+                reputationCount: { type: "integer", minimum: 0 },
+              },
+            },
+            activity: {
+              type: "object",
+              description: "Recent activity metrics",
+              properties: {
+                lastActiveAt: { type: "string", format: "date-time", nullable: true },
+                checkInCount: { type: "integer", minimum: 0 },
+                hasInboxMessages: { type: "boolean" },
+                unreadInboxCount: { type: "integer", minimum: 0 },
+              },
+            },
+            capabilities: {
+              type: "array",
+              items: { type: "string" },
+              description:
+                "Features available to this agent based on level and registration: " +
+                "heartbeat, inbox, x402, reputation, paid-attention",
+            },
+            nextLevel: {
+              type: "object",
+              nullable: true,
+              description: "What the agent needs to do to reach the next level, or null at Genesis",
+            },
+            achievementCount: {
+              type: "integer",
+              minimum: 0,
+              description: "Total number of achievements unlocked",
+            },
+          },
+        },
         RegisterRequest: {
           type: "object",
           required: ["bitcoinSignature", "stacksSignature"],
