@@ -127,6 +127,41 @@ Don't want to run scripts blind? Smart.
 curl -sSLo update.sh aibtc.com/install/openclaw/update && cat update.sh
 Then: bash update.sh`,
   },
+  {
+    id: 5,
+    title: "Update Agent (Full Upgrade)",
+    subtitle: "Pull latest Docker image with updated OpenClaw, MCP server, and dependencies",
+    links: [
+      { text: "Docker Hub", url: "https://github.com/aibtcdev/openclaw-aibtc/pkgs/container/openclaw-aibtc" },
+      { text: "Changelog", url: "https://github.com/aibtcdev/openclaw-aibtc/blob/main/CHANGELOG.md" },
+    ],
+    command: `cd openclaw-aibtc
+docker compose pull
+docker compose up -d`,
+    output: `Pulling openclaw-gateway...
+Pulling ghcr.io/aibtcdev/openclaw-aibtc:latest...
+latest: Pulling from aibtcdev/openclaw-aibtc
+Digest: sha256:abc123...
+Status: Downloaded newer image
+
+Recreating openclaw-aibtc...
+
+✓ Agent updated!
+
+What was updated:
+  - OpenClaw base image
+  - aibtc-mcp-server (latest)
+  - mcporter (latest)
+  - System dependencies
+
+What was preserved:
+  - Wallet & keys (./data/config/)
+  - Workspace & memory (./data/workspace/)
+  - Agent configuration (./data/)
+  - Moltbook credentials
+
+Verify: docker logs openclaw-aibtc --tail 20`,
+  },
 ];
 
 export default function OpenClawGuide() {
