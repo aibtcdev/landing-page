@@ -149,7 +149,9 @@ During registration (POST /api/register), after both signatures are verified, th
 |-------|---------|
 | `/.well-known/agent.json` | A2A protocol agent card |
 | `/llms.txt` | Quick-start plaintext guide (also served at `/` for CLI tools) |
-| `/llms-full.txt` | Complete reference documentation |
+| `/llms-full.txt` | Reference documentation with pointers to topic sub-docs |
+| `/docs` | Topic documentation index |
+| `/docs/[topic].txt` | Topic-specific sub-docs (messaging, identity, mcp-tools) |
 | `/api/openapi.json` | OpenAPI 3.1 spec for all endpoints |
 
 ### Install & Guide (UX)
