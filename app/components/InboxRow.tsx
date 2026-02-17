@@ -20,10 +20,10 @@ interface InboxRowProps {
 }
 
 /**
- * Single inbox row with collapsed/expanded states.
+ * Single inbox row — collapsed shows a scannable summary,
+ * expanded shows the full conversation thread.
  *
- * Collapsed: compact grid matching ActivityFeed EventRow pattern.
- * Expanded: full message content + reply block.
+ * Uses flex layout for natural mobile adaptation instead of rigid CSS grid.
  */
 export default function InboxRow({
   message,
@@ -49,16 +49,14 @@ export default function InboxRow({
   const isSent = direction === "sent";
   const isUnread = !isSent && !readAt;
   const avatarAddress = peerBtcAddress || (isSent ? toBtcAddress : fromAddress);
-  const linkAddress = peerBtcAddress || (isSent ? toBtcAddress : fromAddress);
-  const displayLabel = peerDisplayName || (isSent ? toBtcAddress : fromAddress);
+  const displayLabel = peerDisplayName || generateName(peerBtcAddress || (isSent ? toBtcAddress : fromAddress));
   const isAwaiting = !isSent && !repliedAt && !reply;
-  const avatarSize = compact ? "size-6" : "size-7";
+  const hasReply = !!(repliedAt || reply);
 
-  // Derive sender info for expanded conversation thread
-  // Sent: owner wrote the message. Received: peer wrote the message.
+  // Sender info for expanded thread
   const senderBtcAddress = isSent
-    ? (ownerBtcAddress || toBtcAddress) // owner sent it; fall back to toBtcAddress if no owner prop
-    : (peerBtcAddress || fromAddress);  // peer sent it
+    ? (ownerBtcAddress || toBtcAddress)
+    : (peerBtcAddress || fromAddress);
   const senderName = isSent
     ? (ownerBtcAddress ? generateName(ownerBtcAddress) : "You")
     : (peerDisplayName || generateName(peerBtcAddress || fromAddress));
@@ -69,97 +67,87 @@ export default function InboxRow({
       <button
         type="button"
         onClick={onToggle}
-        className={`group/row grid w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left transition-colors duration-150 hover:bg-white/[0.03] cursor-pointer ${compact ? "grid-cols-[6px_16px_24px_1fr_auto_auto]" : "grid-cols-[6px_20px_28px_1fr_auto_auto_auto]"}`}
+        className="group/row flex w-full items-center gap-2 px-3 py-2.5 text-left transition-colors duration-150 hover:bg-white/[0.03] sm:gap-3 sm:px-4 sm:py-3 cursor-pointer"
       >
-        {/* Col 1: Unread dot */}
-        <div className="flex items-center justify-center">
+        {/* Unread dot */}
+        <span className="shrink-0">
           {isUnread ? (
-            <span className="size-[6px] rounded-full bg-[#F7931A]" />
+            <span className="block size-[6px] rounded-full bg-[#F7931A]" />
           ) : (
-            <span className="size-[6px]" />
+            <span className="block size-[6px]" />
           )}
-        </div>
+        </span>
 
-        {/* Col 2: Direction icon */}
-        <div className="flex items-center justify-center">
+        {/* Direction icon */}
+        <span className="shrink-0">
           {isSent ? (
-            <svg className="size-3.5 text-[#7DA2FF]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <svg className="size-3 text-[#7DA2FF] sm:size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M4.5 19.5l15-15m0 0H8.25m11.25 0v11.25" />
             </svg>
           ) : (
-            <svg className="size-3.5 text-white/40" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <svg className="size-3 text-white/40 sm:size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
               <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 4.5l-15 15m0 0h11.25m-11.25 0V8.25" />
             </svg>
           )}
-        </div>
+        </span>
 
-        {/* Col 3: Avatar */}
+        {/* Avatar */}
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
           src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(avatarAddress)}`}
           alt=""
-          className={`${avatarSize} rounded-full border border-white/[0.08] bg-white/[0.06]`}
+          className={`shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06] ${compact ? "size-6" : "size-6 sm:size-7"}`}
           loading="lazy"
-          width={compact ? 24 : 28}
-          height={compact ? 24 : 28}
+          width={28}
+          height={28}
           onError={(e) => { e.currentTarget.style.display = "none"; }}
         />
 
-        {/* Col 4: Direction label + Name + preview */}
-        <div className="min-w-0">
-          <span className="flex items-center gap-1.5">
-            <span className={`shrink-0 text-[9px] font-semibold uppercase tracking-widest ${isSent ? "text-[#7DA2FF]/50" : "text-white/30"}`}>
-              {isSent ? "To" : "From"}
-            </span>
-            <span className={`shrink-0 text-[13px] ${isUnread ? "font-medium text-white" : "text-white/60"} ${peerDisplayName ? "" : "font-mono"}`}>
+        {/* Name + preview — stacks on mobile, inline on desktop */}
+        <div className="min-w-0 flex-1">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            <span className={`shrink-0 max-w-[120px] truncate text-[12px] sm:max-w-[180px] sm:text-[13px] ${isUnread ? "font-semibold text-white" : "text-white/60"}`}>
               {displayLabel}
             </span>
-            <span className="truncate text-[12px] text-white/25">
+            {/* Status pill inline with name — mobile + desktop */}
+            {hasReply && (
+              <svg className="size-2.5 shrink-0 text-[#7DA2FF] sm:size-3" fill="currentColor" viewBox="0 0 20 20">
+                <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+              </svg>
+            )}
+            {isAwaiting && (
+              <span className="size-1.5 shrink-0 animate-pulse rounded-full bg-[#F7931A]/50" />
+            )}
+            {/* Preview — desktop only (inline) */}
+            <span className="hidden truncate text-[12px] text-white/25 sm:block">
               {content}
             </span>
-          </span>
+          </div>
+          {/* Preview — mobile only (second line) */}
+          <p className="mt-0.5 truncate text-[11px] text-white/25 sm:hidden">
+            {content}
+          </p>
         </div>
 
-        {/* Col 5: Sats badge */}
-        <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
+        {/* Sats badge — pill on desktop, compact on mobile */}
+        <span className="hidden shrink-0 items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20 sm:inline-flex">
           {paymentSatoshis.toLocaleString()} sats
         </span>
-
-        {/* Col 6: Timestamp */}
-        <span className="w-[52px] text-right text-[11px] tabular-nums text-white/20 transition-colors group-hover/row:text-white/30">
-          {formatRelativeTime(sentAt)}
+        <span className="shrink-0 text-[10px] font-bold tabular-nums text-[#F7931A]/60 sm:hidden">
+          {paymentSatoshis}s
         </span>
 
-        {/* Col 7: Status icons (hidden in compact) */}
-        {!compact && (
-          <div className="flex w-[20px] items-center justify-center gap-1">
-            {(repliedAt || reply) && (
-              <svg className="size-3 text-[#7DA2FF]" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            )}
-            {readAt && !(repliedAt || reply) && (
-              <svg className="size-3 text-white/30" fill="currentColor" viewBox="0 0 20 20">
-                <path
-                  fillRule="evenodd"
-                  d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z"
-                  clipRule="evenodd"
-                />
-              </svg>
-            )}
-          </div>
-        )}
+        {/* Timestamp */}
+        <span className="shrink-0 text-[10px] tabular-nums text-white/20 transition-colors group-hover/row:text-white/30 sm:w-[52px] sm:text-right sm:text-[11px]">
+          {formatRelativeTime(sentAt)}
+        </span>
       </button>
 
       {/* Expanded section — conversation thread */}
       {expanded && (
-        <div className={`space-y-2 pb-3 ${compact ? "pl-[70px] pr-3" : "pl-[81px] pr-3"}`}>
+        <div className="space-y-2 px-3 pb-3 pl-[52px] sm:pl-[72px] sm:pr-4">
           {/* Original message with sender attribution */}
-          <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5">
+          <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5 sm:p-3">
             <div className="mb-1.5 flex items-center gap-1.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -171,21 +159,35 @@ export default function InboxRow({
                 height="16"
                 onError={(e) => { e.currentTarget.style.display = "none"; }}
               />
-              <span className="text-[10px] font-medium text-white/70">
+              <span className="text-[10px] font-medium text-white/70 sm:text-[11px]">
                 {senderName}
               </span>
-              <span className="ml-auto text-[9px] text-white/40">
+              <span className="ml-auto text-[9px] text-white/40 sm:text-[10px]">
                 {formatRelativeTime(sentAt)}
               </span>
             </div>
-            <p className="break-words text-[13px] leading-relaxed text-white/80">
+            <p className="break-words text-[13px] leading-relaxed text-white/80 sm:text-[14px]">
               {content}
             </p>
+            {/* Payment info in expanded view */}
+            <div className="mt-2 flex items-center gap-1">
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[9px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20 sm:text-[10px]">
+                {paymentSatoshis.toLocaleString()} sats
+              </span>
+              {readAt && (
+                <span className="inline-flex items-center gap-0.5 text-[9px] text-white/30 sm:text-[10px]">
+                  <svg className="size-2.5" fill="currentColor" viewBox="0 0 20 20">
+                    <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd" />
+                  </svg>
+                  Read
+                </span>
+              )}
+            </div>
           </div>
 
           {/* Reply with replier attribution */}
           {reply && (
-            <div className="rounded-md border border-[#7DA2FF]/20 bg-[#7DA2FF]/5 p-2.5">
+            <div className="rounded-md border border-[#7DA2FF]/20 bg-[#7DA2FF]/5 p-2.5 sm:p-3">
               <div className="mb-1.5 flex items-center gap-1.5">
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
@@ -197,15 +199,15 @@ export default function InboxRow({
                   height="16"
                   onError={(e) => { e.currentTarget.style.display = "none"; }}
                 />
-                <span className="text-[10px] font-medium text-[#7DA2FF]">
+                <span className="text-[10px] font-medium text-[#7DA2FF] sm:text-[11px]">
                   {generateName(reply.fromAddress)}
                 </span>
-                <span className="text-[10px] text-[#7DA2FF]/60">replied</span>
-                <span className="ml-auto text-[9px] text-white/40">
+                <span className="text-[9px] text-[#7DA2FF]/60 sm:text-[10px]">replied</span>
+                <span className="ml-auto text-[9px] text-white/40 sm:text-[10px]">
                   {formatRelativeTime(reply.repliedAt)}
                 </span>
               </div>
-              <p className="break-words text-[12px] leading-relaxed text-white/70">
+              <p className="break-words text-[12px] leading-relaxed text-white/70 sm:text-[13px]">
                 {reply.reply}
               </p>
             </div>
