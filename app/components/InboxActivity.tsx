@@ -187,7 +187,7 @@ export default function InboxActivity({
       {/* Message list — compact row-based with accordion */}
       {hasMessages && (
         <div className="rounded-lg border border-white/[0.08] bg-white/[0.02]">
-          <InboxList messages={messages} replies={replies} compact maxRows={5} />
+          <InboxList messages={messages} replies={replies} ownerBtcAddress={btcAddress} compact maxRows={5} />
         </div>
       )}
 

@@ -308,7 +308,7 @@ export default function InboxPage() {
           {/* Message List — row-based with accordion */}
           {messages.length > 0 && (
             <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px]">
-              <InboxList messages={messages} replies={replies} />
+              <InboxList messages={messages} replies={replies} ownerBtcAddress={agent.btcAddress} />
             </div>
           )}
 

@@ -8,6 +8,7 @@ import type { OutboxReply } from "@/lib/inbox/types";
 interface InboxListProps {
   messages: InboxMessageWithPeer[];
   replies?: Record<string, OutboxReply>;
+  ownerBtcAddress?: string;
   compact?: boolean;
   maxRows?: number;
 }
@@ -21,6 +22,7 @@ interface InboxListProps {
 export default function InboxList({
   messages,
   replies = {},
+  ownerBtcAddress,
   compact = false,
   maxRows,
 }: InboxListProps) {
@@ -35,6 +37,7 @@ export default function InboxList({
           key={message.messageId}
           message={message}
           reply={replies[message.messageId] || null}
+          ownerBtcAddress={ownerBtcAddress}
           expanded={expandedId === message.messageId}
           onToggle={() =>
             setExpandedId(
