@@ -27,6 +27,7 @@ import {
   DEFAULT_FACILITATOR_URL,
   DEFAULT_SPONSOR_RELAY_URL,
 } from "./x402-config";
+import { INBOX_PRICE_SATS, SBTC_CONTRACTS } from "./constants";
 import type { Logger } from "../logging";
 
 /**
@@ -251,5 +252,205 @@ export async function verifyInboxPayment(
     paymentTxid,
     messageId,
     settleResult,
+  };
+}
+
+/**
+ * Verify a confirmed on-chain txid as payment proof for inbox message recovery.
+ *
+ * This is a recovery path for when x402 payment settlement times out but the
+ * sBTC transfer succeeded on-chain. The sender can resubmit the message with
+ * the confirmed txid to prove payment was made.
+ *
+ * Validates that:
+ * 1. Transaction exists and is confirmed (success status)
+ * 2. Transaction is an sBTC SIP-010 transfer (contract-call to sbtc-token.transfer)
+ * 3. Transfer amount >= INBOX_PRICE_SATS (100 sats)
+ * 4. Recipient matches the inbox address's STX address
+ * 5. Txid has not been redeemed for a previous message (checked by caller via KV)
+ *
+ * @param txid - Confirmed Stacks transaction ID (hex, with or without 0x prefix)
+ * @param recipientStxAddress - Expected recipient's STX address
+ * @param network - Stacks network ("mainnet" | "testnet")
+ * @param logger - Optional logger
+ * @returns Verification result with payer address
+ */
+export async function verifyTxidPayment(
+  txid: string,
+  recipientStxAddress: string,
+  network: "mainnet" | "testnet" = "mainnet",
+  logger?: Logger
+): Promise<InboxPaymentVerification> {
+  const log = logger || {
+    debug: () => {},
+    info: () => {},
+    warn: () => {},
+    error: () => {},
+  };
+
+  // Normalize txid (remove 0x prefix if present)
+  const normalizedTxid = txid.startsWith("0x") ? txid.slice(2) : txid;
+  const fullTxid = `0x${normalizedTxid}`;
+
+  // Determine API base URL
+  const apiBase =
+    network === "mainnet"
+      ? "https://api.hiro.so"
+      : "https://api.testnet.hiro.so";
+
+  log.info("Verifying txid payment recovery", {
+    txid: fullTxid,
+    recipientStxAddress,
+    network,
+  });
+
+  // Fetch transaction from Stacks API
+  let txData: {
+    tx_id: string;
+    tx_status: string;
+    sender_address: string;
+    tx_type: string;
+    contract_call?: {
+      contract_id: string;
+      function_name: string;
+      function_args: Array<{
+        name: string;
+        type: string;
+        repr: string;
+      }>;
+    };
+  };
+
+  try {
+    const response = await fetch(`${apiBase}/extended/v1/tx/${fullTxid}`);
+    if (!response.ok) {
+      if (response.status === 404) {
+        return {
+          success: false,
+          error: "Transaction not found. It may not be confirmed yet.",
+          errorCode: "TXID_NOT_FOUND",
+        };
+      }
+      return {
+        success: false,
+        error: `Stacks API error: ${response.status}`,
+        errorCode: "API_ERROR",
+      };
+    }
+    txData = await response.json();
+  } catch (error) {
+    log.error("Failed to fetch transaction", { error: String(error) });
+    return {
+      success: false,
+      error: `Failed to verify transaction: ${String(error)}`,
+      errorCode: "API_ERROR",
+    };
+  }
+
+  // 1. Check tx is confirmed and successful
+  if (txData.tx_status !== "success") {
+    log.warn("Transaction not successful", { status: txData.tx_status });
+    return {
+      success: false,
+      error: `Transaction status is "${txData.tx_status}", expected "success"`,
+      errorCode: "TX_NOT_CONFIRMED",
+    };
+  }
+
+  // 2. Check it's a contract call
+  if (txData.tx_type !== "contract_call" || !txData.contract_call) {
+    return {
+      success: false,
+      error: "Transaction is not a contract call",
+      errorCode: "INVALID_TX_TYPE",
+    };
+  }
+
+  // 3. Check it's an sBTC transfer
+  const sbtcContract = SBTC_CONTRACTS[network];
+  const expectedContractId = `${sbtcContract.address}.${sbtcContract.name}`;
+
+  if (txData.contract_call.contract_id !== expectedContractId) {
+    return {
+      success: false,
+      error: `Transaction is not an sBTC transfer (contract: ${txData.contract_call.contract_id})`,
+      errorCode: "NOT_SBTC_TRANSFER",
+    };
+  }
+
+  if (txData.contract_call.function_name !== "transfer") {
+    return {
+      success: false,
+      error: `Unexpected function: ${txData.contract_call.function_name}`,
+      errorCode: "NOT_SBTC_TRANSFER",
+    };
+  }
+
+  // 4. Parse transfer arguments: (amount uint, sender principal, recipient principal, memo (optional buff))
+  const args = txData.contract_call.function_args;
+  if (!args || args.length < 3) {
+    return {
+      success: false,
+      error: "Cannot parse transfer arguments",
+      errorCode: "INVALID_TX_ARGS",
+    };
+  }
+
+  // Extract amount (first arg, uint)
+  const amountArg = args.find((a) => a.name === "amount");
+  const recipientArg = args.find((a) => a.name === "recipient");
+
+  if (!amountArg || !recipientArg) {
+    return {
+      success: false,
+      error: "Missing amount or recipient in transfer args",
+      errorCode: "INVALID_TX_ARGS",
+    };
+  }
+
+  // Parse amount from Clarity repr (e.g., "u100")
+  const amountMatch = amountArg.repr.match(/^u(\d+)$/);
+  if (!amountMatch) {
+    return {
+      success: false,
+      error: `Cannot parse amount: ${amountArg.repr}`,
+      errorCode: "INVALID_TX_ARGS",
+    };
+  }
+  const transferAmount = parseInt(amountMatch[1], 10);
+
+  // 5. Check amount >= INBOX_PRICE_SATS
+  if (transferAmount < INBOX_PRICE_SATS) {
+    return {
+      success: false,
+      error: `Transfer amount ${transferAmount} sats is below minimum ${INBOX_PRICE_SATS} sats`,
+      errorCode: "INSUFFICIENT_AMOUNT",
+    };
+  }
+
+  // 6. Check recipient matches
+  // Clarity principal repr: 'SP... or 'SM...
+  const recipientAddress = recipientArg.repr.replace(/^'/, "");
+  if (recipientAddress !== recipientStxAddress) {
+    return {
+      success: false,
+      error: `Transfer recipient ${recipientAddress} does not match expected ${recipientStxAddress}`,
+      errorCode: "RECIPIENT_MISMATCH",
+    };
+  }
+
+  const payerStxAddress = txData.sender_address;
+
+  log.info("Txid payment verified", {
+    txid: fullTxid,
+    payerStxAddress,
+    transferAmount,
+    recipientStxAddress,
+  });
+
+  return {
+    success: true,
+    payerStxAddress,
+    paymentTxid: fullTxid,
   };
 }

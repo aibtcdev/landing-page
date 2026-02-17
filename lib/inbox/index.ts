@@ -39,6 +39,7 @@ export {
 export type { InboxPaymentVerification } from "./x402-verify";
 export {
   verifyInboxPayment,
+  verifyTxidPayment,
 } from "./x402-verify";
 
 // x402 Configuration

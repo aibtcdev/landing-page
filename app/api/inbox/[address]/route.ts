@@ -5,6 +5,7 @@ import { lookupAgent } from "@/lib/agent-lookup";
 import {
   validateInboxMessage,
   verifyInboxPayment,
+  verifyTxidPayment,
   storeMessage,
   updateAgentInbox,
   updateSentIndex,
@@ -476,8 +477,8 @@ export async function POST(
   };
   const paymentRequiredHeader = btoa(JSON.stringify(paymentRequiredBody));
 
-  if (!paymentSigHeader) {
-    // No payment signature — return 402 with payment requirements
+  if (!paymentSigHeader && !paymentTxid) {
+    // No payment signature and no txid recovery — return 402 with payment requirements
     logger.info("Returning 402 Payment Required", {
       recipientStx: agent.stxAddress,
       minAmount: INBOX_PRICE_SATS,
@@ -489,6 +490,133 @@ export async function POST(
         [X402_HEADERS.PAYMENT_REQUIRED]: paymentRequiredHeader,
       },
     });
+  }
+
+  // --- Txid recovery path ---
+  // When paymentTxid is provided without payment-signature header, verify the
+  // confirmed on-chain transaction as proof of payment. This is a recovery flow
+  // for when x402 settlement times out but the sBTC transfer succeeded.
+  if (!paymentSigHeader && paymentTxid) {
+    logger.info("Txid recovery: verifying on-chain payment", {
+      txid: paymentTxid,
+      recipientStx: agent.stxAddress,
+    });
+
+    // Check if this txid has already been redeemed for a message
+    const redeemedKey = `inbox:redeemed-txid:${paymentTxid.toLowerCase()}`;
+    const existingRedemption = await kv.get(redeemedKey);
+    if (existingRedemption) {
+      logger.warn("Txid already redeemed", { txid: paymentTxid });
+      return NextResponse.json(
+        {
+          error: "This transaction has already been used for a message",
+          txid: paymentTxid,
+          existingMessageId: existingRedemption,
+        },
+        { status: 409 }
+      );
+    }
+
+    // Verify the transaction on-chain
+    const txidResult = await verifyTxidPayment(
+      paymentTxid,
+      agent.stxAddress,
+      network,
+      logger
+    );
+
+    if (!txidResult.success) {
+      logger.error("Txid verification failed", {
+        error: txidResult.error,
+        errorCode: txidResult.errorCode,
+      });
+      return NextResponse.json(
+        {
+          error: txidResult.error || "Transaction verification failed",
+          errorCode: txidResult.errorCode,
+          hint: "Ensure the transaction is confirmed, is an sBTC transfer of >= 100 sats, and the recipient matches.",
+        },
+        { status: 400 }
+      );
+    }
+
+    // Transaction verified — store message
+    const fromAddress = txidResult.payerStxAddress || "unknown";
+    const messageId = `msg_${Date.now()}_${crypto.randomUUID()}`;
+
+    // Check for sender signature (optional BIP-137 authentication)
+    let senderBtcAddress: string | undefined;
+    let authenticated = false;
+    if (senderSignatureInput) {
+      try {
+        const sigResult = verifyBitcoinSignature(
+          senderSignatureInput,
+          buildSenderAuthMessage(content)
+        );
+        if (sigResult.valid) {
+          senderBtcAddress = sigResult.address;
+          authenticated = true;
+        }
+      } catch {
+        // Signature verification failed — continue without authentication
+      }
+    }
+
+    const now = new Date().toISOString();
+    const message = {
+      messageId,
+      fromAddress,
+      toBtcAddress,
+      toStxAddress,
+      content,
+      paymentTxid: txidResult.paymentTxid || paymentTxid,
+      paymentSatoshis: paymentSatoshis ?? INBOX_PRICE_SATS,
+      sentAt: now,
+      authenticated,
+      recoveredViaTxid: true,
+      ...(senderBtcAddress && { senderBtcAddress }),
+      ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
+    };
+
+    // Resolve sender agent for sent index
+    const senderAgent =
+      fromAddress !== "unknown"
+        ? await lookupSenderAgent(kv, fromAddress)
+        : null;
+
+    // Store message, update indexes, and mark txid as redeemed
+    await Promise.all([
+      storeMessage(kv, message),
+      updateAgentInbox(kv, toBtcAddress, messageId, now),
+      kv.put(redeemedKey, messageId),
+      ...(senderAgent
+        ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
+        : []),
+    ]);
+
+    logger.info("Message stored via txid recovery", {
+      messageId,
+      fromAddress,
+      toBtcAddress,
+      paymentTxid,
+    });
+
+    return NextResponse.json(
+      {
+        success: true,
+        message: "Message sent successfully (recovered via txid proof)",
+        inbox: {
+          messageId,
+          fromAddress,
+          toBtcAddress,
+          sentAt: now,
+          authenticated,
+          recoveredViaTxid: true,
+          ...(senderBtcAddress && { senderBtcAddress }),
+        },
+      },
+      { status: 201 }
+    );
   }
 
   // Parse payment signature (base64-encoded JSON per x402 v2, with plain JSON fallback)
