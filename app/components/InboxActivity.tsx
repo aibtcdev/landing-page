@@ -69,11 +69,11 @@ export default function InboxActivity({
           <div className="h-4 w-24 animate-pulse rounded bg-white/[0.06]" />
           <div className="h-4 w-16 animate-pulse rounded bg-white/[0.06]" />
         </div>
-        <div className="space-y-2">
-          {Array.from({ length: 2 }).map((_, i) => (
+        <div className="space-y-1">
+          {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-24 animate-pulse rounded-lg bg-white/[0.06]"
+              className="h-11 animate-pulse rounded-lg bg-white/[0.06]"
             />
           ))}
         </div>
