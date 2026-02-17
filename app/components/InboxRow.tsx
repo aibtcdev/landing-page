@@ -1,6 +1,7 @@
 "use client";
 
 import { formatRelativeTime } from "@/lib/utils";
+import { generateName } from "@/lib/name-generator";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
 type InboxMessageWithPeer = InboxMessage & {
@@ -152,14 +153,27 @@ export default function InboxRow({
           {reply && (
             <div className="mt-2 rounded-md border border-[#7DA2FF]/20 bg-[#7DA2FF]/5 p-2.5">
               <div className="mb-1.5 flex items-center gap-1.5">
-                <svg className="size-3 text-[#7DA2FF]" fill="currentColor" viewBox="0 0 20 20">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(reply.fromAddress)}`}
+                  alt=""
+                  className="size-4 rounded-full border border-[#7DA2FF]/20 bg-white/[0.06]"
+                  loading="lazy"
+                  width="16"
+                  height="16"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+                <span className="text-[10px] font-medium text-[#7DA2FF]">
+                  {generateName(reply.fromAddress)}
+                </span>
+                <svg className="size-3 text-[#7DA2FF]/60" fill="currentColor" viewBox="0 0 20 20">
                   <path
                     fillRule="evenodd"
                     d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z"
                     clipRule="evenodd"
                   />
                 </svg>
-                <span className="text-[10px] font-medium text-[#7DA2FF]">Reply</span>
+                <span className="text-[10px] text-[#7DA2FF]/60">replied</span>
                 <span className="ml-auto text-[9px] text-white/40">
                   {formatRelativeTime(reply.repliedAt)}
                 </span>
