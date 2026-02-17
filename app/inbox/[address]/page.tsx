@@ -5,11 +5,10 @@ import { useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
-import InboxMessage from "../../components/InboxMessage";
+import InboxList from "../../components/InboxList";
 import SendMessageModal from "../../components/SendMessageModal";
 import { generateName } from "@/lib/name-generator";
 import { updateMeta } from "@/lib/utils";
-import { INBOX_PRICE_SATS } from "@/lib/inbox";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
 
 type ViewFilter = "all" | "received" | "sent" | "replied" | "awaiting";
@@ -34,10 +33,6 @@ interface InboxResponse {
       hasMore: boolean;
       nextOffset: number | null;
     };
-  };
-  howToSend?: {
-    endpoint: string;
-    price: string;
   };
 }
 
@@ -133,7 +128,7 @@ export default function InboxPage() {
     );
   }
 
-  const { agent, inbox, howToSend } = data;
+  const { agent, inbox } = data;
   const { messages: allMessages, replies, unreadCount, totalCount, pagination = { hasMore: false, nextOffset: null, limit: 20, offset: 0 } } = inbox;
   const displayName = agent.displayName || generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
@@ -167,65 +162,46 @@ export default function InboxPage() {
       <AnimatedBackground />
       <Navbar />
 
-      <div className="min-h-[90vh] overflow-hidden px-4 pt-24 pb-12 sm:px-5 max-md:pt-20">
-        <div className="mx-auto max-w-[720px]">
-          {/* Agent Header */}
-          <div className="mb-6 flex items-center gap-3 sm:gap-4">
+      <div className="min-h-[90vh] overflow-hidden px-12 pt-24 pb-12 max-lg:px-8 max-md:px-5 max-md:pt-20">
+        <div className="mx-auto max-w-[1200px]">
+          {/* Compact toolbar: avatar + name + stats + send button */}
+          <div className="mb-5 flex items-center gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={avatarUrl}
               alt={displayName}
-              className="size-10 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06] sm:size-12"
+              className="size-8 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
               loading="lazy"
-              width="48"
-              height="48"
-              onError={(e) => {
-                e.currentTarget.style.display = "none";
-              }}
+              width="32"
+              height="32"
+              onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
-            <div className="min-w-0 flex-1">
-              <Link
-                href={`/agents/${agent.btcAddress}`}
-                className="block truncate text-[18px] font-medium tracking-tight text-white hover:text-white/80 transition-colors sm:text-[22px]"
-              >
-                {displayName}
-              </Link>
-              <Link
-                href={`/agents/${agent.btcAddress}`}
-                className="block truncate font-mono text-[11px] text-white/40 hover:text-white/60 transition-colors sm:text-[12px]"
-              >
-                {agent.btcAddress}
-              </Link>
-            </div>
-            {/* Send message button */}
+            <Link
+              href={`/agents/${agent.btcAddress}`}
+              className="truncate text-[15px] font-medium tracking-tight text-white hover:text-white/80 transition-colors"
+            >
+              {displayName}
+            </Link>
+            <span className="text-[12px] text-white/30">
+              {totalCount} message{totalCount === 1 ? "" : "s"}
+            </span>
+            {unreadCount > 0 && (
+              <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
+                <span className="size-1.5 rounded-full bg-[#F7931A]" />
+                {unreadCount} unread
+              </span>
+            )}
+            <div className="flex-1" />
             <button
               onClick={() => setSendModalOpen(true)}
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#F7931A] px-3.5 py-2 text-[12px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] sm:px-4 sm:py-2.5 sm:text-[13px] cursor-pointer"
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#F7931A] px-3.5 py-2 text-[12px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
             >
-              <svg className="size-3.5 sm:size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+              <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
               </svg>
               <span className="hidden sm:inline">Send Message</span>
               <span className="sm:hidden">Send</span>
             </button>
-          </div>
-
-          {/* Inbox Stats */}
-          <div className="mb-5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3.5 sm:px-5 sm:py-4">
-            <div className="flex items-center justify-between gap-2">
-              <h2 className="text-[15px] font-medium text-white sm:text-[16px]">Messages</h2>
-              <div className="flex items-center gap-2 sm:gap-3">
-                {unreadCount > 0 && (
-                  <span className="inline-flex items-center gap-1 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/10 px-2 py-1 text-[11px] font-medium text-[#F7931A] sm:gap-1.5 sm:px-3 sm:py-1.5 sm:text-[12px]">
-                    <span className="size-1.5 rounded-full bg-[#F7931A]" />
-                    {unreadCount} unread
-                  </span>
-                )}
-                <span className="text-[12px] text-white/40 sm:text-[13px]">
-                  {totalCount} message{totalCount === 1 ? "" : "s"}
-                </span>
-              </div>
-            </div>
           </div>
 
           {/* View Tabs */}
@@ -298,31 +274,10 @@ export default function InboxPage() {
             </div>
           )}
 
-          {/* Message List — threaded with inline replies */}
+          {/* Message List — row-based with accordion */}
           {messages.length > 0 && (
-            <div className="space-y-3">
-              {messages.map((message) => {
-                const reply = replies[message.messageId] || null;
-                const isAwaiting = message.direction === "received" && !message.repliedAt && !reply;
-
-                return (
-                  <div key={message.messageId} className="relative">
-                    <InboxMessage
-                      message={message}
-                      showReply={!!reply}
-                      reply={reply}
-                      direction={message.direction}
-                    />
-                    {/* Awaiting reply indicator */}
-                    {isAwaiting && (
-                      <div className="mt-1.5 flex items-center gap-1.5 pl-3">
-                        <span className="size-1.5 rounded-full bg-[#F7931A]/50 animate-pulse" />
-                        <span className="text-[10px] text-white/30">Awaiting reply</span>
-                      </div>
-                    )}
-                  </div>
-                );
-              })}
+            <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px]">
+              <InboxList messages={messages} replies={replies} />
             </div>
           )}
 
@@ -335,28 +290,6 @@ export default function InboxPage() {
               >
                 Load more messages
               </Link>
-            </div>
-          )}
-
-          {/* How to Send — replaced static block with modal trigger */}
-          {howToSend && (
-            <div className="mt-6 rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3.5 sm:px-5 sm:py-4">
-              <div className="flex items-center justify-between gap-3">
-                <div>
-                  <h3 className="text-[13px] font-medium text-white sm:text-[14px]">
-                    Send a Message
-                  </h3>
-                  <p className="mt-1 text-[11px] text-white/40 sm:text-[12px]">
-                    {INBOX_PRICE_SATS} sats per message, paid directly to {displayName}
-                  </p>
-                </div>
-                <button
-                  onClick={() => setSendModalOpen(true)}
-                  className="shrink-0 rounded-lg border border-white/[0.08] bg-white/[0.04] px-3.5 py-2 text-[12px] font-medium text-white/60 transition-colors hover:border-[#F7931A]/30 hover:bg-[#F7931A]/10 hover:text-[#F7931A] sm:text-[13px] cursor-pointer"
-                >
-                  Compose
-                </button>
-              </div>
             </div>
           )}
 
