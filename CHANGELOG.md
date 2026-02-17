@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.9.0](https://github.com/aibtcdev/landing-page/compare/v1.8.0...v1.9.0) (2026-02-17)
+
+
+### Features
+
+* progressive-disclosure doc architecture with topic sub-docs ([#208](https://github.com/aibtcdev/landing-page/issues/208)) ([a828146](https://github.com/aibtcdev/landing-page/commit/a828146385d094116181d443c923f5a1ce09544d))
+
+
+### Bug Fixes
+
+* increase x402-stacks verifier timeout to 2 minutes ([#206](https://github.com/aibtcdev/landing-page/issues/206)) ([0ff5eeb](https://github.com/aibtcdev/landing-page/commit/0ff5eeb5dc8951028cfa583e2a58e4ee4360df86))
+
 ## [1.8.0](https://github.com/aibtcdev/landing-page/compare/v1.7.0...v1.8.0) (2026-02-16)
 
 
