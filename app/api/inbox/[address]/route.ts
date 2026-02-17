@@ -13,7 +13,9 @@ import {
   getSentIndex,
   INBOX_PRICE_SATS,
   buildInboxPaymentRequirements,
+  buildSenderAuthMessage,
 } from "@/lib/inbox";
+import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent as lookupSenderAgent } from "@/lib/agent-lookup";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
@@ -436,6 +438,7 @@ export async function POST(
     content,
     paymentTxid,
     paymentSatoshis,
+    signature: senderSignatureInput,
   } = validation.data;
 
   // Verify recipient matches agent
@@ -565,6 +568,39 @@ export async function POST(
     );
   }
 
+  // Verify optional sender signature (BIP-137 over "Inbox Message | {content}")
+  // Signature is opt-in — unsigned messages continue to work unchanged.
+  let senderBtcAddress: string | undefined;
+  let authenticated = false;
+
+  if (senderSignatureInput) {
+    try {
+      const sigResult = verifyBitcoinSignature(
+        senderSignatureInput,
+        buildSenderAuthMessage(content)
+      );
+      if (sigResult.valid) {
+        senderBtcAddress = sigResult.address;
+        authenticated = true;
+        logger.info("Sender signature verified", { senderBtcAddress });
+      } else {
+        logger.warn("Sender signature verification failed (invalid)");
+        return NextResponse.json(
+          { error: "Sender signature verification failed" },
+          { status: 400 }
+        );
+      }
+    } catch (err) {
+      logger.warn("Sender signature verification threw error", {
+        error: String(err),
+      });
+      return NextResponse.json(
+        { error: "Sender signature verification failed: invalid format" },
+        { status: 400 }
+      );
+    }
+  }
+
   // Store message (fromAddress stores the payer's STX address from x402 settlement)
   const now = new Date().toISOString();
   const message = {
@@ -576,6 +612,9 @@ export async function POST(
     paymentTxid: paymentResult.paymentTxid || paymentTxid || "",
     paymentSatoshis: paymentSatoshis ?? INBOX_PRICE_SATS,
     sentAt: now,
+    authenticated,
+    ...(senderBtcAddress && { senderBtcAddress }),
+    ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
   };
 
   // Resolve sender's BTC address from their STX address (for sent index)
@@ -619,6 +658,8 @@ export async function POST(
         fromAddress,
         toBtcAddress,
         sentAt: now,
+        authenticated,
+        ...(senderBtcAddress && { senderBtcAddress }),
       },
     },
     {

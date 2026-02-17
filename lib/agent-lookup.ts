@@ -9,17 +9,32 @@ import { computeLevel } from "@/lib/levels";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 
 /**
- * Look up an agent by BTC or STX address.
- * Tries both key prefixes in parallel for efficiency.
+ * Look up an agent by BTC, STX, or taproot address.
+ * For taproot (bc1p) addresses, uses the taproot: reverse index to find
+ * the canonical btcAddress, then looks up the full record.
+ * For other addresses, tries both btc: and stx: prefixes in parallel.
  *
  * @param kv - Cloudflare KV namespace
- * @param address - BTC or STX address to look up
+ * @param address - BTC, STX, or taproot address to look up
  * @returns AgentRecord or null if not found
  */
 export async function lookupAgent(
   kv: KVNamespace,
   address: string
 ): Promise<AgentRecord | null> {
+  // Taproot addresses (bc1p...) use a reverse index
+  if (address.startsWith("bc1p")) {
+    const canonicalBtcAddress = await kv.get(`taproot:${address}`);
+    if (!canonicalBtcAddress) return null;
+    const data = await kv.get(`btc:${canonicalBtcAddress}`);
+    if (!data) return null;
+    try {
+      return JSON.parse(data) as AgentRecord;
+    } catch {
+      return null;
+    }
+  }
+
   const [btcData, stxData] = await Promise.all([
     kv.get(`btc:${address}`),
     kv.get(`stx:${address}`),

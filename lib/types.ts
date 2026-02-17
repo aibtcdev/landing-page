@@ -7,6 +7,7 @@ export interface AgentRecord {
   btcAddress: string;
   stxPublicKey: string;
   btcPublicKey: string;
+  taprootAddress?: string | null;
   displayName?: string;
   description?: string | null;
   bnsName?: string | null;

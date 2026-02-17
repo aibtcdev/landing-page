@@ -7,24 +7,31 @@ import { getAgentAchievements, getAchievementDefinition } from "@/lib/achievemen
 import { getCheckInRecord } from "@/lib/heartbeat";
 import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
 import { getAgentInbox, getSentIndex } from "@/lib/inbox/kv-helpers";
+import { getCAIP19AgentId } from "@/lib/caip19";
 
 /**
  * Determine the address type and KV prefix from the format.
  *
  * - Stacks mainnet addresses start with "SP" or "SM"
- * - Bitcoin addresses: bc1 (Native SegWit), 1 (P2PKH), 3 (P2SH)
+ * - Taproot Bitcoin addresses: bc1p (Native SegWit v1 / P2TR)
+ * - Bitcoin addresses: bc1q (Native SegWit v0), 1 (P2PKH), 3 (P2SH)
  * - BNS names end with ".btc"
  * - Returns null for unrecognized formats
  */
 function getAddressTypeAndPrefix(
   address: string
-): { type: "stx" | "btc" | "bns"; prefix: string } | null {
+): { type: "stx" | "btc" | "taproot" | "bns"; prefix: string } | null {
   // Stacks addresses
   if (address.startsWith("SP") || address.startsWith("SM")) {
     return { type: "stx", prefix: "stx:" };
   }
 
-  // Bitcoin addresses
+  // Taproot addresses (bc1p) — must check before general bc1 check
+  if (address.startsWith("bc1p")) {
+    return { type: "taproot", prefix: "taproot:" };
+  }
+
+  // Bitcoin addresses (bc1q, 1..., 3...)
   if (
     address.startsWith("bc1") ||
     address.startsWith("1") ||
@@ -128,9 +135,10 @@ export async function GET(
           usage: {
             endpoint: "GET /api/agents/:address",
             description:
-              "Look up a specific agent by BTC address, STX address, or BNS name",
+              "Look up a specific agent by BTC address, taproot address, STX address, or BNS name",
             acceptedFormats: {
-              btc: ["bc1...", "1...", "3..."],
+              taproot: ["bc1p..."],
+              btc: ["bc1q...", "1...", "3..."],
               stx: ["SP...", "SM..."],
               bns: ["*.btc"],
             },
@@ -168,12 +176,13 @@ export async function GET(
       return NextResponse.json(
         {
           error:
-            "Invalid address format. Expected a Bitcoin address (bc1..., 1..., 3...), " +
+            "Invalid address format. Expected a Bitcoin address (bc1p..., bc1q..., 1..., 3...), " +
             "Stacks address (SP..., SM...), or BNS name (*.btc).",
           usage: {
             endpoint: "GET /api/agents/:address",
             acceptedFormats: {
-              btc: ["bc1...", "1...", "3..."],
+              taproot: ["bc1p..."],
+              btc: ["bc1q...", "1...", "3..."],
               stx: ["SP...", "SM..."],
               bns: ["*.btc"],
             },
@@ -193,6 +202,22 @@ export async function GET(
     if (addressInfo.type === "bns") {
       // BNS lookup: search for matching bnsName
       agent = await findAgentByBns(kv, address);
+    } else if (addressInfo.type === "taproot") {
+      // Taproot lookup: resolve taproot: reverse index to get canonical btcAddress
+      const canonicalBtcAddress = await kv.get(`taproot:${address}`);
+      if (canonicalBtcAddress) {
+        const value = await kv.get(`btc:${canonicalBtcAddress}`);
+        if (value) {
+          try {
+            agent = JSON.parse(value) as AgentRecord;
+          } catch {
+            return NextResponse.json(
+              { error: "Failed to parse agent record" },
+              { status: 500 }
+            );
+          }
+        }
+      }
     } else {
       // Direct KV lookup by BTC or STX address
       const key = addressInfo.prefix + address;
@@ -330,6 +355,7 @@ export async function GET(
           displayName: agent.displayName,
           description: agent.description,
           bnsName: agent.bnsName,
+          taprootAddress: agent.taprootAddress ?? null,
           verifiedAt: agent.verifiedAt,
           owner: agent.owner,
           stxPublicKey: agent.stxPublicKey,
@@ -337,6 +363,7 @@ export async function GET(
           lastActiveAt: agent.lastActiveAt,
           checkInCount: agent.checkInCount,
           erc8004AgentId: identity?.agentId ?? agent.erc8004AgentId ?? null,
+          caip19: getCAIP19AgentId(identity?.agentId ?? agent.erc8004AgentId ?? null),
         },
         ...levelInfo,
         achievements: achievements.map((record) => {

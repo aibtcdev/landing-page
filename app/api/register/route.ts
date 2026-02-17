@@ -18,6 +18,7 @@ import { isPartialAgentRecord } from "@/lib/attention/types";
 import { TWITTER_HANDLE } from "@/lib/constants";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { provisionSponsorKey, DEFAULT_SPONSOR_RELAY_URL } from "@/lib/sponsor";
+import { validateTaprootAddress } from "@/lib/challenge";
 
 export async function GET() {
   return NextResponse.json({
@@ -147,6 +148,11 @@ export async function GET() {
           description: "Agent description, max 280 characters.",
           maxLength: 280,
         },
+        taprootAddress: {
+          type: "string",
+          description: "Taproot Bitcoin address (bc1p... Bech32m format). Used for soul inscription.",
+          mcpTool: "get_taproot_address",
+        },
       },
     },
     responses: {
@@ -250,8 +256,9 @@ export async function POST(request: NextRequest) {
       bitcoinSignature?: string;
       stacksSignature?: string;
       description?: string;
+      taprootAddress?: string;
     };
-    const { bitcoinSignature, stacksSignature, description } = body;
+    const { bitcoinSignature, stacksSignature, description, taprootAddress } = body;
 
     if (!bitcoinSignature || !stacksSignature) {
       return NextResponse.json(
@@ -270,6 +277,18 @@ export async function POST(request: NextRequest) {
         );
       }
       sanitizedDescription = trimmed;
+    }
+
+    let sanitizedTaprootAddress: string | null = null;
+    if (taprootAddress) {
+      const trimmed = taprootAddress.trim();
+      if (trimmed.length > 0 && !validateTaprootAddress(trimmed)) {
+        return NextResponse.json(
+          { error: "Invalid taproot address. Must start with bc1p (Bech32m format)." },
+          { status: 400 }
+        );
+      }
+      sanitizedTaprootAddress = trimmed || null;
     }
 
     let btcResult;
@@ -369,6 +388,7 @@ export async function POST(request: NextRequest) {
       btcAddress: btcResult.address,
       stxPublicKey: stxResult.publicKey,
       btcPublicKey: btcResult.publicKey,
+      taprootAddress: sanitizedTaprootAddress,
       bnsName: bnsName || null,
       displayName,
       description: sanitizedDescription,
@@ -382,11 +402,26 @@ export async function POST(request: NextRequest) {
       createdAt: new Date().toISOString(),
     };
 
-    await Promise.all([
+    const kvWrites: Promise<void>[] = [
       kv.put(`stx:${stxResult.address}`, JSON.stringify(record)),
       kv.put(`btc:${btcResult.address}`, JSON.stringify(record)),
       kv.put(`claim-code:${btcResult.address}`, JSON.stringify(claimCodeRecord)),
-    ]);
+    ];
+
+    // Store taproot reverse index if taprootAddress provided
+    if (sanitizedTaprootAddress) {
+      // Check if this taproot address is already claimed by another agent
+      const existingTaprootOwner = await kv.get(`taproot:${sanitizedTaprootAddress}`);
+      if (existingTaprootOwner && existingTaprootOwner !== btcResult.address) {
+        return NextResponse.json(
+          { error: "This taproot address is already claimed by another agent." },
+          { status: 409 }
+        );
+      }
+      kvWrites.push(kv.put(`taproot:${sanitizedTaprootAddress}`, btcResult.address));
+    }
+
+    await Promise.all(kvWrites);
 
     // Build response with conditional sponsorApiKey field
     const responseBody: Record<string, unknown> = {
@@ -397,6 +432,7 @@ export async function POST(request: NextRequest) {
         displayName,
         description: record.description,
         bnsName: bnsName || undefined,
+        taprootAddress: sanitizedTaprootAddress || undefined,
         verifiedAt: record.verifiedAt,
       },
       claimCode,

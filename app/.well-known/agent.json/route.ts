@@ -462,6 +462,33 @@ export function GET() {
         outputModes: ["application/json"],
       },
       {
+        id: "unified-resolution",
+        name: "Unified Agent Resolution",
+        description:
+          "Resolve any agent identifier to a canonical structured identity object in a single call. " +
+          "GET /api/resolve/:identifier accepts: numeric ERC-8004 agent-id (on-chain lookup), " +
+          "taproot address (bc1p...), Bitcoin address (bc1q..., 1..., 3...), " +
+          "Stacks address (SP..., SM...), BNS name (*.btc), or display name. " +
+          "Returns identity (all addresses, agentId, caip19), trust (level, onChainIdentity, reputation), " +
+          "activity (lastActiveAt, checkInCount, inbox stats), and capabilities sections.",
+        tags: [
+          "resolution",
+          "identity",
+          "lookup",
+          "unified",
+          "caip19",
+          "agent-id",
+        ],
+        examples: [
+          "Resolve agent by numeric ID",
+          "Look up agent by any address type",
+          "Find agent by BNS name or display name",
+          "Get full identity profile for any identifier",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
+      {
         id: "paid-attention",
         name: "Paid Attention",
         description:

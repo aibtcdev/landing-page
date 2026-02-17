@@ -24,6 +24,21 @@ export interface InboxMessage {
   sentAt: string;
   readAt?: string | null;
   repliedAt?: string | null;
+  /**
+   * BIP-137 signature over "Inbox Message | {content}" provided by the sender.
+   * Present only when the sender opted in to cryptographic authentication.
+   */
+  senderSignature?: string;
+  /**
+   * Bitcoin address recovered from senderSignature via BIP-137 verification.
+   * Proves the sender controls the private key for this address.
+   */
+  senderBtcAddress?: string;
+  /**
+   * Whether the message was cryptographically authenticated by the sender.
+   * True when senderSignature was present and passed BIP-137 verification.
+   */
+  authenticated?: boolean;
 }
 
 /**
