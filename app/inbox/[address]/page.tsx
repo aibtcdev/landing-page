@@ -195,37 +195,43 @@ export default function InboxPage() {
 
       <div className="min-h-[90vh] overflow-hidden px-12 pt-24 pb-12 max-lg:px-8 max-md:px-5 max-md:pt-20">
         <div className="mx-auto max-w-[1200px]">
-          {/* Compact toolbar: avatar + name + stats + send button */}
-          <div className="mb-5 flex items-center gap-3">
+          {/* Toolbar: avatar + name + stats + send button */}
+          <div className="mb-5 flex items-center gap-2 sm:gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
               src={avatarUrl}
               alt={displayName}
-              className="size-8 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+              className="size-7 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06] sm:size-8"
               loading="lazy"
               width="32"
               height="32"
               onError={(e) => { e.currentTarget.style.display = "none"; }}
             />
-            <Link
-              href={`/agents/${agent.btcAddress}`}
-              className="truncate text-[15px] font-medium tracking-tight text-white hover:text-white/80 transition-colors"
-            >
-              {displayName}
-            </Link>
-            <span className="text-[12px] text-white/30">
-              {totalCount} message{totalCount === 1 ? "" : "s"}
-            </span>
-            {unreadCount > 0 && (
-              <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
-                <span className="size-1.5 rounded-full bg-[#F7931A]" />
-                {unreadCount} unread
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                <Link
+                  href={`/agents/${agent.btcAddress}`}
+                  className="truncate text-[14px] font-medium tracking-tight text-white hover:text-white/80 transition-colors sm:text-[15px]"
+                >
+                  {displayName}
+                </Link>
+                {unreadCount > 0 && (
+                  <span className="hidden shrink-0 items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20 sm:inline-flex">
+                    <span className="size-1.5 rounded-full bg-[#F7931A]" />
+                    {unreadCount} unread
+                  </span>
+                )}
+              </div>
+              <span className="text-[11px] text-white/30 sm:text-[12px]">
+                {totalCount} message{totalCount === 1 ? "" : "s"}
+                {unreadCount > 0 && (
+                  <span className="text-[#F7931A]/60 sm:hidden"> &middot; {unreadCount} unread</span>
+                )}
               </span>
-            )}
-            <div className="flex-1" />
+            </div>
             <button
               onClick={() => setSendModalOpen(true)}
-              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#F7931A] px-3.5 py-2 text-[12px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
+              className="shrink-0 inline-flex items-center gap-1.5 rounded-lg bg-[#F7931A] px-3 py-1.5 text-[11px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] sm:px-3.5 sm:py-2 sm:text-[12px] cursor-pointer"
             >
               <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
