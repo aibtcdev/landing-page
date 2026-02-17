@@ -191,6 +191,81 @@ export async function recordRequest(
 }
 
 /**
+ * Validate a taproot Bitcoin address (bc1p... Bech32m format).
+ */
+export function validateTaprootAddress(address: string): boolean {
+  // Taproot addresses are Bech32m encoded, starting with bc1p
+  // Length is 62 characters for P2TR (bc1p + 58 chars)
+  return /^bc1p[a-z0-9]{6,87}$/.test(address);
+}
+
+/**
+ * Action handler: update-taproot
+ */
+async function handleUpdateTaproot(
+  params: Record<string, unknown>,
+  agent: AgentRecord,
+  kv: KVNamespace
+): Promise<ActionResult> {
+  const taprootAddress = params.taprootAddress as string | undefined;
+
+  if (taprootAddress === undefined) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Missing required parameter: taprootAddress",
+    };
+  }
+
+  const trimmed = taprootAddress.trim();
+
+  if (trimmed.length === 0) {
+    // Allow clearing taproot address
+    if (agent.taprootAddress) {
+      await kv.delete(`taproot:${agent.taprootAddress}`);
+    }
+    const updated: AgentRecord = {
+      ...agent,
+      taprootAddress: null,
+    };
+    return { success: true, updated };
+  }
+
+  if (!validateTaprootAddress(trimmed)) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Invalid taproot address. Must start with bc1p (Bech32m format).",
+    };
+  }
+
+  // Check if this taproot address is already claimed by a different agent
+  const existingOwner = await kv.get(`taproot:${trimmed}`);
+  if (existingOwner && existingOwner !== agent.btcAddress) {
+    return {
+      success: false,
+      updated: agent,
+      error: "This taproot address is already claimed by another agent.",
+    };
+  }
+
+  // Clean up old reverse index if taproot address is changing
+  if (agent.taprootAddress && agent.taprootAddress !== trimmed) {
+    await kv.delete(`taproot:${agent.taprootAddress}`);
+  }
+
+  // Set new reverse index: taproot:{taprootAddress} -> btcAddress
+  await kv.put(`taproot:${trimmed}`, agent.btcAddress);
+
+  const updated: AgentRecord = {
+    ...agent,
+    taprootAddress: trimmed,
+  };
+
+  return { success: true, updated };
+}
+
+/**
  * Action handler: update-description
  */
 async function handleUpdateDescription(
@@ -317,6 +392,7 @@ async function handleUpdateOwner(
 const ACTION_HANDLERS: Record<string, ActionHandler> = {
   "update-description": handleUpdateDescription,
   "update-owner": handleUpdateOwner,
+  "update-taproot": handleUpdateTaproot,
 };
 
 /**
@@ -369,6 +445,17 @@ export function getAvailableActions(): Array<{
           type: "string",
           required: true,
           description: "X handle (1-15 chars, alphanumeric + underscore)",
+        },
+      },
+    },
+    {
+      name: "update-taproot",
+      description: "Add or update your taproot Bitcoin address (bc1p...)",
+      params: {
+        taprootAddress: {
+          type: "string",
+          required: true,
+          description: "Taproot address (bc1p... Bech32m format, or empty string to clear)",
         },
       },
     },
