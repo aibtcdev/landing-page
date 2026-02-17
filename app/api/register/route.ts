@@ -410,6 +410,14 @@ export async function POST(request: NextRequest) {
 
     // Store taproot reverse index if taprootAddress provided
     if (sanitizedTaprootAddress) {
+      // Check if this taproot address is already claimed by another agent
+      const existingTaprootOwner = await kv.get(`taproot:${sanitizedTaprootAddress}`);
+      if (existingTaprootOwner && existingTaprootOwner !== btcResult.address) {
+        return NextResponse.json(
+          { error: "This taproot address is already claimed by another agent." },
+          { status: 409 }
+        );
+      }
       kvWrites.push(kv.put(`taproot:${sanitizedTaprootAddress}`, btcResult.address));
     }
 

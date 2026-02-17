@@ -645,7 +645,7 @@ curl "https://aibtc.com/api/resolve/Swift%20Raven"
 \`\`\`
 
 **Error responses:**
-- 400: Invalid agent-id format (non-numeric negative number)
+- 400: Invalid agent-id format (non-numeric or negative number)
 - 404: Identifier not found on platform (or agent-id not minted on-chain)
 
 See /api/openapi.json for complete response schemas.
