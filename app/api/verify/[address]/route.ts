@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { getAgentLevel } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
+import { getCAIP19AgentId } from "@/lib/caip19";
 
 /**
  * Determine the address type from the format.
@@ -128,6 +129,8 @@ export async function GET(
           owner: agent.owner,
           lastActiveAt: agent.lastActiveAt,
           checkInCount: agent.checkInCount,
+          erc8004AgentId: agent.erc8004AgentId ?? null,
+          caip19: getCAIP19AgentId(agent.erc8004AgentId ?? null),
         },
         ...levelInfo,
       },

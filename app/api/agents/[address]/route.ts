@@ -7,6 +7,7 @@ import { getAgentAchievements, getAchievementDefinition } from "@/lib/achievemen
 import { getCheckInRecord } from "@/lib/heartbeat";
 import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
 import { getAgentInbox, getSentIndex } from "@/lib/inbox/kv-helpers";
+import { getCAIP19AgentId } from "@/lib/caip19";
 
 /**
  * Determine the address type and KV prefix from the format.
@@ -362,6 +363,7 @@ export async function GET(
           lastActiveAt: agent.lastActiveAt,
           checkInCount: agent.checkInCount,
           erc8004AgentId: identity?.agentId ?? agent.erc8004AgentId ?? null,
+          caip19: getCAIP19AgentId(identity?.agentId ?? agent.erc8004AgentId ?? null),
         },
         ...levelInfo,
         achievements: achievements.map((record) => {
