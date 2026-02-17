@@ -7,6 +7,9 @@ import {
   deleteChallenge,
   checkRateLimit,
   recordRequest,
+  executeAction,
+  getAvailableActions,
+  validateTaprootAddress,
   type ChallengeStoreRecord,
 } from "../challenge";
 
@@ -436,5 +439,158 @@ describe("rate limiting integration", () => {
     // IP 2 should still be allowed
     const result = await checkRateLimit(kv, "192.168.1.2");
     expect(result.allowed).toBe(true);
+  });
+});
+
+describe("validateTaprootAddress", () => {
+  it("accepts valid taproot address (bc1p)", () => {
+    expect(validateTaprootAddress("bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr")).toBe(true);
+  });
+
+  it("accepts another valid taproot address", () => {
+    expect(validateTaprootAddress("bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0")).toBe(true);
+  });
+
+  it("rejects SegWit v0 address (bc1q)", () => {
+    expect(validateTaprootAddress("bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh")).toBe(false);
+  });
+
+  it("rejects legacy P2PKH address (1...)", () => {
+    expect(validateTaprootAddress("1A1zP1eP5QGefi2DMPTfTL5SLmv7Divf Na")).toBe(false);
+  });
+
+  it("rejects Stacks address", () => {
+    expect(validateTaprootAddress("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7")).toBe(false);
+  });
+
+  it("rejects empty string", () => {
+    expect(validateTaprootAddress("")).toBe(false);
+  });
+
+  it("rejects uppercase bc1p (taproot is lowercase)", () => {
+    expect(validateTaprootAddress("BC1P5CYXNUXMEUWUVKWFEM96LQZSZD02N6XDCJRS20CAC6YQJJWUDPXQKEDRCR")).toBe(false);
+  });
+
+  it("rejects too-short address", () => {
+    expect(validateTaprootAddress("bc1p12345")).toBe(false);
+  });
+});
+
+describe("executeAction: update-taproot", () => {
+  // Minimal AgentRecord for testing
+  const baseAgent = {
+    stxAddress: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+    btcAddress: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+    stxPublicKey: "03abc",
+    btcPublicKey: "02abc",
+    verifiedAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  const validTaprootAddress = "bc1p5cyxnuxmeuwuvkwfem96lqzszd02n6xdcjrs20cac6yqjjwudpxqkedrcr";
+
+  it("updates taproot address and stores KV index", async () => {
+    const kv = createMockKV();
+    const result = await executeAction(
+      "update-taproot",
+      { taprootAddress: validTaprootAddress },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.updated.taprootAddress).toBe(validTaprootAddress);
+    expect(kv.put).toHaveBeenCalledWith(`taproot:${validTaprootAddress}`, baseAgent.btcAddress);
+  });
+
+  it("rejects missing taprootAddress param", async () => {
+    const kv = createMockKV();
+    const result = await executeAction("update-taproot", {}, baseAgent, kv);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Missing required parameter");
+  });
+
+  it("rejects invalid (non-bc1p) address", async () => {
+    const kv = createMockKV();
+    const result = await executeAction(
+      "update-taproot",
+      { taprootAddress: "bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh" },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid taproot address");
+  });
+
+  it("clears taproot address when empty string given", async () => {
+    const kv = createMockKV();
+    const agentWithTaproot = { ...baseAgent, taprootAddress: validTaprootAddress };
+    const result = await executeAction(
+      "update-taproot",
+      { taprootAddress: "" },
+      agentWithTaproot,
+      kv
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.updated.taprootAddress).toBeNull();
+    expect(kv.delete).toHaveBeenCalledWith(`taproot:${validTaprootAddress}`);
+  });
+
+  it("removes old KV index when taproot address changes", async () => {
+    const kv = createMockKV();
+    const oldTaproot = "bc1p0xlxvlhemja6c4dqv22uapctqupfhlxm9h8z3k2e72q4k9hcz7vqzk5jj0";
+    const agentWithTaproot = { ...baseAgent, taprootAddress: oldTaproot };
+
+    const result = await executeAction(
+      "update-taproot",
+      { taprootAddress: validTaprootAddress },
+      agentWithTaproot,
+      kv
+    );
+
+    expect(result.success).toBe(true);
+    expect(kv.delete).toHaveBeenCalledWith(`taproot:${oldTaproot}`);
+    expect(kv.put).toHaveBeenCalledWith(`taproot:${validTaprootAddress}`, baseAgent.btcAddress);
+  });
+
+  it("rejects if taproot address already claimed by different agent", async () => {
+    const kv = createMockKV();
+    // Pre-populate KV with another agent claiming this taproot
+    await kv.put(`taproot:${validTaprootAddress}`, "bc1qother");
+
+    const result = await executeAction(
+      "update-taproot",
+      { taprootAddress: validTaprootAddress },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("already claimed by another agent");
+  });
+});
+
+describe("getAvailableActions", () => {
+  it("includes update-taproot action", () => {
+    const actions = getAvailableActions();
+    const taprootAction = actions.find(a => a.name === "update-taproot");
+    expect(taprootAction).toBeDefined();
+  });
+
+  it("update-taproot action has taprootAddress param", () => {
+    const actions = getAvailableActions();
+    const taprootAction = actions.find(a => a.name === "update-taproot");
+    expect(taprootAction?.params).toHaveProperty("taprootAddress");
+    expect(taprootAction?.params.taprootAddress.required).toBe(true);
+  });
+
+  it("includes all expected actions", () => {
+    const actions = getAvailableActions();
+    const names = actions.map(a => a.name);
+    expect(names).toContain("update-description");
+    expect(names).toContain("update-owner");
+    expect(names).toContain("update-taproot");
   });
 });
