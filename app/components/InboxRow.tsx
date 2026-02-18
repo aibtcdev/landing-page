@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import Link from "next/link";
 import { formatRelativeTime } from "@/lib/utils";
 import { generateName } from "@/lib/name-generator";
@@ -24,18 +23,12 @@ interface InboxRowProps {
  * Click to expand full text if it was clamped.
  * Replies show inline below the message.
  */
-// Rough check: content longer than ~150 chars is likely to exceed 3 lines
-const CLAMP_THRESHOLD = 150;
-
 export default function InboxRow({
   message,
   reply = null,
   ownerBtcAddress,
   compact = false,
 }: InboxRowProps) {
-  const [showFullMessage, setShowFullMessage] = useState(false);
-  const [showFullReply, setShowFullReply] = useState(false);
-
   const {
     fromAddress,
     toBtcAddress,
@@ -106,21 +99,10 @@ export default function InboxRow({
         </span>
       </div>
 
-      {/* Message body — always visible, clamped to 3 lines unless expanded */}
-      <div>
-        <p className={`text-[13px] leading-relaxed text-white/70 sm:text-[14px] ${showFullMessage ? "" : "line-clamp-3"}`}>
-          {content}
-        </p>
-        {content.length > CLAMP_THRESHOLD && (
-          <button
-            type="button"
-            onClick={() => setShowFullMessage(!showFullMessage)}
-            className="mt-1 text-[12px] font-medium text-white/40 hover:text-white/60 transition-colors cursor-pointer"
-          >
-            {showFullMessage ? "Show less" : "Read more"}
-          </button>
-        )}
-      </div>
+      {/* Message body — always fully visible (max 500 chars) */}
+      <p className="text-[13px] leading-relaxed text-white/70 sm:text-[14px]">
+        {content}
+      </p>
 
       {/* Status + meta row */}
       <div className="mt-2 flex items-center gap-2">
@@ -172,18 +154,9 @@ export default function InboxRow({
               {formatRelativeTime(reply.repliedAt)}
             </span>
           </div>
-          <p className={`text-[12px] leading-relaxed text-white/60 sm:text-[13px] ${showFullReply ? "" : "line-clamp-3"}`}>
+          <p className="text-[12px] leading-relaxed text-white/60 sm:text-[13px]">
             {reply.reply}
           </p>
-          {reply.reply.length > CLAMP_THRESHOLD && (
-            <button
-              type="button"
-              onClick={() => setShowFullReply(!showFullReply)}
-              className="mt-1 text-[11px] font-medium text-[#7DA2FF]/50 hover:text-[#7DA2FF]/70 transition-colors cursor-pointer"
-            >
-              {showFullReply ? "Show less" : "Read more"}
-            </button>
-          )}
         </div>
       )}
     </div>

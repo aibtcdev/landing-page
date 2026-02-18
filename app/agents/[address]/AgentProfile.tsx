@@ -334,9 +334,7 @@ export default function AgentProfile({
             <main className="space-y-6 min-w-0">
               {/* Inbox — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-                  <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
-                </div>
+                <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
               )}
 
               {/* Interaction Graph — show for level 1+ agents */}
