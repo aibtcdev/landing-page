@@ -4,7 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 
 const CRAWLER_UA_PATTERNS = [
   "twitterbot",
@@ -111,7 +111,7 @@ async function handleCrawlerAgentPage(
 <meta property="og:image:height" content="630">
 <meta property="og:site_name" content="AIBTC">
 <meta name="twitter:card" content="summary_large_image">
-<meta name="twitter:site" content="${TWITTER_HANDLE}">
+<meta name="twitter:site" content="${X_HANDLE}">
 <meta name="twitter:title" content="${escapeAttr(ogTitle)}">
 <meta name="twitter:description" content="${escapeAttr(description)}">
 <meta name="twitter:image" content="${ogImage}">
