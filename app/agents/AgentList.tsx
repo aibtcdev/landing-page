@@ -238,7 +238,7 @@ export default function AgentList({ agents }: AgentListProps) {
           type="text"
           value={searchQuery}
           onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by name, address, or Twitter handle..."
+          placeholder="Search by name, address, or X handle..."
           className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] py-2 pl-9 pr-3 text-[14px] text-white placeholder-white/30 outline-none transition-colors focus:border-white/20 focus:bg-white/[0.04]"
         />
         {searchQuery && (
