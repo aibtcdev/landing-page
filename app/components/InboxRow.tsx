@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { formatRelativeTime } from "@/lib/utils";
 import { generateName } from "@/lib/name-generator";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
@@ -92,23 +93,33 @@ export default function InboxRow({
         </span>
 
         {/* Avatar */}
-        {/* eslint-disable-next-line @next/next/no-img-element */}
-        <img
-          src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(avatarAddress)}`}
-          alt=""
-          className={`shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06] ${compact ? "size-6" : "size-6 sm:size-7"}`}
-          loading="lazy"
-          width={28}
-          height={28}
-          onError={(e) => { e.currentTarget.style.display = "none"; }}
-        />
+        <Link
+          href={`/agents/${avatarAddress}`}
+          onClick={(e) => e.stopPropagation()}
+          className={`shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06] overflow-hidden ${compact ? "size-6" : "size-6 sm:size-7"}`}
+        >
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(avatarAddress)}`}
+            alt=""
+            className="size-full object-cover"
+            loading="lazy"
+            width={28}
+            height={28}
+            onError={(e) => { e.currentTarget.style.display = "none"; }}
+          />
+        </Link>
 
         {/* Name + preview — stacks on mobile, inline on desktop */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-1.5 sm:gap-2">
-            <span className={`shrink-0 max-w-[120px] truncate text-[12px] sm:max-w-[180px] sm:text-[13px] ${isUnread ? "font-semibold text-white" : "text-white/60"}`}>
+            <Link
+              href={`/agents/${avatarAddress}`}
+              onClick={(e) => e.stopPropagation()}
+              className={`shrink-0 max-w-[120px] truncate text-[12px] hover:underline sm:max-w-[180px] sm:text-[13px] ${isUnread ? "font-semibold text-white" : "text-white/60"}`}
+            >
               {displayLabel}
-            </span>
+            </Link>
             {/* Status pill inline with name — mobile + desktop */}
             {hasReply && (
               <svg className="size-2.5 shrink-0 text-[#7DA2FF] sm:size-3" fill="currentColor" viewBox="0 0 20 20">
@@ -157,19 +168,21 @@ export default function InboxRow({
           {/* Original message with sender attribution */}
           <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-2.5 sm:p-3">
             <div className="mb-1.5 flex items-center gap-1.5">
-              {/* eslint-disable-next-line @next/next/no-img-element */}
-              <img
-                src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(senderBtcAddress)}`}
-                alt=""
-                className="size-4 rounded-full border border-white/[0.08] bg-white/[0.06]"
-                loading="lazy"
-                width="16"
-                height="16"
-                onError={(e) => { e.currentTarget.style.display = "none"; }}
-              />
-              <span className="text-[10px] font-medium text-white/70 sm:text-[11px]">
+              <Link href={`/agents/${senderBtcAddress}`} className="size-4 shrink-0 overflow-hidden rounded-full border border-white/[0.08] bg-white/[0.06]">
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
+                  src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(senderBtcAddress)}`}
+                  alt=""
+                  className="size-full object-cover"
+                  loading="lazy"
+                  width="16"
+                  height="16"
+                  onError={(e) => { e.currentTarget.style.display = "none"; }}
+                />
+              </Link>
+              <Link href={`/agents/${senderBtcAddress}`} className="text-[10px] font-medium text-white/70 hover:underline sm:text-[11px]">
                 {senderName}
-              </span>
+              </Link>
               <span className="ml-auto text-[9px] text-white/40 sm:text-[10px]">
                 {formatRelativeTime(sentAt)}
               </span>
@@ -197,19 +210,21 @@ export default function InboxRow({
           {reply && (
             <div className="rounded-md border border-[#7DA2FF]/20 bg-[#7DA2FF]/5 p-2.5 sm:p-3">
               <div className="mb-1.5 flex items-center gap-1.5">
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(reply.fromAddress)}`}
-                  alt=""
-                  className="size-4 rounded-full border border-[#7DA2FF]/20 bg-white/[0.06]"
-                  loading="lazy"
-                  width="16"
-                  height="16"
-                  onError={(e) => { e.currentTarget.style.display = "none"; }}
-                />
-                <span className="text-[10px] font-medium text-[#7DA2FF] sm:text-[11px]">
+                <Link href={`/agents/${reply.fromAddress}`} className="size-4 shrink-0 overflow-hidden rounded-full border border-[#7DA2FF]/20 bg-white/[0.06]">
+                  {/* eslint-disable-next-line @next/next/no-img-element */}
+                  <img
+                    src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(reply.fromAddress)}`}
+                    alt=""
+                    className="size-full object-cover"
+                    loading="lazy"
+                    width="16"
+                    height="16"
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  />
+                </Link>
+                <Link href={`/agents/${reply.fromAddress}`} className="text-[10px] font-medium text-[#7DA2FF] hover:underline sm:text-[11px]">
                   {generateName(reply.fromAddress)}
-                </span>
+                </Link>
                 <span className="text-[9px] text-[#7DA2FF]/60 sm:text-[10px]">replied</span>
                 <span className="ml-auto text-[9px] text-white/40 sm:text-[10px]">
                   {formatRelativeTime(reply.repliedAt)}
