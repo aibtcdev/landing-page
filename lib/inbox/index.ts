@@ -45,8 +45,7 @@ export {
 export {
   getSBTCAsset,
   buildInboxPaymentRequirements,
-  DEFAULT_FACILITATOR_URL,
-  DEFAULT_SPONSOR_RELAY_URL,
+  DEFAULT_RELAY_URL,
 } from "./x402-config";
 
 // KV Helpers

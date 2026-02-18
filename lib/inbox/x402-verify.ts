@@ -24,8 +24,7 @@ import { deserializeTransaction, AuthType } from "@stacks/transactions";
 import {
   buildInboxPaymentRequirements,
   getSBTCAsset,
-  DEFAULT_FACILITATOR_URL,
-  DEFAULT_SPONSOR_RELAY_URL,
+  DEFAULT_RELAY_URL,
 } from "./x402-config";
 import type { Logger } from "../logging";
 
@@ -56,14 +55,13 @@ export interface InboxPaymentVerification {
  * - Sponsor pays the transaction fee
  *
  * For non-sponsored transactions:
- * - Settles via facilitator.stacksx402.com
+ * - Settles via x402-relay.aibtc.com
  * - Sender pays the transaction fee
  *
  * @param paymentPayload - x402 v2 payment payload from payment-signature header (base64-decoded)
  * @param recipientStxAddress - Recipient agent's STX address (from AgentRecord)
  * @param network - Stacks network (from env.X402_NETWORK or default "mainnet")
- * @param facilitatorUrl - x402 facilitator URL (from env.X402_FACILITATOR_URL or default)
- * @param sponsorRelayUrl - x402 sponsor relay URL (from env.X402_SPONSOR_RELAY_URL or default)
+ * @param relayUrl - x402 relay URL for all settlement (from env.X402_RELAY_URL or default)
  * @param logger - Logger instance for observability
  * @returns Verification result with payer address and message ID
  */
@@ -71,8 +69,7 @@ export async function verifyInboxPayment(
   paymentPayload: PaymentPayloadV2,
   recipientStxAddress: string,
   network: "mainnet" | "testnet" = "mainnet",
-  facilitatorUrl: string = DEFAULT_FACILITATOR_URL,
-  sponsorRelayUrl: string = DEFAULT_SPONSOR_RELAY_URL,
+  relayUrl: string = DEFAULT_RELAY_URL,
   logger?: Logger
 ): Promise<InboxPaymentVerification> {
   const log = logger || {
@@ -129,16 +126,16 @@ export async function verifyInboxPayment(
   const tx = deserializeTransaction(txHex);
   const isSponsored = tx.auth.authType === AuthType.Sponsored;
 
-  // Route sponsored transactions to relay, non-sponsored to facilitator
+  // Route all transactions through the relay (sponsored and non-sponsored)
   let settleResult: SettlementResponseV2;
 
   if (isSponsored) {
     log.debug("Routing sponsored transaction to relay", {
-      relayUrl: sponsorRelayUrl,
+      relayUrl,
     });
 
     try {
-      const relayResponse = await fetch(`${sponsorRelayUrl}/relay`, {
+      const relayResponse = await fetch(`${relayUrl}/relay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -188,19 +185,19 @@ export async function verifyInboxPayment(
       };
     }
   } else {
-    log.debug("Settling non-sponsored transaction via facilitator", {
-      facilitatorUrl,
+    log.debug("Settling non-sponsored transaction via relay", {
+      relayUrl,
     });
 
-    const verifier = new X402PaymentVerifier(facilitatorUrl);
+    const verifier = new X402PaymentVerifier(relayUrl);
 
     try {
       settleResult = await verifier.settle(paymentPayload, {
         paymentRequirements,
       });
-      log.debug("Facilitator settle result", { settleResult });
+      log.debug("Relay settle result", { settleResult });
     } catch (error) {
-      log.error("Facilitator settlement exception", {
+      log.error("Relay settlement exception", {
         error: String(error),
       });
       return {

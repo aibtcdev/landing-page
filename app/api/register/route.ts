@@ -17,7 +17,7 @@ import { generateClaimCode } from "@/lib/claim-code";
 import { isPartialAgentRecord } from "@/lib/attention/types";
 import { TWITTER_HANDLE } from "@/lib/constants";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
-import { provisionSponsorKey, DEFAULT_SPONSOR_RELAY_URL } from "@/lib/sponsor";
+import { provisionSponsorKey, DEFAULT_RELAY_URL } from "@/lib/sponsor";
 import { validateTaprootAddress } from "@/lib/challenge";
 
 export async function GET() {
@@ -373,7 +373,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Phase 2: Sponsor provisioning + BNS lookup (only after confirming no duplicate)
-    const relayUrl = env.X402_SPONSOR_RELAY_URL || DEFAULT_SPONSOR_RELAY_URL;
+    const relayUrl = env.X402_RELAY_URL || DEFAULT_RELAY_URL;
 
     const [sponsorResult, bnsName] = await Promise.all([
       provisionSponsorKey(btcResult.address, bitcoinSignature, EXPECTED_MESSAGE, relayUrl, log),

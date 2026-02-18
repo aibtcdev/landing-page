@@ -14,8 +14,7 @@ import {
   INBOX_PRICE_SATS,
   buildInboxPaymentRequirements,
   buildSenderAuthMessage,
-  DEFAULT_FACILITATOR_URL,
-  DEFAULT_SPONSOR_RELAY_URL,
+  DEFAULT_RELAY_URL,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent as lookupSenderAgent } from "@/lib/agent-lookup";
@@ -373,10 +372,8 @@ export async function POST(
 
   // Extract network config once (used by both 402 response and payment verification)
   const network = (env.X402_NETWORK as "mainnet" | "testnet") || "mainnet";
-  const facilitatorUrl =
-    env.X402_FACILITATOR_URL || DEFAULT_FACILITATOR_URL;
-  const sponsorRelayUrl =
-    env.X402_SPONSOR_RELAY_URL || DEFAULT_SPONSOR_RELAY_URL;
+  const relayUrl =
+    env.X402_RELAY_URL || DEFAULT_RELAY_URL;
 
   logger.info("Inbox message submission", { address });
 
@@ -525,8 +522,7 @@ export async function POST(
     paymentPayload,
     agent.stxAddress,
     network,
-    facilitatorUrl,
-    sponsorRelayUrl,
+    relayUrl,
     logger
   );
 
