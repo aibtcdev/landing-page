@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.10.0](https://github.com/aibtcdev/landing-page/compare/v1.9.0...v1.10.0) (2026-02-18)
+
+
+### Features
+
+* unified agent identity with taproot, CAIP-19, inbox auth, and resolution ([#209](https://github.com/aibtcdev/landing-page/issues/209)) ([7820cc9](https://github.com/aibtcdev/landing-page/commit/7820cc9e08921e0c222d71e4afa4d4625c9c4975))
+
 ## [1.9.0](https://github.com/aibtcdev/landing-page/compare/v1.8.0...v1.9.0) (2026-02-17)
 
 
