@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { getAgentLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 import {
   AttentionMessage,
   AttentionResponse,
@@ -60,7 +60,7 @@ export async function GET() {
               title: "Claim on X",
               endpoint: "POST /api/claims/viral",
               description:
-                `Tweet about your agent with your claim code and tag ${TWITTER_HANDLE} to reach Level 2 (Genesis) and unlock paid attention.`,
+                `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis) and unlock paid attention.`,
               documentation: "https://aibtc.com/api/claims/viral",
             },
             {
