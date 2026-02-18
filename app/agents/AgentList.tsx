@@ -2,6 +2,7 @@
 
 import React, { useState, useMemo } from "react";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 import LevelBadge from "../components/LevelBadge";
 import Tooltip from "../components/Tooltip";
 import SendMessageModal from "../components/SendMessageModal";
@@ -44,24 +45,42 @@ function IdentityIcon() {
 }
 
 export default function AgentList({ agents }: AgentListProps) {
+  const router = useRouter();
   const [sortBy, setSortBy] = useState<SortField>("activity");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
+  const [searchQuery, setSearchQuery] = useState("");
   const [showLevelInfo, setShowLevelInfo] = useState(false);
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
   const [expandedDescription, setExpandedDescription] = useState<string | null>(null);
 
   const filteredAndSortedAgents = useMemo(() => {
     let filtered = agents;
+
+    // Search filter
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      filtered = filtered.filter((a) => {
+        const name = generateName(a.btcAddress).toLowerCase();
+        return (
+          name.includes(q) ||
+          a.btcAddress.toLowerCase().includes(q) ||
+          a.stxAddress.toLowerCase().includes(q) ||
+          (a.bnsName && a.bnsName.toLowerCase().includes(q)) ||
+          (a.owner && a.owner.toLowerCase().includes(q))
+        );
+      });
+    }
+
     if (levelFilter === "genesis") {
-      filtered = agents.filter((a) => (a.level ?? 0) === 2);
+      filtered = filtered.filter((a) => (a.level ?? 0) === 2);
     } else if (levelFilter === "registered") {
-      filtered = agents.filter((a) => (a.level ?? 0) === 1);
+      filtered = filtered.filter((a) => (a.level ?? 0) === 1);
     } else if (levelFilter === "identity") {
-      filtered = agents.filter((a) => a.erc8004AgentId != null);
+      filtered = filtered.filter((a) => a.erc8004AgentId != null);
     } else if (levelFilter === "active24h") {
       const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
-      filtered = agents.filter((a) =>
+      filtered = filtered.filter((a) =>
         a.lastActiveAt && new Date(a.lastActiveAt).getTime() > oneDayAgo
       );
     }
@@ -96,7 +115,7 @@ export default function AgentList({ agents }: AgentListProps) {
     });
 
     return sorted;
-  }, [agents, sortBy, sortOrder, levelFilter]);
+  }, [agents, sortBy, sortOrder, levelFilter, searchQuery]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -109,16 +128,31 @@ export default function AgentList({ agents }: AgentListProps) {
 
   const filterCounts = useMemo(() => {
     const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;
+    // Apply search filter first so counts reflect search results
+    let base = agents;
+    if (searchQuery.trim()) {
+      const q = searchQuery.trim().toLowerCase();
+      base = agents.filter((a) => {
+        const name = generateName(a.btcAddress).toLowerCase();
+        return (
+          name.includes(q) ||
+          a.btcAddress.toLowerCase().includes(q) ||
+          a.stxAddress.toLowerCase().includes(q) ||
+          (a.bnsName && a.bnsName.toLowerCase().includes(q)) ||
+          (a.owner && a.owner.toLowerCase().includes(q))
+        );
+      });
+    }
     return {
-      all: agents.length,
-      genesis: agents.filter((a) => (a.level ?? 0) === 2).length,
-      registered: agents.filter((a) => (a.level ?? 0) === 1).length,
-      identity: agents.filter((a) => a.erc8004AgentId != null).length,
-      active24h: agents.filter((a) =>
+      all: base.length,
+      genesis: base.filter((a) => (a.level ?? 0) === 2).length,
+      registered: base.filter((a) => (a.level ?? 0) === 1).length,
+      identity: base.filter((a) => a.erc8004AgentId != null).length,
+      active24h: base.filter((a) =>
         a.lastActiveAt && new Date(a.lastActiveAt).getTime() > oneDayAgo
       ).length,
     };
-  }, [agents]);
+  }, [agents, searchQuery]);
 
   if (agents.length === 0) {
     return (
@@ -192,6 +226,30 @@ export default function AgentList({ agents }: AgentListProps) {
               </Link>
             </div>
           </div>
+        )}
+      </div>
+
+      {/* Search */}
+      <div className="mb-3 relative">
+        <svg className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+        </svg>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="Search by name, address, or Twitter handle..."
+          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] py-2 pl-9 pr-3 text-[14px] text-white placeholder-white/30 outline-none transition-colors focus:border-white/20 focus:bg-white/[0.04]"
+        />
+        {searchQuery && (
+          <button
+            onClick={() => setSearchQuery("")}
+            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
+          >
+            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
         )}
       </div>
 
@@ -292,7 +350,8 @@ export default function AgentList({ agents }: AgentListProps) {
               return (
                 <tr
                   key={agent.stxAddress}
-                  className="h-[60px] border-b border-white/[0.04] transition-colors duration-200 hover:bg-white/[0.03]"
+                  onClick={() => router.push(`/agents/${agent.btcAddress}`)}
+                  className="h-[60px] cursor-pointer border-b border-white/[0.04] transition-colors duration-200 hover:bg-white/[0.03]"
                 >
                   <td className="px-5 py-3.5">
                     <Link href={`/agents/${agent.btcAddress}`} className="flex items-center gap-3">
@@ -408,7 +467,6 @@ export default function AgentList({ agents }: AgentListProps) {
       <div className="hidden max-md:block space-y-2">
         {filteredAndSortedAgents.map((agent) => {
           const displayName = generateName(agent.btcAddress);
-          const isDescriptionExpanded = expandedDescription === agent.btcAddress;
 
           return (
             <div
@@ -438,17 +496,9 @@ export default function AgentList({ agents }: AgentListProps) {
                     <span className="text-[12px] text-[#7DA2FF]/60">{agent.bnsName}</span>
                   )}
                   {agent.description && (
-                    <button
-                      onClick={(e) => {
-                        e.preventDefault();
-                        setExpandedDescription(isDescriptionExpanded ? null : agent.btcAddress);
-                      }}
-                      className="mt-0.5 block text-left text-[13px] leading-relaxed text-white/50 hover:text-white/60 transition-colors w-full"
-                    >
-                      <span className={isDescriptionExpanded ? "" : "line-clamp-2"}>
-                        {agent.description}
-                      </span>
-                    </button>
+                    <span className="mt-0.5 block text-[13px] leading-relaxed text-white/50 line-clamp-2">
+                      {agent.description}
+                    </span>
                   )}
                   <div className="mt-1 flex items-center gap-3 text-[11px]">
                     <span className="font-mono text-white/30">
@@ -487,7 +537,7 @@ export default function AgentList({ agents }: AgentListProps) {
 
       {/* Count + link below table */}
       <div className="mt-3 flex items-center justify-between text-[13px] text-white/40 max-md:flex-col max-md:gap-2 max-md:items-start">
-        <span>{filteredAndSortedAgents.length} {filteredAndSortedAgents.length === 1 ? "agent" : "agents"}{levelFilter !== "all" ? ` (${levelFilter})` : " registered"}</span>
+        <span>{filteredAndSortedAgents.length} {filteredAndSortedAgents.length === 1 ? "agent" : "agents"}{searchQuery.trim() ? " found" : levelFilter !== "all" ? ` (${levelFilter})` : " registered"}</span>
         <a
           href="/api/agents"
           target="_blank"
