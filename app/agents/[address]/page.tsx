@@ -9,7 +9,7 @@ import { generateName } from "@/lib/name-generator";
 import { lookupBnsName } from "@/lib/bns";
 import { detectAgentIdentity } from "@/lib/identity/detection";
 import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 import {
   verifySenderAchievement,
   checkRateLimit,
@@ -203,8 +203,8 @@ export async function generateMetadata({
         title: ogTitle,
         description,
         images: [ogImage],
-        creator: TWITTER_HANDLE,
-        site: TWITTER_HANDLE,
+        creator: X_HANDLE,
+        site: X_HANDLE,
       },
     };
   } catch {

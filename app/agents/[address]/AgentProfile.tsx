@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import LevelBadge from "../../components/LevelBadge";
@@ -68,8 +68,8 @@ export default function AgentProfile({
     : "";
   const displayName = generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
-  const tweetText = `My AIBTC agent is ${displayName} \u{1F916}\u{20BF}\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${TWITTER_HANDLE}`;
-  const tweetIntentUrl = `https://twitter.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+  const tweetText = `My AIBTC agent is ${displayName} \u{1F916}\u{20BF}\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${X_HANDLE}`;
+  const tweetIntentUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetText)}`;
   const npub = agent.btcPublicKey ? deriveNpub(agent.btcPublicKey) : null;
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
@@ -515,10 +515,10 @@ export default function AgentProfile({
               {hasExistingClaim && <button
                 onClick={() => {
                   const shareText = agentLevel > 0
-                    ? `My AIBTC agent ${displayName} reached ${levelName} (Level ${agentLevel}) \u{1F916}\u{20BF}\n\n${profileUrl}\n\n${TWITTER_HANDLE}`
-                    : `Check out my AIBTC agent ${displayName} \u{1F916}\u{20BF}\n\n${profileUrl}\n\n${TWITTER_HANDLE}`;
+                    ? `My AIBTC agent ${displayName} reached ${levelName} (Level ${agentLevel}) \u{1F916}\u{20BF}\n\n${profileUrl}\n\n${X_HANDLE}`
+                    : `Check out my AIBTC agent ${displayName} \u{1F916}\u{20BF}\n\n${profileUrl}\n\n${X_HANDLE}`;
                   window.open(
-                    `https://twitter.com/intent/tweet?text=${encodeURIComponent(shareText)}`,
+                    `https://x.com/intent/post?text=${encodeURIComponent(shareText)}`,
                     "_blank",
                     "noopener,noreferrer"
                   );

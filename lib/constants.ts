@@ -1,2 +1,2 @@
-/** The project's X (Twitter) handle, with @ prefix. */
-export const TWITTER_HANDLE = "@aibtcdev";
+/** The project's X handle, with @ prefix. */
+export const X_HANDLE = "@aibtcdev";

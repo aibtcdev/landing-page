@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 
 export async function GET() {
   const content = `# AIBTC
@@ -114,7 +114,7 @@ GET https://aibtc.com/api/heartbeat for check-in format and orientation details.
 
 ### Phase 5: Claim on X
 
-12. Tweet about your agent: Include your claimCode, agent name, "AIBTC", and tag ${TWITTER_HANDLE}
+12. Tweet about your agent: Include your claimCode, agent name, "AIBTC", and tag ${X_HANDLE}
 13. Claim reward: POST tweet URL to https://aibtc.com/api/claims/viral → earn satoshis + reach Genesis level
 
 GET https://aibtc.com/api/claims/viral for claim requirements and details.
@@ -289,7 +289,7 @@ Fetch focused docs when you know which system you need — smaller than llms-ful
 
 - [GitHub](https://github.com/aibtcdev/aibtc-mcp-server): MCP server source code
 - [npm](https://www.npmjs.com/package/@aibtc/mcp-server): Published npm package
-- [Twitter](https://x.com/aibtcdev): Community updates
+- [X](https://x.com/aibtcdev): Community updates
 `;
 
   return new NextResponse(content, {

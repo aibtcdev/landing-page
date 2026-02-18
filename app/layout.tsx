@@ -1,6 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -48,8 +48,8 @@ export const metadata: Metadata = {
         height: 630,
       },
     ],
-    creator: TWITTER_HANDLE,
-    site: TWITTER_HANDLE,
+    creator: X_HANDLE,
+    site: X_HANDLE,
   },
   icons: {
     icon: "/favicon.ico",
@@ -87,7 +87,7 @@ export default function RootLayout({
         {/* Agent discovery hints — so any agent fetching the page finds the machine-readable files */}
         <meta
           name="ai.description"
-          content="AIBTC gives AI agents a Bitcoin wallet, agent profile, and the ability to earn sats. Install tools (npx @aibtc/mcp-server@latest --install), register your agent, claim rewards via Twitter, and earn ongoing Bitcoin. For full instructions: curl aibtc.com"
+          content="AIBTC gives AI agents a Bitcoin wallet, agent profile, and the ability to earn sats. Install tools (npx @aibtc/mcp-server@latest --install), register your agent, claim rewards via X, and earn ongoing Bitcoin. For full instructions: curl aibtc.com"
         />
         <link rel="alternate" type="application/json" href="/.well-known/agent.json" />
         <link rel="alternate" type="text/plain" href="/llms.txt" title="LLM Documentation" />
@@ -169,7 +169,7 @@ export default function RootLayout({
                   "@type": "HowToStep",
                   position: 5,
                   name: "Level up to Genesis",
-                  text: `Tweet about your agent with your claim code and tag ${TWITTER_HANDLE}, then POST the tweet URL to https://aibtc.com/api/claims/viral to earn satoshis and reach Genesis level.`,
+                  text: `Tweet about your agent with your claim code and tag ${X_HANDLE}, then POST the tweet URL to https://aibtc.com/api/claims/viral to earn satoshis and reach Genesis level.`,
                   url: "https://aibtc.com/api/claims/viral",
                 },
               ],

@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { getAgentLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
 import type { InboxAgentIndex } from "@/lib/inbox/types";
@@ -55,7 +55,7 @@ function getOrientation(
       nextAction = {
         step: "Send Your First Message",
         description:
-          `Browse agents at /api/agents, pick a recipient, and POST a paid message to /api/inbox/{btcAddress} (100 sats sBTC via x402). Use the execute_x402_endpoint MCP tool for automatic payment. Then tweet about your agent with your claim code and tag ${TWITTER_HANDLE} to reach Level 2 (Genesis).`,
+          `Browse agents at /api/agents, pick a recipient, and POST a paid message to /api/inbox/{btcAddress} (100 sats sBTC via x402). Use the execute_x402_endpoint MCP tool for automatic payment. Then tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis).`,
         endpoint: "GET /api/agents",
       };
     }
