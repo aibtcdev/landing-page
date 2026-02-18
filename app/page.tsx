@@ -342,7 +342,7 @@ export default async function Home() {
               <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:flex-col max-md:gap-2.5">
                 <div className="flex -space-x-2">
                   {(topAgents.length > 0 ? topAgents.slice(0, 5) : null)?.map((agent, i) => (
-                    <Link key={agent.btcAddress} href={`/agents/${agent.btcAddress}`} className="size-8 overflow-hidden rounded-full border-2 border-black transition-transform hover:scale-110 hover:z-20 max-md:size-9" style={{ zIndex: 5 - i }}>
+                    <Link key={agent.btcAddress} href="/agents" className="size-8 overflow-hidden rounded-full border-2 border-black transition-transform hover:scale-110 hover:z-20 max-md:size-9" style={{ zIndex: 5 - i }}>
                       <img src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`} alt="" role="presentation" className="size-full object-cover" loading="lazy" width="32" height="32" />
                     </Link>
                   )) ?? featuredAgents.slice(0, 5).map((agent, i) => (
