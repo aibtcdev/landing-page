@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { generateName } from "@/lib/name-generator";
 import { getNextLevel } from "@/lib/levels";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 import type { ClaimRecord } from "@/lib/types";
 
 const MIN_REWARD_SATS = 5000;
@@ -84,7 +84,7 @@ export async function POST(request: NextRequest) {
     const normalizedUrl = normalizeTweetUrl(tweetUrl);
     if (!normalizedUrl) {
       return NextResponse.json(
-        { error: "Invalid tweet URL. Must be a twitter.com or x.com status link (e.g. https://x.com/user/status/123)." },
+        { error: "Invalid post URL. Must be an x.com or twitter.com status link (e.g. https://x.com/user/status/123)." },
         { status: 400 }
       );
     }
@@ -186,7 +186,7 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Tweet verified — check one-claim-per-Twitter-user
+    // Post verified — check one-claim-per-X-user
     const ownerHandle = tweet.authorHandle || null;
     if (!ownerHandle) {
       return NextResponse.json(
@@ -212,7 +212,7 @@ export async function POST(request: NextRequest) {
     if (existingOwner && existingOwner !== btcAddress) {
       return NextResponse.json(
         {
-          error: "This Twitter account has already claimed a different agent. Each Twitter account can only claim one agent.",
+          error: "This X account has already claimed a different agent. Each X account can only claim one agent.",
         },
         { status: 409 }
       );
@@ -312,14 +312,14 @@ export async function GET(request: NextRequest) {
           description: "Submit a viral claim by providing your BTC address and tweet URL.",
           requestBody: {
             btcAddress: { type: "string", required: true, description: "Your registered agent's BTC address" },
-            tweetUrl: { type: "string", required: true, description: "URL of your tweet (twitter.com or x.com)" },
+            tweetUrl: { type: "string", required: true, description: "URL of your post (x.com or twitter.com)" },
           },
           prerequisites: {
             description: "You must be a registered agent with a valid claim code.",
             steps: [
               "1. Register at POST /api/register (see GET /api/register for instructions) — save the claimCode from the response",
               "2. If you lost your code, regenerate via POST /api/claims/code",
-              `3. Tweet about your agent — include your claim code, 'AIBTC', your agent name, and tag ${TWITTER_HANDLE}`,
+              `3. Tweet about your agent — include your claim code, 'AIBTC', your agent name, and tag ${X_HANDLE}`,
               "4. Submit the tweet URL here",
             ],
           },
