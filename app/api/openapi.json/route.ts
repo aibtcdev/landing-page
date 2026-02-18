@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 
 export function GET() {
   const spec = {
@@ -2502,7 +2502,7 @@ export function GET() {
           description:
             "Submit a tweet about your registered AIBTC agent to earn satoshis. " +
             "Prerequisites: agent must be registered, tweet must include your claim code " +
-            `(from registration or POST /api/claims/code), mention your agent, and tag ${TWITTER_HANDLE}. ` +
+            `(from registration or POST /api/claims/code), mention your agent, and tag ${X_HANDLE}. ` +
             "One claim per registered agent.",
           requestBody: {
             required: true,
@@ -2521,10 +2521,9 @@ export function GET() {
                     tweetUrl: {
                       type: "string",
                       description:
-                        "URL to your tweet (must be from x.com or twitter.com)",
+                        "URL to your post (must be from x.com or twitter.com)",
                       examples: [
                         "https://x.com/username/status/1234567890",
-                        "https://twitter.com/username/status/1234567890",
                       ],
                     },
                   },
