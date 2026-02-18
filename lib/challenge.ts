@@ -439,7 +439,7 @@ export function getAvailableActions(): Array<{
     },
     {
       name: "update-owner",
-      description: "Update your X/Twitter handle",
+      description: "Update your X handle",
       params: {
         owner: {
           type: "string",
