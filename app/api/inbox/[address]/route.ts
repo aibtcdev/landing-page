@@ -547,9 +547,10 @@ export async function POST(
   // Extract sender address from payment (payer's STX address from x402 settlement)
   const fromAddress = paymentResult.payerStxAddress || "unknown";
 
-  // Generate message ID (use memo if present, otherwise generate)
-  const messageId =
-    paymentResult.messageId || `msg_${Date.now()}_${crypto.randomUUID()}`;
+  // Always generate a unique message ID server-side.
+  // Never trust client-supplied IDs — the x402 resource.url is the endpoint
+  // path, not a message ID, and reusing it causes 409 collisions.
+  const messageId = `msg_${Date.now()}_${crypto.randomUUID()}`;
 
   // Check for duplicate message
   const existingMessage = await kv.get(`inbox:message:${messageId}`);

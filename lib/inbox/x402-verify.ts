@@ -35,7 +35,8 @@ export interface InboxPaymentVerification {
   success: boolean;
   payerStxAddress?: string;
   paymentTxid?: string;
-  messageId?: string; // Extracted from payment memo (resource field)
+  /** @deprecated Message IDs are now always generated server-side in the route handler. */
+  messageId?: string;
   error?: string;
   errorCode?: string;
   settleResult?: SettlementResponseV2;
@@ -113,13 +114,8 @@ export async function verifyInboxPayment(
     };
   }
 
-  // Extract message ID from payment resource (if present in v2)
-  let messageId: string | undefined;
-  if (paymentPayload.resource?.url) {
-    // In v2, message ID might be in resource.url
-    messageId = paymentPayload.resource.url;
-    log.debug("Extracted resource from payload", { messageId });
-  }
+  // Message IDs are generated server-side in the route handler (not here).
+  // paymentPayload.resource.url is the endpoint URL, not a message ID.
 
   // Determine if transaction is sponsored using stacks.js deserialization
   const txHex = paymentPayload.payload.transaction;
@@ -238,7 +234,6 @@ export async function verifyInboxPayment(
   log.info("Inbox payment verified", {
     payerStxAddress,
     paymentTxid,
-    messageId,
     recipientStxAddress,
   });
 
@@ -246,7 +241,6 @@ export async function verifyInboxPayment(
     success: true,
     payerStxAddress,
     paymentTxid,
-    messageId,
     settleResult,
   };
 }
