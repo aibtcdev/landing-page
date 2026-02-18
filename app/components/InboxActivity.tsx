@@ -119,21 +119,12 @@ export default function InboxActivity({
         </div>
       </div>
 
-      {/* Stats row — compact inline */}
+      {/* Stats row */}
       {hasMessages && (
-        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/40 sm:text-[12px]">
+        <div className="mb-3 flex items-center gap-3 text-[11px] text-white/40 sm:gap-4 sm:text-[12px]">
           <span>{receivedCount} received</span>
           <span>{sentCount} sent</span>
           {repliedCount > 0 && <span>{repliedCount} replied</span>}
-          {data.inbox.economics && (
-            <span className="lg:hidden">
-              <span className="text-[#F7931A]">{data.inbox.economics.satsReceived.toLocaleString()}</span> earned
-              {" / "}
-              <span className="text-white/60">{data.inbox.economics.satsSent.toLocaleString()}</span> spent
-              {" / "}
-              <span className={data.inbox.economics.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}>{data.inbox.economics.satsNet.toLocaleString()}</span> net
-            </span>
-          )}
         </div>
       )}
 
