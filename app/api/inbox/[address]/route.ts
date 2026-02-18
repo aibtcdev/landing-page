@@ -10,13 +10,12 @@ import {
   updateSentIndex,
   listInboxMessages,
   listSentMessages,
-  getSentIndex,
   INBOX_PRICE_SATS,
   buildInboxPaymentRequirements,
   buildSenderAuthMessage,
+  DEFAULT_RELAY_URL,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
-import { lookupAgent as lookupSenderAgent } from "@/lib/agent-lookup";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
@@ -371,10 +370,8 @@ export async function POST(
 
   // Extract network config once (used by both 402 response and payment verification)
   const network = (env.X402_NETWORK as "mainnet" | "testnet") || "mainnet";
-  const facilitatorUrl =
-    env.X402_FACILITATOR_URL || "https://facilitator.stacksx402.com";
-  const sponsorRelayUrl =
-    env.X402_SPONSOR_RELAY_URL || "https://x402-relay.aibtc.com";
+  const relayUrl =
+    env.X402_RELAY_URL || DEFAULT_RELAY_URL;
 
   logger.info("Inbox message submission", { address });
 
@@ -523,8 +520,7 @@ export async function POST(
     paymentPayload,
     agent.stxAddress,
     network,
-    facilitatorUrl,
-    sponsorRelayUrl,
+    relayUrl,
     logger
   );
 
@@ -620,7 +616,7 @@ export async function POST(
   // Resolve sender's BTC address from their STX address (for sent index)
   const senderAgent =
     fromAddress !== "unknown"
-      ? await lookupSenderAgent(kv, fromAddress)
+      ? await lookupAgent(kv, fromAddress)
       : null;
 
   // Store message, update recipient inbox, and update sender sent index in parallel

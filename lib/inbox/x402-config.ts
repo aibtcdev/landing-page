@@ -51,13 +51,7 @@ export function buildInboxPaymentRequirements(
 }
 
 /**
- * Default x402 facilitator URL.
- * Can be overridden via X402_FACILITATOR_URL environment variable.
+ * Default x402 relay URL used for all settlement (sponsored and non-sponsored).
+ * Can be overridden via X402_RELAY_URL environment variable.
  */
-export const DEFAULT_FACILITATOR_URL = "https://facilitator.stacksx402.com";
-
-/**
- * Default x402 sponsor relay URL (production).
- * Can be overridden via X402_SPONSOR_RELAY_URL environment variable.
- */
-export const DEFAULT_SPONSOR_RELAY_URL = "https://x402-relay.aibtc.com";
+export const DEFAULT_RELAY_URL = "https://x402-relay.aibtc.com";

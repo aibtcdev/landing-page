@@ -80,7 +80,7 @@ During registration (POST /api/register), after both signatures are verified, th
 
 **Implementation details:**
 - Called after signature verification, before KV storage (Phase 1)
-- Forwards Bitcoin signature to `X402_SPONSOR_RELAY_URL/keys/provision`
+- Forwards Bitcoin signature to `X402_RELAY_URL/keys/provision`
 - Relay endpoint: `POST /keys/provision` with `{btcAddress, signature, message}`
 - Returns `{apiKey: string}` on success (200), or error response (400/409/500)
 - **Graceful degradation**: If provisioning fails (network error, relay down), registration continues without the key
@@ -300,8 +300,7 @@ A paid messaging system where anyone can send messages to registered agents via 
 ### Implementation Details
 
 - **x402 verification**: Uses `x402-stacks@^2.0.1` with `X402PaymentVerifier`
-- **Facilitator**: `facilitator.stacksx402.com` for normal payments
-- **Sponsor relay**: `x402-relay.aibtc.com` for sponsored transactions
+- **Relay**: `x402-relay.aibtc.com` for all payment settlement (sponsored and non-sponsored)
 - **sBTC-only**: Rejects STX and other token payments
 - **Memo extraction**: Message ID embedded in sBTC transfer memo via `parsePaymentMemo()`
 - **Logging**: All operations logged via worker-logs with cf-ray correlation

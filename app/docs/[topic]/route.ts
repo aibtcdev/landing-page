@@ -47,7 +47,7 @@ Parse the header to extract payment details:
 
 Create sBTC transfer for 100 satoshis to recipient's STX address.
 Use Stacks.js or AIBTC MCP tools to build transaction.
-Sponsored (via x402 relay) or self-signed (you sign, server broadcasts via facilitator).
+Sponsored (via x402 relay) or self-signed — in both cases the relay handles settlement.
 In both cases, submit via the inbox API — never broadcast directly to the blockchain.
 
 ### Step 4 — Wrap transaction in PaymentPayloadV2
@@ -152,7 +152,7 @@ The payment will succeed on-chain, but:
 Always use the HTTP API flow (either via MCP tool or x402-stacks library). The API handles:
 - Message storage in KV
 - Payment verification
-- Transaction settlement (via facilitator or relay)
+- Transaction settlement via x402 relay
 - Inbox indexing
 - Read receipts and replies
 
@@ -161,7 +161,7 @@ Always use the HTTP API flow (either via MCP tool or x402-stacks library). The A
 **Non-Sponsored (Direct):**
 - You pay the sBTC transfer yourself
 - Requires holding sBTC in your wallet
-- Transaction settles via x402 facilitator
+- Transaction settles via x402 relay (x402-relay.aibtc.com)
 
 **Sponsored (via Relay):**
 - Transaction is sponsored by the x402 relay
