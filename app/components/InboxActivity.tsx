@@ -3,8 +3,8 @@
 import { useState } from "react";
 import dynamic from "next/dynamic";
 import useSWR from "swr";
-import { useRouter } from "next/navigation";
-import InboxMessage from "./InboxMessage";
+import Link from "next/link";
+import InboxList from "./InboxList";
 import { fetcher } from "@/lib/fetcher";
 import { generateName } from "@/lib/name-generator";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
@@ -53,7 +53,6 @@ export default function InboxActivity({
   stxAddress,
   className = "",
 }: InboxActivityProps) {
-  const router = useRouter();
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const { data, error, isLoading: loading } = useSWR<InboxResponse>(
     `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5&view=all`,
@@ -70,11 +69,11 @@ export default function InboxActivity({
           <div className="h-4 w-24 animate-pulse rounded bg-white/[0.06]" />
           <div className="h-4 w-16 animate-pulse rounded bg-white/[0.06]" />
         </div>
-        <div className="space-y-2">
-          {Array.from({ length: 2 }).map((_, i) => (
+        <div className="space-y-1">
+          {Array.from({ length: 3 }).map((_, i) => (
             <div
               key={i}
-              className="h-24 animate-pulse rounded-lg bg-white/[0.06]"
+              className="h-11 animate-pulse rounded-lg bg-white/[0.06]"
             />
           ))}
         </div>
@@ -185,37 +184,21 @@ export default function InboxActivity({
         </div>
       )}
 
-      {/* Message list — threaded with inline replies */}
+      {/* Message list — compact row-based with accordion */}
       {hasMessages && (
-        <div className="space-y-2">
-          {messages.map((message) => (
-            <div
-              key={message.messageId}
-              role="link"
-              tabIndex={0}
-              className="cursor-pointer"
-              onClick={() => router.push(`/inbox/${btcAddress}`)}
-              onKeyDown={(e) => { if (e.key === "Enter" || e.key === " ") router.push(`/inbox/${btcAddress}`); }}
-            >
-              <InboxMessage
-                message={message}
-                showReply={!!replies[message.messageId]}
-                reply={replies[message.messageId] || null}
-                direction={message.direction}
-              />
-            </div>
-          ))}
+        <div className="rounded-lg border border-white/[0.08] bg-white/[0.02]">
+          <InboxList messages={messages} replies={replies} ownerBtcAddress={btcAddress} compact maxRows={5} />
         </div>
       )}
 
       {/* View all link */}
       {hasMessages && totalCount > 5 && (
-        <button
-          onClick={() => router.push(`/inbox/${btcAddress}`)}
-          className="mt-3 w-full rounded-lg border border-white/[0.06] bg-white/[0.02] py-2 text-center text-[11px] text-white/40 transition-colors hover:border-white/[0.1] hover:text-white/60 cursor-pointer"
+        <Link
+          href={`/inbox/${btcAddress}`}
+          className="mt-3 block w-full rounded-lg border border-white/[0.06] bg-white/[0.02] py-2 text-center text-[11px] text-white/40 transition-colors hover:border-white/[0.1] hover:text-white/60"
         >
           View all {totalCount} messages
-        </button>
+        </Link>
       )}
 
       {/* Send Message Modal */}
