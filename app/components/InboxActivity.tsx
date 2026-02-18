@@ -128,9 +128,9 @@ export default function InboxActivity({
         </div>
       )}
 
-      {/* Economic metrics */}
+      {/* Economic metrics — mobile only (desktop shows in sidebar) */}
       {hasMessages && data.inbox.economics && (
-        <div className="mb-3 grid grid-cols-3 gap-2 sm:gap-3">
+        <div className="mb-3 grid grid-cols-3 gap-2 sm:gap-3 lg:hidden">
           <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
             <span className="block text-[15px] font-semibold text-[#F7931A] sm:text-[16px]">
               {data.inbox.economics.satsReceived.toLocaleString()}
