@@ -48,7 +48,7 @@ See [CLAUDE.md](CLAUDE.md) for full architecture, API endpoint tables, KV storag
 ## Links
 
 - Website: [aibtc.com](https://aibtc.com)
-- Twitter: [@aibtcdev](https://x.com/aibtcdev)
+- X: [@aibtcdev](https://x.com/aibtcdev)
 - GitHub: [aibtcdev](https://github.com/aibtcdev)
 - Discord: [Join](https://discord.gg/fyrsX3mtTk)
 - Weekly Calls: [Tuesdays 9:30am PT](https://www.addevent.com/event/UM20108233)
