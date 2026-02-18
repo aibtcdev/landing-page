@@ -58,11 +58,15 @@ export default function InboxRow({
         <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-[#F7931A]" />
       )}
 
-      {/* Header: avatar + name + direction + time */}
-      <div className="mb-2 flex items-center gap-2.5 sm:gap-3">
+      {/* Header: direction + avatar + name + sats + time */}
+      <div className="mb-2 flex items-center gap-2 sm:gap-2.5">
+        <span className={`shrink-0 text-[11px] font-medium uppercase tracking-wide sm:text-[12px] ${isSent ? "text-[#7DA2FF]/70" : "text-white/40"}`}>
+          {isSent ? "To" : "From"}
+        </span>
+
         <Link
           href={`/agents/${avatarAddress}`}
-          className={`shrink-0 rounded-full border overflow-hidden bg-white/[0.06] ${compact ? "size-8" : "size-8 sm:size-9"} ${isUnread ? "border-[#F7931A]/30" : "border-white/10"}`}
+          className={`shrink-0 rounded-full border overflow-hidden bg-white/[0.06] ${compact ? "size-7" : "size-7 sm:size-8"} ${isUnread ? "border-[#F7931A]/30" : "border-white/10"}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -70,25 +74,18 @@ export default function InboxRow({
             alt=""
             className="size-full object-cover"
             loading="lazy"
-            width={36}
-            height={36}
+            width={32}
+            height={32}
             onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         </Link>
 
-        <div className="min-w-0 flex-1">
-          <div className="flex items-center gap-1.5">
-            <span className={`text-[11px] font-medium uppercase tracking-wide sm:text-[12px] ${isSent ? "text-[#7DA2FF]/70" : "text-white/40"}`}>
-              {isSent ? "To" : "From"}
-            </span>
-            <Link
-              href={`/agents/${avatarAddress}`}
-              className={`truncate text-[13px] hover:underline sm:text-[14px] ${isUnread ? "font-semibold text-white" : "font-medium text-white/80"}`}
-            >
-              {displayLabel}
-            </Link>
-          </div>
-        </div>
+        <Link
+          href={`/agents/${avatarAddress}`}
+          className={`min-w-0 flex-1 truncate text-[13px] hover:underline sm:text-[14px] ${isUnread ? "font-semibold text-white" : "font-medium text-white/80"}`}
+        >
+          {displayLabel}
+        </Link>
 
         <span className="inline-flex shrink-0 items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20 sm:text-[11px]">
           {paymentSatoshis.toLocaleString()} sats
