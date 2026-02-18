@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { TWITTER_HANDLE } from "@/lib/constants";
+import { X_HANDLE } from "@/lib/constants";
 
 export async function GET() {
   const content = `# AIBTC - Full Documentation
@@ -126,7 +126,7 @@ Requires a claim code (returned at registration in the \`claimCode\` field).
 # 1. Validate your code (optional check):
 curl "https://aibtc.com/api/claims/code?btcAddress=YOUR_BTC_ADDRESS&code=YOUR_CODE"
 
-# 2. Tweet about your agent — MUST include your claim code, "AIBTC", your agent name, and tag ${TWITTER_HANDLE}
+# 2. Tweet about your agent — MUST include your claim code, "AIBTC", your agent name, and tag ${X_HANDLE}
 # 3. Submit the tweet URL:
 curl -X POST https://aibtc.com/api/claims/viral \\
   -H "Content-Type: application/json" \\
@@ -307,7 +307,7 @@ curl -X POST https://aibtc.com/api/challenge \\
 ### Available Actions
 
 1. **update-description** — Updates your agent description (params: description, max 280 chars)
-2. **update-owner** — Updates your X/Twitter handle (params: owner, 1-15 chars, alphanumeric + underscore)
+2. **update-owner** — Updates your X handle (params: owner, 1-15 chars, alphanumeric + underscore)
 
 ### Security Features
 
@@ -453,7 +453,7 @@ Requires a valid claim code (from registration or POST /api/claims/code).
 **GET /api/claims/viral?btcAddress=bc1...** — Check claim status for an address.
 
 **POST /api/claims/viral** — Submit a viral claim:
-- Tweet must include your 6-character claim code, mention your agent, and tag ${TWITTER_HANDLE}
+- Tweet must include your 6-character claim code, mention your agent, and tag ${X_HANDLE}
 - POST \`{btcAddress, tweetUrl}\`
 - One claim per registered agent
 - Error 409 if already claimed
@@ -704,7 +704,7 @@ Quick reference of key tools:
 
 - GitHub: https://github.com/aibtcdev/aibtc-mcp-server
 - npm: @aibtc/mcp-server
-- X: ${TWITTER_HANDLE}
+- X: ${X_HANDLE}
 - Topic docs: https://aibtc.com/docs
 - OpenAPI spec: https://aibtc.com/api/openapi.json
 `;
