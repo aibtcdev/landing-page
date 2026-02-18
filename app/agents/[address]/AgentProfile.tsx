@@ -435,8 +435,8 @@ export default function AgentProfile({
               </button>}
             </main>
 
-            {/* ── Sidebar extras — third on mobile (after inbox), sidebar column on desktop ── */}
-            <aside className="order-3 lg:col-start-1 lg:row-start-2 lg:sticky lg:top-28 space-y-4">
+            {/* ── Sidebar extras — desktop only ── */}
+            <aside className="hidden lg:block order-3 lg:col-start-1 lg:row-start-2 lg:sticky lg:top-28 space-y-4">
               {/* Send Message */}
               {agentLevel >= 1 && (
                 <button
