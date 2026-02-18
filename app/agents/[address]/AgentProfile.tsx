@@ -20,7 +20,7 @@ import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
 import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
-import { deriveNpub } from "@/lib/nostr";
+
 
 interface ClaimInfo {
   status: "pending" | "verified" | "rewarded" | "failed";
@@ -70,7 +70,6 @@ export default function AgentProfile({
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const tweetText = `My AIBTC agent is ${displayName} \u{1F916}\u{20BF}\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${X_HANDLE}`;
   const tweetIntentUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetText)}`;
-  const npub = agent.btcPublicKey ? deriveNpub(agent.btcPublicKey) : null;
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
   const handleValidateCode = async () => {
@@ -164,8 +163,8 @@ export default function AgentProfile({
         <div className="w-full max-w-[1200px] max-lg:max-w-[520px]">
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
 
-            {/* ── Sidebar ── */}
-            <aside className="lg:sticky lg:top-28 space-y-4">
+            {/* ── Identity header — always first on mobile ── */}
+            <div className="order-1 lg:col-start-1 lg:row-start-1 space-y-4">
               {/* Identity card */}
               <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-5">
                 <div className="flex flex-col items-center text-center">
@@ -220,118 +219,24 @@ export default function AgentProfile({
                   {agent.description && (
                     <p className="mt-2 text-[13px] leading-relaxed text-white/50">{agent.description}</p>
                   )}
-                </div>
-              </div>
-
-              {/* Addresses */}
-              <div className="space-y-2">
-                <a
-                  href={`https://mempool.space/address/${agent.btcAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 transition-colors hover:border-white/[0.12]"
-                >
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Bitcoin</span>
-                  <span className="mt-0.5 block font-mono text-sm max-lg:text-xs text-[#F7931A]">
-                    {truncateAddress(agent.btcAddress)}
-                  </span>
-                </a>
-                <a
-                  href={`https://explorer.hiro.so/address/${agent.stxAddress}?chain=mainnet`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 transition-colors hover:border-white/[0.12]"
-                >
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Stacks</span>
-                  <span className="mt-0.5 block font-mono text-sm max-lg:text-xs text-[#A855F7]">
-                    {truncateAddress(agent.stxAddress)}
-                  </span>
-                </a>
-                {npub && (
+                  {/* BTC address inline */}
                   <a
-                    href={`https://njump.me/${npub}`}
+                    href={`https://mempool.space/address/${agent.btcAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 transition-colors hover:border-white/[0.12]"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2.5 py-1 font-mono text-xs text-[#F7931A] transition-colors hover:bg-white/[0.08]"
                   >
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Nostr</span>
-                    <span className="mt-0.5 block font-mono text-sm max-lg:text-xs text-[#8B5CF6]">
-                      {npub.slice(0, 12)}...{npub.slice(-8)}
-                    </span>
+                    <svg className="size-3 text-[#F7931A]/60" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.638 14.904c-1.602 6.43-8.113 10.34-14.542 8.736C2.67 22.05-1.244 15.525.362 9.105 1.962 2.67 8.475-1.243 14.9.358c6.43 1.605 10.342 8.115 8.738 14.546z" />
+                    </svg>
+                    {truncateAddress(agent.btcAddress)}
                   </a>
-                )}
-              </div>
-
-              {/* Send Message */}
-              {agentLevel >= 1 && (
-                <button
-                  onClick={() => setSendMessageOpen(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F7931A] px-4 py-3 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
-                >
-                  <svg
-                    className="size-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                  Send Message
-                </button>
-              )}
-
-              {/* Level progress */}
-              <LevelProgress
-                level={agentLevel}
-                nextLevel={nextLevel}
-                className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4"
-              />
-
-              {/* Activity — show for level 1+ agents */}
-              {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-2 w-2 rounded-full"
-                        style={{
-                          backgroundColor: getActivityStatus(agent.lastActiveAt).color,
-                        }}
-                      />
-                      <span className="text-sm font-medium text-white">Activity</span>
-                    </div>
-                    {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
-                      <span className="text-xs text-white/50">
-                        {agent.checkInCount} check-in{agent.checkInCount === 1 ? "" : "s"}
-                      </span>
-                    )}
-                  </div>
-                  {agent.lastActiveAt ? (
-                    <p className="mt-1.5 text-xs text-white/40">
-                      Last active {formatRelativeTime(agent.lastActiveAt)}
-                    </p>
-                  ) : (
-                    <p className="mt-1.5 text-xs text-white/40">
-                      No activity yet
-                    </p>
-                  )}
                 </div>
-              )}
-
-              {/* Footer links — desktop only */}
-              <div className="hidden lg:flex items-center justify-between text-xs text-white/40">
-                <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
-                <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
               </div>
-            </aside>
+            </div>
 
-            {/* ── Main content ── */}
-            <main className="space-y-6 min-w-0">
+            {/* ── Main content — second on mobile (inbox is first thing here) ── */}
+            <main className="order-2 lg:col-start-2 lg:row-start-1 lg:row-end-[-1] space-y-6 min-w-0">
               {/* Inbox — show for level 1+ agents */}
               {agentLevel >= 1 && (
                 <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
@@ -528,13 +433,67 @@ export default function AgentProfile({
                 </svg>
                 Share your level
               </button>}
+            </main>
 
-              {/* Footer links — mobile only */}
-              <div className="lg:hidden flex items-center justify-between text-xs text-white/40">
+            {/* ── Sidebar extras — third on mobile (after inbox), sidebar column on desktop ── */}
+            <aside className="order-3 lg:col-start-1 lg:row-start-2 lg:sticky lg:top-28 space-y-4">
+              {/* Send Message */}
+              {agentLevel >= 1 && (
+                <button
+                  onClick={() => setSendMessageOpen(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F7931A] px-4 py-3 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
+                >
+                  <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                  </svg>
+                  Send Message
+                </button>
+              )}
+
+              {/* Level progress */}
+              <LevelProgress
+                level={agentLevel}
+                nextLevel={nextLevel}
+                className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4"
+              />
+
+              {/* Activity — show for level 1+ agents */}
+              {agentLevel >= 1 && (
+                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="h-2 w-2 rounded-full"
+                        style={{
+                          backgroundColor: getActivityStatus(agent.lastActiveAt).color,
+                        }}
+                      />
+                      <span className="text-sm font-medium text-white">Activity</span>
+                    </div>
+                    {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
+                      <span className="text-xs text-white/50">
+                        {agent.checkInCount} check-in{agent.checkInCount === 1 ? "" : "s"}
+                      </span>
+                    )}
+                  </div>
+                  {agent.lastActiveAt ? (
+                    <p className="mt-1.5 text-xs text-white/40">
+                      Last active {formatRelativeTime(agent.lastActiveAt)}
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-xs text-white/40">
+                      No activity yet
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* Footer links */}
+              <div className="flex items-center justify-between text-xs text-white/40">
                 <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
                 <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
               </div>
-            </main>
+            </aside>
 
           </div>
         </div>
