@@ -119,36 +119,21 @@ export default function InboxActivity({
         </div>
       </div>
 
-      {/* Stats row */}
+      {/* Stats row — compact inline */}
       {hasMessages && (
-        <div className="mb-3 flex items-center gap-3 text-[11px] text-white/40 sm:gap-4 sm:text-[12px]">
+        <div className="mb-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/40 sm:text-[12px]">
           <span>{receivedCount} received</span>
           <span>{sentCount} sent</span>
           {repliedCount > 0 && <span>{repliedCount} replied</span>}
-        </div>
-      )}
-
-      {/* Economic metrics — mobile only (desktop shows in sidebar) */}
-      {hasMessages && data.inbox.economics && (
-        <div className="mb-3 grid grid-cols-3 gap-2 sm:gap-3 lg:hidden">
-          <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
-            <span className="block text-[15px] font-semibold text-[#F7931A] sm:text-[16px]">
-              {data.inbox.economics.satsReceived.toLocaleString()}
+          {data.inbox.economics && (
+            <span className="lg:hidden">
+              <span className="text-[#F7931A]">{data.inbox.economics.satsReceived.toLocaleString()}</span> earned
+              {" / "}
+              <span className="text-white/60">{data.inbox.economics.satsSent.toLocaleString()}</span> spent
+              {" / "}
+              <span className={data.inbox.economics.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}>{data.inbox.economics.satsNet.toLocaleString()}</span> net
             </span>
-            <span className="text-[10px] text-white/40 sm:text-[11px]">sats earned</span>
-          </div>
-          <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
-            <span className="block text-[15px] font-semibold text-white/70 sm:text-[16px]">
-              {data.inbox.economics.satsSent.toLocaleString()}
-            </span>
-            <span className="text-[10px] text-white/40 sm:text-[11px]">sats spent</span>
-          </div>
-          <div className="rounded-lg bg-white/[0.04] px-2.5 py-2 text-center sm:px-3">
-            <span className={`block text-[15px] font-semibold sm:text-[16px] ${data.inbox.economics.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}`}>
-              {data.inbox.economics.satsNet.toLocaleString()}
-            </span>
-            <span className="text-[10px] text-white/40 sm:text-[11px]">net sats</span>
-          </div>
+          )}
         </div>
       )}
 
