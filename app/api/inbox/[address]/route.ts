@@ -10,14 +10,12 @@ import {
   updateSentIndex,
   listInboxMessages,
   listSentMessages,
-  getSentIndex,
   INBOX_PRICE_SATS,
   buildInboxPaymentRequirements,
   buildSenderAuthMessage,
   DEFAULT_RELAY_URL,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
-import { lookupAgent as lookupSenderAgent } from "@/lib/agent-lookup";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
@@ -618,7 +616,7 @@ export async function POST(
   // Resolve sender's BTC address from their STX address (for sent index)
   const senderAgent =
     fromAddress !== "unknown"
-      ? await lookupSenderAgent(kv, fromAddress)
+      ? await lookupAgent(kv, fromAddress)
       : null;
 
   // Store message, update recipient inbox, and update sender sent index in parallel
