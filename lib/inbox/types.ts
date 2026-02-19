@@ -39,6 +39,11 @@ export interface InboxMessage {
    * True when senderSignature was present and passed BIP-137 verification.
    */
   authenticated?: boolean;
+  /**
+   * Whether this message was recovered via txid proof instead of normal x402 settlement.
+   * True when the sender resubmitted with a confirmed on-chain txid after settlement timeout.
+   */
+  recoveredViaTxid?: boolean;
 }
 
 /**
