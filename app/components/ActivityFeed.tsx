@@ -114,9 +114,9 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
       headline = (
         <>
           <span className="font-semibold text-white">{event.recipient?.displayName || "Unknown"}</span>
-          <span className="text-white/40"> received </span>
+          <span className="text-white/60"> received</span>
           <span className="font-semibold text-[#F7931A]">{event.paymentSatoshis?.toLocaleString() ?? 0} sats</span>
-          <span className="text-white/40"> from </span>
+          <span className="text-white/60"> from</span>
           <span className="font-semibold text-white">{event.agent.displayName}</span>
         </>
       );
@@ -128,7 +128,7 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
       headline = (
         <>
           <span className="font-semibold text-white">{event.agent.displayName}</span>
-          <span className="text-white/40"> unlocked </span>
+          <span className="text-white/60"> unlocked</span>
           <span className="font-semibold text-[#7DA2FF]">{event.achievementName}</span>
         </>
       );
@@ -139,7 +139,7 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
       headline = (
         <>
           <span className="font-semibold text-white">{event.agent.displayName}</span>
-          <span className="text-white/40"> joined the network</span>
+          <span className="text-white/60"> joined the network</span>
         </>
       );
       href = `/agents/${event.agent.btcAddress}`;
@@ -181,15 +181,15 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
-          <p className="truncate text-sm text-white/60 max-md:text-[13px]">
+          <p className="truncate text-sm text-white/70 max-md:text-[13px]">
             {headline}
           </p>
-          <span className="shrink-0 text-xs tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
+          <span className="shrink-0 text-xs tabular-nums text-white/40 group-hover/row:text-white/50 transition-colors">
             {relativeTime}
           </span>
         </div>
         {preview && (
-          <p className="mt-1 truncate text-[13px] text-white/30">
+          <p className="mt-1 truncate text-[13px] text-white/50">
             {preview}
           </p>
         )}
