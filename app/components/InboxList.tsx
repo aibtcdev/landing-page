@@ -1,6 +1,5 @@
 "use client";
 
-import { useState } from "react";
 import InboxRow from "./InboxRow";
 import type { InboxMessageWithPeer } from "./InboxRow";
 import type { OutboxReply } from "@/lib/inbox/types";
@@ -14,10 +13,8 @@ interface InboxListProps {
 }
 
 /**
- * Accordion-style inbox list container.
- *
- * Only one row expanded at a time. Renders rows inside
- * a divide-y container for clean row separation.
+ * Inbox message list — all messages visible as cards.
+ * No accordion — you can read every message at a glance.
  */
 export default function InboxList({
   messages,
@@ -26,24 +23,16 @@ export default function InboxList({
   compact = false,
   maxRows,
 }: InboxListProps) {
-  const [expandedId, setExpandedId] = useState<string | null>(null);
-
   const visibleMessages = maxRows ? messages.slice(0, maxRows) : messages;
 
   return (
-    <div className="divide-y divide-white/[0.04]">
+    <div className="divide-y divide-white/[0.08]">
       {visibleMessages.map((message) => (
         <InboxRow
           key={message.messageId}
           message={message}
           reply={replies[message.messageId] || null}
           ownerBtcAddress={ownerBtcAddress}
-          expanded={expandedId === message.messageId}
-          onToggle={() =>
-            setExpandedId(
-              expandedId === message.messageId ? null : message.messageId
-            )
-          }
           compact={compact}
         />
       ))}

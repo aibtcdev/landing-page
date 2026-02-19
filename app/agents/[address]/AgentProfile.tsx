@@ -1,8 +1,10 @@
 "use client";
 
 import { useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
 import { X_HANDLE } from "@/lib/constants";
+import { fetcher } from "@/lib/fetcher";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import LevelBadge from "../../components/LevelBadge";
@@ -20,7 +22,7 @@ import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
 import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
-import { deriveNpub } from "@/lib/nostr";
+
 
 interface ClaimInfo {
   status: "pending" | "verified" | "rewarded" | "failed";
@@ -37,6 +39,38 @@ interface AgentProfileProps {
   level: number;
   levelName: string;
   nextLevel: NextLevelInfo | null;
+}
+
+/** Compact sats economics for the desktop sidebar. Taps into the same SWR cache as InboxActivity. */
+function SidebarEconomics({ btcAddress }: { btcAddress: string }) {
+  const { data } = useSWR<{ inbox: { economics?: { satsReceived: number; satsSent: number; satsNet: number } } }>(
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5&view=all`,
+    fetcher
+  );
+  const econ = data?.inbox?.economics;
+  if (!econ) return null;
+
+  return (
+    <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-3">
+      <div className="flex items-center justify-between">
+        <span className="text-[11px] font-medium text-white/50">Sats</span>
+      </div>
+      <div className="mt-2 grid grid-cols-3 gap-2 text-center">
+        <div>
+          <span className="block text-[13px] font-semibold text-[#F7931A]">{econ.satsReceived.toLocaleString()}</span>
+          <span className="text-[9px] text-white/40">earned</span>
+        </div>
+        <div>
+          <span className="block text-[13px] font-semibold text-white/60">{econ.satsSent.toLocaleString()}</span>
+          <span className="text-[9px] text-white/40">spent</span>
+        </div>
+        <div>
+          <span className={`block text-[13px] font-semibold ${econ.satsNet >= 0 ? "text-[#4dcd5e]" : "text-[#F7931A]"}`}>{econ.satsNet.toLocaleString()}</span>
+          <span className="text-[9px] text-white/40">net</span>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 export default function AgentProfile({
@@ -70,7 +104,6 @@ export default function AgentProfile({
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const tweetText = `My AIBTC agent is ${displayName} \u{1F916}\u{20BF}\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${X_HANDLE}`;
   const tweetIntentUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetText)}`;
-  const npub = agent.btcPublicKey ? deriveNpub(agent.btcPublicKey) : null;
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
   const handleValidateCode = async () => {
@@ -220,113 +253,82 @@ export default function AgentProfile({
                   {agent.description && (
                     <p className="mt-2 text-[13px] leading-relaxed text-white/50">{agent.description}</p>
                   )}
-                </div>
-              </div>
-
-              {/* Addresses */}
-              <div className="space-y-2">
-                <a
-                  href={`https://mempool.space/address/${agent.btcAddress}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 transition-colors hover:border-white/[0.12]"
-                >
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Bitcoin</span>
-                  <span className="mt-0.5 block font-mono text-sm max-lg:text-xs text-[#F7931A]">
-                    {truncateAddress(agent.btcAddress)}
-                  </span>
-                </a>
-                <a
-                  href={`https://explorer.hiro.so/address/${agent.stxAddress}?chain=mainnet`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="block rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 transition-colors hover:border-white/[0.12]"
-                >
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Stacks</span>
-                  <span className="mt-0.5 block font-mono text-sm max-lg:text-xs text-[#A855F7]">
-                    {truncateAddress(agent.stxAddress)}
-                  </span>
-                </a>
-                {npub && (
+                  {/* BTC address inline */}
                   <a
-                    href={`https://njump.me/${npub}`}
+                    href={`https://mempool.space/address/${agent.btcAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block rounded-lg border border-white/[0.08] bg-white/[0.02] p-4 transition-colors hover:border-white/[0.12]"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2.5 py-1 font-mono text-xs text-[#F7931A] transition-colors hover:bg-white/[0.08]"
                   >
-                    <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Nostr</span>
-                    <span className="mt-0.5 block font-mono text-sm max-lg:text-xs text-[#8B5CF6]">
-                      {npub.slice(0, 12)}...{npub.slice(-8)}
-                    </span>
+                    <svg className="size-3 text-[#F7931A]/60" fill="currentColor" viewBox="0 0 24 24">
+                      <path d="M23.638 14.904c-1.602 6.43-8.113 10.34-14.542 8.736C2.67 22.05-1.244 15.525.362 9.105 1.962 2.67 8.475-1.243 14.9.358c6.43 1.605 10.342 8.115 8.738 14.546z" />
+                    </svg>
+                    {truncateAddress(agent.btcAddress)}
                   </a>
-                )}
+                </div>
               </div>
 
-              {/* Send Message */}
-              {agentLevel >= 1 && (
-                <button
-                  onClick={() => setSendMessageOpen(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F7931A] px-4 py-3 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
-                >
-                  <svg
-                    className="size-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
+              {/* Desktop-only sidebar items */}
+              <div className="max-lg:hidden space-y-4">
+                {/* Send Message */}
+                {agentLevel >= 1 && (
+                  <button
+                    onClick={() => setSendMessageOpen(true)}
+                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F7931A] px-4 py-3 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                  Send Message
-                </button>
-              )}
+                    <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
+                    </svg>
+                    Send Message
+                  </button>
+                )}
 
-              {/* Level progress */}
-              <LevelProgress
-                level={agentLevel}
-                nextLevel={nextLevel}
-                className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4"
-              />
+                {/* Sats economics */}
+                {agentLevel >= 1 && <SidebarEconomics btcAddress={agent.btcAddress} />}
 
-              {/* Activity — show for level 1+ agents */}
-              {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-2 w-2 rounded-full"
-                        style={{
-                          backgroundColor: getActivityStatus(agent.lastActiveAt).color,
-                        }}
-                      />
-                      <span className="text-sm font-medium text-white">Activity</span>
+                {/* Level progress */}
+                <LevelProgress
+                  level={agentLevel}
+                  nextLevel={nextLevel}
+                  className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4"
+                />
+
+                {/* Activity */}
+                {agentLevel >= 1 && (
+                  <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <div
+                          className="h-2 w-2 rounded-full"
+                          style={{
+                            backgroundColor: getActivityStatus(agent.lastActiveAt).color,
+                          }}
+                        />
+                        <span className="text-sm font-medium text-white">Activity</span>
+                      </div>
+                      {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
+                        <span className="text-xs text-white/50">
+                          {agent.checkInCount} check-in{agent.checkInCount === 1 ? "" : "s"}
+                        </span>
+                      )}
                     </div>
-                    {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
-                      <span className="text-xs text-white/50">
-                        {agent.checkInCount} check-in{agent.checkInCount === 1 ? "" : "s"}
-                      </span>
+                    {agent.lastActiveAt ? (
+                      <p className="mt-1.5 text-xs text-white/40">
+                        Last active {formatRelativeTime(agent.lastActiveAt)}
+                      </p>
+                    ) : (
+                      <p className="mt-1.5 text-xs text-white/40">
+                        No activity yet
+                      </p>
                     )}
                   </div>
-                  {agent.lastActiveAt ? (
-                    <p className="mt-1.5 text-xs text-white/40">
-                      Last active {formatRelativeTime(agent.lastActiveAt)}
-                    </p>
-                  ) : (
-                    <p className="mt-1.5 text-xs text-white/40">
-                      No activity yet
-                    </p>
-                  )}
-                </div>
-              )}
+                )}
 
-              {/* Footer links — desktop only */}
-              <div className="hidden lg:flex items-center justify-between text-xs text-white/40">
-                <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
-                <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
+                {/* Footer links */}
+                <div className="flex items-center justify-between text-xs text-white/40">
+                  <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
+                  <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
+                </div>
               </div>
             </aside>
 
@@ -334,9 +336,7 @@ export default function AgentProfile({
             <main className="space-y-6 min-w-0">
               {/* Inbox — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-                  <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
-                </div>
+                <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
               )}
 
               {/* Interaction Graph — show for level 1+ agents */}
@@ -530,13 +530,8 @@ export default function AgentProfile({
                 </svg>
                 Share your level
               </button>}
-
-              {/* Footer links — mobile only */}
-              <div className="lg:hidden flex items-center justify-between text-xs text-white/40">
-                <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
-                <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
-              </div>
             </main>
+
 
           </div>
         </div>
