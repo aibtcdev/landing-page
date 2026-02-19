@@ -114,7 +114,9 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
       headline = (
         <>
           <span className="md:font-bold">{event.recipient?.displayName || "Unknown"}</span>
-          {` received ${(event.paymentSatoshis ?? 0).toLocaleString()} sats from `}
+          {" received "}
+          <span className="text-[#F7931A]">{(event.paymentSatoshis ?? 0).toLocaleString()} sats</span>
+          {" from "}
           <span className="md:font-bold">{event.agent.displayName}</span>
         </>
       );
