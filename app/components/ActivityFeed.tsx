@@ -180,16 +180,16 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-baseline justify-between gap-3">
-          <p className="truncate text-sm text-white/70 max-md:text-[13px]">
+        <div className="flex items-start justify-between gap-2">
+          <p className="text-sm text-white/70 max-md:text-[11px] max-md:leading-snug">
             {headline}
           </p>
-          <span className="shrink-0 text-xs tabular-nums text-white/40 group-hover/row:text-white/50 transition-colors">
+          <span className="mt-0.5 shrink-0 text-xs tabular-nums text-white/40 group-hover/row:text-white/50 transition-colors max-md:text-[10px]">
             {relativeTime}
           </span>
         </div>
         {preview && (
-          <p className="mt-1 truncate text-[13px] text-white/50">
+          <p className="mt-1 text-[13px] text-white/50 line-clamp-1 max-md:text-[11px]">
             {preview}
           </p>
         )}
