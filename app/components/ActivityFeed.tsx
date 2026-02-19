@@ -151,7 +151,7 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
 
   const content = (
     <div
-      className="group/row flex items-start gap-3 rounded-lg px-3 py-3 transition-colors duration-150 hover:bg-white/[0.04] animate-fadeUp"
+      className="group/row flex items-start gap-4 rounded-lg px-4 py-4 transition-colors duration-150 hover:bg-white/[0.04] animate-fadeUp"
       style={{ animationDelay: `${index * 50}ms`, opacity: 0 }}
     >
       {/* Avatar — receiver for messages, agent for others */}
@@ -164,32 +164,32 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
               : event.agent.btcAddress
           )}`}
           alt=""
-          className="size-8 rounded-full border border-white/[0.08] bg-white/[0.06]"
+          className="size-10 rounded-full border border-white/[0.08] bg-white/[0.06]"
           loading="lazy"
-          width="32"
-          height="32"
+          width="40"
+          height="40"
           onError={(e) => {
             e.currentTarget.style.display = "none";
           }}
         />
         {/* Type badge overlaid on avatar */}
-        <div className={`absolute -bottom-1 -right-1 flex size-4 items-center justify-center rounded-full ${config.bgTint} ${config.accent} ring-1 ring-black/40`}>
-          <div className="scale-[0.6]">{config.icon}</div>
+        <div className={`absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full ${config.bgTint} ${config.accent} ring-1 ring-black/40`}>
+          <div className="scale-75">{config.icon}</div>
         </div>
       </div>
 
       {/* Content */}
       <div className="min-w-0 flex-1">
         <div className="flex items-baseline justify-between gap-3">
-          <p className="truncate text-[13px] leading-snug text-white/60 max-md:text-[12px]">
+          <p className="truncate text-sm text-white/60 max-md:text-[13px]">
             {headline}
           </p>
-          <span className="shrink-0 text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
+          <span className="shrink-0 text-xs tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
             {relativeTime}
           </span>
         </div>
         {preview && (
-          <p className="mt-0.5 truncate text-[12px] leading-snug text-white/25">
+          <p className="mt-1 truncate text-[13px] text-white/30">
             {preview}
           </p>
         )}
