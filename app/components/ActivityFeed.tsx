@@ -113,11 +113,11 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
     case "message":
       headline = (
         <>
-          <span className="font-semibold text-white">{event.recipient?.displayName || "Unknown"}</span>
-          <span className="text-white/60"> received</span>
-          <span className="font-semibold text-[#F7931A]">{event.paymentSatoshis?.toLocaleString() ?? 0} sats</span>
-          <span className="text-white/60"> from</span>
-          <span className="font-semibold text-white">{event.agent.displayName}</span>
+          <span className="font-bold">{event.recipient?.displayName || "Unknown"}</span>
+          {" received "}
+          <span className="font-bold">{event.paymentSatoshis?.toLocaleString() ?? 0} sats</span>
+          {" from "}
+          <span className="font-bold">{event.agent.displayName}</span>
         </>
       );
       preview = event.messagePreview;
@@ -127,9 +127,9 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
     case "achievement":
       headline = (
         <>
-          <span className="font-semibold text-white">{event.agent.displayName}</span>
-          <span className="text-white/60"> unlocked</span>
-          <span className="font-semibold text-[#7DA2FF]">{event.achievementName}</span>
+          <span className="font-bold">{event.agent.displayName}</span>
+          {" unlocked "}
+          <span className="font-bold">{event.achievementName}</span>
         </>
       );
       href = `/agents/${event.agent.btcAddress}`;
@@ -138,8 +138,8 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
     case "registration":
       headline = (
         <>
-          <span className="font-semibold text-white">{event.agent.displayName}</span>
-          <span className="text-white/60"> joined the network</span>
+          <span className="font-bold">{event.agent.displayName}</span>
+          {" joined the network"}
         </>
       );
       href = `/agents/${event.agent.btcAddress}`;
@@ -180,11 +180,11 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
 
       {/* Content */}
       <div className="min-w-0 flex-1">
-        <div className="flex items-start justify-between gap-2">
+        <div className="flex items-start justify-between gap-2 max-md:block">
           <p className="text-sm text-white/70 max-md:text-[11px] max-md:leading-snug">
             {headline}
           </p>
-          <span className="mt-0.5 shrink-0 text-xs tabular-nums text-white/40 group-hover/row:text-white/50 transition-colors max-md:text-[10px]">
+          <span className="mt-0.5 shrink-0 text-xs tabular-nums text-white/40 group-hover/row:text-white/50 transition-colors max-md:mt-1 max-md:block max-md:text-[10px]">
             {relativeTime}
           </span>
         </div>
