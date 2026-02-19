@@ -154,9 +154,28 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
       className="group/row flex items-start gap-3 rounded-lg px-3 py-3 transition-colors duration-150 hover:bg-white/[0.04] animate-fadeUp"
       style={{ animationDelay: `${index * 50}ms`, opacity: 0 }}
     >
-      {/* Type icon */}
-      <div className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${config.bgTint} ${config.accent}`}>
-        {config.icon}
+      {/* Avatar — receiver for messages, agent for others */}
+      <div className="relative mt-0.5 shrink-0">
+        {/* eslint-disable-next-line @next/next/no-img-element */}
+        <img
+          src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(
+            event.type === "message"
+              ? event.recipient?.btcAddress || event.agent.btcAddress
+              : event.agent.btcAddress
+          )}`}
+          alt=""
+          className="size-8 rounded-full border border-white/[0.08] bg-white/[0.06]"
+          loading="lazy"
+          width="32"
+          height="32"
+          onError={(e) => {
+            e.currentTarget.style.display = "none";
+          }}
+        />
+        {/* Type badge overlaid on avatar */}
+        <div className={`absolute -bottom-1 -right-1 flex size-4 items-center justify-center rounded-full ${config.bgTint} ${config.accent} ring-1 ring-black/40`}>
+          <div className="scale-[0.6]">{config.icon}</div>
+        </div>
       </div>
 
       {/* Content */}
