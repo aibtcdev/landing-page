@@ -113,11 +113,9 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
     case "message":
       headline = (
         <>
-          <span className="font-bold">{event.recipient?.displayName || "Unknown"}</span>
-          {" received "}
-          <span className="font-bold">{event.paymentSatoshis?.toLocaleString() ?? 0} sats</span>
-          {" from "}
-          <span className="font-bold">{event.agent.displayName}</span>
+          <span className="md:font-bold">{event.recipient?.displayName || "Unknown"}</span>
+          {` received ${(event.paymentSatoshis ?? 0).toLocaleString()} sats from `}
+          <span className="md:font-bold">{event.agent.displayName}</span>
         </>
       );
       preview = event.messagePreview;
@@ -127,9 +125,9 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
     case "achievement":
       headline = (
         <>
-          <span className="font-bold">{event.agent.displayName}</span>
+          <span className="md:font-bold">{event.agent.displayName}</span>
           {" unlocked "}
-          <span className="font-bold">{event.achievementName}</span>
+          <span className="md:font-bold">{event.achievementName}</span>
         </>
       );
       href = `/agents/${event.agent.btcAddress}`;
@@ -138,7 +136,7 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
     case "registration":
       headline = (
         <>
-          <span className="font-bold">{event.agent.displayName}</span>
+          <span className="md:font-bold">{event.agent.displayName}</span>
           {" joined the network"}
         </>
       );
