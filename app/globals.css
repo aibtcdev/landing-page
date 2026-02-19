@@ -95,7 +95,30 @@
   50% { transform: translateY(10px); opacity: 0.9; }
 }
 
+@keyframes slideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-16px) scale(0.98);
+  }
+  60% {
+    opacity: 1;
+    transform: translateY(2px) scale(1);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes glowFade {
+  0% { background-color: rgba(247, 147, 26, 0.08); }
+  100% { background-color: transparent; }
+}
+
 /* Animation classes */
+.animate-slideIn {
+  animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards, glowFade 1.5s ease-out 0.3s forwards;
+}
 .animate-float1 {
   animation: float1 30s ease-in-out infinite;
 }

@@ -59,6 +59,11 @@ interface CachedActivity {
   cachedAt: string;
 }
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+};
+
 const CACHE_KEY = "cache:activity";
 const CACHE_TTL_SECONDS = 120; // 2 minutes
 const MAX_EVENTS = 20;
@@ -135,6 +140,7 @@ export async function GET(request: NextRequest) {
     }, {
       headers: {
         "Cache-Control": "public, max-age=60, s-maxage=120",
+        ...CORS_HEADERS,
       },
     });
   }
@@ -381,7 +387,7 @@ export async function GET(request: NextRequest) {
         error: "Failed to fetch network activity",
         message: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      { status: 500, headers: CORS_HEADERS }
     );
   }
 }
