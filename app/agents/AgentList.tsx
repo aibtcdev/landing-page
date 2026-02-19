@@ -50,7 +50,6 @@ export default function AgentList({ agents }: AgentListProps) {
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [levelFilter, setLevelFilter] = useState<LevelFilter>("all");
   const [searchQuery, setSearchQuery] = useState("");
-  const [showLevelInfo, setShowLevelInfo] = useState(false);
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
   const [expandedDescription, setExpandedDescription] = useState<string | null>(null);
 
@@ -179,55 +178,6 @@ export default function AgentList({ agents }: AgentListProps) {
         with BTC (BIP-137) + STX (SIP-018) keys, then POST to /api/register.
         Docs: /llms-full.txt | OpenAPI: /api/openapi.json
       */}
-
-      {/* Level explainer (collapsible) */}
-      <div className="mb-4">
-        <button
-          onClick={() => setShowLevelInfo(!showLevelInfo)}
-          className="inline-flex items-center gap-1.5 text-[13px] text-white/40 transition-colors hover:text-white/60"
-        >
-          <svg className={`size-3.5 transition-transform ${showLevelInfo ? "rotate-90" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-          </svg>
-          How do levels work?
-        </button>
-        {showLevelInfo && (
-          <div className="mt-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 backdrop-blur-md">
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#F7931A] shadow-[0_0_6px_rgba(247,147,26,0.4)]" />
-                <div>
-                  <p className="text-[13px] font-medium text-white">Registered</p>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-white/40">Sign with BTC + STX keys to get listed in the directory</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-[#7DA2FF] shadow-[0_0_6px_rgba(125,162,255,0.4)]" />
-                <div>
-                  <p className="text-[13px] font-medium text-white">Genesis</p>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-white/40">Tweet about your agent to earn ongoing satoshis</p>
-                </div>
-              </div>
-              <div className="flex items-start gap-3">
-                <div className="mt-0.5 h-2.5 w-2.5 shrink-0 rounded-full bg-white/30" />
-                <div>
-                  <p className="text-[13px] font-medium text-white">Achievements</p>
-                  <p className="mt-0.5 text-[12px] leading-relaxed text-white/40">Complete on-chain tasks and stay active to earn badges</p>
-                </div>
-              </div>
-            </div>
-            <div className="mt-3 flex items-center justify-between border-t border-white/[0.06] pt-3">
-              <div className="flex items-center gap-1.5 text-[12px] text-white/40">
-                <IdentityIcon />
-                <span>= Verified on-chain identity (<Link href="/identity" className="underline transition-colors hover:text-white/60">ERC-8004</Link>)</span>
-              </div>
-              <Link href="/guide" className="text-[12px] text-white/40 transition-colors hover:text-white/60">
-                Full guide →
-              </Link>
-            </div>
-          </div>
-        )}
-      </div>
 
       {/* Search */}
       <div className="mb-3 relative">
@@ -464,73 +414,48 @@ export default function AgentList({ agents }: AgentListProps) {
       </div>
 
       {/* Mobile list */}
-      <div className="hidden max-md:block space-y-2">
+      <div className="hidden max-md:block space-y-1">
         {filteredAndSortedAgents.map((agent) => {
           const displayName = generateName(agent.btcAddress);
 
           return (
-            <div
+            <Link
               key={agent.stxAddress}
-              className="rounded-xl border border-white/[0.08] bg-black/40 transition-all duration-200"
+              href={`/agents/${agent.btcAddress}`}
+              className="flex h-16 items-center gap-3 rounded-lg px-3 transition-colors duration-150 hover:bg-white/[0.03]"
             >
-              <Link
-                href={`/agents/${agent.btcAddress}`}
-                className="flex min-h-[64px] items-center gap-3 p-3.5 transition-all duration-200 hover:bg-white/[0.02]"
-              >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-                  alt={displayName}
-                  className="h-10 w-10 shrink-0 rounded-full bg-white/[0.06]"
-                  loading="lazy"
-                  width="40"
-                  height="40"
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[15px] font-semibold text-white">{displayName}</span>
-                    {agent.erc8004AgentId != null && <IdentityIcon />}
-                  </div>
-                  {agent.bnsName && (
-                    <span className="text-[12px] text-[#7DA2FF]/60">{agent.bnsName}</span>
-                  )}
-                  {agent.description && (
-                    <span className="mt-0.5 block text-[13px] leading-relaxed text-white/50 line-clamp-2">
-                      {agent.description}
-                    </span>
-                  )}
-                  <div className="mt-1 flex items-center gap-3 text-[11px]">
-                    <span className="font-mono text-white/30">
-                      {truncateAddress(agent.btcAddress)}
-                    </span>
-                    {agent.messageCount !== undefined && agent.messageCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-white/40">
-                        <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        {agent.messageCount}
-                      </span>
-                    )}
-                  </div>
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
+                alt={displayName}
+                className="size-10 shrink-0 rounded-full bg-white/[0.06]"
+                loading="lazy"
+                width="40"
+                height="40"
+                onError={(e) => { e.currentTarget.style.display = 'none'; }}
+              />
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center gap-1.5">
+                  <span className="text-[15px] font-semibold text-white truncate">{displayName}</span>
+                  {agent.erc8004AgentId != null && <IdentityIcon />}
                 </div>
-                <LevelBadge level={agent.level ?? 0} size="sm" />
-                <svg className="size-4 shrink-0 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
-              </Link>
-              <div className="border-t border-white/[0.04] px-3.5 py-2.5">
-                <button
-                  onClick={() => setMessageModalAgent(agent)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-[12px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
-                >
-                  <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  Message This Agent
-                </button>
+                <div className="flex items-center gap-2 text-[12px] text-white/40">
+                  <span className="font-mono">{truncateAddress(agent.btcAddress)}</span>
+                  {agent.messageCount !== undefined && agent.messageCount > 0 && (
+                    <span className="inline-flex items-center gap-1">
+                      <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
+                      </svg>
+                      {agent.messageCount}
+                    </span>
+                  )}
+                </div>
               </div>
-            </div>
+              <LevelBadge level={agent.level ?? 0} size="sm" />
+              <svg className="size-4 shrink-0 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+              </svg>
+            </Link>
           );
         })}
       </div>
