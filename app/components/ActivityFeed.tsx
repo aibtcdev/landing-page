@@ -189,8 +189,8 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
           </span>
         </div>
         {preview && (
-          <p className="mt-0.5 truncate text-[12px] leading-snug text-white/25 italic">
-            &ldquo;{preview}&rdquo;
+          <p className="mt-0.5 truncate text-[12px] leading-snug text-white/25">
+            {preview}
           </p>
         )}
       </div>
