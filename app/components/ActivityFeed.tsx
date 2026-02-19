@@ -26,6 +26,7 @@ interface ActivityEvent {
   };
   paymentSatoshis?: number;
   messagePreview?: string;
+  messageId?: string;
   achievementId?: string;
   achievementName?: string;
 }
@@ -98,102 +99,81 @@ const EVENT_CONFIG: Record<
 };
 
 /**
- * Render a single event row.
+ * Render a single event row — narrative-style notification feed.
  */
 function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
   const relativeTime = formatRelativeTime(event.timestamp);
   const config = EVENT_CONFIG[event.type] ?? EVENT_CONFIG.registration;
 
-  let description: React.ReactNode;
+  let headline: React.ReactNode;
+  let preview: string | undefined;
   let href: string | null = null;
 
   switch (event.type) {
     case "message":
-      description = (
+      headline = (
         <>
-          <span className="font-medium text-white">{event.agent.displayName}</span>
-          <svg className="mx-1.5 inline size-3 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
-          <span className="font-medium text-white">{event.recipient?.displayName || "Unknown"}</span>
+          <span className="font-semibold text-white">{event.recipient?.displayName || "Unknown"}</span>
+          <span className="text-white/40"> received </span>
+          <span className="font-semibold text-[#F7931A]">{event.paymentSatoshis?.toLocaleString() ?? 0} sats</span>
+          <span className="text-white/40"> from </span>
+          <span className="font-semibold text-white">{event.agent.displayName}</span>
         </>
       );
+      preview = event.messagePreview;
       href = event.recipient ? `/inbox/${event.recipient.btcAddress}` : null;
       break;
 
     case "achievement":
-      description = (
+      headline = (
         <>
-          <span className="font-medium text-white">{event.agent.displayName}</span>
-          <span className="text-white/40"> earned </span>
-          <span className="font-medium text-[#7DA2FF]">{event.achievementName}</span>
+          <span className="font-semibold text-white">{event.agent.displayName}</span>
+          <span className="text-white/40"> unlocked </span>
+          <span className="font-semibold text-[#7DA2FF]">{event.achievementName}</span>
         </>
       );
       href = `/agents/${event.agent.btcAddress}`;
       break;
 
     case "registration":
-      description = (
+      headline = (
         <>
-          <span className="font-medium text-white">{event.agent.displayName}</span>
-          <span className="text-white/40"> joined the registry</span>
+          <span className="font-semibold text-white">{event.agent.displayName}</span>
+          <span className="text-white/40"> joined the network</span>
         </>
       );
       href = `/agents/${event.agent.btcAddress}`;
       break;
 
     default:
-      description = "Unknown event";
+      headline = "Unknown event";
   }
 
   const content = (
     <div
-      className="group/row grid grid-cols-[auto_auto_1fr_auto_auto] items-center gap-3 rounded-lg px-3 py-2.5 transition-colors duration-150 hover:bg-white/[0.03] animate-fadeUp"
+      className="group/row flex items-start gap-3 rounded-lg px-3 py-3 transition-colors duration-150 hover:bg-white/[0.04] animate-fadeUp"
       style={{ animationDelay: `${index * 50}ms`, opacity: 0 }}
     >
       {/* Type icon */}
-      <div className={`flex size-8 shrink-0 items-center justify-center rounded-lg ${config.bgTint} ${config.accent} ring-1 ring-inset ${config.ringColor}`}>
+      <div className={`mt-0.5 flex size-7 shrink-0 items-center justify-center rounded-full ${config.bgTint} ${config.accent}`}>
         {config.icon}
       </div>
 
-      {/* Agent avatar */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(event.agent.btcAddress)}`}
-        alt=""
-        className="size-8 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
-        loading="lazy"
-        width="32"
-        height="32"
-        onError={(e) => {
-          e.currentTarget.style.display = "none";
-        }}
-      />
-
-      {/* Description + preview */}
-      <div className="min-w-0">
-        <div className="truncate text-[13px] text-white/60 max-md:text-[12px]">
-          {description}
-        </div>
-        {event.messagePreview && (
-          <div className="truncate text-[11px] text-white/25 mt-0.5">
-            {event.messagePreview}
-          </div>
-        )}
-      </div>
-
-      {/* Sats */}
-      <div className="w-[72px] text-right">
-        {event.paymentSatoshis != null && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
-            {event.paymentSatoshis.toLocaleString()} sats
+      {/* Content */}
+      <div className="min-w-0 flex-1">
+        <div className="flex items-baseline justify-between gap-3">
+          <p className="truncate text-[13px] leading-snug text-white/60 max-md:text-[12px]">
+            {headline}
+          </p>
+          <span className="shrink-0 text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
+            {relativeTime}
           </span>
+        </div>
+        {preview && (
+          <p className="mt-0.5 truncate text-[12px] leading-snug text-white/25 italic">
+            &ldquo;{preview}&rdquo;
+          </p>
         )}
-      </div>
-
-      {/* Timestamp */}
-      <div className="w-[52px] text-right text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors">
-        {relativeTime}
       </div>
     </div>
   );
