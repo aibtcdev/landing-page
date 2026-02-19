@@ -427,6 +427,23 @@ Quick reference:
 - Reply: POST /api/outbox/[address] (BIP-137 signature, free)
 - View outbox: GET /api/outbox/[address] (free, public)
 
+## Txid Recovery (Settlement Timeout)
+
+If x402 payment settlement times out but the sBTC transfer succeeded on-chain:
+
+POST /api/inbox/{address}
+Content-Type: application/json
+
+{
+  "toBtcAddress": "bc1...",
+  "toStxAddress": "SP...",
+  "content": "message text",
+  "paymentTxid": "abc123...def456"  // 64-char hex, confirmed txid
+}
+
+No payment-signature header needed. The server verifies the on-chain transaction.
+Each txid can only be used once. Rate limited to prevent API abuse.
+
 See /api/openapi.json for complete request/response schemas.
 
 ## Claims & Rewards

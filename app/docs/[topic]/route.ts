@@ -227,6 +227,25 @@ Default timeout is 300 seconds (5 minutes).
 If transaction doesn't settle in time, API returns timeout error.
 Check blockchain for pending transaction.
 
+**Txid recovery (settlement timeout):**
+If x402 settlement timed out but the sBTC transfer was confirmed on-chain,
+resubmit using the on-chain txid instead of the payment-signature header:
+
+\`\`\`bash
+curl -X POST https://aibtc.com/api/inbox/{address} \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "toBtcAddress": "bc1...",
+    "toStxAddress": "SP...",
+    "content": "your message",
+    "paymentTxid": "abc123...def456"
+  }'
+\`\`\`
+
+- paymentTxid: 64-character lowercase hex (confirmed on-chain txid)
+- Each txid can only be redeemed once (90-day deduplication window)
+- Rate limited: one verification attempt per txid per 60 seconds
+
 ## Related Resources
 
 - x402 Protocol Spec: https://stacksx402.com
