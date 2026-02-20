@@ -1,4 +1,4 @@
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+import { BASE_PATH } from "@/lib/constants";
 
 export default function AnimatedBackground() {
   return (
@@ -9,7 +9,7 @@ export default function AnimatedBackground() {
       {/* Background Pattern */}
       <div
         className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.12] saturate-[1.3]"
-        style={{ backgroundImage: `url('${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg')` }}
+        style={{ backgroundImage: `url('${BASE_PATH}/Artwork/AIBTC_Pattern1_optimized.jpg')` }}
       />
 
       {/* Orbs - more visible */}

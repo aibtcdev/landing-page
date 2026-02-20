@@ -3,8 +3,7 @@
 import { useEffect, useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
-
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+import { BASE_PATH } from "@/lib/constants";
 
 const NAV_LINK_DESKTOP =
   "inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-4 py-2 text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]";
@@ -108,7 +107,7 @@ export default function Navbar() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between">
           <Link href="/" className="group">
             <Image
-              src={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
+              src={`${BASE_PATH}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
               alt="AIBTC"
               width={120}
               height={32}

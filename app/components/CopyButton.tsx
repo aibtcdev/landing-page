@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 
+const COPY_PATH =
+  "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z";
+const CHECK_PATH = "M5 13l4 4L19 7";
+
 interface CopyButtonProps {
   text: string;
   label?: React.ReactNode;
@@ -83,12 +87,12 @@ export default function CopyButton({
             strokeWidth="2"
           >
             {copied ? (
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              <path strokeLinecap="round" strokeLinejoin="round" d={CHECK_PATH} />
             ) : (
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                d={COPY_PATH}
               />
             )}
           </svg>
@@ -110,12 +114,12 @@ export default function CopyButton({
           strokeWidth="2"
         >
           {copied ? (
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            <path strokeLinecap="round" strokeLinejoin="round" d={CHECK_PATH} />
           ) : (
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              d={COPY_PATH}
             />
           )}
         </svg>
@@ -138,7 +142,7 @@ export default function CopyButton({
             stroke="currentColor"
             strokeWidth="2"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            <path strokeLinecap="round" strokeLinejoin="round" d={CHECK_PATH} />
           </svg>
           <span>Copied!</span>
         </>
@@ -154,7 +158,7 @@ export default function CopyButton({
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              d={COPY_PATH}
             />
           </svg>
           <span>{label}</span>

@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { X_HANDLE } from "@/lib/constants";
-
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+import { X_HANDLE, BASE_PATH } from "@/lib/constants";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -74,13 +72,13 @@ export default function RootLayout({
         />
         <link
           rel="preload"
-          href={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
+          href={`${BASE_PATH}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
           as="image"
           type="image/svg+xml"
         />
         <link
           rel="preload"
-          href={`${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg`}
+          href={`${BASE_PATH}/Artwork/AIBTC_Pattern1_optimized.jpg`}
           as="image"
           type="image/jpeg"
         />

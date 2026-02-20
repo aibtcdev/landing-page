@@ -2,8 +2,7 @@ import Image from "next/image";
 import Link from "next/link";
 import { SocialLinks } from "./Navbar";
 import CopyButton from "./CopyButton";
-
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+import { BASE_PATH } from "@/lib/constants";
 
 function BookIcon({ className }: { className?: string }) {
   return (
@@ -174,7 +173,7 @@ export default function Footer() {
         <div className="mt-10 flex items-center justify-between border-t border-white/[0.06] pt-8 max-md:flex-col max-md:gap-4">
           <Link href="/" className="group">
             <Image
-              src={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
+              src={`${BASE_PATH}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
               alt="AIBTC"
               width={100}
               height={24}
