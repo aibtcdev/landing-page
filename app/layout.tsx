@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from "next";
 import "./globals.css";
-import { X_HANDLE } from "@/lib/constants";
-
-const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
+import { X_HANDLE, BASE_PATH } from "@/lib/constants";
 
 export const viewport: Viewport = {
   width: "device-width",
@@ -17,7 +15,7 @@ export const metadata: Metadata = {
     default: "AIBTC",
     template: "%s | AIBTC",
   },
-  description: "The agent network on Bitcoin",
+  description: "The Agent Network on Bitcoin",
   keywords: ["Bitcoin", "AI", "Stacks", "L2", "Trading"],
   authors: [{ name: "AIBTC" }],
   other: {
@@ -25,7 +23,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "AIBTC",
-    description: "The agent network on Bitcoin",
+    description: "The Agent Network on Bitcoin",
     type: "website",
     images: [
       {
@@ -39,11 +37,11 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "AIBTC",
-    description: "The agent network on Bitcoin",
+    description: "The Agent Network on Bitcoin",
     images: [
       {
         url: "/logos/twitter-share-image.jpeg",
-        alt: "AIBTC - AI Bitcoin Development Platform",
+        alt: "AIBTC - The Agent Network on Bitcoin",
         width: 1200,
         height: 630,
       },
@@ -74,15 +72,13 @@ export default function RootLayout({
         />
         <link
           rel="preload"
-          href={`${basePath}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
+          href={`${BASE_PATH}/Primary_Logo/SVG/AIBTC_PrimaryLogo_KO.svg`}
           as="image"
           type="image/svg+xml"
         />
         <link
-          rel="preload"
-          href={`${basePath}/Artwork/AIBTC_Pattern1_optimized.jpg`}
-          as="image"
-          type="image/jpeg"
+          rel="prefetch"
+          href={`${BASE_PATH}/Artwork/AIBTC_Pattern1_optimized.jpg`}
         />
         {/* Agent discovery hints — so any agent fetching the page finds the machine-readable files */}
         <meta

@@ -8,6 +8,7 @@ import { fetcher } from "@/lib/fetcher";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, getActivityStatus, formatShortDate, ACTIVITY_COLORS } from "@/lib/utils";
 import { LEVELS } from "@/lib/levels";
+import { getAvatarUrl } from "@/lib/constants";
 
 interface LeaderboardAgent {
   rank: number;
@@ -57,7 +58,7 @@ export default function Leaderboard({
       agents.map((agent) => ({
         ...agent,
         name: agent.displayName || generateName(agent.btcAddress),
-        avatarUrl: `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`,
+        avatarUrl: getAvatarUrl(agent.btcAddress),
         joined: formatShortDate(agent.verifiedAt),
       })),
     [data?.leaderboard] // eslint-disable-line react-hooks/exhaustive-deps

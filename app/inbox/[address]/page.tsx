@@ -9,6 +9,7 @@ import InboxList from "../../components/InboxList";
 import SendMessageModal from "../../components/SendMessageModal";
 import { generateName } from "@/lib/name-generator";
 import { updateMeta } from "@/lib/utils";
+import { getAvatarUrl } from "@/lib/constants";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
 
 type ViewFilter = "all" | "received" | "sent" | "replied" | "awaiting";
@@ -162,7 +163,7 @@ export default function InboxPage() {
   }
 
   const displayName = agent.displayName || generateName(agent.btcAddress);
-  const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+  const avatarUrl = getAvatarUrl(agent.btcAddress);
   const hasMessages = totalCount > 0;
 
   // Compute reply stats

@@ -1,8 +1,15 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import CopyButton from "../../components/CopyButton";
+
+export const metadata: Metadata = {
+  title: "OpenClaw Setup",
+  description:
+    "Deploy an autonomous agent with a Bitcoin wallet, Telegram bot, and Stacks access using OpenClaw.",
+};
 
 interface DeployStep {
   id: number;
@@ -287,7 +294,7 @@ export default function OpenClawGuide() {
                       <div className="flex items-center justify-between rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
                         <span className="text-[12px] font-medium text-white/40">Command</span>
                         <CopyButton
-                          text={step.command!}
+                          text={step.command}
                           label="Copy"
                           variant="icon"
                           className="gap-1.5 rounded px-2 py-1 text-[12px]"
@@ -371,7 +378,7 @@ export default function OpenClawGuide() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-white/80">
-                  <strong className="text-white">Stuck?</strong> Join us on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Discord</a> — the community is here to help
+                  <strong className="text-white">Stuck?</strong> Join us on <a href="https://discord.gg/UDhVhK2ywj" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Discord</a> — the community is here to help
                 </p>
               </div>
             </div>

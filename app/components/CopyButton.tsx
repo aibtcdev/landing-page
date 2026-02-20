@@ -2,6 +2,10 @@
 
 import { useState, useEffect, useRef } from "react";
 
+const COPY_PATH =
+  "M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z";
+const CHECK_PATH = "M5 13l4 4L19 7";
+
 interface CopyButtonProps {
   text: string;
   label?: React.ReactNode;
@@ -60,7 +64,7 @@ export default function CopyButton({
         className={`group relative cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded-xl ${className}`}
       >
         {label}
-        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded-md bg-white/10 px-2 py-1 text-[11px] text-white/70 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 whitespace-nowrap">
+        <span className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2 rounded-md bg-[#1a1a1a] px-2 py-1 text-[11px] text-white/70 opacity-0 border border-white/10 transition-opacity group-hover:opacity-100 whitespace-nowrap">
           {copied ? "Copied!" : "Copy"}
         </span>
       </button>
@@ -83,12 +87,12 @@ export default function CopyButton({
             strokeWidth="2"
           >
             {copied ? (
-              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+              <path strokeLinecap="round" strokeLinejoin="round" d={CHECK_PATH} />
             ) : (
               <path
                 strokeLinecap="round"
                 strokeLinejoin="round"
-                d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+                d={COPY_PATH}
               />
             )}
           </svg>
@@ -110,12 +114,12 @@ export default function CopyButton({
           strokeWidth="2"
         >
           {copied ? (
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            <path strokeLinecap="round" strokeLinejoin="round" d={CHECK_PATH} />
           ) : (
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              d={COPY_PATH}
             />
           )}
         </svg>
@@ -127,7 +131,7 @@ export default function CopyButton({
   return (
     <button
       onClick={handleCopy}
-      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 ${variantStyles[variant]} ${className}`}
+      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 max-md:min-h-[44px] ${variantStyles[variant]} ${className}`}
     >
       {copied ? (
         <>
@@ -138,7 +142,7 @@ export default function CopyButton({
             stroke="currentColor"
             strokeWidth="2"
           >
-            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            <path strokeLinecap="round" strokeLinejoin="round" d={CHECK_PATH} />
           </svg>
           <span>Copied!</span>
         </>
@@ -154,7 +158,7 @@ export default function CopyButton({
             <path
               strokeLinecap="round"
               strokeLinejoin="round"
-              d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z"
+              d={COPY_PATH}
             />
           </svg>
           <span>{label}</span>

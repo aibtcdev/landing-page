@@ -4,12 +4,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
-
-const levelColors: Record<number, string> = {
-  0: "rgba(255,255,255,0.3)",
-  1: "#F7931A",
-  2: "#7DA2FF",
-};
+import { kvGetJson } from "@/lib/kv-helpers";
+import { getAvatarUrl } from "@/lib/constants";
 
 export async function GET(
   _request: NextRequest,
@@ -27,28 +23,62 @@ export async function GET(
       return new Response("Invalid address", { status: 400 });
     }
 
-    // Fetch agent and claim in parallel (claim needs btcAddress, but we can
-    // speculatively fetch if address is already btc; otherwise sequential)
-    const agentData = await kv.get(`${prefix}:${address}`);
-    if (!agentData) {
-      return new Response("Agent not found", { status: 404 });
-    }
-
-    const agent = JSON.parse(agentData) as AgentRecord;
-
-    // Get claim status for level computation
-    const claimData = await kv.get(`claim:${agent.btcAddress}`);
+    // For btc addresses the claim key is claim:{address} — fetch agent + claim
+    // in parallel. For stx addresses we must fetch the agent first to get
+    // btcAddress before we can look up the claim.
+    let agent: AgentRecord;
     let claim: ClaimStatus | null = null;
-    if (claimData) {
-      try {
-        claim = JSON.parse(claimData) as ClaimStatus;
-      } catch { /* ignore */ }
+
+    if (prefix === "btc") {
+      const [agentData, claimResult] = await Promise.all([
+        kv.get(`btc:${address}`),
+        kvGetJson<ClaimStatus>(kv, `claim:${address}`),
+      ]);
+      if (!agentData) {
+        return new Response("Agent not found", { status: 404 });
+      }
+      agent = JSON.parse(agentData) as AgentRecord;
+      claim = claimResult;
+    } else {
+      const agentData = await kv.get(`stx:${address}`);
+      if (!agentData) {
+        return new Response("Agent not found", { status: 404 });
+      }
+      agent = JSON.parse(agentData) as AgentRecord;
+      claim = await kvGetJson<ClaimStatus>(kv, `claim:${agent.btcAddress}`);
     }
 
     const level = computeLevel(agent, claim);
     const levelDef = LEVELS[level];
     const displayName = generateName(agent.btcAddress);
-    const color = levelColors[level];
+    const color = levelDef.color;
+
+    // Pre-fetch avatar with timeout to avoid cold-start delays that cause
+    // Twitter's card crawler to time out and cache a no-image card
+    const avatarUrl = getAvatarUrl(agent.btcAddress);
+    let avatarSrc: string | null = null;
+    {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      try {
+        const avatarRes = await fetch(avatarUrl, { signal: controller.signal });
+        if (avatarRes.ok) {
+          const buf = await avatarRes.arrayBuffer();
+          const ct = avatarRes.headers.get("content-type") || "image/svg+xml";
+          const bytes = new Uint8Array(buf);
+          const chunkSize = 0x8000;
+          const chunks: string[] = [];
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+          }
+          avatarSrc = `data:${ct};base64,${btoa(chunks.join(""))}`;
+        }
+      } catch {
+        // Avatar fetch timed out or failed — render without it
+      } finally {
+        clearTimeout(timeout);
+      }
+    }
 
     return new ImageResponse(
       (
@@ -108,23 +138,43 @@ export async function GET(
                   width: "168px",
                   height: "168px",
                   borderRadius: "50%",
-                  border: `2px solid ${levelColors[2]}80`,
+                  border: `2px solid ${LEVELS[2].color}80`,
                   display: "flex",
                 }}
               />
             )}
 
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-              alt=""
-              width="120"
-              height="120"
-              style={{
-                borderRadius: "50%",
-                border: `3px solid ${color}40`,
-              }}
-            />
+            {avatarSrc ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={avatarSrc}
+                alt=""
+                width="120"
+                height="120"
+                style={{
+                  borderRadius: "50%",
+                  border: `3px solid ${color}40`,
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "120px",
+                  height: "120px",
+                  borderRadius: "50%",
+                  border: `3px solid ${color}40`,
+                  background: `linear-gradient(135deg, ${color}40 0%, ${color}20 100%)`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "48px",
+                  fontWeight: "700",
+                  color: color,
+                }}
+              >
+                {displayName.charAt(0)}
+              </div>
+            )}
           </div>
 
           {/* Agent name */}

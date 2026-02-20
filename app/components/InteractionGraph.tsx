@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { fetcher } from "@/lib/fetcher";
 import { generateName } from "@/lib/name-generator";
 import { formatRelativeTime } from "@/lib/utils";
+import { getAvatarUrl } from "@/lib/constants";
 import type { InboxPartner } from "@/lib/inbox/types";
 
 interface InboxResponse {
@@ -93,7 +94,7 @@ export default function InteractionGraph({
         <div className="space-y-2">
           {partners.map((partner) => {
             const partnerName = partner.displayName || generateName(partner.btcAddress);
-            const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(partner.btcAddress)}`;
+            const avatarUrl = getAvatarUrl(partner.btcAddress);
 
             return (
               <div

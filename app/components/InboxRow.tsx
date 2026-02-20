@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { formatRelativeTime } from "@/lib/utils";
 import { generateName } from "@/lib/name-generator";
+import { getAvatarUrl } from "@/lib/constants";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
 type InboxMessageWithPeer = InboxMessage & {
@@ -70,7 +71,7 @@ export default function InboxRow({
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(avatarAddress)}`}
+            src={getAvatarUrl(avatarAddress)}
             alt=""
             className="size-full object-cover"
             loading="lazy"
@@ -134,7 +135,7 @@ export default function InboxRow({
             <Link href={`/agents/${reply.fromAddress}`} className="size-5 shrink-0 overflow-hidden rounded-full border border-[#7DA2FF]/20 bg-white/[0.06]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
-                src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(reply.fromAddress)}`}
+                src={getAvatarUrl(reply.fromAddress)}
                 alt=""
                 className="size-full object-cover"
                 loading="lazy"

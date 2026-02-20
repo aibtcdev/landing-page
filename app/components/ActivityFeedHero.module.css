@@ -1,0 +1,90 @@
+/* Feed scroll viewport with fade masks */
+.feedViewport {
+  overflow: hidden;
+  mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 20px,
+    black calc(100% - 20px),
+    transparent 100%
+  );
+  -webkit-mask-image: linear-gradient(
+    to bottom,
+    transparent 0%,
+    black 20px,
+    black calc(100% - 20px),
+    transparent 100%
+  );
+}
+
+/* Infinite upward scroll — duration set via JS --scroll-duration */
+.feedTrack {
+  animation: scrollUp var(--scroll-duration, 80s) linear infinite;
+}
+.feedTrack:hover {
+  animation-play-state: paused;
+}
+
+@keyframes scrollUp {
+  from {
+    transform: translateY(0);
+  }
+  to {
+    transform: translateY(-50%);
+  }
+}
+
+/* Green live-indicator pulse ring */
+.pulse {
+  position: relative;
+}
+.pulse::after {
+  content: "";
+  position: absolute;
+  inset: -3px;
+  border-radius: 50%;
+  background: #22c55e;
+  animation: pulseRing 2.2s ease-out infinite;
+}
+
+@keyframes pulseRing {
+  0% {
+    transform: scale(1);
+    opacity: 0.35;
+  }
+  100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+/* Subtle orange highlight line at card top */
+.feedCard {
+  position: relative;
+}
+.feedCard::before {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 15%;
+  right: 15%;
+  height: 1px;
+  background: linear-gradient(
+    90deg,
+    transparent,
+    rgba(247, 147, 26, 0.2),
+    transparent
+  );
+  border-radius: 1px;
+  z-index: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .feedTrack {
+    animation: none;
+    overflow-y: auto;
+  }
+  .pulse::after {
+    animation: none;
+  }
+}
