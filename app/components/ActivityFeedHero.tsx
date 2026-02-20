@@ -80,7 +80,7 @@ function FeedItem({ event: ev }: { event: ActivityEvent }) {
         </div>
         <div className="flex shrink-0 flex-col items-end gap-1">
           <span className="rounded-full border border-[#F7931A]/[0.18] bg-[#F7931A]/[0.08] px-2 py-0.5 text-[11px] font-medium text-[#F7931A]">
-            {ev.paymentSatoshis || 100} sats
+            {ev.paymentSatoshis ?? 100} sats
           </span>
           <span className="text-[11px] text-white/20">{timeAgo(ev.timestamp)}</span>
         </div>
@@ -169,8 +169,12 @@ export function ActivityFeedHero({ registeredCount = 0, messageCount = 0, topAge
         events?: ActivityEvent[];
         stats?: ActivityStats;
       };
-      if (data.events?.length) {
-        const hash = data.events.map((e) => e.timestamp + e.type).join("|");
+      if (data.events) {
+        const hash = data.events
+          .map((e) =>
+            [e.timestamp, e.type, e.agent.btcAddress, e.achievementId ?? ""].join("|")
+          )
+          .join("||");
         if (hash !== hashRef.current) {
           hashRef.current = hash;
           setEvents(data.events);

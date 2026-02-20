@@ -72,6 +72,13 @@ const TOP_ACTIVE_AGENTS = 20;
 const ACTIVE_DAYS_THRESHOLD = 7;
 
 /**
+ * OPTIONS /api/activity — CORS preflight handler.
+ */
+export async function OPTIONS() {
+  return new Response(null, { status: 204, headers: CORS_HEADERS });
+}
+
+/**
  * GET /api/activity
  *
  * Returns recent network activity (messages, achievements, registrations)
@@ -140,6 +147,7 @@ export async function GET(request: NextRequest) {
       },
     }, {
       headers: {
+        ...CORS_HEADERS,
         "Cache-Control": "public, max-age=60, s-maxage=120",
       },
     });

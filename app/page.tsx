@@ -4,7 +4,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import AnimatedBackground from "./components/AnimatedBackground";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
-import CopyButton from "./components/CopyButton";
 import { ActivityFeedHero } from "./components/ActivityFeedHero";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";

@@ -9,8 +9,6 @@ import Navbar from "../components/Navbar";
 import {
   type ActivityEvent,
   type ActivityResponse,
-  type NetworkStats,
-  EVENT_CONFIG,
   EventRow,
   StatsGrid,
   formatNumber,
@@ -19,7 +17,8 @@ import {
 export default function ActivityPage() {
   const { data, error, isLoading: loading } = useSWR<ActivityResponse>(
     "/api/activity",
-    fetcher
+    fetcher,
+    { refreshInterval: 30_000, revalidateOnFocus: true }
   );
 
   const [isMobile, setIsMobile] = useState(false);
@@ -150,7 +149,6 @@ function FullFeed({
   events: ActivityEvent[];
   visibleCount: number;
 }) {
-  const containerRef = useRef<HTMLDivElement>(null);
   const uidRef = useRef(0);
   const eventIndexRef = useRef(0);
 
@@ -160,7 +158,13 @@ function FullFeed({
   );
   const [enteringUid, setEnteringUid] = useState<number | null>(null);
 
-  const rowH = typeof window !== "undefined" && window.innerWidth <= 767 ? 46 : 56;
+  const [rowH, setRowH] = useState(56);
+
+  useEffect(() => {
+    if (typeof window !== "undefined" && window.innerWidth <= 767) {
+      setRowH(46);
+    }
+  }, []);
 
   // Prime the index so the ticker starts after the initial batch
   useEffect(() => {
@@ -187,7 +191,6 @@ function FullFeed({
 
   return (
     <div
-      ref={containerRef}
       className="feed-container rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px]"
       style={{ height: containerH }}
     >
@@ -207,5 +210,3 @@ function FullFeed({
   );
 }
 
-// Re-export for use in /api/activity to ensure types are consistent
-export type { NetworkStats };

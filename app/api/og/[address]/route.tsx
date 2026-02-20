@@ -54,23 +54,27 @@ export async function GET(
     // Twitter's card crawler to time out and cache a no-image card
     const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
     let avatarSrc: string | null = null;
-    try {
+    {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 3000);
-      const avatarRes = await fetch(avatarUrl, { signal: controller.signal });
-      clearTimeout(timeout);
-      if (avatarRes.ok) {
-        const buf = await avatarRes.arrayBuffer();
-        const ct = avatarRes.headers.get("content-type") || "image/svg+xml";
-        const bytes = new Uint8Array(buf);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i++) {
-          binary += String.fromCharCode(bytes[i]);
+      try {
+        const avatarRes = await fetch(avatarUrl, { signal: controller.signal });
+        if (avatarRes.ok) {
+          const buf = await avatarRes.arrayBuffer();
+          const ct = avatarRes.headers.get("content-type") || "image/svg+xml";
+          const bytes = new Uint8Array(buf);
+          const chunkSize = 0x8000;
+          const chunks: string[] = [];
+          for (let i = 0; i < bytes.length; i += chunkSize) {
+            chunks.push(String.fromCharCode(...bytes.subarray(i, i + chunkSize)));
+          }
+          avatarSrc = `data:${ct};base64,${btoa(chunks.join(""))}`;
         }
-        avatarSrc = `data:${ct};base64,${btoa(binary)}`;
+      } catch {
+        // Avatar fetch timed out or failed — render without it
+      } finally {
+        clearTimeout(timeout);
       }
-    } catch {
-      // Avatar fetch timed out or failed — render without it
     }
 
     return new ImageResponse(
