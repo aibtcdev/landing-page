@@ -8,6 +8,7 @@ import LevelBadge from "../components/LevelBadge";
 import Tooltip from "../components/Tooltip";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus } from "@/lib/utils";
+import { getAvatarUrl } from "@/lib/constants";
 import type { AgentRecord } from "@/lib/types";
 
 const SendMessageModal = dynamic(() => import("../components/SendMessageModal"), { ssr: false });
@@ -304,7 +305,7 @@ export default function AgentList({ agents }: AgentListProps) {
                     <Link href={`/agents/${agent.btcAddress}`} className="flex items-center gap-3">
                       {/* eslint-disable-next-line @next/next/no-img-element */}
                       <img
-                        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
+                        src={getAvatarUrl(agent.btcAddress)}
                         alt={displayName}
                         className="h-9 w-9 shrink-0 rounded-full bg-white/[0.06]"
                         loading="lazy"
@@ -401,7 +402,7 @@ export default function AgentList({ agents }: AgentListProps) {
               >
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
-                  src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
+                  src={getAvatarUrl(agent.btcAddress)}
                   alt={displayName}
                   className="h-10 w-10 shrink-0 rounded-full bg-white/[0.06]"
                   loading="lazy"

@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import CopyButton from "./CopyButton";
 import { INBOX_PRICE_SATS, MAX_MESSAGE_LENGTH } from "@/lib/inbox/constants";
+import { getAvatarUrl } from "@/lib/constants";
 
 interface SendMessageModalProps {
   isOpen: boolean;
@@ -57,7 +58,7 @@ export default function SendMessageModal({
 
   if (!isOpen) return null;
 
-  const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientBtcAddress)}`;
+  const avatarUrl = getAvatarUrl(recipientBtcAddress);
   const endpoint = `/api/inbox/${recipientBtcAddress}`;
   const messageContent = message.trim() || "Your message here";
 

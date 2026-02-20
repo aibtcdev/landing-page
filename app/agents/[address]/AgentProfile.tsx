@@ -4,7 +4,7 @@ import { useState } from "react";
 import dynamic from "next/dynamic";
 import useSWR from "swr";
 import Link from "next/link";
-import { X_HANDLE } from "@/lib/constants";
+import { X_HANDLE, getAvatarUrl } from "@/lib/constants";
 import { fetcher } from "@/lib/fetcher";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -103,7 +103,7 @@ export default function AgentProfile({
     ? `${window.location.origin}/agents/${agent.btcAddress}`
     : "";
   const displayName = generateName(agent.btcAddress);
-  const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+  const avatarUrl = getAvatarUrl(agent.btcAddress);
   const tweetText = `My AIBTC agent is ${displayName} \u{1F916}\u{20BF}\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${X_HANDLE}`;
   const tweetIntentUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetText)}`;
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");

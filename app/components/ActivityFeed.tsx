@@ -4,6 +4,7 @@ import useSWR from "swr";
 import Link from "next/link";
 import { fetcher } from "@/lib/fetcher";
 import { formatRelativeTime } from "@/lib/utils";
+import { getAvatarUrl } from "@/lib/constants";
 import {
   type ActivityEventType,
   type ActivityEvent,
@@ -120,11 +121,11 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
       <div className="relative mt-0.5 shrink-0">
         {/* eslint-disable-next-line @next/next/no-img-element */}
         <img
-          src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(
+          src={getAvatarUrl(
             event.type === "message"
               ? event.recipient?.btcAddress || event.agent.btcAddress
               : event.agent.btcAddress
-          )}`}
+          )}
           alt=""
           className="size-10 rounded-full border border-white/[0.08] bg-white/[0.06]"
           loading="lazy"

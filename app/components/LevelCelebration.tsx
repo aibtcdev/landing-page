@@ -1,11 +1,7 @@
 "use client";
 
 import { useEffect, useState, useCallback } from "react";
-
-const levelColors: Record<number, string> = {
-  1: "#F7931A",
-  2: "#7DA2FF",
-};
+import { LEVELS } from "@/lib/levels";
 
 interface Particle {
   id: number;
@@ -33,7 +29,7 @@ export default function LevelCelebration({
   const [celebrating, setCelebrating] = useState(false);
 
   const triggerCelebration = useCallback((newLevel: number) => {
-    const color = levelColors[newLevel] || "#ffffff";
+    const color = LEVELS[newLevel]?.color || "#ffffff";
     const newParticles: Particle[] = [];
     for (let i = 0; i < 24; i++) {
       newParticles.push({

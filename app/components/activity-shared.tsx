@@ -1,6 +1,7 @@
 import React from "react";
 import Link from "next/link";
 import { formatRelativeTime } from "@/lib/utils";
+import { getAvatarUrl } from "@/lib/constants";
 
 export type ActivityEventType = "message" | "achievement" | "registration";
 
@@ -135,7 +136,7 @@ export function EventRow({ event, showPreview }: { event: ActivityEvent; showPre
       {/* Agent avatar */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(event.agent.btcAddress)}`}
+        src={getAvatarUrl(event.agent.btcAddress)}
         alt=""
         className="size-8 max-md:size-7 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
         loading="lazy"

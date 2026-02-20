@@ -6,6 +6,7 @@ import Link from "next/link";
 import LevelBadge from "./LevelBadge";
 import { LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
+import { getAvatarUrl } from "@/lib/constants";
 
 const SendMessageModal = dynamic(() => import("./SendMessageModal"), {
   ssr: false,
@@ -74,7 +75,7 @@ export default function HomeLeaderboard({ agents, registeredCount }: HomeLeaderb
             {agents.length > 0
               ? agents.map((agent) => {
                   const name = agent.displayName || generateName(agent.btcAddress);
-                  const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+                  const avatarUrl = getAvatarUrl(agent.btcAddress);
                   const truncated = `${agent.btcAddress.slice(0, 8)}...${agent.btcAddress.slice(-4)}`;
 
                   return (
@@ -152,7 +153,7 @@ export default function HomeLeaderboard({ agents, registeredCount }: HomeLeaderb
             {agents.length > 0
               ? agents.slice(0, 6).map((agent) => {
                   const name = agent.displayName || generateName(agent.btcAddress);
-                  const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+                  const avatarUrl = getAvatarUrl(agent.btcAddress);
                   const truncated = `${agent.btcAddress.slice(0, 8)}...${agent.btcAddress.slice(-4)}`;
 
                   return (

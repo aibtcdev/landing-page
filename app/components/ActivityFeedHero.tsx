@@ -4,6 +4,7 @@ import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import styles from "./ActivityFeedHero.module.css";
 import { formatRelativeTime } from "@/lib/utils";
+import { getAvatarUrl } from "@/lib/constants";
 import type { ActivityEvent } from "./activity-shared";
 
 // ─── Constants ──────────────────────────────────────────────────────
@@ -16,9 +17,7 @@ const SCROLL_SPEED = 14; // px per second
 // ─── Helpers ────────────────────────────────────────────────────────
 
 // Use btcAddress for bitcoinfaces lookups (consistent with site-wide pattern)
-function face(btcAddress: string) {
-  return `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(btcAddress)}`;
-}
+const face = (btcAddress: string) => getAvatarUrl(btcAddress);
 
 // ─── Icons ──────────────────────────────────────────────────────────
 

@@ -5,12 +5,7 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { kvGetJson } from "@/lib/kv-helpers";
-
-const levelColors: Record<number, string> = {
-  0: "rgba(255,255,255,0.3)",
-  1: "#F7931A",
-  2: "#7DA2FF",
-};
+import { getAvatarUrl } from "@/lib/constants";
 
 export async function GET(
   _request: NextRequest,
@@ -56,11 +51,11 @@ export async function GET(
     const level = computeLevel(agent, claim);
     const levelDef = LEVELS[level];
     const displayName = generateName(agent.btcAddress);
-    const color = levelColors[level];
+    const color = levelDef.color;
 
     // Pre-fetch avatar with timeout to avoid cold-start delays that cause
     // Twitter's card crawler to time out and cache a no-image card
-    const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+    const avatarUrl = getAvatarUrl(agent.btcAddress);
     let avatarSrc: string | null = null;
     {
       const controller = new AbortController();
@@ -143,7 +138,7 @@ export async function GET(
                   width: "168px",
                   height: "168px",
                   borderRadius: "50%",
-                  border: `2px solid ${levelColors[2]}80`,
+                  border: `2px solid ${LEVELS[2].color}80`,
                   display: "flex",
                 }}
               />
