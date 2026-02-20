@@ -4,6 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
+import { kvGetJson } from "@/lib/kv-helpers";
 
 const levelColors: Record<number, string> = {
   0: "rgba(255,255,255,0.3)",
@@ -27,22 +28,29 @@ export async function GET(
       return new Response("Invalid address", { status: 400 });
     }
 
-    // Fetch agent and claim in parallel (claim needs btcAddress, but we can
-    // speculatively fetch if address is already btc; otherwise sequential)
-    const agentData = await kv.get(`${prefix}:${address}`);
-    if (!agentData) {
-      return new Response("Agent not found", { status: 404 });
-    }
-
-    const agent = JSON.parse(agentData) as AgentRecord;
-
-    // Get claim status for level computation
-    const claimData = await kv.get(`claim:${agent.btcAddress}`);
+    // For btc addresses the claim key is claim:{address} — fetch agent + claim
+    // in parallel. For stx addresses we must fetch the agent first to get
+    // btcAddress before we can look up the claim.
+    let agent: AgentRecord;
     let claim: ClaimStatus | null = null;
-    if (claimData) {
-      try {
-        claim = JSON.parse(claimData) as ClaimStatus;
-      } catch { /* ignore */ }
+
+    if (prefix === "btc") {
+      const [agentData, claimResult] = await Promise.all([
+        kv.get(`btc:${address}`),
+        kvGetJson<ClaimStatus>(kv, `claim:${address}`),
+      ]);
+      if (!agentData) {
+        return new Response("Agent not found", { status: 404 });
+      }
+      agent = JSON.parse(agentData) as AgentRecord;
+      claim = claimResult;
+    } else {
+      const agentData = await kv.get(`stx:${address}`);
+      if (!agentData) {
+        return new Response("Agent not found", { status: 404 });
+      }
+      agent = JSON.parse(agentData) as AgentRecord;
+      claim = await kvGetJson<ClaimStatus>(kv, `claim:${agent.btcAddress}`);
     }
 
     const level = computeLevel(agent, claim);
