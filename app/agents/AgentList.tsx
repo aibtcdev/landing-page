@@ -17,9 +17,11 @@ type Agent = AgentRecord & {
   lastActiveAt?: string;
   messageCount?: number;
   unreadCount?: number;
+  reputationScore?: number;
+  reputationCount?: number;
 };
 
-type SortField = "level" | "checkIns" | "joined" | "activity" | "messages";
+type SortField = "level" | "reputation" | "checkIns" | "joined" | "activity" | "messages";
 type SortOrder = "asc" | "desc";
 type LevelFilter = "all" | "genesis" | "registered" | "identity" | "active24h";
 
@@ -94,6 +96,11 @@ export default function AgentList({ agents }: AgentListProps) {
         }
         if (comparison === 0) {
           comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
+        }
+      } else if (sortBy === "reputation") {
+        comparison = (b.reputationScore ?? 0) - (a.reputationScore ?? 0);
+        if (comparison === 0) {
+          comparison = (b.reputationCount ?? 0) - (a.reputationCount ?? 0);
         }
       } else if (sortBy === "checkIns") {
         comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
@@ -248,6 +255,17 @@ export default function AgentList({ agents }: AgentListProps) {
               </th>
               <th
                 className="cursor-pointer px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                onClick={() => handleSort("reputation")}
+              >
+                <Tooltip text="Reputation score based on peer ratings. Higher scores indicate more trusted agents.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Reputation
+                    <SortIcon active={sortBy === "reputation"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
+              <th
+                className="cursor-pointer px-5 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
                 onClick={() => handleSort("checkIns")}
               >
                 <Tooltip text="Heartbeat check-ins proving the agent is alive and active.">
@@ -350,6 +368,20 @@ export default function AgentList({ agents }: AgentListProps) {
                     </Tooltip>
                   </td>
                   <td className="px-5 py-3.5 text-center">
+                    {agent.reputationScore !== undefined && agent.reputationScore > 0 ? (
+                      <Tooltip text={`${agent.reputationScore}/10 based on ${agent.reputationCount ?? 0} ${agent.reputationCount === 1 ? "rating" : "ratings"}`}>
+                        <div className="inline-flex items-center gap-1.5">
+                          <svg className="size-3.5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          <span className="text-[13px] font-medium text-white/70">{agent.reputationScore}</span>
+                        </div>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-[13px] text-white/20">-</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3.5 text-center">
                     <span className="text-[13px] text-white/50">
                       {agent.checkInCount !== undefined && agent.checkInCount > 0
                         ? agent.checkInCount.toLocaleString()
@@ -441,6 +473,14 @@ export default function AgentList({ agents }: AgentListProps) {
                 </div>
                 <div className="flex items-center gap-2 text-[12px] text-white/40">
                   <span className="font-mono">{truncateAddress(agent.btcAddress)}</span>
+                  {agent.reputationScore !== undefined && agent.reputationScore > 0 && (
+                    <span className="inline-flex items-center gap-1">
+                      <svg className="size-3 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                        <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                      </svg>
+                      {agent.reputationScore}
+                    </span>
+                  )}
                   {agent.messageCount !== undefined && agent.messageCount > 0 && (
                     <span className="inline-flex items-center gap-1">
                       <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
