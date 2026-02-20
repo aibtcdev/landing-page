@@ -310,7 +310,9 @@ export async function verifyTxidPayment(
   };
 
   try {
-    const response = await fetch(`${apiBase}/extended/v1/tx/${fullTxid}`);
+    const response = await fetch(`${apiBase}/extended/v1/tx/${fullTxid}`, {
+      signal: AbortSignal.timeout(10000),
+    });
     if (!response.ok) {
       if (response.status === 404) {
         return {
@@ -436,6 +438,6 @@ export async function verifyTxidPayment(
   return {
     success: true,
     payerStxAddress,
-    paymentTxid: fullTxid,
+    paymentTxid: normalizedTxid,
   };
 }

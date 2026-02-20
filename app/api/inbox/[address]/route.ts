@@ -528,6 +528,17 @@ export async function POST(
     });
   }
 
+  // Reject ambiguous requests with both payment methods
+  if (paymentSigHeader && paymentTxid) {
+    logger.warn("Both payment-signature and paymentTxid provided");
+    return NextResponse.json(
+      {
+        error: "Cannot provide both payment-signature header and paymentTxid. Use one payment method.",
+      },
+      { status: 400 }
+    );
+  }
+
   // Txid recovery path: verify on-chain sBTC transfer as proof of payment
   // when x402 settlement timed out but the transfer succeeded.
   if (!paymentSigHeader && paymentTxid) {
@@ -590,6 +601,16 @@ export async function POST(
 
     const fromAddress = txidResult.payerStxAddress || "unknown";
     const messageId = `msg_${Date.now()}_${crypto.randomUUID()}`;
+
+    // Guard against (extremely unlikely) server-generated ID collision
+    const existingMessage = await kv.get(`inbox:message:${messageId}`);
+    if (existingMessage) {
+      logger.warn("Duplicate message ID", { messageId });
+      return NextResponse.json(
+        { error: "Message already exists", messageId },
+        { status: 409 }
+      );
+    }
 
     const sigResult = verifySenderSignature(senderSignatureInput, content, logger);
     if (sigResult instanceof NextResponse) return sigResult;
