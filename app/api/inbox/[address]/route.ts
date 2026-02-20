@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
+import type { Logger } from "@/lib/logging";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
   validateInboxMessage,
@@ -20,6 +21,43 @@ import {
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
+
+/**
+ * Verify optional BIP-137 sender signature over message content.
+ * Returns the recovered BTC address on success, or a 400 NextResponse on failure.
+ * When no signature is provided, returns { authenticated: false }.
+ */
+function verifySenderSignature(
+  signature: string | undefined,
+  content: string,
+  logger: Logger
+): { authenticated: true; senderBtcAddress: string } | { authenticated: false; senderBtcAddress: undefined } | NextResponse {
+  if (!signature) {
+    return { authenticated: false, senderBtcAddress: undefined };
+  }
+
+  try {
+    const sigResult = verifyBitcoinSignature(
+      signature,
+      buildSenderAuthMessage(content)
+    );
+    if (sigResult.valid) {
+      logger.info("Sender signature verified", { senderBtcAddress: sigResult.address });
+      return { authenticated: true, senderBtcAddress: sigResult.address };
+    }
+    logger.warn("Sender signature verification failed");
+    return NextResponse.json(
+      { error: "Sender signature verification failed" },
+      { status: 400 }
+    );
+  } catch (err) {
+    logger.warn("Sender signature verification error", { error: String(err) });
+    return NextResponse.json(
+      { error: "Sender signature verification failed: invalid format" },
+      { status: 400 }
+    );
+  }
+}
 
 export async function GET(
   request: NextRequest,
@@ -490,17 +528,15 @@ export async function POST(
     });
   }
 
-  // --- Txid recovery path ---
-  // When paymentTxid is provided without payment-signature header, verify the
-  // confirmed on-chain transaction as proof of payment. This is a recovery flow
-  // for when x402 settlement times out but the sBTC transfer succeeded.
+  // Txid recovery path: verify on-chain sBTC transfer as proof of payment
+  // when x402 settlement timed out but the transfer succeeded.
   if (!paymentSigHeader && paymentTxid) {
     logger.info("Txid recovery: verifying on-chain payment", {
       txid: paymentTxid,
       recipientStx: agent.stxAddress,
     });
 
-    // Rate limit: one txid verification attempt per txid per 60 seconds
+    // Rate limit: one attempt per txid per 60 seconds
     const rateLimitKey = `ratelimit:txid-recovery:${paymentTxid}`;
     const rateLimitHit = await kv.get(rateLimitKey);
     if (rateLimitHit) {
@@ -515,7 +551,7 @@ export async function POST(
     }
     await kv.put(rateLimitKey, "1", { expirationTtl: 60 });
 
-    // Check if this txid has already been redeemed for a message
+    // Prevent double-redemption
     const redeemedKey = `inbox:redeemed-txid:${paymentTxid}`;
     const existingRedemption = await kv.get(redeemedKey);
     if (existingRedemption) {
@@ -530,7 +566,6 @@ export async function POST(
       );
     }
 
-    // Verify the transaction on-chain
     const txidResult = await verifyTxidPayment(
       paymentTxid,
       agent.stxAddress,
@@ -553,41 +588,12 @@ export async function POST(
       );
     }
 
-    // Transaction verified -- store message
     const fromAddress = txidResult.payerStxAddress || "unknown";
     const messageId = `msg_${Date.now()}_${crypto.randomUUID()}`;
 
-    // Verify optional sender signature (BIP-137 over "Inbox Message | {content}")
-    // FIX: Match x402 path behavior -- return 400 on bad signature, don't silently continue
-    let senderBtcAddress: string | undefined;
-    let authenticated = false;
-    if (senderSignatureInput) {
-      try {
-        const sigResult = verifyBitcoinSignature(
-          senderSignatureInput,
-          buildSenderAuthMessage(content)
-        );
-        if (sigResult.valid) {
-          senderBtcAddress = sigResult.address;
-          authenticated = true;
-          logger.info("Sender signature verified (txid recovery)", { senderBtcAddress });
-        } else {
-          logger.warn("Sender signature verification failed (txid recovery)");
-          return NextResponse.json(
-            { error: "Sender signature verification failed" },
-            { status: 400 }
-          );
-        }
-      } catch (err) {
-        logger.warn("Sender signature verification threw error (txid recovery)", {
-          error: String(err),
-        });
-        return NextResponse.json(
-          { error: "Sender signature verification failed: invalid format" },
-          { status: 400 }
-        );
-      }
-    }
+    const sigResult = verifySenderSignature(senderSignatureInput, content, logger);
+    if (sigResult instanceof NextResponse) return sigResult;
+    const { authenticated, senderBtcAddress } = sigResult;
 
     const now = new Date().toISOString();
     const message = {
@@ -605,7 +611,7 @@ export async function POST(
       ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
     };
 
-    // Resolve sender agent for sent index (use existing lookupAgent, not a separate import)
+    // Resolve sender agent for sent index
     const senderAgent =
       fromAddress !== "unknown"
         ? await lookupAgent(kv, fromAddress)
@@ -646,18 +652,20 @@ export async function POST(
     );
   }
 
+  // x402 payment path: paymentSigHeader is present (both !paymentSigHeader branches returned above)
+  if (!paymentSigHeader) {
+    // Unreachable -- satisfies TypeScript narrowing
+    return NextResponse.json({ error: "Missing payment signature" }, { status: 400 });
+  }
+
   // Parse payment signature (base64-encoded JSON per x402 v2, with plain JSON fallback)
-  // At this point paymentSigHeader is guaranteed non-null (both !paymentSigHeader paths returned above)
-  const paymentSigHeaderValue = paymentSigHeader!;
   let paymentPayload: PaymentPayloadV2;
   try {
-    // Try base64 decode first (v2 standard)
-    const decoded = atob(paymentSigHeaderValue);
+    const decoded = atob(paymentSigHeader);
     paymentPayload = JSON.parse(decoded) as PaymentPayloadV2;
   } catch {
-    // Fallback: try plain JSON (backwards compat)
     try {
-      paymentPayload = JSON.parse(paymentSigHeaderValue) as PaymentPayloadV2;
+      paymentPayload = JSON.parse(paymentSigHeader) as PaymentPayloadV2;
     } catch {
       logger.error("Invalid payment signature format");
       return NextResponse.json(
@@ -704,15 +712,10 @@ export async function POST(
     );
   }
 
-  // Extract sender address from payment (payer's STX address from x402 settlement)
   const fromAddress = paymentResult.payerStxAddress || "unknown";
-
-  // Always generate a unique message ID server-side.
-  // Never trust client-supplied IDs — the x402 resource.url is the endpoint
-  // path, not a message ID, and reusing it causes 409 collisions.
   const messageId = `msg_${Date.now()}_${crypto.randomUUID()}`;
 
-  // Check for duplicate message
+  // Guard against (extremely unlikely) server-generated ID collision
   const existingMessage = await kv.get(`inbox:message:${messageId}`);
   if (existingMessage) {
     logger.warn("Duplicate message ID", { messageId });
@@ -725,40 +728,10 @@ export async function POST(
     );
   }
 
-  // Verify optional sender signature (BIP-137 over "Inbox Message | {content}")
-  // Signature is opt-in — unsigned messages continue to work unchanged.
-  let senderBtcAddress: string | undefined;
-  let authenticated = false;
+  const sigResult = verifySenderSignature(senderSignatureInput, content, logger);
+  if (sigResult instanceof NextResponse) return sigResult;
+  const { authenticated, senderBtcAddress } = sigResult;
 
-  if (senderSignatureInput) {
-    try {
-      const sigResult = verifyBitcoinSignature(
-        senderSignatureInput,
-        buildSenderAuthMessage(content)
-      );
-      if (sigResult.valid) {
-        senderBtcAddress = sigResult.address;
-        authenticated = true;
-        logger.info("Sender signature verified", { senderBtcAddress });
-      } else {
-        logger.warn("Sender signature verification failed (invalid)");
-        return NextResponse.json(
-          { error: "Sender signature verification failed" },
-          { status: 400 }
-        );
-      }
-    } catch (err) {
-      logger.warn("Sender signature verification threw error", {
-        error: String(err),
-      });
-      return NextResponse.json(
-        { error: "Sender signature verification failed: invalid format" },
-        { status: 400 }
-      );
-    }
-  }
-
-  // Store message (fromAddress stores the payer's STX address from x402 settlement)
   const now = new Date().toISOString();
   const message = {
     messageId,
@@ -774,13 +747,12 @@ export async function POST(
     ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
   };
 
-  // Resolve sender's BTC address from their STX address (for sent index)
+  // Resolve sender agent for sent index
   const senderAgent =
     fromAddress !== "unknown"
       ? await lookupAgent(kv, fromAddress)
       : null;
 
-  // Store message, update recipient inbox, and update sender sent index in parallel
   await Promise.all([
     storeMessage(kv, message),
     updateAgentInbox(kv, toBtcAddress, messageId, now),

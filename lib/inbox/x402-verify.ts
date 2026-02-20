@@ -29,6 +29,14 @@ import {
 import { INBOX_PRICE_SATS, SBTC_CONTRACTS } from "./constants";
 import type { Logger } from "../logging";
 
+/** No-op logger used when no logger is provided. */
+const NOOP_LOGGER: Logger = {
+  debug: () => {},
+  info: () => {},
+  warn: () => {},
+  error: () => {},
+};
+
 /**
  * Result of x402 payment verification for inbox messages.
  */
@@ -74,12 +82,7 @@ export async function verifyInboxPayment(
   relayUrl: string = DEFAULT_RELAY_URL,
   logger?: Logger
 ): Promise<InboxPaymentVerification> {
-  const log = logger || {
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-  };
+  const log = logger || NOOP_LOGGER;
 
   // Validate network and asset
   const networkCAIP2 = networkToCAIP2(network);
@@ -272,18 +275,12 @@ export async function verifyTxidPayment(
   network: "mainnet" | "testnet" = "mainnet",
   logger?: Logger
 ): Promise<InboxPaymentVerification> {
-  const log = logger || {
-    debug: () => {},
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-  };
+  const log = logger || NOOP_LOGGER;
 
-  // Normalize txid (remove 0x prefix if present)
+  // Normalize txid: ensure 0x prefix for Stacks API
   const normalizedTxid = txid.startsWith("0x") ? txid.slice(2) : txid;
   const fullTxid = `0x${normalizedTxid}`;
 
-  // Determine API base URL
   const apiBase =
     network === "mainnet"
       ? "https://api.hiro.so"
@@ -295,7 +292,7 @@ export async function verifyTxidPayment(
     network,
   });
 
-  // Fetch transaction from Stacks API
+  // Fetch and validate transaction from Stacks API
   let txData: {
     tx_id: string;
     tx_status: string;
@@ -338,7 +335,7 @@ export async function verifyTxidPayment(
     };
   }
 
-  // 1. Check tx is confirmed and successful
+  // Require confirmed, successful transaction
   if (txData.tx_status !== "success") {
     log.warn("Transaction not successful", { status: txData.tx_status });
     return {
@@ -348,7 +345,7 @@ export async function verifyTxidPayment(
     };
   }
 
-  // 2. Check it's a contract call
+  // Require contract call (not a token transfer or other tx type)
   if (txData.tx_type !== "contract_call" || !txData.contract_call) {
     return {
       success: false,
@@ -357,7 +354,7 @@ export async function verifyTxidPayment(
     };
   }
 
-  // 3. Check it's an sBTC transfer
+  // Verify the call targets the sBTC token contract's transfer function
   const sbtcContract = SBTC_CONTRACTS[network];
   const expectedContractId = `${sbtcContract.address}.${sbtcContract.name}`;
 
@@ -377,7 +374,7 @@ export async function verifyTxidPayment(
     };
   }
 
-  // 4. Parse transfer arguments: (amount uint, sender principal, recipient principal, memo (optional buff))
+  // Parse SIP-010 transfer args: (amount uint, sender principal, recipient principal, memo (optional buff))
   const args = txData.contract_call.function_args;
   if (!args || args.length < 3) {
     return {
@@ -387,7 +384,6 @@ export async function verifyTxidPayment(
     };
   }
 
-  // Extract amount (first arg, uint)
   const amountArg = args.find((a) => a.name === "amount");
   const recipientArg = args.find((a) => a.name === "recipient");
 
@@ -399,7 +395,7 @@ export async function verifyTxidPayment(
     };
   }
 
-  // Parse amount from Clarity repr (e.g., "u100")
+  // Parse Clarity uint repr (e.g., "u100")
   const amountMatch = amountArg.repr.match(/^u(\d+)$/);
   if (!amountMatch) {
     return {
@@ -410,7 +406,6 @@ export async function verifyTxidPayment(
   }
   const transferAmount = parseInt(amountMatch[1], 10);
 
-  // 5. Check amount >= INBOX_PRICE_SATS
   if (transferAmount < INBOX_PRICE_SATS) {
     return {
       success: false,
@@ -419,8 +414,7 @@ export async function verifyTxidPayment(
     };
   }
 
-  // 6. Check recipient matches
-  // Clarity principal repr: 'SP... or 'SM...
+  // Strip Clarity principal quote prefix ('SP... -> SP...)
   const recipientAddress = recipientArg.repr.replace(/^'/, "");
   if (recipientAddress !== recipientStxAddress) {
     return {
