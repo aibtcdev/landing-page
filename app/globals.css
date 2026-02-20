@@ -146,6 +146,105 @@
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  /* Ensure animate-fadeUp elements are visible when motion is reduced */
+  .animate-fadeUp {
+    animation: none !important;
+    opacity: 1 !important;
+  }
+}
+
+/* Activity feed animations */
+@keyframes slideIn {
+  0% {
+    opacity: 0;
+    transform: translateY(-10px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes feedSettle {
+  0% {
+    opacity: 0.5;
+    transform: translateY(-6px);
+  }
+  100% {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes glowFade {
+  0% {
+    background-color: rgba(247, 147, 26, 0.1);
+    box-shadow: inset 0 0 0 1px rgba(247, 147, 26, 0.25), 0 0 16px rgba(247, 147, 26, 0.12);
+  }
+  40% {
+    background-color: rgba(247, 147, 26, 0.06);
+    box-shadow: inset 0 0 0 1px rgba(247, 147, 26, 0.15), 0 0 10px rgba(247, 147, 26, 0.06);
+  }
+  100% {
+    background-color: transparent;
+    box-shadow: inset 0 0 0 1px transparent, 0 0 0px transparent;
+  }
+}
+
+.animate-slideIn {
+  animation: slideIn 0.6s cubic-bezier(0.22, 1, 0.36, 1) forwards, glowFade 3s ease-out 0.15s forwards;
+  border-radius: 8px;
+}
+.animate-feedSettle {
+  animation: feedSettle 0.5s cubic-bezier(0.22, 1, 0.36, 1) forwards;
+}
+
+/* Feed animation system — absolute-positioned items with smooth CSS transitions */
+.feed-container {
+  --feed-row-h: 56px;
+  position: relative;
+  overflow: hidden;
+}
+
+@media (max-width: 767px) {
+  .feed-container {
+    --feed-row-h: 46px;
+  }
+}
+
+.feed-item {
+  position: absolute;
+  inset-inline: 0;
+  will-change: transform;
+  transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+@keyframes feedEnter {
+  from {
+    opacity: 0;
+    transform: translateY(-20px);
+  }
+}
+
+/* Subtle pulsing orange glow for CTA boxes */
+@keyframes glowPulse {
+  0%, 100% {
+    box-shadow: 0 0 25px rgba(247,147,26,0.06), 0 0 50px rgba(247,147,26,0.03);
+  }
+  50% {
+    box-shadow: 0 0 35px rgba(247,147,26,0.14), 0 0 70px rgba(247,147,26,0.07);
+  }
+}
+
+.animate-glowPulse {
+  animation: glowPulse 3s ease-in-out infinite;
+}
+
+.feed-item-enter {
+  animation: feedEnter 600ms cubic-bezier(0.22, 1, 0.36, 1) both,
+             glowFade 2.2s ease-out 0.1s both;
+  border-radius: 8px;
 }
 
 /* Hide scrollbar */

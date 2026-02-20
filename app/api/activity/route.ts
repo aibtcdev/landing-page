@@ -1,4 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
+
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type",
+};
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
 import type { InboxAgentIndex, InboxMessage } from "@/lib/inbox/types";
@@ -150,6 +156,7 @@ export async function GET(request: NextRequest) {
       if (cachedAge < CACHE_TTL_SECONDS * 1000) {
         return NextResponse.json(cached.data, {
           headers: {
+            ...CORS_HEADERS,
             "Cache-Control": "public, max-age=60, s-maxage=120",
             "X-Cache": "HIT",
             "X-Cache-Age": Math.floor(cachedAge / 1000).toString(),
@@ -370,6 +377,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(response, {
       headers: {
+        ...CORS_HEADERS,
         "Cache-Control": "public, max-age=60, s-maxage=120",
         "X-Cache": "MISS",
       },
@@ -381,7 +389,10 @@ export async function GET(request: NextRequest) {
         error: "Failed to fetch network activity",
         message: error instanceof Error ? error.message : "Unknown error",
       },
-      { status: 500 }
+      {
+        status: 500,
+        headers: { ...CORS_HEADERS },
+      }
     );
   }
 }
