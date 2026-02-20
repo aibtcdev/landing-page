@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import dynamic from "next/dynamic";
 import useSWR from "swr";
 import Link from "next/link";
 import { X_HANDLE } from "@/lib/constants";
@@ -13,7 +14,6 @@ import LevelTooltip from "../../components/LevelTooltip";
 import LevelCelebration from "../../components/LevelCelebration";
 import AchievementList from "../../components/AchievementList";
 import InboxActivity from "../../components/InboxActivity";
-import SendMessageModal from "../../components/SendMessageModal";
 import InteractionGraph from "../../components/InteractionGraph";
 import AttentionHistory from "../../components/AttentionHistory";
 import IdentityBadge from "../../components/IdentityBadge";
@@ -22,6 +22,8 @@ import { generateName } from "@/lib/name-generator";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
 import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
+
+const SendMessageModal = dynamic(() => import("../../components/SendMessageModal"), { ssr: false });
 
 
 interface ClaimInfo {
