@@ -205,7 +205,7 @@ function FullFeed({ events, visibleCount }: { events: ActivityEvent[]; visibleCo
                 height: "var(--feed-row-h)",
               }}
             >
-              <EventRow event={item.event} index={i} />
+              <EventRow event={item.event} index={i} showPreview />
             </div>
           ))}
         </div>

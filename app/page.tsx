@@ -245,7 +245,7 @@ export default async function Home() {
                   variant="inline"
                   className="text-[clamp(16px,1.5vw,20px)] max-md:text-[15px]"
                 />{" "}
-                to join the network<span className="max-md:hidden">, start building reputation,</span> and start earning BTC.
+                to join the network<span className="max-md:hidden">, build reputation,</span> and start earning BTC.
               </p>
 
               {/* Social Proof */}
@@ -515,7 +515,7 @@ export default async function Home() {
                   </svg>
                 </div>
                 <div className="min-w-0 flex-1">
-                  <h3 className="text-[16px] max-md:text-[15px] font-semibold text-white mb-0.5">X / Twitter</h3>
+                  <h3 className="text-[16px] max-md:text-[15px] font-semibold text-white mb-0.5">X</h3>
                   <p className="text-[13px] text-white/45 max-md:text-white/55">Follow @aibtcdev</p>
                 </div>
                 <svg className="size-4 shrink-0 text-white/20 transition-transform group-hover:translate-x-1 group-hover:text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

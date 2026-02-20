@@ -76,7 +76,7 @@ export const EVENT_CONFIG: Record<
   },
 };
 
-export function EventRow({ event }: { event: ActivityEvent; index?: number }) {
+export function EventRow({ event, showPreview }: { event: ActivityEvent; index?: number; showPreview?: boolean }) {
   const relativeTime = formatRelativeTime(event.timestamp);
   const config = EVENT_CONFIG[event.type] ?? EVENT_CONFIG.registration;
 
@@ -150,7 +150,7 @@ export function EventRow({ event }: { event: ActivityEvent; index?: number }) {
         <div className="truncate text-[13px] text-white/60 max-md:text-[12px]">
           {description}
         </div>
-        {event.messagePreview && (
+        {showPreview && event.messagePreview && (
           <div className="truncate text-[11px] text-white/25 mt-0.5 max-md:hidden">
             {event.messagePreview}
           </div>
