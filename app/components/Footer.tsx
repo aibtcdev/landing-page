@@ -1,6 +1,3 @@
-"use client";
-
-import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { SocialLinks } from "./Navbar";
@@ -90,21 +87,18 @@ const footerSections = [
   },
 ];
 
+const LINK_CLASSES =
+  "flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A] max-md:min-h-[44px] max-md:py-1.5";
+
 function FooterSection({ section }: { section: typeof footerSections[number] }) {
-  const [open, setOpen] = useState(false);
   const Icon = section.icon;
 
   return (
-    <div className="max-md:py-4">
-      {/* Desktop: static heading. Mobile: tappable toggle */}
-      <button
-        className="mb-4 max-md:mb-0 flex w-full items-center justify-between text-sm font-semibold text-white/70 md:pointer-events-none md:cursor-default min-h-[44px]"
-        onClick={() => setOpen(!open)}
-        aria-expanded={open}
-      >
+    <details className="group max-md:py-4">
+      <summary className="mb-4 max-md:mb-0 flex w-full items-center justify-between text-sm font-semibold text-white/70 md:pointer-events-none md:cursor-default min-h-[44px] list-none [&::-webkit-details-marker]:hidden">
         {section.title}
         <svg
-          className={`size-4 text-white/30 transition-transform duration-200 md:hidden ${open ? "rotate-180" : ""}`}
+          className="size-4 text-white/30 transition-transform duration-200 md:hidden group-open:rotate-180"
           fill="none"
           viewBox="0 0 24 24"
           stroke="currentColor"
@@ -112,24 +106,36 @@ function FooterSection({ section }: { section: typeof footerSections[number] }) 
         >
           <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
         </svg>
-      </button>
+      </summary>
 
-      {/* Desktop: always visible. Mobile: collapsed by default */}
-      <div className={`space-y-2.5 max-md:space-y-1 md:block ${open ? "block" : "hidden"}`}>
-        {section.links.map((link) => (
-          <a
-            key={link.name}
-            href={link.url}
-            {...("external" in link && link.external && { target: "_blank", rel: "noopener noreferrer" })}
-            className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A] max-md:min-h-[44px] max-md:py-1.5"
-            title={"desc" in link ? link.desc : undefined}
-          >
-            <Icon className="size-3.5 shrink-0" />
-            {link.name}
-          </a>
-        ))}
+      <div className="space-y-2.5 max-md:space-y-1 md:!block">
+        {section.links.map((link) =>
+          "external" in link && link.external ? (
+            <a
+              key={link.name}
+              href={link.url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className={LINK_CLASSES}
+              title={"desc" in link ? link.desc : undefined}
+            >
+              <Icon className="size-3.5 shrink-0" />
+              {link.name}
+            </a>
+          ) : (
+            <Link
+              key={link.name}
+              href={link.url}
+              className={LINK_CLASSES}
+              title={"desc" in link ? link.desc : undefined}
+            >
+              <Icon className="size-3.5 shrink-0" />
+              {link.name}
+            </Link>
+          )
+        )}
       </div>
-    </div>
+    </details>
   );
 }
 
@@ -143,7 +149,7 @@ export default function Footer() {
             <p className="text-[15px] text-white/60 max-md:text-[14px]">
               Humans see this site. Agents curl it.
             </p>
-            <p className="mt-2 text-[13px] text-white/40 max-md:text-[13px]">
+            <p className="mt-2 text-[13px] text-white/40">
               Tell your agent{" "}
               <CopyButton
                 text="Check aibtc.com/llms.txt instructions"
@@ -151,7 +157,6 @@ export default function Footer() {
                   <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-white/50 hover:text-white/70 transition-colors cursor-pointer">Check aibtc.com/llms.txt instructions</code>
                 }
                 variant="inline"
-                className=""
               />{" "}
               to ensure it has all the AIBTC skills.
             </p>
