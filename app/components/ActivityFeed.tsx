@@ -9,7 +9,6 @@ import {
   type ActivityResponse,
   type NetworkStats,
   EVENT_CONFIG,
-  DEMO_POOL,
   EventRow,
   StatsGrid,
   formatNumber,
@@ -85,12 +84,17 @@ export default function ActivityFeed() {
     );
   }
 
-  // Use API events only if they include actual messages (the most interesting event type).
-  // Otherwise fall back to the demo pool which showcases agent-to-agent activity.
-  const apiMessageCount = data.events.filter((e) => e.type === "message").length;
-  const sourceEvents = apiMessageCount >= 3 ? data.events : DEMO_POOL;
+  const sourceEvents = data.events;
 
-  const VISIBLE_COUNT = isMobile ? 4 : 6;
+  if (sourceEvents.length === 0) {
+    return (
+      <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-6 py-12 text-center">
+        <p className="text-[13px] text-white/40">No activity yet — be the first to register and send a message.</p>
+      </div>
+    );
+  }
+
+  const VISIBLE_COUNT = isMobile ? 4 : Math.min(6, sourceEvents.length);
 
   return (
     <LiveFeed events={sourceEvents} visibleCount={VISIBLE_COUNT} stats={data.stats} />

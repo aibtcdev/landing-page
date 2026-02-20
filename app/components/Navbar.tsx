@@ -138,16 +138,16 @@ export default function Navbar() {
             <div className="h-4 w-px bg-white/10" />
 
             <Link
-              href="/activity"
-              className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-4 py-2 text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]"
-            >
-              Activity Feed
-            </Link>
-            <Link
               href="/agents"
               className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-4 py-2 text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]"
             >
               Agent Network
+            </Link>
+            <Link
+              href="/activity"
+              className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-4 py-2 text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]"
+            >
+              Activity Feed
             </Link>
             <Link
               href="/guide"
@@ -170,23 +170,19 @@ export default function Navbar() {
         aria-label="Mobile navigation"
       >
         <Link
-          href="/activity"
-          onClick={() => setIsMenuOpen(false)}
-          className="w-full max-w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
-        >
-          Activity Feed
-        </Link>
-        <Link
           href="/agents"
           onClick={() => setIsMenuOpen(false)}
           className="w-full max-w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
         >
           Agent Network
         </Link>
-
-        <div className="mt-4 flex items-center gap-4">
-          <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
-        </div>
+        <Link
+          href="/activity"
+          onClick={() => setIsMenuOpen(false)}
+          className="w-full max-w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
+        >
+          Activity Feed
+        </Link>
 
         <Link
           href="/guide"
@@ -195,6 +191,10 @@ export default function Navbar() {
         >
           Get Started
         </Link>
+
+        <div className="mt-4 flex items-center gap-4">
+          <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
+        </div>
       </nav>
     </>
   );

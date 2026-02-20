@@ -1,6 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import Image from "next/image";
 import Link from "next/link";
 import { SocialLinks } from "./Navbar";
+import CopyButton from "./CopyButton";
 
 const basePath = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
@@ -28,122 +32,136 @@ function GitHubIcon({ className }: { className?: string }) {
   );
 }
 
+const footerSections = [
+  {
+    title: "For Humans",
+    icon: BookIcon,
+    links: [
+      { name: "Setup Guides", url: "/guide" },
+      { name: "Install Commands", url: "/install" },
+      { name: "Agent Registry", url: "/agents" },
+      { name: "Claude Code", url: "https://claude.ai/code", external: true },
+      { name: "Discord Community", url: "https://discord.gg/UDhVhK2ywj", external: true },
+    ],
+  },
+  {
+    title: "For Agents",
+    icon: BookIcon,
+    links: [
+      { name: "Register Agent", url: "/api/register", desc: "POST — sign & register" },
+      { name: "Agent Directory", url: "/api/agents", desc: "GET — list agents" },
+      { name: "Verify Agent", url: "/api/verify/{address}", desc: "GET — check registration" },
+      { name: "OpenAPI Spec", url: "/api/openapi.json", desc: "Machine-readable API" },
+      { name: "Agent Card", url: "/.well-known/agent.json", desc: "A2A discovery" },
+      { name: "LLM Docs", url: "/llms.txt", desc: "llmstxt.org format" },
+    ],
+  },
+  {
+    title: "For Developers",
+    icon: GitHubIcon,
+    links: [
+      { name: "AIBTC MCP Server", url: "https://github.com/aibtcdev/aibtc-mcp-server", external: true },
+      { name: "x402 API Template", url: "https://github.com/aibtcdev/x402-api", external: true },
+      { name: "x402 Crosschain Example", url: "https://github.com/aibtcdev/x402-crosschain-example", external: true },
+      { name: "All AIBTC Repos", url: "https://github.com/aibtcdev", external: true },
+      { name: "Stacks Docs", url: "https://docs.stacks.co", external: true },
+    ],
+  },
+  {
+    title: "Network Endpoints",
+    icon: GlobeIcon,
+    links: [
+      { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com", external: true },
+      { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev", external: true },
+      { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev", external: true },
+      { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet", external: true },
+      { name: "Health Check", url: "/api/health" },
+    ],
+  },
+  {
+    title: "Protocols & Tools",
+    icon: GlobeIcon,
+    links: [
+      { name: "x402 Protocol", url: "https://x402.org", desc: "Agent payment protocol", external: true },
+      { name: "ERC-8004", url: "https://eips.ethereum.org/EIPS/eip-8004", desc: "Agent identity standard", external: true },
+      { name: "Moltbook", url: "https://moltbook.com", desc: "Agent social network", external: true },
+    ],
+  },
+];
+
+function FooterSection({ section }: { section: typeof footerSections[number] }) {
+  const [open, setOpen] = useState(false);
+  const Icon = section.icon;
+
+  return (
+    <div className="max-md:py-4">
+      {/* Desktop: static heading. Mobile: tappable toggle */}
+      <button
+        className="mb-4 max-md:mb-0 flex w-full items-center justify-between text-sm font-semibold text-white/70 md:pointer-events-none md:cursor-default min-h-[44px]"
+        onClick={() => setOpen(!open)}
+        aria-expanded={open}
+      >
+        {section.title}
+        <svg
+          className={`size-4 text-white/30 transition-transform duration-200 md:hidden ${open ? "rotate-180" : ""}`}
+          fill="none"
+          viewBox="0 0 24 24"
+          stroke="currentColor"
+          strokeWidth="2"
+        >
+          <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+        </svg>
+      </button>
+
+      {/* Desktop: always visible. Mobile: collapsed by default */}
+      <div className={`space-y-2.5 max-md:space-y-1 md:block ${open ? "block" : "hidden"}`}>
+        {section.links.map((link) => (
+          <a
+            key={link.name}
+            href={link.url}
+            {...("external" in link && link.external && { target: "_blank", rel: "noopener noreferrer" })}
+            className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A] max-md:min-h-[44px] max-md:py-1.5"
+            title={"desc" in link ? link.desc : undefined}
+          >
+            <Icon className="size-3.5 shrink-0" />
+            {link.name}
+          </a>
+        ))}
+      </div>
+    </div>
+  );
+}
+
 export default function Footer() {
   return (
     <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-5 max-md:pb-10 max-md:pt-10">
       <div className="mx-auto max-w-[1200px]">
         {/* Agent-Native Callout */}
-        <div className="mb-12 max-md:mb-10">
-          <div className="mx-auto max-w-[600px] rounded-xl border border-white/[0.06] bg-white/[0.02] px-6 py-5 text-center max-md:px-4 max-md:py-4">
+        <div className="mb-12 max-md:mb-8">
+          <div className="mx-auto max-w-[420px] rounded-xl border border-white/[0.06] bg-white/[0.02] px-6 py-5 text-center max-md:px-4 max-md:py-4">
             <p className="text-[15px] text-white/60 max-md:text-[14px]">
               Humans see this site. Agents curl it.
             </p>
-            <p className="mt-1.5 text-[13px] text-white/35 max-md:text-[12px]">
-              Try the prompt <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-white/50">curl aibtc.com/llms.txt</code> to ensure your agent has all the AIBTC skills.
+            <p className="mt-2 text-[13px] text-white/40 max-md:text-[13px]">
+              Tell your agent{" "}
+              <CopyButton
+                text="Check aibtc.com/llms.txt instructions"
+                label={
+                  <code className="rounded bg-white/[0.06] px-1.5 py-0.5 font-mono text-[11px] text-white/50 hover:text-white/70 transition-colors cursor-pointer">Check aibtc.com/llms.txt instructions</code>
+                }
+                variant="inline"
+                className=""
+              />{" "}
+              to ensure it has all the AIBTC skills.
             </p>
           </div>
         </div>
 
-        {/* Quick Reference Grid */}
-        <div className="grid gap-8 max-md:gap-6 max-sm:grid-cols-1 max-md:grid-cols-2 md:grid-cols-2 lg:grid-cols-5">
-          {/* For Humans */}
-          <div>
-            <h4 className="mb-4 text-sm font-semibold text-white/70">For Humans</h4>
-            <div className="space-y-2.5">
-              {[
-                { name: "Setup Guides", url: "/guide" },
-                { name: "Install Commands", url: "/install" },
-                { name: "Agent Registry", url: "/agents" },
-                { name: "Claude Code", url: "https://claude.ai/code", external: true },
-                { name: "Discord Community", url: "https://discord.gg/UDhVhK2ywj", external: true },
-              ].map((link) => (
-                <a
-                  key={link.name}
-                  href={link.url}
-                  {...(link.external && { target: "_blank", rel: "noopener noreferrer" })}
-                  className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]"
-                >
-                  <BookIcon className="size-3.5 shrink-0" />
-                  {link.name}
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* For Agents */}
-          <div>
-            <h4 className="mb-4 text-sm font-semibold text-white/70">For Agents</h4>
-            <div className="space-y-2.5">
-              {[
-                { name: "Register Agent", url: "/api/register", desc: "POST — sign & register" },
-                { name: "Agent Directory", url: "/api/agents", desc: "GET — list agents" },
-                { name: "Verify Agent", url: "/api/verify/{address}", desc: "GET — check registration" },
-                { name: "OpenAPI Spec", url: "/api/openapi.json", desc: "Machine-readable API" },
-                { name: "Agent Card", url: "/.well-known/agent.json", desc: "A2A discovery" },
-                { name: "LLM Docs", url: "/llms.txt", desc: "llmstxt.org format" },
-              ].map((link) => (
-                <a key={link.name} href={link.url} className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]" title={link.desc}>
-                  <BookIcon className="size-3.5 shrink-0" />
-                  {link.name}
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* For Developers */}
-          <div>
-            <h4 className="mb-4 text-sm font-semibold text-white/70">For Developers</h4>
-            <div className="space-y-2.5">
-              {[
-                { name: "AIBTC MCP Server", url: "https://github.com/aibtcdev/aibtc-mcp-server" },
-                { name: "x402 API Template", url: "https://github.com/aibtcdev/x402-api" },
-                { name: "x402 Crosschain Example", url: "https://github.com/aibtcdev/x402-crosschain-example" },
-                { name: "All AIBTC Repos", url: "https://github.com/aibtcdev" },
-                { name: "Stacks Docs", url: "https://docs.stacks.co" },
-              ].map((link) => (
-                <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]">
-                  <GitHubIcon className="size-3.5 shrink-0" />
-                  {link.name}
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* Network Endpoints */}
-          <div>
-            <h4 className="mb-4 text-sm font-semibold text-white/70">Network Endpoints</h4>
-            <div className="space-y-2.5">
-              {[
-                { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com" },
-                { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev" },
-                { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev" },
-                { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet" },
-                { name: "Health Check", url: "/api/health" },
-              ].map((link) => (
-                <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]">
-                  <GlobeIcon className="size-3.5 shrink-0" />
-                  {link.name}
-                </a>
-              ))}
-            </div>
-          </div>
-
-          {/* Protocols & Tools */}
-          <div>
-            <h4 className="mb-4 text-sm font-semibold text-white/70">Protocols & Tools</h4>
-            <div className="space-y-2.5">
-              {[
-                { name: "x402 Protocol", url: "https://x402.org", desc: "Agent payment protocol" },
-                { name: "ERC-8004", url: "https://eips.ethereum.org/EIPS/eip-8004", desc: "Agent identity standard" },
-                { name: "Moltbook", url: "https://moltbook.com", desc: "Agent social network" },
-              ].map((link) => (
-                <a key={link.name} href={link.url} target="_blank" rel="noopener noreferrer" className="flex items-center gap-2 text-sm text-white/50 transition-colors hover:text-[#F7931A]" title={link.desc}>
-                  <GlobeIcon className="size-3.5 shrink-0" />
-                  {link.name}
-                </a>
-              ))}
-            </div>
-          </div>
+        {/* Quick Reference Grid — collapsible on mobile */}
+        <div className="grid gap-8 max-md:gap-0 max-md:divide-y max-md:divide-white/[0.04] md:grid-cols-2 lg:grid-cols-5">
+          {footerSections.map((section) => (
+            <FooterSection key={section.title} section={section} />
+          ))}
         </div>
 
         {/* Bottom Bar */}

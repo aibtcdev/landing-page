@@ -11,7 +11,6 @@ import {
   type ActivityResponse,
   type NetworkStats,
   EVENT_CONFIG,
-  DEMO_POOL,
   EventRow,
   StatsGrid,
   formatNumber,
@@ -85,9 +84,8 @@ export default function ActivityPage() {
     );
   }
 
-  const apiMessageCount = data.events.filter((e) => e.type === "message").length;
-  const sourceEvents = apiMessageCount >= 3 ? data.events : DEMO_POOL;
-  const VISIBLE_COUNT = isMobile ? 8 : 15;
+  const sourceEvents = data.events;
+  const VISIBLE_COUNT = isMobile ? Math.min(8, sourceEvents.length || 1) : Math.min(15, sourceEvents.length || 1);
 
   return (
     <>

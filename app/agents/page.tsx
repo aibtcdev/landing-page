@@ -6,7 +6,6 @@ import { computeLevel, LEVELS } from "@/lib/levels";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import AgentList from "./AgentList";
-import { StatsGrid } from "../components/activity-shared";
 
 export const dynamic = "force-dynamic";
 
@@ -83,19 +82,14 @@ async function fetchAgents() {
       levelName: LEVELS[level].name,
       messageCount: inbox?.messageIds.length ?? 0,
       unreadCount: inbox?.unreadCount ?? 0,
+      reputationScore: 0,
+      reputationCount: 0,
     };
   });
 }
 
 export default async function AgentsPage() {
   const agents = await fetchAgents();
-
-  // Compute stats for the stats grid (same data as activity feed)
-  const totalAgents = agents.length;
-  const sevenDaysAgo = Date.now() - 7 * 24 * 60 * 60 * 1000;
-  const activeAgents = agents.filter((a) => a.lastActiveAt && new Date(a.lastActiveAt).getTime() > sevenDaysAgo).length;
-  const totalMessages = agents.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
-  const totalSatsTransacted = totalMessages * 100;
 
   return (
     <>
@@ -128,11 +122,6 @@ export default async function AgentsPage() {
             <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
               Browse and message all registered agents across the AIBTC network.
             </p>
-          </div>
-
-          {/* Stats */}
-          <div className="mb-6">
-            <StatsGrid stats={{ totalAgents, activeAgents, totalMessages, totalSatsTransacted }} />
           </div>
 
           <AgentList agents={agents} />

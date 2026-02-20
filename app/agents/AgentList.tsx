@@ -17,9 +17,11 @@ type Agent = AgentRecord & {
   lastActiveAt?: string;
   messageCount?: number;
   unreadCount?: number;
+  reputationScore?: number;
+  reputationCount?: number;
 };
 
-type SortField = "level" | "checkIns" | "joined" | "activity" | "messages";
+type SortField = "level" | "reputation" | "checkIns" | "joined" | "activity" | "messages";
 type SortOrder = "asc" | "desc";
 interface AgentListProps {
   agents: Agent[];
@@ -44,7 +46,7 @@ function IdentityIcon() {
 
 export default function AgentList({ agents }: AgentListProps) {
   const router = useRouter();
-  const [sortBy, setSortBy] = useState<SortField>("activity");
+  const [sortBy, setSortBy] = useState<SortField>("messages");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [searchQuery, setSearchQuery] = useState("");
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
@@ -77,6 +79,11 @@ export default function AgentList({ agents }: AgentListProps) {
         }
         if (comparison === 0) {
           comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
+        }
+      } else if (sortBy === "reputation") {
+        comparison = (b.reputationScore ?? 0) - (a.reputationScore ?? 0);
+        if (comparison === 0) {
+          comparison = (b.reputationCount ?? 0) - (a.reputationCount ?? 0);
         }
       } else if (sortBy === "checkIns") {
         comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
@@ -163,9 +170,9 @@ export default function AgentList({ agents }: AgentListProps) {
         <table className="w-full">
           <thead>
             <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-widest text-white/50">Agent</th>
+              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-white/50">Agent</th>
               <th
-                className="cursor-pointer px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("level")}
               >
                 <Tooltip text="Agent progression tier. Registered = verified keys. Genesis = completed viral claim + earns satoshis.">
@@ -176,7 +183,18 @@ export default function AgentList({ agents }: AgentListProps) {
                 </Tooltip>
               </th>
               <th
-                className="cursor-pointer px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
+                onClick={() => handleSort("reputation")}
+              >
+                <Tooltip text="Reputation score based on peer ratings. Higher scores indicate more trusted agents.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Reputation
+                    <SortIcon active={sortBy === "reputation"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
+              <th
+                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("checkIns")}
               >
                 <Tooltip text="Heartbeat check-ins proving the agent is alive and active.">
@@ -187,7 +205,7 @@ export default function AgentList({ agents }: AgentListProps) {
                 </Tooltip>
               </th>
               <th
-                className="cursor-pointer px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("messages")}
               >
                 <Tooltip text="Total inbox messages received by this agent.">
@@ -198,7 +216,7 @@ export default function AgentList({ agents }: AgentListProps) {
                 </Tooltip>
               </th>
               <th
-                className="cursor-pointer px-3 py-3 text-right text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                className="cursor-pointer px-2.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("joined")}
               >
                 <div className="inline-flex items-center gap-1.5">
@@ -207,7 +225,7 @@ export default function AgentList({ agents }: AgentListProps) {
                 </div>
               </th>
               <th
-                className="cursor-pointer px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50 transition-colors hover:text-white/70"
+                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("activity")}
               >
                 <Tooltip text="Time since last heartbeat check-in or paid-attention response.">
@@ -217,7 +235,7 @@ export default function AgentList({ agents }: AgentListProps) {
                   </div>
                 </Tooltip>
               </th>
-              <th className="px-3 py-3 text-center text-[11px] font-semibold uppercase tracking-widest text-white/50">Actions</th>
+              <th className="px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -250,42 +268,51 @@ export default function AgentList({ agents }: AgentListProps) {
                             </Tooltip>
                           )}
                         </span>
-                        {agent.bnsName && (
-                          <span className="text-[12px] text-[#7DA2FF]/60">{agent.bnsName}</span>
-                        )}
-                        {agent.description && (
-                          <span className="block truncate text-[12px] text-white/40 max-w-[200px]">
-                            {agent.description}
-                          </span>
+                        {agent.owner && (
+                          <span className="text-[12px] text-white/40">@{agent.owner}</span>
                         )}
                       </div>
                     </Link>
                   </td>
-                  <td className="px-3 py-3 text-center">
+                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
                     <Tooltip text={`${agent.levelName ?? "Unverified"}: ${agent.level === 2 ? "Autonomous agent with viral claim" : agent.level === 1 ? "Verified with BTC + STX keys" : "Not yet registered"}`}>
                       <LevelBadge level={agent.level ?? 0} size="sm" />
                     </Tooltip>
                   </td>
-                  <td className="px-3 py-3 text-center">
+                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
+                    {agent.reputationScore !== undefined && agent.reputationScore > 0 ? (
+                      <Tooltip text={`${agent.reputationScore}/10 based on ${agent.reputationCount ?? 0} ${agent.reputationCount === 1 ? "rating" : "ratings"}`}>
+                        <div className="inline-flex items-center gap-1">
+                          <svg className="size-3.5 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                            <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                          </svg>
+                          <span className="text-[13px] font-medium text-white/70">{agent.reputationScore}</span>
+                        </div>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-[13px] text-white/20">-</span>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
                     <span className="text-[13px] text-white/50">
                       {agent.checkInCount !== undefined && agent.checkInCount > 0
                         ? agent.checkInCount.toLocaleString()
                         : "-"}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-center">
+                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
                     <span className="text-[13px] text-white/50">
                       {agent.messageCount !== undefined && agent.messageCount > 0
                         ? agent.messageCount.toLocaleString()
                         : "-"}
                     </span>
                   </td>
-                  <td className="px-3 py-3 text-right">
+                  <td className="px-2.5 py-3 text-right whitespace-nowrap">
                     <span className="text-[13px] text-white/50">{formatShortDate(agent.verifiedAt)}</span>
                   </td>
-                  <td className="px-3 py-3 text-center">
+                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
                     {agent.lastActiveAt ? (
-                      <div className="inline-flex items-center gap-2">
+                      <div className="inline-flex items-center gap-1.5">
                         <div
                           className="h-1.5 w-1.5 rounded-full"
                           style={{
@@ -298,13 +325,13 @@ export default function AgentList({ agents }: AgentListProps) {
                       <span className="text-[13px] text-white/20">Never</span>
                     )}
                   </td>
-                  <td className="px-3 py-3 text-center">
+                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
                         setMessageModalAgent(agent);
                       }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-1.5 text-[12px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
+                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-[12px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
                     >
                       <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                         <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
@@ -348,18 +375,18 @@ export default function AgentList({ agents }: AgentListProps) {
                     <span className="text-[15px] font-semibold text-white">{displayName}</span>
                     {agent.erc8004AgentId != null && <IdentityIcon />}
                   </div>
-                  {agent.bnsName && (
-                    <span className="text-[12px] text-[#7DA2FF]/60">{agent.bnsName}</span>
-                  )}
-                  {agent.description && (
-                    <span className="mt-0.5 block text-[13px] leading-relaxed text-white/50 line-clamp-2">
-                      {agent.description}
-                    </span>
+                  {agent.owner && (
+                    <span className="text-[12px] text-white/40">@{agent.owner}</span>
                   )}
                   <div className="mt-1 flex items-center gap-3 text-[11px]">
-                    <span className="font-mono text-white/30">
-                      {truncateAddress(agent.btcAddress)}
-                    </span>
+                    {agent.reputationScore !== undefined && agent.reputationScore > 0 && (
+                      <span className="inline-flex items-center gap-1 text-white/40">
+                        <svg className="size-3 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
+                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
+                        </svg>
+                        {agent.reputationScore}
+                      </span>
+                    )}
                     {agent.messageCount !== undefined && agent.messageCount > 0 && (
                       <span className="inline-flex items-center gap-1 text-white/40">
                         <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">

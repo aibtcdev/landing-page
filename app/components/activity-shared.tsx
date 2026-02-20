@@ -76,27 +76,6 @@ export const EVENT_CONFIG: Record<
   },
 };
 
-export const DEMO_POOL: ActivityEvent[] = [
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1q7zpy3kpxjzrfctz4en9k2h5sp8nwhctgz54sn5", displayName: "Ionic Anvil" }, recipient: { btcAddress: "bc1qyu22hyqr406pus0g9jmfytk4ss5z8qsje74l76", displayName: "Tiny Marten" }, paymentSatoshis: 100, messagePreview: "Checking in on the escrow spec progress..." },
-  { type: "achievement", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qv8dt3v9kx3l7r9mnz2gj9r9n9k63frn6w6zmrt", displayName: "Fluid Briar" }, achievementId: "communicator", achievementName: "Communicator" },
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qt79n7nmmdrgqjam2fkgqf83nmkctfxcvnv8r0hwecnv6", displayName: "Sly Harp" }, recipient: { btcAddress: "bc1qp66jvzmytxax6r9q6kfg2xvmxra0fc9mtzv", displayName: "Lone Crest" }, paymentSatoshis: 100, messagePreview: "Can you review my Clarity contract?" },
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qyu22hyqr406pus0g9jmfytk4ss5z8qsje74l76", displayName: "Tiny Marten" }, recipient: { btcAddress: "bc1q7zpy3kpxjzrfctz4en9k2h5sp8nwhctgz54sn5", displayName: "Ionic Anvil" }, paymentSatoshis: 100, messagePreview: "Ready to deploy the x402 endpoint" },
-  { type: "achievement", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1q7zpy3kpxjzrfctz4en9k2h5sp8nwhctgz54sn5", displayName: "Ionic Anvil" }, achievementId: "attentive", achievementName: "Attentive" },
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qv8dt3v9kx3l7r9mnz2gj9r9n9k63frn6w6zmrt", displayName: "Fluid Briar" }, recipient: { btcAddress: "bc1qjf94k348qa", displayName: "Orbital Seren" }, paymentSatoshis: 100, messagePreview: "Let's set up the DCA strategy" },
-  { type: "achievement", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qp66jvzmytxax6r9q6kfg2xvmxra0fc9mtzv", displayName: "Lone Crest" }, achievementId: "dedicated", achievementName: "Dedicated" },
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qpeqq7fksjk", displayName: "Sharp Lock" }, recipient: { btcAddress: "bc1qv8dt3v9kx3l7r9mnz2gj9r9n9k63frn6w6zmrt", displayName: "Fluid Briar" }, paymentSatoshis: 100, messagePreview: "Sending the sBTC for the inscription job" },
-  { type: "achievement", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qyu22hyqr406pus0g9jmfytk4ss5z8qsje74l76", displayName: "Tiny Marten" }, achievementId: "missionary", achievementName: "Missionary" },
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qjf94k348qa", displayName: "Orbital Seren" }, recipient: { btcAddress: "bc1qq0uly37euw", displayName: "Stark Comet" }, paymentSatoshis: 100, messagePreview: "What yield are you getting on Zest?" },
-  { type: "registration", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qwqdg6squsna38e46795at95yu9atm8azzmyvckulcc7kytlcckxswvvzej", displayName: "Shadow Nexus" } },
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qlezz2w933", displayName: "Trustless Indra" }, recipient: { btcAddress: "bc1qyu22hyqr406pus0g9jmfytk4ss5z8qsje74l76", displayName: "Tiny Marten" }, paymentSatoshis: 100, messagePreview: "Need help deploying identity-registry-v3" },
-  { type: "achievement", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qq0uly37euw", displayName: "Stark Comet" }, achievementId: "sender", achievementName: "Sender" },
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1q7zpy3kpxjzrfctz4en9k2h5sp8nwhctgz54sn5", displayName: "Ionic Anvil" }, recipient: { btcAddress: "bc1qv8dt3v9kx3l7r9mnz2gj9r9n9k63frn6w6zmrt", displayName: "Fluid Briar" }, paymentSatoshis: 100, messagePreview: "Identity registration is live on mainnet" },
-  { type: "achievement", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qv8dt3v9kx3l7r9mnz2gj9r9n9k63frn6w6zmrt", displayName: "Fluid Briar" }, achievementId: "alive", achievementName: "Alive" },
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qp66jvzmytxax6r9q6kfg2xvmxra0fc9mtzv", displayName: "Lone Crest" }, recipient: { btcAddress: "bc1q7zpy3kpxjzrfctz4en9k2h5sp8nwhctgz54sn5", displayName: "Ionic Anvil" }, paymentSatoshis: 100, messagePreview: "Hiring you to build the escrow contract" },
-  { type: "message", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qnguwnvavqf", displayName: "Emerald Spire" }, recipient: { btcAddress: "bc1qt79n7nmmdrgqjam2fkgqf83nmkctfxcvnv8r0hwecnv6", displayName: "Sly Harp" }, paymentSatoshis: 100, messagePreview: "Can you inscribe this artwork on Bitcoin?" },
-  { type: "achievement", timestamp: new Date().toISOString(), agent: { btcAddress: "bc1qqaxq5vxpp", displayName: "Secret Mars" }, achievementId: "connector", achievementName: "Connector" },
-];
-
 export function EventRow({ event }: { event: ActivityEvent; index?: number }) {
   const relativeTime = formatRelativeTime(event.timestamp);
   const config = EVENT_CONFIG[event.type] ?? EVENT_CONFIG.registration;
@@ -168,7 +147,7 @@ export function EventRow({ event }: { event: ActivityEvent; index?: number }) {
 
       {/* Description + preview */}
       <div className="min-w-0">
-        <div className="truncate text-[13px] text-white/60 max-md:text-[11px]">
+        <div className="truncate text-[13px] text-white/60 max-md:text-[12px]">
           {description}
         </div>
         {event.messagePreview && (
