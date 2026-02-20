@@ -1,14 +1,16 @@
 "use client";
 
 import React, { useState, useMemo } from "react";
+import dynamic from "next/dynamic";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LevelBadge from "../components/LevelBadge";
 import Tooltip from "../components/Tooltip";
-import SendMessageModal from "../components/SendMessageModal";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus } from "@/lib/utils";
 import type { AgentRecord } from "@/lib/types";
+
+const SendMessageModal = dynamic(() => import("../components/SendMessageModal"), { ssr: false });
 
 type Agent = AgentRecord & {
   level?: number;
@@ -25,6 +27,17 @@ type LevelFilter = "all" | "genesis" | "registered" | "identity" | "active24h";
 
 interface AgentListProps {
   agents: Agent[];
+}
+
+function matchesSearch(a: Agent, q: string, nameMap: Map<string, string>): boolean {
+  const name = (nameMap.get(a.btcAddress) ?? "").toLowerCase();
+  return (
+    name.includes(q) ||
+    a.btcAddress.toLowerCase().includes(q) ||
+    a.stxAddress.toLowerCase().includes(q) ||
+    (a.bnsName ? a.bnsName.toLowerCase().includes(q) : false) ||
+    (a.owner ? a.owner.toLowerCase().includes(q) : false)
+  );
 }
 
 function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
@@ -52,22 +65,18 @@ export default function AgentList({ agents }: AgentListProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
 
+  const displayNames = useMemo(
+    () => new Map(agents.map((a) => [a.btcAddress, generateName(a.btcAddress)])),
+    [agents]
+  );
+
   const filteredAndSortedAgents = useMemo(() => {
     let filtered = agents;
 
     // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      filtered = filtered.filter((a) => {
-        const name = generateName(a.btcAddress).toLowerCase();
-        return (
-          name.includes(q) ||
-          a.btcAddress.toLowerCase().includes(q) ||
-          a.stxAddress.toLowerCase().includes(q) ||
-          (a.bnsName && a.bnsName.toLowerCase().includes(q)) ||
-          (a.owner && a.owner.toLowerCase().includes(q))
-        );
-      });
+      filtered = filtered.filter((a) => matchesSearch(a, q, displayNames));
     }
 
     if (levelFilter === "genesis") {
@@ -113,7 +122,7 @@ export default function AgentList({ agents }: AgentListProps) {
     });
 
     return sorted;
-  }, [agents, sortBy, sortOrder, levelFilter, searchQuery]);
+  }, [agents, sortBy, sortOrder, levelFilter, searchQuery, displayNames]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -130,16 +139,7 @@ export default function AgentList({ agents }: AgentListProps) {
     let base = agents;
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      base = agents.filter((a) => {
-        const name = generateName(a.btcAddress).toLowerCase();
-        return (
-          name.includes(q) ||
-          a.btcAddress.toLowerCase().includes(q) ||
-          a.stxAddress.toLowerCase().includes(q) ||
-          (a.bnsName && a.bnsName.toLowerCase().includes(q)) ||
-          (a.owner && a.owner.toLowerCase().includes(q))
-        );
-      });
+      base = agents.filter((a) => matchesSearch(a, q, displayNames));
     }
     return {
       all: base.length,
@@ -150,7 +150,7 @@ export default function AgentList({ agents }: AgentListProps) {
         a.lastActiveAt && new Date(a.lastActiveAt).getTime() > oneDayAgo
       ).length,
     };
-  }, [agents, searchQuery]);
+  }, [agents, searchQuery, displayNames]);
 
   if (agents.length === 0) {
     return (
@@ -292,7 +292,7 @@ export default function AgentList({ agents }: AgentListProps) {
           </thead>
           <tbody>
             {filteredAndSortedAgents.map((agent) => {
-              const displayName = generateName(agent.btcAddress);
+              const displayName = displayNames.get(agent.btcAddress) ?? agent.btcAddress;
 
               return (
                 <tr
@@ -388,7 +388,7 @@ export default function AgentList({ agents }: AgentListProps) {
       {/* Mobile list */}
       <div className="hidden max-md:block space-y-2">
         {filteredAndSortedAgents.map((agent) => {
-          const displayName = generateName(agent.btcAddress);
+          const displayName = displayNames.get(agent.btcAddress) ?? agent.btcAddress;
 
           return (
             <div
@@ -469,7 +469,7 @@ export default function AgentList({ agents }: AgentListProps) {
           onClose={() => setMessageModalAgent(null)}
           recipientBtcAddress={messageModalAgent.btcAddress}
           recipientStxAddress={messageModalAgent.stxAddress}
-          recipientDisplayName={generateName(messageModalAgent.btcAddress)}
+          recipientDisplayName={displayNames.get(messageModalAgent.btcAddress) ?? messageModalAgent.btcAddress}
         />
       )}
     </>
