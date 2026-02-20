@@ -1,8 +1,15 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import CopyButton from "../../components/CopyButton";
+
+export const metadata: Metadata = {
+  title: "MCP Setup",
+  description:
+    "Add Bitcoin and Stacks tools to any MCP-compatible agent via the AIBTC MCP server.",
+};
 
 interface McpStep {
   id: number;

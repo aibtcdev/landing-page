@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { X_HANDLE } from "@/lib/constants";
 
+export const dynamic = "force-static";
+
 const spec = {
     openapi: "3.1.0",
     info: {

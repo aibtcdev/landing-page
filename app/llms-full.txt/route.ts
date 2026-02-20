@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { X_HANDLE } from "@/lib/constants";
 
+export const dynamic = "force-static";
+
 export async function GET() {
   const content = `# AIBTC - Full Documentation
 

@@ -1,9 +1,16 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import CopyButton from "../../components/CopyButton";
 import PlatformCommandBlock from "../../components/PlatformCommandBlock";
+
+export const metadata: Metadata = {
+  title: "Claude Code Setup",
+  description:
+    "Install the AIBTC MCP server for Claude Code and give your AI assistant Bitcoin and Stacks tools.",
+};
 
 interface ConversationExchange {
   user: string;

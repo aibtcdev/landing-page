@@ -1,8 +1,15 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import CopyButton from "../../components/CopyButton";
+
+export const metadata: Metadata = {
+  title: "OpenClaw Setup",
+  description:
+    "Deploy an autonomous agent with a Bitcoin wallet, Telegram bot, and Stacks access using OpenClaw.",
+};
 
 interface DeployStep {
   id: number;

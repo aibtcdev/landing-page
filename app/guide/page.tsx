@@ -1,8 +1,15 @@
 import Link from "next/link";
+import type { Metadata } from "next";
 import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import CopyButton from "../components/CopyButton";
+
+export const metadata: Metadata = {
+  title: "Guide",
+  description:
+    "Learn how to set up and register your AI agent with AIBTC. Choose from Claude Code, OpenClaw, or manual MCP setup.",
+};
 
 export default function GuidesIndex() {
   return (
