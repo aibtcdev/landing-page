@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import Link from "next/link";
 import styles from "./ActivityFeedHero.module.css";
+import { formatRelativeTime } from "@/lib/utils";
 import type { ActivityEvent } from "./activity-shared";
 
 // ─── Constants ──────────────────────────────────────────────────────
@@ -17,15 +18,6 @@ const SCROLL_SPEED = 14; // px per second
 // Use btcAddress for bitcoinfaces lookups (consistent with site-wide pattern)
 function face(btcAddress: string) {
   return `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(btcAddress)}`;
-}
-
-function timeAgo(iso: string): string {
-  const sec = (Date.now() - new Date(iso).getTime()) / 1000;
-  if (sec < 60) return "now";
-  if (sec < 3600) return `${Math.floor(sec / 60)}m ago`;
-  if (sec < 86400) return `${Math.floor(sec / 3600)}h ago`;
-  if (sec < 604800) return `${Math.floor(sec / 86400)}d ago`;
-  return new Date(iso).toLocaleDateString();
 }
 
 // ─── Icons ──────────────────────────────────────────────────────────
@@ -69,6 +61,8 @@ function FeedItem({ event: ev }: { event: ActivityEvent }) {
           src={face(ev.agent.btcAddress)}
           alt=""
           loading="lazy"
+          width="32"
+          height="32"
         />
         <div className="min-w-0 flex-1">
           <div className="truncate text-[13px] leading-snug">
@@ -82,7 +76,7 @@ function FeedItem({ event: ev }: { event: ActivityEvent }) {
           <span className="rounded-full border border-[#F7931A]/[0.18] bg-[#F7931A]/[0.08] px-2 py-0.5 text-[11px] font-medium text-[#F7931A]">
             {ev.paymentSatoshis ?? 100} sats
           </span>
-          <span className="text-[11px] text-white/20">{timeAgo(ev.timestamp)}</span>
+          <span className="text-[11px] text-white/20">{formatRelativeTime(ev.timestamp)}</span>
         </div>
       </div>
     );
@@ -100,13 +94,15 @@ function FeedItem({ event: ev }: { event: ActivityEvent }) {
           src={face(ev.agent.btcAddress)}
           alt=""
           loading="lazy"
+          width="32"
+          height="32"
         />
         <div className="min-w-0 flex-1 text-[13px]">
           <span className="font-medium text-white">{ev.agent.displayName}</span>
           <span className="text-white/40"> earned </span>
           <span className="font-medium text-[#F7931A]">{ev.achievementName}</span>
         </div>
-        <span className="shrink-0 text-[11px] text-white/20">{timeAgo(ev.timestamp)}</span>
+        <span className="shrink-0 text-[11px] text-white/20">{formatRelativeTime(ev.timestamp)}</span>
       </div>
     );
   }
@@ -123,12 +119,14 @@ function FeedItem({ event: ev }: { event: ActivityEvent }) {
           src={face(ev.agent.btcAddress)}
           alt=""
           loading="lazy"
+          width="32"
+          height="32"
         />
         <div className="min-w-0 flex-1 text-[13px]">
           <span className="font-medium text-white">{ev.agent.displayName}</span>
           <span className="text-white/40"> joined the network</span>
         </div>
-        <span className="shrink-0 text-[11px] text-white/20">{timeAgo(ev.timestamp)}</span>
+        <span className="shrink-0 text-[11px] text-white/20">{formatRelativeTime(ev.timestamp)}</span>
       </div>
     );
   }
@@ -195,20 +193,29 @@ export function ActivityFeedHero() {
     trackRef.current.style.setProperty("--scroll-duration", `${h / SCROLL_SPEED}s`);
   }, [events]);
 
-  // Derived
-  const msgCount = events.filter((e) => e.type === "message").length;
-  const achCount = events.filter((e) => e.type === "achievement").length;
+  // Derived counts — memoized to avoid recomputing on every render
+  const msgCount = useMemo(
+    () => events.filter((e) => e.type === "message").length,
+    [events]
+  );
+  const achCount = useMemo(
+    () => events.filter((e) => e.type === "achievement").length,
+    [events]
+  );
 
-  // Derive avatars from activity feed events
-  const seen = new Set<string>();
-  const avatars: { name: string; addr: string }[] = [];
-  for (const ev of events) {
-    if (!seen.has(ev.agent.btcAddress)) {
-      seen.add(ev.agent.btcAddress);
-      avatars.push({ name: ev.agent.displayName, addr: ev.agent.btcAddress });
-      if (avatars.length >= 6) break;
+  // Derive unique agent avatars from activity feed events — memoized
+  const avatars = useMemo(() => {
+    const seen = new Set<string>();
+    const result: { name: string; addr: string }[] = [];
+    for (const ev of events) {
+      if (!seen.has(ev.agent.btcAddress)) {
+        seen.add(ev.agent.btcAddress);
+        result.push({ name: ev.agent.displayName, addr: ev.agent.btcAddress });
+        if (result.length >= 6) break;
+      }
     }
-  }
+    return result;
+  }, [events]);
 
   return (
     <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 max-lg:px-8 max-md:px-6">
@@ -259,7 +266,7 @@ export function ActivityFeedHero() {
                     style={{ zIndex: 6 - i }}
                   >
                     {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img src={face(a.addr)} alt="" className="size-full object-cover" loading="lazy" />
+                    <img src={face(a.addr)} alt="" className="size-full object-cover" loading="lazy" width="32" height="32" />
                   </div>
                 ))}
               </Link>
@@ -303,7 +310,7 @@ export function ActivityFeedHero() {
                 </div>
               ) : (
                 <div ref={trackRef} className={styles.feedTrack}>
-                  {/* Events rendered twice for seamless loop */}
+                  {/* Events rendered twice for seamless loop — index suffix ensures unique keys */}
                   {[...events, ...events].map((ev, i) => (
                     <FeedItem key={`${ev.timestamp}-${ev.type}-${i}`} event={ev} />
                   ))}
