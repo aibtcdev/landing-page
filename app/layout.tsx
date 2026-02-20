@@ -77,10 +77,8 @@ export default function RootLayout({
           type="image/svg+xml"
         />
         <link
-          rel="preload"
+          rel="prefetch"
           href={`${BASE_PATH}/Artwork/AIBTC_Pattern1_optimized.jpg`}
-          as="image"
-          type="image/jpeg"
         />
         {/* Agent discovery hints — so any agent fetching the page finds the machine-readable files */}
         <meta
