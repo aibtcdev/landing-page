@@ -23,6 +23,17 @@ import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
 /**
+ * Increment the platform-wide sats transacted counter in KV.
+ * Uses read-increment-write so the value is always accurate (not estimated).
+ * Fire-and-forget: awaited inside Promise.all with message storage.
+ */
+async function incrementSatsCounter(kv: KVNamespace, amount: number): Promise<void> {
+  const raw = await kv.get("stats:totalSatsTransacted");
+  const current = raw ? parseInt(raw, 10) : 0;
+  await kv.put("stats:totalSatsTransacted", String(current + amount));
+}
+
+/**
  * Verify optional BIP-137 sender signature over message content.
  * Returns the recovered BTC address on success, or a 400 NextResponse on failure.
  * When no signature is provided, returns { authenticated: false }.
@@ -638,11 +649,12 @@ export async function POST(
         ? await lookupAgent(kv, fromAddress)
         : null;
 
-    // Store message, update indexes, and mark txid as redeemed (with TTL)
+    // Store message, update indexes, mark txid as redeemed, and increment sats counter
     await Promise.all([
       storeMessage(kv, message),
       updateAgentInbox(kv, toBtcAddress, messageId, now),
       kv.put(redeemedKey, messageId, { expirationTtl: REDEEMED_TXID_TTL_SECONDS }),
+      incrementSatsCounter(kv, INBOX_PRICE_SATS),
       ...(senderAgent
         ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
         : []),
@@ -774,9 +786,11 @@ export async function POST(
       ? await lookupAgent(kv, fromAddress)
       : null;
 
+  // Store message, update indexes, and increment platform-wide sats counter
   await Promise.all([
     storeMessage(kv, message),
     updateAgentInbox(kv, toBtcAddress, messageId, now),
+    incrementSatsCounter(kv, INBOX_PRICE_SATS),
     ...(senderAgent
       ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
       : []),

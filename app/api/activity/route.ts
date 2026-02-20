@@ -204,26 +204,33 @@ export async function GET(request: NextRequest) {
       })
       .slice(0, TOP_ACTIVE_AGENTS);
 
-    // Compute network-wide totals from ALL agents' inbox indices
+    // Compute network-wide totals from ALL agents' inbox indices.
+    // The stats:totalSatsTransacted KV counter is incremented on each successful
+    // inbox payment, so we read it directly instead of estimating from message counts.
     let totalMessages = 0;
-    let totalSatsTransacted = 0;
 
-    // TODO: Consider maintaining a pre-built activity index that updates
-    // incrementally in the inbox POST handler to avoid scanning all agents
-    // on cache miss. Current cost is O(N) KV reads where N = total agents.
-    const allInboxPromises = agents.map(async (agent) => {
-      const inboxIndex = await kv.get<InboxAgentIndex>(
-        `inbox:agent:${agent.btcAddress}`,
-        "json"
-      );
-      if (inboxIndex) {
-        totalMessages += inboxIndex.messageIds.length;
-        // Estimate sats from message count (each message costs INBOX_PRICE_SATS)
-        // This avoids fetching every message just for the total
-        totalSatsTransacted += inboxIndex.messageIds.length * 100;
-      }
-    });
-    await Promise.all(allInboxPromises);
+    const [allInboxResults, satsCounterRaw] = await Promise.all([
+      Promise.all(
+        agents.map(async (agent) => {
+          const inboxIndex = await kv.get<InboxAgentIndex>(
+            `inbox:agent:${agent.btcAddress}`,
+            "json"
+          );
+          return inboxIndex ? inboxIndex.messageIds.length : 0;
+        })
+      ),
+      kv.get("stats:totalSatsTransacted"),
+    ]);
+
+    for (const count of allInboxResults) {
+      totalMessages += count;
+    }
+
+    // Use the real KV counter when available; fall back to scan-based estimate
+    // for environments where the counter has not yet been seeded.
+    const totalSatsTransacted = satsCounterRaw
+      ? parseInt(satsCounterRaw, 10)
+      : totalMessages * 100;
 
     // Collect events from top active agents
     const events: ActivityEvent[] = [];
