@@ -1,15 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import type { AgentRecord } from "@/lib/types";
+import type { InboxAgentIndex, InboxMessage } from "@/lib/inbox/types";
+import type { AchievementAgentIndex, AchievementRecord } from "@/lib/achievements/types";
+import { ACHIEVEMENTS } from "@/lib/achievements/registry";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
   "Access-Control-Allow-Headers": "Content-Type",
 };
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord } from "@/lib/types";
-import type { InboxAgentIndex, InboxMessage } from "@/lib/inbox/types";
-import type { AchievementAgentIndex, AchievementRecord } from "@/lib/achievements/types";
-import { ACHIEVEMENTS } from "@/lib/achievements/registry";
 
 /**
  * Activity event types that can appear in the network feed.
@@ -220,39 +220,52 @@ export async function GET(request: NextRequest) {
       })
       .slice(0, TOP_ACTIVE_AGENTS);
 
-    // Compute network-wide totals from ALL agents' inbox indices
-    let totalMessages = 0;
-    let totalSatsTransacted = 0;
-
+    // Fetch ALL inbox indices in a single parallel pass. This map is reused
+    // both for computing network-wide totals and for the per-agent event loop,
+    // eliminating the duplicate KV reads that the two separate passes caused.
+    //
     // TODO: Consider maintaining a pre-built activity index that updates
     // incrementally in the inbox POST handler to avoid scanning all agents
     // on cache miss. Current cost is O(N) KV reads where N = total agents.
-    const allInboxPromises = agents.map(async (agent) => {
-      const inboxIndex = await kv.get<InboxAgentIndex>(
-        `inbox:agent:${agent.btcAddress}`,
-        "json"
-      );
-      if (inboxIndex) {
-        totalMessages += inboxIndex.messageIds.length;
-        // Estimate sats from message count (each message costs INBOX_PRICE_SATS)
-        // This avoids fetching every message just for the total
-        totalSatsTransacted += inboxIndex.messageIds.length * 100;
-      }
-    });
-    await Promise.all(allInboxPromises);
+    const inboxIndexMap = new Map<string, InboxAgentIndex | null>(
+      await Promise.all(
+        agents.map(async (agent): Promise<[string, InboxAgentIndex | null]> => {
+          const inboxIndex = await kv.get<InboxAgentIndex>(
+            `inbox:agent:${agent.btcAddress}`,
+            "json"
+          );
+          return [agent.btcAddress, inboxIndex];
+        })
+      )
+    );
+
+    // Compute network-wide totals from the pre-fetched inbox index map.
+    const { totalMessages, totalSatsTransacted } = Array.from(
+      inboxIndexMap.values()
+    ).reduce(
+      (acc, inboxIndex) => {
+        if (inboxIndex) {
+          acc.totalMessages += inboxIndex.messageIds.length;
+          // Estimate sats from message count (each message costs INBOX_PRICE_SATS).
+          // This avoids fetching every message just for the total.
+          acc.totalSatsTransacted += inboxIndex.messageIds.length * 100;
+        }
+        return acc;
+      },
+      { totalMessages: 0, totalSatsTransacted: 0 }
+    );
+
+    // Build a Map for O(1) sender lookup by stxAddress during event construction.
+    const agentByStxAddress = new Map<string, AgentRecord>(
+      agents.map((agent) => [agent.stxAddress, agent])
+    );
 
     // Collect events from top active agents
-    const events: ActivityEvent[] = [];
-
-    // Fetch inbox and achievement indices for top active agents
     const eventPromises = sortedAgents.map(async (agent) => {
       const agentEvents: ActivityEvent[] = [];
 
-      // Fetch inbox index (may re-fetch for top agents, but cached by runtime)
-      const inboxIndex = await kv.get<InboxAgentIndex>(
-        `inbox:agent:${agent.btcAddress}`,
-        "json"
-      );
+      // Reuse the already-fetched inbox index from the shared map.
+      const inboxIndex = inboxIndexMap.get(agent.btcAddress) ?? null;
 
       if (inboxIndex && inboxIndex.messageIds.length > 0) {
         // Fetch most recent 3 messages for the event feed
@@ -270,11 +283,8 @@ export async function GET(request: NextRequest) {
         // Add message events
         for (const message of messages) {
           if (message) {
-
-            // Find sender agent for display name
-            const senderAgent = agents.find(
-              (a) => a.stxAddress === message.fromAddress
-            );
+            // O(1) sender lookup via pre-built Map
+            const senderAgent = agentByStxAddress.get(message.fromAddress);
 
             agentEvents.push({
               type: "message",
