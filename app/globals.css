@@ -39,12 +39,6 @@
 }
 
 @layer base {
-  * {
-    margin: 0;
-    padding: 0;
-    box-sizing: border-box;
-  }
-
   html {
     font-size: 16px;
     -webkit-font-smoothing: antialiased;
@@ -215,7 +209,6 @@
 .feed-item {
   position: absolute;
   inset-inline: 0;
-  will-change: transform;
   transition: transform 600ms cubic-bezier(0.22, 1, 0.36, 1);
   border-bottom: 1px solid rgba(255, 255, 255, 0.04);
 }
@@ -242,6 +235,7 @@
 }
 
 .feed-item-enter {
+  will-change: transform, opacity;
   animation: feedEnter 600ms cubic-bezier(0.22, 1, 0.36, 1) both,
              glowFade 2.2s ease-out 0.1s both;
   border-radius: 8px;
