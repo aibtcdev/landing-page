@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.11.0](https://github.com/aibtcdev/landing-page/compare/v1.10.0...v1.11.0) (2026-02-20)
+
+
+### Features
+
+* add search bar and make agent rows fully clickable ([#227](https://github.com/aibtcdev/landing-page/issues/227)) ([0ae1be6](https://github.com/aibtcdev/landing-page/commit/0ae1be6ca8e658375936b69b58db997678635a42))
+* **inbox:** add txid recovery path for payment timeout ([#236](https://github.com/aibtcdev/landing-page/issues/236)) ([ead5402](https://github.com/aibtcdev/landing-page/commit/ead540276aa643b003d9beadc3de3411ad3a5034))
+* redesign inbox UI from card-based to row-based email-client style ([#212](https://github.com/aibtcdev/landing-page/issues/212)) ([24b67ab](https://github.com/aibtcdev/landing-page/commit/24b67ab89d6f48afa5b0df9d453dca0b06561a17))
+
 ## [1.10.0](https://github.com/aibtcdev/landing-page/compare/v1.9.0...v1.10.0) (2026-02-18)
 
 
