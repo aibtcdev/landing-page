@@ -23,6 +23,24 @@ import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
 /**
+ * Increment the platform-wide sats transacted counter in KV.
+ * Uses read-increment-write; note that KV does not provide atomic
+ * read-modify-write, so under concurrent writes increments may be lost.
+ * This counter is best-effort / eventually consistent.
+ */
+async function incrementSatsCounter(kv: KVNamespace, amount: number): Promise<void> {
+  const raw = await kv.get("stats:totalSatsTransacted");
+  let current = 0;
+  if (raw !== null) {
+    const parsed = Number.parseInt(raw, 10);
+    if (!Number.isNaN(parsed)) {
+      current = parsed;
+    }
+  }
+  await kv.put("stats:totalSatsTransacted", String(current + amount));
+}
+
+/**
  * Verify optional BIP-137 sender signature over message content.
  * Returns the recovered BTC address on success, or a 400 NextResponse on failure.
  * When no signature is provided, returns { authenticated: false }.
@@ -638,7 +656,7 @@ export async function POST(
         ? await lookupAgent(kv, fromAddress)
         : null;
 
-    // Store message, update indexes, and mark txid as redeemed (with TTL)
+    // Store message, update indexes, and mark txid as redeemed (critical writes)
     await Promise.all([
       storeMessage(kv, message),
       updateAgentInbox(kv, toBtcAddress, messageId, now),
@@ -647,6 +665,13 @@ export async function POST(
         ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
         : []),
     ]);
+
+    // Best-effort stats update — isolated so a failure here cannot break message delivery
+    try {
+      await incrementSatsCounter(kv, INBOX_PRICE_SATS);
+    } catch (err) {
+      logger.warn("Failed to increment sats counter", { error: String(err) });
+    }
 
     logger.info("Message stored via txid recovery", {
       messageId,
@@ -774,6 +799,7 @@ export async function POST(
       ? await lookupAgent(kv, fromAddress)
       : null;
 
+  // Store message and update indexes (critical writes)
   await Promise.all([
     storeMessage(kv, message),
     updateAgentInbox(kv, toBtcAddress, messageId, now),
@@ -781,6 +807,13 @@ export async function POST(
       ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
       : []),
   ]);
+
+  // Best-effort stats update — isolated so a failure here cannot break message delivery
+  try {
+    await incrementSatsCounter(kv, INBOX_PRICE_SATS);
+  } catch (err) {
+    logger.warn("Failed to increment sats counter", { error: String(err) });
+  }
 
   logger.info("Message stored", {
     messageId,
