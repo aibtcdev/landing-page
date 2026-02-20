@@ -45,7 +45,7 @@ export default function Footer() {
         </div>
 
         {/* Quick Reference Grid */}
-        <div className="grid gap-8 max-md:gap-6 max-md:grid-cols-2 md:grid-cols-2 lg:grid-cols-5">
+        <div className="grid gap-8 max-md:gap-6 max-sm:grid-cols-1 max-md:grid-cols-2 md:grid-cols-2 lg:grid-cols-5">
           {/* For Humans */}
           <div>
             <h4 className="mb-4 text-sm font-semibold text-white/70">For Humans</h4>

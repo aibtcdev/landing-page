@@ -161,7 +161,7 @@ export default function Navbar() {
 
       {/* Mobile Menu Overlay — rendered outside header to avoid backdrop-filter containing block */}
       <nav
-        className={`fixed inset-0 z-[55] hidden flex-col items-center justify-center gap-2 bg-black/98 backdrop-blur-[24px] transition-[opacity,visibility] duration-300 max-md:flex ${
+        className={`fixed inset-0 z-[55] hidden flex-col items-center justify-center gap-2 px-5 bg-black/98 backdrop-blur-[24px] transition-[opacity,visibility] duration-300 max-md:flex ${
           isMenuOpen
             ? "visible opacity-100"
             : "invisible opacity-0 pointer-events-none"
@@ -172,14 +172,14 @@ export default function Navbar() {
         <Link
           href="/activity"
           onClick={() => setIsMenuOpen(false)}
-          className="w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
+          className="w-full max-w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
         >
           Activity Feed
         </Link>
         <Link
           href="/agents"
           onClick={() => setIsMenuOpen(false)}
-          className="w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
+          className="w-full max-w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
         >
           Agent Network
         </Link>
@@ -191,7 +191,7 @@ export default function Navbar() {
         <Link
           href="/guide"
           onClick={() => setIsMenuOpen(false)}
-          className="mt-2 inline-flex w-[280px] items-center justify-center rounded-xl bg-[#F7931A] py-3.5 text-base font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97]"
+          className="mt-2 inline-flex w-full max-w-[280px] items-center justify-center rounded-xl bg-[#F7931A] py-3.5 text-base font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97]"
         >
           Get Started
         </Link>

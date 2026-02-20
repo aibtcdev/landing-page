@@ -58,10 +58,10 @@ export default function AgentStrip() {
   }, []);
 
   return (
-    <section id="agents" className="relative px-12 py-10 max-lg:px-8 max-md:px-0 max-md:py-8">
+    <section id="agents" className="relative px-12 py-10 max-lg:px-8 max-md:px-5 max-md:py-8">
       <div className="mx-auto w-full max-w-[1200px]">
         {/* View all link */}
-        <div className="mb-6 flex items-center justify-end max-md:px-5 max-md:mb-5">
+        <div className="mb-6 flex items-center justify-end max-md:mb-5">
           <Link
             href="/agents"
             className="group flex items-center gap-1.5 text-[13px] font-medium text-[#F7931A]/70 transition-colors hover:text-[#F7931A]"
@@ -79,7 +79,7 @@ export default function AgentStrip() {
           <div className="pointer-events-none absolute left-0 top-0 z-10 h-full w-16 bg-gradient-to-r from-black to-transparent max-md:w-8" />
           <div className="pointer-events-none absolute right-0 top-0 z-10 h-full w-16 bg-gradient-to-l from-black to-transparent max-md:w-8" />
 
-          <div className="flex gap-3 overflow-x-auto px-2 pb-2 scrollbar-hide max-md:gap-2.5 max-md:px-5">
+          <div className="flex gap-3 overflow-x-auto px-2 pb-2 scrollbar-hide max-md:gap-2.5 max-md:px-0">
             {agents.map((agent) => {
               const name = agent.displayName || agent.btcAddress;
               const colorClass = LEVEL_COLORS[agent.level] || LEVEL_COLORS[0];

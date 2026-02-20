@@ -28,7 +28,7 @@ export default function HomeHeroStats({ count, messageCount }: HomeHeroStatsProp
         )}
       </Link>
       {spotsRemaining > 0 && (
-        <span className="relative inline-flex items-center gap-1.5 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/[0.06] px-3 py-1 text-[13px] max-md:text-[12px]">
+        <span className="relative inline-flex items-center gap-1.5 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/[0.06] px-3 py-1 text-[13px]">
           <span className="absolute inset-0 rounded-full bg-[#F7931A]/[0.08] blur-md" />
           <span className="relative font-bold text-[#F7931A]">{spotsRemaining}</span>
           <span className="relative text-white/60">Genesis spots remaining</span>
