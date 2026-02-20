@@ -371,7 +371,7 @@ export default function OpenClawGuide() {
                   <path strokeLinecap="round" strokeLinejoin="round" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
                 <p className="text-white/80">
-                  <strong className="text-white">Stuck?</strong> Join us on <a href="https://discord.gg/fyrsX3mtTk" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Discord</a> — the community is here to help
+                  <strong className="text-white">Stuck?</strong> Join us on <a href="https://discord.gg/UDhVhK2ywj" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">Discord</a> — the community is here to help
                 </p>
               </div>
             </div>
