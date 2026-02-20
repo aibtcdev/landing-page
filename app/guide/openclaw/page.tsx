@@ -132,7 +132,7 @@ Then: bash update.sh`,
     title: "Update Agent (Full Upgrade)",
     subtitle: "Pull latest Docker image with updated OpenClaw, MCP server, and dependencies",
     links: [
-      { text: "Docker Hub", url: "https://github.com/aibtcdev/openclaw-aibtc/pkgs/container/openclaw-aibtc" },
+      { text: "GitHub Packages", url: "https://github.com/aibtcdev/openclaw-aibtc/pkgs/container/openclaw-aibtc" },
       { text: "Changelog", url: "https://github.com/aibtcdev/openclaw-aibtc/blob/main/CHANGELOG.md" },
     ],
     command: `cd openclaw-aibtc
