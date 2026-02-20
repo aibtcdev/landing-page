@@ -129,8 +129,28 @@ export async function GET(
       cursor = parsedCursor;
     }
     const feedback = await getReputationFeedback(agentId, cursor, hiroApiKey, kv);
+
+    // Resolve client STX addresses to agent display names
+    const clientAddresses = [...new Set(feedback.items.map((item) => item.client))];
+    const clientAgents = new Map<string, AgentRecord>();
+    await Promise.all(
+      clientAddresses.map(async (addr) => {
+        const clientAgent = await lookupAgent(kv, addr);
+        if (clientAgent) clientAgents.set(addr, clientAgent);
+      })
+    );
+
+    const enrichedItems = feedback.items.map((item) => {
+      const clientAgent = clientAgents.get(item.client);
+      return {
+        ...item,
+        ...(clientAgent?.displayName && { clientDisplayName: clientAgent.displayName }),
+        ...(clientAgent?.btcAddress && { clientBtcAddress: clientAgent.btcAddress }),
+      };
+    });
+
     return NextResponse.json(
-      { feedback },
+      { feedback: { ...feedback, items: enrichedItems } },
       {
         headers: {
           "Cache-Control": "public, max-age=60, s-maxage=300",

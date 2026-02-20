@@ -17,6 +17,8 @@ export interface ReputationSummary {
 
 export interface ReputationFeedback {
   client: string;
+  clientDisplayName?: string;
+  clientBtcAddress?: string;
   index: number;
   value: number;
   valueDecimals: number;

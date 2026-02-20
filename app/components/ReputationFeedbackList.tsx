@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import useSWR from "swr";
 import type { ReputationFeedback, ReputationFeedbackResponse } from "@/lib/identity";
 import { fetcher } from "@/lib/fetcher";
@@ -81,9 +82,18 @@ export default function ReputationFeedbackList({
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
                 <div className="flex flex-wrap items-center gap-2 mb-1">
-                  <span className="min-w-0 truncate text-xs font-mono text-white/70">
-                    {item.client.slice(0, 8)}...{item.client.slice(-8)}
-                  </span>
+                  {item.clientDisplayName ? (
+                    <Link
+                      href={`/agents/${item.clientBtcAddress || item.client}`}
+                      className="min-w-0 truncate text-xs font-medium text-orange-400/90 hover:text-orange-300 transition-colors"
+                    >
+                      {item.clientDisplayName}
+                    </Link>
+                  ) : (
+                    <span className="min-w-0 truncate text-xs font-mono text-white/70">
+                      {item.client.slice(0, 8)}...{item.client.slice(-8)}
+                    </span>
+                  )}
                   {item.tag1 && (
                     <span className="px-2 py-0.5 rounded text-xs bg-white/10 text-white/60">
                       {item.tag1}
