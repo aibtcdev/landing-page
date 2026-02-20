@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
+import { kvGetJson } from "@/lib/kv-helpers";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import AgentList from "./AgentList";
@@ -47,35 +48,22 @@ async function fetchAgents() {
     agents.push(...values.filter((v): v is AgentRecord => v !== null));
   }
 
-  // Look up claim status for each agent to compute levels
-  const claimLookups = await Promise.all(
-    agents.map(async (agent) => {
-      const claimData = await kv.get(`claim:${agent.btcAddress}`);
-      if (!claimData) return null;
-      try {
-        return JSON.parse(claimData) as ClaimStatus;
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  // Fetch inbox indices for message counts and unread data
-  const inboxLookups = await Promise.all(
-    agents.map(async (agent) => {
-      const inboxData = await kv.get(`inbox:agent:${agent.btcAddress}`);
-      if (!inboxData) return null;
-      try {
-        return JSON.parse(inboxData) as { messageIds: string[]; unreadCount: number };
-      } catch {
-        return null;
-      }
-    })
+  // Fetch claim + inbox for each agent in parallel (both only need btcAddress)
+  const perAgentData = await Promise.all(
+    agents.map((agent) =>
+      Promise.all([
+        kvGetJson<ClaimStatus>(kv, `claim:${agent.btcAddress}`),
+        kvGetJson<{ messageIds: string[]; unreadCount: number }>(
+          kv,
+          `inbox:agent:${agent.btcAddress}`
+        ),
+      ])
+    )
   );
 
   return agents.map((agent, i) => {
-    const level = computeLevel(agent, claimLookups[i]);
-    const inbox = inboxLookups[i];
+    const [claim, inbox] = perAgentData[i];
+    const level = computeLevel(agent, claim);
     return {
       ...agent,
       level,
