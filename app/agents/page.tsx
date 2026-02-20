@@ -73,15 +73,38 @@ async function fetchAgents() {
     })
   );
 
+  // Fetch reputation data from AIBTC public API
+  const reputationLookups = await Promise.all(
+    agents.map(async (agent) => {
+      try {
+        const response = await fetch(`https://aibtc.com/api/agents/${agent.stxAddress}`, {
+          next: { revalidate: 300 }, // Cache for 5 minutes
+        });
+        if (!response.ok) return null;
+        const data = await response.json();
+        if (!data.found || !data.trust) return null;
+        return {
+          reputationScore: data.trust.reputationScore ?? 0,
+          reputationCount: data.trust.reputationCount ?? 0,
+        };
+      } catch {
+        return null;
+      }
+    })
+  );
+
   return agents.map((agent, i) => {
     const level = computeLevel(agent, claimLookups[i]);
     const inbox = inboxLookups[i];
+    const reputation = reputationLookups[i];
     return {
       ...agent,
       level,
       levelName: LEVELS[level].name,
       messageCount: inbox?.messageIds.length ?? 0,
       unreadCount: inbox?.unreadCount ?? 0,
+      reputationScore: reputation?.reputationScore ?? 0,
+      reputationCount: reputation?.reputationCount ?? 0,
     };
   });
 }
