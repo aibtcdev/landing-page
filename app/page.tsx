@@ -1,14 +1,9 @@
 import Link from "next/link";
 import Image from "next/image";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import AnimatedBackground from "./components/AnimatedBackground";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import { ActivityFeedHero } from "./components/ActivityFeedHero";
-import type { AgentRecord, ClaimStatus } from "@/lib/types";
-import { computeLevel, LEVELS } from "@/lib/levels";
-
-export const dynamic = "force-dynamic";
 
 // Agent capabilities shown in the superpowers grid
 const upgrades = [
@@ -68,142 +63,15 @@ const upgrades = [
   },
 ];
 
-interface LeaderboardAgent {
-  rank: number;
-  stxAddress: string;
-  btcAddress: string;
-  displayName?: string;
-  bnsName?: string | null;
-  verifiedAt: string;
-  level: number;
-  levelName: string;
-}
-
-/**
- * Fetch home data from KV.
- */
-async function fetchHomeData() {
-  try {
-    const { env } = await getCloudflareContext();
-    const kv = env.VERIFIED_AGENTS as KVNamespace;
-
-    const [registeredCount, topAgents, messageCount] = await Promise.all([
-      countAgents(kv),
-      loadLeaderboard(kv, 12),
-      countMessages(kv),
-    ]);
-
-    return { registeredCount, topAgents, messageCount };
-  } catch {
-    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], messageCount: 0 };
-  }
-}
-
-async function countMessages(kv: KVNamespace): Promise<number> {
-  let count = 0;
-  let cursor: string | undefined;
-  let complete = false;
-  while (!complete) {
-    const page = await kv.list({ prefix: "inbox:message:", cursor });
-    count += page.keys.length;
-    complete = page.list_complete;
-    cursor = !page.list_complete ? page.cursor : undefined;
-  }
-  return count;
-}
-
-async function countAgents(kv: KVNamespace): Promise<number> {
-  let count = 0;
-  let cursor: string | undefined;
-  let complete = false;
-  while (!complete) {
-    const page = await kv.list({ prefix: "stx:", cursor });
-    count += page.keys.length;
-    complete = page.list_complete;
-    cursor = !page.list_complete ? page.cursor : undefined;
-  }
-  return count;
-}
-
-async function loadLeaderboard(kv: KVNamespace, limit: number): Promise<LeaderboardAgent[]> {
-  const agents: AgentRecord[] = [];
-  let cursor: string | undefined;
-  let listComplete = false;
-
-  while (!listComplete) {
-    const listResult = await kv.list({ prefix: "stx:", cursor });
-    listComplete = listResult.list_complete;
-    cursor = !listResult.list_complete ? listResult.cursor : undefined;
-
-    const values = await Promise.all(
-      listResult.keys.map(async (key) => {
-        const value = await kv.get(key.name);
-        if (!value) return null;
-        try {
-          return JSON.parse(value) as AgentRecord;
-        } catch {
-          return null;
-        }
-      })
-    );
-    agents.push(...values.filter((v): v is AgentRecord => v !== null));
-  }
-
-  const claims = await Promise.all(
-    agents.map(async (agent) => {
-      const claimData = await kv.get(`claim:${agent.btcAddress}`);
-      if (!claimData) return null;
-      try {
-        return JSON.parse(claimData) as ClaimStatus;
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  const agentsWithLevels = agents.map((agent, i) => {
-    const level = computeLevel(agent, claims[i]);
-    return {
-      stxAddress: agent.stxAddress,
-      btcAddress: agent.btcAddress,
-      displayName: agent.displayName,
-      bnsName: agent.bnsName,
-      verifiedAt: agent.verifiedAt,
-      level,
-      levelName: LEVELS[level].name,
-      lastActiveAt: agent.lastActiveAt,
-      checkInCount: agent.checkInCount,
-    };
-  });
-
-  agentsWithLevels.sort((a, b) => {
-    let cmp = (b.level ?? 0) - (a.level ?? 0);
-    if (cmp === 0) cmp = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
-    if (cmp === 0) cmp = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
-    return cmp;
-  });
-
-  return agentsWithLevels.slice(0, limit).map((agent, i) => ({
-    ...agent,
-    rank: i + 1,
-  }));
-}
-
-export default async function Home() {
-  const { registeredCount, topAgents, messageCount } = await fetchHomeData();
-
+export default function Home() {
   return (
     <>
       <AnimatedBackground />
       <Navbar />
 
       <main id="main">
-        {/* Hero Section — ActivityFeedHero replaces old static hero */}
-        <ActivityFeedHero
-          registeredCount={registeredCount}
-          messageCount={messageCount}
-          topAgents={topAgents}
-        />
+        {/* Hero Section — ActivityFeedHero fetches live data from /api/activity */}
+        <ActivityFeedHero />
 
         {/* The Agent Network Section */}
         <section id="agents" className="relative px-12 pb-16 pt-16 max-lg:px-8 max-md:px-5 max-md:pb-12 max-md:pt-16">

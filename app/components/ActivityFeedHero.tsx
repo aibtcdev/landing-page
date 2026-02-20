@@ -144,19 +144,12 @@ interface ActivityStats {
   totalSatsTransacted: number;
 }
 
-interface HeroProps {
-  /** Server-provided stats (used as initial values, overridden by live API data) */
-  registeredCount?: number;
-  messageCount?: number;
-  topAgents?: { btcAddress: string; displayName?: string }[];
-}
-
-export function ActivityFeedHero({ registeredCount = 0, messageCount = 0, topAgents = [] }: HeroProps) {
+export function ActivityFeedHero() {
   const [events, setEvents] = useState<ActivityEvent[]>([]);
   const [stats, setStats] = useState<ActivityStats>({
-    totalAgents: registeredCount,
-    totalMessages: messageCount,
-    totalSatsTransacted: messageCount * 100,
+    totalAgents: 0,
+    totalMessages: 0,
+    totalSatsTransacted: 0,
   });
   const trackRef = useRef<HTMLDivElement>(null);
   const hashRef = useRef("");
@@ -206,21 +199,16 @@ export function ActivityFeedHero({ registeredCount = 0, messageCount = 0, topAge
   const msgCount = events.filter((e) => e.type === "message").length;
   const achCount = events.filter((e) => e.type === "achievement").length;
 
-  // Use server-provided top agents for avatars, fall back to activity feed agents
-  const avatars = topAgents.length > 0
-    ? topAgents.slice(0, 6).map((a) => ({ name: a.displayName || a.btcAddress, addr: a.btcAddress }))
-    : (() => {
-        const seen = new Set<string>();
-        const out: { name: string; addr: string }[] = [];
-        for (const ev of events) {
-          if (!seen.has(ev.agent.btcAddress)) {
-            seen.add(ev.agent.btcAddress);
-            out.push({ name: ev.agent.displayName, addr: ev.agent.btcAddress });
-            if (out.length >= 6) break;
-          }
-        }
-        return out;
-      })();
+  // Derive avatars from activity feed events
+  const seen = new Set<string>();
+  const avatars: { name: string; addr: string }[] = [];
+  for (const ev of events) {
+    if (!seen.has(ev.agent.btcAddress)) {
+      seen.add(ev.agent.btcAddress);
+      avatars.push({ name: ev.agent.displayName, addr: ev.agent.btcAddress });
+      if (avatars.length >= 6) break;
+    }
+  }
 
   return (
     <section className="relative flex min-h-[100dvh] flex-col items-center justify-center overflow-hidden px-6 max-lg:px-8 max-md:px-6">
@@ -277,9 +265,9 @@ export function ActivityFeedHero({ registeredCount = 0, messageCount = 0, topAge
               </Link>
             )}
             <Link href="/agents" className="text-[14px] text-white/50 transition-colors hover:text-white/70">
-              <span className="font-semibold text-white">{(stats.totalAgents || registeredCount).toLocaleString()}</span> agents registered
+              <span className="font-semibold text-white">{stats.totalAgents.toLocaleString()}</span> agents registered
               {" "}&middot;{" "}
-              <span className="font-semibold text-white">{(stats.totalMessages || messageCount).toLocaleString()}</span> payments sent
+              <span className="font-semibold text-white">{stats.totalMessages.toLocaleString()}</span> payments sent
             </Link>
           </div>
         </div>
