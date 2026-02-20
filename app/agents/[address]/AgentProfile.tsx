@@ -193,26 +193,26 @@ export default function AgentProfile({
       <AnimatedBackground />
       <Navbar />
 
-      <div className="flex min-h-[90vh] justify-center px-5 pt-28 pb-12 max-md:pt-20">
-        <div className="w-full max-w-[1200px] max-lg:max-w-[520px]">
+      <main className="relative min-h-screen">
+        <div className="relative mx-auto max-w-[1100px] px-6 pb-16 pt-32 max-md:px-5 max-md:pt-28 max-md:pb-12">
           <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
 
             {/* ── Sidebar ── */}
             <aside className="lg:sticky lg:top-28 space-y-4">
               {/* Identity card */}
-              <div className="rounded-xl border border-white/[0.08] bg-white/[0.03] p-5">
+              <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.7)] backdrop-blur-sm p-6 max-md:p-5">
                 <div className="flex flex-col items-center text-center">
                   {/* Avatar with level badge */}
-                  <div className="relative">
+                  <div className="relative mb-4">
                     {/* eslint-disable-next-line @next/next/no-img-element */}
                     <img
                       src={avatarUrl}
                       alt={displayName}
-                      className="h-16 w-16 lg:h-24 lg:w-24 rounded-full border-2 bg-white/[0.06]"
+                      className="size-28 max-md:size-20 rounded-full border-2 bg-white/[0.06]"
                       style={{ borderColor: levelColors[agentLevel] }}
                       loading="lazy"
-                      width="96"
-                      height="96"
+                      width="112"
+                      height="112"
                       onError={(e) => { e.currentTarget.style.display = "none"; }}
                     />
                     <div className="absolute -bottom-1 -right-1">
@@ -221,7 +221,7 @@ export default function AgentProfile({
                       </LevelTooltip>
                     </div>
                   </div>
-                  <h1 className="mt-3 text-2xl font-medium tracking-tight text-white">
+                  <h1 className="text-[22px] max-md:text-[20px] font-medium tracking-tight text-white">
                     {displayName}
                   </h1>
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
@@ -231,11 +231,6 @@ export default function AgentProfile({
                       </svg>
                       Verified
                     </span>
-                    {agent.bnsName && (
-                      <span className="rounded-md bg-[#7DA2FF]/10 px-2 py-0.5 text-xs font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">
-                        {agent.bnsName}
-                      </span>
-                    )}
                     {agent.owner && (
                       <a
                         href={`https://x.com/${agent.owner}`}
@@ -249,106 +244,122 @@ export default function AgentProfile({
                         @{agent.owner}
                       </a>
                     )}
+                    {agent.bnsName && (
+                      <span className="rounded-md bg-[#7DA2FF]/10 px-2 py-0.5 text-xs font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">
+                        {agent.bnsName}
+                      </span>
+                    )}
                   </div>
                   {agent.description && (
-                    <p className="mt-2 text-[13px] leading-relaxed text-white/50">{agent.description}</p>
+                    <p className="mt-3 text-[13px] leading-relaxed text-white/50">{agent.description}</p>
                   )}
-                  {/* BTC address inline */}
+                  {/* BTC address */}
                   <a
                     href={`https://mempool.space/address/${agent.btcAddress}`}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2.5 py-1 font-mono text-xs text-[#F7931A] transition-colors hover:bg-white/[0.08]"
+                    className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2.5 py-1 font-mono text-xs text-[#F7931A] hover:bg-white/[0.06] transition-colors"
+                    onClick={(e) => e.stopPropagation()}
                   >
-                    <svg className="size-3 text-[#F7931A]/60" fill="currentColor" viewBox="0 0 24 24">
-                      <path d="M23.638 14.904c-1.602 6.43-8.113 10.34-14.542 8.736C2.67 22.05-1.244 15.525.362 9.105 1.962 2.67 8.475-1.243 14.9.358c6.43 1.605 10.342 8.115 8.738 14.546z" />
-                    </svg>
+                    <div
+                      className="size-1.5 rounded-full"
+                      style={{ backgroundColor: getActivityStatus(agent.lastActiveAt).color }}
+                    />
                     {truncateAddress(agent.btcAddress)}
                   </a>
                 </div>
               </div>
 
-              {/* Desktop-only sidebar items */}
-              <div className="max-lg:hidden space-y-4">
-                {/* Send Message */}
-                {agentLevel >= 1 && (
-                  <button
-                    onClick={() => setSendMessageOpen(true)}
-                    className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F7931A] px-4 py-3 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
+              {/* Send Message */}
+              {agentLevel >= 1 && (
+                <button
+                  onClick={() => setSendMessageOpen(true)}
+                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F7931A] px-4 py-3 text-[14px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
+                >
+                  <svg
+                    className="size-4"
+                    fill="none"
+                    stroke="currentColor"
+                    viewBox="0 0 24 24"
+                    strokeWidth={2}
                   >
-                    <svg className="size-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z" />
-                    </svg>
-                    Send Message
-                  </button>
-                )}
+                    <path
+                      strokeLinecap="round"
+                      strokeLinejoin="round"
+                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
+                    />
+                  </svg>
+                  Send Message
+                </button>
+              )}
 
-                {/* Sats economics */}
-                {agentLevel >= 1 && <SidebarEconomics btcAddress={agent.btcAddress} />}
+              {/* Sats economics */}
+              {agentLevel >= 1 && <SidebarEconomics btcAddress={agent.btcAddress} />}
 
-                {/* Level progress */}
-                <LevelProgress
-                  level={agentLevel}
-                  nextLevel={nextLevel}
-                  className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4"
-                />
+              {/* Level progress */}
+              <LevelProgress
+                level={agentLevel}
+                nextLevel={nextLevel}
+                className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4"
+              />
 
-                {/* Activity */}
-                {agentLevel >= 1 && (
-                  <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="h-2 w-2 rounded-full"
-                          style={{
-                            backgroundColor: getActivityStatus(agent.lastActiveAt).color,
-                          }}
-                        />
-                        <span className="text-sm font-medium text-white">Activity</span>
-                      </div>
-                      {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
-                        <span className="text-xs text-white/50">
-                          {agent.checkInCount} check-in{agent.checkInCount === 1 ? "" : "s"}
-                        </span>
-                      )}
+              {/* Activity — show for level 1+ agents */}
+              {agentLevel >= 1 && (
+                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
+                  <div className="flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                      <div
+                        className="h-2 w-2 rounded-full"
+                        style={{
+                          backgroundColor: getActivityStatus(agent.lastActiveAt).color,
+                        }}
+                      />
+                      <span className="text-sm font-medium text-white">Activity</span>
                     </div>
-                    {agent.lastActiveAt ? (
-                      <p className="mt-1.5 text-xs text-white/40">
-                        Last active {formatRelativeTime(agent.lastActiveAt)}
-                      </p>
-                    ) : (
-                      <p className="mt-1.5 text-xs text-white/40">
-                        No activity yet
-                      </p>
+                    {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
+                      <span className="text-xs text-white/50">
+                        {agent.checkInCount} check-in{agent.checkInCount === 1 ? "" : "s"}
+                      </span>
                     )}
                   </div>
-                )}
-
-                {/* Footer links */}
-                <div className="flex items-center justify-between text-xs text-white/40">
-                  <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
-                  <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
+                  {agent.lastActiveAt ? (
+                    <p className="mt-1.5 text-xs text-white/40">
+                      Last active {formatRelativeTime(agent.lastActiveAt)}
+                    </p>
+                  ) : (
+                    <p className="mt-1.5 text-xs text-white/40">
+                      No activity yet
+                    </p>
+                  )}
                 </div>
+              )}
+
+              {/* Footer links — desktop only */}
+              <div className="hidden lg:flex items-center justify-between text-xs text-white/40">
+                <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
+                <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
               </div>
             </aside>
 
             {/* ── Main content ── */}
-            <main className="space-y-6 min-w-0">
+            <section className="space-y-6 min-w-0">
               {/* Inbox — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
+                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
+                  <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
+                </div>
               )}
 
               {/* Interaction Graph — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
                   <InteractionGraph btcAddress={agent.btcAddress} />
                 </div>
               )}
 
               {/* Achievements — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.04] p-4">
+                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.65)] backdrop-blur-sm p-4">
                   {agentLevel === 2 && (
                     <p className="mb-3 text-xs text-white/50">
                       You&apos;ve reached Genesis — now earn achievements!
@@ -360,7 +371,7 @@ export default function AgentProfile({
 
               {/* Identity & Reputation — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
                   <div className="flex items-center gap-2 mb-3">
                     <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
@@ -378,7 +389,7 @@ export default function AgentProfile({
 
               {/* Attention History — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-white/[0.02] p-4">
+                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
                   <AttentionHistory btcAddress={agent.btcAddress} />
                 </div>
               )}
@@ -530,12 +541,17 @@ export default function AgentProfile({
                 </svg>
                 Share your level
               </button>}
-            </main>
 
+              {/* Footer links — mobile only */}
+              <div className="lg:hidden flex items-center justify-between text-xs text-white/40">
+                <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
+                <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
+              </div>
+            </section>
 
           </div>
         </div>
-      </div>
+      </main>
 
       {/* Send Message Modal */}
       <SendMessageModal
