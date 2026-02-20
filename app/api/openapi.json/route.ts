@@ -1,8 +1,7 @@
 import { NextResponse } from "next/server";
 import { X_HANDLE } from "@/lib/constants";
 
-export function GET() {
-  const spec = {
+const spec = {
     openapi: "3.1.0",
     info: {
       title: "AIBTC Agent API",
@@ -4205,6 +4204,7 @@ export function GET() {
     },
   };
 
+export function GET() {
   return NextResponse.json(spec, {
     headers: {
       "Cache-Control": "public, max-age=3600, s-maxage=86400",
