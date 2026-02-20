@@ -228,9 +228,17 @@ export async function GET(request: NextRequest) {
 
     // Use the real KV counter when available; fall back to scan-based estimate
     // for environments where the counter has not yet been seeded.
-    const totalSatsTransacted = satsCounterRaw
-      ? parseInt(satsCounterRaw, 10)
-      : totalMessages * 100;
+    const SATS_PER_MESSAGE_ESTIMATE = 100;
+
+    let totalSatsTransacted: number;
+    if (typeof satsCounterRaw === "string") {
+      const parsed = parseInt(satsCounterRaw, 10);
+      totalSatsTransacted = Number.isNaN(parsed)
+        ? totalMessages * SATS_PER_MESSAGE_ESTIMATE
+        : parsed;
+    } else {
+      totalSatsTransacted = totalMessages * SATS_PER_MESSAGE_ESTIMATE;
+    }
 
     // Collect events from top active agents
     const events: ActivityEvent[] = [];

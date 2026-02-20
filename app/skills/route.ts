@@ -33,12 +33,25 @@ export async function GET() {
       );
     }
 
-    const body = await response.text();
+    // Parse as JSON to validate the upstream response is valid JSON
+    // (prevents forwarding HTML error pages with a JSON content-type)
+    let data: unknown;
+    try {
+      data = await response.json();
+    } catch {
+      return NextResponse.json(
+        {
+          error: "Upstream returned invalid JSON",
+          source: SKILLS_JSON_URL,
+          hint: `Fetch the manifest directly from ${SKILLS_JSON_URL}`,
+        },
+        { status: 502 }
+      );
+    }
 
-    return new NextResponse(body, {
+    return NextResponse.json(data, {
       status: 200,
       headers: {
-        "Content-Type": "application/json",
         "Cache-Control": "public, max-age=3600",
         "X-Skills-Source": SKILLS_JSON_URL,
       },
