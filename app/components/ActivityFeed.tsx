@@ -4,60 +4,19 @@ import useSWR from "swr";
 import Link from "next/link";
 import { fetcher } from "@/lib/fetcher";
 import { formatRelativeTime } from "@/lib/utils";
-
-/**
- * Activity event types.
- */
-type ActivityEventType = "message" | "achievement" | "registration";
-
-/**
- * A single activity event.
- */
-interface ActivityEvent {
-  type: ActivityEventType;
-  timestamp: string;
-  agent: {
-    btcAddress: string;
-    displayName: string;
-  };
-  recipient?: {
-    btcAddress: string;
-    displayName: string;
-  };
-  paymentSatoshis?: number;
-  messagePreview?: string;
-  messageId?: string;
-  achievementId?: string;
-  achievementName?: string;
-}
-
-/**
- * Aggregate network statistics.
- */
-interface NetworkStats {
-  totalAgents: number;
-  activeAgents: number;
-  totalMessages: number;
-  totalSatsTransacted: number;
-}
-
-/**
- * Response from GET /api/activity.
- */
-interface ActivityResponse {
-  events: ActivityEvent[];
-  stats: NetworkStats;
-}
-
-/**
- * Format large numbers with commas.
- */
-function formatNumber(num: number): string {
-  return num.toLocaleString();
-}
+import {
+  type ActivityEventType,
+  type ActivityEvent,
+  type NetworkStats,
+  type ActivityResponse,
+  formatNumber,
+} from "./activity-shared";
 
 /**
  * Event type configuration: accent color, icon, label.
+ *
+ * Kept local to ActivityFeed because this component uses a narrative card layout
+ * with different icon sizing and avatar treatment than the shared EventRow.
  */
 const EVENT_CONFIG: Record<
   ActivityEventType,
@@ -100,6 +59,9 @@ const EVENT_CONFIG: Record<
 
 /**
  * Render a single event row — narrative-style notification feed.
+ *
+ * Uses a card layout with overlaid avatar badges, distinct from the tabular
+ * EventRow in activity-shared.tsx used by ActivityFeedHero.
  */
 function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
   const relativeTime = formatRelativeTime(event.timestamp);
@@ -209,6 +171,9 @@ function EventRow({ event, index }: { event: ActivityEvent; index: number }) {
 
 /**
  * Single stat card with icon + accent.
+ *
+ * Kept local because ActivityFeed uses larger sizing (rounded-xl, p-4, text-[24px])
+ * versus the compact variant in activity-shared.tsx (rounded-lg, px-3 py-2.5, text-[18px]).
  */
 function StatCard({
   label,
@@ -298,12 +263,13 @@ function StatsGrid({ stats }: { stats: NetworkStats }) {
 }
 
 /**
- * Activity feed component for homepage.
+ * Activity feed component for the /activity page.
  *
  * Fetches from GET /api/activity and displays:
  * - Aggregate stats (total agents, active agents, messages, sats)
  * - Recent event feed (messages, achievements, registrations)
  *
+ * Uses a narrative card layout — distinct from ActivityFeedHero's scrolling ticker.
  * Follows pattern from InboxActivity.tsx (SWR fetch, loading skeleton).
  */
 export default function ActivityFeed() {

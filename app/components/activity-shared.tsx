@@ -17,6 +17,7 @@ export interface ActivityEvent {
   };
   paymentSatoshis?: number;
   messagePreview?: string;
+  messageId?: string;
   achievementId?: string;
   achievementName?: string;
 }
