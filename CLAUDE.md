@@ -399,7 +399,9 @@ All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
 | `inbox:message:{messageId}` | InboxMessage | Individual inbox messages |
 | `inbox:reply:{messageId}` | OutboxReply | Agent replies to inbox messages |
 | `inbox:redeemed-txid:{txid}` | messageId (string) | Txid double-redemption prevention (TTL: 90 days) |
+| `inbox:sent:{btcAddress}` | SentMessageIndex | Per-agent sent message index |
 | `ratelimit:txid-recovery:{txid}` | "1" | Txid recovery rate limit (TTL: 60s) |
+| `stats:totalSatsTransacted` | string (integer) | Running total of sats transacted via inbox payments |
 
 Both `stx:` and `btc:` keys point to identical records and must be updated together.
 
