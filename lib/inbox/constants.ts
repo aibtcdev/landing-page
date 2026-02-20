@@ -116,6 +116,13 @@ export const SBTC_CONTRACTS = {
 } as const;
 
 /**
+ * TTL for redeemed txid KV keys (90 days in seconds).
+ * After this period, the key is automatically deleted.
+ * The on-chain record remains as the source of truth.
+ */
+export const REDEEMED_TXID_TTL_SECONDS = 90 * 24 * 60 * 60; // 7,776,000 seconds
+
+/**
  * KV key prefixes for all inbox system data.
  *
  * All records use prefix-based keys to enable efficient listing and

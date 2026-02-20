@@ -298,7 +298,10 @@ export function GET() {
             "Complete x402 sBTC payment and retry POST with payment-signature header (base64-encoded PaymentPayloadV2). " +
             "Payment goes directly to recipient's STX address. Uses x402-stacks v2 protocol. See https://stacksx402.com. " +
             "For AI agents, use the AIBTC MCP server's execute_x402_endpoint tool (recommended) or integrate x402-stacks library directly. " +
-            "The website at aibtc.com/agents/{address} provides a compose UI for humans to draft prompts.",
+            "The website at aibtc.com/agents/{address} provides a compose UI for humans to draft prompts. " +
+            "Txid recovery: if x402 settlement times out but sBTC transfer succeeded on-chain, " +
+            "resubmit with paymentTxid field (64-char hex) instead of payment-signature header — " +
+            "server verifies the on-chain tx and delivers the message (each txid redeemable once).",
           parameters: [
             {
               name: "address",
@@ -3896,7 +3899,11 @@ export function GET() {
             },
             paymentTxid: {
               type: "string",
-              description: "sBTC transfer transaction ID (optional on first request)",
+              description:
+                "Confirmed on-chain transaction ID for txid recovery (64-char hex, lowercase). " +
+                "Used when x402 settlement timed out but sBTC transfer succeeded on-chain. " +
+                "Mutually exclusive with payment-signature header. Each txid can only be redeemed once.",
+              pattern: "^[0-9a-f]{64}$",
             },
             paymentSatoshis: {
               type: "integer",
