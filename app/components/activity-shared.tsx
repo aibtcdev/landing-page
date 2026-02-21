@@ -126,8 +126,8 @@ export function EventRow({ event, showPreview, compact }: { event: ActivityEvent
     <div
       className={`group/row grid items-center transition-all duration-300 hover:bg-white/[0.03] ${
         compact
-          ? "grid-cols-[auto_auto_1fr] gap-2 px-3 py-2"
-          : "grid-cols-[auto_auto_1fr_auto_auto] max-md:grid-cols-[auto_auto_1fr] gap-3 max-md:gap-2 px-3 py-2.5 max-md:px-4 max-md:py-2"
+          ? "grid-cols-[28px_28px_1fr] gap-2 px-3 py-2"
+          : "grid-cols-[32px_32px_1fr_auto_auto] max-md:grid-cols-[28px_28px_1fr] gap-3 max-md:gap-2 px-3 py-2.5 max-md:px-4 max-md:py-2"
       }`}
     >
       {/* Type icon */}
