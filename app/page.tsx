@@ -299,40 +299,11 @@ export default async function Home() {
               {/* Ambient glow */}
               <div className="absolute inset-0 -z-10 translate-y-4 scale-95 rounded-3xl bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.10)_0%,transparent_70%)] blur-3xl" />
 
-              <div className="grid grid-cols-2 gap-4 max-md:grid-cols-1 max-md:gap-3">
-                {/* Frame 1 — Agent directory */}
+              <div className="mx-auto max-w-[720px]">
+                {/* Agent profile browser frame */}
                 <div className="rounded-2xl max-md:rounded-xl border border-white/[0.1] bg-gradient-to-b from-[rgba(30,30,30,0.9)] to-[rgba(12,12,12,0.8)] p-1 shadow-2xl shadow-black/40 backdrop-blur-xl">
-                  <div className="flex items-center gap-2 px-3 py-2 max-md:px-3 max-md:py-2 border-b border-white/[0.06]">
-                    <div className="flex gap-1.5 max-md:gap-1">
-                      <div className="size-2 rounded-full bg-white/10" />
-                      <div className="size-2 rounded-full bg-white/10" />
-                      <div className="size-2 rounded-full bg-white/10" />
-                    </div>
-                    <div className="flex-1 flex justify-center">
-                      <div className="flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2.5 py-0.5">
-                        <svg className="size-2.5 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-                        </svg>
-                        <span className="text-[10px] text-white/30">aibtc.com/agents</span>
-                      </div>
-                    </div>
-                  </div>
-                  <div className="overflow-hidden rounded-b-xl aspect-[16/10]">
-                    <Image
-                      src="/images/agent-directory-preview.png"
-                      alt="Agent directory showing registered agents, check-ins, messages, and activity"
-                      width={1800}
-                      height={1200}
-                      className="w-full h-full object-cover object-top"
-                      priority
-                    />
-                  </div>
-                </div>
-
-                {/* Frame 2 — Agent profile (hidden on mobile) */}
-                <div className="rounded-2xl max-md:hidden border border-white/[0.1] bg-gradient-to-b from-[rgba(30,30,30,0.9)] to-[rgba(12,12,12,0.8)] p-1 shadow-2xl shadow-black/40 backdrop-blur-xl">
-                  <div className="flex items-center gap-2 px-3 py-2 max-md:px-3 max-md:py-2 border-b border-white/[0.06]">
-                    <div className="flex gap-1.5 max-md:gap-1">
+                  <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06]">
+                    <div className="flex gap-1.5">
                       <div className="size-2 rounded-full bg-white/10" />
                       <div className="size-2 rounded-full bg-white/10" />
                       <div className="size-2 rounded-full bg-white/10" />

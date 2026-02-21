@@ -96,17 +96,20 @@ function makeEventKey(e: ActivityEvent): string {
   return `${e.type}:${e.timestamp}:${e.agent.btcAddress}`;
 }
 
-/** Count messages and sats in a list of events */
-function countMessagesAndSats(events: ActivityEvent[]): { messages: number; sats: number } {
+/** Count messages, sats, and registrations in a list of events */
+function countQueuedStats(events: ActivityEvent[]): { messages: number; sats: number; registrations: number } {
   let messages = 0;
   let sats = 0;
+  let registrations = 0;
   for (const e of events) {
     if (e.type === "message") {
       messages++;
       sats += e.paymentSatoshis ?? 0;
+    } else if (e.type === "registration") {
+      registrations++;
     }
   }
-  return { messages, sats };
+  return { messages, sats, registrations };
 }
 
 /**
@@ -122,8 +125,8 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [enteringUid, setEnteringUid] = useState<number | null>(null);
 
-  // Track how many messages/sats are still in the queue (for counting up)
-  const [queuedStats, setQueuedStats] = useState({ messages: 0, sats: 0 });
+  // Track how many messages/sats/registrations are still in the queue (for counting up)
+  const [queuedStats, setQueuedStats] = useState({ messages: 0, sats: 0, registrations: 0 });
 
   // Initialize: fill visible rows from the oldest events, queue the rest
   const [items, setItems] = useState(() => {
@@ -133,8 +136,8 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
     queueRef.current = queue;
     knownKeysRef.current = new Set(events.map(makeEventKey));
 
-    // Count messages/sats remaining in the queue
-    setQueuedStats(countMessagesAndSats(queue));
+    // Count messages/sats/registrations remaining in the queue
+    setQueuedStats(countQueuedStats(queue));
 
     // Display newest-on-top within the initial batch
     return initial.reverse().map((event) => ({
@@ -151,8 +154,14 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
     // Update queued stats (decrement)
     if (next.type === "message") {
       setQueuedStats((prev) => ({
+        ...prev,
         messages: prev.messages - 1,
         sats: prev.sats - (next.paymentSatoshis ?? 0),
+      }));
+    } else if (next.type === "registration") {
+      setQueuedStats((prev) => ({
+        ...prev,
+        registrations: prev.registrations - 1,
       }));
     }
 
@@ -194,6 +203,7 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   useEffect(() => {
     let addedMessages = 0;
     let addedSats = 0;
+    let addedRegistrations = 0;
     for (const event of events) {
       const key = makeEventKey(event);
       if (!knownKeysRef.current.has(key)) {
@@ -202,16 +212,19 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
         if (event.type === "message") {
           addedMessages++;
           addedSats += event.paymentSatoshis ?? 0;
+        } else if (event.type === "registration") {
+          addedRegistrations++;
         }
       }
     }
-    if (addedMessages > 0) {
+    if (addedMessages > 0 || addedRegistrations > 0) {
       setQueuedStats((prev) => ({
         messages: prev.messages + addedMessages,
         sats: prev.sats + addedSats,
+        registrations: prev.registrations + addedRegistrations,
       }));
     }
-    if (addedMessages > 0 || queueRef.current.length > 0) ensureInterval();
+    if (addedMessages > 0 || addedRegistrations > 0 || queueRef.current.length > 0) ensureInterval();
   }, [events, ensureInterval]);
 
   // Clear entering animation after transition
@@ -225,6 +238,15 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   // Stats count up: real total minus what's still queued
   const displayMessages = stats.totalMessages - queuedStats.messages;
   const displaySats = stats.totalSatsTransacted - queuedStats.sats;
+
+  // Broadcast agent count adjustment so hero stats can sync
+  useEffect(() => {
+    window.dispatchEvent(
+      new CustomEvent("activity-queued-registrations", {
+        detail: { queuedRegistrations: queuedStats.registrations },
+      })
+    );
+  }, [queuedStats.registrations]);
 
   return (
     <Link href="/activity" className="block space-y-2 group/feed">
