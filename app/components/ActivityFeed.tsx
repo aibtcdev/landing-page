@@ -164,17 +164,12 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
           </span>
         </div>
 
-        {/* Type legend — static, always shows all 3 types */}
-        <div className="flex items-center gap-3 max-md:hidden">
+        {/* Type legend — dots only, no labels (compact homepage widget) */}
+        <div className="flex items-center gap-2">
           {(["message", "achievement", "registration"] as const).map((type) => {
             const config = EVENT_CONFIG[type];
             return (
-              <div key={type} className="flex items-center gap-1.5">
-                <div className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />
-                <span className="text-[11px] text-white/30">
-                  {config.label}s
-                </span>
-              </div>
+              <div key={type} className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />
             );
           })}
         </div>
@@ -183,7 +178,7 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
       {/* Event list — absolute positioned for smooth transitions */}
       <div
         className="feed-container px-2 max-md:px-0"
-        style={{ height: `calc(var(--feed-row-h) * ${visibleCount})` }}
+        style={{ "--feed-row-h": "46px", height: `calc(var(--feed-row-h) * ${visibleCount})` } as React.CSSProperties}
       >
         {items.map((item, i) => (
           <div
@@ -194,7 +189,7 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
               height: "var(--feed-row-h)",
             }}
           >
-            <EventRow event={item.event} index={i} />
+            <EventRow event={item.event} index={i} compact />
           </div>
         ))}
       </div>

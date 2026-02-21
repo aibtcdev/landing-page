@@ -76,7 +76,7 @@ export const EVENT_CONFIG: Record<
   },
 };
 
-export function EventRow({ event, showPreview }: { event: ActivityEvent; index?: number; showPreview?: boolean }) {
+export function EventRow({ event, showPreview, compact }: { event: ActivityEvent; index?: number; showPreview?: boolean; compact?: boolean }) {
   const relativeTime = formatRelativeTime(event.timestamp);
   const config = EVENT_CONFIG[event.type] ?? EVENT_CONFIG.registration;
 
@@ -124,10 +124,14 @@ export function EventRow({ event, showPreview }: { event: ActivityEvent; index?:
 
   return (
     <div
-      className="group/row grid grid-cols-[auto_auto_1fr_auto_auto] max-md:grid-cols-[auto_auto_1fr] items-center gap-3 max-md:gap-2 px-3 py-2.5 max-md:px-4 max-md:py-2 transition-all duration-300 hover:bg-white/[0.03]"
+      className={`group/row grid items-center transition-all duration-300 hover:bg-white/[0.03] ${
+        compact
+          ? "grid-cols-[auto_auto_1fr] gap-2 px-3 py-2"
+          : "grid-cols-[auto_auto_1fr_auto_auto] max-md:grid-cols-[auto_auto_1fr] gap-3 max-md:gap-2 px-3 py-2.5 max-md:px-4 max-md:py-2"
+      }`}
     >
       {/* Type icon */}
-      <div className={`flex size-8 max-md:size-7 shrink-0 items-center justify-center rounded-lg ${config.bgTint} ${config.accent} ring-1 ring-inset ${config.ringColor}`}>
+      <div className={`flex ${compact ? "size-7" : "size-8 max-md:size-7"} shrink-0 items-center justify-center rounded-lg ${config.bgTint} ${config.accent} ring-1 ring-inset ${config.ringColor}`}>
         {config.icon}
       </div>
 
@@ -136,7 +140,7 @@ export function EventRow({ event, showPreview }: { event: ActivityEvent; index?:
       <img
         src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(event.agent.btcAddress)}`}
         alt=""
-        className="size-8 max-md:size-7 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+        className={`${compact ? "size-7" : "size-8 max-md:size-7"} shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]`}
         loading="lazy"
         width="32"
         height="32"
@@ -147,7 +151,7 @@ export function EventRow({ event, showPreview }: { event: ActivityEvent; index?:
 
       {/* Description + preview */}
       <div className="min-w-0">
-        <div className="truncate text-[13px] text-white/60 max-md:text-[12px]">
+        <div className={`truncate text-white/60 ${compact ? "text-[12px]" : "text-[13px] max-md:text-[12px]"}`}>
           {description}
         </div>
         {showPreview && event.messagePreview && (
@@ -157,19 +161,23 @@ export function EventRow({ event, showPreview }: { event: ActivityEvent; index?:
         )}
       </div>
 
-      {/* Sats — hidden on mobile */}
-      <div className="w-[72px] text-right max-md:hidden">
-        {event.paymentSatoshis != null && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
-            {event.paymentSatoshis.toLocaleString()} sats
-          </span>
-        )}
-      </div>
+      {/* Sats — hidden on mobile and in compact mode */}
+      {!compact && (
+        <div className="w-[72px] text-right max-md:hidden">
+          {event.paymentSatoshis != null && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
+              {event.paymentSatoshis.toLocaleString()} sats
+            </span>
+          )}
+        </div>
+      )}
 
-      {/* Timestamp — hidden on mobile */}
-      <div className="shrink-0 whitespace-nowrap text-right text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors max-md:hidden">
-        {relativeTime}
-      </div>
+      {/* Timestamp — hidden on mobile and in compact mode */}
+      {!compact && (
+        <div className="shrink-0 whitespace-nowrap text-right text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors max-md:hidden">
+          {relativeTime}
+        </div>
+      )}
     </div>
   );
 }
