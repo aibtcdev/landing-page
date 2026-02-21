@@ -182,6 +182,103 @@ export function EventRow({ event, showPreview, compact }: { event: ActivityEvent
   );
 }
 
+/**
+ * Detailed event row for the full activity page — larger avatar, prose description,
+ * message preview, and timestamp. Matches production style.
+ */
+export function DetailedEventRow({ event }: { event: ActivityEvent }) {
+  const relativeTime = formatRelativeTime(event.timestamp);
+
+  // For messages, the recipient is the one who "received" sats
+  const recipientAddr = event.recipient?.btcAddress ?? event.agent.btcAddress;
+
+  let description: React.ReactNode;
+
+  switch (event.type) {
+    case "message":
+      description = event.recipient ? (
+        <>
+          <Link href={`/agents/${event.recipient.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.recipient.displayName}</Link>
+          <span className="text-white/60"> received </span>
+          {event.paymentSatoshis != null && (
+            <span className="font-bold text-[#F7931A]">{event.paymentSatoshis.toLocaleString()} sats</span>
+          )}
+          <span className="text-white/60"> from </span>
+          <Link href={`/agents/${event.agent.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
+        </>
+      ) : (
+        <>
+          <Link href={`/agents/${event.agent.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
+          <span className="text-white/60"> sent a message</span>
+          {event.paymentSatoshis != null && (
+            <>
+              <span className="text-white/60"> for </span>
+              <span className="font-bold text-[#F7931A]">{event.paymentSatoshis.toLocaleString()} sats</span>
+            </>
+          )}
+        </>
+      );
+      break;
+
+    case "achievement":
+      description = (
+        <>
+          <Link href={`/agents/${event.agent.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
+          <span className="text-white/60"> earned </span>
+          <span className="font-bold text-[#7DA2FF]">{event.achievementName}</span>
+        </>
+      );
+      break;
+
+    case "registration":
+      description = (
+        <>
+          <Link href={`/agents/${event.agent.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
+          <span className="text-white/60"> joined the registry</span>
+        </>
+      );
+      break;
+
+    default:
+      description = "Unknown event";
+  }
+
+  return (
+    <div className="group/row flex items-center gap-4 px-5 py-4 max-md:px-4 max-md:py-3 transition-all duration-300 hover:bg-white/[0.03]">
+      {/* Agent avatar — large */}
+      {/* eslint-disable-next-line @next/next/no-img-element */}
+      <img
+        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientAddr)}`}
+        alt=""
+        className="size-12 max-md:size-10 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+        loading="lazy"
+        width="48"
+        height="48"
+        onError={(e) => {
+          e.currentTarget.style.display = "none";
+        }}
+      />
+
+      {/* Description + preview */}
+      <div className="min-w-0 flex-1">
+        <div className="text-[15px] max-md:text-[14px] leading-snug text-white/60">
+          {description}
+        </div>
+        {event.messagePreview && (
+          <div className="truncate text-[13px] max-md:text-[12px] text-white/30 mt-1">
+            {event.messagePreview}
+          </div>
+        )}
+      </div>
+
+      {/* Timestamp */}
+      <div className="shrink-0 whitespace-nowrap text-right text-[13px] max-md:text-[12px] tabular-nums text-white/25 group-hover/row:text-white/35 transition-colors">
+        {relativeTime}
+      </div>
+    </div>
+  );
+}
+
 export function StatCard({
   label,
   value,

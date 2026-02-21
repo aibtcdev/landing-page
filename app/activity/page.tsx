@@ -10,7 +10,7 @@ import {
   type ActivityEvent,
   type ActivityResponse,
   EVENT_CONFIG,
-  EventRow,
+  DetailedEventRow,
   StatsGrid,
 } from "../components/activity-shared";
 
@@ -124,6 +124,13 @@ export default function ActivityPage() {
 }
 
 function FullFeed({ events }: { events: ActivityEvent[]; visibleCount: number }) {
+  // Count events by type for the header summary
+  const counts: Record<string, number> = {};
+  for (const e of events) {
+    const label = EVENT_CONFIG[e.type]?.label ?? e.type;
+    counts[label] = (counts[label] ?? 0) + 1;
+  }
+
   return (
     <div className="space-y-3">
       {/* Event feed card */}
@@ -140,15 +147,17 @@ function FullFeed({ events }: { events: ActivityEvent[]; visibleCount: number })
             </span>
           </div>
 
-          {/* Type legend */}
-          <div className="flex items-center gap-3">
+          {/* Event counts */}
+          <div className="flex items-center gap-3 max-md:hidden">
             {(["message", "achievement", "registration"] as const).map((type) => {
               const config = EVENT_CONFIG[type];
+              const count = counts[config.label];
+              if (!count) return null;
               return (
                 <div key={type} className="flex items-center gap-1.5">
                   <div className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />
                   <span className="text-[11px] text-white/30">
-                    {config.label}s
+                    {count} {config.label}{count !== 1 ? "s" : ""}
                   </span>
                 </div>
               );
@@ -156,10 +165,10 @@ function FullFeed({ events }: { events: ActivityEvent[]; visibleCount: number })
           </div>
         </div>
 
-        {/* Event list — static chronological order (newest first) */}
+        {/* Event list */}
         <div className="divide-y divide-white/[0.04]">
           {events.map((event, i) => (
-            <EventRow key={`${event.type}-${event.timestamp}-${i}`} event={event} index={i} showPreview />
+            <DetailedEventRow key={`${event.type}-${event.timestamp}-${i}`} event={event} />
           ))}
         </div>
       </div>
