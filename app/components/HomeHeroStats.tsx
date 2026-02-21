@@ -1,5 +1,6 @@
 import Link from "next/link";
 
+/** Maximum number of Genesis-tier agent spots in the network. */
 const GENESIS_CAP = 200;
 
 interface HomeHeroStatsProps {
