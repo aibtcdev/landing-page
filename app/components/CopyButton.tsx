@@ -59,10 +59,16 @@ export default function CopyButton({
         onClick={handleCopy}
         className={`group relative cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded-xl ${className}`}
       >
-        {label}
-        <span className="pointer-events-none absolute top-full mt-1.5 left-1/2 -translate-x-1/2 rounded-md bg-[#1a1a1a] px-2 py-1 text-[11px] text-white/70 opacity-0 border border-white/10 transition-opacity group-hover:opacity-100 whitespace-nowrap">
-          {copied ? "Copied!" : "Copy"}
-        </span>
+        {copied ? (
+          <span className="inline-flex items-center gap-1 text-green-400 transition-colors duration-200">
+            Copied!
+            <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+          </span>
+        ) : (
+          label
+        )}
       </button>
     );
   }
