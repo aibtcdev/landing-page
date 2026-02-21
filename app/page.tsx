@@ -221,7 +221,7 @@ export default async function Home() {
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
           </div>
 
-          <div className="relative z-10 mx-auto flex w-full max-w-[1200px] items-center justify-between gap-16 max-lg:flex-col max-lg:gap-12 max-lg:text-center">
+          <div className="relative z-10 mx-auto flex w-full max-w-[1200px] items-center justify-between gap-16 max-lg:flex-col max-lg:gap-12 max-md:gap-6 max-lg:text-center">
             {/* Left side - Text content */}
             <div className="flex flex-1 flex-col max-lg:items-center">
               {/* Main Headline */}
