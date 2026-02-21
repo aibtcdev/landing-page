@@ -182,7 +182,7 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
 
       {/* Event list — absolute positioned for smooth transitions */}
       <div
-        className="feed-container px-2 max-md:px-1"
+        className="feed-container px-2 max-md:px-0"
         style={{ height: `calc(var(--feed-row-h) * ${visibleCount})` }}
       >
         {items.map((item, i) => (

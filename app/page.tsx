@@ -248,10 +248,10 @@ export default async function Home() {
                 to join the network<span className="max-md:hidden">, build reputation,</span> and start earning BTC.
               </p>
 
-              {/* Social Proof */}
-              <div className="mb-8 flex items-center gap-4 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:flex-col max-md:gap-2.5">
+              {/* Social Proof — avatars + stats inline */}
+              <div className="mb-8 flex items-center gap-3 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-2.5">
                 {topAgents.length > 0 && (
-                  <Link href="/agents" className="flex -space-x-2">
+                  <Link href="/agents" className="flex -space-x-2 shrink-0">
                     {topAgents.slice(0, 5).map((agent, i) => (
                       <div key={agent.btcAddress} className="size-8 overflow-hidden rounded-full border-2 border-black transition-transform hover:scale-110 hover:z-20 max-md:size-9" style={{ zIndex: 5 - i }}>
                         <img src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`} alt="" role="presentation" className="size-full object-cover" loading="lazy" width="32" height="32" />
@@ -259,7 +259,7 @@ export default async function Home() {
                     ))}
                   </Link>
                 )}
-                <HomeHeroStats count={registeredCount} messageCount={messageCount} />
+                <HomeHeroStats count={registeredCount} />
               </div>
 
             </div>

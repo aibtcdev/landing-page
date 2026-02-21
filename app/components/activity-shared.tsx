@@ -124,7 +124,7 @@ export function EventRow({ event, showPreview }: { event: ActivityEvent; index?:
 
   return (
     <div
-      className="group/row grid grid-cols-[auto_auto_1fr_auto_auto] max-md:grid-cols-[auto_auto_1fr] items-center gap-3 max-md:gap-2 px-3 py-2.5 max-md:px-2 max-md:py-2 transition-all duration-300 hover:bg-white/[0.03]"
+      className="group/row grid grid-cols-[auto_auto_1fr_auto_auto] max-md:grid-cols-[auto_auto_1fr] items-center gap-3 max-md:gap-2 px-3 py-2.5 max-md:px-4 max-md:py-2 transition-all duration-300 hover:bg-white/[0.03]"
     >
       {/* Type icon */}
       <div className={`flex size-8 max-md:size-7 shrink-0 items-center justify-center rounded-lg ${config.bgTint} ${config.accent} ring-1 ring-inset ${config.ringColor}`}>

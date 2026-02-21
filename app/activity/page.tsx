@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { fetcher } from "@/lib/fetcher";
@@ -9,11 +9,9 @@ import Navbar from "../components/Navbar";
 import {
   type ActivityEvent,
   type ActivityResponse,
-  type NetworkStats,
   EVENT_CONFIG,
   EventRow,
   StatsGrid,
-  formatNumber,
 } from "../components/activity-shared";
 
 export default function ActivityPage() {
@@ -125,40 +123,7 @@ export default function ActivityPage() {
   );
 }
 
-function FullFeed({ events, visibleCount }: { events: ActivityEvent[]; visibleCount: number }) {
-  const uidRef = useRef(0);
-  const eventIndexRef = useRef(visibleCount - 1);
-  const [enteringUid, setEnteringUid] = useState<number | null>(null);
-
-  const [items, setItems] = useState(() =>
-    Array.from({ length: visibleCount }, (_, i) => ({
-      uid: uidRef.current++,
-      event: events[i % events.length],
-    }))
-  );
-
-  useEffect(() => {
-    const interval = setInterval(() => {
-      eventIndexRef.current = (eventIndexRef.current + 1) % events.length;
-      const newUid = uidRef.current++;
-      const incoming = events[eventIndexRef.current];
-
-      setEnteringUid(newUid);
-      setItems((prev) => [
-        { uid: newUid, event: incoming },
-        ...prev.slice(0, visibleCount),
-      ]);
-    }, 2400);
-    return () => clearInterval(interval);
-  }, [events, visibleCount]);
-
-  useEffect(() => {
-    if (enteringUid !== null) {
-      const t = setTimeout(() => setEnteringUid(null), 2300);
-      return () => clearTimeout(t);
-    }
-  }, [enteringUid]);
-
+function FullFeed({ events }: { events: ActivityEvent[]; visibleCount: number }) {
   return (
     <div className="space-y-3">
       {/* Event feed card */}
@@ -171,7 +136,7 @@ function FullFeed({ events, visibleCount }: { events: ActivityEvent[]; visibleCo
               <span className="relative inline-flex size-2 rounded-full bg-green-500" />
             </span>
             <span className="text-[13px] font-medium text-white/60">
-              Live
+              Recent Activity
             </span>
           </div>
 
@@ -191,22 +156,10 @@ function FullFeed({ events, visibleCount }: { events: ActivityEvent[]; visibleCo
           </div>
         </div>
 
-        {/* Event list — absolute positioned for smooth transitions */}
-        <div
-          className="feed-container px-2"
-          style={{ height: `calc(var(--feed-row-h) * ${visibleCount})` }}
-        >
-          {items.map((item, i) => (
-            <div
-              key={item.uid}
-              className={`feed-item ${item.uid === enteringUid ? "feed-item-enter" : ""}`}
-              style={{
-                transform: `translateY(calc(var(--feed-row-h) * ${i}))`,
-                height: "var(--feed-row-h)",
-              }}
-            >
-              <EventRow event={item.event} index={i} showPreview />
-            </div>
+        {/* Event list — static chronological order (newest first) */}
+        <div className="divide-y divide-white/[0.04]">
+          {events.map((event, i) => (
+            <EventRow key={`${event.type}-${event.timestamp}-${i}`} event={event} index={i} showPreview />
           ))}
         </div>
       </div>
