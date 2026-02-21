@@ -129,12 +129,12 @@ export function CompactEventRow({ event }: { event: ActivityEvent }) {
   }
 
   return (
-    <div className="flex items-center gap-2.5 px-3 py-2 transition-all duration-300 hover:bg-white/[0.03]">
+    <div className="flex items-center gap-2.5 max-md:gap-2 px-3 max-md:px-2.5 py-2 transition-all duration-300 hover:bg-white/[0.03]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientAddr)}`}
         alt=""
-        className="size-8 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+        className="size-8 max-md:size-7 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
         loading="lazy"
         width="32"
         height="32"
@@ -142,7 +142,7 @@ export function CompactEventRow({ event }: { event: ActivityEvent }) {
           e.currentTarget.style.display = "none";
         }}
       />
-      <div className="min-w-0 truncate text-[12px] leading-snug text-white/60">
+      <div className="min-w-0 truncate text-[12px] max-md:text-[11px] leading-snug text-white/60">
         {description}
       </div>
     </div>

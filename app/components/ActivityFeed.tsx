@@ -276,7 +276,7 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
 
       {/* Event list — absolute positioned for smooth transitions */}
       <div
-        className="feed-container px-2 max-md:px-0"
+        className="feed-container px-2 max-md:px-0 max-md:[--feed-row-h:40px]"
         style={{ "--feed-row-h": "46px", height: `calc(var(--feed-row-h) * ${visibleCount})` } as React.CSSProperties}
       >
         {items.map((item, i) => (
@@ -296,12 +296,12 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
 
       {/* Paid messages stat — counts up to real total as events drip in */}
       {displayMessages > 0 && (
-        <div className="flex items-center justify-center gap-2 rounded-lg border border-[#F7931A]/15 bg-[#F7931A]/[0.04] px-4 py-2.5">
-          <svg className="size-4 text-[#F7931A]/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
+        <div className="flex items-center justify-center gap-2 rounded-lg border border-[#F7931A]/15 bg-[#F7931A]/[0.04] px-4 py-2.5 max-md:px-3 max-md:py-2">
+          <svg className="size-4 max-md:size-3.5 shrink-0 text-[#F7931A]/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
           </svg>
-          <span className="text-[13px] text-white/50">
-            <span className="font-semibold text-white tabular-nums">{displayMessages.toLocaleString()}</span> paid messages sent
+          <span className="text-[13px] max-md:text-[12px] text-white/50 truncate">
+            <span className="font-semibold text-white tabular-nums">{displayMessages.toLocaleString()}</span> paid messages
             <span className="text-white/30"> &middot; </span>
             <span className="font-semibold text-[#F7931A]/70 tabular-nums">{displaySats.toLocaleString()}</span> <span className="text-white/40">sats</span>
           </span>

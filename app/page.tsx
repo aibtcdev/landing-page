@@ -265,7 +265,7 @@ export default async function Home() {
             </div>
 
             {/* Right side - Activity feed */}
-            <div className="animate-fadeUp opacity-0 [animation-delay:0.4s] w-full max-w-[520px] shrink-0 max-lg:max-w-full text-left">
+            <div className="animate-fadeUp opacity-0 [animation-delay:0.4s] w-full max-w-[520px] min-w-0 max-lg:max-w-full text-left">
               <ActivityFeed />
             </div>
           </div>
