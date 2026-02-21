@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect, useRef } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { fetcher } from "@/lib/fetcher";
@@ -10,8 +10,6 @@ import {
   type NetworkStats,
   EVENT_CONFIG,
   EventRow,
-  StatsGrid,
-  formatNumber,
 } from "./activity-shared";
 
 /**
@@ -26,7 +24,8 @@ import {
 export default function ActivityFeed() {
   const { data, error, isLoading: loading } = useSWR<ActivityResponse>(
     "/api/activity",
-    fetcher
+    fetcher,
+    { refreshInterval: 30_000 }
   );
 
   // Show fewer rows on mobile — hooks must be before early returns
@@ -101,59 +100,98 @@ export default function ActivityFeed() {
   );
 }
 
+/** Composite key for deduplicating events */
+function makeEventKey(e: ActivityEvent): string {
+  return `${e.type}:${e.timestamp}:${e.agent.btcAddress}`;
+}
+
 /**
- * Animated live feed — absolute-positioned items slide smoothly via CSS transitions.
- * New items enter with a slide+glow animation; existing items transition down.
+ * Queue-based live feed — starts a few events behind the present,
+ * drips them in chronologically, then waits for real new events via SWR polling.
+ * Stats always reflect the API response directly (no artificial inflation).
  */
 function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; visibleCount: number; stats: NetworkStats }) {
   const uidRef = useRef(0);
-  const eventIndexRef = useRef(visibleCount - 1);
+  const queueRef = useRef<ActivityEvent[]>([]);
+  const knownKeysRef = useRef<Set<string>>(new Set());
+  const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [enteringUid, setEnteringUid] = useState<number | null>(null);
-  const [bonusMessages, setBonusMessages] = useState(0);
-  const [bonusSats, setBonusSats] = useState(0);
 
-  const [items, setItems] = useState(() =>
-    Array.from({ length: visibleCount }, (_, i) => ({
+  // Initialize: fill visible rows from the past, queue the rest to drip in
+  const [items, setItems] = useState(() => {
+    const chrono = [...events].reverse(); // oldest → newest
+    const startIdx = Math.max(0, chrono.length - visibleCount - 5);
+    const initial = chrono.slice(startIdx, startIdx + visibleCount);
+    queueRef.current = chrono.slice(startIdx + visibleCount);
+    knownKeysRef.current = new Set(events.map(makeEventKey));
+
+    // Display newest-first (reverse chronological in the visible list)
+    return initial.reverse().map((event) => ({
       uid: uidRef.current++,
-      event: events[i % events.length],
-    }))
-  );
+      event,
+    }));
+  });
 
-  // Reset bonus counters when fresh API data arrives
-  useEffect(() => {
-    setBonusMessages(0);
-    setBonusSats(0);
-  }, [stats.totalMessages, stats.totalSatsTransacted]);
+  // Drip one event from the queue into the feed
+  const drip = useCallback(() => {
+    const next = queueRef.current.shift();
+    if (!next) return;
 
-  useEffect(() => {
-    const interval = setInterval(() => {
-      eventIndexRef.current = (eventIndexRef.current + 1) % events.length;
-      const newUid = uidRef.current++;
-      const incoming = events[eventIndexRef.current];
+    const newUid = uidRef.current++;
+    setEnteringUid(newUid);
+    setItems((prev) => [
+      { uid: newUid, event: next },
+      ...prev.slice(0, visibleCount),
+    ]);
+  }, [visibleCount]);
 
-      if (incoming?.type === "message" && incoming.paymentSatoshis) {
-        setBonusMessages((m) => m + 1);
-        setBonusSats((s) => s + incoming.paymentSatoshis!);
+  // Start/restart the drip interval when there are queued items
+  const ensureInterval = useCallback(() => {
+    if (intervalRef.current) return;
+    if (queueRef.current.length === 0) return;
+
+    intervalRef.current = setInterval(() => {
+      if (queueRef.current.length === 0) {
+        clearInterval(intervalRef.current!);
+        intervalRef.current = null;
+        return;
       }
-
-      setEnteringUid(newUid);
-      setItems((prev) => [
-        { uid: newUid, event: incoming },
-        ...prev.slice(0, visibleCount),
-      ]);
+      drip();
     }, 2400);
-    return () => clearInterval(interval);
-  }, [events, visibleCount]);
+  }, [drip]);
 
+  // Start dripping on mount
+  useEffect(() => {
+    ensureInterval();
+    return () => {
+      if (intervalRef.current) {
+        clearInterval(intervalRef.current);
+        intervalRef.current = null;
+      }
+    };
+  }, [ensureInterval]);
+
+  // When SWR revalidates with new events, queue any we haven't seen
+  useEffect(() => {
+    let added = false;
+    for (const event of events) {
+      const key = makeEventKey(event);
+      if (!knownKeysRef.current.has(key)) {
+        knownKeysRef.current.add(key);
+        queueRef.current.push(event);
+        added = true;
+      }
+    }
+    if (added) ensureInterval();
+  }, [events, ensureInterval]);
+
+  // Clear entering animation after transition
   useEffect(() => {
     if (enteringUid !== null) {
       const t = setTimeout(() => setEnteringUid(null), 2300);
       return () => clearTimeout(t);
     }
   }, [enteringUid]);
-
-  const displayMessages = stats.totalMessages + bonusMessages;
-  const displaySats = stats.totalSatsTransacted + bonusSats;
 
   return (
     <Link href="/activity" className="block space-y-2 group/feed">
@@ -201,16 +239,16 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
       </div>
     </div>
 
-      {/* Paid messages stat */}
-      {displayMessages > 0 && (
+      {/* Paid messages stat — always reflects real API data */}
+      {stats.totalMessages > 0 && (
         <div className="flex items-center justify-center gap-2 rounded-lg border border-[#F7931A]/15 bg-[#F7931A]/[0.04] px-4 py-2.5">
           <svg className="size-4 text-[#F7931A]/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
           </svg>
           <span className="text-[13px] text-white/50">
-            <span className="font-semibold text-white tabular-nums">{displayMessages.toLocaleString()}</span> paid messages sent
+            <span className="font-semibold text-white tabular-nums">{stats.totalMessages.toLocaleString()}</span> paid messages sent
             <span className="text-white/30"> &middot; </span>
-            <span className="font-semibold text-[#F7931A]/70 tabular-nums">{displaySats.toLocaleString()}</span> <span className="text-white/40">sats</span>
+            <span className="font-semibold text-[#F7931A]/70 tabular-nums">{stats.totalSatsTransacted.toLocaleString()}</span> <span className="text-white/40">sats</span>
           </span>
         </div>
       )}
