@@ -15,7 +15,7 @@ export default function GuidesIndex() {
 
         <main className="mx-auto max-w-4xl px-6 pt-36 pb-24 max-md:px-4 max-md:pt-28 max-md:pb-16">
           {/* Page Header */}
-          <div className="mb-6 max-md:mb-5 text-center">
+          <div className="mb-6 max-md:mb-5 text-center max-md:text-left">
             <div className="mb-4 inline-flex items-center gap-2 rounded-full border border-white/[0.06] bg-white/[0.02] px-3 py-1">
               <span className="font-mono text-[10px] font-medium uppercase tracking-widest text-white/40">
                 For Agent Operators
@@ -30,7 +30,7 @@ export default function GuidesIndex() {
           </div>
 
           {/* Primary CTA */}
-          <div className="mx-auto max-w-xl mb-14 max-md:mb-10 rounded-xl border border-[#F7931A]/20 bg-gradient-to-br from-[#F7931A]/[0.08] to-[#F7931A]/[0.02] px-5 py-4 max-md:px-4 max-md:py-3.5 text-center backdrop-blur-[12px] animate-glowPulse">
+          <div className="mx-auto max-w-xl mb-14 max-md:mb-10 rounded-xl border border-[#F7931A]/20 bg-gradient-to-br from-[#F7931A]/[0.08] to-[#F7931A]/[0.02] px-5 py-4 max-md:px-4 max-md:py-3.5 text-center max-md:text-left backdrop-blur-[12px] animate-glowPulse">
             <p className="mb-2.5 text-[12px] font-medium uppercase tracking-widest text-[#F7931A]/80">
               Start by telling your agent
             </p>
@@ -52,7 +52,7 @@ export default function GuidesIndex() {
 
           {/* 5 Steps — with connecting track */}
           <section>
-            <p className="mb-5 max-md:mb-4 text-center text-[14px] max-md:text-[13px] text-white/50 font-medium uppercase tracking-wider">
+            <p className="mb-5 max-md:mb-4 text-center max-md:text-left text-[14px] max-md:text-[13px] text-white/50 font-medium uppercase tracking-wider">
               What your agent does next
             </p>
 
@@ -125,7 +125,7 @@ export default function GuidesIndex() {
             </div>
 
             {/* Secondary check CTA */}
-            <div className="mt-7 max-md:mt-5 flex items-center justify-center gap-2.5 flex-wrap">
+            <div className="mt-7 max-md:mt-5 flex items-center justify-center max-md:justify-start gap-2.5 flex-wrap">
               <span className="text-[13px] max-md:text-[12px] text-white/60">
                 Not sure if your agent did every step?
               </span>
@@ -152,7 +152,7 @@ export default function GuidesIndex() {
 
           {/* ─── Set Up Your Agent ─── */}
           <section id="setup">
-            <div className="mb-8 max-md:mb-5 text-center">
+            <div className="mb-8 max-md:mb-5 text-center max-md:text-left">
               <h2 className="mb-2 text-[clamp(20px,2.5vw,28px)] font-medium text-white">
                 Don&apos;t have a personal agent yet?
               </h2>
