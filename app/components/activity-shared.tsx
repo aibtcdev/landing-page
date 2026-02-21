@@ -76,25 +76,31 @@ export const EVENT_CONFIG: Record<
   },
 };
 
-export function EventRow({ event, showPreview, compact }: { event: ActivityEvent; index?: number; showPreview?: boolean; compact?: boolean }) {
-  const relativeTime = formatRelativeTime(event.timestamp);
-  const config = EVENT_CONFIG[event.type] ?? EVENT_CONFIG.registration;
+/**
+ * Compact event row for the homepage feed widget.
+ * Avatar + prose description, optimized for the small ticker frame.
+ */
+export function CompactEventRow({ event }: { event: ActivityEvent }) {
+  const recipientAddr = event.recipient?.btcAddress ?? event.agent.btcAddress;
 
   let description: React.ReactNode;
 
   switch (event.type) {
     case "message":
-      description = (
+      description = event.recipient ? (
         <>
-          <Link href={`/agents/${event.agent.btcAddress}`} className="font-medium text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
-          <svg className="mx-1.5 inline size-3 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
-          </svg>
-          {event.recipient ? (
-            <Link href={`/agents/${event.recipient.btcAddress}`} className="font-medium text-white hover:text-[#F7931A] transition-colors">{event.recipient.displayName}</Link>
-          ) : (
-            <span className="font-medium text-white">Unknown</span>
+          <span className="font-semibold text-white">{event.recipient.displayName}</span>
+          <span className="text-white/50"> received </span>
+          {event.paymentSatoshis != null && (
+            <span className="font-semibold text-[#F7931A]">{event.paymentSatoshis.toLocaleString()} sats</span>
           )}
+          <span className="text-white/50"> from </span>
+          <span className="font-semibold text-white">{event.agent.displayName}</span>
+        </>
+      ) : (
+        <>
+          <span className="font-semibold text-white">{event.agent.displayName}</span>
+          <span className="text-white/50"> sent a message</span>
         </>
       );
       break;
@@ -102,9 +108,9 @@ export function EventRow({ event, showPreview, compact }: { event: ActivityEvent
     case "achievement":
       description = (
         <>
-          <Link href={`/agents/${event.agent.btcAddress}`} className="font-medium text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
-          <span className="text-white/40"> earned </span>
-          <span className="font-medium text-[#7DA2FF]">{event.achievementName}</span>
+          <span className="font-semibold text-white">{event.agent.displayName}</span>
+          <span className="text-white/50"> earned </span>
+          <span className="font-semibold text-[#7DA2FF]">{event.achievementName}</span>
         </>
       );
       break;
@@ -112,8 +118,8 @@ export function EventRow({ event, showPreview, compact }: { event: ActivityEvent
     case "registration":
       description = (
         <>
-          <Link href={`/agents/${event.agent.btcAddress}`} className="font-medium text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
-          <span className="text-white/40"> joined the registry</span>
+          <span className="font-semibold text-white">{event.agent.displayName}</span>
+          <span className="text-white/50"> joined the registry</span>
         </>
       );
       break;
@@ -123,24 +129,12 @@ export function EventRow({ event, showPreview, compact }: { event: ActivityEvent
   }
 
   return (
-    <div
-      className={`group/row grid items-center transition-all duration-300 hover:bg-white/[0.03] ${
-        compact
-          ? "grid-cols-[28px_28px_1fr] gap-2 px-3 py-2"
-          : "grid-cols-[32px_32px_1fr_auto_auto] max-md:grid-cols-[28px_28px_1fr] gap-3 max-md:gap-2 px-3 py-2.5 max-md:px-4 max-md:py-2"
-      }`}
-    >
-      {/* Type icon */}
-      <div className={`flex ${compact ? "size-7" : "size-8 max-md:size-7"} shrink-0 items-center justify-center rounded-lg ${config.bgTint} ${config.accent} ring-1 ring-inset ${config.ringColor}`}>
-        {config.icon}
-      </div>
-
-      {/* Agent avatar */}
+    <div className="flex items-center gap-2.5 px-3 py-2 transition-all duration-300 hover:bg-white/[0.03]">
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
-        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(event.agent.btcAddress)}`}
+        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientAddr)}`}
         alt=""
-        className={`${compact ? "size-7" : "size-8 max-md:size-7"} shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]`}
+        className="size-8 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
         loading="lazy"
         width="32"
         height="32"
@@ -148,36 +142,9 @@ export function EventRow({ event, showPreview, compact }: { event: ActivityEvent
           e.currentTarget.style.display = "none";
         }}
       />
-
-      {/* Description + preview */}
-      <div className="min-w-0">
-        <div className={`truncate text-white/60 ${compact ? "text-[12px]" : "text-[13px] max-md:text-[12px]"}`}>
-          {description}
-        </div>
-        {showPreview && event.messagePreview && (
-          <div className="truncate text-[11px] text-white/25 mt-0.5 max-md:hidden">
-            {event.messagePreview}
-          </div>
-        )}
+      <div className="min-w-0 truncate text-[12px] leading-snug text-white/60">
+        {description}
       </div>
-
-      {/* Sats — hidden on mobile and in compact mode */}
-      {!compact && (
-        <div className="w-[72px] text-right max-md:hidden">
-          {event.paymentSatoshis != null && (
-            <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-bold tabular-nums text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20">
-              {event.paymentSatoshis.toLocaleString()} sats
-            </span>
-          )}
-        </div>
-      )}
-
-      {/* Timestamp — hidden on mobile and in compact mode */}
-      {!compact && (
-        <div className="shrink-0 whitespace-nowrap text-right text-[11px] tabular-nums text-white/20 group-hover/row:text-white/30 transition-colors max-md:hidden">
-          {relativeTime}
-        </div>
-      )}
     </div>
   );
 }

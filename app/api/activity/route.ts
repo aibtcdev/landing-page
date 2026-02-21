@@ -66,7 +66,7 @@ const CORS_HEADERS = {
 
 const CACHE_KEY = "cache:activity";
 const CACHE_TTL_SECONDS = 120; // 2 minutes
-const MAX_EVENTS = 20;
+const MAX_EVENTS = 40;
 const TOP_ACTIVE_AGENTS = 20;
 const ACTIVE_DAYS_THRESHOLD = 7;
 

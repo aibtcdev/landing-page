@@ -9,7 +9,7 @@ import {
   type ActivityResponse,
   type NetworkStats,
   EVENT_CONFIG,
-  EventRow,
+  CompactEventRow,
 } from "./activity-shared";
 
 /**
@@ -17,9 +17,12 @@ import {
  *
  * Fetches from GET /api/activity and displays:
  * - Recent event feed (messages, achievements, registrations)
- * - Paid messages stat bar
+ * - Paid messages stat bar that counts up to the real total
  *
- * Follows pattern from InboxActivity.tsx (SWR fetch, loading skeleton).
+ * The feed starts ~40 events behind the present and drips them in
+ * chronologically. Once caught up, it waits for real new events via
+ * SWR polling (30s). Stats count up from a starting point and converge
+ * on the real API totals when the queue is exhausted.
  */
 export default function ActivityFeed() {
   const { data, error, isLoading: loading } = useSWR<ActivityResponse>(
@@ -41,16 +44,6 @@ export default function ActivityFeed() {
   if (loading) {
     return (
       <div className="space-y-3">
-        {/* Stats skeleton */}
-        <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
-          {Array.from({ length: 4 }).map((_, i) => (
-            <div
-              key={i}
-              className="h-[88px] animate-pulse rounded-xl border border-white/[0.06] bg-white/[0.03]"
-            />
-          ))}
-        </div>
-
         {/* Events skeleton */}
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.03] p-4">
           <div className="mb-4 h-4 w-32 animate-pulse rounded bg-white/[0.06]" />
@@ -58,12 +51,10 @@ export default function ActivityFeed() {
             {Array.from({ length: 6 }).map((_, i) => (
               <div
                 key={i}
-                className="flex items-center gap-3 px-3 py-2.5"
+                className="flex items-center gap-3 px-3 py-2"
               >
-                <div className="size-8 animate-pulse rounded-lg bg-white/[0.06]" />
                 <div className="size-8 animate-pulse rounded-full bg-white/[0.06]" />
                 <div className="h-4 flex-1 animate-pulse rounded bg-white/[0.06]" />
-                <div className="h-3 w-12 animate-pulse rounded bg-white/[0.06]" />
               </div>
             ))}
           </div>
@@ -105,10 +96,24 @@ function makeEventKey(e: ActivityEvent): string {
   return `${e.type}:${e.timestamp}:${e.agent.btcAddress}`;
 }
 
+/** Count messages and sats in a list of events */
+function countMessagesAndSats(events: ActivityEvent[]): { messages: number; sats: number } {
+  let messages = 0;
+  let sats = 0;
+  for (const e of events) {
+    if (e.type === "message") {
+      messages++;
+      sats += e.paymentSatoshis ?? 0;
+    }
+  }
+  return { messages, sats };
+}
+
 /**
- * Queue-based live feed — starts a few events behind the present,
- * drips them in chronologically, then waits for real new events via SWR polling.
- * Stats always reflect the API response directly (no artificial inflation).
+ * Queue-based live feed — starts far behind the present and drips events
+ * in chronologically. Stats count up from a starting point and converge
+ * on the real API totals when the queue empties. After catching up,
+ * waits for genuinely new events via SWR polling.
  */
 function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; visibleCount: number; stats: NetworkStats }) {
   const uidRef = useRef(0);
@@ -117,15 +122,21 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [enteringUid, setEnteringUid] = useState<number | null>(null);
 
-  // Initialize: fill visible rows from the past, queue the rest to drip in
+  // Track how many messages/sats are still in the queue (for counting up)
+  const [queuedStats, setQueuedStats] = useState({ messages: 0, sats: 0 });
+
+  // Initialize: fill visible rows from the oldest events, queue the rest
   const [items, setItems] = useState(() => {
     const chrono = [...events].reverse(); // oldest → newest
-    const startIdx = Math.max(0, chrono.length - visibleCount - 5);
-    const initial = chrono.slice(startIdx, startIdx + visibleCount);
-    queueRef.current = chrono.slice(startIdx + visibleCount);
+    const initial = chrono.slice(0, visibleCount);
+    const queue = chrono.slice(visibleCount);
+    queueRef.current = queue;
     knownKeysRef.current = new Set(events.map(makeEventKey));
 
-    // Display newest-first (reverse chronological in the visible list)
+    // Count messages/sats remaining in the queue
+    setQueuedStats(countMessagesAndSats(queue));
+
+    // Display newest-on-top within the initial batch
     return initial.reverse().map((event) => ({
       uid: uidRef.current++,
       event,
@@ -136,6 +147,14 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const drip = useCallback(() => {
     const next = queueRef.current.shift();
     if (!next) return;
+
+    // Update queued stats (decrement)
+    if (next.type === "message") {
+      setQueuedStats((prev) => ({
+        messages: prev.messages - 1,
+        sats: prev.sats - (next.paymentSatoshis ?? 0),
+      }));
+    }
 
     const newUid = uidRef.current++;
     setEnteringUid(newUid);
@@ -173,16 +192,26 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
 
   // When SWR revalidates with new events, queue any we haven't seen
   useEffect(() => {
-    let added = false;
+    let addedMessages = 0;
+    let addedSats = 0;
     for (const event of events) {
       const key = makeEventKey(event);
       if (!knownKeysRef.current.has(key)) {
         knownKeysRef.current.add(key);
         queueRef.current.push(event);
-        added = true;
+        if (event.type === "message") {
+          addedMessages++;
+          addedSats += event.paymentSatoshis ?? 0;
+        }
       }
     }
-    if (added) ensureInterval();
+    if (addedMessages > 0) {
+      setQueuedStats((prev) => ({
+        messages: prev.messages + addedMessages,
+        sats: prev.sats + addedSats,
+      }));
+    }
+    if (addedMessages > 0 || queueRef.current.length > 0) ensureInterval();
   }, [events, ensureInterval]);
 
   // Clear entering animation after transition
@@ -192,6 +221,10 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
       return () => clearTimeout(t);
     }
   }, [enteringUid]);
+
+  // Stats count up: real total minus what's still queued
+  const displayMessages = stats.totalMessages - queuedStats.messages;
+  const displaySats = stats.totalSatsTransacted - queuedStats.sats;
 
   return (
     <Link href="/activity" className="block space-y-2 group/feed">
@@ -233,22 +266,22 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
               height: "var(--feed-row-h)",
             }}
           >
-            <EventRow event={item.event} index={i} compact />
+            <CompactEventRow event={item.event} />
           </div>
         ))}
       </div>
     </div>
 
-      {/* Paid messages stat — always reflects real API data */}
-      {stats.totalMessages > 0 && (
+      {/* Paid messages stat — counts up to real total as events drip in */}
+      {displayMessages > 0 && (
         <div className="flex items-center justify-center gap-2 rounded-lg border border-[#F7931A]/15 bg-[#F7931A]/[0.04] px-4 py-2.5">
           <svg className="size-4 text-[#F7931A]/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
             <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
           </svg>
           <span className="text-[13px] text-white/50">
-            <span className="font-semibold text-white tabular-nums">{stats.totalMessages.toLocaleString()}</span> paid messages sent
+            <span className="font-semibold text-white tabular-nums">{displayMessages.toLocaleString()}</span> paid messages sent
             <span className="text-white/30"> &middot; </span>
-            <span className="font-semibold text-[#F7931A]/70 tabular-nums">{stats.totalSatsTransacted.toLocaleString()}</span> <span className="text-white/40">sats</span>
+            <span className="font-semibold text-[#F7931A]/70 tabular-nums">{displaySats.toLocaleString()}</span> <span className="text-white/40">sats</span>
           </span>
         </div>
       )}
