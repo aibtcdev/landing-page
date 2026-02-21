@@ -286,6 +286,7 @@ export function ActivityFeedHero({ registeredCount = 0, messageCount = 0, topAge
   // Recalculate scroll speed when content changes
   useEffect(() => {
     if (!trackRef.current) return;
+    // scrollHeight is in pixels; SCROLL_SPEED is px/s — division yields seconds
     const h = trackRef.current.scrollHeight / 2;
     trackRef.current.style.setProperty("--scroll-duration", `${h / SCROLL_SPEED}s`);
   }, [events]);
