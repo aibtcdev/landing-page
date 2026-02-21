@@ -82,6 +82,7 @@ async function fetchAgents() {
       levelName: LEVELS[level].name,
       messageCount: inbox?.messageIds.length ?? 0,
       unreadCount: inbox?.unreadCount ?? 0,
+      // Placeholder — reputation is loaded on individual profile pages to avoid N+1 fetches
       reputationScore: 0,
       reputationCount: 0,
     };
