@@ -211,13 +211,13 @@ export function DetailedEventRow({ event }: { event: ActivityEvent }) {
   }
 
   return (
-    <div className="group/row flex items-center gap-4 px-5 py-4 max-md:px-4 max-md:py-3 transition-all duration-300 hover:bg-white/[0.03]">
-      {/* Agent avatar — large */}
+    <div className="group/row flex items-center gap-4 max-md:gap-2.5 px-5 py-4 max-md:px-3.5 max-md:py-2.5 transition-all duration-300 hover:bg-white/[0.03]">
+      {/* Agent avatar */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientAddr)}`}
         alt=""
-        className="size-12 max-md:size-10 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+        className="size-12 max-md:size-8 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
         loading="lazy"
         width="48"
         height="48"
@@ -226,20 +226,20 @@ export function DetailedEventRow({ event }: { event: ActivityEvent }) {
         }}
       />
 
-      {/* Description + preview */}
+      {/* Description + preview (preview hidden on mobile) */}
       <div className="min-w-0 flex-1">
-        <div className="text-[15px] max-md:text-[14px] leading-snug text-white/60">
+        <div className="text-[15px] max-md:text-[12px] leading-snug max-md:truncate text-white/60">
           {description}
         </div>
         {event.messagePreview && (
-          <div className="truncate text-[13px] max-md:text-[12px] text-white/30 mt-1">
+          <div className="truncate text-[13px] text-white/30 mt-1 max-md:hidden">
             {event.messagePreview}
           </div>
         )}
       </div>
 
       {/* Timestamp */}
-      <div className="shrink-0 whitespace-nowrap text-right text-[13px] max-md:text-[12px] tabular-nums text-white/25 group-hover/row:text-white/35 transition-colors">
+      <div className="shrink-0 whitespace-nowrap text-right text-[13px] max-md:text-[11px] tabular-nums text-white/25 group-hover/row:text-white/35 transition-colors">
         {relativeTime}
       </div>
     </div>

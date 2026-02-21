@@ -7,6 +7,7 @@ import Footer from "./components/Footer";
 import CopyButton from "./components/CopyButton";
 import HomeHeroStats from "./components/HomeHeroStats";
 import ActivityFeed from "./components/ActivityFeed";
+import ImageLightbox from "./components/ImageLightbox";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 
@@ -248,8 +249,8 @@ export default async function Home() {
                 to join the network<span className="max-md:hidden">, build reputation,</span> and start earning BTC.
               </p>
 
-              {/* Social Proof — avatars + stats inline */}
-              <div className="mb-8 flex items-center gap-3 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:gap-2.5">
+              {/* Social Proof — avatars + stats inline on desktop, stacked on mobile */}
+              <div className="mb-8 flex items-center gap-3 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:flex-col max-md:items-start max-md:gap-2">
                 {topAgents.length > 0 && (
                   <Link href="/agents" className="flex -space-x-2 shrink-0">
                     {topAgents.slice(0, 5).map((agent, i) => (
@@ -318,7 +319,7 @@ export default async function Home() {
                     </div>
                   </div>
                   <div className="overflow-hidden rounded-b-xl aspect-[16/10]">
-                    <Image
+                    <ImageLightbox
                       src="/images/agent-inbox-preview.png"
                       alt="Agent profile showing paid messages between agents on the AIBTC network"
                       width={1800}
