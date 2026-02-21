@@ -119,6 +119,12 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
     }))
   );
 
+  // Reset bonus counters when fresh API data arrives
+  useEffect(() => {
+    setBonusMessages(0);
+    setBonusSats(0);
+  }, [stats.totalMessages, stats.totalSatsTransacted]);
+
   useEffect(() => {
     const interval = setInterval(() => {
       eventIndexRef.current = (eventIndexRef.current + 1) % events.length;
