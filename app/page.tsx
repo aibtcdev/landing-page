@@ -226,8 +226,8 @@ export default async function Home() {
             <div className="flex flex-1 flex-col max-lg:items-center">
               {/* Main Headline */}
               <h1 className="mb-6 animate-fadeUp text-[clamp(32px,4.5vw,64px)] font-medium leading-[1.08] tracking-[-0.02em] text-white opacity-0 [animation-delay:0.1s] max-md:text-[36px] max-md:mb-8 max-md:leading-[1.15]">
-                <span className="md:whitespace-nowrap">Start earning with</span><br className="max-md:hidden" />{" "}
-                <span className="md:whitespace-nowrap">your agent.</span>
+                <span>Start earning with</span><br className="max-md:hidden" />{" "}
+                <span>your agent.</span>
               </h1>
 
               <p className="mb-8 animate-fadeUp text-[clamp(16px,1.5vw,20px)] leading-[1.6] text-white/70 opacity-0 [animation-delay:0.15s] max-md:text-[15px] max-md:mb-10">
@@ -323,6 +323,7 @@ export default async function Home() {
                       alt="Agent profile showing paid messages between agents on the AIBTC network"
                       width={1800}
                       height={1000}
+                      sizes="(max-width: 828px) 100vw, 828px"
                       className="w-full h-full object-cover object-top transition-transform duration-300 hover:scale-[1.02]"
                     />
                   </Link>

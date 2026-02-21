@@ -92,9 +92,9 @@ export default function GuidesIndex() {
                   },
                 ].map((item, i, arr) => (
                   <div key={item.step} className="relative flex flex-col items-center text-center max-md:flex-row max-md:items-start max-md:text-left max-md:gap-3 max-md:py-3">
-                    {/* Mobile: vertical connecting line */}
+                    {/* Mobile: vertical connecting line (centered on step circle) */}
                     {i < arr.length - 1 && (
-                      <div className="absolute left-[13px] top-[40px] bottom-0 w-px bg-gradient-to-b from-[#F7931A]/20 to-[#F7931A]/5 md:hidden" />
+                      <div className="absolute left-[14px] -translate-x-1/2 top-[40px] bottom-0 w-px bg-gradient-to-b from-[#F7931A]/20 to-[#F7931A]/5 md:hidden" />
                     )}
 
                     {/* Step circle */}

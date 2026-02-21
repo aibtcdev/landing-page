@@ -92,6 +92,7 @@ const footerSections = [
 function FooterSection({ section }: { section: typeof footerSections[number] }) {
   const [open, setOpen] = useState(false);
   const Icon = section.icon;
+  const sectionId = `footer-${section.title.toLowerCase().replace(/\s+/g, "-")}`;
 
   return (
     <div className="max-md:py-4">
@@ -100,6 +101,7 @@ function FooterSection({ section }: { section: typeof footerSections[number] }) 
         className="mb-4 max-md:mb-0 flex w-full items-center justify-between text-sm font-semibold text-white/70 md:pointer-events-none md:cursor-default min-h-[44px]"
         onClick={() => setOpen(!open)}
         aria-expanded={open}
+        aria-controls={sectionId}
       >
         {section.title}
         <svg
@@ -114,7 +116,7 @@ function FooterSection({ section }: { section: typeof footerSections[number] }) 
       </button>
 
       {/* Desktop: always visible. Mobile: collapsed by default */}
-      <div className={`space-y-2.5 max-md:space-y-1 md:block ${open ? "block" : "hidden"}`}>
+      <div id={sectionId} className={`space-y-2.5 max-md:space-y-1 md:block ${open ? "block" : "hidden"}`}>
         {section.links.map((link) => (
           <a
             key={link.name}
