@@ -63,11 +63,8 @@ export async function GET(
         const buf = await avatarRes.arrayBuffer();
         const ct = avatarRes.headers.get("content-type") || "image/svg+xml";
         const bytes = new Uint8Array(buf);
-        let binary = "";
-        for (let i = 0; i < bytes.length; i++) {
-          binary += String.fromCharCode(bytes[i]);
-        }
-        avatarSrc = `data:${ct};base64,${btoa(binary)}`;
+        const base64 = Buffer.from(bytes).toString("base64");
+        avatarSrc = `data:${ct};base64,${base64}`;
       }
     } catch {
       // Avatar fetch timed out or failed — render without it
