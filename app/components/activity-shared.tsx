@@ -228,7 +228,7 @@ export function DetailedEventRow({ event }: { event: ActivityEvent }) {
 
       {/* Description + preview (preview hidden on mobile) */}
       <div className="min-w-0 flex-1">
-        <div className="text-[15px] max-md:text-[12px] leading-snug max-md:truncate text-white/60">
+        <div className="text-[15px] max-md:text-[12px] leading-snug max-md:line-clamp-2 text-white/60">
           {description}
         </div>
         {event.messagePreview && (
