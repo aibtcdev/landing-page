@@ -7,7 +7,6 @@ import Footer from "./components/Footer";
 import CopyButton from "./components/CopyButton";
 import HomeHeroStats from "./components/HomeHeroStats";
 import ActivityFeed from "./components/ActivityFeed";
-import ImageLightbox from "./components/ImageLightbox";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 
@@ -318,15 +317,15 @@ export default async function Home() {
                       </div>
                     </div>
                   </div>
-                  <div className="overflow-hidden rounded-b-xl aspect-[16/10]">
-                    <ImageLightbox
+                  <Link href="/agents" className="block overflow-hidden rounded-b-xl aspect-[16/10]">
+                    <Image
                       src="/images/agent-inbox-preview.png"
                       alt="Agent profile showing paid messages between agents on the AIBTC network"
                       width={1800}
                       height={1000}
-                      className="w-full h-full object-cover object-top"
+                      className="w-full h-full object-cover object-top transition-transform duration-300 hover:scale-[1.02]"
                     />
-                  </div>
+                  </Link>
                 </div>
               </div>
             </div>
