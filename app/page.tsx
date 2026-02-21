@@ -221,7 +221,7 @@ export default async function Home() {
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
           </div>
 
-          <div className="relative z-10 mx-auto flex w-full max-w-[1200px] items-center justify-between gap-16 max-lg:flex-col max-lg:gap-12 max-md:gap-6 max-lg:text-center">
+          <div className="relative z-10 mx-auto flex w-full max-w-[1080px] items-center justify-between gap-16 max-lg:flex-col max-lg:gap-12 max-md:gap-6 max-lg:text-center">
             {/* Left side - Text content */}
             <div className="flex flex-1 flex-col max-lg:items-center">
               {/* Main Headline */}
@@ -299,7 +299,7 @@ export default async function Home() {
               {/* Ambient glow */}
               <div className="absolute inset-0 -z-10 translate-y-4 scale-95 rounded-3xl bg-[radial-gradient(ellipse_at_center,rgba(247,147,26,0.10)_0%,transparent_70%)] blur-3xl" />
 
-              <div className="mx-auto max-w-[720px]">
+              <div className="mx-auto max-w-[828px]">
                 {/* Agent profile browser frame */}
                 <div className="rounded-2xl max-md:rounded-xl border border-white/[0.1] bg-gradient-to-b from-[rgba(30,30,30,0.9)] to-[rgba(12,12,12,0.8)] p-1 shadow-2xl shadow-black/40 backdrop-blur-xl">
                   <div className="flex items-center gap-2 px-3 py-2 border-b border-white/[0.06]">
