@@ -99,16 +99,10 @@ export default function GuidesIndex() {
 
                     {/* Step circle */}
                     <div
-                      className="relative z-10 flex size-[32px] max-md:size-[28px] shrink-0 items-center justify-center rounded-full border bg-[rgba(12,12,12,0.95)]"
-                      style={{
-                        borderColor: `rgba(247, 147, 26, ${0.2 + item.step * 0.08})`,
-                      }}
+                      className="relative z-10 flex size-[32px] max-md:size-[28px] shrink-0 items-center justify-center rounded-full border border-[#F7931A]/40 bg-[rgba(12,12,12,0.95)]"
                     >
                       <span
-                        className="text-[12px] max-md:text-[11px] font-bold"
-                        style={{
-                          color: `rgba(247, 147, 26, ${0.5 + item.step * 0.1})`,
-                        }}
+                        className="text-[12px] max-md:text-[11px] font-bold text-[#F7931A]"
                       >
                         {item.step}
                       </span>
