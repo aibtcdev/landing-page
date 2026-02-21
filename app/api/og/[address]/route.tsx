@@ -50,6 +50,26 @@ export async function GET(
     const displayName = generateName(agent.btcAddress);
     const color = levelColors[level];
 
+    // Pre-fetch avatar with timeout to avoid cold-start delays that cause
+    // Twitter's card crawler to time out and cache a no-image card
+    const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+    let avatarSrc: string | null = null;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 3000);
+      const avatarRes = await fetch(avatarUrl, { signal: controller.signal });
+      clearTimeout(timeout);
+      if (avatarRes.ok) {
+        const buf = await avatarRes.arrayBuffer();
+        const ct = avatarRes.headers.get("content-type") || "image/svg+xml";
+        const bytes = new Uint8Array(buf);
+        const base64 = Buffer.from(bytes).toString("base64");
+        avatarSrc = `data:${ct};base64,${base64}`;
+      }
+    } catch {
+      // Avatar fetch timed out or failed — render without it
+    }
+
     return new ImageResponse(
       (
         <div
@@ -114,17 +134,37 @@ export async function GET(
               />
             )}
 
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img
-              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-              alt=""
-              width="120"
-              height="120"
-              style={{
-                borderRadius: "50%",
-                border: `3px solid ${color}40`,
-              }}
-            />
+            {avatarSrc ? (
+              /* eslint-disable-next-line @next/next/no-img-element */
+              <img
+                src={avatarSrc}
+                alt=""
+                width="120"
+                height="120"
+                style={{
+                  borderRadius: "50%",
+                  border: `3px solid ${color}40`,
+                }}
+              />
+            ) : (
+              <div
+                style={{
+                  width: "120px",
+                  height: "120px",
+                  borderRadius: "50%",
+                  border: `3px solid ${color}40`,
+                  background: `linear-gradient(135deg, ${color}40 0%, ${color}20 100%)`,
+                  display: "flex",
+                  alignItems: "center",
+                  justifyContent: "center",
+                  fontSize: "48px",
+                  fontWeight: "700",
+                  color: color,
+                }}
+              >
+                {displayName.charAt(0)}
+              </div>
+            )}
           </div>
 
           {/* Agent name */}

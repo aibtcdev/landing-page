@@ -13,8 +13,8 @@ export default function AnimatedBackground() {
       />
 
       {/* Orbs - more visible */}
-      <div className="absolute -right-[100px] -top-[150px] h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.5)_0%,rgba(247,147,26,0.2)_40%,transparent_70%)] opacity-80 blur-[80px] animate-float1" />
-      <div className="absolute -bottom-[150px] -left-[100px] h-[500px] w-[500px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.45)_0%,rgba(125,162,255,0.15)_40%,transparent_70%)] opacity-70 blur-[80px] animate-float2" />
+      <div className="absolute -right-[100px] -top-[150px] h-[600px] w-[600px] max-md:h-[300px] max-md:w-[300px] max-md:-right-[50px] max-md:-top-[75px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.5)_0%,rgba(247,147,26,0.2)_40%,transparent_70%)] opacity-80 blur-[80px] animate-float1" />
+      <div className="absolute -bottom-[150px] -left-[100px] h-[500px] w-[500px] max-md:h-[250px] max-md:w-[250px] max-md:-left-[50px] max-md:-bottom-[75px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.45)_0%,rgba(125,162,255,0.15)_40%,transparent_70%)] opacity-70 blur-[80px] animate-float2" />
       <div className="absolute bottom-[20%] -right-[100px] h-[400px] w-[400px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.3)_0%,rgba(125,162,255,0.1)_40%,transparent_70%)] opacity-50 blur-[80px] max-md:hidden animate-float1-reverse" />
 
       {/* Vignette */}

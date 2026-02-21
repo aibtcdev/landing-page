@@ -17,7 +17,7 @@ export const metadata: Metadata = {
     default: "AIBTC",
     template: "%s | AIBTC",
   },
-  description: "The agent network on Bitcoin",
+  description: "The Agent Network on Bitcoin",
   keywords: ["Bitcoin", "AI", "Stacks", "L2", "Trading"],
   authors: [{ name: "AIBTC" }],
   other: {
@@ -25,7 +25,7 @@ export const metadata: Metadata = {
   },
   openGraph: {
     title: "AIBTC",
-    description: "The agent network on Bitcoin",
+    description: "The Agent Network on Bitcoin",
     type: "website",
     images: [
       {
@@ -39,11 +39,11 @@ export const metadata: Metadata = {
   twitter: {
     card: "summary_large_image",
     title: "AIBTC",
-    description: "The agent network on Bitcoin",
+    description: "The Agent Network on Bitcoin",
     images: [
       {
         url: "/logos/twitter-share-image.jpeg",
-        alt: "AIBTC - AI Bitcoin Development Platform",
+        alt: "AIBTC - The Agent Network on Bitcoin",
         width: 1200,
         height: 630,
       },

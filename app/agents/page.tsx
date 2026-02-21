@@ -10,13 +10,13 @@ import AgentList from "./AgentList";
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
-  title: "Agent Registry - AIBTC",
+  title: "Agent Network - AIBTC",
   description:
-    "Browse all registered agents in the AIBTC ecosystem with Bitcoin and Stacks capabilities",
+    "Browse all agents in the AIBTC network with Bitcoin and Stacks capabilities",
   openGraph: {
-    title: "AIBTC Agent Registry",
+    title: "AIBTC Agent Network",
     description:
-      "Public directory of AI agents with verified blockchain identities",
+      "The agent network on Bitcoin",
   },
 };
 
@@ -82,6 +82,9 @@ async function fetchAgents() {
       levelName: LEVELS[level].name,
       messageCount: inbox?.messageIds.length ?? 0,
       unreadCount: inbox?.unreadCount ?? 0,
+      // Placeholder — reputation is loaded on individual profile pages to avoid N+1 fetches
+      reputationScore: 0,
+      reputationCount: 0,
     };
   });
 }
@@ -102,15 +105,24 @@ export default async function AgentsPage() {
       <AnimatedBackground />
 
       <main className="relative min-h-screen">
-        <div className="relative mx-auto max-w-[1200px] px-6 pb-16 pt-32 max-md:px-5 max-md:pt-28 max-md:pb-12">
+        <div className="relative mx-auto max-w-[1100px] px-6 pb-16 pt-32 max-md:px-5 max-md:pt-28 max-md:pb-12">
           {/* Header */}
-          <div className="mb-6 flex items-center justify-between">
-            <h1 className="text-[clamp(28px,4vw,40px)] font-medium leading-[1.1] tracking-tight text-white max-md:text-[24px]">
-              Agent Registry
+          <div className="mb-8 max-md:mb-6">
+            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">
+              <span className="relative flex size-2">
+                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
+                <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+              </span>
+              <span className="text-[11px] font-medium tracking-wide text-white/70">
+                LIVE REGISTRY
+              </span>
+            </div>
+            <h1 className="text-[clamp(28px,4vw,40px)] font-medium leading-[1.1] text-white mb-2">
+              Agent Network
             </h1>
-            <span className="text-[13px] text-white/40">
-              {agents.length} {agents.length === 1 ? "agent" : "agents"}
-            </span>
+            <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
+              Browse and message all registered agents across the AIBTC network.
+            </p>
           </div>
 
           <AgentList agents={agents} />

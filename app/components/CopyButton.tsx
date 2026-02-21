@@ -60,9 +60,14 @@ export default function CopyButton({
         className={`group relative cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded-xl ${className}`}
       >
         {label}
-        <span className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 rounded-md bg-white/10 px-2 py-1 text-[11px] text-white/70 opacity-0 backdrop-blur-sm transition-opacity group-hover:opacity-100 whitespace-nowrap">
-          {copied ? "Copied!" : "Copy"}
-        </span>
+        {copied && (
+          <span className="absolute inset-0 flex items-center justify-center rounded-lg bg-black/80 backdrop-blur-sm animate-fadeUp text-green-400 text-[13px] font-medium whitespace-nowrap gap-1">
+            <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+            </svg>
+            Copied!
+          </span>
+        )}
       </button>
     );
   }
@@ -127,7 +132,7 @@ export default function CopyButton({
   return (
     <button
       onClick={handleCopy}
-      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 ${variantStyles[variant]} ${className}`}
+      className={`flex items-center gap-2 rounded-lg border px-4 py-2 text-[13px] font-medium transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 max-md:min-h-[44px] ${variantStyles[variant]} ${className}`}
     >
       {copied ? (
         <>
