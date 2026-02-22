@@ -128,8 +128,13 @@ export function CompactEventRow({ event }: { event: ActivityEvent }) {
       description = "Unknown event";
   }
 
+  // Link target based on event type
+  const href = event.type === "message" && event.recipient
+    ? `/inbox/${event.recipient.btcAddress}`
+    : `/agents/${event.agent.btcAddress}`;
+
   return (
-    <div className="flex items-center gap-2.5 max-md:gap-2 px-3 max-md:px-2.5 py-2 transition-all duration-300 hover:bg-white/[0.03]">
+    <Link href={href} className="flex items-center gap-2.5 max-md:gap-2 px-3 max-md:px-2.5 py-2 transition-all duration-300 hover:bg-white/[0.03]" onClick={(e) => e.stopPropagation()}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientAddr)}`}
@@ -145,7 +150,7 @@ export function CompactEventRow({ event }: { event: ActivityEvent }) {
       <div className="min-w-0 truncate text-[12px] max-md:text-[11px] leading-snug text-white/60">
         {description}
       </div>
-    </div>
+    </Link>
   );
 }
 
