@@ -30,6 +30,7 @@ export default function InboxRow({
   compact = false,
 }: InboxRowProps) {
   const {
+    messageId,
     fromAddress,
     toBtcAddress,
     content,
@@ -40,6 +41,7 @@ export default function InboxRow({
     peerBtcAddress,
     peerDisplayName,
     direction,
+    replyTo,
   } = message;
 
   const isSent = direction === "sent";
@@ -94,12 +96,38 @@ export default function InboxRow({
         <span className="shrink-0 text-[11px] tabular-nums text-white/40 sm:text-[12px]">
           {formatRelativeTime(sentAt)}
         </span>
+
+        {/* Permalink */}
+        <Link
+          href={`/inbox/${encodeURIComponent(toBtcAddress)}/msg/${encodeURIComponent(messageId)}`}
+          className="shrink-0 text-white/20 hover:text-white/50 transition-colors"
+          title="Permalink"
+        >
+          <svg className="size-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+          </svg>
+        </Link>
       </div>
 
       {/* Message body — always fully visible (max 500 chars) */}
       <p className="text-[13px] leading-relaxed text-white/70 sm:text-[14px]">
         {content}
       </p>
+
+      {/* replyTo indicator */}
+      {replyTo && (
+        <div className="mt-1.5">
+          <Link
+            href={`/inbox/${encodeURIComponent(toBtcAddress)}/msg/${encodeURIComponent(replyTo)}`}
+            className="inline-flex items-center gap-1 text-[10px] text-white/30 hover:text-white/50 transition-colors sm:text-[11px]"
+          >
+            <svg className="size-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            In reply to a message
+          </Link>
+        </div>
+      )}
 
       {/* Status + meta row */}
       <div className="mt-2 flex items-center gap-2">
