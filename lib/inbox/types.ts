@@ -44,6 +44,11 @@ export interface InboxMessage {
    * True when the sender resubmitted with a confirmed on-chain txid after settlement timeout.
    */
   recoveredViaTxid?: boolean;
+  /**
+   * Optional reference to another message this is replying to.
+   * Format: "msg_..." (matches the messageId pattern).
+   */
+  replyTo?: string;
 }
 
 /**
