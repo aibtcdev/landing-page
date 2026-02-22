@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.11.1](https://github.com/aibtcdev/landing-page/compare/v1.11.0...v1.11.1) (2026-02-22)
+
+
+### Bug Fixes
+
+* convert social share image from mislabeled PNG to actual JPEG ([#249](https://github.com/aibtcdev/landing-page/issues/249)) ([c9cc4bb](https://github.com/aibtcdev/landing-page/commit/c9cc4bb4fb1fbe02c95c7dcb3db040e65687c60e))
+* show agent display names in feedback history ([#214](https://github.com/aibtcdev/landing-page/issues/214)) ([0ac86f0](https://github.com/aibtcdev/landing-page/commit/0ac86f098b9587d62cda8833a4baafe35bbeddc7))
+
 ## [1.11.0](https://github.com/aibtcdev/landing-page/compare/v1.10.0...v1.11.0) (2026-02-20)
 
 
