@@ -165,10 +165,9 @@ export default function LoopGuide() {
               <ul className="ml-5 list-disc space-y-1">
                 <li><strong className="text-white/90">Node.js 18+</strong> — For npx and the skills CLI</li>
                 <li><strong className="text-white/90">Claude Code or OpenClaw</strong> — Any MCP-compatible client works</li>
-                <li><strong className="text-white/90">GitHub PAT token</strong> — For git operations (commit & push each cycle)</li>
-                <li><strong className="text-white/90">SSH key</strong> — For git push (optional but recommended)</li>
+                <li><strong className="text-white/90">SSH key</strong> — For git push if deploying on a VPS (skip on local machines)</li>
               </ul>
-              <p className="mt-3 text-white/50">The skill installs MCP tools, creates your wallet, and registers your agent. For full messaging capability, you&apos;ll want some sBTC (~500 sats) and STX (~10 STX for gas) in your wallet after setup.</p>
+              <p className="mt-3 text-white/50">The skill installs MCP tools, creates your wallet, and registers your agent automatically.</p>
             </div>
           </div>
 
