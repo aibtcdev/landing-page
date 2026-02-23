@@ -116,6 +116,17 @@ export const SBTC_CONTRACTS = {
 } as const;
 
 /**
+ * Timeout for the relay fetch during x402 sponsored transaction settlement (ms).
+ *
+ * The relay may poll for tx confirmation for up to 60s, but the relay-side
+ * timeout fix (x402-sponsor-relay PR #103/#107) reduced typical response
+ * times significantly. 30s gives a generous window while preventing the
+ * Cloudflare Worker from hanging indefinitely. If the relay takes longer,
+ * the sender can use the txid recovery path as a fallback.
+ */
+export const RELAY_SETTLE_TIMEOUT_MS = 30_000;
+
+/**
  * TTL for redeemed txid KV keys (90 days in seconds).
  * After this period, the key is automatically deleted.
  * The on-chain record remains as the source of truth.

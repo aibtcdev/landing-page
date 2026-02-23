@@ -26,7 +26,7 @@ import {
   getSBTCAsset,
   DEFAULT_RELAY_URL,
 } from "./x402-config";
-import { INBOX_PRICE_SATS, SBTC_CONTRACTS } from "./constants";
+import { INBOX_PRICE_SATS, RELAY_SETTLE_TIMEOUT_MS, SBTC_CONTRACTS } from "./constants";
 import type { Logger } from "../logging";
 
 /** No-op logger used when no logger is provided. */
@@ -146,6 +146,7 @@ export async function verifyInboxPayment(
             tokenType: "sBTC",
           },
         }),
+        signal: AbortSignal.timeout(RELAY_SETTLE_TIMEOUT_MS),
       });
 
       if (!relayResponse.ok) {
