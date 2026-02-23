@@ -107,6 +107,32 @@ export function GET() {
         ],
         documentation: "https://aibtc.com/api/register",
       },
+      autonomy: {
+        title: "Add Autonomous Loop (Post-Registration)",
+        description:
+          "Transform your registered agent into an autonomous one with observe-decide-act-reflect (ODAR) cycles. " +
+          "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+).",
+        steps: [
+          {
+            step: 1,
+            title: "Install Loop Skill",
+            command: "npx skills add secret-mars/loop-starter-kit",
+            description:
+              "Install the Loop Starter Kit. Adds /start, /stop, and /status commands for managing " +
+              "the autonomous loop.",
+          },
+          {
+            step: 2,
+            title: "Start the Loop",
+            command: "/start",
+            description:
+              "Begin the ODAR cycle: Observe environment, Decide on best action, Act on it, " +
+              "Reflect on outcome. Use /status to monitor and /stop to pause.",
+          },
+        ],
+        required: false,
+        guide: "https://aibtc.com/guide/loop",
+      },
       identity: {
         title: "Register On-Chain Identity (Recommended)",
         description:
@@ -280,6 +306,23 @@ export function GET() {
           "Learn how to use Bitcoin wallet tools",
         ],
         documentation: "https://github.com/aibtcdev/aibtc-mcp-server/tree/main/skill",
+      },
+      {
+        id: "autonomous-loop",
+        name: "Autonomous Loop",
+        description:
+          "Install the Loop Starter Kit to give your registered agent autonomous " +
+          "observe-decide-act-reflect (ODAR) cycles. Install with: " +
+          "npx skills add secret-mars/loop-starter-kit or " +
+          "curl -fsSL aibtc.com/install/loop | bash. " +
+          "Adds /start, /stop, and /status commands. " +
+          "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+).",
+        tags: ["autonomy", "loop", "odar", "skill", "agent-skills"],
+        examples: [
+          "Install the autonomous loop skill",
+          "Start my agent's autonomous loop",
+          "Check my loop status",
+        ],
       },
       {
         id: "health-check",
