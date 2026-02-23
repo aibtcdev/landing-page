@@ -298,8 +298,30 @@ export async function GET(
       })
     );
 
+    // Deduplicate resolved partners by btcAddress — the same agent can appear
+    // under different pre-resolution keys (STX for received, BTC for sent).
+    const deduped = new Map<string, typeof resolvedPartners[number]>();
+    for (const p of resolvedPartners) {
+      const key = p.btcAddress;
+      if (!key) continue;
+      const existing = deduped.get(key);
+      if (existing) {
+        existing.messageCount += p.messageCount;
+        if (existing.direction !== p.direction) existing.direction = "both";
+        if (new Date(p.lastInteractionAt).getTime() > new Date(existing.lastInteractionAt).getTime()) {
+          existing.lastInteractionAt = p.lastInteractionAt;
+        }
+        if (!existing.stxAddress && p.stxAddress) existing.stxAddress = p.stxAddress;
+        if (!existing.displayName && p.displayName) existing.displayName = p.displayName;
+      } else {
+        deduped.set(key, { ...p });
+      }
+    }
+
+    const dedupedPartners = Array.from(deduped.values());
+
     // Sort by message count (descending), then by most recent interaction
-    resolvedPartners.sort((a, b) => {
+    dedupedPartners.sort((a, b) => {
       if (b.messageCount !== a.messageCount) {
         return b.messageCount - a.messageCount;
       }
@@ -307,7 +329,7 @@ export async function GET(
     });
 
     // Limit to top 10 partners
-    partners = resolvedPartners.slice(0, 10);
+    partners = dedupedPartners.slice(0, 10);
   }
 
   // If no messages, return self-documenting response
@@ -477,6 +499,7 @@ export async function POST(
     paymentTxid,
     paymentSatoshis,
     signature: senderSignatureInput,
+    replyTo,
   } = validation.data;
 
   // Verify recipient matches agent
@@ -631,6 +654,7 @@ export async function POST(
       recoveredViaTxid: true,
       ...(senderBtcAddress && { senderBtcAddress }),
       ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
+      ...(replyTo && { replyTo }),
     };
 
     // Resolve sender agent for sent index
@@ -767,6 +791,7 @@ export async function POST(
     authenticated,
     ...(senderBtcAddress && { senderBtcAddress }),
     ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
+    ...(replyTo && { replyTo }),
   };
 
   // Resolve sender agent for sent index

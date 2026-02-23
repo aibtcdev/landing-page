@@ -72,6 +72,7 @@ export function validateInboxMessage(body: unknown):
         paymentTxid?: string;
         paymentSatoshis?: number;
         signature?: string;
+        replyTo?: string;
       };
       errors?: never;
     }
@@ -129,6 +130,17 @@ export function validateInboxMessage(body: unknown):
     }
   }
 
+  // replyTo — optional reference to another message (must match msg_ prefix)
+  if (b.replyTo !== undefined) {
+    if (typeof b.replyTo !== "string") {
+      errors.push("replyTo must be a string");
+    } else if (b.replyTo.trim().length === 0) {
+      errors.push("replyTo cannot be empty");
+    } else if (!/^msg_/.test(b.replyTo)) {
+      errors.push("replyTo must be a valid message ID (msg_... format)");
+    }
+  }
+
   // signature — optional BIP-137 sender authentication signature
   // Signed message format: "Inbox Message | {content}"
   if (b.signature !== undefined) {
@@ -156,6 +168,9 @@ export function validateInboxMessage(body: unknown):
       }),
       ...(typeof b.signature === "string" && {
         signature: b.signature,
+      }),
+      ...(typeof b.replyTo === "string" && {
+        replyTo: b.replyTo,
       }),
     },
   };

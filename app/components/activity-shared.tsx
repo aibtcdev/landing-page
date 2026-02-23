@@ -128,8 +128,13 @@ export function CompactEventRow({ event }: { event: ActivityEvent }) {
       description = "Unknown event";
   }
 
+  // Link target based on event type
+  const href = event.type === "message" && event.recipient
+    ? `/inbox/${event.recipient.btcAddress}`
+    : `/agents/${event.agent.btcAddress}`;
+
   return (
-    <div className="flex items-center gap-2.5 max-md:gap-2 px-3 max-md:px-2.5 py-2 transition-all duration-300 hover:bg-white/[0.03]">
+    <Link href={href} className="flex items-center gap-2.5 max-md:gap-2 px-3 max-md:px-2.5 py-2 transition-all duration-300 hover:bg-white/[0.03]" onClick={(e) => e.stopPropagation()}>
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
         src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientAddr)}`}
@@ -145,7 +150,7 @@ export function CompactEventRow({ event }: { event: ActivityEvent }) {
       <div className="min-w-0 truncate text-[12px] max-md:text-[11px] leading-snug text-white/60">
         {description}
       </div>
-    </div>
+    </Link>
   );
 }
 
@@ -165,17 +170,17 @@ export function DetailedEventRow({ event }: { event: ActivityEvent }) {
     case "message":
       description = event.recipient ? (
         <>
-          <Link href={`/agents/${event.recipient.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.recipient.displayName}</Link>
+          <Link href={`/agents/${event.recipient.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.recipient.displayName}</Link>
           <span className="text-white/60"> received </span>
           {event.paymentSatoshis != null && (
             <span className="font-bold text-[#F7931A]">{event.paymentSatoshis.toLocaleString()} sats</span>
           )}
           <span className="text-white/60"> from </span>
-          <Link href={`/agents/${event.agent.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
+          <Link href={`/agents/${event.agent.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
         </>
       ) : (
         <>
-          <Link href={`/agents/${event.agent.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
+          <Link href={`/agents/${event.agent.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
           <span className="text-white/60"> sent a message</span>
           {event.paymentSatoshis != null && (
             <>
@@ -190,7 +195,7 @@ export function DetailedEventRow({ event }: { event: ActivityEvent }) {
     case "achievement":
       description = (
         <>
-          <Link href={`/agents/${event.agent.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
+          <Link href={`/agents/${event.agent.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
           <span className="text-white/60"> earned </span>
           <span className="font-bold text-[#7DA2FF]">{event.achievementName}</span>
         </>
@@ -200,7 +205,7 @@ export function DetailedEventRow({ event }: { event: ActivityEvent }) {
     case "registration":
       description = (
         <>
-          <Link href={`/agents/${event.agent.btcAddress}`} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
+          <Link href={`/agents/${event.agent.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
           <span className="text-white/60"> joined the registry</span>
         </>
       );
@@ -210,8 +215,13 @@ export function DetailedEventRow({ event }: { event: ActivityEvent }) {
       description = "Unknown event";
   }
 
+  // Link target based on event type
+  const href = event.type === "message" && event.recipient
+    ? `/inbox/${event.recipient.btcAddress}`
+    : `/agents/${event.agent.btcAddress}`;
+
   return (
-    <div className="group/row flex items-center gap-4 max-md:gap-2.5 px-5 py-4 max-md:px-3.5 max-md:py-2.5 transition-all duration-300 hover:bg-white/[0.03]">
+    <Link href={href} className="group/row flex items-center gap-4 max-md:gap-2.5 px-5 py-4 max-md:px-3.5 max-md:py-2.5 transition-all duration-300 hover:bg-white/[0.03]">
       {/* Agent avatar */}
       {/* eslint-disable-next-line @next/next/no-img-element */}
       <img
@@ -242,7 +252,7 @@ export function DetailedEventRow({ event }: { event: ActivityEvent }) {
       <div className="shrink-0 whitespace-nowrap text-right text-[13px] max-md:text-[11px] tabular-nums text-white/25 group-hover/row:text-white/35 transition-colors">
         {relativeTime}
       </div>
-    </div>
+    </Link>
   );
 }
 

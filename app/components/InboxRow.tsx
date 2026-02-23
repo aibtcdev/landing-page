@@ -30,6 +30,7 @@ export default function InboxRow({
   compact = false,
 }: InboxRowProps) {
   const {
+    messageId,
     fromAddress,
     toBtcAddress,
     content,
@@ -40,6 +41,7 @@ export default function InboxRow({
     peerBtcAddress,
     peerDisplayName,
     direction,
+    replyTo,
   } = message;
 
   const isSent = direction === "sent";
@@ -49,9 +51,12 @@ export default function InboxRow({
   const isAwaiting = !isSent && !repliedAt && !reply;
   const hasReply = !!(repliedAt || reply);
 
+  const permalinkHref = `/inbox/${encodeURIComponent(toBtcAddress)}/msg/${encodeURIComponent(messageId)}`;
+
   return (
-    <div
-      className={`group relative px-4 py-3.5 transition-colors sm:px-5 sm:py-4 ${isUnread ? "bg-white/[0.04]" : ""}`}
+    <Link
+      href={permalinkHref}
+      className={`group relative block px-4 py-3.5 transition-colors hover:bg-white/[0.03] sm:px-5 sm:py-4 ${isUnread ? "bg-white/[0.04]" : ""}`}
     >
       {/* Unread left accent */}
       {isUnread && (
@@ -66,6 +71,7 @@ export default function InboxRow({
 
         <Link
           href={`/agents/${avatarAddress}`}
+          onClick={(e) => e.stopPropagation()}
           className={`shrink-0 rounded-full border overflow-hidden bg-white/[0.06] ${compact ? "size-7" : "size-7 sm:size-8"} ${isUnread ? "border-[#F7931A]/30" : "border-white/10"}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -82,6 +88,7 @@ export default function InboxRow({
 
         <Link
           href={`/agents/${avatarAddress}`}
+          onClick={(e) => e.stopPropagation()}
           className={`min-w-0 flex-1 truncate text-[13px] hover:underline sm:text-[14px] ${isUnread ? "font-semibold text-white" : "font-medium text-white/80"}`}
         >
           {displayLabel}
@@ -100,6 +107,22 @@ export default function InboxRow({
       <p className="text-[13px] leading-relaxed text-white/70 sm:text-[14px]">
         {content}
       </p>
+
+      {/* replyTo indicator */}
+      {replyTo && (
+        <div className="mt-1.5">
+          <Link
+            href={`/inbox/${encodeURIComponent(toBtcAddress)}/msg/${encodeURIComponent(replyTo)}`}
+            onClick={(e) => e.stopPropagation()}
+            className="inline-flex items-center gap-1 text-[10px] text-white/30 hover:text-white/50 transition-colors sm:text-[11px]"
+          >
+            <svg className="size-3" fill="currentColor" viewBox="0 0 20 20">
+              <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
+            </svg>
+            In reply to a message
+          </Link>
+        </div>
+      )}
 
       {/* Status + meta row */}
       <div className="mt-2 flex items-center gap-2">
@@ -131,7 +154,7 @@ export default function InboxRow({
       {reply && (
         <div className="mt-3 rounded-lg border border-[#7DA2FF]/15 bg-[#7DA2FF]/5 p-3 sm:p-3.5">
           <div className="mb-1.5 flex items-center gap-2">
-            <Link href={`/agents/${reply.fromAddress}`} className="size-5 shrink-0 overflow-hidden rounded-full border border-[#7DA2FF]/20 bg-white/[0.06]">
+            <Link href={`/agents/${reply.fromAddress}`} onClick={(e) => e.stopPropagation()} className="size-5 shrink-0 overflow-hidden rounded-full border border-[#7DA2FF]/20 bg-white/[0.06]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(reply.fromAddress)}`}
@@ -143,7 +166,7 @@ export default function InboxRow({
                 onError={(e) => { e.currentTarget.style.display = "none"; }}
               />
             </Link>
-            <Link href={`/agents/${reply.fromAddress}`} className="text-[12px] font-medium text-[#7DA2FF] hover:underline sm:text-[13px]">
+            <Link href={`/agents/${reply.fromAddress}`} onClick={(e) => e.stopPropagation()} className="text-[12px] font-medium text-[#7DA2FF] hover:underline sm:text-[13px]">
               {generateName(reply.fromAddress)}
             </Link>
             <span className="text-[10px] text-[#7DA2FF]/50 sm:text-[11px]">replied</span>
@@ -156,7 +179,7 @@ export default function InboxRow({
           </p>
         </div>
       )}
-    </div>
+    </Link>
   );
 }
 
