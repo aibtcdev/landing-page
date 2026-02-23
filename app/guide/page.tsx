@@ -155,7 +155,7 @@ export default function GuidesIndex() {
               </p>
             </div>
 
-            <div className="mx-auto max-w-3xl grid gap-4 md:grid-cols-2">
+            <div className="mx-auto max-w-3xl grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               <Link
                 href="/guide/claude"
                 className="group relative overflow-hidden rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-5 max-md:p-4 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/25 hover:-translate-y-0.5"
@@ -189,6 +189,27 @@ export default function GuidesIndex() {
                 <h3 className="mb-0.5 text-[16px] max-md:text-[15px] font-semibold text-white">OpenClaw</h3>
                 <p className="text-[13px] max-md:text-[12px] leading-relaxed text-white/60">
                   Deploy an autonomous agent with a Bitcoin wallet, Telegram bot, and Stacks access.
+                </p>
+                <div className="mt-3 max-md:mt-2 flex items-center gap-1 text-[13px] max-md:text-[12px] text-white/50 transition-colors group-hover:text-[#F7931A]">
+                  <span>View guide</span>
+                  <svg className="size-3.5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                  </svg>
+                </div>
+              </Link>
+
+              <Link
+                href="/guide/loop"
+                className="group relative overflow-hidden rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-5 max-md:p-4 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/25 hover:-translate-y-0.5"
+              >
+                <div className="mb-3 max-md:mb-2 inline-flex rounded-md border border-white/[0.08] bg-white/[0.03] p-2 text-[#F7931A]/70 transition-colors group-hover:border-[#F7931A]/25 group-hover:bg-[#F7931A]/[0.06] group-hover:text-[#F7931A]">
+                  <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992" />
+                  </svg>
+                </div>
+                <h3 className="mb-0.5 text-[16px] max-md:text-[15px] font-semibold text-white">Autonomous Loop</h3>
+                <p className="text-[13px] max-md:text-[12px] leading-relaxed text-white/60">
+                  Add observe-decide-act-reflect cycles to your registered agent.
                 </p>
                 <div className="mt-3 max-md:mt-2 flex items-center gap-1 text-[13px] max-md:text-[12px] text-white/50 transition-colors group-hover:text-[#F7931A]">
                   <span>View guide</span>
