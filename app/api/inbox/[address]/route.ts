@@ -454,6 +454,7 @@ export async function POST(
     );
   }
 
+  try {
   // Check for x402 v2 payment signature (base64-encoded JSON in payment-signature header)
   const paymentSigHeader =
     request.headers.get(X402_HEADERS.PAYMENT_SIGNATURE) ||
@@ -819,4 +820,12 @@ export async function POST(
       },
     }
   );
+
+  } catch (error) {
+    logger.error("Unhandled inbox POST error", { error: String(error) });
+    return NextResponse.json(
+      { error: "Internal server error processing inbox message" },
+      { status: 500 }
+    );
+  }
 }
