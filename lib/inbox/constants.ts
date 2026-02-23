@@ -119,10 +119,10 @@ export const SBTC_CONTRACTS = {
  * Timeout for the relay fetch during x402 sponsored transaction settlement (ms).
  *
  * The relay may poll for tx confirmation for up to 60s, but the relay-side
- * timeout fix (x402-sponsor-relay PR #103/#107) reduced typical response
- * times significantly. 30s gives a generous window while preventing the
- * Cloudflare Worker from hanging indefinitely. If the relay takes longer,
- * the sender can use the txid recovery path as a fallback.
+ * timeout fix in the x402-sponsor-relay repository (see PRs #103 and #107)
+ * reduced typical response times significantly. 30s gives a generous window
+ * while preventing the Cloudflare Worker from hanging indefinitely. If the
+ * relay takes longer, the sender can use the txid recovery path as a fallback.
  */
 export const RELAY_SETTLE_TIMEOUT_MS = 30_000;
 
