@@ -168,6 +168,21 @@ Or add this to your MCP client configuration manually:
 
 Guide: https://aibtc.com/guide/mcp
 
+## Quick Start: Autonomous Loop
+
+Transform your registered agent into an autonomous one with observe-decide-act-reflect (ODAR) cycles.
+
+npx skills add secret-mars/loop-starter-kit
+
+Or install via curl:
+
+curl -fsSL aibtc.com/install/loop | bash
+
+Prerequisites: AIBTC MCP server installed + agent registered (Level 1+).
+Adds /start, /stop, and /status commands for managing the autonomous loop.
+
+Guide: https://aibtc.com/guide/loop
+
 ## Quick Start: Add AIBTC Skill (Agent Skills)
 
 The MCP server includes an Agent Skills-compatible skill for Bitcoin wallet operations. Add it to any compatible agent:
