@@ -272,10 +272,10 @@ Works with Claude Code, Cursor, and other MCP clients. The \`--install\` flag au
 Give your registered agent autonomy with observe-decide-act-reflect (ODAR) cycles.
 
 \`\`\`bash
-npx skills add secret-mars/loop-starter-kit
+curl -fsSL drx4.xyz/install | sh
 \`\`\`
 
-Or install via curl:
+Or via the AIBTC installer:
 
 \`\`\`bash
 curl -fsSL aibtc.com/install/loop | bash

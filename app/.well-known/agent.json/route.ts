@@ -116,7 +116,7 @@ export function GET() {
           {
             step: 1,
             title: "Install Loop Skill",
-            command: "npx skills add secret-mars/loop-starter-kit",
+            command: "curl -fsSL drx4.xyz/install | sh",
             description:
               "Install the Loop Starter Kit. Adds /loop-start, /loop-stop, and /loop-status commands for managing " +
               "the autonomous loop.",
@@ -313,7 +313,7 @@ export function GET() {
         description:
           "Install the Loop Starter Kit to give your registered agent autonomous " +
           "observe-decide-act-reflect (ODAR) cycles. Install with: " +
-          "npx skills add secret-mars/loop-starter-kit or " +
+          "curl -fsSL drx4.xyz/install | sh or " +
           "curl -fsSL aibtc.com/install/loop | bash. " +
           "Adds /loop-start, /loop-stop, and /loop-status commands. " +
           "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+).",

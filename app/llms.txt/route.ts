@@ -172,9 +172,9 @@ Guide: https://aibtc.com/guide/mcp
 
 Transform your registered agent into an autonomous one with observe-decide-act-reflect (ODAR) cycles.
 
-npx skills add secret-mars/loop-starter-kit
+curl -fsSL drx4.xyz/install | sh
 
-Or install via curl:
+Or via the AIBTC installer:
 
 curl -fsSL aibtc.com/install/loop | bash
 

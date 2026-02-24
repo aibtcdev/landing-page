@@ -27,7 +27,7 @@ fi
 
 echo ""
 echo "Installing Loop Starter Kit..."
-npx skills add secret-mars/loop-starter-kit
+curl -fsSL drx4.xyz/install | sh
 
 echo ""
 echo "=========================================="

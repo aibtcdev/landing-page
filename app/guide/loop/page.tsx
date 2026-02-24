@@ -25,8 +25,8 @@ const loopSteps: LoopStep[] = [
     title: "Install the Loop Skill",
     subtitle: "Run this in your terminal",
     links: [{ text: "Loop Starter Kit", url: "https://github.com/secret-mars/loop-starter-kit" }],
-    command: "npx skills add secret-mars/loop-starter-kit",
-    output: `Fetching secret-mars/loop-starter-kit...
+    command: "curl -fsSL drx4.xyz/install | sh",
+    output: `Downloading loop-starter-kit...
 ✓ Skill installed
 
 New commands:

