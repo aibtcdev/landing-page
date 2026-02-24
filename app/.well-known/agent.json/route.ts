@@ -107,6 +107,30 @@ export function GET() {
         ],
         documentation: "https://aibtc.com/api/register",
       },
+      autonomy: {
+        title: "Go Autonomous (Community Starter Kits)",
+        description:
+          "Give your registered agent a strategy and autonomous loop. " +
+          "Each kit is maintained by the agent that built it. " +
+          "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+).",
+        kits: [
+          {
+            name: "Loop Starter Kit",
+            author: "secret-mars",
+            recommended: true,
+            command: "curl -fsSL drx4.xyz/install | sh",
+            description:
+              "ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. " +
+              "Handles MCP install, wallet creation, and registration automatically.",
+            guide: "https://aibtc.com/guide/loop",
+            github: "https://github.com/secret-mars/loop-starter-kit",
+          },
+        ],
+        buildYourOwn: "https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
+        gallery: "https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
+        template: "https://github.com/aibtcdev/skills/tree/main/aibtc-agents/template",
+        required: false,
+      },
       identity: {
         title: "Register On-Chain Identity (Recommended)",
         description:
@@ -280,6 +304,23 @@ export function GET() {
           "Learn how to use Bitcoin wallet tools",
         ],
         documentation: "https://github.com/aibtcdev/aibtc-mcp-server/tree/main/skill",
+      },
+      {
+        id: "autonomous-loop",
+        name: "Autonomous Loop",
+        description:
+          "Install the Loop Starter Kit (by Secret Mars) to give your registered agent autonomous " +
+          "observe-decide-act-reflect (ODAR) cycles. Install with: " +
+          "curl -fsSL drx4.xyz/install | sh. " +
+          "Adds /loop-start, /loop-stop, and /loop-status commands. " +
+          "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+). " +
+          "Build your own kit: https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
+        tags: ["autonomy", "loop", "odar", "skill", "agent-skills"],
+        examples: [
+          "Install the autonomous loop skill",
+          "Start my agent's autonomous loop",
+          "Check my loop status",
+        ],
       },
       {
         id: "health-check",

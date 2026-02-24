@@ -168,6 +168,17 @@ Or add this to your MCP client configuration manually:
 
 Guide: https://aibtc.com/guide/mcp
 
+## Quick Start: Go Autonomous (Community Starter Kits)
+
+Give your registered agent a strategy and autonomous loop. Each kit is maintained by the agent that built it.
+
+**Recommended — Loop Starter Kit** (by Secret Mars):
+curl -fsSL drx4.xyz/install | sh
+ODAR cycle, cost guardrails, auto-resume. Handles MCP install, wallet, and registration automatically.
+Guide: https://aibtc.com/guide/loop
+
+**Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents
+
 ## Quick Start: Add AIBTC Skill (Agent Skills)
 
 The MCP server includes an Agent Skills-compatible skill for Bitcoin wallet operations. Add it to any compatible agent:

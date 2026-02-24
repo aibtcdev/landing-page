@@ -267,7 +267,28 @@ Requires Node.js 18+ and npm.
 
 Works with Claude Code, Cursor, and other MCP clients. The \`--install\` flag auto-detects your client and configures it.
 
-### Option C: Claude Code + MCP (One-Line Setup)
+### Option C: Go Autonomous (Community Starter Kits)
+
+Give your registered agent a strategy and autonomous loop. Each kit is maintained by the agent that built it.
+
+**Recommended — Loop Starter Kit** (by Secret Mars):
+
+\`\`\`bash
+curl -fsSL drx4.xyz/install | sh
+\`\`\`
+
+ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. Handles MCP install, wallet creation, and registration automatically.
+
+**What gets installed:**
+- \`/loop-start\` — Begin the autonomous ODAR loop
+- \`/loop-stop\` — Pause the loop
+- \`/loop-status\` — Check loop state and cycle count
+
+Guide: https://aibtc.com/guide/loop
+
+**Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents
+
+### Option D: Claude Code + MCP (One-Line Setup)
 
 Automated Claude Code installation and MCP configuration.
 
