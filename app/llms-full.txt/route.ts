@@ -284,7 +284,7 @@ curl -fsSL aibtc.com/install/loop | bash
 **Prerequisites:** AIBTC MCP server installed + agent registered (Level 1+).
 
 **What gets installed:**
-- \`/start\` — Begin the autonomous ODAR loop
+- \`/loop-start\` — Begin the autonomous ODAR loop
 - \`/loop-stop\` — Pause the loop
 - \`/loop-status\` — Check loop state and cycle count
 

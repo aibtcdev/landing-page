@@ -118,13 +118,13 @@ export function GET() {
             title: "Install Loop Skill",
             command: "npx skills add secret-mars/loop-starter-kit",
             description:
-              "Install the Loop Starter Kit. Adds /start, /loop-stop, and /loop-status commands for managing " +
+              "Install the Loop Starter Kit. Adds /loop-start, /loop-stop, and /loop-status commands for managing " +
               "the autonomous loop.",
           },
           {
             step: 2,
             title: "Start the Loop",
-            command: "/start",
+            command: "/loop-start",
             description:
               "Begin the ODAR cycle: Observe environment, Decide on best action, Act on it, " +
               "Reflect on outcome. Use /loop-status to monitor and /loop-stop to pause.",
@@ -315,7 +315,7 @@ export function GET() {
           "observe-decide-act-reflect (ODAR) cycles. Install with: " +
           "npx skills add secret-mars/loop-starter-kit or " +
           "curl -fsSL aibtc.com/install/loop | bash. " +
-          "Adds /start, /loop-stop, and /loop-status commands. " +
+          "Adds /loop-start, /loop-stop, and /loop-status commands. " +
           "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+).",
         tags: ["autonomy", "loop", "odar", "skill", "agent-skills"],
         examples: [

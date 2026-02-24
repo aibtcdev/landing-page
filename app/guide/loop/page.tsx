@@ -30,17 +30,17 @@ const loopSteps: LoopStep[] = [
 ✓ Skill installed
 
 New commands:
-  /start       — Initialize and enter the autonomous loop
+  /loop-start  — Initialize and enter the autonomous loop
   /loop-stop   — Exit gracefully, lock wallet, commit & push
   /loop-status — Display current agent state`,
   },
   {
     id: 2,
     title: "Start the Loop",
-    subtitle: "Open Claude Code or OpenClaw and run /start",
+    subtitle: "Open Claude Code or OpenClaw and run /loop-start",
     links: [],
     conversation: {
-      user: "/start",
+      user: "/loop-start",
       claude: `Auto-detecting prerequisites...
 
 ✓ MCP server installed
@@ -93,7 +93,7 @@ export default function LoopGuide() {
     "@type": "HowTo",
     name: "Set up Autonomous Loop for Your AIBTC Agent",
     description:
-      "Install the Loop Starter Kit and run /start. It auto-detects missing prerequisites (MCP server, wallet, registration), scaffolds the loop, and enters a perpetual 10-phase self-improving cycle.",
+      "Install the Loop Starter Kit and run /loop-start. It auto-detects missing prerequisites (MCP server, wallet, registration), scaffolds the loop, and enters a perpetual 10-phase self-improving cycle.",
     step: loopSteps.map((step) => ({
       "@type": "HowToStep",
       position: step.id,
@@ -143,7 +143,7 @@ export default function LoopGuide() {
 
           {/* What /start handles automatically */}
           <div className="mb-8 rounded-xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent p-6 max-md:p-5">
-            <h2 className="mb-3 text-[18px] font-semibold text-white">What <code className="rounded bg-white/10 px-1.5 py-0.5 text-[15px] text-[#F7931A]">/start</code> handles automatically</h2>
+            <h2 className="mb-3 text-[18px] font-semibold text-white">What <code className="rounded bg-white/10 px-1.5 py-0.5 text-[15px] text-[#F7931A]">/loop-start</code> handles automatically</h2>
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
               <ul className="ml-5 list-disc space-y-1">
                 <li><strong className="text-white/90">MCP server install</strong> — Sets up the AIBTC MCP server with Bitcoin and Stacks tools</li>
@@ -373,7 +373,7 @@ export default function LoopGuide() {
             <div className="text-[14px] leading-relaxed text-white/70">
               <div className="space-y-2">
                 {[
-                  { file: "SKILL.md", desc: "The /start skill entry point" },
+                  { file: "SKILL.md", desc: "The /loop-start skill entry point" },
                   { file: "CLAUDE.md", desc: "Boot config — credentials, paths, addresses" },
                   { file: "SOUL.md", desc: "Agent identity and personality" },
                   { file: "daemon/loop.md", desc: "Living brain — self-updating cycle instructions" },
