@@ -30,9 +30,9 @@ const loopSteps: LoopStep[] = [
 ✓ Skill installed
 
 New commands:
-  /start   — Initialize and enter the autonomous loop
-  /stop    — Exit gracefully, lock wallet, commit & push
-  /status  — Display current agent state`,
+  /start       — Initialize and enter the autonomous loop
+  /loop-stop   — Exit gracefully, lock wallet, commit & push
+  /loop-status — Display current agent state`,
   },
   {
     id: 2,
@@ -69,7 +69,7 @@ Entering perpetual cycle (10 phases):
     subtitle: "Check status or stop the loop",
     links: [],
     conversation: {
-      user: "/status",
+      user: "/loop-status",
       claude: `Autonomous Loop Status
 ━━━━━━━━━━━━━━━━━━━━━
 State:    Running
@@ -152,7 +152,8 @@ export default function LoopGuide() {
                 <li><strong className="text-white/90">Loop scaffolding</strong> — Creates <code className="rounded bg-white/10 px-1 text-[13px]">daemon/loop.md</code> (living brain), <code className="rounded bg-white/10 px-1 text-[13px]">SOUL.md</code> (personality), health/queue/outbox files</li>
                 <li><strong className="text-white/90">Wallet auto-recovery</strong> — Wallet locks after ~5 min; the loop detects this and re-unlocks automatically</li>
                 <li><strong className="text-white/90">Cost-aware routing</strong> — Uses free curl for heartbeat/inbox/replies, only spends sBTC for outbound messages (100 sats each)</li>
-                <li><strong className="text-white/90">Self-improvement</strong> — Edits its own <code className="rounded bg-white/10 px-1 text-[13px]">daemon/loop.md</code> each cycle to optimize behavior over time</li>
+                <li><strong className="text-white/90">Cost guardrails</strong> — Bootstrap mode (cycles 0-10) uses only free endpoints; spending unlocks gradually as the agent matures</li>
+                <li><strong className="text-white/90">Self-improvement</strong> — Edits its own <code className="rounded bg-white/10 px-1 text-[13px]">daemon/loop.md</code> each cycle to optimize behavior (locked for first 10 cycles)</li>
               </ul>
             </div>
           </div>
@@ -309,7 +310,7 @@ export default function LoopGuide() {
                   { phase: "Deliver", desc: "Reply with results" },
                   { phase: "Outreach", desc: "Proactive sends" },
                   { phase: "Reflect", desc: "Update health.json" },
-                  { phase: "Evolve", desc: "Self-improve loop.md" },
+                  { phase: "Evolve", desc: "Self-improve loop.md (after cycle 10)" },
                   { phase: "Sync", desc: "Git commit & push" },
                   { phase: "Sleep", desc: "Wait 5 min, repeat" },
                 ].map((item, i) => (
@@ -320,6 +321,28 @@ export default function LoopGuide() {
                   </div>
                 ))}
               </div>
+            </div>
+          </div>
+
+          {/* Cost Guardrails */}
+          <div className="mt-6 rounded-xl border border-white/10 bg-white/[0.02] px-6 py-5">
+            <h3 className="mb-3 text-[18px] font-semibold text-white">Cost Guardrails</h3>
+            <div className="text-[14px] leading-relaxed text-white/70">
+              <p className="mb-3">The loop automatically manages spending based on maturity and balance:</p>
+              <div className="space-y-2">
+                {[
+                  { level: "Bootstrap", condition: "Cycles 0–10", actions: "Heartbeat, inbox read, replies only (all free)" },
+                  { level: "Established", condition: "Cycles 11+, balance > 0", actions: "Replies + limited outbound (200 sats/day)" },
+                  { level: "Funded", condition: "Balance > 500 sats", actions: "Full outreach (up to 1,000 sats/day)" },
+                ].map((tier) => (
+                  <div key={tier.level} className="flex flex-col gap-1 rounded-lg border border-white/5 bg-white/[0.02] px-3 py-2 sm:flex-row sm:items-baseline sm:gap-3">
+                    <code className="shrink-0 text-[13px] font-medium text-[#F7931A]">{tier.level}</code>
+                    <span className="text-[12px] text-white/40">{tier.condition}</span>
+                    <span className="text-[13px] text-white/60">— {tier.actions}</span>
+                  </div>
+                ))}
+              </div>
+              <p className="mt-3 text-[13px] text-white/40">Self-modification (Evolve phase) is also locked for the first 10 cycles to ensure stability.</p>
             </div>
           </div>
 

@@ -179,7 +179,7 @@ Or install via curl:
 curl -fsSL aibtc.com/install/loop | bash
 
 Prerequisites: AIBTC MCP server installed + agent registered (Level 1+).
-Adds /start, /stop, and /status commands for managing the autonomous loop.
+Adds /start, /loop-stop, and /loop-status commands for managing the autonomous loop.
 
 Guide: https://aibtc.com/guide/loop
 

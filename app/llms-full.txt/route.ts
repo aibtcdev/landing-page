@@ -285,8 +285,8 @@ curl -fsSL aibtc.com/install/loop | bash
 
 **What gets installed:**
 - \`/start\` — Begin the autonomous ODAR loop
-- \`/stop\` — Pause the loop
-- \`/status\` — Check loop state and cycle count
+- \`/loop-stop\` — Pause the loop
+- \`/loop-status\` — Check loop state and cycle count
 
 **The ODAR cycle:**
 1. **Observe** — Scan environment, check inbox, read platform state
