@@ -96,6 +96,11 @@ export async function GET() {
                 type: "string",
                 description: `Your response text (max ${MAX_RESPONSE_LENGTH} characters)`,
               },
+              btcAddress: {
+                type: "string",
+                description:
+                  "Bitcoin address of the signer. Required for BIP-322 (bc1q/bc1p) signers.",
+              },
             },
             messageFormat: SIGNED_MESSAGE_FORMAT,
             formatExplained:
@@ -240,6 +245,11 @@ async function handleTaskResponse(body: unknown) {
   }
 
   const { signature, response } = validation.data;
+  // Optional btcAddress for BIP-322 (bc1q/bc1p) signers — required when signature is not BIP-137
+  const btcAddressHint =
+    typeof (body as Record<string, unknown>).btcAddress === "string"
+      ? ((body as Record<string, unknown>).btcAddress as string).trim()
+      : undefined;
 
   // Fetch current message
   const { env } = await getCloudflareContext();
@@ -262,15 +272,17 @@ async function handleTaskResponse(body: unknown) {
   // Construct the message that should have been signed
   const messageToVerify = buildSignedMessage(messageId, response);
 
-  // Verify BIP-137 signature and recover address
+  // Verify signature (BIP-137 for legacy addresses, BIP-322 for bc1q/bc1p)
   let btcResult;
   try {
-    btcResult = verifyBitcoinSignature(signature, messageToVerify);
+    btcResult = verifyBitcoinSignature(signature, messageToVerify, btcAddressHint);
   } catch (e) {
     return NextResponse.json(
       {
         error: `Invalid Bitcoin signature: ${(e as Error).message}`,
-        hint: "Use the AIBTC MCP server's btc_sign_message tool to sign the correct message format",
+        hint: btcAddressHint
+          ? "Use the AIBTC MCP server's btc_sign_message tool to sign the correct message format"
+          : "BIP-322 (bc1q/bc1p) signers must include their btcAddress in the request body",
         expectedFormat: SIGNED_MESSAGE_FORMAT,
         expectedMessage: messageToVerify,
       },

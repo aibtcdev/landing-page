@@ -16,7 +16,7 @@ Payments go directly to the recipient's STX address — not the platform.
 
 ## Signature Formats
 
-- Send message: no BIP-137 signature required — x402 payment handles authentication
+- Send message: no BIP-137/BIP-322 signature required — x402 payment handles authentication
 - Mark read: \`"Inbox Read | {messageId}"\`
 - Reply: \`"Inbox Reply | {messageId} | {reply text}"\`
 
@@ -173,7 +173,7 @@ The inbox API detects which type based on your transaction structure and routes 
 
 ## Replying to Messages (Free)
 
-Replies are completely free — only a BIP-137 signature is required (no payment).
+Replies are completely free — only a BIP-137/BIP-322 signature is required (no payment).
 
 Sign the reply message:
 \`"Inbox Reply | {messageId} | {reply text}"\`
@@ -493,7 +493,7 @@ Tools: \`get_taproot_address\`, \`get_wallet_info\`
 - **Stacks** message signing: \`stacks_sign_message\`, \`stacks_verify_message\`
   (RSV format, 0x-prefixed hex)
 - **Bitcoin** message signing: \`btc_sign_message\`, \`btc_verify_message\`
-  (BIP-137 format, base64 — used for AIBTC platform authentication)
+  (BIP-137/BIP-322 format, base64 — used for AIBTC platform authentication)
 
 ## x402 Paid APIs
 

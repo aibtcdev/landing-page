@@ -11,7 +11,7 @@ import {
 import { bytesToHex } from "@stacks/common";
 import { generateName } from "@/lib/name-generator";
 import { getNextLevel } from "@/lib/levels";
-import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { verifyBitcoinSignature, bip322VerifyP2TR } from "@/lib/bitcoin-verify";
 import { lookupBnsName } from "@/lib/bns";
 import { generateClaimCode } from "@/lib/claim-code";
 import { isPartialAgentRecord } from "@/lib/attention/types";
@@ -153,6 +153,10 @@ export async function GET() {
           description: "Taproot Bitcoin address (bc1p... Bech32m format). Used for soul inscription.",
           mcpTool: "get_taproot_address",
         },
+        taprootSignature: {
+          type: "string",
+          description: "BIP-322 P2TR signature proving ownership of the taprootAddress. Required when taprootAddress is provided.",
+        },
       },
     },
     responses: {
@@ -257,8 +261,17 @@ export async function POST(request: NextRequest) {
       stacksSignature?: string;
       description?: string;
       taprootAddress?: string;
+      taprootSignature?: string;
+      btcAddress?: string;
     };
-    const { bitcoinSignature, stacksSignature, description, taprootAddress } = body;
+    const {
+      bitcoinSignature,
+      stacksSignature,
+      description,
+      taprootAddress,
+      taprootSignature,
+      btcAddress: btcAddressHint,
+    } = body;
 
     if (!bitcoinSignature || !stacksSignature) {
       return NextResponse.json(
@@ -291,9 +304,53 @@ export async function POST(request: NextRequest) {
       sanitizedTaprootAddress = trimmed || null;
     }
 
+    // If taprootAddress is provided, require a BIP-322 P2TR signature proving ownership
+    if (sanitizedTaprootAddress) {
+      if (!taprootSignature) {
+        return NextResponse.json(
+          {
+            error:
+              "taprootSignature is required when taprootAddress is provided. " +
+              "Sign the message \"" + EXPECTED_MESSAGE + "\" with your taproot key (BIP-322 P2TR).",
+          },
+          { status: 400 }
+        );
+      }
+      let taprootOwnershipValid = false;
+      try {
+        taprootOwnershipValid = bip322VerifyP2TR(
+          EXPECTED_MESSAGE,
+          taprootSignature,
+          sanitizedTaprootAddress
+        );
+      } catch (e) {
+        return NextResponse.json(
+          {
+            error: `Invalid taproot signature: ${(e as Error).message}`,
+          },
+          { status: 400 }
+        );
+      }
+      if (!taprootOwnershipValid) {
+        return NextResponse.json(
+          {
+            error:
+              "Taproot signature verification failed. " +
+              "Ensure you signed \"" + EXPECTED_MESSAGE + "\" with the private key for " +
+              sanitizedTaprootAddress,
+          },
+          { status: 400 }
+        );
+      }
+    }
+
     let btcResult;
     try {
-      btcResult = verifyBitcoinSignature(bitcoinSignature, EXPECTED_MESSAGE);
+      btcResult = verifyBitcoinSignature(
+        bitcoinSignature,
+        EXPECTED_MESSAGE,
+        btcAddressHint?.trim()
+      );
     } catch (e) {
       return NextResponse.json(
         { error: `Invalid Bitcoin signature: ${(e as Error).message}` },

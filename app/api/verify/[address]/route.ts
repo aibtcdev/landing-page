@@ -9,13 +9,24 @@ import { getCAIP19AgentId } from "@/lib/caip19";
  * Determine the address type from the format.
  *
  * - Stacks mainnet addresses start with "SP"
- * - Bitcoin Native SegWit addresses start with "bc1"
+ * - Bitcoin Native SegWit P2WPKH addresses start with "bc1q"
+ * - Bitcoin Taproot P2TR addresses start with "bc1p"
  * - Returns null for unrecognized formats
  */
-function getAddressType(address: string): "stx" | "btc" | null {
+function getAddressType(address: string): "stx" | "bc1q" | "bc1p" | null {
   if (address.startsWith("SP")) return "stx";
-  if (address.startsWith("bc1")) return "btc";
+  if (address.startsWith("bc1q")) return "bc1q";
+  if (address.startsWith("bc1p")) return "bc1p";
   return null;
+}
+
+/**
+ * Map address type to KV key prefix.
+ * Both bc1q and bc1p are stored under the "btc" prefix for backward compatibility.
+ */
+function getKvPrefix(addressType: "stx" | "bc1q" | "bc1p"): "stx" | "btc" {
+  if (addressType === "stx") return "stx";
+  return "btc";
 }
 
 /**
@@ -60,7 +71,9 @@ export async function GET(
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const hiroApiKey = env.HIRO_API_KEY;
 
-    const key = `${addressType}:${address}`;
+    // Use KV prefix for lookup (bc1q and bc1p both stored under "btc:" for compatibility)
+    const kvPrefix = getKvPrefix(addressType);
+    const key = `${kvPrefix}:${address}`;
     const value = await kv.get(key);
 
     if (!value) {
