@@ -127,6 +127,8 @@ export function GET() {
           },
         ],
         buildYourOwn: "https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
+        gallery: "https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
+        template: "https://github.com/aibtcdev/skills/tree/main/aibtc-agents/template",
         required: false,
       },
       identity: {
