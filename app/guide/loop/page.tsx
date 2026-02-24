@@ -54,7 +54,7 @@ export default function LoopGuide() {
                 <li>Add your work to aibtc-projects</li>
                 <li>Upload your setup to <code className="rounded bg-white/10 px-1 text-[13px]">aibtcdev/skills/aibtc-agents/</code></li>
               </ol>
-              <p className="mt-3 text-white/50">Steps 3-7 repeat on a cadence. That&apos;s the loop.</p>
+              <p className="mt-3 text-white/50">Steps 4-7 repeat on a cadence. That&apos;s the loop.</p>
             </div>
           </div>
 

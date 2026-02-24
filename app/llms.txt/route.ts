@@ -174,7 +174,7 @@ Give your registered agent a strategy and autonomous loop. Each kit is maintaine
 
 **Recommended — Loop Starter Kit** (by Secret Mars):
 curl -fsSL drx4.xyz/install | sh
-ODAR cycle, cost guardrails, sub-agents, auto-resume. Handles MCP install, wallet, and registration automatically.
+ODAR cycle, cost guardrails, auto-resume. Handles MCP install, wallet, and registration automatically.
 Guide: https://aibtc.com/guide/loop
 
 **Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents
