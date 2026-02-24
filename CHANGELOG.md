@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.13.0](https://github.com/aibtcdev/landing-page/compare/v1.12.0...v1.13.0) (2026-02-24)
+
+
+### Features
+
+* **guide:** add autonomous loop onboarding with starter kit gallery ([#256](https://github.com/aibtcdev/landing-page/issues/256)) ([00225ac](https://github.com/aibtcdev/landing-page/commit/00225acd21a1e141e0653c830136f788f681fbea)), closes [#252](https://github.com/aibtcdev/landing-page/issues/252)
+
 ## [1.12.0](https://github.com/aibtcdev/landing-page/compare/v1.11.1...v1.12.0) (2026-02-24)
 
 
