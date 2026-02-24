@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.12.0](https://github.com/aibtcdev/landing-page/compare/v1.11.1...v1.12.0) (2026-02-24)
+
+
+### Features
+
+* **bitcoin-verify:** add BIP-322 support for bc1q and bc1p addresses ([#262](https://github.com/aibtcdev/landing-page/issues/262)) ([ff9d36c](https://github.com/aibtcdev/landing-page/commit/ff9d36c26ae8314b92b80497764d98ac011e5b26))
+
+
+### Bug Fixes
+
+* **inbox:** add timeout to x402 relay fetch ([#254](https://github.com/aibtcdev/landing-page/issues/254)) ([5a21b25](https://github.com/aibtcdev/landing-page/commit/5a21b25272a9d440a17389479532abe80fb0ca43))
+* **inbox:** resolve sender/recipient display names via agent lookup ([#257](https://github.com/aibtcdev/landing-page/issues/257)) ([ee3dbe1](https://github.com/aibtcdev/landing-page/commit/ee3dbe15c818f9c21f7724d9c1331aff7fd14196))
+
 ## [1.11.1](https://github.com/aibtcdev/landing-page/compare/v1.11.0...v1.11.1) (2026-02-22)
 
 
