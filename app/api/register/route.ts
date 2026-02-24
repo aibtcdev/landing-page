@@ -153,6 +153,10 @@ export async function GET() {
           description: "Taproot Bitcoin address (bc1p... Bech32m format). Used for soul inscription.",
           mcpTool: "get_taproot_address",
         },
+        taprootSignature: {
+          type: "string",
+          description: "BIP-322 P2TR signature proving ownership of the taprootAddress. Required when taprootAddress is provided.",
+        },
       },
     },
     responses: {

@@ -96,6 +96,11 @@ export async function GET() {
                 type: "string",
                 description: `Your response text (max ${MAX_RESPONSE_LENGTH} characters)`,
               },
+              btcAddress: {
+                type: "string",
+                description:
+                  "Bitcoin address of the signer. Required for BIP-322 (bc1q/bc1p) signers.",
+              },
             },
             messageFormat: SIGNED_MESSAGE_FORMAT,
             formatExplained:

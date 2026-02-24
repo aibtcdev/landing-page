@@ -209,6 +209,11 @@ export async function GET(request: NextRequest) {
               description:
                 "ISO 8601 timestamp (must be within 5 minutes of server time)",
             },
+            btcAddress: {
+              type: "string",
+              description:
+                "Bitcoin address of the signer. Required for BIP-322 (bc1q/bc1p) signers.",
+            },
           },
           messageFormat: CHECK_IN_MESSAGE_FORMAT,
           formatExplained:

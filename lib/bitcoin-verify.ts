@@ -89,17 +89,19 @@ function parseDERSignature(der: Uint8Array): Uint8Array {
   if (der[pos] !== 0x02) throw new Error("parseDERSignature: expected 0x02 for r");
   pos++;
   const rLen = der[pos++];
+  if (pos + rLen > der.length) throw new Error("parseDERSignature: r extends beyond signature");
   // Strip optional leading 0x00 padding byte (added when high bit is set)
   const rBytes = der.slice(rLen === 33 ? pos + 1 : pos, pos + rLen);
   pos += rLen;
   if (der[pos] !== 0x02) throw new Error("parseDERSignature: expected 0x02 for s");
   pos++;
   const sLen = der[pos++];
+  if (pos + sLen > der.length) throw new Error("parseDERSignature: s extends beyond signature");
   const sBytes = der.slice(sLen === 33 ? pos + 1 : pos, pos + sLen);
 
   const compact = new Uint8Array(64);
-  compact.set(rBytes.slice(-32), 0);  // r (last 32 bytes, in case rLen < 32)
-  compact.set(sBytes.slice(-32), 32); // s (last 32 bytes)
+  compact.set(rBytes, 32 - rBytes.length);  // left-pad r
+  compact.set(sBytes, 64 - sBytes.length);  // left-pad s
   return compact;
 }
 
@@ -412,11 +414,19 @@ export function verifyBitcoinSignature(
       btcAddress.startsWith("bc1p") || btcAddress.startsWith("tb1p");
 
     if (isP2WPKH) {
-      const valid = bip322VerifyP2WPKH(message, signature, btcAddress);
-      return { valid, address: btcAddress, publicKey: "" };
+      try {
+        const isValid = bip322VerifyP2WPKH(message, signature, btcAddress);
+        return { valid: isValid, address: btcAddress, publicKey: "" };
+      } catch {
+        return { valid: false, address: btcAddress, publicKey: "" };
+      }
     } else if (isP2TR) {
-      const valid = bip322VerifyP2TR(message, signature, btcAddress);
-      return { valid, address: btcAddress, publicKey: "" };
+      try {
+        const isValid = bip322VerifyP2TR(message, signature, btcAddress);
+        return { valid: isValid, address: btcAddress, publicKey: "" };
+      } catch {
+        return { valid: false, address: btcAddress, publicKey: "" };
+      }
     } else {
       throw new Error(
         `BIP-322 verification not supported for address type: ${btcAddress}`
