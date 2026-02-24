@@ -195,8 +195,8 @@ export async function recordRequest(
  */
 export function validateTaprootAddress(address: string): boolean {
   // Taproot addresses are Bech32m encoded, starting with bc1p
-  // Length is 62 characters for P2TR (bc1p + 58 chars)
-  return /^bc1p[a-z0-9]{6,87}$/.test(address);
+  // P2TR mainnet addresses are always exactly 62 characters: "bc1p" (4) + 58 data chars
+  return /^bc1p[a-z0-9]{58}$/.test(address);
 }
 
 /**
