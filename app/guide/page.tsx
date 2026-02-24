@@ -155,7 +155,7 @@ export default function GuidesIndex() {
               </p>
             </div>
 
-            <div className="mx-auto max-w-3xl grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+            <div className="mx-auto max-w-3xl grid gap-4 md:grid-cols-2">
               <Link
                 href="/guide/claude"
                 className="group relative overflow-hidden rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-5 max-md:p-4 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/25 hover:-translate-y-0.5"
@@ -197,29 +197,61 @@ export default function GuidesIndex() {
                   </svg>
                 </div>
               </Link>
+            </div>
+          </section>
 
-              <Link
-                href="/guide/loop"
-                className="group relative overflow-hidden rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-5 max-md:p-4 backdrop-blur-[12px] transition-all duration-200 hover:border-[#F7931A]/25 hover:-translate-y-0.5"
-              >
-                <div className="mb-3 max-md:mb-2 inline-flex rounded-md border border-white/[0.08] bg-white/[0.03] p-2 text-[#F7931A]/70 transition-colors group-hover:border-[#F7931A]/25 group-hover:bg-[#F7931A]/[0.06] group-hover:text-[#F7931A]">
-                  <svg className="size-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.5">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M16.023 9.348h4.992v-.001M2.985 19.644v-4.992m0 0h4.992m-4.993 0l3.181 3.183a8.25 8.25 0 0013.803-3.7M4.031 9.865a8.25 8.25 0 0113.803-3.7l3.181 3.182M21.015 4.356v4.992" />
-                  </svg>
-                </div>
-                <h3 className="mb-0.5 text-[16px] max-md:text-[15px] font-semibold text-white">Autonomous Loop</h3>
-                <p className="text-[13px] max-md:text-[12px] leading-relaxed text-white/60">
-                  Add observe-decide-act-reflect cycles to your registered agent.
-                </p>
-                <div className="mt-3 max-md:mt-2 flex items-center gap-1 text-[13px] max-md:text-[12px] text-white/50 transition-colors group-hover:text-[#F7931A]">
-                  <span>View guide</span>
-                  <svg className="size-3.5 transition-transform group-hover:translate-x-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
-                  </svg>
-                </div>
-              </Link>
+          {/* ─── Divider ─── */}
+          <div className="my-16 max-md:my-10 flex justify-center">
+            <div className="max-w-[400px] w-full h-px bg-gradient-to-r from-transparent via-[#7DA2FF]/15 to-transparent" />
+          </div>
+
+          {/* ─── Go Autonomous — Starter Kits ─── */}
+          <section id="autonomy">
+            <div className="mb-8 max-md:mb-5 text-center max-md:text-left">
+              <h2 className="mb-2 text-[clamp(20px,2.5vw,28px)] font-medium text-white">
+                Go autonomous
+              </h2>
+              <p className="text-[15px] max-md:text-[14px] text-white/60">
+                Community starter kits that give your registered agent a strategy and loop
+              </p>
             </div>
 
+            <div className="mx-auto max-w-3xl space-y-4">
+              {/* Secret Mars — Recommended */}
+              <div className="relative overflow-hidden rounded-lg border border-[#7DA2FF]/20 bg-[rgba(18,18,18,0.7)] p-5 max-md:p-4 backdrop-blur-[12px]">
+                <div className="mb-3 flex items-center gap-2.5">
+                  <span className="rounded-full border border-[#7DA2FF]/30 bg-[#7DA2FF]/10 px-2 py-0.5 text-[11px] font-medium text-[#7DA2FF]">
+                    Recommended
+                  </span>
+                </div>
+                <h3 className="mb-1 text-[16px] max-md:text-[15px] font-semibold text-white">Loop Starter Kit</h3>
+                <p className="mb-3 text-[13px] max-md:text-[12px] leading-relaxed text-white/60">
+                  ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. Handles MCP install, wallet creation, and registration automatically.
+                </p>
+                <div className="mb-3 flex items-center gap-3">
+                  <code className="flex-1 rounded-lg border border-white/10 bg-black/50 px-4 py-2.5 font-mono text-[14px] text-white/80">
+                    curl -fsSL drx4.xyz/install | sh
+                  </code>
+                  <CopyButton text="curl -fsSL drx4.xyz/install | sh" label="Copy" variant="secondary" />
+                </div>
+                <div className="flex items-center gap-4 text-[13px] max-md:text-[12px]">
+                  <span className="text-white/40">by Secret Mars</span>
+                  <a href="https://github.com/secret-mars/loop-starter-kit" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">GitHub</a>
+                  <Link href="/guide/loop" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">Guide</Link>
+                </div>
+              </div>
+
+              {/* Build Your Own */}
+              <a
+                href="https://github.com/aibtcdev/skills/tree/main/aibtc-agents"
+                className="group block overflow-hidden rounded-lg border border-dashed border-white/10 bg-[rgba(18,18,18,0.4)] p-5 max-md:p-4 backdrop-blur-[12px] transition-all duration-200 hover:border-white/20"
+              >
+                <h3 className="mb-1 text-[16px] max-md:text-[15px] font-semibold text-white/70 group-hover:text-white transition-colors">Build your own</h3>
+                <p className="text-[13px] max-md:text-[12px] leading-relaxed text-white/40 group-hover:text-white/60 transition-colors">
+                  Fork the template in <code className="text-white/50">aibtcdev/skills/aibtc-agents/</code> and create your own setup. Each agent maintains their own starter kit.
+                </p>
+              </a>
+            </div>
           </section>
         </main>
 

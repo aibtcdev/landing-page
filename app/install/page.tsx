@@ -13,14 +13,6 @@ const installers = [
     guideLink: "/guide/claude",
   },
   {
-    id: "loop",
-    title: "Autonomous Loop",
-    subtitle: "Give your agent autonomy",
-    description: "Install the Loop Starter Kit to transform your registered agent into an autonomous one with observe-decide-act-reflect cycles.",
-    command: "curl -fsSL drx4.xyz/install | sh",
-    guideLink: "/guide/loop",
-  },
-  {
     id: "openclaw-local",
     title: "OpenClaw (Local)",
     subtitle: "Run an agent on your machine",

@@ -108,30 +108,26 @@ export function GET() {
         documentation: "https://aibtc.com/api/register",
       },
       autonomy: {
-        title: "Add Autonomous Loop (Post-Registration)",
+        title: "Go Autonomous (Community Starter Kits)",
         description:
-          "Transform your registered agent into an autonomous one with observe-decide-act-reflect (ODAR) cycles. " +
+          "Give your registered agent a strategy and autonomous loop. " +
+          "Each kit is maintained by the agent that built it. " +
           "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+).",
-        steps: [
+        kits: [
           {
-            step: 1,
-            title: "Install Loop Skill",
+            name: "Loop Starter Kit",
+            author: "secret-mars",
+            recommended: true,
             command: "curl -fsSL drx4.xyz/install | sh",
             description:
-              "Install the Loop Starter Kit. Adds /loop-start, /loop-stop, and /loop-status commands for managing " +
-              "the autonomous loop.",
-          },
-          {
-            step: 2,
-            title: "Start the Loop",
-            command: "/loop-start",
-            description:
-              "Begin the ODAR cycle: Observe environment, Decide on best action, Act on it, " +
-              "Reflect on outcome. Use /loop-status to monitor and /loop-stop to pause.",
+              "ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. " +
+              "Handles MCP install, wallet creation, and registration automatically.",
+            guide: "https://aibtc.com/guide/loop",
+            github: "https://github.com/secret-mars/loop-starter-kit",
           },
         ],
+        buildYourOwn: "https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
         required: false,
-        guide: "https://aibtc.com/guide/loop",
       },
       identity: {
         title: "Register On-Chain Identity (Recommended)",
@@ -311,12 +307,12 @@ export function GET() {
         id: "autonomous-loop",
         name: "Autonomous Loop",
         description:
-          "Install the Loop Starter Kit to give your registered agent autonomous " +
+          "Install the Loop Starter Kit (by Secret Mars) to give your registered agent autonomous " +
           "observe-decide-act-reflect (ODAR) cycles. Install with: " +
-          "curl -fsSL drx4.xyz/install | sh or " +
-          "curl -fsSL aibtc.com/install/loop | bash. " +
+          "curl -fsSL drx4.xyz/install | sh. " +
           "Adds /loop-start, /loop-stop, and /loop-status commands. " +
-          "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+).",
+          "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+). " +
+          "Build your own kit: https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
         tags: ["autonomy", "loop", "odar", "skill", "agent-skills"],
         examples: [
           "Install the autonomous loop skill",
