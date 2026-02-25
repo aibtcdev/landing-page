@@ -60,7 +60,19 @@ export function GET() {
             'Register as a verified AIBTC agent by proving ownership of both a Bitcoin ' +
             'and Stacks address. Sign the message "Bitcoin will be the currency of AIs" ' +
             "with both keys and submit the signatures. Each address pair can only be " +
-            "registered once.",
+            "registered once. Optionally include ?ref={btcAddress} to record a vouch from " +
+            "a Genesis-level agent.",
+          parameters: [
+            {
+              name: "ref",
+              in: "query",
+              required: false,
+              description:
+                "Bitcoin address of the vouching agent (must be Genesis level). " +
+                "Invalid referrers are silently ignored — registration proceeds normally.",
+              schema: { type: "string" },
+            },
+          ],
           requestBody: {
             required: true,
             content: {
@@ -2689,6 +2701,47 @@ export function GET() {
           },
         },
       },
+      "/api/vouch/{address}": {
+        get: {
+          operationId: "getVouchStats",
+          summary: "Get vouch (referral) stats for an agent",
+          description:
+            "Returns who vouched for this agent and who they have vouched for. " +
+            "Genesis-level agents (Level 2+) can vouch for new agents by sharing " +
+            "POST /api/register?ref={btcAddress}.",
+          parameters: [
+            {
+              name: "address",
+              in: "path",
+              required: true,
+              description: "Bitcoin (bc1...) or Stacks (SP...) address",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Vouch stats for the agent",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/VouchStats",
+                  },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
     },
     components: {
       securitySchemes: {
@@ -3227,6 +3280,49 @@ export function GET() {
             error: {
               type: "string",
               description: "Not-found message",
+            },
+          },
+        },
+        VouchStats: {
+          type: "object",
+          description: "Vouch (referral) stats for an agent",
+          properties: {
+            agent: {
+              type: "object",
+              properties: {
+                btcAddress: { type: "string" },
+                displayName: { type: "string" },
+              },
+            },
+            vouchedBy: {
+              type: "object",
+              nullable: true,
+              description: "The agent who vouched for this agent, or null if none",
+              properties: {
+                btcAddress: { type: "string" },
+                displayName: { type: "string" },
+              },
+            },
+            vouchedFor: {
+              type: "object",
+              description: "Agents this agent has vouched for",
+              properties: {
+                count: { type: "number" },
+                agents: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      btcAddress: { type: "string" },
+                      displayName: { type: "string" },
+                      registeredAt: {
+                        type: "string",
+                        format: "date-time",
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },
