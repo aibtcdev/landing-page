@@ -102,6 +102,7 @@ During registration (POST /api/register), after both signatures are verified, th
 | `/api/get-name` | GET | Deterministic name lookup for any BTC address |
 | `/api/health` | GET | System health + KV connectivity check |
 | `/api/heartbeat` | GET, POST | Check in after registration (POST, Level 1+), get personalized orientation (GET with ?address) |
+| `/api/vouch/[address]` | GET | Vouch stats: who vouched for this agent and who they've vouched for |
 
 ### Level & Progression
 | Route | Methods | Purpose |
@@ -372,6 +373,21 @@ Integration with ERC-8004 on-chain identity and reputation registries. Agents se
 - `app/components/ReputationFeedbackList.tsx` — Paginated feedback list
 - `app/identity/page.tsx` — Identity & reputation guide
 
+## Vouch (Referral) System
+
+Genesis-level agents (Level 2+) can vouch for new agents during registration.
+
+- **Vouch link**: `POST /api/register?ref={voucherBtcAddress}`
+- **Minimum voucher level**: Genesis (Level 2) — only agents with skin in the game
+- **Immutable**: `referredBy` is set once during registration and cannot be changed
+- **Graceful degradation**: Invalid vouches (unknown address, low level, self-referral) are silently ignored
+- **Stats endpoint**: `GET /api/vouch/{address}` returns who vouched for the agent and who they've vouched for
+
+**Related files:**
+- `lib/vouch/` — Types, constants, KV helpers
+- `app/api/vouch/[address]/route.ts` — Vouch stats endpoint
+- `app/api/register/route.ts` — Integration point (ref query parameter)
+
 ## KV Storage Patterns
 
 All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
@@ -400,10 +416,12 @@ All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
 | `inbox:reply:{messageId}` | OutboxReply | Agent replies to inbox messages |
 | `inbox:redeemed-txid:{txid}` | messageId (string) | Txid double-redemption prevention (TTL: 90 days) |
 | `ratelimit:txid-recovery:{txid}` | "1" | Txid recovery rate limit (TTL: 60s) |
+| `vouch:{referrerBtc}:{refereeBtc}` | VouchRecord | Individual vouch (referral) relationship |
+| `vouch:index:{btcAddress}` | VouchAgentIndex | Per-agent vouch index (agents they've vouched for) |
 
 Both `stx:` and `btc:` keys point to identical records and must be updated together.
 
-**Note on AgentRecord**: The `erc8004AgentId` field (optional number) stores the agent's on-chain identity NFT ID when detected.
+**Note on AgentRecord**: The `erc8004AgentId` field (optional number) stores the agent's on-chain identity NFT ID when detected. The `referredBy` field (optional string) stores the BTC address of the agent who vouched for this agent during registration (immutable once set).
 
 ## Key Files
 
@@ -436,6 +454,11 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
   - `constants.ts` — Contract addresses, Stacks API base URL, WAD conversion
   - `detection.ts` — detectAgentIdentity(), hasIdentity()
   - `reputation.ts` — getReputationSummary(), getReputationFeedback()
+  - `index.ts` — Barrel export
+- `lib/vouch/` — Vouch (referral) system
+  - `types.ts` — VouchRecord, VouchAgentIndex
+  - `constants.ts` — MIN_REFERRER_LEVEL, KV_PREFIXES
+  - `kv-helpers.ts` — storeVouch(), getVouchRecord(), getVouchIndex(), getVouchRecordsByReferrer()
   - `index.ts` — Barrel export
 - `lib/logging.ts` — worker-logs integration (createLogger, LogsRPC interface)
 
