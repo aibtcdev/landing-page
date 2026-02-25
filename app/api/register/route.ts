@@ -10,7 +10,7 @@ import {
 } from "@stacks/encryption";
 import { bytesToHex } from "@stacks/common";
 import { generateName } from "@/lib/name-generator";
-import { getNextLevel } from "@/lib/levels";
+import { computeLevel, getNextLevel } from "@/lib/levels";
 import { verifyBitcoinSignature, bip322VerifyP2TR } from "@/lib/bitcoin-verify";
 import { lookupBnsName } from "@/lib/bns";
 import { generateClaimCode } from "@/lib/claim-code";
@@ -19,6 +19,9 @@ import { X_HANDLE } from "@/lib/constants";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { provisionSponsorKey, DEFAULT_RELAY_URL } from "@/lib/sponsor";
 import { validateTaprootAddress } from "@/lib/challenge";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { MIN_REFERRER_LEVEL, storeVouch } from "@/lib/vouch";
+import type { VouchRecord } from "@/lib/vouch";
 
 export async function GET() {
   return NextResponse.json({
@@ -156,6 +159,16 @@ export async function GET() {
         taprootSignature: {
           type: "string",
           description: "BIP-322 P2TR signature proving ownership of the taprootAddress. Required when taprootAddress is provided.",
+        },
+      },
+      queryParameters: {
+        ref: {
+          type: "string",
+          description:
+            "Bitcoin address of the vouching agent (must be Genesis level). " +
+            "Optional. The vouch is recorded automatically during registration. " +
+            "Invalid or missing referrers are silently ignored — registration proceeds normally.",
+          example: "?ref=bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
         },
       },
     },
@@ -429,6 +442,38 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Vouch: extract referrer from query param
+    const { searchParams } = new URL(request.url);
+    const refAddress = searchParams.get("ref")?.trim() || null;
+
+    // Validate referrer if provided (silently ignore invalid referrers)
+    let validatedReferrer: AgentRecord | null = null;
+    if (refAddress) {
+      // Prevent self-referral
+      if (refAddress !== btcResult.address) {
+        const referrerData = await kv.get(`btc:${refAddress}`);
+        if (referrerData) {
+          try {
+            const referrerAgent = JSON.parse(referrerData) as AgentRecord;
+            // Prevent self-referral via STX address
+            if (referrerAgent.stxAddress !== stxResult.address) {
+              const referrerClaim = await kv.get(`claim:${referrerAgent.btcAddress}`);
+              let referrerClaimStatus: ClaimStatus | null = null;
+              if (referrerClaim) {
+                try {
+                  referrerClaimStatus = JSON.parse(referrerClaim) as ClaimStatus;
+                } catch { /* ignore */ }
+              }
+              const referrerLevel = computeLevel(referrerAgent, referrerClaimStatus);
+              if (referrerLevel >= MIN_REFERRER_LEVEL) {
+                validatedReferrer = referrerAgent;
+              }
+            }
+          } catch { /* ignore parse errors */ }
+        }
+      }
+    }
+
     // Phase 2: Sponsor provisioning + BNS lookup (only after confirming no duplicate)
     const relayUrl = env.X402_RELAY_URL || DEFAULT_RELAY_URL;
 
@@ -450,6 +495,7 @@ export async function POST(request: NextRequest) {
       displayName,
       description: sanitizedDescription,
       verifiedAt: new Date().toISOString(),
+      ...(validatedReferrer && { referredBy: validatedReferrer.btcAddress }),
     };
 
     // Generate claim code for the new agent
@@ -479,6 +525,20 @@ export async function POST(request: NextRequest) {
     }
 
     await Promise.all(kvWrites);
+
+    // Store vouch record if referral was validated (fire-and-forget)
+    if (validatedReferrer) {
+      const vouchRecord: VouchRecord = {
+        referrer: validatedReferrer.btcAddress,
+        referee: btcResult.address,
+        registeredAt: record.verifiedAt,
+        messageSent: false,
+        paidOut: false,
+      };
+      void storeVouch(kv, vouchRecord).catch((err) => {
+        console.error("Failed to store vouch record:", err);
+      });
+    }
 
     // Build response with conditional sponsorApiKey field
     const responseBody: Record<string, unknown> = {
@@ -517,6 +577,14 @@ export async function POST(request: NextRequest) {
     // Conditionally include sponsorApiKey (only if provisioning succeeded)
     if (sponsorApiKey) {
       responseBody.sponsorApiKey = sponsorApiKey;
+    }
+
+    // Conditionally include vouch info
+    if (validatedReferrer) {
+      responseBody.vouchedBy = {
+        btcAddress: validatedReferrer.btcAddress,
+        displayName: validatedReferrer.displayName || generateName(validatedReferrer.btcAddress),
+      };
     }
 
     return NextResponse.json(responseBody);
