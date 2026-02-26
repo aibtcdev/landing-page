@@ -324,7 +324,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      rewardInfo: "Ongoing satoshis per claim",
+      rewardInfo: "Genesis badge + x402 inbox unlocked (earn sats from messages)",
       documentation: {
         registerFirst: "https://aibtc.com/api/register",
         fullDocs: "https://aibtc.com/llms-full.txt",
