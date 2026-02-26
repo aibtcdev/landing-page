@@ -18,12 +18,41 @@ import {
   OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS,
   OUTBOX_RATE_LIMIT_REGISTERED_MAX,
   OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS,
+  OUTBOX_RATE_LIMIT_VALIDATION_MAX,
+  OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS,
 } from "@/lib/inbox/constants";
 import {
   hasAchievement,
   grantAchievement,
   getAchievementDefinition,
 } from "@/lib/achievements";
+
+/**
+ * Fixed-window KV rate limiter. Reads the current count, checks against max,
+ * and increments. TTL is set only on the first write so the window expires
+ * from the first request. KV read-then-write is not atomic; minor
+ * under-counting under concurrency is accepted.
+ *
+ * @returns true if the request is rate-limited (count >= max)
+ */
+async function checkFixedWindowRateLimit(
+  kv: KVNamespace,
+  key: string,
+  max: number,
+  ttlSeconds: number
+): Promise<boolean> {
+  const raw = await kv.get(key);
+  const count = raw ? parseInt(raw, 10) : 0;
+
+  if (count >= max) return true;
+
+  if (count === 0) {
+    await kv.put(key, "1", { expirationTtl: ttlSeconds });
+  } else {
+    await kv.put(key, String(count + 1));
+  }
+  return false;
+}
 
 export async function POST(
   request: NextRequest,
@@ -41,19 +70,14 @@ export async function POST(
   const agent = await lookupAgent(kv, address);
 
   if (!agent) {
-    // Rate limit unregistered addresses to prevent repeated 404 attempts
-    // from flooding the log and KV.
-    const unregisteredRateLimitKey = `ratelimit:outbox-unregistered:${address}`;
-    const unregisteredCountRaw = await kv.get(unregisteredRateLimitKey);
-    const unregisteredCount = unregisteredCountRaw
-      ? parseInt(unregisteredCountRaw, 10)
-      : 0;
-
-    if (unregisteredCount >= OUTBOX_RATE_LIMIT_UNREGISTERED_MAX) {
-      logger.warn("Outbox rate limited (unregistered)", {
-        address,
-        count: unregisteredCount,
-      });
+    const limited = await checkFixedWindowRateLimit(
+      kv,
+      `ratelimit:outbox-unregistered:${address}`,
+      OUTBOX_RATE_LIMIT_UNREGISTERED_MAX,
+      OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS
+    );
+    if (limited) {
+      logger.warn("Outbox rate limited (unregistered)", { address });
       return NextResponse.json(
         {
           error:
@@ -71,19 +95,6 @@ export async function POST(
       );
     }
 
-    // Fixed-window counter: set TTL only on first attempt so the window
-    // expires from the first request, not the latest one.
-    // KV read-then-write is not atomic; concurrent under-counting is accepted.
-    if (unregisteredCount === 0) {
-      await kv.put(unregisteredRateLimitKey, "1", {
-        expirationTtl: OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS,
-      });
-    } else {
-      await kv.put(
-        unregisteredRateLimitKey,
-        String(unregisteredCount + 1)
-      );
-    }
     logger.warn("Agent not found", { address });
     return NextResponse.json(
       {
@@ -114,6 +125,30 @@ export async function POST(
   // Validate reply body
   const validation = validateOutboxReply(body);
   if (validation.errors) {
+    const ip =
+      request.headers.get("cf-connecting-ip") ||
+      request.headers.get("x-forwarded-for");
+
+    if (ip) {
+      const limited = await checkFixedWindowRateLimit(
+        kv,
+        `ratelimit:outbox-validation:${ip}`,
+        OUTBOX_RATE_LIMIT_VALIDATION_MAX,
+        OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS
+      );
+      if (limited) {
+        return NextResponse.json(
+          { error: "Too many invalid requests. Slow down." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS),
+            },
+          }
+        );
+      }
+    }
+
     logger.warn("Validation failed", { errors: validation.errors });
     return NextResponse.json(
       { error: validation.errors.join(", ") },
@@ -142,7 +177,7 @@ export async function POST(
 
   let btcResult;
   try {
-    btcResult = verifyBitcoinSignature(signature, messageToVerify);
+    btcResult = verifyBitcoinSignature(signature, messageToVerify, message.toBtcAddress);
   } catch (e) {
     logger.error("Invalid signature", { error: (e as Error).message });
     return NextResponse.json(
@@ -199,19 +234,16 @@ export async function POST(
     );
   }
 
-  // Rate limit registered callers by signer identity (not path address)
-  // to prevent scripted flooding. Placed after signature verification so
-  // we know the caller's real BTC address.
-  const registeredRateLimitKey = `ratelimit:outbox:${btcResult.address}`;
-  const registeredCountRaw = await kv.get(registeredRateLimitKey);
-  const registeredCount = registeredCountRaw
-    ? parseInt(registeredCountRaw, 10)
-    : 0;
-
-  if (registeredCount >= OUTBOX_RATE_LIMIT_REGISTERED_MAX) {
+  // Rate limit by signer identity (placed after signature verification)
+  const registeredLimited = await checkFixedWindowRateLimit(
+    kv,
+    `ratelimit:outbox:${btcResult.address}`,
+    OUTBOX_RATE_LIMIT_REGISTERED_MAX,
+    OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS
+  );
+  if (registeredLimited) {
     logger.warn("Outbox rate limited (registered)", {
       callerAddress: btcResult.address,
-      count: registeredCount,
     });
     return NextResponse.json(
       {
@@ -223,19 +255,6 @@ export async function POST(
         status: 429,
         headers: { "Retry-After": String(OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS) },
       }
-    );
-  }
-
-  // Fixed-window counter: set TTL only on first attempt so the window
-  // expires from the first request, not the latest one.
-  if (registeredCount === 0) {
-    await kv.put(registeredRateLimitKey, "1", {
-      expirationTtl: OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS,
-    });
-  } else {
-    await kv.put(
-      registeredRateLimitKey,
-      String(registeredCount + 1)
     );
   }
 

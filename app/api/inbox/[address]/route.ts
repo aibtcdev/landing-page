@@ -605,7 +605,8 @@ export async function POST(
       paymentTxid,
       agent.stxAddress,
       network,
-      logger
+      logger,
+      kv
     );
 
     if (!txidResult.success) {
