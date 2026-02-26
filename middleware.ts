@@ -151,6 +151,11 @@ export async function middleware(request: NextRequest) {
     return handleCrawlerAgentPage(request, path);
   }
 
+  // Redirect deprecated /guide/mcp to /guide
+  if (path === "/guide/mcp") {
+    return NextResponse.redirect(new URL("/guide", request.url), 301);
+  }
+
   // Only intercept CLI tools for remaining middleware logic
   if (!isCLI(request)) {
     return NextResponse.next();
@@ -164,11 +169,6 @@ export async function middleware(request: NextRequest) {
   // Heartbeat: rewrite to CLI route for curl/wget
   if (path === "/heartbeat") {
     return NextResponse.rewrite(new URL("/heartbeat/cli", request.url));
-  }
-
-  // Paid attention: rewrite to CLI route for curl/wget
-  if (path === "/paid-attention") {
-    return NextResponse.rewrite(new URL("/paid-attention/cli", request.url));
   }
 
   if (path === "/skills") {
@@ -222,12 +222,12 @@ export const config = {
   matcher: [
     "/",
     "/agents/:path*",
+    "/guide/mcp",
     "/vps",
     "/local",
     "/update",
     "/update-skill.sh",
     "/skills",
     "/heartbeat",
-    "/paid-attention",
   ],
 };

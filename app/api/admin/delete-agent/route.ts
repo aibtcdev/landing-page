@@ -3,7 +3,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin/auth";
 import { lookupAgent } from "@/lib/agent-lookup";
 import type { AchievementAgentIndex } from "@/lib/achievements/types";
-import type { AttentionAgentIndex } from "@/lib/attention/types";
 import type { InboxAgentIndex } from "@/lib/inbox/types";
 
 /** Safely parse JSON, returning null on failure. */
@@ -40,7 +39,7 @@ export async function GET(request: NextRequest) {
       behavior: [
         "Resolves address to AgentRecord (404 if not found)",
         "Reads all index records to discover related KV keys",
-        "Deletes all keys across 7 categories in parallel batches",
+        "Deletes all keys across 6 categories in parallel batches",
         "Returns categorized summary of deleted keys",
       ],
       deletedKeyPatterns: {
@@ -59,11 +58,6 @@ export async function GET(request: NextRequest) {
         achievements: [
           "achievements:{btcAddress}",
           "achievement:{btcAddress}:{achievementId}",
-        ],
-        attention: [
-          "attention:agent:{btcAddress}",
-          "attention:response:{messageId}:{btcAddress}",
-          "attention:payout:{messageId}:{btcAddress}",
         ],
         inbox: [
           "inbox:agent:{btcAddress}",
@@ -84,11 +78,6 @@ export async function GET(request: NextRequest) {
             "ratelimit:achievement-verify:...",
           ],
           achievements: ["achievements:...", "achievement:...:sender"],
-          attention: [
-            "attention:agent:...",
-            "attention:response:msg1:...",
-            "attention:payout:msg1:...",
-          ],
           inbox: [
             "inbox:agent:...",
             "inbox:message:msg1",
@@ -96,14 +85,13 @@ export async function GET(request: NextRequest) {
           ],
         },
         summary: {
-          totalKeys: 17,
+          totalKeys: 14,
           categories: {
             core: 2,
             claims: 3,
             genesis: 1,
             challenges: 3,
             achievements: 2,
-            attention: 3,
             inbox: 3,
           },
         },
@@ -164,19 +152,14 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Read index records in parallel to discover related keys
-    const [achievementData, attentionData, inboxData] = await Promise.all([
+    const [achievementData, inboxData] = await Promise.all([
       kv.get(`achievements:${agent.btcAddress}`),
-      kv.get(`attention:agent:${agent.btcAddress}`),
       kv.get(`inbox:agent:${agent.btcAddress}`),
     ]);
 
     const achievementIndex = safeParseJson<AchievementAgentIndex>(
       achievementData,
       "achievement index"
-    );
-    const attentionIndex = safeParseJson<AttentionAgentIndex>(
-      attentionData,
-      "attention index"
     );
     const inboxIndex = safeParseJson<InboxAgentIndex>(
       inboxData,
@@ -190,16 +173,6 @@ export async function DELETE(request: NextRequest) {
           error: "Internal Server Error",
           details:
             "Corrupted achievement index data; deletion cannot be safely completed.",
-        },
-        { status: 500 }
-      );
-    }
-    if (attentionData && !attentionIndex) {
-      return NextResponse.json(
-        {
-          error: "Internal Server Error",
-          details:
-            "Corrupted attention index data; deletion cannot be safely completed.",
         },
         { status: 500 }
       );
@@ -242,13 +215,6 @@ export async function DELETE(request: NextRequest) {
         ...(achievementIndex?.achievementIds.map(
           (id) => `achievement:${agent.btcAddress}:${id}`
         ) || []),
-      ],
-      attention: [
-        `attention:agent:${agent.btcAddress}`,
-        ...(attentionIndex?.messageIds.flatMap((msgId) => [
-          `attention:response:${msgId}:${agent.btcAddress}`,
-          `attention:payout:${msgId}:${agent.btcAddress}`,
-        ]) || []),
       ],
       inbox: [
         `inbox:agent:${agent.btcAddress}`,

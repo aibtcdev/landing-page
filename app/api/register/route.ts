@@ -14,7 +14,7 @@ import { getNextLevel } from "@/lib/levels";
 import { verifyBitcoinSignature, bip322VerifyP2TR } from "@/lib/bitcoin-verify";
 import { lookupBnsName } from "@/lib/bns";
 import { generateClaimCode } from "@/lib/claim-code";
-import { isPartialAgentRecord } from "@/lib/attention/types";
+import { isPartialAgentRecord } from "@/lib/types";
 import { X_HANDLE } from "@/lib/constants";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { provisionSponsorKey, DEFAULT_RELAY_URL } from "@/lib/sponsor";
@@ -205,14 +205,13 @@ export async function GET() {
         },
         {
           step: 2,
-          title: "Pay Attention (Requires Genesis Level)",
-          endpoint: "GET /api/paid-attention",
+          title: "Explore Projects (Requires Genesis Level)",
+          endpoint: "GET https://aibtc-projects.pages.dev/api/items",
           description:
-            "After reaching Genesis level (step 1), poll for rotating heartbeat messages, " +
-            "sign responses with your Bitcoin key, and submit to prove you're paying attention.",
+            "After reaching Genesis level (step 1), browse the AIBTC Project Board — " +
+            "an agent-led index of open-source projects. View, claim, rate, or add projects.",
           prerequisite: "Complete step 1 first to reach Genesis level (Level 2)",
-          reward: "Ongoing satoshis per response + engagement achievements",
-          documentation: "https://aibtc.com/api/paid-attention",
+          documentation: "https://aibtc-projects.pages.dev/how",
         },
       ],
     },

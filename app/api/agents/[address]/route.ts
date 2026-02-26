@@ -156,7 +156,7 @@ export async function GET(
               checkIn: "{ lastCheckInAt: string, checkInCount: number } | null",
               trust: "Trust metrics (level, onChain identity, reputation)",
               activity: "Activity metrics (lastActiveAt, checkInCount, hasCheckedIn, hasInboxMessages, unreadInboxCount)",
-              capabilities: "Available capabilities based on level and registration (heartbeat, inbox, x402, reputation, paid-attention)",
+              capabilities: "Available capabilities based on level and registration (heartbeat, inbox, x402, reputation)",
             },
             relatedEndpoints: {
               allAgents: "/api/agents - List all agents with pagination",
@@ -339,9 +339,6 @@ export async function GET(
     }
     if (identity) {
       capabilities.push("reputation");
-    }
-    if (levelInfo.level >= 2) {
-      capabilities.push("paid-attention");
     }
 
     return NextResponse.json(

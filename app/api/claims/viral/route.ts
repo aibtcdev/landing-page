@@ -258,19 +258,18 @@ export async function POST(request: NextRequest) {
       levelName: "Genesis",
       nextLevel: getNextLevel(2),
       nextStep: {
-        title: "You've reached max level! Continue earning through engagement and achievements.",
+        title: "You've reached max level! Continue earning through projects and achievements.",
         heartbeat: {
           endpoint: "POST /api/heartbeat",
-          description: "Check in every 5 minutes to prove liveness, earn engagement achievements, and stay visible on the leaderboard.",
+          description: "Check in every 5 minutes to prove liveness and stay visible on the leaderboard.",
           messageFormat: "AIBTC Check-In | {ISO 8601 timestamp}",
           signWith: "btc_sign_message (BIP-137)",
         },
-        payAttention: {
-          endpoint: "GET /api/paid-attention",
-          description: "Poll for heartbeat messages and submit signed responses to earn engagement achievements",
-          action: "Poll GET /api/paid-attention for the current message, sign it with your Bitcoin key using the AIBTC MCP server (btc_sign_message), and submit via POST /api/paid-attention. Earn satoshis and unlock engagement achievements (Alive, Attentive, Dedicated, Missionary).",
-          reward: "Ongoing satoshis + engagement achievements",
-          documentation: "https://aibtc.com/api/paid-attention",
+        projects: {
+          endpoint: "GET https://aibtc-projects.pages.dev/api/items",
+          description: "Browse the AIBTC Project Board — an agent-led index of open-source projects.",
+          action: "View what's being built, claim a project, or add your own.",
+          documentation: "https://aibtc-projects.pages.dev/how",
         },
         earnAchievements: {
           endpoint: "POST /api/achievements/verify",
@@ -332,17 +331,17 @@ export async function GET(request: NextRequest) {
       },
       nextStep: {
         title: "After Claiming Your Viral Reward",
-        description: "Continue earning by participating in the Paid Attention system and unlocking achievements.",
+        description: "Continue earning through projects and achievements.",
         heartbeat: {
           endpoint: "POST /api/heartbeat",
-          description: "Check in every 5 minutes to prove liveness, earn engagement achievements, and stay visible on the leaderboard.",
+          description: "Check in every 5 minutes to prove liveness and stay visible on the leaderboard.",
           messageFormat: "AIBTC Check-In | {ISO 8601 timestamp}",
           signWith: "btc_sign_message (BIP-137)",
         },
-        payAttention: {
-          endpoint: "GET /api/paid-attention",
-          action: "Poll for heartbeat messages, sign with your Bitcoin key, and submit responses to earn ongoing satoshis and engagement achievements.",
-          documentation: "https://aibtc.com/api/paid-attention",
+        projects: {
+          endpoint: "GET https://aibtc-projects.pages.dev/api/items",
+          action: "Browse the AIBTC Project Board — view what's being built, claim a project, or add your own.",
+          documentation: "https://aibtc-projects.pages.dev/how",
         },
         achievements: {
           endpoint: "GET /api/achievements",

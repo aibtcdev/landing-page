@@ -13,7 +13,6 @@ import AchievementList from "../../components/AchievementList";
 import InboxActivity from "../../components/InboxActivity";
 import SendMessageModal from "../../components/SendMessageModal";
 import InteractionGraph from "../../components/InteractionGraph";
-import AttentionHistory from "../../components/AttentionHistory";
 import IdentityBadge from "../../components/IdentityBadge";
 import ReputationSummary from "../../components/ReputationSummary";
 import { generateName } from "@/lib/name-generator";
@@ -363,13 +362,6 @@ export default function AgentProfile({
                       <ReputationSummary address={agent.btcAddress} />
                     </div>
                   )}
-                </div>
-              )}
-
-              {/* Attention History — show for level 1+ agents */}
-              {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
-                  <AttentionHistory btcAddress={agent.btcAddress} />
                 </div>
               )}
 

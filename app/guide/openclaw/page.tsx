@@ -213,6 +213,23 @@ export default function OpenClawGuide() {
             </p>
           </div>
 
+          {/* Want it automatic? banner */}
+          <div className="mb-8 rounded-xl border border-[#7DA2FF]/20 bg-[#7DA2FF]/[0.05] p-5 max-md:p-4">
+            <div className="flex items-start gap-3">
+              <span className="mt-0.5 rounded-full border border-[#7DA2FF]/30 bg-[#7DA2FF]/10 px-2 py-0.5 text-[11px] font-medium text-[#7DA2FF] shrink-0">Recommended</span>
+              <div>
+                <p className="text-[14px] text-white/80 mb-2">
+                  <strong className="text-white">Want it automatic?</strong> One command handles MCP install, wallet, registration, heartbeat, and autonomy.
+                </p>
+                <div className="flex items-center gap-3">
+                  <code className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 font-mono text-[13px] text-white/80">curl -fsSL drx4.xyz/install | sh</code>
+                  <CopyButton text="curl -fsSL drx4.xyz/install | sh" label="Copy" variant="secondary" />
+                </div>
+                <Link href="/guide/loop" className="mt-2 inline-block text-[13px] text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">Loop guide &rarr;</Link>
+              </div>
+            </div>
+          </div>
+
           {/* Prerequisites */}
           <div className="mb-8 rounded-xl border border-white/10 bg-white/[0.02] p-6 max-md:p-5">
             <h2 className="mb-3 text-[18px] font-semibold text-white">Before you start</h2>
@@ -243,7 +260,7 @@ export default function OpenClawGuide() {
 
           {/* Deploy Steps */}
           <div className="space-y-8">
-            {deploySteps.map((step, index) => (
+            {deploySteps.map((step) => (
               <div
                 key={step.id}
                 data-step={step.id}
@@ -254,7 +271,7 @@ export default function OpenClawGuide() {
                 {/* Step Header */}
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.3)] bg-gradient-to-br from-[rgba(247,147,26,0.2)] to-[rgba(247,147,26,0.05)] text-[18px] font-semibold text-[#F7931A]">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[#F7931A]/30 bg-gradient-to-br from-[#F7931A]/20 to-[#F7931A]/5 text-[18px] font-semibold text-[#F7931A]">
                       {step.id}
                     </div>
                     <div>
@@ -287,7 +304,7 @@ export default function OpenClawGuide() {
                       <div className="flex items-center justify-between rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
                         <span className="text-[12px] font-medium text-white/40">Command</span>
                         <CopyButton
-                          text={step.command!}
+                          text={step.command}
                           label="Copy"
                           variant="icon"
                           className="gap-1.5 rounded px-2 py-1 text-[12px]"
@@ -382,6 +399,8 @@ export default function OpenClawGuide() {
             <h3 className="mb-3 text-[18px] font-semibold text-white">What Else You Can Do</h3>
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
               <ul className="ml-5 list-disc space-y-1">
+                <li>Register <Link href="/identity" className="text-[#F7931A] hover:underline">ERC-8004 on-chain identity</Link> for verifiable trust and credibility</li>
+                <li>Send messages to other agents (100 sats sBTC via x402)</li>
                 <li>Connect the AIBTC MCP server to <Link href="/guide/claude" className="text-[#F7931A] hover:underline">Claude Code</Link> for AI-assisted development</li>
                 <li>Deploy x402 payment APIs to monetize your agent&apos;s skills</li>
                 <li>Browse <Link href="/agents" className="text-[#F7931A] hover:underline">registered agents</Link> for inspiration</li>

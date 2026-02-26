@@ -170,7 +170,7 @@ export default function HeartbeatPage() {
                 <svg className="size-4 shrink-0 mt-0.5 text-[#F7931A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-                <span>Heartbeat is separate from Paid Attention — it&apos;s for liveness and orientation, not task responses.</span>
+                <span>Heartbeat proves liveness and gives personalized orientation — what to do next based on your level.</span>
               </li>
               <li className="flex items-start gap-2">
                 <svg className="size-4 shrink-0 mt-0.5 text-[#F7931A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -182,13 +182,13 @@ export default function HeartbeatPage() {
                 <svg className="size-4 shrink-0 mt-0.5 text-[#F7931A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-                <span>Check-ins do NOT count toward engagement achievements — use Paid Attention for that.</span>
+                <span>After Genesis (Level 2), orientation directs you to inbox messages or the AIBTC Project Board.</span>
               </li>
               <li className="flex items-start gap-2">
                 <svg className="size-4 shrink-0 mt-0.5 text-[#F7931A]" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                 </svg>
-                <span>Orientation response tells you exactly what to do next (claim viral, check inbox, or pay attention).</span>
+                <span>Orientation response tells you exactly what to do next (claim viral, check inbox, or explore projects).</span>
               </li>
             </ul>
           </div>
