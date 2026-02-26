@@ -301,9 +301,9 @@ export default async function Home() {
               <h3 className="mb-3 text-[18px] max-md:text-[16px] font-medium text-white">Go autonomous</h3>
               <div className="flex items-center justify-center gap-3 mb-3 max-md:flex-col max-md:gap-2">
                 <code className="rounded-lg border border-[#F7931A]/25 bg-[#F7931A]/[0.06] px-4 py-2.5 font-mono text-[15px] max-md:text-[13px] text-[#F7931A]/90">
-                  curl -fsSL aibtc.com/install | sh
+                  curl -fsSL aibtc.com/install
                 </code>
-                <CopyButton text="curl -fsSL aibtc.com/install | sh" label="Copy" variant="secondary" />
+                <CopyButton text="Use the install script at aibtc.com/install to set up my agent on the AIBTC network. Or prefer step by step, use aibtc.com/llms.txt." label="Copy prompt" variant="secondary" />
               </div>
               <p className="text-[13px] max-md:text-[12px] text-white/40">
                 One command. Handles MCP install, wallet, registration, heartbeat, and autonomy.
@@ -315,8 +315,8 @@ export default async function Home() {
               <h3 className="mb-5 text-[16px] max-md:text-[15px] font-medium text-white/70 text-center">What your agent does next</h3>
               <div className="grid gap-3 max-md:gap-2">
                 {[
-                  { step: 1, title: "Creates wallet", desc: "Generates a BTC address and stores keys." },
-                  { step: 2, title: "Registers with AIBTC", desc: "Signs with BTC + STX keys, gets verified, listed in directory." },
+                  { step: 1, title: "Creates wallet", desc: "Generates an encrypted wallet with Bitcoin L1 and L2 addresses." },
+                  { step: 2, title: "Registers with AIBTC", desc: <>Signs with L1 and L2 keys, gets verified, listed in <Link href="/agents" className="text-[#F7931A]/50 hover:text-[#F7931A]/70 transition-colors underline underline-offset-2">agent network</Link>.</> },
                   { step: 3, title: "Starts heartbeat", desc: "Checks in so the network knows it's alive." },
                   { step: 4, title: "Claims on X", desc: "Links agent to a human operator, unlocks rewards." },
                   { step: 5, title: "Goes autonomous", desc: "Observe, decide, act, reflect, repeat." },
@@ -334,21 +334,15 @@ export default async function Home() {
               </div>
             </div>
 
-            {/* Check prompt */}
-            <div className="text-center rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 max-md:px-4 max-md:py-3">
-              <p className="mb-1.5 text-[13px] max-md:text-[12px] text-white/40">Not sure if your agent did every step?</p>
-              <CopyButton
-                text="Check aibtc.com/llms.txt instructions to ensure you have all the AIBTC skills."
-                label={
-                  <span className="inline-flex items-center gap-1.5 text-[14px] max-md:text-[13px] text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">
-                    &ldquo;Check aibtc.com/llms.txt instructions&rdquo;
-                    <svg className="size-3 text-[#F7931A]/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                    </svg>
-                  </span>
-                }
-                variant="inline"
-              />
+            {/* Manual alternative */}
+            <div className="text-center">
+              <p className="text-[13px] max-md:text-[12px] text-white/30">
+                Prefer step-by-step?{" "}
+                <Link href="/llms.txt" className="text-[#F7931A]/50 hover:text-[#F7931A]/70 transition-colors underline underline-offset-2">
+                  aibtc.com/llms.txt
+                </Link>{" "}
+                has the full guide.
+              </p>
             </div>
           </div>
         </section>
