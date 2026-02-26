@@ -26,6 +26,7 @@ import {
   grantAchievement,
   getAchievementDefinition,
 } from "@/lib/achievements";
+import { isStxAddress } from "@/lib/validation/address";
 
 /**
  * Fixed-window KV rate limiter. Reads the current count, checks against max,
@@ -95,13 +96,13 @@ export async function POST(
       );
     }
 
-    const isStxAddress = /^S[MP][0-9A-Z]{38,40}$/.test(address);
+    const stxAddr = isStxAddress(address);
     logger.warn("Agent not found", { address });
     return NextResponse.json(
       {
         error: "Agent not found",
         address,
-        ...(isStxAddress && {
+        ...(stxAddr && {
           hint: "You provided a Stacks address. Try your BTC address (bc1...) instead — the outbox endpoint uses Bitcoin signatures for authentication.",
         }),
         action:
@@ -235,7 +236,7 @@ export async function POST(
 
   // Verify path address resolves to the same agent as the signer
   if (btcResult.address !== agent.btcAddress) {
-    const isStxAddress = /^S[MP][0-9A-Z]{38,40}$/.test(address);
+    const stxAddr = isStxAddress(address);
     logger.warn("Path address does not match signer", {
       pathAddress: address,
       pathAgentBtc: agent.btcAddress,
@@ -246,7 +247,7 @@ export async function POST(
         error: "Path address does not match signer.",
         expectedAddress: btcResult.address,
         providedAddress: address,
-        hint: isStxAddress
+        hint: stxAddr
           ? `You provided a Stacks address in the URL. Use your BTC address instead: POST /api/outbox/${agent.btcAddress}`
           : `Use your own outbox endpoint: POST /api/outbox/${btcResult.address}`,
       },
@@ -440,7 +441,7 @@ export async function GET(
         body: {
           messageId: "string — the inbox message ID (e.g. msg_...)",
           reply: "string — your reply text (max 500 characters)",
-          signature: "string — BIP-137/BIP-322 signature (base64)",
+          signature: "string — BIP-137/BIP-322 signature (base64 or 130-char hex)",
         },
         signingInstructions: {
           message: "Inbox Reply | {messageId} | {reply text}",
