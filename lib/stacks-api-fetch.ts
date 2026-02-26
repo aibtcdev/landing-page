@@ -69,7 +69,6 @@ export async function stacksApiFetch(
   baseDelayMs = 500
 ): Promise<Response> {
   const tag = "[stacksApiFetch]";
-  let lastResponse!: Response;
 
   for (let attempt = 0; attempt < retries; attempt++) {
     const attemptOptions: RequestInit = {
@@ -84,8 +83,6 @@ export async function stacksApiFetch(
       if (!isRetryableStatus(response.status)) {
         return response;
       }
-
-      lastResponse = response;
 
       if (isLastAttempt) {
         console.warn(`${tag} All ${retries} attempts exhausted for ${url} (status: ${response.status})`);
@@ -114,5 +111,5 @@ export async function stacksApiFetch(
   }
 
   // Unreachable -- loop always returns or throws on final attempt
-  return lastResponse;
+  throw new Error(`${tag} Unexpected: retry loop exited without return`);
 }

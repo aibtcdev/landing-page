@@ -127,24 +127,26 @@ export async function POST(
   if (validation.errors) {
     const ip =
       request.headers.get("cf-connecting-ip") ||
-      request.headers.get("x-forwarded-for") ||
-      "unknown";
-    const limited = await checkFixedWindowRateLimit(
-      kv,
-      `ratelimit:outbox-validation:${ip}`,
-      OUTBOX_RATE_LIMIT_VALIDATION_MAX,
-      OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS
-    );
-    if (limited) {
-      return NextResponse.json(
-        { error: "Too many invalid requests. Slow down." },
-        {
-          status: 429,
-          headers: {
-            "Retry-After": String(OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS),
-          },
-        }
+      request.headers.get("x-forwarded-for");
+
+    if (ip) {
+      const limited = await checkFixedWindowRateLimit(
+        kv,
+        `ratelimit:outbox-validation:${ip}`,
+        OUTBOX_RATE_LIMIT_VALIDATION_MAX,
+        OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS
       );
+      if (limited) {
+        return NextResponse.json(
+          { error: "Too many invalid requests. Slow down." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS),
+            },
+          }
+        );
+      }
     }
 
     logger.warn("Validation failed", { errors: validation.errors });

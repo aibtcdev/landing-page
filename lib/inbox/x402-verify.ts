@@ -285,7 +285,7 @@ export async function verifyTxidPayment(
   let txData: StacksTxData;
 
   // Confirmed transactions are immutable -- check cache first
-  const cachedTx = await getCachedTransaction(normalizedTxid, kv);
+  const cachedTx = await getCachedTransaction(normalizedTxid, kv) as StacksTxData | null;
   if (cachedTx) {
     log.info("Txid verification: cache hit", { txid: fullTxid });
     txData = cachedTx;
@@ -308,7 +308,7 @@ export async function verifyTxidPayment(
           errorCode: "API_ERROR",
         };
       }
-      txData = await response.json();
+      txData = (await response.json()) as StacksTxData;
     } catch (error) {
       log.error("Failed to fetch transaction", { error: String(error) });
       return {

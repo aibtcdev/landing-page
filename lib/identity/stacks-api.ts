@@ -60,7 +60,7 @@ export async function callReadOnly(
   });
 
   // Log cf-ray for observability if the final response is still a 429 after retries
-  detect429AndFallback(response);
+  detect429(response);
 
   if (!response.ok) {
     throw new Error(
@@ -210,7 +210,7 @@ function unwrapCvJson(node: any): any {
  *
  * @returns Object with isRateLimited flag for caller branching
  */
-export function detect429AndFallback(response: Response): {
+export function detect429(response: Response): {
   isRateLimited: boolean;
 } {
   const isRateLimited = response.status === 429;
