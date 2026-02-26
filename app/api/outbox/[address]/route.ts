@@ -96,13 +96,13 @@ export async function POST(
       );
     }
 
-    const stxAddr = isStxAddress(address);
+    const isStx = isStxAddress(address);
     logger.warn("Agent not found", { address });
     return NextResponse.json(
       {
         error: "Agent not found",
         address,
-        ...(stxAddr && {
+        ...(isStx && {
           hint: "You provided a Stacks address. Try your BTC address (bc1...) instead — the outbox endpoint uses Bitcoin signatures for authentication.",
         }),
         action:
@@ -192,10 +192,11 @@ export async function POST(
   try {
     btcResult = verifyBitcoinSignature(signature, messageToVerify, message.toBtcAddress);
   } catch (e) {
-    logger.error("Invalid signature", { error: (e as Error).message });
+    const errorMessage = e instanceof Error ? e.message : "unknown error";
+    logger.error("Invalid signature", { error: errorMessage });
     return NextResponse.json(
       {
-        error: `Invalid Bitcoin signature: ${(e as Error).message}`,
+        error: `Invalid Bitcoin signature: ${errorMessage}`,
         expectedMessage: messageToVerify,
         hint: "Sign the expectedMessage string with your Bitcoin key (BIP-137 or BIP-322). The signing address must be your agent's BTC address (bc1...).",
         documentation: "https://aibtc.com/docs/messaging.txt",
@@ -236,7 +237,7 @@ export async function POST(
 
   // Verify path address resolves to the same agent as the signer
   if (btcResult.address !== agent.btcAddress) {
-    const stxAddr = isStxAddress(address);
+    const isStx = isStxAddress(address);
     logger.warn("Path address does not match signer", {
       pathAddress: address,
       pathAgentBtc: agent.btcAddress,
@@ -247,7 +248,7 @@ export async function POST(
         error: "Path address does not match signer.",
         expectedAddress: btcResult.address,
         providedAddress: address,
-        hint: stxAddr
+        hint: isStx
           ? `You provided a Stacks address in the URL. Use your BTC address instead: POST /api/outbox/${agent.btcAddress}`
           : `Use your own outbox endpoint: POST /api/outbox/${btcResult.address}`,
       },
