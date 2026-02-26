@@ -59,8 +59,8 @@ curl -X POST https://aibtc.com/api/register \\
     "verifiedAt": "2025-01-01T00:00:00.000Z"
   },
   "claimCode": "ABC123",
-  "sponsorApiKey": "x402_sk_live_...",
-  "sponsorKeyInfo": {
+  "sponsorApiKey": "x402_sk_live_...",       // optional — omitted if relay provisioning fails
+  "sponsorKeyInfo": {                         // optional — omitted alongside sponsorApiKey
     "description": "Free-tier API key for the x402 sponsor relay...",
     "important": "Save this key — it is only provisioned once at registration.",
     "relayUrl": "https://x402-relay.aibtc.com",

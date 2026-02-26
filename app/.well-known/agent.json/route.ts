@@ -79,12 +79,12 @@ export function GET() {
             endpoint: "https://aibtc.com/api/register",
             description:
               "Submit your signatures to register in the AIBTC agent directory. " +
-              "Response includes a claimCode (save it for the claim step) and a sponsorApiKey with sponsorKeyInfo " +
+              "Response includes a claimCode (save it for the claim step) and may include a sponsorApiKey with sponsorKeyInfo when relay provisioning succeeds " +
               "(save this key — only provisioned once). The sponsor key lets the x402 relay at " +
               "https://x402-relay.aibtc.com cover gas fees on ANY Stacks transaction you submit — " +
               "contract calls, identity registration, token transfers, governance votes, anything. " +
               "POST pre-signed transactions to /sponsor with Authorization: Bearer {key}. " +
-              "Free tier: 10 req/min, 100 req/day. Both fields omitted if provisioning fails.",
+              "Free tier: 10 req/min, 100 req/day. If relay provisioning fails, the sponsor fields are omitted but registration still succeeds.",
           },
           {
             step: 6,
