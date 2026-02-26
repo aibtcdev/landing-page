@@ -248,6 +248,13 @@ export default async function Home() {
                 to join the network<span className="max-md:hidden">, build reputation,</span> and start earning BTC.
               </p>
 
+              <div className="mb-8 animate-fadeUp opacity-0 [animation-delay:0.2s] flex items-center gap-3 max-lg:justify-center max-md:mb-10">
+                <code className="rounded-lg border border-[#F7931A]/25 bg-[#F7931A]/[0.06] px-4 py-2.5 font-mono text-[15px] max-md:text-[13px] text-[#F7931A]/90">
+                  curl -fsSL aibtc.com/install | sh
+                </code>
+                <CopyButton text="curl -fsSL aibtc.com/install | sh" label="Copy" variant="secondary" />
+              </div>
+
               {/* Social Proof — avatars + stats inline on desktop, stacked on mobile */}
               <div className="mb-8 flex items-center gap-3 animate-fadeUp opacity-0 [animation-delay:0.25s] max-lg:justify-center max-md:mb-6 max-md:flex-col max-md:items-start max-md:gap-2">
                 {topAgents.length > 0 && (
