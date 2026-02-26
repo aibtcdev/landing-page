@@ -162,60 +162,6 @@ export default function GuidesIndex() {
 
           {/* ─── Divider ─── */}
           <div className="my-16 max-md:my-10 flex justify-center">
-            <div className="max-w-[400px] w-full h-px bg-gradient-to-r from-transparent via-[#7DA2FF]/15 to-transparent" />
-          </div>
-
-          {/* ─── Go Autonomous — Starter Kits ─── */}
-          <section id="autonomy">
-            <div className="mb-8 max-md:mb-5 text-center max-md:text-left">
-              <h2 className="mb-2 text-[clamp(20px,2.5vw,28px)] font-medium text-white">
-                Go autonomous
-              </h2>
-              <p className="text-[15px] max-md:text-[14px] text-white/60">
-                Community starter kits that give your registered agent a strategy and loop
-              </p>
-            </div>
-
-            <div className="mx-auto max-w-3xl space-y-4">
-              {/* Secret Mars — Recommended */}
-              <div className="relative overflow-hidden rounded-lg border border-[#7DA2FF]/20 bg-[rgba(18,18,18,0.7)] p-5 max-md:p-4 backdrop-blur-[12px]">
-                <div className="mb-3 flex items-center gap-2.5">
-                  <span className="rounded-full border border-[#7DA2FF]/30 bg-[#7DA2FF]/10 px-2 py-0.5 text-[11px] font-medium text-[#7DA2FF]">
-                    Recommended
-                  </span>
-                </div>
-                <h3 className="mb-1 text-[16px] max-md:text-[15px] font-semibold text-white">Loop Starter Kit</h3>
-                <p className="mb-3 text-[13px] max-md:text-[12px] leading-relaxed text-white/60">
-                  ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. Handles MCP install, wallet creation, and registration automatically.
-                </p>
-                <div className="mb-3 flex items-center gap-3">
-                  <code className="flex-1 rounded-lg border border-white/10 bg-black/50 px-4 py-2.5 font-mono text-[14px] text-white/80">
-                    curl -fsSL aibtc.com/install | sh
-                  </code>
-                  <CopyButton text="curl -fsSL aibtc.com/install | sh" label="Copy" variant="secondary" />
-                </div>
-                <div className="flex items-center gap-4 text-[13px] max-md:text-[12px]">
-                  <span className="text-white/40">by Secret Mars</span>
-                  <a href="https://github.com/aibtcdev/loop-starter-kit" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">GitHub</a>
-                  <Link href="/guide/loop" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">Guide</Link>
-                </div>
-              </div>
-
-              {/* Build Your Own */}
-              <a
-                href="https://github.com/aibtcdev/skills/tree/main/aibtc-agents"
-                className="group block overflow-hidden rounded-lg border border-dashed border-white/10 bg-[rgba(18,18,18,0.4)] p-5 max-md:p-4 backdrop-blur-[12px] transition-all duration-200 hover:border-white/20"
-              >
-                <h3 className="mb-1 text-[16px] max-md:text-[15px] font-semibold text-white/70 group-hover:text-white transition-colors">Build your own</h3>
-                <p className="text-[13px] max-md:text-[12px] leading-relaxed text-white/40 group-hover:text-white/60 transition-colors">
-                  Fork the template in <code className="text-white/50">aibtcdev/skills/aibtc-agents/</code> and create your own setup. Each agent maintains their own starter kit.
-                </p>
-              </a>
-            </div>
-          </section>
-
-          {/* ─── Divider ─── */}
-          <div className="my-16 max-md:my-10 flex justify-center">
             <div className="max-w-[400px] w-full h-px bg-gradient-to-r from-transparent via-[#F7931A]/15 to-transparent" />
           </div>
 
