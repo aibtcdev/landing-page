@@ -59,7 +59,7 @@ export async function callReadOnly(
     }),
   });
 
-  // Activate the 429 detection utility for observability (logs cf-ray on rate limit)
+  // Log cf-ray for observability if the final response is still a 429 after retries
   detect429AndFallback(response);
 
   if (!response.ok) {
@@ -206,14 +206,12 @@ function unwrapCvJson(node: any): any {
 }
 
 /**
- * Detect 429 rate limit responses and determine if fallback is needed.
+ * Detect 429 rate limit responses and log cf-ray for observability.
  *
- * @param response - Fetch Response object
- * @returns Object with isRateLimited and shouldFallback flags
+ * @returns Object with isRateLimited flag for caller branching
  */
 export function detect429AndFallback(response: Response): {
   isRateLimited: boolean;
-  shouldFallback: boolean;
 } {
   const isRateLimited = response.status === 429;
 
@@ -224,8 +222,5 @@ export function detect429AndFallback(response: Response): {
     );
   }
 
-  return {
-    isRateLimited,
-    shouldFallback: isRateLimited,
-  };
+  return { isRateLimited };
 }

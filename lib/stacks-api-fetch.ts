@@ -40,10 +40,6 @@ function parseRetryAfterMs(response: Response): number | null {
   return Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
 }
 
-/**
- * Sleep for a given number of milliseconds.
- * Uses a Promise-based setTimeout for compatibility with Cloudflare Workers.
- */
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -72,76 +68,51 @@ export async function stacksApiFetch(
   retries = 3,
   baseDelayMs = 500
 ): Promise<Response> {
-  let lastResponse: Response | undefined;
-  let lastError: unknown;
+  const tag = "[stacksApiFetch]";
+  let lastResponse!: Response;
 
   for (let attempt = 0; attempt < retries; attempt++) {
-    // Replace any caller-provided signal with a per-attempt timeout signal
     const attemptOptions: RequestInit = {
       ...options,
       signal: AbortSignal.timeout(PER_ATTEMPT_TIMEOUT_MS),
     };
+    const isLastAttempt = attempt === retries - 1;
 
     try {
       const response = await fetch(url, attemptOptions);
 
       if (!isRetryableStatus(response.status)) {
-        // Success or a non-retryable error (4xx) — return immediately
         return response;
       }
 
-      // Retryable status (429 or 5xx)
       lastResponse = response;
 
-      const isLastAttempt = attempt === retries - 1;
       if (isLastAttempt) {
-        // Exhausted all retries — return the last response for the caller to handle
-        console.warn(
-          `[stacksApiFetch] All ${retries} attempts exhausted for ${url} (last status: ${response.status})`
-        );
+        console.warn(`${tag} All ${retries} attempts exhausted for ${url} (status: ${response.status})`);
         return response;
       }
 
-      // Compute delay: prefer Retry-After header on 429, otherwise exponential backoff
-      let delayMs: number;
-      if (response.status === 429) {
-        const retryAfterMs = parseRetryAfterMs(response);
-        delayMs = retryAfterMs ?? baseDelayMs * Math.pow(2, attempt);
-        console.warn(
-          `[stacksApiFetch] Rate limited (429) on ${url}, attempt ${attempt + 1}/${retries}, ` +
-          `retrying in ${delayMs}ms${retryAfterMs ? " (Retry-After)" : " (backoff)"}`
-        );
-      } else {
-        delayMs = baseDelayMs * Math.pow(2, attempt);
-        console.warn(
-          `[stacksApiFetch] Server error (${response.status}) on ${url}, attempt ${attempt + 1}/${retries}, ` +
-          `retrying in ${delayMs}ms`
-        );
-      }
-
+      // Prefer Retry-After header on 429, otherwise exponential backoff
+      const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response) : null;
+      const delayMs = retryAfterMs ?? baseDelayMs * Math.pow(2, attempt);
+      console.warn(
+        `${tag} ${response.status} on ${url}, attempt ${attempt + 1}/${retries}, retrying in ${delayMs}ms`
+      );
       await sleep(delayMs);
     } catch (error) {
-      // Network-level error (timeout, DNS, connection refused)
-      lastError = error;
-      const isLastAttempt = attempt === retries - 1;
-
       if (isLastAttempt) {
-        console.warn(
-          `[stacksApiFetch] All ${retries} attempts exhausted for ${url} (network error: ${String(error)})`
-        );
+        console.warn(`${tag} All ${retries} attempts exhausted for ${url} (${String(error)})`);
         throw error;
       }
 
       const delayMs = baseDelayMs * Math.pow(2, attempt);
       console.warn(
-        `[stacksApiFetch] Network error on ${url}, attempt ${attempt + 1}/${retries}, ` +
-        `retrying in ${delayMs}ms: ${String(error)}`
+        `${tag} Network error on ${url}, attempt ${attempt + 1}/${retries}, retrying in ${delayMs}ms`
       );
       await sleep(delayMs);
     }
   }
 
-  // Should be unreachable — the loop always returns or throws
-  if (lastError) throw lastError;
-  return lastResponse!;
+  // Unreachable -- loop always returns or throws on final attempt
+  return lastResponse;
 }
