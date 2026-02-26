@@ -11,7 +11,6 @@ import {
   updateMessage,
   buildReplyMessage,
   listInboxMessages,
-  getAgentInbox,
   decrementUnreadCount,
 } from "@/lib/inbox";
 import {
@@ -38,8 +37,8 @@ export async function POST(
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
 
-  // Rate limit: unregistered addresses are capped before the KV agent lookup.
-  // This prevents repeated 404 attempts from flooding the log and KV.
+  // Rate limit unregistered addresses before the agent lookup to prevent
+  // repeated 404 attempts from flooding the log and KV.
   const unregisteredRateLimitKey = `ratelimit:outbox-unregistered:${address}`;
   const unregisteredCountRaw = await kv.get(unregisteredRateLimitKey);
   const unregisteredCount = unregisteredCountRaw
@@ -72,13 +71,19 @@ export async function POST(
   const agent = await lookupAgent(kv, address);
 
   if (!agent) {
-    // Increment the unregistered attempt counter before returning 404.
-    // TTL resets on each failed attempt to give a rolling 1-hour window.
-    await kv.put(
-      unregisteredRateLimitKey,
-      String(unregisteredCount + 1),
-      { expirationTtl: OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS }
-    );
+    // Fixed-window counter: set TTL only on first attempt so the window
+    // expires from the first request, not the latest one.
+    // KV read-then-write is not atomic; concurrent under-counting is accepted.
+    if (unregisteredCount === 0) {
+      await kv.put(unregisteredRateLimitKey, "1", {
+        expirationTtl: OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS,
+      });
+    } else {
+      await kv.put(
+        unregisteredRateLimitKey,
+        String(unregisteredCount + 1)
+      );
+    }
     logger.warn("Agent not found", { address });
     return NextResponse.json(
       {
@@ -92,10 +97,9 @@ export async function POST(
     );
   }
 
-  // Agent found — log the submission now (after the guard, not before).
   logger.info("Outbox reply submission", { address });
 
-  // Rate limit: registered addresses are capped to prevent scripted flooding.
+  // Rate limit registered addresses to prevent scripted flooding.
   const registeredRateLimitKey = `ratelimit:outbox:${address}`;
   const registeredCountRaw = await kv.get(registeredRateLimitKey);
   const registeredCount = registeredCountRaw
@@ -120,12 +124,17 @@ export async function POST(
     );
   }
 
-  // Increment registered rate limit counter (TTL resets each window).
-  await kv.put(
-    registeredRateLimitKey,
-    String(registeredCount + 1),
-    { expirationTtl: OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS }
-  );
+  // Fixed-window counter (same pattern as unregistered path above).
+  if (registeredCount === 0) {
+    await kv.put(registeredRateLimitKey, "1", {
+      expirationTtl: OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS,
+    });
+  } else {
+    await kv.put(
+      registeredRateLimitKey,
+      String(registeredCount + 1)
+    );
+  }
 
   // Parse request body
   let body: unknown;

@@ -134,37 +134,23 @@ export const RELAY_SETTLE_TIMEOUT_MS = 30_000;
 export const REDEEMED_TXID_TTL_SECONDS = 90 * 24 * 60 * 60; // 7,776,000 seconds
 
 /**
- * Maximum number of outbox POST attempts allowed per unregistered address
- * before rate limiting kicks in.
- *
- * When an address that is not registered as an AIBTC agent sends repeated
- * outbox requests, they receive 404 responses. After this many attempts,
- * they receive a 429 with instructions to register.
+ * Max outbox POST attempts per unregistered address before 429.
+ * After this many 404 responses, the address receives rate-limit instructions.
  */
 export const OUTBOX_RATE_LIMIT_UNREGISTERED_MAX = 5;
 
 /**
- * TTL in seconds for the unregistered address outbox rate limit counter.
- *
- * After this window expires (1 hour), the counter resets and the address
- * may try again. This gives automated agents time to register and retry.
+ * TTL (seconds) for the unregistered outbox rate limit counter (1 hour).
  */
 export const OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS = 3600;
 
 /**
- * Maximum number of outbox POST requests allowed per registered address
- * per rate limit window.
- *
- * This prevents registered agents from flooding the outbox endpoint.
- * Legitimate agents send at most a handful of replies per minute.
+ * Max outbox POST requests per registered address per rate limit window.
  */
 export const OUTBOX_RATE_LIMIT_REGISTERED_MAX = 10;
 
 /**
- * TTL in seconds for the registered address outbox rate limit window.
- *
- * Counter resets after this many seconds (1 minute), allowing burst
- * of up to OUTBOX_RATE_LIMIT_REGISTERED_MAX requests per minute.
+ * TTL (seconds) for the registered outbox rate limit window (1 minute).
  */
 export const OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS = 60;
 
