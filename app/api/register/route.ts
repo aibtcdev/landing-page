@@ -20,8 +20,7 @@ import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { provisionSponsorKey, DEFAULT_RELAY_URL } from "@/lib/sponsor";
 import { validateTaprootAddress } from "@/lib/challenge";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
-import { MIN_REFERRER_LEVEL, storeVouch } from "@/lib/vouch";
-import type { VouchRecord } from "@/lib/vouch";
+import { MIN_REFERRER_LEVEL, storeVouch, type VouchRecord } from "@/lib/vouch";
 
 export async function GET() {
   return NextResponse.json({

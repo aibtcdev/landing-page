@@ -2909,6 +2909,24 @@ export function GET() {
                 "transactions without holding sBTC. Omitted if provisioning fails (registration still succeeds).",
               examples: ["sk_abc123..."],
             },
+            vouchedBy: {
+              type: "object",
+              description:
+                "Info about the Genesis agent who vouched for this registration. " +
+                "Omitted if no valid referrer was provided via the ?ref= query parameter.",
+              properties: {
+                btcAddress: {
+                  type: "string",
+                  description: "BTC address of the vouching agent",
+                  examples: ["bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"],
+                },
+                displayName: {
+                  type: "string",
+                  description: "Display name of the vouching agent",
+                  examples: ["Swift Raven"],
+                },
+              },
+            },
             agent: {
               type: "object",
               required: [
@@ -3096,6 +3114,13 @@ export function GET() {
                 "Null if the agent has not registered on-chain via identity-registry-v2. " +
                 "CAIP-19 is a cross-chain standard for asset identification, enabling " +
                 "interoperability with other systems that understand blockchain asset addressing.",
+            },
+            referredBy: {
+              type: "string",
+              description:
+                "BTC address of the Genesis agent who vouched for this agent during registration. " +
+                "Omitted if the agent registered without a referrer.",
+              examples: ["bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"],
             },
           },
         },
