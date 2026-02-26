@@ -15,6 +15,12 @@ import {
   decrementUnreadCount,
 } from "@/lib/inbox";
 import {
+  OUTBOX_RATE_LIMIT_UNREGISTERED_MAX,
+  OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS,
+  OUTBOX_RATE_LIMIT_REGISTERED_MAX,
+  OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS,
+} from "@/lib/inbox/constants";
+import {
   hasAchievement,
   grantAchievement,
   getAchievementDefinition,
@@ -32,21 +38,94 @@ export async function POST(
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
 
-  logger.info("Outbox reply submission", { address });
+  // Rate limit: unregistered addresses are capped before the KV agent lookup.
+  // This prevents repeated 404 attempts from flooding the log and KV.
+  const unregisteredRateLimitKey = `ratelimit:outbox-unregistered:${address}`;
+  const unregisteredCountRaw = await kv.get(unregisteredRateLimitKey);
+  const unregisteredCount = unregisteredCountRaw
+    ? parseInt(unregisteredCountRaw, 10)
+    : 0;
+
+  if (unregisteredCount >= OUTBOX_RATE_LIMIT_UNREGISTERED_MAX) {
+    logger.warn("Outbox rate limited (unregistered)", {
+      address,
+      count: unregisteredCount,
+    });
+    return NextResponse.json(
+      {
+        error:
+          "Too many attempts from this address. This address is not registered as an AIBTC agent.",
+        address,
+        action:
+          "Register at POST /api/register to use the outbox endpoint.",
+        documentation: "https://aibtc.com/api/register",
+        retryAfter: "1 hour",
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS) },
+      }
+    );
+  }
 
   // Look up agent
   const agent = await lookupAgent(kv, address);
 
   if (!agent) {
+    // Increment the unregistered attempt counter before returning 404.
+    // TTL resets on each failed attempt to give a rolling 1-hour window.
+    await kv.put(
+      unregisteredRateLimitKey,
+      String(unregisteredCount + 1),
+      { expirationTtl: OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS }
+    );
     logger.warn("Agent not found", { address });
     return NextResponse.json(
       {
         error: "Agent not found",
         address,
+        action:
+          "Register at POST /api/register to use the outbox endpoint.",
+        documentation: "https://aibtc.com/api/register",
       },
       { status: 404 }
     );
   }
+
+  // Agent found — log the submission now (after the guard, not before).
+  logger.info("Outbox reply submission", { address });
+
+  // Rate limit: registered addresses are capped to prevent scripted flooding.
+  const registeredRateLimitKey = `ratelimit:outbox:${address}`;
+  const registeredCountRaw = await kv.get(registeredRateLimitKey);
+  const registeredCount = registeredCountRaw
+    ? parseInt(registeredCountRaw, 10)
+    : 0;
+
+  if (registeredCount >= OUTBOX_RATE_LIMIT_REGISTERED_MAX) {
+    logger.warn("Outbox rate limited (registered)", {
+      address,
+      count: registeredCount,
+    });
+    return NextResponse.json(
+      {
+        error: "Too many outbox requests. Slow down.",
+        address,
+        retryAfter: "1 minute",
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS) },
+      }
+    );
+  }
+
+  // Increment registered rate limit counter (TTL resets each window).
+  await kv.put(
+    registeredRateLimitKey,
+    String(registeredCount + 1),
+    { expirationTtl: OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS }
+  );
 
   // Parse request body
   let body: unknown;
