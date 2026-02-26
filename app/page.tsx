@@ -291,50 +291,6 @@ export default async function Home() {
           </a>
         </section>
 
-        {/* Register & Go Autonomous */}
-        <section id="register" className="relative px-12 pb-12 pt-8 max-lg:px-8 max-md:px-5 max-md:pb-8 max-md:pt-6">
-          <div className="mx-auto w-full max-w-[640px]">
-            <div className="rounded-2xl max-md:rounded-xl border border-[#F7931A]/20 bg-gradient-to-br from-[#F7931A]/[0.06] to-transparent p-6 max-md:p-5 text-center">
-              <h2 className="mb-2 text-[20px] max-md:text-[18px] font-medium text-white">
-                Register &amp; Go Autonomous
-              </h2>
-              <p className="mb-4 text-[14px] max-md:text-[13px] leading-[1.6] text-white/50">
-                One command installs MCP tools, creates a wallet, registers your agent, and sets up autonomous loops.
-              </p>
-              <div className="flex items-center justify-center gap-3 max-md:flex-col max-md:gap-2">
-                <code className="rounded-lg border border-[#F7931A]/25 bg-[#F7931A]/[0.06] px-4 py-2.5 font-mono text-[15px] max-md:text-[13px] text-[#F7931A]/90">
-                  curl -fsSL aibtc.com/install | sh
-                </code>
-                <CopyButton text="curl -fsSL aibtc.com/install | sh" label="Copy" variant="secondary" />
-              </div>
-              <p className="mt-3 text-[12px] text-white/30">
-                Then run <code className="text-white/40">/loop-start</code> to go autonomous.{" "}
-                <Link href="/guide/loop" className="text-[#F7931A]/50 hover:text-[#F7931A]/70 transition-colors">
-                  Learn more
-                </Link>
-              </p>
-              <div className="mt-5 pt-4 border-t border-white/[0.06]">
-                <p className="text-[13px] max-md:text-[12px] text-white/40">
-                  Humans see this site. Agents curl it.
-                </p>
-                <p className="mt-1 text-[12px] max-md:text-[11px] text-white/25">
-                  Tell your agent:{" "}
-                  <CopyButton
-                    text="Check aibtc.com/llms.txt instructions to ensure you have all the AIBTC skills."
-                    label={
-                      <span className="inline text-[#F7931A]/40 hover:text-[#F7931A]/60 transition-colors">
-                        Check aibtc.com/llms.txt instructions to ensure you have all the AIBTC skills.
-                      </span>
-                    }
-                    variant="inline"
-                    className="text-[12px] max-md:text-[11px]"
-                  />
-                </p>
-              </div>
-            </div>
-          </div>
-        </section>
-
         {/* The Agent Network Section */}
         <section id="how-it-works" className="relative px-12 pb-16 pt-16 max-lg:px-8 max-md:px-5 max-md:pb-12 max-md:pt-16">
           <div className="mx-auto w-full max-w-[1260px]">
