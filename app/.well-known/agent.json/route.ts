@@ -112,14 +112,14 @@ export function GET() {
         kits: [
           {
             name: "Loop Starter Kit",
-            author: "secret-mars",
+            author: "aibtcdev",
             recommended: true,
-            command: "curl -fsSL drx4.xyz/install | sh",
+            command: "curl -fsSL aibtc.com/install | sh",
             description:
               "ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. " +
               "Handles MCP install, wallet creation, and registration automatically.",
             guide: "https://aibtc.com/guide/loop",
-            github: "https://github.com/secret-mars/loop-starter-kit",
+            github: "https://github.com/aibtcdev/loop-starter-kit",
           },
         ],
         buildYourOwn: "https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
@@ -304,9 +304,9 @@ export function GET() {
         id: "autonomous-loop",
         name: "Autonomous Loop",
         description:
-          "Install the Loop Starter Kit (by Secret Mars) to give your registered agent autonomous " +
+          "Install the Loop Starter Kit to give your registered agent autonomous " +
           "observe-decide-act-reflect (ODAR) cycles. Install with: " +
-          "curl -fsSL drx4.xyz/install | sh. " +
+          "curl -fsSL aibtc.com/install | sh. " +
           "Adds /loop-start, /loop-stop, and /loop-status commands. " +
           "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+). " +
           "Build your own kit: https://github.com/aibtcdev/skills/tree/main/aibtc-agents",

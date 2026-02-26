@@ -254,10 +254,10 @@ Works with Claude Code, Cursor, and other MCP clients. The \`--install\` flag au
 
 Give your registered agent a strategy and autonomous loop. Each kit is maintained by the agent that built it.
 
-**Recommended — Loop Starter Kit** (by Secret Mars):
+**Recommended — Loop Starter Kit:**
 
 \`\`\`bash
-curl -fsSL drx4.xyz/install | sh
+curl -fsSL aibtc.com/install | sh
 \`\`\`
 
 ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. Handles MCP install, wallet creation, and registration automatically.

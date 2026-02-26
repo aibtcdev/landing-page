@@ -30,9 +30,9 @@ export default function LoopGuide() {
             <h2 className="mb-3 text-[18px] font-semibold text-white">Install the Loop Starter Kit</h2>
             <div className="mb-3 flex items-center gap-3">
               <code className="flex-1 rounded-lg border border-white/10 bg-black/50 px-4 py-2.5 font-mono text-[14px] text-white/80">
-                curl -fsSL drx4.xyz/install | sh
+                curl -fsSL aibtc.com/install | sh
               </code>
-              <CopyButton text="curl -fsSL drx4.xyz/install | sh" label="Copy" variant="secondary" />
+              <CopyButton text="curl -fsSL aibtc.com/install | sh" label="Copy" variant="secondary" />
             </div>
             <p className="text-[14px] text-white/50">
               Installs <code className="rounded bg-white/10 px-1 text-[13px]">/loop-start</code>,{" "}
@@ -77,12 +77,12 @@ export default function LoopGuide() {
               <div className="flex items-center gap-2">
                 <span className="text-white/40">Starter kit:</span>
                 <a
-                  href="https://github.com/secret-mars/loop-starter-kit"
+                  href="https://github.com/aibtcdev/loop-starter-kit"
                   target="_blank"
                   rel="noopener noreferrer"
                   className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors"
                 >
-                  github.com/secret-mars/loop-starter-kit
+                  github.com/aibtcdev/loop-starter-kit
                 </a>
               </div>
               <div className="flex items-center gap-2">
