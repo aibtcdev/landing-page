@@ -155,6 +155,17 @@ export const OUTBOX_RATE_LIMIT_REGISTERED_MAX = 10;
 export const OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS = 60;
 
 /**
+ * Max validation failures per IP per window before 429 is returned.
+ * Prevents bots from flooding WARN logs with invalid payloads.
+ */
+export const OUTBOX_RATE_LIMIT_VALIDATION_MAX = 10;
+
+/**
+ * TTL (seconds) for the validation-failure rate limit window (10 minutes).
+ */
+export const OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS = 600;
+
+/**
  * KV key prefixes for all inbox system data.
  *
  * All records use prefix-based keys to enable efficient listing and
