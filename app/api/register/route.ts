@@ -161,7 +161,9 @@ export async function GET() {
     },
     responses: {
       "200": {
-        description: "Registration successful. Returns agent record, claim code, and level info. May include sponsorApiKey if sponsor relay provisioning succeeds (best-effort, omitted on failure).",
+        description:
+          "Registration successful. Returns agent record, claim code, level info, and (when provisioning succeeds) " +
+          "a sponsorApiKey with full usage instructions. The sponsor key enables gasless Stacks transactions via the x402 relay.",
         example: {
           success: true,
           agent: {
@@ -174,7 +176,19 @@ export async function GET() {
           },
           claimCode: "ABC123",
           claimInstructions: "To claim, visit aibtc.com/agents/bc1q... and enter code: ABC123",
-          sponsorApiKey: "sk_abc123... (optional, omitted if provisioning fails)",
+          sponsorApiKey: "x402_sk_live_abc123... (save this — only provisioned once)",
+          sponsorKeyInfo: {
+            description: "Free-tier API key for the x402 sponsor relay. Covers gas fees on any Stacks transaction.",
+            important: "Save this key — it is only provisioned once at registration.",
+            relayUrl: "https://x402-relay.aibtc.com",
+            usage: {
+              endpoint: "POST https://x402-relay.aibtc.com/sponsor",
+              authorization: "Bearer x402_sk_live_abc123...",
+              body: "{\"transaction\": \"<hex-encoded-pre-signed-sponsored-tx>\"}",
+            },
+            rateLimits: { tier: "free", requestsPerMinute: 10, requestsPerDay: 100, dailySpendingCap: "100 STX" },
+            documentation: "https://x402-relay.aibtc.com/llms.txt",
+          },
         },
       },
       "400": "Invalid request or signature verification failed.",
@@ -513,9 +527,33 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Conditionally include sponsorApiKey (only if provisioning succeeded)
+    // Conditionally include sponsorApiKey with usage info (only if provisioning succeeded)
     if (sponsorApiKey) {
       responseBody.sponsorApiKey = sponsorApiKey;
+      responseBody.sponsorKeyInfo = {
+        description:
+          "Free-tier API key for the x402 sponsor relay. " +
+          "This key lets the relay cover gas fees on any Stacks transaction you submit — " +
+          "contract calls, token transfers, identity registration, governance votes, anything. " +
+          "You build and sign the transaction locally, then the relay sponsors and broadcasts it.",
+        important: "Save this key — it is only provisioned once at registration.",
+        relayUrl: relayUrl,
+        usage: {
+          endpoint: `POST ${relayUrl}/sponsor`,
+          authorization: `Bearer ${sponsorApiKey}`,
+          body: '{"transaction": "<hex-encoded-pre-signed-sponsored-tx>"}',
+          description:
+            "Submit any pre-signed sponsored transaction. " +
+            "The relay adds its signature (covering gas fees) and broadcasts to Stacks.",
+        },
+        rateLimits: {
+          tier: "free",
+          requestsPerMinute: 10,
+          requestsPerDay: 100,
+          dailySpendingCap: "100 STX",
+        },
+        documentation: `${relayUrl}/llms.txt`,
+      };
     }
 
     return NextResponse.json(responseBody);

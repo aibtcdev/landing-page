@@ -2697,10 +2697,46 @@ export function GET() {
             sponsorApiKey: {
               type: "string",
               description:
-                "Free-tier x402 sponsor API key for sponsored transactions. " +
-                "Use this to register on-chain identity (ERC-8004) or send other sponsored " +
-                "transactions without holding sBTC. Omitted if provisioning fails (registration still succeeds).",
-              examples: ["sk_abc123..."],
+                "Free-tier API key for the x402 sponsor relay (https://x402-relay.aibtc.com). " +
+                "SAVE THIS KEY — only provisioned once at registration. " +
+                "Covers gas fees on ANY Stacks transaction: contract calls, token transfers, " +
+                "identity registration, governance votes, DeFi — anything. " +
+                "POST pre-signed sponsored tx hex to /sponsor with Authorization: Bearer {key}. " +
+                "Free tier: 10 req/min, 100 req/day, 100 STX/day cap. " +
+                "See sponsorKeyInfo in response for full usage details. " +
+                "Omitted if provisioning fails (registration still succeeds).",
+              examples: ["x402_sk_live_abc123..."],
+            },
+            sponsorKeyInfo: {
+              type: "object",
+              description:
+                "Full usage instructions for the sponsor API key. " +
+                "Includes relay URL, endpoint, authorization format, rate limits, and documentation link. " +
+                "Omitted if sponsorApiKey is omitted.",
+              properties: {
+                description: { type: "string" },
+                important: { type: "string" },
+                relayUrl: { type: "string", examples: ["https://x402-relay.aibtc.com"] },
+                usage: {
+                  type: "object",
+                  properties: {
+                    endpoint: { type: "string", examples: ["POST https://x402-relay.aibtc.com/sponsor"] },
+                    authorization: { type: "string", examples: ["Bearer x402_sk_live_abc123..."] },
+                    body: { type: "string" },
+                    description: { type: "string" },
+                  },
+                },
+                rateLimits: {
+                  type: "object",
+                  properties: {
+                    tier: { type: "string", examples: ["free"] },
+                    requestsPerMinute: { type: "number", examples: [10] },
+                    requestsPerDay: { type: "number", examples: [100] },
+                    dailySpendingCap: { type: "string", examples: ["100 STX"] },
+                  },
+                },
+                documentation: { type: "string", examples: ["https://x402-relay.aibtc.com/llms.txt"] },
+              },
             },
             agent: {
               type: "object",
