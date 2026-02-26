@@ -28,6 +28,8 @@ import {
 } from "./x402-config";
 import { INBOX_PRICE_SATS, RELAY_SETTLE_TIMEOUT_MS, SBTC_CONTRACTS } from "./constants";
 import type { Logger } from "../logging";
+import { stacksApiFetch } from "../stacks-api-fetch";
+import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 
 /** No-op logger used when no logger is provided. */
 const NOOP_LOGGER: Logger = {
@@ -274,7 +276,8 @@ export async function verifyTxidPayment(
   txid: string,
   recipientStxAddress: string,
   network: "mainnet" | "testnet" = "mainnet",
-  logger?: Logger
+  logger?: Logger,
+  kv?: KVNamespace
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
 
@@ -310,32 +313,39 @@ export async function verifyTxidPayment(
     };
   };
 
-  try {
-    const response = await fetch(`${apiBase}/extended/v1/tx/${fullTxid}`, {
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok) {
-      if (response.status === 404) {
+  // Check KV cache first — confirmed transactions are immutable, safe to cache
+  const cachedTx = await getCachedTransaction(normalizedTxid, kv);
+  if (cachedTx) {
+    log.info("Txid verification: cache hit", { txid: fullTxid });
+    txData = cachedTx;
+  } else {
+    try {
+      const response = await stacksApiFetch(`${apiBase}/extended/v1/tx/${fullTxid}`, {
+        method: "GET",
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          return {
+            success: false,
+            error: "Transaction not found. It may not be confirmed yet.",
+            errorCode: "TXID_NOT_FOUND",
+          };
+        }
         return {
           success: false,
-          error: "Transaction not found. It may not be confirmed yet.",
-          errorCode: "TXID_NOT_FOUND",
+          error: `Stacks API error: ${response.status}`,
+          errorCode: "API_ERROR",
         };
       }
+      txData = await response.json();
+    } catch (error) {
+      log.error("Failed to fetch transaction", { error: String(error) });
       return {
         success: false,
-        error: `Stacks API error: ${response.status}`,
+        error: `Failed to verify transaction: ${String(error)}`,
         errorCode: "API_ERROR",
       };
     }
-    txData = await response.json();
-  } catch (error) {
-    log.error("Failed to fetch transaction", { error: String(error) });
-    return {
-      success: false,
-      error: `Failed to verify transaction: ${String(error)}`,
-      errorCode: "API_ERROR",
-    };
   }
 
   // Require confirmed, successful transaction
@@ -346,6 +356,14 @@ export async function verifyTxidPayment(
       error: `Transaction status is "${txData.tx_status}", expected "success"`,
       errorCode: "TX_NOT_CONFIRMED",
     };
+  }
+
+  // Cache confirmed transactions — they are immutable once on-chain.
+  // Fire-and-forget: don't block the response on a cache write.
+  if (!cachedTx) {
+    setCachedTransaction(normalizedTxid, txData, kv).catch((err) => {
+      console.warn("[verifyTxidPayment] KV cache write failed:", String(err));
+    });
   }
 
   // Require contract call (not a token transfer or other tx type)
