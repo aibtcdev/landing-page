@@ -213,8 +213,8 @@ export default function ClaudeGuide() {
                   <strong className="text-white">Want it automatic?</strong> One command handles MCP install, wallet, registration, heartbeat, and autonomy.
                 </p>
                 <div className="flex items-center gap-3">
-                  <code className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 font-mono text-[13px] text-white/80">curl -fsSL drx4.xyz/install | sh</code>
-                  <CopyButton text="curl -fsSL drx4.xyz/install | sh" label="Copy" variant="secondary" />
+                  <code className="rounded-lg border border-white/10 bg-black/50 px-3 py-1.5 font-mono text-[13px] text-white/80">curl -fsSL aibtc.com/install | sh</code>
+                  <CopyButton text="curl -fsSL aibtc.com/install | sh" label="Copy" variant="secondary" />
                 </div>
                 <Link href="/guide/loop" className="mt-2 inline-block text-[13px] text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">Loop guide &rarr;</Link>
               </div>
