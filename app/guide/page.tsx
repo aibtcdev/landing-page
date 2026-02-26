@@ -4,6 +4,32 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import CopyButton from "../components/CopyButton";
 
+const mcpStandard = `{
+  "mcpServers": {
+    "aibtc": {
+      "command": "npx",
+      "args": ["@aibtc/mcp-server"],
+      "env": { "NETWORK": "mainnet" }
+    }
+  }
+}`;
+
+const mcpVscode = `{
+  "servers": {
+    "aibtc": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@aibtc/mcp-server"],
+      "env": { "NETWORK": "mainnet" }
+    }
+  }
+}`;
+
+const editorConfigs = [
+  { name: "Cursor", file: ".cursor/mcp.json", json: mcpStandard },
+  { name: "VS Code", file: ".vscode/mcp.json", json: mcpVscode },
+  { name: "Claude Desktop", file: "claude_desktop_config.json", json: mcpStandard },
+] as const;
 
 export default function GuidesIndex() {
   return (
@@ -106,7 +132,7 @@ export default function GuidesIndex() {
                     {/* Text */}
                     <div className="mt-3 max-md:mt-0 max-md:min-w-0 max-md:flex-1">
                       <h3 className="text-[13px] max-md:text-[14px] font-semibold text-white leading-tight">{item.title}</h3>
-                      <p className="mt-1 text-[12px] leading-snug text-white/60 max-md:text-white/60">{item.description}</p>
+                      <p className="mt-1 text-[12px] leading-snug text-white/60">{item.description}</p>
                     </div>
                   </div>
                 ))}
@@ -266,57 +292,15 @@ export default function GuidesIndex() {
             </div>
 
             <div className="mx-auto max-w-3xl space-y-3">
-              {/* Cursor */}
-              <div className="rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-4 max-md:p-3.5 backdrop-blur-[12px]">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-[13px] font-medium text-white/70">Cursor <span className="text-white/30 font-normal">— <code className="text-[12px]">.cursor/mcp.json</code></span></span>
-                  <CopyButton text={`{"mcpServers":{"aibtc":{"command":"npx","args":["@aibtc/mcp-server"],"env":{"NETWORK":"mainnet"}}}}`} label="Copy" variant="secondary" />
+              {editorConfigs.map((editor) => (
+                <div key={editor.name} className="rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-4 max-md:p-3.5 backdrop-blur-[12px]">
+                  <div className="mb-2 flex items-center justify-between gap-3">
+                    <span className="text-[13px] font-medium text-white/70">{editor.name} <span className="text-white/30 font-normal">— <code className="text-[12px]">{editor.file}</code></span></span>
+                    <CopyButton text={JSON.stringify(JSON.parse(editor.json))} label="Copy" variant="secondary" />
+                  </div>
+                  <pre className="overflow-x-auto rounded-md border border-white/[0.06] bg-black/40 px-3 py-2.5 text-[12px] leading-relaxed text-white/70"><code>{editor.json}</code></pre>
                 </div>
-                <pre className="overflow-x-auto rounded-md border border-white/[0.06] bg-black/40 px-3 py-2.5 text-[12px] leading-relaxed text-white/70"><code>{`{
-  "mcpServers": {
-    "aibtc": {
-      "command": "npx",
-      "args": ["@aibtc/mcp-server"],
-      "env": { "NETWORK": "mainnet" }
-    }
-  }
-}`}</code></pre>
-              </div>
-
-              {/* VS Code */}
-              <div className="rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-4 max-md:p-3.5 backdrop-blur-[12px]">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-[13px] font-medium text-white/70">VS Code <span className="text-white/30 font-normal">— <code className="text-[12px]">.vscode/mcp.json</code></span></span>
-                  <CopyButton text={`{"servers":{"aibtc":{"type":"stdio","command":"npx","args":["@aibtc/mcp-server"],"env":{"NETWORK":"mainnet"}}}}`} label="Copy" variant="secondary" />
-                </div>
-                <pre className="overflow-x-auto rounded-md border border-white/[0.06] bg-black/40 px-3 py-2.5 text-[12px] leading-relaxed text-white/70"><code>{`{
-  "servers": {
-    "aibtc": {
-      "type": "stdio",
-      "command": "npx",
-      "args": ["@aibtc/mcp-server"],
-      "env": { "NETWORK": "mainnet" }
-    }
-  }
-}`}</code></pre>
-              </div>
-
-              {/* Claude Desktop */}
-              <div className="rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-4 max-md:p-3.5 backdrop-blur-[12px]">
-                <div className="mb-2 flex items-center justify-between gap-3">
-                  <span className="text-[13px] font-medium text-white/70">Claude Desktop <span className="text-white/30 font-normal">— <code className="text-[12px]">claude_desktop_config.json</code></span></span>
-                  <CopyButton text={`{"mcpServers":{"aibtc":{"command":"npx","args":["@aibtc/mcp-server"],"env":{"NETWORK":"mainnet"}}}}`} label="Copy" variant="secondary" />
-                </div>
-                <pre className="overflow-x-auto rounded-md border border-white/[0.06] bg-black/40 px-3 py-2.5 text-[12px] leading-relaxed text-white/70"><code>{`{
-  "mcpServers": {
-    "aibtc": {
-      "command": "npx",
-      "args": ["@aibtc/mcp-server"],
-      "env": { "NETWORK": "mainnet" }
-    }
-  }
-}`}</code></pre>
-              </div>
+              ))}
             </div>
           </section>
 

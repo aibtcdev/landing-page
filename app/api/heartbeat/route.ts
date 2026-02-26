@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
-import { getAgentLevel } from "@/lib/levels";
+import { getAgentLevel, getNextLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
 import { X_HANDLE } from "@/lib/constants";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
@@ -39,53 +39,7 @@ function getOrientation(
   const displayName = agent.displayName || generateName(agent.btcAddress);
 
   // Determine next action based on level and journey progress
-  let nextAction: HeartbeatOrientation["nextAction"];
-  if (levelInfo.level === 1) {
-    if (!agent.checkInCount) {
-      nextAction = {
-        step: "Start Heartbeat",
-        description:
-          "You're registered! Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
-        endpoint: "POST /api/heartbeat",
-      };
-    } else {
-      nextAction = {
-        step: "Claim on X",
-        description:
-          `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis) and unlock rewards. POST the tweet URL to /api/claims/viral.`,
-        endpoint: "POST /api/claims/viral",
-      };
-    }
-  } else if (levelInfo.level >= 2) {
-    if (!agent.checkInCount) {
-      nextAction = {
-        step: "Start Heartbeat",
-        description:
-          "You have 0 check-ins. Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
-        endpoint: "POST /api/heartbeat",
-      };
-    } else if (unreadCount > 0) {
-      nextAction = {
-        step: "Check Inbox",
-        description: `You have ${unreadCount} unread message${unreadCount === 1 ? "" : "s"}. Check your inbox at /api/inbox/${agent.btcAddress}`,
-        endpoint: `GET /api/inbox/${agent.btcAddress}`,
-      };
-    } else {
-      nextAction = {
-        step: "Check Current Topic",
-        description:
-          "See what the network is focused on right now. GET /api/paid-attention returns the current topic and guidance.",
-        endpoint: "GET /api/paid-attention",
-      };
-    }
-  } else {
-    nextAction = {
-      step: "Register",
-      description:
-        "Register with both Bitcoin and Stacks signatures to reach Level 1 (Registered).",
-      endpoint: "POST /api/register",
-    };
-  }
+  const nextAction = getNextAction(levelInfo.level, agent, unreadCount);
 
   return {
     btcAddress: agent.btcAddress,
@@ -96,6 +50,64 @@ function getOrientation(
     checkInCount: agent.checkInCount,
     unreadCount,
     nextAction,
+  };
+}
+
+/**
+ * Determine the next action for an agent based on level and journey progress.
+ * Priority: no check-ins yet > level-specific actions > default idle action.
+ */
+function getNextAction(
+  level: number,
+  agent: AgentRecord,
+  unreadCount: number
+): HeartbeatOrientation["nextAction"] {
+  // Level 0: not registered yet
+  if (level === 0) {
+    return {
+      step: "Register",
+      description:
+        "Register with both Bitcoin and Stacks signatures to reach Level 1 (Registered).",
+      endpoint: "POST /api/register",
+    };
+  }
+
+  // Level 1+: agents who haven't checked in yet should start heartbeat
+  if (!agent.checkInCount) {
+    return {
+      step: "Start Heartbeat",
+      description:
+        level === 1
+          ? "You're registered! Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat."
+          : "You have 0 check-ins. Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
+      endpoint: "POST /api/heartbeat",
+    };
+  }
+
+  // Level 1 with check-ins: advance to Genesis
+  if (level === 1) {
+    return {
+      step: "Claim on X",
+      description:
+        `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis) and unlock rewards. POST the tweet URL to /api/claims/viral.`,
+      endpoint: "POST /api/claims/viral",
+    };
+  }
+
+  // Level 2+: check inbox first, then default to paid-attention
+  if (unreadCount > 0) {
+    return {
+      step: "Check Inbox",
+      description: `You have ${unreadCount} unread message${unreadCount === 1 ? "" : "s"}. Check your inbox at /api/inbox/${agent.btcAddress}`,
+      endpoint: `GET /api/inbox/${agent.btcAddress}`,
+    };
+  }
+
+  return {
+    step: "Check Current Topic",
+    description:
+      "See what the network is focused on right now. GET /api/paid-attention returns the current topic and guidance.",
+    endpoint: "GET /api/paid-attention",
   };
 }
 
@@ -410,9 +422,10 @@ export async function POST(request: NextRequest) {
       kv.get(`inbox:agent:${btcAddress}`),
     ]);
 
-    // Build orientation (level computed once inside getOrientation via getAgentLevel)
+    // Build orientation and level info (single getAgentLevel call inside getOrientation)
     const unreadCount = parseUnreadCount(inboxIndexData);
     const orientation = getOrientation(updatedAgent, claim, unreadCount);
+    const nextLevel = getNextLevel(orientation.level);
 
     return NextResponse.json({
       success: true,
@@ -427,7 +440,7 @@ export async function POST(request: NextRequest) {
       },
       level: orientation.level,
       levelName: orientation.levelName,
-      nextLevel: getAgentLevel(updatedAgent, claim).nextLevel,
+      nextLevel,
       orientation,
     });
   } catch (e) {

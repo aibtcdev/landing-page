@@ -237,7 +237,7 @@ export default function ClaudeGuide() {
 
           {/* Claude Steps */}
           <div className="space-y-8">
-            {claudeSteps.map((step, index) => (
+            {claudeSteps.map((step) => (
               <div
                 key={step.id}
                 data-step={step.id}
@@ -285,7 +285,7 @@ export default function ClaudeGuide() {
                       <div className="flex items-center justify-between rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
                         <span className="text-[12px] font-medium text-white/40">Command</span>
                         <CopyButton
-                          text={step.command!}
+                          text={step.command}
                           label="Copy"
                           variant="icon"
                           className="gap-1.5 rounded px-2 py-1 text-[12px]"

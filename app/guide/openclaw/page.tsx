@@ -260,7 +260,7 @@ export default function OpenClawGuide() {
 
           {/* Deploy Steps */}
           <div className="space-y-8">
-            {deploySteps.map((step, index) => (
+            {deploySteps.map((step) => (
               <div
                 key={step.id}
                 data-step={step.id}
@@ -271,7 +271,7 @@ export default function OpenClawGuide() {
                 {/* Step Header */}
                 <div className="mb-4 flex items-start justify-between gap-4">
                   <div className="flex items-start gap-4">
-                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[rgba(247,147,26,0.3)] bg-gradient-to-br from-[rgba(247,147,26,0.2)] to-[rgba(247,147,26,0.05)] text-[18px] font-semibold text-[#F7931A]">
+                    <div className="flex size-10 shrink-0 items-center justify-center rounded-xl border border-[#F7931A]/30 bg-gradient-to-br from-[#F7931A]/20 to-[#F7931A]/5 text-[18px] font-semibold text-[#F7931A]">
                       {step.id}
                     </div>
                     <div>
@@ -304,7 +304,7 @@ export default function OpenClawGuide() {
                       <div className="flex items-center justify-between rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
                         <span className="text-[12px] font-medium text-white/40">Command</span>
                         <CopyButton
-                          text={step.command!}
+                          text={step.command}
                           label="Copy"
                           variant="icon"
                           className="gap-1.5 rounded px-2 py-1 text-[12px]"

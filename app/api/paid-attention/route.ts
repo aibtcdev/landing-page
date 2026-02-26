@@ -171,9 +171,8 @@ export async function POST(request: NextRequest) {
     // Detect submission type
     const isCheckIn = body && typeof body === "object" && (body as Record<string, unknown>).type === "check-in";
 
-    // Branch based on submission type
+    // Return 410 Gone breadcrumb — check-in has moved to /api/heartbeat
     if (isCheckIn) {
-      // Return 410 Gone breadcrumb — check-in has moved to /api/heartbeat
       return NextResponse.json(
         {
           error: "Check-in has moved to /api/heartbeat",
@@ -219,9 +218,9 @@ export async function POST(request: NextRequest) {
         },
         { status: 410 }
       );
-    } else {
-      return await handleTaskResponse(body);
     }
+
+    return await handleTaskResponse(body);
   } catch (e) {
     return NextResponse.json(
       { error: `Failed to process request: ${(e as Error).message}` },
