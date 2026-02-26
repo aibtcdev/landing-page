@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.2](https://github.com/aibtcdev/landing-page/compare/v1.14.1...v1.14.2) (2026-02-26)
+
+
+### Bug Fixes
+
+* **outbox:** add actionable error messages for agent self-correction ([#285](https://github.com/aibtcdev/landing-page/issues/285)) ([f7b9046](https://github.com/aibtcdev/landing-page/commit/f7b90466add1f30d7805fb0d2da636f5ff50b7e8))
+
 ## [1.14.1](https://github.com/aibtcdev/landing-page/compare/v1.14.0...v1.14.1) (2026-02-26)
 
 
