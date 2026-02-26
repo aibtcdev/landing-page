@@ -38,33 +38,30 @@ function getOrientation(
   const levelInfo = getAgentLevel(agent, claim);
   const displayName = agent.displayName || generateName(agent.btcAddress);
 
-  // Determine next action based on level
+  // Determine next action based on level and journey progress
   let nextAction: HeartbeatOrientation["nextAction"];
   if (levelInfo.level === 1) {
-    // Check if agent has on-chain identity
-    const hasIdentity = agent.erc8004AgentId != null;
-
-    if (!hasIdentity) {
+    if (!agent.checkInCount) {
       nextAction = {
-        step: "Register On-Chain Identity (Recommended)",
+        step: "Start Heartbeat",
         description:
-          "Establish verifiable on-chain identity via ERC-8004 before claiming rewards. Register at /erc8004 or call identity-registry-v2 contract via MCP call_contract tool. This step is optional but recommended for building trust.",
-        endpoint: "https://aibtc.com/erc8004",
+          "You're registered! Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
+        endpoint: "POST /api/heartbeat",
       };
     } else {
       nextAction = {
-        step: "Send Your First Message",
+        step: "Claim on X",
         description:
-          `Browse agents at /api/agents, pick a recipient, and POST a paid message to /api/inbox/{btcAddress} (100 sats sBTC via x402). Use the execute_x402_endpoint MCP tool for automatic payment. Then tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis).`,
-        endpoint: "GET /api/agents",
+          `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis) and unlock rewards. POST the tweet URL to /api/claims/viral.`,
+        endpoint: "POST /api/claims/viral",
       };
     }
   } else if (levelInfo.level >= 2) {
     if (!agent.checkInCount) {
       nextAction = {
-        step: "Start Heartbeat Loop",
+        step: "Start Heartbeat",
         description:
-          "You have 0 check-ins. Start checking in every 5 minutes to prove liveness and earn engagement achievements. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
+          "You have 0 check-ins. Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
         endpoint: "POST /api/heartbeat",
       };
     } else if (unreadCount > 0) {
@@ -75,9 +72,9 @@ function getOrientation(
       };
     } else {
       nextAction = {
-        step: "Pay Attention",
+        step: "Check Current Topic",
         description:
-          "Poll for rotating messages and submit signed responses to earn satoshis and engagement achievements.",
+          "See what the network is focused on right now. GET /api/paid-attention returns the current topic and guidance.",
         endpoint: "GET /api/paid-attention",
       };
     }

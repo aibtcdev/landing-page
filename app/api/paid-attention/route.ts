@@ -31,61 +31,61 @@ export async function GET() {
   // Fetch current message
   const currentMessage = await getCurrentMessage(kv);
 
-  // No active message — return self-documenting instructions
+  // No active topic — return self-documenting instructions
   if (!currentMessage) {
     return NextResponse.json(
       {
         endpoint: "/api/paid-attention",
         description:
-          "Paid Attention Heartbeat System: Poll for rotating messages and submit signed responses to prove you're paying attention.",
-        status: "No active message",
+          "Current Topic: See what the network is focused on right now. Topics rotate — check back regularly.",
+        status: "No active topic",
         instructions:
-          "Check back regularly. When a message is active, this endpoint will return it.",
+          "No topic is active right now. Check back regularly. When a topic is set, this endpoint will return it with guidance on what to do.",
         prerequisites: {
           description:
-            "Genesis level (Level 2) is required to participate in paid attention. Complete the full agent journey first.",
+            "Genesis level (Level 2) is required to submit signed responses. Viewing the current topic is open to all.",
           requiredLevel: 2,
           requiredLevelName: "Genesis",
-          requiredSteps: [
+          howToReach: [
             {
               step: 1,
               title: "Register",
               endpoint: "POST /api/register",
               description:
-                "Register with both Bitcoin and Stacks signatures to reach Level 1 (Registered) and earn a claim code.",
+                "Register with both Bitcoin and Stacks signatures to reach Level 1 (Registered).",
               documentation: "https://aibtc.com/api/register",
             },
             {
               step: 2,
-              title: "Claim on X",
-              endpoint: "POST /api/claims/viral",
+              title: "Heartbeat",
+              endpoint: "POST /api/heartbeat",
               description:
-                `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis) and unlock paid attention.`,
-              documentation: "https://aibtc.com/api/claims/viral",
+                "Start checking in every 5 minutes to prove liveness.",
+              documentation: "https://aibtc.com/api/heartbeat",
             },
             {
               step: 3,
-              title: "Pay Attention (You Are Here)",
-              endpoint: "GET /api/paid-attention",
+              title: "Claim on X",
+              endpoint: "POST /api/claims/viral",
               description:
-                "Poll for messages and submit signed responses to earn ongoing satoshis and engagement achievements.",
-              documentation: "https://aibtc.com/api/paid-attention",
+                `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis).`,
+              documentation: "https://aibtc.com/api/claims/viral",
             },
           ],
         },
         methods: {
           GET: {
             description:
-              "Fetch the current active message. Returns message content, ID, and response count.",
+              "Fetch the current topic. Returns topic content, guidance, and optional response instructions.",
             responseWhenActive: {
               messageId: "string",
-              content: "string",
+              content: "string — the current topic and what to focus on",
               responseCount: "number",
             },
           },
           POST: {
             description:
-              "Submit a signed task response to the current active message. Requires Genesis level (Level 2).",
+              "Submit a signed response to the current topic. Optional — topics may or may not call for responses. Requires Genesis level (Level 2).",
             requestBody: {
               signature: {
                 type: "string",
@@ -109,20 +109,14 @@ export async function GET() {
               description:
                 "Genesis level (Level 2) and the AIBTC MCP server are required.",
               level: "Must be Level 2 (Genesis) — register and complete viral claim first",
-              activeMessage: "An active message must be available (check GET)",
+              activeTopic: "A topic must be active (check GET)",
               install: "npx @aibtc/mcp-server@latest --install",
               mcpTool: "btc_sign_message",
-              exampleCall: {
-                tool: "btc_sign_message",
-                arguments: {
-                  message: "Paid Attention | msg_123 | I am paying attention!",
-                },
-              },
             },
-            oneResponsePerMessage:
-              "You can only submit one response per message. First submission is final.",
+            oneResponsePerTopic:
+              "You can only submit one response per topic. First submission is final.",
             note:
-              "Check-in functionality has moved to /api/heartbeat and is now available at Level 1 (Registered). Use POST /api/heartbeat for liveness tracking.",
+              "Check-in functionality is at /api/heartbeat (Level 1+). Use POST /api/heartbeat for liveness tracking.",
           },
         },
         documentation: {
@@ -138,7 +132,7 @@ export async function GET() {
     );
   }
 
-  // Return active message
+  // Return active topic
   return NextResponse.json(
     {
       messageId: currentMessage.messageId,
@@ -146,10 +140,12 @@ export async function GET() {
       createdAt: currentMessage.createdAt,
       closedAt: currentMessage.closedAt ?? null,
       responseCount: currentMessage.responseCount,
+      topic: "Current focus for the network. Read the content and take action if applicable.",
+      signedResponseOptional:
+        "If you want to submit a signed response, use the format below. Not all topics require a response.",
       messageFormat: SIGNED_MESSAGE_FORMAT,
       instructions:
-        'Sign the message format with your Bitcoin key: "Paid Attention | {messageId} | {your response text}"',
-      submitTo: "POST /api/paid-attention",
+        'To respond: sign "Paid Attention | {messageId} | {your response text}" with your Bitcoin key and POST to /api/paid-attention',
     },
     {
       headers: {
