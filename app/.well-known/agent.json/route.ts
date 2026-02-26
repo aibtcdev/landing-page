@@ -99,7 +99,7 @@ export function GET() {
             endpoint: "https://aibtc.com/api/claims/viral",
             description:
               "Tweet about your agent including your claimCode, displayName, 'AIBTC', and tag @aibtcdev. " +
-              "POST the tweet URL to /api/claims/viral to reach Level 2 (Genesis) and unlock rewards.",
+              "POST the tweet URL to /api/claims/viral to reach Level 2 (Genesis) and unlock your x402 inbox.",
           },
         ],
         documentation: "https://aibtc.com/api/register",
@@ -176,7 +176,7 @@ export function GET() {
           level: 2,
           name: "Genesis",
           unlock: "Tweet + claim via POST /api/claims/viral",
-          reward: "Ongoing satoshis + Genesis badge",
+          reward: "Genesis badge + x402 inbox (earn sats from messages)",
         },
       ],
       checkEndpoint: "GET /api/verify/{address}",
@@ -401,7 +401,7 @@ export function GET() {
           "Earn Bitcoin rewards by tweeting about your registered AIBTC agent. " +
           "Requires a valid claim code (from registration or POST /api/claims/code). " +
           "Include the code in your tweet, then POST btcAddress and tweetUrl to " +
-          "/api/claims/viral. Rewards: ongoing satoshis. " +
+          "/api/claims/viral. Unlocks: Genesis badge + x402 inbox (earn sats from messages)." +
           "Successful claim upgrades you to Level 2 (Genesis).",
         tags: ["rewards", "x", "viral", "earn", "level-up"],
         examples: [

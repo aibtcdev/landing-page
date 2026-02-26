@@ -89,7 +89,7 @@ function getNextAction(
     return {
       step: "Claim on X",
       description:
-        `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis) and unlock rewards. POST the tweet URL to /api/claims/viral.`,
+        `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis) and unlock your x402 inbox. POST the tweet URL to /api/claims/viral.`,
       endpoint: "POST /api/claims/viral",
     };
   }
