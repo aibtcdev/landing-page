@@ -14,6 +14,7 @@ import {
   cvToJSON,
 } from "@stacks/transactions";
 import { STACKS_API_BASE } from "./constants";
+import { stacksApiFetch } from "../stacks-api-fetch";
 
 /** Build headers for Hiro API requests, optionally including an API key. */
 export function buildHiroHeaders(hiroApiKey?: string): Record<string, string> {
@@ -49,7 +50,7 @@ export async function callReadOnly(
   const headers = buildHiroHeaders(hiroApiKey);
   headers["Content-Type"] = "application/json";
 
-  const response = await fetch(url, {
+  const response = await stacksApiFetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -57,6 +58,9 @@ export async function callReadOnly(
       arguments: hexArgs,
     }),
   });
+
+  // Activate the 429 detection utility for observability (logs cf-ray on rate limit)
+  detect429AndFallback(response);
 
   if (!response.ok) {
     throw new Error(
