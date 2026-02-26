@@ -19,9 +19,9 @@ export interface VouchRecord {
   /** ISO 8601 timestamp of when the referee registered. */
   registeredAt: string;
   /** Whether an introduction message has been sent to the referrer. */
-  messageSent: boolean;
+  messageSent?: boolean;
   /** Whether a referral reward has been paid out. */
-  paidOut: boolean;
+  paidOut?: boolean;
 }
 
 /**

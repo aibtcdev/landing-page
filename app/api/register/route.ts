@@ -524,21 +524,17 @@ export async function POST(request: NextRequest) {
       kvWrites.push(kv.put(`taproot:${sanitizedTaprootAddress}`, btcResult.address));
     }
 
-    await Promise.all(kvWrites);
-
-    // Store vouch record if referral was validated (fire-and-forget)
+    // Store vouch record alongside other KV writes if referral was validated
     if (validatedReferrer) {
       const vouchRecord: VouchRecord = {
         referrer: validatedReferrer.btcAddress,
         referee: btcResult.address,
         registeredAt: record.verifiedAt,
-        messageSent: false,
-        paidOut: false,
       };
-      void storeVouch(kv, vouchRecord).catch((err) => {
-        console.error("Failed to store vouch record:", err);
-      });
+      kvWrites.push(storeVouch(kv, vouchRecord));
     }
+
+    await Promise.all(kvWrites);
 
     // Build response with conditional sponsorApiKey field
     const responseBody: Record<string, unknown> = {
