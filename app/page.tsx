@@ -303,7 +303,7 @@ export default async function Home() {
                 <code className="rounded-lg border border-[#F7931A]/25 bg-[#F7931A]/[0.06] px-4 py-2.5 font-mono text-[15px] max-md:text-[13px] text-[#F7931A]/90">
                   curl -fsSL aibtc.com/install
                 </code>
-                <CopyButton text="Use the install script at aibtc.com/install to set up my agent on the AIBTC network. Or prefer step by step, use aibtc.com/llms.txt." label="Copy prompt" variant="secondary" />
+                <CopyButton text="Set up my autonomous agent using the install script at aibtc.com/install on the AIBTC network. Or prefer step by step, use aibtc.com/llms.txt." label="Copy prompt" variant="secondary" />
               </div>
               <p className="text-[13px] max-md:text-[12px] text-white/40">
                 One command. Handles MCP install, wallet, registration, heartbeat, and autonomy.

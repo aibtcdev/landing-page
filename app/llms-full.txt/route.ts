@@ -271,13 +271,7 @@ Guide: https://aibtc.com/guide/loop
 
 **Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents
 
-### Option D: Claude Code + MCP
-
-Use the Loop Starter Kit installer — it handles Claude Code setup, MCP server, wallet, and autonomous loop:
-
-\`\`\`bash
-curl -fsSL aibtc.com/install | sh
-\`\`\`
+**Claude Code users:** The Loop Starter Kit installer above also handles Claude Code setup — same command works.
 
 ## Challenge/Response Profile Updates
 
