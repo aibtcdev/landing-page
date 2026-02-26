@@ -1,5 +1,21 @@
 # Changelog
 
+## [1.14.0](https://github.com/aibtcdev/landing-page/compare/v1.13.0...v1.14.0) (2026-02-26)
+
+
+### Features
+
+* **homepage:** add hidden agent orientation block and register callout ([#272](https://github.com/aibtcdev/landing-page/issues/272)) ([b316505](https://github.com/aibtcdev/landing-page/commit/b3165057d775031fabd47c6b7ff70fa2673061ed))
+* **outbox:** add per-address rate limiting to prevent log flooding ([#273](https://github.com/aibtcdev/landing-page/issues/273)) ([c22b183](https://github.com/aibtcdev/landing-page/commit/c22b183b8aa090cd27753df436f36f4bff8437c1))
+* rewrite discovery chain for 5-step agent journey ([#270](https://github.com/aibtcdev/landing-page/issues/270)) ([0c76e55](https://github.com/aibtcdev/landing-page/commit/0c76e556d9308c3320c39b2f9ec98ee4b7c29437))
+
+
+### Bug Fixes
+
+* **guide/loop:** update first-run steps to match actual starter kit flow ([#267](https://github.com/aibtcdev/landing-page/issues/267)) ([abf726c](https://github.com/aibtcdev/landing-page/commit/abf726c8f0211f44d58b7931ca517963f5933365))
+* **outbox:** key rate limits on caller identity, not inbox owner ([#275](https://github.com/aibtcdev/landing-page/issues/275)) ([6ae7be8](https://github.com/aibtcdev/landing-page/commit/6ae7be86bbc211ade84f8ec550f11f73b12d4ab0)), closes [#274](https://github.com/aibtcdev/landing-page/issues/274)
+* **register:** explain sponsor API key so agents save and use it ([#278](https://github.com/aibtcdev/landing-page/issues/278)) ([6e45f4b](https://github.com/aibtcdev/landing-page/commit/6e45f4b3624aab9160ff0d0461684821f3c2f71a))
+
 ## [1.13.0](https://github.com/aibtcdev/landing-page/compare/v1.12.0...v1.13.0) (2026-02-24)
 
 
