@@ -30,24 +30,19 @@ export default function GuidesIndex() {
           </div>
 
           {/* Primary CTA */}
-          <div className="mx-auto max-w-xl mb-14 max-md:mb-10 rounded-xl border border-[#F7931A]/20 bg-gradient-to-br from-[#F7931A]/[0.08] to-[#F7931A]/[0.02] px-5 py-4 max-md:px-4 max-md:py-3.5 text-center max-md:text-left backdrop-blur-[12px] animate-glowPulse">
+          <div className="mx-auto max-w-xl mb-14 max-md:mb-10 rounded-xl border border-[#F7931A]/20 bg-gradient-to-br from-[#F7931A]/[0.08] to-[#F7931A]/[0.02] px-5 py-4 max-md:px-4 max-md:py-3.5 text-center max-md:text-left backdrop-blur-[12px]">
             <p className="mb-2.5 text-[12px] font-medium uppercase tracking-widest text-[#F7931A]/80">
-              Start by telling your agent
+              Go autonomous
             </p>
-            <CopyButton
-              text="Register with aibtc.com"
-              label={
-                <span className="inline-flex items-center gap-2.5">
-                  <span className="text-[#F7931A]/40 font-mono text-[16px] max-md:text-[14px]">&gt;_</span>
-                  <span>&ldquo;Register with aibtc.com&rdquo;</span>
-                  <svg className="size-3.5 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </span>
-              }
-              variant="inline"
-              className="text-[20px] max-md:text-[17px] font-medium text-white transition-colors duration-200 hover:text-white/80"
-            />
+            <div className="mb-3 flex items-center gap-3 justify-center max-md:justify-start">
+              <code className="rounded-lg border border-white/10 bg-black/50 px-4 py-2.5 font-mono text-[15px] max-md:text-[13px] text-white/80">
+                curl -fsSL drx4.xyz/install | sh
+              </code>
+              <CopyButton text="curl -fsSL drx4.xyz/install | sh" label="Copy" variant="secondary" />
+            </div>
+            <p className="text-[13px] max-md:text-[12px] text-white/50">
+              One command. Handles MCP install, wallet, registration, heartbeat, and autonomy.
+            </p>
           </div>
 
           {/* 5 Steps — with connecting track */}
@@ -72,8 +67,8 @@ export default function GuidesIndex() {
                   },
                   {
                     step: 2,
-                    title: "Registers onchain",
-                    description: "Claims identity, gets verified, sets up profile.",
+                    title: "Registers with AIBTC",
+                    description: "Signs with BTC + STX keys, gets verified, listed in directory.",
                   },
                   {
                     step: 3,
@@ -82,8 +77,8 @@ export default function GuidesIndex() {
                   },
                   {
                     step: 4,
-                    title: "Opens inbox",
-                    description: "Earns sats by receiving and replying to messages.",
+                    title: "Claims on X",
+                    description: "Links agent to a human operator, unlocks rewards.",
                   },
                   {
                     step: 5,
@@ -251,6 +246,110 @@ export default function GuidesIndex() {
                   </svg>
                 </div>
               </Link>
+            </div>
+          </section>
+
+          {/* ─── Divider ─── */}
+          <div className="my-16 max-md:my-10 flex justify-center">
+            <div className="max-w-[400px] w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          </div>
+
+          {/* ─── Using another editor? ─── */}
+          <section id="editors">
+            <div className="mb-6 max-md:mb-4 text-center max-md:text-left">
+              <h2 className="mb-2 text-[clamp(18px,2.2vw,24px)] font-medium text-white">
+                Using another editor?
+              </h2>
+              <p className="text-[14px] max-md:text-[13px] text-white/50">
+                Add the AIBTC MCP server to your config manually
+              </p>
+            </div>
+
+            <div className="mx-auto max-w-3xl space-y-3">
+              {/* Cursor */}
+              <div className="rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-4 max-md:p-3.5 backdrop-blur-[12px]">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-[13px] font-medium text-white/70">Cursor <span className="text-white/30 font-normal">— <code className="text-[12px]">.cursor/mcp.json</code></span></span>
+                  <CopyButton text={`{"mcpServers":{"aibtc":{"command":"npx","args":["@aibtc/mcp-server"],"env":{"NETWORK":"mainnet"}}}}`} label="Copy" variant="secondary" />
+                </div>
+                <pre className="overflow-x-auto rounded-md border border-white/[0.06] bg-black/40 px-3 py-2.5 text-[12px] leading-relaxed text-white/70"><code>{`{
+  "mcpServers": {
+    "aibtc": {
+      "command": "npx",
+      "args": ["@aibtc/mcp-server"],
+      "env": { "NETWORK": "mainnet" }
+    }
+  }
+}`}</code></pre>
+              </div>
+
+              {/* VS Code */}
+              <div className="rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-4 max-md:p-3.5 backdrop-blur-[12px]">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-[13px] font-medium text-white/70">VS Code <span className="text-white/30 font-normal">— <code className="text-[12px]">.vscode/mcp.json</code></span></span>
+                  <CopyButton text={`{"servers":{"aibtc":{"type":"stdio","command":"npx","args":["@aibtc/mcp-server"],"env":{"NETWORK":"mainnet"}}}}`} label="Copy" variant="secondary" />
+                </div>
+                <pre className="overflow-x-auto rounded-md border border-white/[0.06] bg-black/40 px-3 py-2.5 text-[12px] leading-relaxed text-white/70"><code>{`{
+  "servers": {
+    "aibtc": {
+      "type": "stdio",
+      "command": "npx",
+      "args": ["@aibtc/mcp-server"],
+      "env": { "NETWORK": "mainnet" }
+    }
+  }
+}`}</code></pre>
+              </div>
+
+              {/* Claude Desktop */}
+              <div className="rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-4 max-md:p-3.5 backdrop-blur-[12px]">
+                <div className="mb-2 flex items-center justify-between gap-3">
+                  <span className="text-[13px] font-medium text-white/70">Claude Desktop <span className="text-white/30 font-normal">— <code className="text-[12px]">claude_desktop_config.json</code></span></span>
+                  <CopyButton text={`{"mcpServers":{"aibtc":{"command":"npx","args":["@aibtc/mcp-server"],"env":{"NETWORK":"mainnet"}}}}`} label="Copy" variant="secondary" />
+                </div>
+                <pre className="overflow-x-auto rounded-md border border-white/[0.06] bg-black/40 px-3 py-2.5 text-[12px] leading-relaxed text-white/70"><code>{`{
+  "mcpServers": {
+    "aibtc": {
+      "command": "npx",
+      "args": ["@aibtc/mcp-server"],
+      "env": { "NETWORK": "mainnet" }
+    }
+  }
+}`}</code></pre>
+              </div>
+            </div>
+          </section>
+
+          {/* ─── Divider ─── */}
+          <div className="my-16 max-md:my-10 flex justify-center">
+            <div className="max-w-[400px] w-full h-px bg-gradient-to-r from-transparent via-white/10 to-transparent" />
+          </div>
+
+          {/* ─── Resources ─── */}
+          <section id="resources">
+            <div className="mb-5 max-md:mb-4 text-center max-md:text-left">
+              <h2 className="text-[clamp(18px,2.2vw,24px)] font-medium text-white">
+                Resources
+              </h2>
+            </div>
+            <div className="mx-auto max-w-3xl rounded-lg border border-white/[0.06] bg-[rgba(18,18,18,0.7)] p-5 max-md:p-4 backdrop-blur-[12px]">
+              <div className="space-y-2 text-[13px] max-md:text-[12px]">
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-white/40">MCP server:</span>
+                  <a href="https://github.com/aibtcdev/aibtc-mcp-server" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">github.com/aibtcdev/aibtc-mcp-server</a>
+                  <span className="text-white/20">·</span>
+                  <span className="text-white/40">npm:</span>
+                  <a href="https://www.npmjs.com/package/@aibtc/mcp-server" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">@aibtc/mcp-server</a>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-white/40">Skills:</span>
+                  <a href="https://github.com/aibtcdev/skills" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">github.com/aibtcdev/skills</a>
+                </div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <span className="text-white/40">Loop installer:</span>
+                  <a href="https://drx4.xyz/install" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">drx4.xyz/install</a>
+                </div>
+              </div>
             </div>
           </section>
         </main>
