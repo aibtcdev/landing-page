@@ -154,6 +154,7 @@ export async function middleware(request: NextRequest) {
   // Redirect deprecated paths (301 permanent)
   const deprecatedRedirects: Record<string, string> = {
     "/guide/mcp": "/guide",
+    "/guide/loop": "/guide",
     "/install/claude": "/install",
   };
   const redirectTarget = deprecatedRedirects[path];
@@ -234,6 +235,7 @@ export const config = {
     "/install",
     "/agents/:path*",
     "/guide/mcp",
+    "/guide/loop",
     "/install/claude",
     "/vps",
     "/local",

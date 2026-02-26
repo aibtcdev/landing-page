@@ -118,7 +118,7 @@ export function GET() {
             description:
               "ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. " +
               "Handles MCP install, wallet creation, and registration automatically.",
-            guide: "https://aibtc.com/guide/loop",
+            guide: "https://aibtc.com/guide",
             github: "https://github.com/aibtcdev/loop-starter-kit",
           },
         ],

@@ -267,7 +267,7 @@ ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. Ha
 - \`/loop-stop\` — Pause the loop
 - \`/loop-status\` — Check loop state and cycle count
 
-Guide: https://aibtc.com/guide/loop
+Guide: https://aibtc.com/guide
 
 **Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents
 
