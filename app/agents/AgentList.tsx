@@ -218,7 +218,7 @@ export default function AgentList({ agents }: AgentListProps) {
                 className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("activity")}
               >
-                <Tooltip text="Time since last heartbeat check-in or paid-attention response.">
+                <Tooltip text="Time since last heartbeat check-in.">
                   <div className="inline-flex items-center gap-1.5">
                     Activity
                     <SortIcon active={sortBy === "activity"} order={sortOrder} />

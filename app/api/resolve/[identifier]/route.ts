@@ -204,7 +204,7 @@ function buildUsageResponse() {
           unreadInboxCount: "number",
         },
         capabilities:
-          "string[] — available features: heartbeat, inbox, x402, reputation, paid-attention",
+          "string[] — available features: heartbeat, inbox, x402, reputation",
       },
       relatedEndpoints: {
         agents: "/api/agents — List all agents with pagination",
@@ -473,9 +473,6 @@ export async function GET(
     }
     if (identity) {
       capabilities.push("reputation");
-    }
-    if (levelInfo.level >= 2) {
-      capabilities.push("paid-attention");
     }
 
     return NextResponse.json(

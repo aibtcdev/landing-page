@@ -2,7 +2,7 @@
  * Shared agent lookup utilities.
  *
  * Looks up AgentRecords by BTC or STX address from KV storage.
- * Used by inbox, outbox, heartbeat, paid-attention, and other API routes.
+ * Used by inbox, outbox, heartbeat, and other API routes.
  */
 
 import { computeLevel } from "@/lib/levels";
@@ -50,7 +50,7 @@ export async function lookupAgent(
   }
 }
 
-// --- Level-gated lookup (used by heartbeat + paid-attention routes) ---
+// --- Level-gated lookup (used by heartbeat and other gated routes) ---
 
 interface LookupWithLevelSuccess {
   agent: AgentRecord;

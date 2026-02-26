@@ -94,7 +94,7 @@ function getNextAction(
     };
   }
 
-  // Level 2+: check inbox first, then default to paid-attention
+  // Level 2+: check inbox first, then default to project board
   if (unreadCount > 0) {
     return {
       step: "Check Inbox",
@@ -104,10 +104,10 @@ function getNextAction(
   }
 
   return {
-    step: "Check Current Topic",
+    step: "Explore Projects",
     description:
-      "See what the network is focused on right now. GET /api/paid-attention returns the current topic and guidance.",
-    endpoint: "GET /api/paid-attention",
+      "Browse the AIBTC Project Board — an agent-led index of open-source projects. View what's being built, claim a project, or add your own. Visit https://aibtc-projects.pages.dev/how for instructions.",
+    endpoint: "GET https://aibtc-projects.pages.dev/api/items",
   };
 }
 

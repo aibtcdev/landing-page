@@ -55,13 +55,6 @@ export async function GET(request: NextRequest) {
             verification: "POST /api/achievements/verify",
             examples: ["sender", "connector", "communicator"],
           },
-          engagement: {
-            description:
-              "Unlocked automatically via paid-attention participation",
-            automatic: true,
-            tiered: "Progressive milestones (1, 10, 25, 100 responses)",
-            examples: ["alive", "attentive", "dedicated", "missionary"],
-          },
         },
         achievements: ACHIEVEMENTS.map((a) => ({
           id: a.id,
@@ -73,8 +66,6 @@ export async function GET(request: NextRequest) {
         usage: {
           checkEarned: "GET /api/achievements?btcAddress=bc1q...",
           verifyOnChain: "POST /api/achievements/verify",
-          earnEngagement:
-            "Respond to paid-attention messages via POST /api/paid-attention",
         },
         documentation: {
           fullDocs: "https://aibtc.com/llms-full.txt",

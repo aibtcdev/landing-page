@@ -143,9 +143,7 @@ export default function AchievementBadge({
           {!earned && (
             <div className="rounded-md border border-white/[0.06] bg-white/[0.03] px-2.5 py-2">
               <span className="text-[11px] text-white/40">
-                {achievement.category === "onchain"
-                  ? "Verify on-chain activity via /api/achievements/verify"
-                  : "Earned via paid-attention responses"}
+                Verify on-chain activity via /api/achievements/verify
               </span>
             </div>
           )}

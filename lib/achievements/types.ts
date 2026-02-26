@@ -9,7 +9,7 @@
  * (for progressive engagement achievements).
  */
 export interface AchievementDefinition {
-  /** Unique identifier (e.g., "sender", "alive", "attentive") */
+  /** Unique identifier (e.g., "sender", "connector", "communicator") */
   id: string;
   /** Display name shown in UI */
   name: string;
