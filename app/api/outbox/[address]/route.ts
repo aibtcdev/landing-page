@@ -18,6 +18,8 @@ import {
   OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS,
   OUTBOX_RATE_LIMIT_REGISTERED_MAX,
   OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS,
+  OUTBOX_RATE_LIMIT_VALIDATION_MAX,
+  OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS,
 } from "@/lib/inbox/constants";
 import {
   hasAchievement,
@@ -114,6 +116,41 @@ export async function POST(
   // Validate reply body
   const validation = validateOutboxReply(body);
   if (validation.errors) {
+    // Rate limit per-IP validation failures to prevent bots from flooding WARN logs
+    // with repeated invalid payloads. Uses same fixed-window KV counter pattern as
+    // the unregistered/registered rate limits above.
+    const ip =
+      request.headers.get("cf-connecting-ip") ||
+      request.headers.get("x-forwarded-for") ||
+      "unknown";
+    const validationRateLimitKey = `ratelimit:outbox-validation:${ip}`;
+    const validationCountRaw = await kv.get(validationRateLimitKey);
+    const validationCount = validationCountRaw
+      ? parseInt(validationCountRaw, 10)
+      : 0;
+
+    if (validationCount >= OUTBOX_RATE_LIMIT_VALIDATION_MAX) {
+      // Skip logger.warn entirely — this IP is already known to be sending bad payloads.
+      return NextResponse.json(
+        { error: "Too many invalid requests. Slow down." },
+        {
+          status: 429,
+          headers: {
+            "Retry-After": String(OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS),
+          },
+        }
+      );
+    }
+
+    // Fixed-window counter: pin TTL to first failure so the window resets cleanly.
+    if (validationCount === 0) {
+      await kv.put(validationRateLimitKey, "1", {
+        expirationTtl: OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS,
+      });
+    } else {
+      await kv.put(validationRateLimitKey, String(validationCount + 1));
+    }
+
     logger.warn("Validation failed", { errors: validation.errors });
     return NextResponse.json(
       { error: validation.errors.join(", ") },
