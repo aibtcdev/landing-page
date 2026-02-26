@@ -13,14 +13,6 @@ const installers = [
     guideLink: "/guide",
   },
   {
-    id: "claude",
-    title: "Claude Code + AIBTC",
-    subtitle: "Add Bitcoin tools to Claude Code",
-    description: "Installs Claude Code CLI (if needed) and adds the AIBTC MCP server for Bitcoin and Stacks capabilities.",
-    command: "curl -fsSL aibtc.com/install/claude | bash",
-    guideLink: "/guide/claude",
-  },
-  {
     id: "openclaw-local",
     title: "OpenClaw (Local)",
     subtitle: "Run an agent on your machine",

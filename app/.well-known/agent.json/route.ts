@@ -369,9 +369,9 @@ export function GET() {
         name: "Claude Code MCP Setup",
         description:
           "Install Claude Code and configure AIBTC MCP tools. " +
-          "Run: curl https://aibtc.com/install/claude | sh. " +
-          "This checks for Claude Code, installs it if missing, and adds the " +
-          "AIBTC MCP server for Bitcoin and Stacks blockchain tools.",
+          "Run: curl -fsSL aibtc.com/install | sh. " +
+          "This installs the Loop Starter Kit which handles MCP server setup, " +
+          "wallet creation, registration, and autonomous loop.",
         tags: ["install", "claude", "mcp", "setup"],
         examples: [
           "Set up Claude Code with Bitcoin tools",
