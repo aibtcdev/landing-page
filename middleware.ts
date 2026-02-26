@@ -166,6 +166,11 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL("/llms.txt", request.url));
   }
 
+  // Install: rewrite to loop installer script for curl/wget
+  if (path === "/install") {
+    return NextResponse.rewrite(new URL("/install/loop", request.url));
+  }
+
   // Heartbeat: rewrite to CLI route for curl/wget
   if (path === "/heartbeat") {
     return NextResponse.rewrite(new URL("/heartbeat/cli", request.url));
@@ -221,6 +226,7 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/",
+    "/install",
     "/agents/:path*",
     "/guide/mcp",
     "/vps",
