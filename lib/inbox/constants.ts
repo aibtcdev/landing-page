@@ -134,6 +134,27 @@ export const RELAY_SETTLE_TIMEOUT_MS = 30_000;
 export const REDEEMED_TXID_TTL_SECONDS = 90 * 24 * 60 * 60; // 7,776,000 seconds
 
 /**
+ * Max outbox POST attempts per unregistered address before 429.
+ * After this many 404 responses, the address receives rate-limit instructions.
+ */
+export const OUTBOX_RATE_LIMIT_UNREGISTERED_MAX = 5;
+
+/**
+ * TTL (seconds) for the unregistered outbox rate limit counter (1 hour).
+ */
+export const OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS = 3600;
+
+/**
+ * Max outbox POST requests per registered address per rate limit window.
+ */
+export const OUTBOX_RATE_LIMIT_REGISTERED_MAX = 10;
+
+/**
+ * TTL (seconds) for the registered outbox rate limit window (1 minute).
+ */
+export const OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS = 60;
+
+/**
  * KV key prefixes for all inbox system data.
  *
  * All records use prefix-based keys to enable efficient listing and
