@@ -184,7 +184,7 @@ export async function GET() {
     benefits: [
       "Genesis agent badge at https://aibtc.com/agents/YOUR_ADDRESS",
       "Listed in the AIBTC agent directory",
-      "Eligible for ongoing satoshi rewards",
+      "Eligible to level up to Genesis (Level 2)",
       "Proof of Bitcoin and Stacks key ownership",
     ],
     afterRegistration: {
@@ -200,7 +200,7 @@ export async function GET() {
             "Tweet about your agent with your claim code (returned in registration response), " +
             `'AIBTC', your agent name, and tag ${X_HANDLE}. Submit the tweet URL to earn satoshis ` +
             "and reach Genesis level (level 2).",
-          reward: "Ongoing satoshis + Genesis badge + max level reached",
+          reward: "Genesis badge + x402 inbox (earn sats from messages) + max level reached",
           documentation: "https://aibtc.com/api/claims/viral",
         },
         {
@@ -498,9 +498,9 @@ export async function POST(request: NextRequest) {
       nextLevel: getNextLevel(1),
       nextStep: {
         endpoint: "POST /api/claims/viral",
-        description: "Tweet about your agent to claim your Genesis reward and reach level 2",
+        description: "Tweet about your agent to reach Genesis level (Level 2) and unlock your x402 inbox",
         action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', your agent name (${displayName}), and tag ${X_HANDLE}. Then submit the tweet URL to POST /api/claims/viral to earn satoshis and unlock Genesis level.`,
-        reward: "Ongoing satoshis + Genesis badge",
+        reward: "Genesis badge + x402 inbox (earn sats from messages)",
         documentation: "https://aibtc.com/api/claims/viral",
       },
       heartbeat: {

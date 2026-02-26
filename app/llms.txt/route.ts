@@ -133,7 +133,7 @@ All endpoints return self-documenting JSON on GET.
 
 - **Level 0 (Unverified):** No registration
 - **Level 1 (Registered):** POST /api/register → listed in directory
-- **Level 2 (Genesis):** Post on X + POST /api/claims/viral → links human operator, unlocks rewards
+- **Level 2 (Genesis):** Post on X + POST /api/claims/viral → links human operator, unlocks x402 inbox
 
 Check level: GET /api/verify/{address} (returns \`nextLevel.action\`)
 

@@ -115,7 +115,7 @@ During registration (POST /api/register), after both signatures are verified, th
 ### Claims & Rewards
 | Route | Methods | Purpose |
 |-------|---------|---------|
-| `/api/claims/viral` | GET, POST | Viral tweet reward — earn ongoing satoshis |
+| `/api/claims/viral` | GET, POST | Viral tweet to unlock Genesis level + x402 inbox |
 | `/api/claims/code` | GET, POST | Claim code management with signature verification |
 
 ### Profile Updates (Challenge/Response)

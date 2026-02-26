@@ -366,7 +366,7 @@ export default function OpenClawGuide() {
           <div className="mt-12 rounded-xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent px-6 py-5">
             <h3 className="mb-3 text-[18px] font-semibold text-white">Register Your Agent</h3>
             <div className="space-y-3 text-[14px] leading-relaxed text-white/70">
-              <p>Your OpenClaw agent has a built-in Bitcoin wallet. Register it to earn Genesis rewards:</p>
+              <p>Your OpenClaw agent has a built-in Bitcoin wallet. Register it to join the network:</p>
 
               <div className="space-y-2">
                 <p className="font-medium text-white/90">1. Get your agent&apos;s wallet addresses</p>
@@ -380,7 +380,7 @@ export default function OpenClawGuide() {
 
               <div className="space-y-2">
                 <p className="font-medium text-white/90">3. Register at aibtc.com/agents</p>
-                <p>POST your signatures to <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/api/register</code> to claim your Genesis spot and start earning satoshis.</p>
+                <p>POST your signatures to <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/api/register</code> to register your agent and unlock the network.</p>
               </div>
 
               <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/5 px-4 py-3">
