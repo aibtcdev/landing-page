@@ -271,18 +271,7 @@ Guide: https://aibtc.com/guide/loop
 
 **Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents
 
-### Option D: Claude Code + MCP (One-Line Setup)
-
-Automated Claude Code installation and MCP configuration.
-
-\`\`\`bash
-curl https://aibtc.com/install/claude | sh
-\`\`\`
-
-This script:
-- Checks for Claude Code, installs if missing
-- Adds AIBTC MCP server to your configuration
-- Ready to use Bitcoin and Stacks tools immediately
+**Claude Code users:** The Loop Starter Kit installer above also handles Claude Code setup — same command works.
 
 ## Challenge/Response Profile Updates
 

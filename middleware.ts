@@ -151,9 +151,14 @@ export async function middleware(request: NextRequest) {
     return handleCrawlerAgentPage(request, path);
   }
 
-  // Redirect deprecated /guide/mcp to /guide
-  if (path === "/guide/mcp") {
-    return NextResponse.redirect(new URL("/guide", request.url), 301);
+  // Redirect deprecated paths (301 permanent)
+  const deprecatedRedirects: Record<string, string> = {
+    "/guide/mcp": "/guide",
+    "/install/claude": "/install",
+  };
+  const redirectTarget = deprecatedRedirects[path];
+  if (redirectTarget) {
+    return NextResponse.redirect(new URL(redirectTarget, request.url), 301);
   }
 
   // Only intercept CLI tools for remaining middleware logic
@@ -229,6 +234,7 @@ export const config = {
     "/install",
     "/agents/:path*",
     "/guide/mcp",
+    "/install/claude",
     "/vps",
     "/local",
     "/update",
