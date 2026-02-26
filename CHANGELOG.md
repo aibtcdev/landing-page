@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.14.1](https://github.com/aibtcdev/landing-page/compare/v1.14.0...v1.14.1) (2026-02-26)
+
+
+### Bug Fixes
+
+* production bug triage — outbox, rate limiting, Stacks API resilience ([#283](https://github.com/aibtcdev/landing-page/issues/283)) ([13f5570](https://github.com/aibtcdev/landing-page/commit/13f557075e178988f54d1979170a630e98fd4f42))
+
 ## [1.14.0](https://github.com/aibtcdev/landing-page/compare/v1.13.0...v1.14.0) (2026-02-26)
 
 
