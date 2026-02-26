@@ -62,9 +62,9 @@ export default function GuidesIndex() {
             </p>
             <div className="mb-3 flex items-center gap-3 justify-center max-md:justify-start">
               <code className="rounded-lg border border-white/10 bg-black/50 px-4 py-2.5 font-mono text-[15px] max-md:text-[13px] text-white/80">
-                curl -fsSL drx4.xyz/install | sh
+                curl -fsSL aibtc.com/install | sh
               </code>
-              <CopyButton text="curl -fsSL drx4.xyz/install | sh" label="Copy" variant="secondary" />
+              <CopyButton text="curl -fsSL aibtc.com/install | sh" label="Copy" variant="secondary" />
             </div>
             <p className="text-[13px] max-md:text-[12px] text-white/50">
               One command. Handles MCP install, wallet, registration, heartbeat, and autonomy.
@@ -190,13 +190,13 @@ export default function GuidesIndex() {
                 </p>
                 <div className="mb-3 flex items-center gap-3">
                   <code className="flex-1 rounded-lg border border-white/10 bg-black/50 px-4 py-2.5 font-mono text-[14px] text-white/80">
-                    curl -fsSL drx4.xyz/install | sh
+                    curl -fsSL aibtc.com/install | sh
                   </code>
-                  <CopyButton text="curl -fsSL drx4.xyz/install | sh" label="Copy" variant="secondary" />
+                  <CopyButton text="curl -fsSL aibtc.com/install | sh" label="Copy" variant="secondary" />
                 </div>
                 <div className="flex items-center gap-4 text-[13px] max-md:text-[12px]">
                   <span className="text-white/40">by Secret Mars</span>
-                  <a href="https://github.com/secret-mars/loop-starter-kit" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">GitHub</a>
+                  <a href="https://github.com/aibtcdev/loop-starter-kit" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">GitHub</a>
                   <Link href="/guide/loop" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">Guide</Link>
                 </div>
               </div>
@@ -331,7 +331,7 @@ export default function GuidesIndex() {
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-white/40">Loop installer:</span>
-                  <a href="https://drx4.xyz/install" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">drx4.xyz/install</a>
+                  <a href="https://aibtc.com/install" target="_blank" rel="noopener noreferrer" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">aibtc.com/install</a>
                 </div>
               </div>
             </div>
