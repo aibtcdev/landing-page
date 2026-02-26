@@ -40,6 +40,11 @@ export async function getVouchRecord(
 
 /**
  * Store a vouch record and update the referrer's index.
+ *
+ * NOTE: Known race condition — this is a read-modify-write without CAS.
+ * Concurrent vouches for the same referrer can lose index updates. KV does not
+ * support atomic compare-and-swap. Acceptable for now given low concurrency;
+ * if drift becomes noticeable, serialize via Durable Objects.
  */
 export async function storeVouch(
   kv: KVNamespace,
@@ -48,23 +53,15 @@ export async function storeVouch(
   const vouchKey = buildVouchKey(record.referrer, record.referee);
   const indexKey = buildAgentIndexKey(record.referrer);
 
-  const existingData = await kv.get(indexKey);
+  const existing = await getVouchIndex(kv, record.referrer);
   let index: VouchAgentIndex;
 
-  if (existingData) {
-    try {
-      index = JSON.parse(existingData) as VouchAgentIndex;
-      if (!index.refereeAddresses.includes(record.referee)) {
-        index.refereeAddresses.push(record.referee);
-      }
-      index.lastVouchAt = record.registeredAt;
-    } catch {
-      index = {
-        btcAddress: record.referrer,
-        refereeAddresses: [record.referee],
-        lastVouchAt: record.registeredAt,
-      };
+  if (existing) {
+    if (!existing.refereeAddresses.includes(record.referee)) {
+      existing.refereeAddresses.push(record.referee);
     }
+    existing.lastVouchAt = record.registeredAt;
+    index = existing;
   } else {
     index = {
       btcAddress: record.referrer,

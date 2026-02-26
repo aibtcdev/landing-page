@@ -243,6 +243,48 @@ export async function GET() {
 
 const EXPECTED_MESSAGE = "Bitcoin will be the currency of AIs";
 
+/**
+ * Validate a referrer BTC address and return the AgentRecord if eligible.
+ *
+ * Returns null (silently) for any invalid, missing, or ineligible referrer so
+ * that registration always proceeds regardless of referral validity.
+ */
+async function validateReferrer(
+  kv: KVNamespace,
+  refAddress: string,
+  newBtcAddress: string,
+  newStxAddress: string
+): Promise<AgentRecord | null> {
+  // Prevent self-referral by BTC address
+  if (refAddress === newBtcAddress) return null;
+
+  const referrerData = await kv.get(`btc:${refAddress}`);
+  if (!referrerData) return null;
+
+  let referrerAgent: AgentRecord;
+  try {
+    referrerAgent = JSON.parse(referrerData) as AgentRecord;
+  } catch {
+    return null;
+  }
+
+  // Prevent self-referral via STX address
+  if (referrerAgent.stxAddress === newStxAddress) return null;
+
+  const referrerClaim = await kv.get(`claim:${referrerAgent.btcAddress}`);
+  let referrerClaimStatus: ClaimStatus | null = null;
+  if (referrerClaim) {
+    try {
+      referrerClaimStatus = JSON.parse(referrerClaim) as ClaimStatus;
+    } catch { /* ignore */ }
+  }
+
+  const referrerLevel = computeLevel(referrerAgent, referrerClaimStatus);
+  if (referrerLevel < MIN_REFERRER_LEVEL) return null;
+
+  return referrerAgent;
+}
+
 function verifyStacksSignature(signature: string): {
   valid: boolean;
   address: string;
@@ -442,37 +484,12 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Vouch: extract referrer from query param
+    // Vouch: extract referrer from query param and validate (silently ignore invalid referrers)
     const { searchParams } = new URL(request.url);
     const refAddress = searchParams.get("ref")?.trim() || null;
-
-    // Validate referrer if provided (silently ignore invalid referrers)
-    let validatedReferrer: AgentRecord | null = null;
-    if (refAddress) {
-      // Prevent self-referral
-      if (refAddress !== btcResult.address) {
-        const referrerData = await kv.get(`btc:${refAddress}`);
-        if (referrerData) {
-          try {
-            const referrerAgent = JSON.parse(referrerData) as AgentRecord;
-            // Prevent self-referral via STX address
-            if (referrerAgent.stxAddress !== stxResult.address) {
-              const referrerClaim = await kv.get(`claim:${referrerAgent.btcAddress}`);
-              let referrerClaimStatus: ClaimStatus | null = null;
-              if (referrerClaim) {
-                try {
-                  referrerClaimStatus = JSON.parse(referrerClaim) as ClaimStatus;
-                } catch { /* ignore */ }
-              }
-              const referrerLevel = computeLevel(referrerAgent, referrerClaimStatus);
-              if (referrerLevel >= MIN_REFERRER_LEVEL) {
-                validatedReferrer = referrerAgent;
-              }
-            }
-          } catch { /* ignore parse errors */ }
-        }
-      }
-    }
+    const validatedReferrer = refAddress
+      ? await validateReferrer(kv, refAddress, btcResult.address, stxResult.address)
+      : null;
 
     // Phase 2: Sponsor provisioning + BNS lookup (only after confirming no duplicate)
     const relayUrl = env.X402_RELAY_URL || DEFAULT_RELAY_URL;
