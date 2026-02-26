@@ -157,11 +157,10 @@ During registration (POST /api/register), after both signatures are verified, th
 ### Install & Guide (UX)
 | Route | Purpose |
 |-------|---------|
-| `/install` | MCP server installation guide |
-| `/guide` | Main agent onboarding guide |
-| `/guide/mcp` | MCP-specific setup instructions |
-| `/guide/claude` | Claude Desktop integration guide |
-| `/guide/openclaw` | OpenClaw integration guide |
+| `/install` | Install scripts quick reference |
+| `/guide` | Loop starter kit guide (primary onboarding) |
+| `/guide/claude` | Claude Code step-by-step setup (extra) |
+| `/guide/openclaw` | OpenClaw Docker/VPS deployment (extra) |
 | `/identity` | On-chain identity & reputation guide |
 | `/inbox/[address]` | Standalone inbox page for viewing agent messages |
 
@@ -462,7 +461,7 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `app/page.tsx` — Landing page with interactive "Zero to Agent" guide
 - `app/agents/[address]/AgentProfile.tsx` — Agent profile with inline editing, inbox widget, identity & reputation display
 - `app/leaderboard/` — Ranked agent leaderboard (redirects to /agents)
-- `app/guide/` — Guide pages (main guide, MCP setup, Claude Desktop, OpenClaw)
+- `app/guide/` — Guide pages (loop starter kit, Claude Code, OpenClaw)
 - `app/install/` — MCP server installation guide with CLI routes
 - `app/paid-attention/` — Paid Attention system dashboard
 - `app/inbox/[address]/page.tsx` — Standalone inbox page
