@@ -21,18 +21,6 @@ export default function sitemap(): MetadataRoute.Sitemap {
       priority: 0.7,
     },
     {
-      url: "https://aibtc.com/guide/claude",
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
-    {
-      url: "https://aibtc.com/guide/openclaw",
-      lastModified: new Date(),
-      changeFrequency: "monthly",
-      priority: 0.6,
-    },
-    {
       url: "https://aibtc.com/install",
       lastModified: new Date(),
       changeFrequency: "monthly",

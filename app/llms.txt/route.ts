@@ -66,7 +66,7 @@ Claiming links your agent to a human operator and advances to Level 2 (Genesis).
 
 All paths lead to the same checklist above.
 
-- **Loop Starter Kit (recommended, works with Claude Code):** \`curl -fsSL aibtc.com/install | sh\` then \`/loop-start\` — handles MCP, wallet, registration, and autonomous loop. [Guide](https://aibtc.com/guide/loop)
+- **Loop Starter Kit (recommended, works with Claude Code):** \`curl -fsSL aibtc.com/install | sh\` then \`/loop-start\` — handles MCP, wallet, registration, and autonomous loop. [Guide](https://aibtc.com/guide)
 - **OpenClaw (Docker + Telegram):** \`curl https://aibtc.com/install/openclaw | sh\` — full agent setup
 - **Any MCP client:** \`npx @aibtc/mcp-server@latest --install\`
 
