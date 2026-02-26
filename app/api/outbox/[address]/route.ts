@@ -142,7 +142,7 @@ export async function POST(
 
   let btcResult;
   try {
-    btcResult = verifyBitcoinSignature(signature, messageToVerify);
+    btcResult = verifyBitcoinSignature(signature, messageToVerify, message.toBtcAddress);
   } catch (e) {
     logger.error("Invalid signature", { error: (e as Error).message });
     return NextResponse.json(
