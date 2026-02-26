@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
 import type { InboxAgentIndex, InboxMessage } from "@/lib/inbox/types";
+import { INBOX_PRICE_SATS } from "@/lib/inbox/constants";
 import type { AchievementAgentIndex, AchievementRecord } from "@/lib/achievements/types";
 import { ACHIEVEMENTS } from "@/lib/achievements/registry";
 
@@ -227,7 +228,7 @@ export async function GET(request: NextRequest) {
         totalMessages += inboxIndex.messageIds.length;
         // Estimate sats from message count (each message costs INBOX_PRICE_SATS)
         // This avoids fetching every message just for the total
-        totalSatsTransacted += inboxIndex.messageIds.length * 100;
+        totalSatsTransacted += inboxIndex.messageIds.length * INBOX_PRICE_SATS;
       }
     });
     await Promise.all(allInboxPromises);
