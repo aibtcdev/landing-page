@@ -121,12 +121,20 @@ export async function GET(
   const includeReceived = view === "received" || view === "all";
   const includeSent = view === "sent" || view === "all";
 
+  // For "all" view, we need enough messages to fill the page after merging
+  // and sorting by date. When partners are requested, fetch more so partner
+  // computation has a complete picture. Otherwise use limit+offset as the cap.
+  const fetchLimit = view === "all"
+    ? (includePartners ? 100 : limit + offset)
+    : limit;
+  const fetchOffset = view === "all" ? 0 : offset;
+
   const [receivedResult, sentResult] = await Promise.all([
     includeReceived
-      ? listInboxMessages(kv, agent.btcAddress, view === "all" ? 100 : limit, view === "all" ? 0 : offset, { includeReplies: true })
+      ? listInboxMessages(kv, agent.btcAddress, fetchLimit, fetchOffset, { includeReplies: true })
       : Promise.resolve(null),
     includeSent
-      ? listSentMessages(kv, agent.btcAddress, view === "all" ? 100 : limit, view === "all" ? 0 : offset, { includeReplies: true })
+      ? listSentMessages(kv, agent.btcAddress, fetchLimit, fetchOffset, { includeReplies: true })
       : Promise.resolve(null),
   ]);
 
