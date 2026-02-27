@@ -121,12 +121,18 @@ export async function GET(
   const includeReceived = view === "received" || view === "all";
   const includeSent = view === "sent" || view === "all";
 
+  // For "all" view, fetch limit+offset from each direction so we have enough
+  // messages to fill the page after merging and sorting by date. This avoids
+  // the previous behavior of always fetching 100 per direction.
+  const fetchLimit = view === "all" ? limit + offset : limit;
+  const fetchOffset = view === "all" ? 0 : offset;
+
   const [receivedResult, sentResult] = await Promise.all([
     includeReceived
-      ? listInboxMessages(kv, agent.btcAddress, view === "all" ? 100 : limit, view === "all" ? 0 : offset, { includeReplies: true })
+      ? listInboxMessages(kv, agent.btcAddress, fetchLimit, fetchOffset, { includeReplies: true })
       : Promise.resolve(null),
     includeSent
-      ? listSentMessages(kv, agent.btcAddress, view === "all" ? 100 : limit, view === "all" ? 0 : offset, { includeReplies: true })
+      ? listSentMessages(kv, agent.btcAddress, fetchLimit, fetchOffset, { includeReplies: true })
       : Promise.resolve(null),
   ]);
 
