@@ -29,30 +29,61 @@ import {
 import { isStxAddress } from "@/lib/validation/address";
 
 /**
- * Fixed-window KV rate limiter. Reads the current count, checks against max,
- * and increments. TTL is set only on the first write so the window expires
- * from the first request. KV read-then-write is not atomic; minor
- * under-counting under concurrency is accepted.
+ * Fixed-window KV rate limiter.
  *
- * @returns true if the request is rate-limited (count >= max)
+ * Stores value as "{count}:{windowStartMs}" so the window start time is
+ * preserved across increments. The expirationTtl is always computed from
+ * the remaining window time, ensuring Cloudflare KV actually expires the key
+ * at the end of the window rather than becoming permanent on subsequent writes.
+ *
+ * @returns { limited, resetAt } -- limited=true if count >= max at read time.
  */
 async function checkFixedWindowRateLimit(
   kv: KVNamespace,
   key: string,
   max: number,
   ttlSeconds: number
-): Promise<boolean> {
+): Promise<{ limited: boolean; resetAt: Date }> {
+  const now = Date.now();
   const raw = await kv.get(key);
-  const count = raw ? parseInt(raw, 10) : 0;
 
-  if (count >= max) return true;
+  let count = 0;
+  let windowStartMs = now;
 
-  if (count === 0) {
-    await kv.put(key, "1", { expirationTtl: ttlSeconds });
-  } else {
-    await kv.put(key, String(count + 1));
+  if (raw) {
+    const sep = raw.indexOf(":");
+    count = parseInt(sep >= 0 ? raw.slice(0, sep) : raw, 10);
+    windowStartMs =
+      sep >= 0 ? parseInt(raw.slice(sep + 1), 10) : now - ttlSeconds * 1000;
   }
-  return false;
+
+  const windowExpiresMs = windowStartMs + ttlSeconds * 1000;
+  const resetAt = new Date(windowExpiresMs);
+
+  if (count >= max) return { limited: true, resetAt };
+
+  // Compute remaining TTL so KV expiry matches the fixed window boundary.
+  const remainingMs = windowExpiresMs - now;
+  const remainingSeconds =
+    count === 0 ? ttlSeconds : Math.max(1, Math.ceil(remainingMs / 1000));
+  const newWindowStart = count === 0 ? now : windowStartMs;
+
+  await kv.put(key, `${count + 1}:${newWindowStart}`, {
+    expirationTtl: remainingSeconds,
+  });
+
+  return { limited: false, resetAt };
+}
+
+/** Format a remaining-seconds duration as a human-readable string. */
+function formatRetryAfter(totalSeconds: number): string {
+  if (totalSeconds <= 0) return "moments";
+  if (totalSeconds < 60)
+    return `${totalSeconds} second${totalSeconds === 1 ? "" : "s"}`;
+  const minutes = Math.ceil(totalSeconds / 60);
+  if (minutes < 60) return `${minutes} minute${minutes === 1 ? "" : "s"}`;
+  const hours = Math.ceil(totalSeconds / 3600);
+  return `${hours} hour${hours === 1 ? "" : "s"}`;
 }
 
 export async function POST(
@@ -67,11 +98,11 @@ export async function POST(
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
 
-  // Look up agent first — rate limits are applied contextually below.
+  // Look up agent first -- rate limits are applied contextually below.
   const agent = await lookupAgent(kv, address);
 
   if (!agent) {
-    const limited = await checkFixedWindowRateLimit(
+    const { limited } = await checkFixedWindowRateLimit(
       kv,
       `ratelimit:outbox-unregistered:${address}`,
       OUTBOX_RATE_LIMIT_UNREGISTERED_MAX,
@@ -91,7 +122,9 @@ export async function POST(
         },
         {
           status: 429,
-          headers: { "Retry-After": String(OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS) },
+          headers: {
+            "Retry-After": String(OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS),
+          },
         }
       );
     }
@@ -103,10 +136,9 @@ export async function POST(
         error: "Agent not found",
         address,
         ...(isStx && {
-          hint: "You provided a Stacks address. Try your BTC address (bc1...) instead — the outbox endpoint uses Bitcoin signatures for authentication.",
+          hint: "You provided a Stacks address. Try your BTC address (bc1...) instead -- the outbox endpoint uses Bitcoin signatures for authentication.",
         }),
-        action:
-          "Register at POST /api/register to use the outbox endpoint.",
+        action: "Register at POST /api/register to use the outbox endpoint.",
         documentation: "https://aibtc.com/api/register",
       },
       { status: 404 }
@@ -121,10 +153,7 @@ export async function POST(
     body = await request.json();
   } catch {
     logger.error("Malformed JSON body");
-    return NextResponse.json(
-      { error: "Malformed JSON body" },
-      { status: 400 }
-    );
+    return NextResponse.json({ error: "Malformed JSON body" }, { status: 400 });
   }
 
   // Validate reply body
@@ -135,7 +164,7 @@ export async function POST(
       request.headers.get("x-forwarded-for");
 
     if (ip) {
-      const limited = await checkFixedWindowRateLimit(
+      const { limited } = await checkFixedWindowRateLimit(
         kv,
         `ratelimit:outbox-validation:${ip}`,
         OUTBOX_RATE_LIMIT_VALIDATION_MAX,
@@ -159,9 +188,11 @@ export async function POST(
       {
         error: validation.errors.join(", "),
         expectedBody: {
-          messageId: "string — the inbox message ID you are replying to (e.g. msg_...)",
-          reply: "string — your reply text (max 500 characters)",
-          signature: "string — BIP-137/BIP-322 signature over 'Inbox Reply | {messageId} | {reply}'",
+          messageId:
+            "string -- the inbox message ID you are replying to (e.g. msg_...)",
+          reply: "string -- your reply text (max 500 characters)",
+          signature:
+            "string -- BIP-137/BIP-322 signature over 'Inbox Reply | {messageId} | {reply}'",
         },
         documentation: "https://aibtc.com/docs/messaging.txt",
       },
@@ -177,10 +208,7 @@ export async function POST(
   if (!message) {
     logger.warn("Message not found", { messageId });
     return NextResponse.json(
-      {
-        error: "Message not found",
-        messageId,
-      },
+      { error: "Message not found", messageId },
       { status: 404 }
     );
   }
@@ -190,7 +218,11 @@ export async function POST(
 
   let btcResult;
   try {
-    btcResult = verifyBitcoinSignature(signature, messageToVerify, message.toBtcAddress);
+    btcResult = verifyBitcoinSignature(
+      signature,
+      messageToVerify,
+      message.toBtcAddress
+    );
   } catch (e) {
     const errorMessage = e instanceof Error ? e.message : "unknown error";
     logger.error("Invalid signature", { error: errorMessage });
@@ -226,7 +258,8 @@ export async function POST(
     });
     return NextResponse.json(
       {
-        error: "Signer does not match the message recipient. Only the recipient can reply.",
+        error:
+          "Signer does not match the message recipient. Only the recipient can reply.",
         expectedSigner: message.toBtcAddress,
         actualSigner: btcResult.address,
         hint: `This message was sent to ${message.toBtcAddress}. You must sign with that address's private key to reply. If this is not your address, you cannot reply to this message.`,
@@ -257,25 +290,35 @@ export async function POST(
   }
 
   // Rate limit by signer identity (placed after signature verification)
-  const registeredLimited = await checkFixedWindowRateLimit(
-    kv,
-    `ratelimit:outbox:${btcResult.address}`,
-    OUTBOX_RATE_LIMIT_REGISTERED_MAX,
-    OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS
-  );
+  const { limited: registeredLimited, resetAt } =
+    await checkFixedWindowRateLimit(
+      kv,
+      `ratelimit:outbox:${btcResult.address}`,
+      OUTBOX_RATE_LIMIT_REGISTERED_MAX,
+      OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS
+    );
   if (registeredLimited) {
+    const remainingSeconds = Math.max(
+      0,
+      Math.ceil((resetAt.getTime() - Date.now()) / 1000)
+    );
     logger.warn("Outbox rate limited (registered)", {
       callerAddress: btcResult.address,
+      resetAt: resetAt.toISOString(),
     });
     return NextResponse.json(
       {
-        error: "Too many outbox requests. Slow down.",
+        error: "Outbox rate limit reached.",
         address: btcResult.address,
-        retryAfter: "1 minute",
+        limit: OUTBOX_RATE_LIMIT_REGISTERED_MAX,
+        windowSeconds: OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS,
+        remaining: 0,
+        resetAt: resetAt.toISOString(),
+        retryAfter: formatRetryAfter(remainingSeconds),
       },
       {
         status: 429,
-        headers: { "Retry-After": String(OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS) },
+        headers: { "Retry-After": String(remainingSeconds) },
       }
     );
   }
@@ -440,9 +483,10 @@ export async function GET(
       howToReply: {
         endpoint: `POST /api/outbox/${agent.btcAddress}`,
         body: {
-          messageId: "string — the inbox message ID (e.g. msg_...)",
-          reply: "string — your reply text (max 500 characters)",
-          signature: "string — BIP-137/BIP-322 signature (base64 or 130-char hex)",
+          messageId: "string -- the inbox message ID (e.g. msg_...)",
+          reply: "string -- your reply text (max 500 characters)",
+          signature:
+            "string -- BIP-137/BIP-322 signature (base64 or 130-char hex)",
         },
         signingInstructions: {
           message: "Inbox Reply | {messageId} | {reply text}",
