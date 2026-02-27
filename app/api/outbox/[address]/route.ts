@@ -29,30 +29,39 @@ import {
 import { isStxAddress } from "@/lib/validation/address";
 
 /**
- * Fixed-window KV rate limiter. Reads the current count, checks against max,
- * and increments. TTL is set only on the first write so the window expires
- * from the first request. KV read-then-write is not atomic; minor
- * under-counting under concurrency is accepted.
+ * Fixed-window KV rate limiter. Stores "count:windowStartMs" so each write
+ * preserves the original window expiry. KV read-then-write is not atomic;
+ * minor under-counting under concurrency is accepted.
  *
- * @returns true if the request is rate-limited (count >= max)
+ * @returns { limited, retryAfterSeconds } — limited is true when count >= max;
+ *          retryAfterSeconds is the time remaining in the current window.
  */
 async function checkFixedWindowRateLimit(
   kv: KVNamespace,
   key: string,
   max: number,
   ttlSeconds: number
-): Promise<boolean> {
+): Promise<{ limited: boolean; retryAfterSeconds: number }> {
+  const now = Date.now();
   const raw = await kv.get(key);
-  const count = raw ? parseInt(raw, 10) : 0;
 
-  if (count >= max) return true;
+  let count = 0;
+  let windowStart = now;
 
-  if (count === 0) {
-    await kv.put(key, "1", { expirationTtl: ttlSeconds });
-  } else {
-    await kv.put(key, String(count + 1));
+  if (raw) {
+    const parts = raw.split(":");
+    count = parseInt(parts[0], 10) || 0;
+    windowStart = parseInt(parts[1], 10) || now;
   }
-  return false;
+
+  const elapsedSeconds = (now - windowStart) / 1000;
+  const remainingSeconds = Math.max(1, Math.ceil(ttlSeconds - elapsedSeconds));
+
+  if (count >= max) return { limited: true, retryAfterSeconds: remainingSeconds };
+
+  const value = `${count + 1}:${raw ? windowStart : now}`;
+  await kv.put(key, value, { expirationTtl: raw ? remainingSeconds : ttlSeconds });
+  return { limited: false, retryAfterSeconds: remainingSeconds };
 }
 
 export async function POST(
@@ -71,7 +80,7 @@ export async function POST(
   const agent = await lookupAgent(kv, address);
 
   if (!agent) {
-    const limited = await checkFixedWindowRateLimit(
+    const { limited, retryAfterSeconds } = await checkFixedWindowRateLimit(
       kv,
       `ratelimit:outbox-unregistered:${address}`,
       OUTBOX_RATE_LIMIT_UNREGISTERED_MAX,
@@ -87,11 +96,11 @@ export async function POST(
           action:
             "Register at POST /api/register to use the outbox endpoint.",
           documentation: "https://aibtc.com/api/register",
-          retryAfter: "1 hour",
+          retryAfter: `${retryAfterSeconds} seconds`,
         },
         {
           status: 429,
-          headers: { "Retry-After": String(OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS) },
+          headers: { "Retry-After": String(retryAfterSeconds) },
         }
       );
     }
@@ -135,19 +144,20 @@ export async function POST(
       request.headers.get("x-forwarded-for");
 
     if (ip) {
-      const limited = await checkFixedWindowRateLimit(
-        kv,
-        `ratelimit:outbox-validation:${ip}`,
-        OUTBOX_RATE_LIMIT_VALIDATION_MAX,
-        OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS
-      );
-      if (limited) {
+      const { limited: validationLimited, retryAfterSeconds: validationRetry } =
+        await checkFixedWindowRateLimit(
+          kv,
+          `ratelimit:outbox-validation:${ip}`,
+          OUTBOX_RATE_LIMIT_VALIDATION_MAX,
+          OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS
+        );
+      if (validationLimited) {
         return NextResponse.json(
           { error: "Too many invalid requests. Slow down." },
           {
             status: 429,
             headers: {
-              "Retry-After": String(OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS),
+              "Retry-After": String(validationRetry),
             },
           }
         );
@@ -257,12 +267,13 @@ export async function POST(
   }
 
   // Rate limit by signer identity (placed after signature verification)
-  const registeredLimited = await checkFixedWindowRateLimit(
-    kv,
-    `ratelimit:outbox:${btcResult.address}`,
-    OUTBOX_RATE_LIMIT_REGISTERED_MAX,
-    OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS
-  );
+  const { limited: registeredLimited, retryAfterSeconds: registeredRetry } =
+    await checkFixedWindowRateLimit(
+      kv,
+      `ratelimit:outbox:${btcResult.address}`,
+      OUTBOX_RATE_LIMIT_REGISTERED_MAX,
+      OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS
+    );
   if (registeredLimited) {
     logger.warn("Outbox rate limited (registered)", {
       callerAddress: btcResult.address,
@@ -271,11 +282,11 @@ export async function POST(
       {
         error: "Too many outbox requests. Slow down.",
         address: btcResult.address,
-        retryAfter: "1 minute",
+        retryAfter: `${registeredRetry} seconds`,
       },
       {
         status: 429,
-        headers: { "Retry-After": String(OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS) },
+        headers: { "Retry-After": String(registeredRetry) },
       }
     );
   }
