@@ -16,6 +16,7 @@ export interface AgentRecord {
   lastActiveAt?: string;
   checkInCount?: number;
   erc8004AgentId?: number | null;
+  nostrPublicKey?: string | null;
   lastIdentityCheck?: string;
 }
 
