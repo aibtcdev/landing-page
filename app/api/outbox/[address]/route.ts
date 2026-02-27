@@ -30,9 +30,9 @@ import { isStxAddress } from "@/lib/validation/address";
 
 /**
  * Fixed-window KV rate limiter. Reads the current count, checks against max,
- * and increments. TTL is set only on the first write so the window expires
- * from the first request. KV read-then-write is not atomic; minor
- * under-counting under concurrency is accepted.
+ * and increments. TTL is set on every write so the window always expires
+ * correctly. KV read-then-write is not atomic; minor under-counting under
+ * concurrency is accepted.
  *
  * @returns true if the request is rate-limited (count >= max)
  */
@@ -50,7 +50,7 @@ async function checkFixedWindowRateLimit(
   if (count === 0) {
     await kv.put(key, "1", { expirationTtl: ttlSeconds });
   } else {
-    await kv.put(key, String(count + 1));
+    await kv.put(key, String(count + 1), { expirationTtl: ttlSeconds });
   }
   return false;
 }
@@ -271,7 +271,7 @@ export async function POST(
       {
         error: "Too many outbox requests. Slow down.",
         address: btcResult.address,
-        retryAfter: "1 minute",
+        retryAfter: `${OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS} seconds`,
       },
       {
         status: 429,
