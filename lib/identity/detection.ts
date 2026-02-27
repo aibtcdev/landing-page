@@ -5,6 +5,7 @@
 import { uintCV } from "@stacks/transactions";
 import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "./constants";
 import { callReadOnly, parseClarityValue, buildHiroHeaders } from "./stacks-api";
+import { stacksApiFetch } from "../stacks-api-fetch";
 import type { AgentIdentity } from "./types";
 import { getCachedIdentity, setCachedIdentity } from "./kv-cache";
 
@@ -35,7 +36,7 @@ export async function detectAgentIdentity(
     const holdingsUrl = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
     const headers = buildHiroHeaders(hiroApiKey);
-    const response = await fetch(holdingsUrl, { headers });
+    const response = await stacksApiFetch(holdingsUrl, { headers });
 
     if (!response.ok) {
       // Fallback to legacy scan if holdings API fails (e.g. 404, 500)
