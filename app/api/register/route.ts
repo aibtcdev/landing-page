@@ -19,6 +19,7 @@ import { X_HANDLE } from "@/lib/constants";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { provisionSponsorKey, DEFAULT_RELAY_URL } from "@/lib/sponsor";
 import { validateTaprootAddress } from "@/lib/challenge";
+import { validateNostrPubkey } from "@/lib/nostr";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { MIN_REFERRER_LEVEL, storeVouch, type VouchRecord } from "@/lib/vouch";
 
@@ -158,6 +159,16 @@ export async function GET() {
         taprootSignature: {
           type: "string",
           description: "BIP-322 P2TR signature proving ownership of the taprootAddress. Required when taprootAddress is provided.",
+        },
+        nostrPublicKey: {
+          type: "string",
+          description:
+            "Your Nostr public key as a 64-character hex string (x-only secp256k1, NIP-19). " +
+            "Provide this if your Nostr npub was derived via NIP-06 (m/44'/1237'/0'/0/0) rather than BIP84. " +
+            "If omitted, the platform derives an npub from your BIP84 Bitcoin public key as a fallback. " +
+            "Can also be set later via POST /api/challenge with action update-nostr-pubkey.",
+          format: "64-char lowercase hex",
+          example: "2b4603d231d15f771ded3e6c1ee250d79bd9a8950dbaf2e76015d5bb5c65e198",
         },
       },
       queryParameters: {
@@ -340,6 +351,7 @@ export async function POST(request: NextRequest) {
       taprootAddress?: string;
       taprootSignature?: string;
       btcAddress?: string;
+      nostrPublicKey?: string;
     };
     const {
       bitcoinSignature,
@@ -348,6 +360,7 @@ export async function POST(request: NextRequest) {
       taprootAddress,
       taprootSignature,
       btcAddress: btcAddressHint,
+      nostrPublicKey,
     } = body;
 
     if (!bitcoinSignature || !stacksSignature) {
@@ -419,6 +432,18 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
+    }
+
+    let sanitizedNostrPublicKey: string | null = null;
+    if (nostrPublicKey) {
+      const trimmed = nostrPublicKey.trim().toLowerCase();
+      if (!validateNostrPubkey(trimmed)) {
+        return NextResponse.json(
+          { error: "Invalid nostrPublicKey. Must be a 64-character lowercase hex string (x-only secp256k1 pubkey)." },
+          { status: 400 }
+        );
+      }
+      sanitizedNostrPublicKey = trimmed;
     }
 
     let btcResult;
@@ -530,6 +555,7 @@ export async function POST(request: NextRequest) {
       stxPublicKey: stxResult.publicKey,
       btcPublicKey: btcResult.publicKey,
       taprootAddress: sanitizedTaprootAddress,
+      nostrPublicKey: sanitizedNostrPublicKey,
       bnsName: bnsName || null,
       displayName,
       description: sanitizedDescription,
