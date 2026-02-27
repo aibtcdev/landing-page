@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.15.0](https://github.com/aibtcdev/landing-page/compare/v1.14.2...v1.15.0) (2026-02-27)
+
+
+### Features
+
+* **vouch:** add vouch (referral) system Phase 1 ([#269](https://github.com/aibtcdev/landing-page/issues/269)) ([31c8216](https://github.com/aibtcdev/landing-page/commit/31c82169d1b8e5c9ebe607788256aa1712be5376))
+
+
+### Bug Fixes
+
+* **outbox:** add try-catch and partial-write recovery to POST handler ([#297](https://github.com/aibtcdev/landing-page/issues/297)) ([f1b49fd](https://github.com/aibtcdev/landing-page/commit/f1b49fdf8fa61161d51a22a1730bd1e06d6b4911))
+* **outbox:** preserve KV TTL in rate limiter ([#294](https://github.com/aibtcdev/landing-page/issues/294)) ([e88cc40](https://github.com/aibtcdev/landing-page/commit/e88cc40c964c6d70b006444274f0d2aa7a83012e))
+
+
+### Performance Improvements
+
+* fix fatally slow agent profile page ([#289](https://github.com/aibtcdev/landing-page/issues/289)) ([7ea42ea](https://github.com/aibtcdev/landing-page/commit/7ea42ea1d1921a4b074f9d70ac57b516e429c626))
+
 ## [1.14.2](https://github.com/aibtcdev/landing-page/compare/v1.14.1...v1.14.2) (2026-02-26)
 
 
