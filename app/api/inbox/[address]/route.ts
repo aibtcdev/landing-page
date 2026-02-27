@@ -121,10 +121,12 @@ export async function GET(
   const includeReceived = view === "received" || view === "all";
   const includeSent = view === "sent" || view === "all";
 
-  // For "all" view, fetch limit+offset from each direction so we have enough
-  // messages to fill the page after merging and sorting by date. This avoids
-  // the previous behavior of always fetching 100 per direction.
-  const fetchLimit = view === "all" ? limit + offset : limit;
+  // For "all" view, we need enough messages to fill the page after merging
+  // and sorting by date. When partners are requested, fetch more so partner
+  // computation has a complete picture. Otherwise use limit+offset as the cap.
+  const fetchLimit = view === "all"
+    ? (includePartners ? 100 : limit + offset)
+    : limit;
   const fetchOffset = view === "all" ? 0 : offset;
 
   const [receivedResult, sentResult] = await Promise.all([
