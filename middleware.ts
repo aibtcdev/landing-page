@@ -151,6 +151,17 @@ export async function middleware(request: NextRequest) {
     return handleCrawlerAgentPage(request, path);
   }
 
+  // Redirect deprecated paths (301 permanent)
+  const deprecatedRedirects: Record<string, string> = {
+    "/guide/mcp": "/guide",
+    "/guide/loop": "/guide",
+    "/install/claude": "/install",
+  };
+  const redirectTarget = deprecatedRedirects[path];
+  if (redirectTarget) {
+    return NextResponse.redirect(new URL(redirectTarget, request.url), 301);
+  }
+
   // Only intercept CLI tools for remaining middleware logic
   if (!isCLI(request)) {
     return NextResponse.next();
@@ -161,14 +172,14 @@ export async function middleware(request: NextRequest) {
     return NextResponse.rewrite(new URL("/llms.txt", request.url));
   }
 
+  // Install: rewrite to loop installer script for curl/wget
+  if (path === "/install") {
+    return NextResponse.rewrite(new URL("/install/loop", request.url));
+  }
+
   // Heartbeat: rewrite to CLI route for curl/wget
   if (path === "/heartbeat") {
     return NextResponse.rewrite(new URL("/heartbeat/cli", request.url));
-  }
-
-  // Paid attention: rewrite to CLI route for curl/wget
-  if (path === "/paid-attention") {
-    return NextResponse.rewrite(new URL("/paid-attention/cli", request.url));
   }
 
   if (path === "/skills") {
@@ -221,13 +232,16 @@ export async function middleware(request: NextRequest) {
 export const config = {
   matcher: [
     "/",
+    "/install",
     "/agents/:path*",
+    "/guide/mcp",
+    "/guide/loop",
+    "/install/claude",
     "/vps",
     "/local",
     "/update",
     "/update-skill.sh",
     "/skills",
     "/heartbeat",
-    "/paid-attention",
   ],
 };

@@ -28,14 +28,32 @@ import {
 } from "./x402-config";
 import { INBOX_PRICE_SATS, RELAY_SETTLE_TIMEOUT_MS, SBTC_CONTRACTS } from "./constants";
 import type { Logger } from "../logging";
+import { stacksApiFetch } from "../stacks-api-fetch";
+import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 
-/** No-op logger used when no logger is provided. */
 const NOOP_LOGGER: Logger = {
   debug: () => {},
   info: () => {},
   warn: () => {},
   error: () => {},
 };
+
+/** Subset of Stacks API transaction response used for sBTC transfer validation. */
+interface StacksTxData {
+  tx_id: string;
+  tx_status: string;
+  sender_address: string;
+  tx_type: string;
+  contract_call?: {
+    contract_id: string;
+    function_name: string;
+    function_args: Array<{
+      name: string;
+      type: string;
+      repr: string;
+    }>;
+  };
+}
 
 /**
  * Result of x402 payment verification for inbox messages.
@@ -52,28 +70,11 @@ export interface InboxPaymentVerification {
 }
 
 /**
- * Verify x402 payment for an inbox message.
+ * Verify x402 sBTC payment for an inbox message.
  *
- * Validates that:
- * 1. Payment is in sBTC (rejects STX, USDCx)
- * 2. Payment amount meets minimum (INBOX_PRICE_SATS)
- * 3. Payment recipient is the intended recipient agent
- * 4. Payment is not expired or already used
- *
- * For sponsored transactions:
- * - Relays to x402-relay.aibtc.com for settlement
- * - Sponsor pays the transaction fee
- *
- * For non-sponsored transactions:
- * - Settles via x402-relay.aibtc.com
- * - Sender pays the transaction fee
- *
- * @param paymentPayload - x402 v2 payment payload from payment-signature header (base64-decoded)
- * @param recipientStxAddress - Recipient agent's STX address (from AgentRecord)
- * @param network - Stacks network (from env.X402_NETWORK or default "mainnet")
- * @param relayUrl - x402 relay URL for all settlement (from env.X402_RELAY_URL or default)
- * @param logger - Logger instance for observability
- * @returns Verification result with payer address and message ID
+ * Validates sBTC-only payment, minimum amount, and correct recipient.
+ * Routes sponsored transactions through the relay; non-sponsored through
+ * x402 verifier settle flow.
  */
 export async function verifyInboxPayment(
   paymentPayload: PaymentPayloadV2,
@@ -253,28 +254,16 @@ export async function verifyInboxPayment(
 /**
  * Verify a confirmed on-chain txid as payment proof for inbox message recovery.
  *
- * This is a recovery path for when x402 payment settlement times out but the
- * sBTC transfer succeeded on-chain. The sender can resubmit the message with
- * the confirmed txid to prove payment was made.
- *
- * Validates that:
- * 1. Transaction exists and is confirmed (success status)
- * 2. Transaction is an sBTC SIP-010 transfer (contract-call to sbtc-token.transfer)
- * 3. Transfer amount >= INBOX_PRICE_SATS (100 sats)
- * 4. Recipient matches the inbox address's STX address
- * 5. Txid has not been redeemed for a previous message (checked by caller via KV)
- *
- * @param txid - Confirmed Stacks transaction ID (hex, with or without 0x prefix)
- * @param recipientStxAddress - Expected recipient's STX address
- * @param network - Stacks network ("mainnet" | "testnet")
- * @param logger - Optional logger
- * @returns Verification result with payer address
+ * Recovery path for when x402 settlement times out but the sBTC transfer
+ * succeeded on-chain. Validates the tx is a confirmed sBTC SIP-010 transfer
+ * with sufficient amount to the expected recipient.
  */
 export async function verifyTxidPayment(
   txid: string,
   recipientStxAddress: string,
   network: "mainnet" | "testnet" = "mainnet",
-  logger?: Logger
+  logger?: Logger,
+  kv?: KVNamespace
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
 
@@ -293,49 +282,41 @@ export async function verifyTxidPayment(
     network,
   });
 
-  // Fetch and validate transaction from Stacks API
-  let txData: {
-    tx_id: string;
-    tx_status: string;
-    sender_address: string;
-    tx_type: string;
-    contract_call?: {
-      contract_id: string;
-      function_name: string;
-      function_args: Array<{
-        name: string;
-        type: string;
-        repr: string;
-      }>;
-    };
-  };
+  let txData: StacksTxData;
 
-  try {
-    const response = await fetch(`${apiBase}/extended/v1/tx/${fullTxid}`, {
-      signal: AbortSignal.timeout(10000),
-    });
-    if (!response.ok) {
-      if (response.status === 404) {
+  // Confirmed transactions are immutable -- check cache first
+  const cachedTx = await getCachedTransaction(normalizedTxid, kv) as StacksTxData | null;
+  if (cachedTx) {
+    log.info("Txid verification: cache hit", { txid: fullTxid });
+    txData = cachedTx;
+  } else {
+    try {
+      const response = await stacksApiFetch(`${apiBase}/extended/v1/tx/${fullTxid}`, {
+        method: "GET",
+      });
+      if (!response.ok) {
+        if (response.status === 404) {
+          return {
+            success: false,
+            error: "Transaction not found. It may not be confirmed yet.",
+            errorCode: "TXID_NOT_FOUND",
+          };
+        }
         return {
           success: false,
-          error: "Transaction not found. It may not be confirmed yet.",
-          errorCode: "TXID_NOT_FOUND",
+          error: `Stacks API error: ${response.status}`,
+          errorCode: "API_ERROR",
         };
       }
+      txData = (await response.json()) as StacksTxData;
+    } catch (error) {
+      log.error("Failed to fetch transaction", { error: String(error) });
       return {
         success: false,
-        error: `Stacks API error: ${response.status}`,
+        error: `Failed to verify transaction: ${String(error)}`,
         errorCode: "API_ERROR",
       };
     }
-    txData = await response.json();
-  } catch (error) {
-    log.error("Failed to fetch transaction", { error: String(error) });
-    return {
-      success: false,
-      error: `Failed to verify transaction: ${String(error)}`,
-      errorCode: "API_ERROR",
-    };
   }
 
   // Require confirmed, successful transaction
@@ -346,6 +327,13 @@ export async function verifyTxidPayment(
       error: `Transaction status is "${txData.tx_status}", expected "success"`,
       errorCode: "TX_NOT_CONFIRMED",
     };
+  }
+
+  // Fire-and-forget cache write for confirmed transactions
+  if (!cachedTx) {
+    setCachedTransaction(normalizedTxid, txData, kv).catch((err) => {
+      console.warn("[verifyTxidPayment] KV cache write failed:", String(err));
+    });
   }
 
   // Require contract call (not a token transfer or other tx type)

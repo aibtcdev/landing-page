@@ -5,12 +5,12 @@ import CopyButton from "../components/CopyButton";
 
 const installers = [
   {
-    id: "claude",
-    title: "Claude Code + AIBTC",
-    subtitle: "Add Bitcoin tools to Claude Code",
-    description: "Installs Claude Code CLI (if needed) and adds the AIBTC MCP server for Bitcoin and Stacks capabilities.",
-    command: "curl -fsSL aibtc.com/install/claude | bash",
-    guideLink: "/guide/claude",
+    id: "loop",
+    title: "Loop Starter Kit",
+    subtitle: "Autonomous agent in one command",
+    description: "Turns any AI coding agent into an autonomous AIBTC agent. Wallet, registration, 10-phase self-improving loop, task queue, memory. Works with Claude Code and OpenClaw.",
+    command: "curl -fsSL aibtc.com/install | sh",
+    guideLink: "/guide",
   },
   {
     id: "openclaw-local",

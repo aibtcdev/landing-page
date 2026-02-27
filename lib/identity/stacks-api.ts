@@ -14,6 +14,7 @@ import {
   cvToJSON,
 } from "@stacks/transactions";
 import { STACKS_API_BASE } from "./constants";
+import { stacksApiFetch } from "../stacks-api-fetch";
 
 /** Build headers for Hiro API requests, optionally including an API key. */
 export function buildHiroHeaders(hiroApiKey?: string): Record<string, string> {
@@ -49,7 +50,7 @@ export async function callReadOnly(
   const headers = buildHiroHeaders(hiroApiKey);
   headers["Content-Type"] = "application/json";
 
-  const response = await fetch(url, {
+  const response = await stacksApiFetch(url, {
     method: "POST",
     headers,
     body: JSON.stringify({
@@ -57,6 +58,9 @@ export async function callReadOnly(
       arguments: hexArgs,
     }),
   });
+
+  // Log cf-ray for observability if the final response is still a 429 after retries
+  detect429(response);
 
   if (!response.ok) {
     throw new Error(
@@ -202,14 +206,12 @@ function unwrapCvJson(node: any): any {
 }
 
 /**
- * Detect 429 rate limit responses and determine if fallback is needed.
+ * Detect 429 rate limit responses and log cf-ray for observability.
  *
- * @param response - Fetch Response object
- * @returns Object with isRateLimited and shouldFallback flags
+ * @returns Object with isRateLimited flag for caller branching
  */
-export function detect429AndFallback(response: Response): {
+export function detect429(response: Response): {
   isRateLimited: boolean;
-  shouldFallback: boolean;
 } {
   const isRateLimited = response.status === 429;
 
@@ -220,8 +222,5 @@ export function detect429AndFallback(response: Response): {
     );
   }
 
-  return {
-    isRateLimited,
-    shouldFallback: isRateLimited,
-  };
+  return { isRateLimited };
 }

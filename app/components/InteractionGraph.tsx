@@ -36,8 +36,9 @@ export default function InteractionGraph({
   className = "",
 }: InteractionGraphProps) {
   const router = useRouter();
+  // Use the same SWR key as InboxActivity to share the cached response
   const { data, error, isLoading: loading } = useSWR<InboxResponse>(
-    `/api/inbox/${encodeURIComponent(btcAddress)}?include=partners&view=all`,
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5&view=all&include=partners`,
     fetcher
   );
 

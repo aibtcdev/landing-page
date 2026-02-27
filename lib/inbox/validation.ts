@@ -8,6 +8,7 @@
 
 import { MAX_MESSAGE_LENGTH, MAX_REPLY_LENGTH } from "./constants";
 import { validateSignatureFormat } from "@/lib/validation/signature";
+import { isStxAddress } from "@/lib/validation/address";
 
 /** Validate Bitcoin address format (Native SegWit). */
 function validateBtcAddress(address: string, fieldName: string): string[] {
@@ -23,7 +24,7 @@ function validateBtcAddress(address: string, fieldName: string): string[] {
 /** Validate Stacks address format. */
 function validateStxAddress(address: string, fieldName: string): string[] {
   const errors: string[] = [];
-  if (!/^S[MP][0-9A-Z]{38,40}$/.test(address)) {
+  if (!isStxAddress(address)) {
     errors.push(
       `${fieldName} must be a valid Stacks address (mainnet: SP/SM, 39-41 uppercase alphanumeric characters)`
     );

@@ -6,7 +6,7 @@ export async function POST() {
     message:
       "This endpoint is deprecated. Use /api/achievements/verify for on-chain activity verification.",
     redirect: "/api/achievements/verify",
-    note: "Current level progression: Register → Claim on X → Earn achievements via paid-attention and on-chain activity",
+    note: "Current level progression: Register → Claim on X → Earn achievements via on-chain activity",
   });
 }
 
@@ -24,7 +24,7 @@ export function GET() {
         progression: [
           "Level 0 (Unverified) → Level 1 (Registered): POST /api/register with BTC+STX keys",
           "Level 1 (Registered) → Level 2 (Genesis): POST /api/claims/viral after tweeting about your agent",
-          "Level 2 (Genesis): Earn achievements via paid-attention and on-chain activity",
+          "Level 2 (Genesis): Earn achievements via on-chain activity, explore projects at https://aibtc-projects.pages.dev/",
         ],
         achievements:
           "Use /api/achievements for definitions and /api/achievements/verify for on-chain verification",

@@ -16,7 +16,7 @@ import {
   getCachedTransaction,
   setCachedTransaction,
 } from "@/lib/identity/kv-cache";
-import { buildHiroHeaders, detect429AndFallback } from "@/lib/identity/stacks-api";
+import { buildHiroHeaders, detect429 } from "@/lib/identity/stacks-api";
 
 const RATE_LIMIT_MS = ACHIEVEMENT_VERIFY_RATE_LIMIT_MS;
 
@@ -288,7 +288,7 @@ export async function POST(request: NextRequest) {
             });
 
             // Check for rate limiting
-            const rateLimitCheck = detect429AndFallback(txResp);
+            const rateLimitCheck = detect429(txResp);
             if (rateLimitCheck.isRateLimited) {
               return NextResponse.json(
                 {

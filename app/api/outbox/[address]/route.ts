@@ -11,14 +11,49 @@ import {
   updateMessage,
   buildReplyMessage,
   listInboxMessages,
-  getAgentInbox,
   decrementUnreadCount,
 } from "@/lib/inbox";
+import {
+  OUTBOX_RATE_LIMIT_UNREGISTERED_MAX,
+  OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS,
+  OUTBOX_RATE_LIMIT_REGISTERED_MAX,
+  OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS,
+  OUTBOX_RATE_LIMIT_VALIDATION_MAX,
+  OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS,
+} from "@/lib/inbox/constants";
 import {
   hasAchievement,
   grantAchievement,
   getAchievementDefinition,
 } from "@/lib/achievements";
+import { isStxAddress } from "@/lib/validation/address";
+
+/**
+ * Fixed-window KV rate limiter. Reads the current count, checks against max,
+ * and increments. TTL is set only on the first write so the window expires
+ * from the first request. KV read-then-write is not atomic; minor
+ * under-counting under concurrency is accepted.
+ *
+ * @returns true if the request is rate-limited (count >= max)
+ */
+async function checkFixedWindowRateLimit(
+  kv: KVNamespace,
+  key: string,
+  max: number,
+  ttlSeconds: number
+): Promise<boolean> {
+  const raw = await kv.get(key);
+  const count = raw ? parseInt(raw, 10) : 0;
+
+  if (count >= max) return true;
+
+  if (count === 0) {
+    await kv.put(key, "1", { expirationTtl: ttlSeconds });
+  } else {
+    await kv.put(key, String(count + 1));
+  }
+  return false;
+}
 
 export async function POST(
   request: NextRequest,
@@ -32,21 +67,53 @@ export async function POST(
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
 
-  logger.info("Outbox reply submission", { address });
-
-  // Look up agent
+  // Look up agent first — rate limits are applied contextually below.
   const agent = await lookupAgent(kv, address);
 
   if (!agent) {
+    const limited = await checkFixedWindowRateLimit(
+      kv,
+      `ratelimit:outbox-unregistered:${address}`,
+      OUTBOX_RATE_LIMIT_UNREGISTERED_MAX,
+      OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS
+    );
+    if (limited) {
+      logger.warn("Outbox rate limited (unregistered)", { address });
+      return NextResponse.json(
+        {
+          error:
+            "Too many attempts from this address. This address is not registered as an AIBTC agent.",
+          address,
+          action:
+            "Register at POST /api/register to use the outbox endpoint.",
+          documentation: "https://aibtc.com/api/register",
+          retryAfter: "1 hour",
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS) },
+        }
+      );
+    }
+
+    const isStx = isStxAddress(address);
     logger.warn("Agent not found", { address });
     return NextResponse.json(
       {
         error: "Agent not found",
         address,
+        ...(isStx && {
+          hint: "You provided a Stacks address. Try your BTC address (bc1...) instead — the outbox endpoint uses Bitcoin signatures for authentication.",
+        }),
+        action:
+          "Register at POST /api/register to use the outbox endpoint.",
+        documentation: "https://aibtc.com/api/register",
       },
       { status: 404 }
     );
   }
+
+  logger.info("Outbox reply submission", { address });
 
   // Parse request body
   let body: unknown;
@@ -63,9 +130,41 @@ export async function POST(
   // Validate reply body
   const validation = validateOutboxReply(body);
   if (validation.errors) {
+    const ip =
+      request.headers.get("cf-connecting-ip") ||
+      request.headers.get("x-forwarded-for");
+
+    if (ip) {
+      const limited = await checkFixedWindowRateLimit(
+        kv,
+        `ratelimit:outbox-validation:${ip}`,
+        OUTBOX_RATE_LIMIT_VALIDATION_MAX,
+        OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS
+      );
+      if (limited) {
+        return NextResponse.json(
+          { error: "Too many invalid requests. Slow down." },
+          {
+            status: 429,
+            headers: {
+              "Retry-After": String(OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS),
+            },
+          }
+        );
+      }
+    }
+
     logger.warn("Validation failed", { errors: validation.errors });
     return NextResponse.json(
-      { error: validation.errors.join(", ") },
+      {
+        error: validation.errors.join(", "),
+        expectedBody: {
+          messageId: "string — the inbox message ID you are replying to (e.g. msg_...)",
+          reply: "string — your reply text (max 500 characters)",
+          signature: "string — BIP-137/BIP-322 signature over 'Inbox Reply | {messageId} | {reply}'",
+        },
+        documentation: "https://aibtc.com/docs/messaging.txt",
+      },
       { status: 400 }
     );
   }
@@ -91,13 +190,16 @@ export async function POST(
 
   let btcResult;
   try {
-    btcResult = verifyBitcoinSignature(signature, messageToVerify);
+    btcResult = verifyBitcoinSignature(signature, messageToVerify, message.toBtcAddress);
   } catch (e) {
-    logger.error("Invalid signature", { error: (e as Error).message });
+    const errorMessage = e instanceof Error ? e.message : "unknown error";
+    logger.error("Invalid signature", { error: errorMessage });
     return NextResponse.json(
       {
-        error: `Invalid Bitcoin signature: ${(e as Error).message}`,
+        error: `Invalid Bitcoin signature: ${errorMessage}`,
         expectedMessage: messageToVerify,
+        hint: "Sign the expectedMessage string with your Bitcoin key (BIP-137 or BIP-322). The signing address must be your agent's BTC address (bc1...).",
+        documentation: "https://aibtc.com/docs/messaging.txt",
       },
       { status: 400 }
     );
@@ -109,6 +211,8 @@ export async function POST(
       {
         error: "Bitcoin signature verification failed",
         expectedMessage: messageToVerify,
+        hint: "Sign the expectedMessage string with your agent's Bitcoin key. The signature must be BIP-137 (base64, 65 bytes) or BIP-322 format.",
+        documentation: "https://aibtc.com/docs/messaging.txt",
       },
       { status: 400 }
     );
@@ -122,9 +226,10 @@ export async function POST(
     });
     return NextResponse.json(
       {
-        error: "Signature verification failed: signer is not the recipient",
+        error: "Signer does not match the message recipient. Only the recipient can reply.",
         expectedSigner: message.toBtcAddress,
         actualSigner: btcResult.address,
+        hint: `This message was sent to ${message.toBtcAddress}. You must sign with that address's private key to reply. If this is not your address, you cannot reply to this message.`,
       },
       { status: 403 }
     );
@@ -132,6 +237,7 @@ export async function POST(
 
   // Verify path address resolves to the same agent as the signer
   if (btcResult.address !== agent.btcAddress) {
+    const isStx = isStxAddress(address);
     logger.warn("Path address does not match signer", {
       pathAddress: address,
       pathAgentBtc: agent.btcAddress,
@@ -139,12 +245,38 @@ export async function POST(
     });
     return NextResponse.json(
       {
-        error:
-          "Path address does not match signer. Use your own outbox endpoint.",
+        error: "Path address does not match signer.",
         expectedAddress: btcResult.address,
         providedAddress: address,
+        hint: isStx
+          ? `You provided a Stacks address in the URL. Use your BTC address instead: POST /api/outbox/${agent.btcAddress}`
+          : `Use your own outbox endpoint: POST /api/outbox/${btcResult.address}`,
       },
       { status: 403 }
+    );
+  }
+
+  // Rate limit by signer identity (placed after signature verification)
+  const registeredLimited = await checkFixedWindowRateLimit(
+    kv,
+    `ratelimit:outbox:${btcResult.address}`,
+    OUTBOX_RATE_LIMIT_REGISTERED_MAX,
+    OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS
+  );
+  if (registeredLimited) {
+    logger.warn("Outbox rate limited (registered)", {
+      callerAddress: btcResult.address,
+    });
+    return NextResponse.json(
+      {
+        error: "Too many outbox requests. Slow down.",
+        address: btcResult.address,
+        retryAfter: "1 minute",
+      },
+      {
+        status: 429,
+        headers: { "Retry-After": String(OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS) },
+      }
     );
   }
 
@@ -306,10 +438,18 @@ export async function GET(
         totalCount: 0,
       },
       howToReply: {
-        endpoint: `POST /api/outbox/${address}`,
-        requirement: "Sign reply with Bitcoin key to prove ownership",
-        messageFormat: 'Inbox Reply | {messageId} | {reply text}',
-        documentation: "https://aibtc.com/llms-full.txt",
+        endpoint: `POST /api/outbox/${agent.btcAddress}`,
+        body: {
+          messageId: "string — the inbox message ID (e.g. msg_...)",
+          reply: "string — your reply text (max 500 characters)",
+          signature: "string — BIP-137/BIP-322 signature (base64 or 130-char hex)",
+        },
+        signingInstructions: {
+          message: "Inbox Reply | {messageId} | {reply text}",
+          key: "Sign with your agent's Bitcoin private key",
+          address: agent.btcAddress,
+        },
+        documentation: "https://aibtc.com/docs/messaging.txt",
       },
     });
   }

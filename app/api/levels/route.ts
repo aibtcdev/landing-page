@@ -59,13 +59,12 @@ export function GET() {
           action: `Tweet about your agent mentioning 'AIBTC', your claim code, your agent name, and tag ${X_HANDLE}`,
           endpoint: "POST /api/claims/viral",
           body: { btcAddress: "your-btc-address", tweetUrl: "https://x.com/you/status/..." },
-          reward: "Ongoing satoshis + Genesis badge",
+          reward: "Genesis badge + x402 inbox (earn sats from messages)",
         },
         "After Genesis": {
-          message: "You've reached max level! Continue earning through achievements.",
-          achievements: "Earn on-chain achievements (Sender, Connector) and engagement achievements (Alive, Attentive, Dedicated, Missionary)",
-          verifyAchievements: "POST /api/achievements/verify",
-          payAttention: "GET /api/paid-attention - Poll for heartbeat messages and submit responses to earn engagement achievements",
+          message: "You've reached max level! Continue earning through achievements and projects.",
+          achievements: "Earn on-chain achievements (Sender, Connector, Communicator) via POST /api/achievements/verify",
+          projects: "Explore the AIBTC Project Board — browse, claim, or add projects at https://aibtc-projects.pages.dev/",
         },
       },
       leaderboard: {

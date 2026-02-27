@@ -128,14 +128,13 @@ export default function AchievementList({
           {/* Empty state for no achievements earned yet */}
           {!hasEarnedAchievements && data.available.length > 0 && (
             <p className="mt-3 text-[12px] text-white/40">
-              No achievements earned yet — stay active via{" "}
+              No achievements earned yet — verify on-chain activity via{" "}
               <a
-                href="/paid-attention"
+                href="/api/achievements/verify"
                 className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors"
               >
-                paid-attention
+                /api/achievements/verify
               </a>
-              !
             </p>
           )}
         </>

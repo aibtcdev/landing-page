@@ -47,3 +47,47 @@ export interface ClaimRecord {
   rewardTxid: string | null;
   status: "pending" | "verified" | "rewarded" | "failed";
 }
+
+/**
+ * Partial agent record for auto-registration during first response.
+ *
+ * When an unregistered agent submits a response, we create this minimal
+ * record with only Bitcoin credentials. Agents can later complete their
+ * registration via /api/register to add Stacks credentials and unlock
+ * additional features.
+ */
+export interface PartialAgentRecord {
+  btcAddress: string;
+  btcPublicKey: string;
+  displayName?: string;
+  verifiedAt: string;
+  lastActiveAt?: string;
+  checkInCount?: number;
+  stxAddress?: never;
+  stxPublicKey?: never;
+  description?: never;
+  bnsName?: never;
+  owner?: never;
+}
+
+/**
+ * Type guard to check if an agent record is a partial registration.
+ *
+ * Partial records only have Bitcoin credentials (no stxAddress).
+ * Full records have both Bitcoin and Stacks credentials.
+ */
+export function isPartialAgentRecord(
+  agent: unknown
+): agent is PartialAgentRecord {
+  if (!agent || typeof agent !== "object") return false;
+  const record = agent as Record<string, unknown>;
+  const hasStacksCredentials =
+    typeof record.stxAddress === "string" ||
+    typeof record.stxPublicKey === "string";
+  return (
+    typeof record.btcAddress === "string" &&
+    typeof record.btcPublicKey === "string" &&
+    !hasStacksCredentials &&
+    typeof record.verifiedAt === "string"
+  );
+}

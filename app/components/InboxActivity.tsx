@@ -55,7 +55,7 @@ export default function InboxActivity({
 }: InboxActivityProps) {
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const { data, error, isLoading: loading } = useSWR<InboxResponse>(
-    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5&view=all`,
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5&view=all&include=partners`,
     fetcher
   );
 

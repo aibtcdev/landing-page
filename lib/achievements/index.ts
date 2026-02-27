@@ -15,7 +15,6 @@ export type {
 export {
   ACHIEVEMENTS,
   getAchievementDefinition,
-  getEngagementTier,
 } from "./registry";
 
 // KV helpers

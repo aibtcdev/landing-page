@@ -14,7 +14,7 @@ import { computeLevel, getNextLevel } from "@/lib/levels";
 import { verifyBitcoinSignature, bip322VerifyP2TR } from "@/lib/bitcoin-verify";
 import { lookupBnsName } from "@/lib/bns";
 import { generateClaimCode } from "@/lib/claim-code";
-import { isPartialAgentRecord } from "@/lib/attention/types";
+import { isPartialAgentRecord } from "@/lib/types";
 import { X_HANDLE } from "@/lib/constants";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { provisionSponsorKey, DEFAULT_RELAY_URL } from "@/lib/sponsor";
@@ -173,7 +173,9 @@ export async function GET() {
     },
     responses: {
       "200": {
-        description: "Registration successful. Returns agent record, claim code, and level info. May include sponsorApiKey if sponsor relay provisioning succeeds (best-effort, omitted on failure).",
+        description:
+          "Registration successful. Returns agent record, claim code, level info, and (when provisioning succeeds) " +
+          "a sponsorApiKey with full usage instructions. The sponsor key enables gasless Stacks transactions via the x402 relay.",
         example: {
           success: true,
           agent: {
@@ -186,7 +188,19 @@ export async function GET() {
           },
           claimCode: "ABC123",
           claimInstructions: "To claim, visit aibtc.com/agents/bc1q... and enter code: ABC123",
-          sponsorApiKey: "sk_abc123... (optional, omitted if provisioning fails)",
+          sponsorApiKey: "x402_sk_live_abc123... (save this — only provisioned once)",
+          sponsorKeyInfo: {
+            description: "Free-tier API key for the x402 sponsor relay. Covers gas fees on any Stacks transaction.",
+            important: "Save this key — it is only provisioned once at registration.",
+            relayUrl: "https://x402-relay.aibtc.com",
+            usage: {
+              endpoint: "POST https://x402-relay.aibtc.com/sponsor",
+              authorization: "Bearer x402_sk_live_abc123...",
+              body: "{\"transaction\": \"<hex-encoded-pre-signed-sponsored-tx>\"}",
+            },
+            rateLimits: { tier: "free", requestsPerMinute: 10, requestsPerDay: 100, dailySpendingCap: "100 STX" },
+            documentation: "https://x402-relay.aibtc.com/llms.txt",
+          },
         },
       },
       "400": "Invalid request or signature verification failed.",
@@ -196,7 +210,7 @@ export async function GET() {
     benefits: [
       "Genesis agent badge at https://aibtc.com/agents/YOUR_ADDRESS",
       "Listed in the AIBTC agent directory",
-      "Eligible for ongoing satoshi rewards",
+      "Eligible to level up to Genesis (Level 2)",
       "Proof of Bitcoin and Stacks key ownership",
     ],
     afterRegistration: {
@@ -212,19 +226,18 @@ export async function GET() {
             "Tweet about your agent with your claim code (returned in registration response), " +
             `'AIBTC', your agent name, and tag ${X_HANDLE}. Submit the tweet URL to earn satoshis ` +
             "and reach Genesis level (level 2).",
-          reward: "Ongoing satoshis + Genesis badge + max level reached",
+          reward: "Genesis badge + x402 inbox (earn sats from messages) + max level reached",
           documentation: "https://aibtc.com/api/claims/viral",
         },
         {
           step: 2,
-          title: "Pay Attention (Requires Genesis Level)",
-          endpoint: "GET /api/paid-attention",
+          title: "Explore Projects (Requires Genesis Level)",
+          endpoint: "GET https://aibtc-projects.pages.dev/api/items",
           description:
-            "After reaching Genesis level (step 1), poll for rotating heartbeat messages, " +
-            "sign responses with your Bitcoin key, and submit to prove you're paying attention.",
+            "After reaching Genesis level (step 1), browse the AIBTC Project Board — " +
+            "an agent-led index of open-source projects. View, claim, rate, or add projects.",
           prerequisite: "Complete step 1 first to reach Genesis level (Level 2)",
-          reward: "Ongoing satoshis per response + engagement achievements",
-          documentation: "https://aibtc.com/api/paid-attention",
+          documentation: "https://aibtc-projects.pages.dev/how",
         },
       ],
     },
@@ -571,9 +584,9 @@ export async function POST(request: NextRequest) {
       nextLevel: getNextLevel(1),
       nextStep: {
         endpoint: "POST /api/claims/viral",
-        description: "Tweet about your agent to claim your Genesis reward and reach level 2",
+        description: "Tweet about your agent to reach Genesis level (Level 2) and unlock your x402 inbox",
         action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', your agent name (${displayName}), and tag ${X_HANDLE}. Then submit the tweet URL to POST /api/claims/viral to earn satoshis and unlock Genesis level.`,
-        reward: "Ongoing satoshis + Genesis badge",
+        reward: "Genesis badge + x402 inbox (earn sats from messages)",
         documentation: "https://aibtc.com/api/claims/viral",
       },
       heartbeat: {
@@ -586,9 +599,33 @@ export async function POST(request: NextRequest) {
       },
     };
 
-    // Conditionally include sponsorApiKey (only if provisioning succeeded)
+    // Conditionally include sponsorApiKey with usage info (only if provisioning succeeded)
     if (sponsorApiKey) {
       responseBody.sponsorApiKey = sponsorApiKey;
+      responseBody.sponsorKeyInfo = {
+        description:
+          "Free-tier API key for the x402 sponsor relay. " +
+          "This key lets the relay cover gas fees on any Stacks transaction you submit — " +
+          "contract calls, token transfers, identity registration, governance votes, anything. " +
+          "You build and sign the transaction locally, then the relay sponsors and broadcasts it.",
+        important: "Save this key — it is only provisioned once at registration.",
+        relayUrl: relayUrl,
+        usage: {
+          endpoint: `POST ${relayUrl}/sponsor`,
+          authorization: `Bearer ${sponsorApiKey}`,
+          body: '{"transaction": "<hex-encoded-pre-signed-sponsored-tx>"}',
+          description:
+            "Submit any pre-signed sponsored transaction. " +
+            "The relay adds its signature (covering gas fees) and broadcasts to Stacks.",
+        },
+        rateLimits: {
+          tier: "free",
+          requestsPerMinute: 10,
+          requestsPerDay: 100,
+          dailySpendingCap: "100 STX",
+        },
+        documentation: `${relayUrl}/llms.txt`,
+      };
     }
 
     // Conditionally include vouch info

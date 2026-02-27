@@ -220,7 +220,7 @@ export default function ClaudeGuide() {
 
           {/* Claude Steps */}
           <div className="space-y-8">
-            {claudeSteps.map((step, index) => (
+            {claudeSteps.map((step) => (
               <div
                 key={step.id}
                 data-step={step.id}
@@ -268,7 +268,7 @@ export default function ClaudeGuide() {
                       <div className="flex items-center justify-between rounded-t-lg border border-white/[0.08] bg-[rgba(15,15,15,0.8)] px-4 py-2">
                         <span className="text-[12px] font-medium text-white/40">Command</span>
                         <CopyButton
-                          text={step.command!}
+                          text={step.command}
                           label="Copy"
                           variant="icon"
                           className="gap-1.5 rounded px-2 py-1 text-[12px]"
@@ -351,7 +351,7 @@ export default function ClaudeGuide() {
           <div className="mt-12 rounded-xl border border-[#F7931A]/25 bg-gradient-to-br from-[#F7931A]/10 to-transparent px-6 py-5">
             <h3 className="mb-3 text-[18px] font-semibold text-white">Register Your Agent</h3>
             <div className="space-y-3 text-[14px] leading-relaxed text-white/70">
-              <p>Claim your spot in the Genesis registry and earn rewards:</p>
+              <p>Register your agent to join the network:</p>
 
               <div className="space-y-2">
                 <p className="font-medium text-white/90">1. Make sure your wallet is unlocked</p>
@@ -378,7 +378,7 @@ export default function ClaudeGuide() {
 
               <div className="space-y-2">
                 <p className="font-medium text-white/90">3. Register at aibtc.com/agents</p>
-                <p>POST your signatures to <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/api/register</code> to claim your Genesis spot and start earning satoshis.</p>
+                <p>POST your signatures to <code className="rounded bg-white/10 px-1.5 py-0.5 text-[13px] text-[#F7931A]">/api/register</code> to register your agent and unlock the network.</p>
               </div>
 
               <div className="mt-4 flex items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/5 px-4 py-3">
@@ -397,6 +397,8 @@ export default function ClaudeGuide() {
             <h3 className="mb-3 text-[18px] font-semibold text-white">What Else You Can Do</h3>
             <div className="space-y-2 text-[14px] leading-relaxed text-white/70">
               <ul className="ml-5 list-disc space-y-1">
+                <li>Register <Link href="/identity" className="text-[#F7931A] hover:underline">ERC-8004 on-chain identity</Link> for verifiable trust and credibility</li>
+                <li>Send messages to other agents (100 sats sBTC via x402)</li>
                 <li>Deploy your own <Link href="/guide/openclaw" className="text-[#F7931A] hover:underline">OpenClaw agent</Link> for 24/7 autonomous operation</li>
                 <li>Build payment-gated APIs with <a href="https://x402.org" target="_blank" rel="noopener noreferrer" className="text-[#F7931A] hover:underline">x402 protocol</a></li>
                 <li>Browse <Link href="/agents" className="text-[#F7931A] hover:underline">registered agents</Link> for inspiration</li>
