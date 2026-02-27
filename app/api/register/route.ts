@@ -267,34 +267,44 @@ async function validateReferrer(
   newBtcAddress: string,
   newStxAddress: string
 ): Promise<AgentRecord | null> {
-  // Prevent self-referral by BTC address
-  if (refAddress === newBtcAddress) return null;
-
-  const referrerData = await kv.get(`btc:${refAddress}`);
-  if (!referrerData) return null;
-
-  let referrerAgent: AgentRecord;
   try {
-    referrerAgent = JSON.parse(referrerData) as AgentRecord;
+    // Fast format check — reject obviously invalid input before KV access
+    if (!refAddress || refAddress.length < 10 || refAddress.length > 100 || !refAddress.startsWith("bc1")) {
+      return null;
+    }
+
+    // Prevent self-referral by BTC address
+    if (refAddress === newBtcAddress) return null;
+
+    const referrerData = await kv.get(`btc:${refAddress}`);
+    if (!referrerData) return null;
+
+    let referrerAgent: AgentRecord;
+    try {
+      referrerAgent = JSON.parse(referrerData) as AgentRecord;
+    } catch {
+      return null;
+    }
+
+    // Prevent self-referral via STX address
+    if (referrerAgent.stxAddress === newStxAddress) return null;
+
+    const referrerClaim = await kv.get(`claim:${referrerAgent.btcAddress}`);
+    let referrerClaimStatus: ClaimStatus | null = null;
+    if (referrerClaim) {
+      try {
+        referrerClaimStatus = JSON.parse(referrerClaim) as ClaimStatus;
+      } catch { /* ignore */ }
+    }
+
+    const referrerLevel = computeLevel(referrerAgent, referrerClaimStatus);
+    if (referrerLevel < MIN_REFERRER_LEVEL) return null;
+
+    return referrerAgent;
   } catch {
+    // Any unexpected error — silently ignore so registration always proceeds
     return null;
   }
-
-  // Prevent self-referral via STX address
-  if (referrerAgent.stxAddress === newStxAddress) return null;
-
-  const referrerClaim = await kv.get(`claim:${referrerAgent.btcAddress}`);
-  let referrerClaimStatus: ClaimStatus | null = null;
-  if (referrerClaim) {
-    try {
-      referrerClaimStatus = JSON.parse(referrerClaim) as ClaimStatus;
-    } catch { /* ignore */ }
-  }
-
-  const referrerLevel = computeLevel(referrerAgent, referrerClaimStatus);
-  if (referrerLevel < MIN_REFERRER_LEVEL) return null;
-
-  return referrerAgent;
 }
 
 function verifyStacksSignature(signature: string): {
@@ -553,17 +563,22 @@ export async function POST(request: NextRequest) {
       kvWrites.push(kv.put(`taproot:${sanitizedTaprootAddress}`, btcResult.address));
     }
 
-    // Store vouch record alongside other KV writes if referral was validated
+    await Promise.all(kvWrites);
+
+    // Fire-and-forget: store vouch record after main KV writes succeed.
+    // Uses ctx.waitUntil so errors don't break registration.
     if (validatedReferrer) {
       const vouchRecord: VouchRecord = {
         referrer: validatedReferrer.btcAddress,
         referee: btcResult.address,
         registeredAt: record.verifiedAt,
       };
-      kvWrites.push(storeVouch(kv, vouchRecord));
+      ctx.waitUntil(
+        storeVouch(kv, vouchRecord).catch((err) =>
+          console.error("Failed to store vouch record:", err)
+        )
+      );
     }
-
-    await Promise.all(kvWrites);
 
     // Build response with conditional sponsorApiKey field
     const responseBody: Record<string, unknown> = {

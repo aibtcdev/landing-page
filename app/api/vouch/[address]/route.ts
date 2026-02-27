@@ -2,77 +2,44 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { generateName } from "@/lib/name-generator";
-import { getVouchRecordsByReferrer } from "@/lib/vouch";
+import { getVouchIndex } from "@/lib/vouch";
+
+/** Lightweight address format check — must look like a BTC or STX address. */
+function isValidAddressFormat(address: string): boolean {
+  if (address.length < 10 || address.length > 100) return false;
+  return address.startsWith("bc1") || address.startsWith("SP") || address.startsWith("SM");
+}
 
 export async function GET(
   request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
+  const normalizedAddress = address?.trim() ?? "";
 
-  if (!address || address.trim().length === 0) {
+  // Validate address format before KV access
+  if (!normalizedAddress || !isValidAddressFormat(normalizedAddress)) {
     return NextResponse.json(
       {
-        endpoint: "/api/vouch/{address}",
-        method: "GET",
-        description:
-          "Get vouch (referral) stats for any registered agent. " +
-          "Shows who vouched for them and who they have vouched for.",
-        parameters: {
-          address: {
-            type: "string",
-            required: true,
-            description: "Bitcoin (bc1...) or Stacks (SP...) address",
-          },
-        },
-        responseFormat: {
-          agent: {
-            btcAddress: "string",
-            displayName: "string",
-          },
-          vouchedBy: "{ btcAddress, displayName } | null",
-          vouchedFor: {
-            count: "number",
-            agents: [
-              {
-                btcAddress: "string",
-                displayName: "string",
-                registeredAt: "string (ISO 8601)",
-              },
-            ],
-          },
-        },
-        referralLink: {
-          description:
-            "Genesis-level agents (Level 2+) can share a vouch link. " +
-            "New agents register with ?ref={btcAddress} appended to POST /api/register.",
-          format: "POST /api/register?ref={your-btc-address}",
-          requirement: "Voucher must be Genesis level (Level 2+)",
-        },
-        relatedEndpoints: {
-          register: "POST /api/register?ref={btcAddress}",
-          verify: "GET /api/verify/{address}",
-          agents: "GET /api/agents",
-        },
-        documentation: {
-          openApiSpec: "https://aibtc.com/api/openapi.json",
-          fullDocs: "https://aibtc.com/llms-full.txt",
-          agentCard: "https://aibtc.com/.well-known/agent.json",
-        },
+        error: "Invalid address format. Must be a Bitcoin (bc1...) or Stacks (SP...) address.",
+        hint: "Example: /api/vouch/bc1q...",
       },
-      {
-        headers: {
-          "Cache-Control": "public, max-age=3600, s-maxage=86400",
-        },
-      }
+      { status: 400 }
     );
   }
+
+  // Parse pagination params
+  const url = new URL(request.url);
+  const limitParam = url.searchParams.get("limit");
+  const offsetParam = url.searchParams.get("offset");
+  const limit = limitParam ? Math.min(Math.max(parseInt(limitParam, 10) || 20, 1), 50) : 20;
+  const offset = offsetParam ? Math.max(parseInt(offsetParam, 10) || 0, 0) : 0;
 
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    const agent = await lookupAgent(kv, address);
+    const agent = await lookupAgent(kv, normalizedAddress);
     if (!agent) {
       return NextResponse.json(
         {
@@ -97,20 +64,20 @@ export async function GET(
       }
     }
 
-    // Get who this agent has vouched for
-    const vouchRecords = await getVouchRecordsByReferrer(
-      kv,
-      agent.btcAddress
-    );
+    // Get paginated list of agents this agent has vouched for
+    const index = await getVouchIndex(kv, agent.btcAddress);
+    const allReferees = index?.refereeAddresses ?? [];
+    const totalCount = allReferees.length;
+    const paginatedReferees = allReferees.slice(offset, offset + limit);
 
     const vouchedForAgents = await Promise.all(
-      vouchRecords.map(async (record) => {
-        const referee = await lookupAgent(kv, record.referee);
+      paginatedReferees.map(async (refereeBtc) => {
+        const referee = await lookupAgent(kv, refereeBtc);
         return {
-          btcAddress: record.referee,
+          btcAddress: refereeBtc,
           displayName:
-            referee?.displayName || generateName(record.referee),
-          registeredAt: record.registeredAt,
+            referee?.displayName || generateName(refereeBtc),
+          registeredAt: referee?.verifiedAt || null,
         };
       })
     );
@@ -124,8 +91,14 @@ export async function GET(
         },
         vouchedBy: vouchedByInfo,
         vouchedFor: {
-          count: vouchedForAgents.length,
+          count: totalCount,
           agents: vouchedForAgents,
+          pagination: {
+            limit,
+            offset,
+            hasMore: offset + limit < totalCount,
+            nextOffset: offset + limit < totalCount ? offset + limit : null,
+          },
         },
       },
       {
