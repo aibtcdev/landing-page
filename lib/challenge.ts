@@ -395,13 +395,21 @@ async function handleUpdateNostrPubkey(
   agent: AgentRecord,
   _kv: KVNamespace
 ): Promise<ActionResult> {
-  const nostrPublicKey = params.nostrPublicKey as string | undefined;
+  const nostrPublicKey = params.nostrPublicKey;
 
   if (nostrPublicKey === undefined) {
     return {
       success: false,
       updated: agent,
       error: "Missing required parameter: nostrPublicKey",
+    };
+  }
+
+  if (typeof nostrPublicKey !== "string") {
+    return {
+      success: false,
+      updated: agent,
+      error: "Invalid type for nostrPublicKey. Expected string.",
     };
   }
 
@@ -508,7 +516,7 @@ export function getAvailableActions(): Array<{
     },
     {
       name: "update-nostr-pubkey",
-      description: "Set or update your Nostr public key (x-only secp256k1, NIP-19 compatible)",
+      description: "Set or update your Nostr public key (64-char hex x-only pubkey, encoded to NIP-19 npub for display)",
       params: {
         nostrPublicKey: {
           type: "string",

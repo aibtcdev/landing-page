@@ -163,7 +163,7 @@ export async function GET() {
         nostrPublicKey: {
           type: "string",
           description:
-            "Your Nostr public key as a 64-character hex string (x-only secp256k1, NIP-19). " +
+            "Your Nostr public key as a 64-character hex string (x-only secp256k1 pubkey, encoded to NIP-19 npub for display). " +
             "Provide this if your Nostr npub was derived via NIP-06 (m/44'/1237'/0'/0/0) rather than BIP84. " +
             "If omitted, the platform derives an npub from your BIP84 Bitcoin public key as a fallback. " +
             "Can also be set later via POST /api/challenge with action update-nostr-pubkey.",
@@ -435,15 +435,22 @@ export async function POST(request: NextRequest) {
     }
 
     let sanitizedNostrPublicKey: string | null = null;
-    if (nostrPublicKey) {
+    if (typeof nostrPublicKey === "string") {
       const trimmed = nostrPublicKey.trim().toLowerCase();
-      if (!validateNostrPubkey(trimmed)) {
-        return NextResponse.json(
-          { error: "Invalid nostrPublicKey. Must be a 64-character lowercase hex string (x-only secp256k1 pubkey)." },
-          { status: 400 }
-        );
+      if (trimmed.length > 0) {
+        if (!validateNostrPubkey(trimmed)) {
+          return NextResponse.json(
+            { error: "Invalid nostrPublicKey. Must be a 64-character lowercase hex string (x-only secp256k1 pubkey)." },
+            { status: 400 }
+          );
+        }
+        sanitizedNostrPublicKey = trimmed;
       }
-      sanitizedNostrPublicKey = trimmed;
+    } else if (nostrPublicKey !== undefined && nostrPublicKey !== null) {
+      return NextResponse.json(
+        { error: "Invalid nostrPublicKey. Must be a 64-character lowercase hex string (x-only secp256k1 pubkey)." },
+        { status: 400 }
+      );
     }
 
     let btcResult;
