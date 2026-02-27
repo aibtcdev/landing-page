@@ -291,24 +291,59 @@ export async function POST(
     );
   }
 
-  // Check if reply already exists
+  // Check if reply already exists — with partial-write recovery
   const existingReply = await getReply(kv, messageId);
+  let isRecovery = false;
 
   if (existingReply) {
-    logger.warn("Reply already exists", { messageId });
-    return NextResponse.json(
-      {
-        error: "Reply already exists for this message",
+    // If the stored reply was from a different signer, reject immediately
+    if (existingReply.fromAddress !== btcResult.address) {
+      logger.warn("Reply exists from different address", {
         messageId,
-        existingReply: {
-          repliedAt: existingReply.repliedAt,
-          reply: existingReply.reply,
+        existingFrom: existingReply.fromAddress,
+        requestFrom: btcResult.address,
+      });
+      return NextResponse.json(
+        {
+          error: "Reply already exists for this message from a different address",
+          messageId,
+          existingReply: {
+            repliedAt: existingReply.repliedAt,
+            reply: existingReply.reply,
+          },
         },
-      },
-      { status: 409 }
-    );
+        { status: 409 }
+      );
+    }
+
+    // Re-read the original message to check if the write completed
+    const freshMessage = await getMessage(kv, messageId);
+
+    if (freshMessage?.repliedAt) {
+      // All writes completed — true duplicate
+      logger.warn("Reply already exists (complete)", { messageId });
+      return NextResponse.json(
+        {
+          error: "Reply already exists for this message",
+          messageId,
+          existingReply: {
+            repliedAt: existingReply.repliedAt,
+            reply: existingReply.reply,
+          },
+        },
+        { status: 409 }
+      );
+    }
+
+    // repliedAt not set on the message — partial write detected, complete the operation
+    logger.info("Partial write detected, completing reply", {
+      messageId,
+      btcAddress: btcResult.address,
+    });
+    isRecovery = true;
   }
 
+  try {
   // Store reply
   const now = new Date().toISOString();
   const outboxReply = {
@@ -324,6 +359,7 @@ export async function POST(
   const wasUnread = !message.readAt;
 
   // Store reply, update message (also mark as read), and check achievement in parallel
+  // On recovery, storeReply overwrites the existing partial record with a fresh timestamp
   const [, , hasCommunicator] = await Promise.all([
     storeReply(kv, outboxReply),
     updateMessage(kv, messageId, {
@@ -377,6 +413,7 @@ export async function POST(
     messageId,
     fromAddress: outboxReply.fromAddress,
     toBtcAddress: outboxReply.toBtcAddress,
+    ...(isRecovery && { recovered: true }),
   });
 
   return NextResponse.json(
@@ -391,9 +428,24 @@ export async function POST(
       },
       reputationPayload,
       ...(newAchievement && { achievement: newAchievement }),
+      ...(isRecovery && { recovered: true }),
     },
     { status: 201 }
   );
+  } catch (error) {
+    logger.error("Unhandled outbox POST error", {
+      error: String(error),
+      messageId,
+    });
+    return NextResponse.json(
+      {
+        error: "Internal server error storing reply",
+        hint: "This error may be transient. Retrying the request will automatically complete the operation if the reply was partially stored.",
+        messageId,
+      },
+      { status: 500 }
+    );
+  }
 }
 
 export async function GET(
