@@ -10,13 +10,6 @@ import { lookupBnsName } from "@/lib/bns";
 import { detectAgentIdentity } from "@/lib/identity/detection";
 import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import { X_HANDLE } from "@/lib/constants";
-import {
-  verifySenderAchievement,
-  checkRateLimit,
-  setRateLimit,
-  hasAchievement,
-  grantAchievement,
-} from "@/lib/achievements";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -96,14 +89,14 @@ async function resolveIdentity(
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
-  // Cache check: skip scan only if we already have a positive result
-  // Always re-check when erc8004AgentId is null (not found) so newly
-  // registered identities are picked up on the next page view.
+  // Cache check: skip scan if we checked within the TTL window.
+  // Both positive (has identity) and negative (no identity) results are
+  // cached — the expensive O(N) on-chain scan only runs once per TTL period.
   const isCheckedRecently =
     agent.lastIdentityCheck &&
     Date.now() - new Date(agent.lastIdentityCheck).getTime() < IDENTITY_CHECK_TTL_MS;
 
-  if (isCheckedRecently && agent.erc8004AgentId != null) {
+  if (isCheckedRecently) {
     return agent;
   }
 
@@ -252,29 +245,10 @@ export default async function AgentProfilePage({
       );
     }
 
-    // Fetch claim, resolve identity, and proactively check sender achievement in parallel
-    const [claimRecord, agentWithIdentity, _senderCheck] = await Promise.all([
+    // Fetch claim and resolve identity in parallel
+    const [claimRecord, agentWithIdentity] = await Promise.all([
       cachedFetchClaim(agent.btcAddress),
       resolveIdentity(kv, agent, env.HIRO_API_KEY),
-      // Proactively check sender achievement (fire-and-forget, result unused)
-      (async () => {
-        try {
-          const rateLimit = await checkRateLimit(kv, agent.btcAddress, "sender");
-          if (rateLimit.allowed) {
-            const hasSender = await hasAchievement(kv, agent.btcAddress, "sender");
-            if (!hasSender) {
-              const hasOutgoingTx = await verifySenderAchievement(agent.btcAddress, kv);
-              if (hasOutgoingTx) {
-                await grantAchievement(kv, agent.btcAddress, "sender");
-              }
-            }
-            await setRateLimit(kv, agent.btcAddress, "sender");
-          }
-        } catch (error) {
-          // Best-effort: log and continue if achievement check fails
-          console.error("Failed to check sender achievement during profile load:", error);
-        }
-      })(),
     ]);
 
     // Compute level info
