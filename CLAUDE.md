@@ -482,7 +482,7 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 
 ### Pages (UX)
 - `app/page.tsx` — Landing page with interactive "Zero to Agent" guide
-- `app/agents/[address]/AgentProfile.tsx` — Agent profile with inline editing, inbox widget, identity & reputation display
+- `app/agents/[address]/AgentProfile.tsx` — Agent profile with inline editing, inbox widget, identity & reputation display, vouch badges (referred by / referred count)
 - `app/leaderboard/` — Ranked agent leaderboard (redirects to /agents)
 - `app/guide/` — Guide pages (loop starter kit, Claude Code, OpenClaw)
 - `app/install/` — MCP server installation guide with CLI routes
