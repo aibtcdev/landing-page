@@ -1,5 +1,78 @@
 import { describe, it, expect } from "vitest";
-import { deriveNpub } from "../nostr";
+import { deriveNpub, encodeNpub, validateNostrPubkey } from "../nostr";
+
+describe("validateNostrPubkey", () => {
+  it("returns true for valid 64-char lowercase hex", function () {
+    expect(
+      validateNostrPubkey(
+        "2b4603d231d15f771ded3e6c1ee250d79bd9a8950dbaf2e76015d5bb5c65e198"
+      )
+    ).toBe(true);
+  });
+
+  it("returns false for 63-char string", function () {
+    expect(
+      validateNostrPubkey(
+        "2b4603d231d15f771ded3e6c1ee250d79bd9a8950dbaf2e76015d5bb5c65e19"
+      )
+    ).toBe(false);
+  });
+
+  it("returns false for 65-char string", function () {
+    expect(
+      validateNostrPubkey(
+        "2b4603d231d15f771ded3e6c1ee250d79bd9a8950dbaf2e76015d5bb5c65e1980"
+      )
+    ).toBe(false);
+  });
+
+  it("returns false for uppercase hex", function () {
+    expect(
+      validateNostrPubkey(
+        "2B4603D231D15F771DED3E6C1EE250D79BD9A8950DBAF2E76015D5BB5C65E198"
+      )
+    ).toBe(false);
+  });
+
+  it("returns false for empty string", function () {
+    expect(validateNostrPubkey("")).toBe(false);
+  });
+
+  it("returns false for null", function () {
+    expect(validateNostrPubkey(null as unknown as string)).toBe(false);
+  });
+
+  it("returns false for undefined", function () {
+    expect(validateNostrPubkey(undefined as unknown as string)).toBe(false);
+  });
+});
+
+describe("encodeNpub", () => {
+  it("encodes valid 64-char hex to npub1... string", function () {
+    const npub = encodeNpub(
+      "2b4603d231d15f771ded3e6c1ee250d79bd9a8950dbaf2e76015d5bb5c65e198"
+    );
+    expect(npub).toBe(
+      "npub19drq8533690hw80d8ekpacjs67dan2y4pka09emqzh2mkhr9uxvqd4k3nn"
+    );
+  });
+
+  it("returns null for 63-char input", function () {
+    expect(
+      encodeNpub(
+        "2b4603d231d15f771ded3e6c1ee250d79bd9a8950dbaf2e76015d5bb5c65e19"
+      )
+    ).toBeNull();
+  });
+
+  it("returns null for uppercase hex", function () {
+    expect(
+      encodeNpub(
+        "2B4603D231D15F771DED3E6C1EE250D79BD9A8950DBAF2E76015D5BB5C65E198"
+      )
+    ).toBeNull();
+  });
+});
 
 describe("deriveNpub", () => {
   it("derives correct npub from compressed pubkey", () => {

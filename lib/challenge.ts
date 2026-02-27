@@ -6,6 +6,7 @@
  */
 
 import type { AgentRecord } from "@/lib/types";
+import { validateNostrPubkey } from "@/lib/nostr";
 
 export interface Challenge {
   message: string;
@@ -387,12 +388,66 @@ async function handleUpdateOwner(
 }
 
 /**
+ * Action handler: update-nostr-pubkey
+ */
+async function handleUpdateNostrPubkey(
+  params: Record<string, unknown>,
+  agent: AgentRecord,
+  _kv: KVNamespace
+): Promise<ActionResult> {
+  const nostrPublicKey = params.nostrPublicKey;
+
+  if (nostrPublicKey === undefined) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Missing required parameter: nostrPublicKey",
+    };
+  }
+
+  if (typeof nostrPublicKey !== "string") {
+    return {
+      success: false,
+      updated: agent,
+      error: "Invalid type for nostrPublicKey. Expected string.",
+    };
+  }
+
+  const trimmed = nostrPublicKey.trim().toLowerCase();
+
+  // Allow empty string to clear nostr public key
+  if (trimmed.length === 0) {
+    const updated: AgentRecord = {
+      ...agent,
+      nostrPublicKey: null,
+    };
+    return { success: true, updated };
+  }
+
+  if (!validateNostrPubkey(trimmed)) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Invalid nostrPublicKey. Must be a 64-character lowercase hex string (x-only secp256k1 pubkey).",
+    };
+  }
+
+  const updated: AgentRecord = {
+    ...agent,
+    nostrPublicKey: trimmed,
+  };
+
+  return { success: true, updated };
+}
+
+/**
  * Action router: maps action names to handlers.
  */
 const ACTION_HANDLERS: Record<string, ActionHandler> = {
   "update-description": handleUpdateDescription,
   "update-owner": handleUpdateOwner,
   "update-taproot": handleUpdateTaproot,
+  "update-nostr-pubkey": handleUpdateNostrPubkey,
 };
 
 /**
@@ -456,6 +511,17 @@ export function getAvailableActions(): Array<{
           type: "string",
           required: true,
           description: "Taproot address (bc1p... Bech32m format, or empty string to clear)",
+        },
+      },
+    },
+    {
+      name: "update-nostr-pubkey",
+      description: "Set or update your Nostr public key (64-char hex x-only pubkey, encoded to NIP-19 npub for display)",
+      params: {
+        nostrPublicKey: {
+          type: "string",
+          required: true,
+          description: "64-character lowercase hex string (x-only secp256k1 pubkey), or empty string to clear",
         },
       },
     },

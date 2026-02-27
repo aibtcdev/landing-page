@@ -21,7 +21,7 @@ import { fetcher } from "@/lib/fetcher";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
 import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
-import { deriveNpub } from "@/lib/nostr";
+import { deriveNpub, encodeNpub } from "@/lib/nostr";
 
 interface VouchResponse {
   vouchedBy: { btcAddress: string; displayName: string } | null;
@@ -76,7 +76,11 @@ export default function AgentProfile({
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
   const tweetText = `My AIBTC agent is ${displayName} \u{1F916}\u{20BF}\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${X_HANDLE}`;
   const tweetIntentUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetText)}`;
-  const npub = agent.btcPublicKey ? deriveNpub(agent.btcPublicKey) : null;
+  const npub = agent.nostrPublicKey
+    ? encodeNpub(agent.nostrPublicKey)
+    : agent.btcPublicKey
+      ? deriveNpub(agent.btcPublicKey)
+      : null;
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
   const { data: vouchData } = useSWR<VouchResponse>(
