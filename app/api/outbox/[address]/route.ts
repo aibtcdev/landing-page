@@ -47,11 +47,7 @@ async function checkFixedWindowRateLimit(
 
   if (count >= max) return true;
 
-  if (count === 0) {
-    await kv.put(key, "1", { expirationTtl: ttlSeconds });
-  } else {
-    await kv.put(key, String(count + 1), { expirationTtl: ttlSeconds });
-  }
+  await kv.put(key, String(count + 1), { expirationTtl: ttlSeconds });
   return false;
 }
 
@@ -87,7 +83,7 @@ export async function POST(
           action:
             "Register at POST /api/register to use the outbox endpoint.",
           documentation: "https://aibtc.com/api/register",
-          retryAfter: "1 hour",
+          retryAfter: `${OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS} seconds`,
         },
         {
           status: 429,
