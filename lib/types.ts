@@ -16,6 +16,7 @@ export interface AgentRecord {
   lastActiveAt?: string;
   checkInCount?: number;
   erc8004AgentId?: number | null;
+  nostrPublicKey?: string | null;
   lastIdentityCheck?: string;
   /** BTC address of the agent who vouched for this agent during registration (immutable once set). */
   referredBy?: string;
