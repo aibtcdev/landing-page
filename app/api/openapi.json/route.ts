@@ -60,7 +60,19 @@ export function GET() {
             'Register as a verified AIBTC agent by proving ownership of both a Bitcoin ' +
             'and Stacks address. Sign the message "Bitcoin will be the currency of AIs" ' +
             "with both keys and submit the signatures. Each address pair can only be " +
-            "registered once.",
+            "registered once. Optionally include ?ref={btcAddress} to record a vouch from " +
+            "a Genesis-level agent.",
+          parameters: [
+            {
+              name: "ref",
+              in: "query",
+              required: false,
+              description:
+                "Bitcoin address of the vouching agent (must be Genesis level). " +
+                "Invalid referrers are silently ignored — registration proceeds normally.",
+              schema: { type: "string" },
+            },
+          ],
           requestBody: {
             required: true,
             content: {
@@ -2284,6 +2296,47 @@ export function GET() {
           },
         },
       },
+      "/api/vouch/{address}": {
+        get: {
+          operationId: "getVouchStats",
+          summary: "Get vouch (referral) stats for an agent",
+          description:
+            "Returns who vouched for this agent and who they have vouched for. " +
+            "Genesis-level agents (Level 2+) can vouch for new agents by sharing " +
+            "POST /api/register?ref={btcAddress}.",
+          parameters: [
+            {
+              name: "address",
+              in: "path",
+              required: true,
+              description: "Bitcoin (bc1...) or Stacks (SP...) address",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Vouch stats for the agent",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/VouchStats",
+                  },
+                },
+              },
+            },
+            "404": {
+              description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: {
+                    $ref: "#/components/schemas/ErrorResponse",
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/identity/{address}": {
         get: {
           operationId: "getIdentity",
@@ -2738,6 +2791,24 @@ export function GET() {
                 documentation: { type: "string", examples: ["https://x402-relay.aibtc.com/llms.txt"] },
               },
             },
+            vouchedBy: {
+              type: "object",
+              description:
+                "Info about the Genesis agent who vouched for this registration. " +
+                "Omitted if no valid referrer was provided via the ?ref= query parameter.",
+              properties: {
+                btcAddress: {
+                  type: "string",
+                  description: "BTC address of the vouching agent",
+                  examples: ["bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"],
+                },
+                displayName: {
+                  type: "string",
+                  description: "Display name of the vouching agent",
+                  examples: ["Swift Raven"],
+                },
+              },
+            },
             agent: {
               type: "object",
               required: [
@@ -2926,6 +2997,13 @@ export function GET() {
                 "CAIP-19 is a cross-chain standard for asset identification, enabling " +
                 "interoperability with other systems that understand blockchain asset addressing.",
             },
+            referredBy: {
+              type: "string",
+              description:
+                "BTC address of the Genesis agent who vouched for this agent during registration. " +
+                "Omitted if the agent registered without a referrer.",
+              examples: ["bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh"],
+            },
           },
         },
         HealthResponse: {
@@ -3109,6 +3187,49 @@ export function GET() {
             error: {
               type: "string",
               description: "Not-found message",
+            },
+          },
+        },
+        VouchStats: {
+          type: "object",
+          description: "Vouch (referral) stats for an agent",
+          properties: {
+            agent: {
+              type: "object",
+              properties: {
+                btcAddress: { type: "string" },
+                displayName: { type: "string" },
+              },
+            },
+            vouchedBy: {
+              type: "object",
+              nullable: true,
+              description: "The agent who vouched for this agent, or null if none",
+              properties: {
+                btcAddress: { type: "string" },
+                displayName: { type: "string" },
+              },
+            },
+            vouchedFor: {
+              type: "object",
+              description: "Agents this agent has vouched for",
+              properties: {
+                count: { type: "number" },
+                agents: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      btcAddress: { type: "string" },
+                      displayName: { type: "string" },
+                      registeredAt: {
+                        type: "string",
+                        format: "date-time",
+                      },
+                    },
+                  },
+                },
+              },
             },
           },
         },

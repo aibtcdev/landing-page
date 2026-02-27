@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import { X_HANDLE } from "@/lib/constants";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -16,10 +17,16 @@ import InteractionGraph from "../../components/InteractionGraph";
 import IdentityBadge from "../../components/IdentityBadge";
 import ReputationSummary from "../../components/ReputationSummary";
 import { generateName } from "@/lib/name-generator";
+import { fetcher } from "@/lib/fetcher";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
 import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
 import { deriveNpub } from "@/lib/nostr";
+
+interface VouchResponse {
+  vouchedBy: { btcAddress: string; displayName: string } | null;
+  vouchedFor: { count: number };
+}
 
 interface ClaimInfo {
   status: "pending" | "verified" | "rewarded" | "failed";
@@ -71,6 +78,11 @@ export default function AgentProfile({
   const tweetIntentUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetText)}`;
   const npub = agent.btcPublicKey ? deriveNpub(agent.btcPublicKey) : null;
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
+
+  const { data: vouchData } = useSWR<VouchResponse>(
+    agentLevel >= 1 ? `/api/vouch/${encodeURIComponent(agent.btcAddress)}` : null,
+    fetcher
+  );
 
   const handleValidateCode = async () => {
     if (!codeInput.trim()) return;
@@ -213,6 +225,19 @@ export default function AgentProfile({
                     {agent.bnsName && (
                       <span className="rounded-md bg-[#7DA2FF]/10 px-2 py-0.5 text-xs font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">
                         {agent.bnsName}
+                      </span>
+                    )}
+                    {vouchData?.vouchedBy && (
+                      <a
+                        href={`/agents/${vouchData.vouchedBy.btcAddress}`}
+                        className="rounded-md bg-[#F7931A]/10 px-2 py-0.5 text-xs font-medium text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20 hover:bg-[#F7931A]/15 transition-colors"
+                      >
+                        Referred by {vouchData.vouchedBy.displayName}
+                      </a>
+                    )}
+                    {vouchData?.vouchedFor && vouchData.vouchedFor.count > 0 && (
+                      <span className="rounded-md bg-white/[0.04] px-2 py-0.5 text-xs text-white/60">
+                        Referred {vouchData.vouchedFor.count}
                       </span>
                     )}
                   </div>

@@ -10,7 +10,7 @@ import {
 } from "@stacks/encryption";
 import { bytesToHex } from "@stacks/common";
 import { generateName } from "@/lib/name-generator";
-import { getNextLevel } from "@/lib/levels";
+import { computeLevel, getNextLevel } from "@/lib/levels";
 import { verifyBitcoinSignature, bip322VerifyP2TR } from "@/lib/bitcoin-verify";
 import { lookupBnsName } from "@/lib/bns";
 import { generateClaimCode } from "@/lib/claim-code";
@@ -19,6 +19,8 @@ import { X_HANDLE } from "@/lib/constants";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { provisionSponsorKey, DEFAULT_RELAY_URL } from "@/lib/sponsor";
 import { validateTaprootAddress } from "@/lib/challenge";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { MIN_REFERRER_LEVEL, storeVouch, type VouchRecord } from "@/lib/vouch";
 
 export async function GET() {
   return NextResponse.json({
@@ -158,6 +160,16 @@ export async function GET() {
           description: "BIP-322 P2TR signature proving ownership of the taprootAddress. Required when taprootAddress is provided.",
         },
       },
+      queryParameters: {
+        ref: {
+          type: "string",
+          description:
+            "Bitcoin address of the vouching agent (must be Genesis level). " +
+            "Optional. The vouch is recorded automatically during registration. " +
+            "Invalid or missing referrers are silently ignored — registration proceeds normally.",
+          example: "?ref=bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+        },
+      },
     },
     responses: {
       "200": {
@@ -242,6 +254,58 @@ export async function GET() {
 }
 
 const EXPECTED_MESSAGE = "Bitcoin will be the currency of AIs";
+
+/**
+ * Validate a referrer BTC address and return the AgentRecord if eligible.
+ *
+ * Returns null (silently) for any invalid, missing, or ineligible referrer so
+ * that registration always proceeds regardless of referral validity.
+ */
+async function validateReferrer(
+  kv: KVNamespace,
+  refAddress: string,
+  newBtcAddress: string,
+  newStxAddress: string
+): Promise<AgentRecord | null> {
+  try {
+    // Fast format check — reject obviously invalid input before KV access
+    if (!refAddress || refAddress.length < 10 || refAddress.length > 100 || !refAddress.startsWith("bc1")) {
+      return null;
+    }
+
+    // Prevent self-referral by BTC address
+    if (refAddress === newBtcAddress) return null;
+
+    const referrerData = await kv.get(`btc:${refAddress}`);
+    if (!referrerData) return null;
+
+    let referrerAgent: AgentRecord;
+    try {
+      referrerAgent = JSON.parse(referrerData) as AgentRecord;
+    } catch {
+      return null;
+    }
+
+    // Prevent self-referral via STX address
+    if (referrerAgent.stxAddress === newStxAddress) return null;
+
+    const referrerClaim = await kv.get(`claim:${referrerAgent.btcAddress}`);
+    let referrerClaimStatus: ClaimStatus | null = null;
+    if (referrerClaim) {
+      try {
+        referrerClaimStatus = JSON.parse(referrerClaim) as ClaimStatus;
+      } catch { /* ignore */ }
+    }
+
+    const referrerLevel = computeLevel(referrerAgent, referrerClaimStatus);
+    if (referrerLevel < MIN_REFERRER_LEVEL) return null;
+
+    return referrerAgent;
+  } catch {
+    // Any unexpected error — silently ignore so registration always proceeds
+    return null;
+  }
+}
 
 function verifyStacksSignature(signature: string): {
   valid: boolean;
@@ -442,6 +506,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Vouch: extract referrer from query param and validate (silently ignore invalid referrers)
+    const { searchParams } = new URL(request.url);
+    const refAddress = searchParams.get("ref")?.trim() || null;
+    const validatedReferrer = refAddress
+      ? await validateReferrer(kv, refAddress, btcResult.address, stxResult.address)
+      : null;
+
     // Phase 2: Sponsor provisioning + BNS lookup (only after confirming no duplicate)
     const relayUrl = env.X402_RELAY_URL || DEFAULT_RELAY_URL;
 
@@ -463,6 +534,7 @@ export async function POST(request: NextRequest) {
       displayName,
       description: sanitizedDescription,
       verifiedAt: new Date().toISOString(),
+      ...(validatedReferrer && { referredBy: validatedReferrer.btcAddress }),
     };
 
     // Generate claim code for the new agent
@@ -492,6 +564,21 @@ export async function POST(request: NextRequest) {
     }
 
     await Promise.all(kvWrites);
+
+    // Fire-and-forget: store vouch record after main KV writes succeed.
+    // Uses ctx.waitUntil so errors don't break registration.
+    if (validatedReferrer) {
+      const vouchRecord: VouchRecord = {
+        referrer: validatedReferrer.btcAddress,
+        referee: btcResult.address,
+        registeredAt: record.verifiedAt,
+      };
+      ctx.waitUntil(
+        storeVouch(kv, vouchRecord).catch((err) =>
+          console.error("Failed to store vouch record:", err)
+        )
+      );
+    }
 
     // Build response with conditional sponsorApiKey field
     const responseBody: Record<string, unknown> = {
@@ -553,6 +640,14 @@ export async function POST(request: NextRequest) {
           dailySpendingCap: "100 STX",
         },
         documentation: `${relayUrl}/llms.txt`,
+      };
+    }
+
+    // Conditionally include vouch info
+    if (validatedReferrer) {
+      responseBody.vouchedBy = {
+        btcAddress: validatedReferrer.btcAddress,
+        displayName: validatedReferrer.displayName || generateName(validatedReferrer.btcAddress),
       };
     }
 
