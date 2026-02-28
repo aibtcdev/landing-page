@@ -649,7 +649,7 @@ export async function POST(
       );
     }
 
-    // Look up sender agent to get BTC address for BIP-322 verification
+    // Look up sender agent for BIP-322 verification and sent-index update
     const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress) : null;
     const sigResult = verifySenderSignature(senderSignatureInput, content, logger, senderAgent?.btcAddress);
     if (sigResult instanceof NextResponse) return sigResult;
@@ -671,12 +671,6 @@ export async function POST(
       ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
       ...(replyTo && { replyTo }),
     };
-
-    // Resolve sender agent for sent index
-    const senderAgent =
-      fromAddress !== "unknown"
-        ? await lookupAgent(kv, fromAddress)
-        : null;
 
     // Store message, update indexes, and mark txid as redeemed (with TTL)
     await Promise.all([
@@ -789,7 +783,7 @@ export async function POST(
     );
   }
 
-  // Look up sender agent to get BTC address for BIP-322 verification
+  // Look up sender agent for BIP-322 verification and sent-index update
   const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress) : null;
   const sigResult = verifySenderSignature(senderSignatureInput, content, logger, senderAgent?.btcAddress);
   if (sigResult instanceof NextResponse) return sigResult;
@@ -810,12 +804,6 @@ export async function POST(
     ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
     ...(replyTo && { replyTo }),
   };
-
-  // Resolve sender agent for sent index
-  const senderAgent =
-    fromAddress !== "unknown"
-      ? await lookupAgent(kv, fromAddress)
-      : null;
 
   await Promise.all([
     storeMessage(kv, message),
