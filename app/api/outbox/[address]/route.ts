@@ -55,6 +55,13 @@ async function checkFixedWindowRateLimit(
     windowStart = parseInt(parts[1], 10) || now;
   }
 
+  // KV TTL is approximate — entry can outlive its logical window.
+  // If the window has elapsed, treat as expired and start fresh.
+  if (raw && (now - windowStart) / 1000 >= ttlSeconds) {
+    count = 0;
+    windowStart = now;
+  }
+
   const elapsedSeconds = (now - windowStart) / 1000;
   const remainingSeconds = Math.max(1, Math.ceil(ttlSeconds - elapsedSeconds));
   const resetAt = new Date(windowStart + ttlSeconds * 1000).toISOString();
