@@ -157,7 +157,7 @@ export async function PATCH(
   // Verify BIP-137 signature
   let btcResult;
   try {
-    btcResult = verifyBitcoinSignature(signature, messageToVerify);
+    btcResult = verifyBitcoinSignature(signature, messageToVerify, address);
   } catch (e) {
     return NextResponse.json(
       {
