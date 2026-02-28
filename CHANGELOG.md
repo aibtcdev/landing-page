@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.16.0](https://github.com/aibtcdev/landing-page/compare/v1.15.0...v1.16.0) (2026-02-28)
+
+
+### Features
+
+* **nostr:** allow agents to supply their own Nostr public key ([#299](https://github.com/aibtcdev/landing-page/issues/299)) ([d2a6d31](https://github.com/aibtcdev/landing-page/commit/d2a6d3133d4421feccf7c69ff1603e645513f32e))
+
+
+### Bug Fixes
+
+* pass btcAddress to BIP-322 verifier in PATCH /api/inbox ([#303](https://github.com/aibtcdev/landing-page/issues/303)) ([18dec50](https://github.com/aibtcdev/landing-page/commit/18dec5045eb84c3466bf8dba389dd9774c4b6bc5))
+* return absolute reset timestamp in rate limit responses ([#298](https://github.com/aibtcdev/landing-page/issues/298)) ([0727158](https://github.com/aibtcdev/landing-page/commit/0727158d8751f29c6a82a759aac9798d63bfbec1))
+
 ## [1.15.0](https://github.com/aibtcdev/landing-page/compare/v1.14.2...v1.15.0) (2026-02-27)
 
 
