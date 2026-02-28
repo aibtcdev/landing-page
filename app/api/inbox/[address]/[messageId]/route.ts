@@ -154,10 +154,14 @@ export async function PATCH(
   // Build expected message format
   const messageToVerify = buildMarkReadMessage(messageId);
 
-  // Verify BIP-137 signature
+  // Verify Bitcoin signature (supports BIP-137 and BIP-322)
   let btcResult;
   try {
-    btcResult = verifyBitcoinSignature(signature, messageToVerify);
+    btcResult = verifyBitcoinSignature(
+      signature,
+      messageToVerify,
+      message.toBtcAddress
+    );
   } catch (e) {
     return NextResponse.json(
       {
