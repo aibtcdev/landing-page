@@ -23,14 +23,17 @@ import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
 /**
- * Verify optional BIP-137 sender signature over message content.
+ * Verify optional Bitcoin sender signature over message content.
+ * Supports both BIP-137 (address recovered from signature) and BIP-322
+ * (requires btcAddress hint for witness validation).
  * Returns the recovered BTC address on success, or a 400 NextResponse on failure.
  * When no signature is provided, returns { authenticated: false }.
  */
 function verifySenderSignature(
   signature: string | undefined,
   content: string,
-  logger: Logger
+  logger: Logger,
+  btcAddress?: string
 ): { authenticated: true; senderBtcAddress: string } | { authenticated: false; senderBtcAddress: undefined } | NextResponse {
   if (!signature) {
     return { authenticated: false, senderBtcAddress: undefined };
@@ -39,7 +42,8 @@ function verifySenderSignature(
   try {
     const sigResult = verifyBitcoinSignature(
       signature,
-      buildSenderAuthMessage(content)
+      buildSenderAuthMessage(content),
+      btcAddress
     );
     if (sigResult.valid) {
       logger.info("Sender signature verified", { senderBtcAddress: sigResult.address });
@@ -645,7 +649,9 @@ export async function POST(
       );
     }
 
-    const sigResult = verifySenderSignature(senderSignatureInput, content, logger);
+    // Look up sender agent to get BTC address for BIP-322 verification
+    const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress) : null;
+    const sigResult = verifySenderSignature(senderSignatureInput, content, logger, senderAgent?.btcAddress);
     if (sigResult instanceof NextResponse) return sigResult;
     const { authenticated, senderBtcAddress } = sigResult;
 
@@ -783,7 +789,9 @@ export async function POST(
     );
   }
 
-  const sigResult = verifySenderSignature(senderSignatureInput, content, logger);
+  // Look up sender agent to get BTC address for BIP-322 verification
+  const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress) : null;
+  const sigResult = verifySenderSignature(senderSignatureInput, content, logger, senderAgent?.btcAddress);
   if (sigResult instanceof NextResponse) return sigResult;
   const { authenticated, senderBtcAddress } = sigResult;
 
