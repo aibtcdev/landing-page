@@ -675,6 +675,38 @@ export function GET() {
                 },
               },
             },
+            "429": {
+              description:
+                "Rate limit exceeded — applies to unregistered agents (5/hour), " +
+                "registered agents (10/min), and validation failures (10/10min)",
+              headers: {
+                "Retry-After": {
+                  description: "Seconds until the rate limit window resets",
+                  schema: { type: "integer" },
+                },
+              },
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      error: { type: "string" },
+                      retryAfter: {
+                        type: "integer",
+                        description: "Seconds until retry is allowed",
+                      },
+                      resetAt: {
+                        type: "string",
+                        format: "date-time",
+                        description:
+                          "ISO 8601 timestamp when the rate limit window resets",
+                      },
+                    },
+                    required: ["error", "retryAfter", "resetAt"],
+                  },
+                },
+              },
+            },
           },
         },
       },

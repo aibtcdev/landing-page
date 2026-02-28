@@ -33,15 +33,16 @@ import { isStxAddress } from "@/lib/validation/address";
  * preserves the original window expiry. KV read-then-write is not atomic;
  * minor under-counting under concurrency is accepted.
  *
- * @returns { limited, retryAfterSeconds } — limited is true when count >= max;
- *          retryAfterSeconds is the time remaining in the current window.
+ * @returns { limited, retryAfterSeconds, resetAt } — limited is true when count >= max;
+ *          retryAfterSeconds is the time remaining in the current window;
+ *          resetAt is the ISO 8601 timestamp when the window resets.
  */
 async function checkFixedWindowRateLimit(
   kv: KVNamespace,
   key: string,
   max: number,
   ttlSeconds: number
-): Promise<{ limited: boolean; retryAfterSeconds: number }> {
+): Promise<{ limited: boolean; retryAfterSeconds: number; resetAt: string }> {
   const now = Date.now();
   const raw = await kv.get(key);
 
@@ -56,12 +57,13 @@ async function checkFixedWindowRateLimit(
 
   const elapsedSeconds = (now - windowStart) / 1000;
   const remainingSeconds = Math.max(1, Math.ceil(ttlSeconds - elapsedSeconds));
+  const resetAt = new Date(windowStart + ttlSeconds * 1000).toISOString();
 
-  if (count >= max) return { limited: true, retryAfterSeconds: remainingSeconds };
+  if (count >= max) return { limited: true, retryAfterSeconds: remainingSeconds, resetAt };
 
   const value = `${count + 1}:${raw ? windowStart : now}`;
   await kv.put(key, value, { expirationTtl: raw ? remainingSeconds : ttlSeconds });
-  return { limited: false, retryAfterSeconds: remainingSeconds };
+  return { limited: false, retryAfterSeconds: remainingSeconds, resetAt };
 }
 
 export async function POST(
@@ -80,7 +82,7 @@ export async function POST(
   const agent = await lookupAgent(kv, address);
 
   if (!agent) {
-    const { limited, retryAfterSeconds } = await checkFixedWindowRateLimit(
+    const { limited, retryAfterSeconds, resetAt } = await checkFixedWindowRateLimit(
       kv,
       `ratelimit:outbox-unregistered:${address}`,
       OUTBOX_RATE_LIMIT_UNREGISTERED_MAX,
@@ -96,7 +98,8 @@ export async function POST(
           action:
             "Register at POST /api/register to use the outbox endpoint.",
           documentation: "https://aibtc.com/api/register",
-          retryAfter: `${retryAfterSeconds} seconds`,
+          retryAfter: retryAfterSeconds,
+          resetAt,
         },
         {
           status: 429,
@@ -144,7 +147,7 @@ export async function POST(
       request.headers.get("x-forwarded-for");
 
     if (ip) {
-      const { limited: validationLimited, retryAfterSeconds: validationRetry } =
+      const { limited: validationLimited, retryAfterSeconds: validationRetry, resetAt: validationResetAt } =
         await checkFixedWindowRateLimit(
           kv,
           `ratelimit:outbox-validation:${ip}`,
@@ -153,7 +156,7 @@ export async function POST(
         );
       if (validationLimited) {
         return NextResponse.json(
-          { error: "Too many invalid requests. Slow down." },
+          { error: "Too many invalid requests. Slow down.", retryAfter: validationRetry, resetAt: validationResetAt },
           {
             status: 429,
             headers: {
@@ -267,7 +270,7 @@ export async function POST(
   }
 
   // Rate limit by signer identity (placed after signature verification)
-  const { limited: registeredLimited, retryAfterSeconds: registeredRetry } =
+  const { limited: registeredLimited, retryAfterSeconds: registeredRetry, resetAt: registeredResetAt } =
     await checkFixedWindowRateLimit(
       kv,
       `ratelimit:outbox:${btcResult.address}`,
@@ -282,7 +285,8 @@ export async function POST(
       {
         error: "Too many outbox requests. Slow down.",
         address: btcResult.address,
-        retryAfter: `${registeredRetry} seconds`,
+        retryAfter: registeredRetry,
+        resetAt: registeredResetAt,
       },
       {
         status: 429,
