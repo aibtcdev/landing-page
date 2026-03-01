@@ -100,22 +100,10 @@ export async function GET(
               width: "1200px",
               height: "630px",
               objectFit: "cover",
-              opacity: 0.7,
+              opacity: 1,
             }}
           />
 
-          {/* Dark gradient overlay for text readability */}
-          <div
-            style={{
-              position: "absolute",
-              top: 0,
-              left: 0,
-              width: "1200px",
-              height: "630px",
-              background: "linear-gradient(135deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.55) 100%)",
-              display: "flex",
-            }}
-          />
 
           {/* Content: left-aligned layout */}
           <div
@@ -143,8 +131,8 @@ export async function GET(
                   position: "absolute",
                   top: "-14px",
                   left: "-14px",
-                  width: "188px",
-                  height: "188px",
+                  width: "268px",
+                  height: "268px",
                   borderRadius: "50%",
                   border: `3px solid ${color}`,
                   display: "flex",
@@ -154,10 +142,10 @@ export async function GET(
                 <div
                   style={{
                     position: "absolute",
-                    top: "-26px",
-                    left: "-26px",
-                    width: "212px",
-                    height: "212px",
+                    top: "-28px",
+                    left: "-28px",
+                    width: "296px",
+                    height: "296px",
                     borderRadius: "50%",
                     border: `2px solid ${levelColors[2]}60`,
                     display: "flex",
@@ -170,8 +158,8 @@ export async function GET(
                 <img
                   src={avatarSrc}
                   alt=""
-                  width="160"
-                  height="160"
+                  width="240"
+                  height="240"
                   style={{
                     borderRadius: "50%",
                     border: `4px solid ${color}50`,
@@ -180,15 +168,15 @@ export async function GET(
               ) : (
                 <div
                   style={{
-                    width: "160px",
-                    height: "160px",
+                    width: "240px",
+                    height: "240px",
                     borderRadius: "50%",
                     border: `4px solid ${color}50`,
                     background: `linear-gradient(135deg, ${color}40 0%, ${color}20 100%)`,
                     display: "flex",
                     alignItems: "center",
                     justifyContent: "center",
-                    fontSize: "64px",
+                    fontSize: "96px",
                     fontWeight: "700",
                     color: color,
                   }}
