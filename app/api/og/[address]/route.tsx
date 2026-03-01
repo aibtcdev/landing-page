@@ -66,9 +66,7 @@ export async function GET(
     const color = levelColors[level] ?? levelColors[0];
 
     // Fetch background pattern and avatar in parallel
-    // Use origin from request URL so it works on both preview and production deployments
-    const origin = new URL(request.url).origin;
-    const bgUrl = `${origin}/Artwork/AIBTC_Pattern1_optimized.jpg`;
+    const bgUrl = "https://aibtc.com/Artwork/AIBTC_Pattern1_optimized.jpg";
     const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
 
     const [bgSrc, avatarSrc] = await Promise.all([
