@@ -65,14 +65,11 @@ export async function GET(
     const displayName = agent.displayName || generateName(agent.btcAddress);
     const color = levelColors[level] ?? levelColors[0];
 
-    // Fetch background pattern and avatar in parallel
-    const bgUrl = "https://aibtc.com/Artwork/AIBTC_Pattern1_optimized.jpg";
+    // Fetch avatar as base64 (small image). Background pattern uses direct URL
+    // — Satori fetches it internally, avoiding the 528KB base64 encoding issue.
     const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
-
-    const [bgSrc, avatarSrc] = await Promise.all([
-      fetchImageAsDataUri(bgUrl, 4000),
-      fetchImageAsDataUri(avatarUrl, 3000),
-    ]);
+    const avatarSrc = await fetchImageAsDataUri(avatarUrl, 3000);
+    const bgSrc = "https://aibtc.com/Artwork/AIBTC_Pattern1_optimized.jpg";
 
     return new ImageResponse(
       (
@@ -84,30 +81,28 @@ export async function GET(
             flexDirection: "row",
             alignItems: "center",
             fontFamily: "system-ui, sans-serif",
-            background: "#0a0a0f",
+            background: "linear-gradient(135deg, #0a0a1a 0%, #0d1020 30%, #12081a 60%, #0a0a1a 100%)",
             position: "relative",
             overflow: "hidden",
           }}
         >
-          {/* Background pattern */}
-          {bgSrc && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img
-              src={bgSrc}
-              alt=""
-              width="1200"
-              height="630"
-              style={{
-                position: "absolute",
-                top: 0,
-                left: 0,
-                width: "1200px",
-                height: "630px",
-                objectFit: "cover",
-                opacity: 0.7,
-              }}
-            />
-          )}
+          {/* Background pattern — Satori fetches the URL directly */}
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={bgSrc}
+            alt=""
+            width="1200"
+            height="630"
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "1200px",
+              height: "630px",
+              objectFit: "cover",
+              opacity: 0.7,
+            }}
+          />
 
           {/* Dark gradient overlay for text readability */}
           <div
