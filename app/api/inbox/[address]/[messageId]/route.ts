@@ -64,11 +64,31 @@ export async function GET(
     );
   }
 
-  // Return message with reply if exists
-  return NextResponse.json({
-    message,
-    reply: reply || null,
-  });
+  // Resolve sender agent info (recipient is already `agent`)
+  const senderAddr = message.senderBtcAddress || message.fromAddress;
+  const senderAgent = await lookupAgent(kv, senderAddr);
+
+  // Return message with reply and resolved peer info
+  // Messages are immutable after delivery — cache aggressively
+  return NextResponse.json(
+    {
+      message,
+      reply: reply || null,
+      sender: senderAgent
+        ? { btcAddress: senderAgent.btcAddress, stxAddress: senderAgent.stxAddress, displayName: senderAgent.displayName }
+        : null,
+      recipient: {
+        btcAddress: agent.btcAddress,
+        stxAddress: agent.stxAddress,
+        displayName: agent.displayName,
+      },
+    },
+    {
+      headers: {
+        "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600",
+      },
+    }
+  );
 }
 
 export async function PATCH(
