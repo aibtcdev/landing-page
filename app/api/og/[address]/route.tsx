@@ -111,7 +111,7 @@ export async function GET(
               left: 0,
               width: "1200px",
               height: "630px",
-              background: "rgba(0,0,0,0.55)",
+              background: "rgba(0,0,0,0.7)",
               display: "flex",
             }}
           />
