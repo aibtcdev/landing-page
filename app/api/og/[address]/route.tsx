@@ -103,6 +103,18 @@ export async function GET(
             }}
           />
 
+          {/* Dark overlay for text readability */}
+          <div
+            style={{
+              position: "absolute",
+              top: 0,
+              left: 0,
+              width: "1200px",
+              height: "630px",
+              background: "rgba(0,0,0,0.55)",
+              display: "flex",
+            }}
+          />
 
           {/* Content: left-aligned layout */}
           <div
