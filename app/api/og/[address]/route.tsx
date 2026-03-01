@@ -104,7 +104,7 @@ export async function GET(
                 width: "1200px",
                 height: "630px",
                 objectFit: "cover",
-                opacity: 0.4,
+                opacity: 0.7,
               }}
             />
           )}
@@ -117,7 +117,7 @@ export async function GET(
               left: 0,
               width: "1200px",
               height: "630px",
-              background: "linear-gradient(135deg, rgba(0,0,0,0.75) 0%, rgba(0,0,0,0.4) 50%, rgba(0,0,0,0.7) 100%)",
+              background: "linear-gradient(135deg, rgba(0,0,0,0.65) 0%, rgba(0,0,0,0.3) 50%, rgba(0,0,0,0.55) 100%)",
               display: "flex",
             }}
           />
