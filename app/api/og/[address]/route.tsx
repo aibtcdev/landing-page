@@ -81,7 +81,7 @@ export async function GET(
             flexDirection: "row",
             alignItems: "center",
             fontFamily: "system-ui, sans-serif",
-            background: "linear-gradient(135deg, #0a0a1a 0%, #0d1020 30%, #12081a 60%, #0a0a1a 100%)",
+            background: "#000000",
             position: "relative",
             overflow: "hidden",
           }}
