@@ -57,9 +57,10 @@ async function handleCrawlerAgentPage(
     return NextResponse.next();
   }
 
-  const prefix = address.startsWith("SP")
+  // Support all Bitcoin address formats (bc1, 1..., 3...) and STX (SP...)
+  const prefix = address.startsWith("SP") || address.startsWith("SM")
     ? "stx"
-    : address.startsWith("bc1")
+    : address.startsWith("bc1") || address.startsWith("1") || address.startsWith("3")
       ? "btc"
       : null;
   if (!prefix) {
