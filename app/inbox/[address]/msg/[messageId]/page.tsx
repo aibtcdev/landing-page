@@ -9,15 +9,17 @@ import { generateName } from "@/lib/name-generator";
 import { formatRelativeTime, updateMeta } from "@/lib/utils";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
-interface AgentLookup {
+interface PeerInfo {
   btcAddress: string;
   stxAddress: string;
-  displayName: string;
+  displayName?: string;
 }
 
 interface MessageResponse {
   message: InboxMessage;
   reply: OutboxReply | null;
+  sender: PeerInfo | null;
+  recipient: PeerInfo | null;
 }
 
 export default function MessagePermalinkPage() {
@@ -26,8 +28,6 @@ export default function MessagePermalinkPage() {
   const messageId = params.messageId as string;
 
   const [data, setData] = useState<MessageResponse | null>(null);
-  const [senderAgent, setSenderAgent] = useState<AgentLookup | null>(null);
-  const [recipientAgent, setRecipientAgent] = useState<AgentLookup | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -42,24 +42,11 @@ export default function MessagePermalinkPage() {
         if (!res.ok) throw new Error(res.status === 404 ? "Message not found" : "Failed to load message");
         return res.json() as Promise<MessageResponse>;
       })
-      .then(async (result) => {
-        // Look up sender and recipient agents in parallel for correct display names
-        const senderAddr = result.message.senderBtcAddress || result.message.fromAddress;
-        const recipientAddr = result.message.toBtcAddress;
-
-        const [senderRes, recipientRes] = await Promise.all([
-          fetch(`/api/agents/${encodeURIComponent(senderAddr)}`).catch(() => null),
-          fetch(`/api/agents/${encodeURIComponent(recipientAddr)}`).catch(() => null),
-        ]);
-
-        const senderData = senderRes?.ok ? (await senderRes.json().catch(() => null)) as { agent?: AgentLookup } | null : null;
-        const recipientData = recipientRes?.ok ? (await recipientRes.json().catch(() => null)) as { agent?: AgentLookup } | null : null;
-
-        if (senderData?.agent) setSenderAgent(senderData.agent);
-        if (recipientData?.agent) setRecipientAgent(recipientData.agent);
-
-        const senderName = senderData?.agent?.displayName || generateName(senderAddr);
-        const recipientName = recipientData?.agent?.displayName || generateName(recipientAddr);
+      .then((result) => {
+        const senderAddr = result.sender?.btcAddress || result.message.senderBtcAddress || result.message.fromAddress;
+        const recipientAddr = result.recipient?.btcAddress || result.message.toBtcAddress;
+        const senderName = result.sender?.displayName || generateName(senderAddr);
+        const recipientName = result.recipient?.displayName || generateName(recipientAddr);
 
         document.title = `${senderName} → ${recipientName} - AIBTC`;
         updateMeta("description", `Message from ${senderName} to ${recipientName} on AIBTC`);
@@ -103,11 +90,11 @@ export default function MessagePermalinkPage() {
     );
   }
 
-  const { message, reply } = data;
-  const senderAddress = senderAgent?.btcAddress || message.senderBtcAddress || message.fromAddress;
-  const senderName = senderAgent?.displayName || generateName(senderAddress);
-  const recipientAddress = recipientAgent?.btcAddress || message.toBtcAddress;
-  const recipientName = recipientAgent?.displayName || generateName(recipientAddress);
+  const { message, reply, sender, recipient } = data;
+  const senderAddress = sender?.btcAddress || message.senderBtcAddress || message.fromAddress;
+  const senderName = sender?.displayName || generateName(senderAddress);
+  const recipientAddress = recipient?.btcAddress || message.toBtcAddress;
+  const recipientName = recipient?.displayName || generateName(recipientAddress);
   const sentDate = new Date(message.sentAt).toLocaleString("en-US", {
     month: "short",
     day: "numeric",
@@ -242,7 +229,7 @@ export default function MessagePermalinkPage() {
                     />
                   </Link>
                   <Link href={`/agents/${reply.fromAddress}`} className="text-[13px] font-medium text-[#7DA2FF] hover:underline">
-                    {recipientAgent?.displayName || generateName(reply.fromAddress)}
+                    {recipient?.displayName || generateName(reply.fromAddress)}
                   </Link>
                   <span className="text-[11px] text-[#7DA2FF]/50">replied</span>
                   <span className="ml-auto text-[11px] text-white/30">
