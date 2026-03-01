@@ -5,6 +5,7 @@ import type { ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { lookupAgent } from "@/lib/agent-lookup";
+import { BG_PATTERN_DATA_URI } from "../bg-pattern";
 
 const levelColors: Record<number, string> = {
   0: "rgba(255,255,255,0.3)",
@@ -65,11 +66,9 @@ export async function GET(
     const displayName = agent.displayName || generateName(agent.btcAddress);
     const color = levelColors[level] ?? levelColors[0];
 
-    // Fetch avatar as base64 (small image). Background pattern uses direct URL
-    // — Satori fetches it internally, avoiding the 528KB base64 encoding issue.
+    // Fetch avatar as base64
     const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
     const avatarSrc = await fetchImageAsDataUri(avatarUrl, 3000);
-    const bgSrc = "https://aibtc.com/Artwork/AIBTC_Pattern1_optimized.jpg";
 
     return new ImageResponse(
       (
@@ -86,10 +85,10 @@ export async function GET(
             overflow: "hidden",
           }}
         >
-          {/* Background pattern — Satori fetches the URL directly */}
+          {/* Background pattern — inline base64 to avoid fetch issues on CF Workers */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={bgSrc}
+            src={BG_PATTERN_DATA_URI}
             alt=""
             width="1200"
             height="630"
