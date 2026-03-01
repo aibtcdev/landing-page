@@ -12,8 +12,31 @@ const levelColors: Record<number, string> = {
   2: "#7DA2FF",
 };
 
+/**
+ * Fetch an image and return it as a base64 data URI.
+ * Returns null on failure (timeout, network error, non-OK status).
+ */
+async function fetchImageAsDataUri(
+  url: string,
+  timeoutMs: number
+): Promise<string | null> {
+  try {
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    const res = await fetch(url, { signal: controller.signal });
+    clearTimeout(timer);
+    if (!res.ok) return null;
+    const buf = await res.arrayBuffer();
+    const ct = res.headers.get("content-type") || "image/jpeg";
+    const base64 = Buffer.from(new Uint8Array(buf)).toString("base64");
+    return `data:${ct};base64,${base64}`;
+  } catch {
+    return null;
+  }
+}
+
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
@@ -42,6 +65,12 @@ export async function GET(
     const displayName = agent.displayName || generateName(agent.btcAddress);
     const color = levelColors[level] ?? levelColors[0];
 
+    // Fetch avatar as base64 (small image). Background pattern uses direct URL
+    // — Satori fetches it internally, avoiding the 528KB base64 encoding issue.
+    const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+    const avatarSrc = await fetchImageAsDataUri(avatarUrl, 3000);
+    const bgSrc = "https://aibtc.com/Artwork/AIBTC_Pattern1_optimized.jpg";
+
     return new ImageResponse(
       (
         <div
@@ -51,15 +80,16 @@ export async function GET(
             display: "flex",
             flexDirection: "row",
             alignItems: "center",
-            justifyContent: "center",
             fontFamily: "system-ui, sans-serif",
+            background: "#000000",
             position: "relative",
+            overflow: "hidden",
           }}
         >
-          {/* Background pattern — full bleed, no overlay */}
+          {/* Background pattern — Satori fetches the URL directly */}
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src="https://aibtc.com/Artwork/AIBTC_Pattern1_optimized.jpg"
+            src={bgSrc}
             alt=""
             width="1200"
             height="630"
@@ -70,74 +100,153 @@ export async function GET(
               width: "1200px",
               height: "630px",
               objectFit: "cover",
+              opacity: 1,
             }}
           />
 
-          {/* Agent info — centered on top of pattern */}
+
+          {/* Content: left-aligned layout */}
           <div
             style={{
               display: "flex",
-              flexDirection: "column",
+              flexDirection: "row",
               alignItems: "center",
-              gap: "16px",
+              gap: "48px",
+              padding: "0 80px",
               position: "relative",
+              width: "100%",
             }}
           >
-            {/* Agent name */}
-            <div
-              style={{
-                fontSize: "64px",
-                fontWeight: "700",
-                color: "#ffffff",
-                display: "flex",
-                lineHeight: 1.1,
-                textShadow: "0 2px 12px rgba(0,0,0,0.8)",
-              }}
-            >
-              {displayName}
-            </div>
-
-            {/* Level badge */}
+            {/* Avatar */}
             <div
               style={{
                 display: "flex",
-                alignItems: "center",
-                gap: "10px",
+                position: "relative",
+                flexShrink: 0,
               }}
             >
+              {/* Orbital ring */}
               <div
                 style={{
-                  width: "16px",
-                  height: "16px",
+                  position: "absolute",
+                  top: "-14px",
+                  left: "-14px",
+                  width: "268px",
+                  height: "268px",
                   borderRadius: "50%",
-                  backgroundColor: color,
+                  border: `3px solid ${color}`,
                   display: "flex",
                 }}
               />
-              <span
-                style={{
-                  fontSize: "32px",
-                  fontWeight: "500",
-                  color: color,
-                  display: "flex",
-                  textShadow: "0 2px 8px rgba(0,0,0,0.8)",
-                }}
-              >
-                {level === 0 ? "Unverified" : `Level ${level}: ${levelDef.name}`}
-              </span>
+              {level >= 2 && (
+                <div
+                  style={{
+                    position: "absolute",
+                    top: "-28px",
+                    left: "-28px",
+                    width: "296px",
+                    height: "296px",
+                    borderRadius: "50%",
+                    border: `2px solid ${levelColors[2]}60`,
+                    display: "flex",
+                  }}
+                />
+              )}
+
+              {avatarSrc ? (
+                // eslint-disable-next-line @next/next/no-img-element
+                <img
+                  src={avatarSrc}
+                  alt=""
+                  width="240"
+                  height="240"
+                  style={{
+                    borderRadius: "50%",
+                    border: `4px solid ${color}50`,
+                  }}
+                />
+              ) : (
+                <div
+                  style={{
+                    width: "240px",
+                    height: "240px",
+                    borderRadius: "50%",
+                    border: `4px solid ${color}50`,
+                    background: `linear-gradient(135deg, ${color}40 0%, ${color}20 100%)`,
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    fontSize: "96px",
+                    fontWeight: "700",
+                    color: color,
+                  }}
+                >
+                  {displayName.charAt(0)}
+                </div>
+              )}
             </div>
 
-            {/* aibtc.com */}
+            {/* Agent info */}
             <div
               style={{
-                fontSize: "22px",
-                color: "rgba(255,255,255,0.6)",
                 display: "flex",
-                marginTop: "4px",
-                textShadow: "0 1px 6px rgba(0,0,0,0.8)",
+                flexDirection: "column",
+                gap: "12px",
               }}
             >
-              aibtc.com
+              {/* Agent name */}
+              <div
+                style={{
+                  fontSize: "56px",
+                  fontWeight: "700",
+                  color: "#ffffff",
+                  display: "flex",
+                  lineHeight: 1.1,
+                }}
+              >
+                {displayName}
+              </div>
+
+              {/* Level badge */}
+              <div
+                style={{
+                  display: "flex",
+                  alignItems: "center",
+                  gap: "10px",
+                }}
+              >
+                <div
+                  style={{
+                    width: "14px",
+                    height: "14px",
+                    borderRadius: "50%",
+                    backgroundColor: color,
+                    display: "flex",
+                  }}
+                />
+                <span
+                  style={{
+                    fontSize: "28px",
+                    fontWeight: "500",
+                    color: color,
+                    display: "flex",
+                  }}
+                >
+                  {level === 0 ? "Unverified" : `Level ${level}: ${levelDef.name}`}
+                </span>
+              </div>
+
+              {/* aibtc.com */}
+              <div
+                style={{
+                  fontSize: "20px",
+                  color: "rgba(255,255,255,0.4)",
+                  display: "flex",
+                  marginTop: "4px",
+                }}
+              >
+                aibtc.com
+              </div>
             </div>
           </div>
         </div>
