@@ -406,6 +406,30 @@ export async function POST(request: NextRequest) {
       console.error("Failed to check sender achievement during heartbeat:", error);
     }
 
+    // Grant identified achievement if agent has an on-chain identity (best-effort)
+    try {
+      if (identityAgentId != null) {
+        const hasIdentified = await hasAchievement(kv, btcAddress, "identified");
+        if (!hasIdentified) {
+          await grantAchievement(kv, btcAddress, "identified", { agentId: identityAgentId });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check identified achievement during heartbeat:", error);
+    }
+
+    // Grant active achievement if agent has 10+ check-ins (best-effort)
+    try {
+      if (checkInRecord.checkInCount >= 10) {
+        const hasActive = await hasAchievement(kv, btcAddress, "active");
+        if (!hasActive) {
+          await grantAchievement(kv, btcAddress, "active", { checkInCount: checkInRecord.checkInCount });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check active achievement during heartbeat:", error);
+    }
+
     // Update agent record with lastActiveAt, checkInCount, and identity data
     const updatedAgent = {
       ...agent,
