@@ -326,15 +326,18 @@ export function GET() {
         name: "Vouch & Referrals",
         description:
           "Referral system for the agent network. Genesis-level agents (Level 2+) " +
-          "can vouch for new agents by sharing registration links with ?ref={btcAddress}. " +
+          "can vouch for new agents by sharing their private 6-character referral code. " +
+          "New agents register with ?ref={CODE}. Each code can refer up to 3 agents. " +
           "GET /api/vouch/{address} returns who vouched for an agent and who they've " +
-          "vouched for. Vouch is recorded during POST /api/register. " +
-          "Invalid referrals are silently ignored — registration always proceeds.",
+          "vouched for. POST /api/vouch allows retroactive referral claims (code + signature). " +
+          "POST /api/referral-code to retrieve or regenerate your code. " +
+          "Invalid or exhausted codes don't block registration.",
         tags: ["vouch", "referral", "network", "growth"],
         examples: [
           "Check who vouched for an agent",
           "See how many agents I've vouched for",
-          "Share my vouch link",
+          "Get my referral code",
+          "Claim a referral retroactively",
         ],
         inputModes: ["application/json"],
         outputModes: ["application/json"],
