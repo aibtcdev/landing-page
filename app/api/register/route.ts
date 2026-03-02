@@ -21,7 +21,15 @@ import { provisionSponsorKey, DEFAULT_RELAY_URL } from "@/lib/sponsor";
 import { validateTaprootAddress } from "@/lib/challenge";
 import { validateNostrPubkey } from "@/lib/nostr";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
-import { MIN_REFERRER_LEVEL, storeVouch, type VouchRecord } from "@/lib/vouch";
+import {
+  MIN_REFERRER_LEVEL,
+  MAX_REFERRALS,
+  storeVouch,
+  getVouchIndex,
+  generateAndStoreReferralCode,
+  lookupReferralCode,
+  type VouchRecord,
+} from "@/lib/vouch";
 
 export async function GET() {
   return NextResponse.json({
@@ -175,10 +183,11 @@ export async function GET() {
         ref: {
           type: "string",
           description:
-            "Bitcoin address of the vouching agent (must be Genesis level). " +
+            "6-character referral code from a Genesis-level agent. " +
             "Optional. The vouch is recorded automatically during registration. " +
-            "Invalid or missing referrers are silently ignored — registration proceeds normally.",
-          example: "?ref=bc1qxy2kgdygjrsqtzq2n0yrf2493p83kkfjhx0wlh",
+            "Invalid or exhausted codes don't block registration — the response " +
+            "includes a referralStatus field explaining why the referral wasn't applied.",
+          example: "?ref=ABC123",
         },
       },
     },
@@ -267,39 +276,61 @@ export async function GET() {
 const EXPECTED_MESSAGE = "Bitcoin will be the currency of AIs";
 
 /**
- * Validate a referrer BTC address and return the AgentRecord if eligible.
+ * Result of referral code validation.
+ */
+interface ReferralValidation {
+  valid: boolean;
+  referrer?: AgentRecord;
+  reason?: string;
+}
+
+/**
+ * Validate a referral code and return the referrer's AgentRecord if eligible.
  *
- * Returns null (silently) for any invalid, missing, or ineligible referrer so
- * that registration always proceeds regardless of referral validity.
+ * Returns { valid: false, reason } for any invalid, missing, or ineligible referral
+ * so that registration always proceeds — the reason is surfaced in the response.
  */
 async function validateReferrer(
   kv: KVNamespace,
-  refAddress: string,
+  refCode: string,
   newBtcAddress: string,
   newStxAddress: string
-): Promise<AgentRecord | null> {
+): Promise<ReferralValidation> {
   try {
-    // Fast format check — reject obviously invalid input before KV access
-    if (!refAddress || refAddress.length < 10 || refAddress.length > 100 || !refAddress.startsWith("bc1")) {
-      return null;
+    // Fast format check — referral codes are 6 alphanumeric chars
+    if (!refCode || refCode.length !== 6) {
+      return { valid: false, reason: "invalid_code" };
+    }
+
+    // Reverse lookup: code → referrer BTC address
+    const referrerBtcAddress = await lookupReferralCode(kv, refCode.toUpperCase());
+    if (!referrerBtcAddress) {
+      return { valid: false, reason: "invalid_code" };
     }
 
     // Prevent self-referral by BTC address
-    if (refAddress === newBtcAddress) return null;
+    if (referrerBtcAddress === newBtcAddress) {
+      return { valid: false, reason: "self_referral" };
+    }
 
-    const referrerData = await kv.get(`btc:${refAddress}`);
-    if (!referrerData) return null;
+    const referrerData = await kv.get(`btc:${referrerBtcAddress}`);
+    if (!referrerData) {
+      return { valid: false, reason: "referrer_not_found" };
+    }
 
     let referrerAgent: AgentRecord;
     try {
       referrerAgent = JSON.parse(referrerData) as AgentRecord;
     } catch {
-      return null;
+      return { valid: false, reason: "referrer_not_found" };
     }
 
     // Prevent self-referral via STX address
-    if (referrerAgent.stxAddress === newStxAddress) return null;
+    if (referrerAgent.stxAddress === newStxAddress) {
+      return { valid: false, reason: "self_referral" };
+    }
 
+    // Check referrer level (must be Genesis / Level 2+)
     const referrerClaim = await kv.get(`claim:${referrerAgent.btcAddress}`);
     let referrerClaimStatus: ClaimStatus | null = null;
     if (referrerClaim) {
@@ -309,12 +340,21 @@ async function validateReferrer(
     }
 
     const referrerLevel = computeLevel(referrerAgent, referrerClaimStatus);
-    if (referrerLevel < MIN_REFERRER_LEVEL) return null;
+    if (referrerLevel < MIN_REFERRER_LEVEL) {
+      return { valid: false, reason: "referrer_not_eligible" };
+    }
 
-    return referrerAgent;
+    // Check referral count (max 3)
+    const vouchIndex = await getVouchIndex(kv, referrerAgent.btcAddress);
+    const referralCount = vouchIndex?.refereeAddresses.length ?? 0;
+    if (referralCount >= MAX_REFERRALS) {
+      return { valid: false, reason: "code_exhausted" };
+    }
+
+    return { valid: true, referrer: referrerAgent };
   } catch {
-    // Any unexpected error — silently ignore so registration always proceeds
-    return null;
+    // Any unexpected error — silently fail so registration always proceeds
+    return { valid: false, reason: "internal_error" };
   }
 }
 
@@ -538,12 +578,13 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Vouch: extract referrer from query param and validate (silently ignore invalid referrers)
+    // Vouch: extract referral code from query param and validate
     const { searchParams } = new URL(request.url);
-    const refAddress = searchParams.get("ref")?.trim() || null;
-    const validatedReferrer = refAddress
-      ? await validateReferrer(kv, refAddress, btcResult.address, stxResult.address)
+    const refCode = searchParams.get("ref")?.trim() || null;
+    const referralValidation = refCode
+      ? await validateReferrer(kv, refCode, btcResult.address, stxResult.address)
       : null;
+    const validatedReferrer = referralValidation?.valid ? referralValidation.referrer! : null;
 
     // Phase 2: Sponsor provisioning + BNS lookup (only after confirming no duplicate)
     const relayUrl = env.X402_RELAY_URL || DEFAULT_RELAY_URL;
@@ -598,19 +639,26 @@ export async function POST(request: NextRequest) {
 
     await Promise.all(kvWrites);
 
-    // Fire-and-forget: store vouch record after main KV writes succeed.
-    // Uses ctx.waitUntil so errors don't break registration.
+    // Store vouch record synchronously (not fire-and-forget) to enforce count limits
     if (validatedReferrer) {
       const vouchRecord: VouchRecord = {
         referrer: validatedReferrer.btcAddress,
         referee: btcResult.address,
         registeredAt: record.verifiedAt,
       };
-      ctx.waitUntil(
-        storeVouch(kv, vouchRecord).catch((err) =>
-          console.error("Failed to store vouch record:", err)
-        )
-      );
+      try {
+        await storeVouch(kv, vouchRecord);
+      } catch (err) {
+        console.error("Failed to store vouch record:", err);
+      }
+    }
+
+    // Generate referral code for the new agent
+    let referralCode: string | undefined;
+    try {
+      referralCode = await generateAndStoreReferralCode(kv, btcResult.address);
+    } catch (err) {
+      console.error("Failed to generate referral code:", err);
     }
 
     // Build response with conditional sponsorApiKey field
@@ -676,11 +724,30 @@ export async function POST(request: NextRequest) {
       };
     }
 
+    // Include referral code in response
+    if (referralCode) {
+      responseBody.referralCode = referralCode;
+      responseBody.referralInstructions =
+        "Share this code with other agents to refer them during registration. " +
+        "They register with ?ref=" + referralCode + ". " +
+        "Your code becomes active once you reach Genesis level (Level 2). " +
+        "Each code can refer up to " + MAX_REFERRALS + " agents. " +
+        "Retrieve or regenerate your code via POST /api/referral-code.";
+    }
+
     // Conditionally include vouch info
     if (validatedReferrer) {
       responseBody.vouchedBy = {
         btcAddress: validatedReferrer.btcAddress,
         displayName: validatedReferrer.displayName || generateName(validatedReferrer.btcAddress),
+      };
+    }
+
+    // Include referral status when a code was provided but wasn't valid
+    if (refCode && referralValidation && !referralValidation.valid) {
+      responseBody.referralStatus = {
+        applied: false,
+        reason: referralValidation.reason,
       };
     }
 
