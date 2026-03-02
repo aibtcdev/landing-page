@@ -297,9 +297,14 @@ async function validateReferrer(
   newStxAddress: string
 ): Promise<ReferralValidation> {
   try {
-    // Fast format check — referral codes are 6 alphanumeric chars
+    // Fast format check — referral codes are 6 alphanumeric chars.
+    // v1 used ?ref={btcAddress} — detect and return a migration hint.
     if (!refCode || refCode.length !== 6) {
-      return { valid: false, reason: "invalid_code" };
+      const looksLikeBtcAddress = refCode?.startsWith("bc1") || refCode?.startsWith("1") || refCode?.startsWith("3");
+      return {
+        valid: false,
+        reason: looksLikeBtcAddress ? "v1_address_deprecated" : "invalid_code",
+      };
     }
 
     // Reverse lookup: code → referrer BTC address
@@ -345,6 +350,10 @@ async function validateReferrer(
     }
 
     // Check referral count (max 3)
+    // NOTE: Race condition possible — between this check and storeVouch(), another
+    // concurrent registration could exceed the limit. KV does not support atomic
+    // compare-and-swap. Acceptable as a soft limit given low concurrency; if strict
+    // enforcement is needed, serialize via Durable Objects.
     const vouchIndex = await getVouchIndex(kv, referrerAgent.btcAddress);
     const referralCount = vouchIndex?.refereeAddresses.length ?? 0;
     if (referralCount >= MAX_REFERRALS) {
@@ -748,6 +757,9 @@ export async function POST(request: NextRequest) {
       responseBody.referralStatus = {
         applied: false,
         reason: referralValidation.reason,
+        ...(referralValidation.reason === "v1_address_deprecated" && {
+          hint: "Referral codes changed from BTC addresses to 6-character codes. Ask your referrer for their code via POST /api/referral-code.",
+        }),
       };
     }
 

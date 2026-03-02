@@ -149,11 +149,12 @@ export async function POST(request: NextRequest) {
     let codeRecord = await getReferralCode(kv, agent.btcAddress);
 
     if (regenerate || !codeRecord) {
-      // Delete old reverse lookup if regenerating
-      if (codeRecord) {
-        await deleteReferralLookup(kv, codeRecord.code);
-      }
+      const oldCode = codeRecord?.code;
+      // Generate new code first, then clean up old reverse lookup
       const newCode = await generateAndStoreReferralCode(kv, agent.btcAddress);
+      if (oldCode) {
+        await deleteReferralLookup(kv, oldCode);
+      }
       codeRecord = { code: newCode, createdAt: new Date().toISOString() };
     }
 
