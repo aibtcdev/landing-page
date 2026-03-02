@@ -4,6 +4,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { lookupAgent } from "@/lib/agent-lookup";
 import type { AchievementAgentIndex } from "@/lib/achievements/types";
 import type { InboxAgentIndex } from "@/lib/inbox/types";
+import type { ReferralCodeRecord } from "@/lib/vouch";
 
 /** Safely parse JSON, returning null on failure. */
 function safeParseJson<T>(data: string | null, label: string): T | null {
@@ -63,6 +64,10 @@ export async function GET(request: NextRequest) {
           "inbox:agent:{btcAddress}",
           "inbox:message:{messageId}",
           "inbox:reply:{messageId}",
+        ],
+        referral: [
+          "referral-code:{btcAddress}",
+          "referral-lookup:{code}",
         ],
       },
       returns: {
@@ -152,9 +157,10 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Read index records in parallel to discover related keys
-    const [achievementData, inboxData] = await Promise.all([
+    const [achievementData, inboxData, referralCodeData] = await Promise.all([
       kv.get(`achievements:${agent.btcAddress}`),
       kv.get(`inbox:agent:${agent.btcAddress}`),
+      kv.get(`referral-code:${agent.btcAddress}`),
     ]);
 
     const achievementIndex = safeParseJson<AchievementAgentIndex>(
@@ -187,6 +193,12 @@ export async function DELETE(request: NextRequest) {
         { status: 500 }
       );
     }
+
+    // Parse referral code for reverse lookup cleanup
+    const referralCode = safeParseJson<ReferralCodeRecord>(
+      referralCodeData,
+      "referral code"
+    );
 
     // Build categorized key lists
     const coreKeys = [`btc:${agent.btcAddress}`];
@@ -222,6 +234,10 @@ export async function DELETE(request: NextRequest) {
           `inbox:message:${msgId}`,
           `inbox:reply:${msgId}`,
         ]) || []),
+      ],
+      referral: [
+        `referral-code:${agent.btcAddress}`,
+        ...(referralCode ? [`referral-lookup:${referralCode.code}`] : []),
       ],
     };
 
