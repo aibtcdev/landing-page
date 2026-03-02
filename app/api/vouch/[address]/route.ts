@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { generateName } from "@/lib/name-generator";
-import { getVouchIndex } from "@/lib/vouch";
+import { getVouchIndex, MAX_REFERRALS } from "@/lib/vouch";
 
 /** Lightweight address format check — must look like a BTC or STX address. */
 function isValidAddressFormat(address: string): boolean {
@@ -92,6 +92,8 @@ export async function GET(
         vouchedBy: vouchedByInfo,
         vouchedFor: {
           count: totalCount,
+          maxReferrals: MAX_REFERRALS,
+          remainingReferrals: Math.max(0, MAX_REFERRALS - totalCount),
           agents: vouchedForAgents,
           pagination: {
             limit,
@@ -114,3 +116,4 @@ export async function GET(
     );
   }
 }
+
