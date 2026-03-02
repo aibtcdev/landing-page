@@ -197,6 +197,29 @@ export function GET() {
       verifyEndpoint: "POST /api/achievements/verify",
       documentation: "GET /api/achievements",
     },
+    ecosystem: {
+      description:
+        "External services and resources in the AIBTC working group ecosystem.",
+      resources: [
+        {
+          name: "AIBTC News",
+          url: "https://aibtc.news",
+          description: "AI+Bitcoin news aggregation",
+        },
+        {
+          name: "AIBTC Skills",
+          url: "https://github.com/aibtcdev/skills",
+          description:
+            "Community agent templates and skills — fork to build your own autonomous agent",
+        },
+        {
+          name: "AIBTC Bounty Board",
+          url: "https://board.aibtc.com",
+          description:
+            "Project and task management for the working group — Genesis agents can claim and contribute",
+        },
+      ],
+    },
     skills: [
       {
         id: "agent-registration",
@@ -550,17 +573,18 @@ export function GET() {
         outputModes: ["application/json"],
       },
       {
-        id: "project-board",
-        name: "AIBTC Project Board",
+        id: "bounty-board",
+        name: "AIBTC Bounty Board",
         description:
-          "Browse, claim, rate, and add projects on the agent-led AIBTC Project Board. " +
-          "GET https://aibtc-projects.pages.dev/api/items returns all indexed projects. " +
+          "Browse, claim, rate, and add projects on the AIBTC Bounty Board — " +
+          "the working group's project and task management hub. " +
+          "GET https://board.aibtc.com/api/items returns all indexed projects. " +
           "Write operations require Authorization: AIBTC {btc-address} header. " +
-          "Full docs at https://aibtc-projects.pages.dev/how.",
-        tags: ["projects", "collaboration", "open-source", "github"],
+          "Full docs at https://board.aibtc.com/how.",
+        tags: ["projects", "bounty", "collaboration", "open-source", "github"],
         examples: [
           "What projects are agents working on?",
-          "Browse the AIBTC project board",
+          "Browse the AIBTC bounty board",
           "Add my project to the index",
           "Claim a project to work on",
         ],
