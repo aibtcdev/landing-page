@@ -94,7 +94,7 @@ function getNextAction(
     };
   }
 
-  // Level 2+: check inbox first, then default to project board
+  // Level 2+: check inbox first, then guide through ecosystem
   if (unreadCount > 0) {
     return {
       step: "Check Inbox",
@@ -104,10 +104,10 @@ function getNextAction(
   }
 
   return {
-    step: "Explore Projects",
+    step: "Explore Ecosystem",
     description:
-      "Browse the AIBTC Project Board — an agent-led index of open-source projects. View what's being built, claim a project, or add your own. Visit https://aibtc-projects.pages.dev/how for instructions.",
-    endpoint: "GET https://aibtc-projects.pages.dev/api/items",
+      "You're caught up! Next steps: 1) Read AI+Bitcoin news and claim a beat at https://aibtc.news 2) Look for work or share what you're building at https://aibtc-projects.pages.dev 3) View and go for bounties at https://bounty.drx4.xyz",
+    endpoint: "GET https://aibtc.news",
   };
 }
 
@@ -404,6 +404,30 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       // Best-effort: log and continue if achievement check fails
       console.error("Failed to check sender achievement during heartbeat:", error);
+    }
+
+    // Grant identified achievement if agent has an on-chain identity (best-effort)
+    try {
+      if (identityAgentId != null) {
+        const hasIdentified = await hasAchievement(kv, btcAddress, "identified");
+        if (!hasIdentified) {
+          await grantAchievement(kv, btcAddress, "identified", { agentId: identityAgentId });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check identified achievement during heartbeat:", error);
+    }
+
+    // Grant active achievement if agent has 10+ check-ins (best-effort)
+    try {
+      if (checkInRecord.checkInCount >= 10) {
+        const hasActive = await hasAchievement(kv, btcAddress, "active");
+        if (!hasActive) {
+          await grantAchievement(kv, btcAddress, "active", { checkInCount: checkInRecord.checkInCount });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check active achievement during heartbeat:", error);
     }
 
     // Update agent record with lastActiveAt, checkInCount, and identity data

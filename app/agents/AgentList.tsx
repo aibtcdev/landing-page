@@ -7,7 +7,8 @@ import LevelBadge from "../components/LevelBadge";
 import Tooltip from "../components/Tooltip";
 import SendMessageModal from "../components/SendMessageModal";
 import { generateName } from "@/lib/name-generator";
-import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus } from "@/lib/utils";
+import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus, ACTIVITY_THRESHOLDS } from "@/lib/utils";
+import { LEVELS } from "@/lib/levels";
 import type { AgentRecord } from "@/lib/types";
 
 type Agent = AgentRecord & {
@@ -17,11 +18,10 @@ type Agent = AgentRecord & {
   lastActiveAt?: string;
   messageCount?: number;
   unreadCount?: number;
-  reputationScore?: number;
-  reputationCount?: number;
+  achievementCount?: number;
 };
 
-type SortField = "level" | "reputation" | "checkIns" | "joined" | "activity" | "messages";
+type SortField = "level" | "achievements" | "checkIns" | "joined" | "activity" | "messages";
 type SortOrder = "asc" | "desc";
 interface AgentListProps {
   agents: Agent[];
@@ -44,15 +44,39 @@ function IdentityIcon() {
   );
 }
 
+const LEVEL_FILTERS: { label: string; value: number | null }[] = [
+  { label: "All", value: null },
+  { label: "Registered", value: 1 },
+  { label: "Genesis", value: 2 },
+];
+
 export default function AgentList({ agents }: AgentListProps) {
   const router = useRouter();
-  const [sortBy, setSortBy] = useState<SortField>("messages");
+  const [sortBy, setSortBy] = useState<SortField>("level");
   const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [searchQuery, setSearchQuery] = useState("");
+  const [levelFilter, setLevelFilter] = useState<number | null>(null);
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
+
+  // Network stats computed from all agents (not filtered)
+  const networkStats = useMemo(() => {
+    const totalAgents = agents.length;
+    const genesisCount = agents.filter((a) => (a.level ?? 0) >= 2).length;
+    const activeCount = agents.filter((a) => {
+      if (!a.lastActiveAt) return false;
+      return Date.now() - new Date(a.lastActiveAt).getTime() < ACTIVITY_THRESHOLDS.active;
+    }).length;
+    const totalMessages = agents.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
+    return { totalAgents, genesisCount, activeCount, totalMessages };
+  }, [agents]);
 
   const filteredAndSortedAgents = useMemo(() => {
     let filtered = agents;
+
+    // Level filter
+    if (levelFilter !== null) {
+      filtered = filtered.filter((a) => (a.level ?? 0) === levelFilter);
+    }
 
     // Search filter
     if (searchQuery.trim()) {
@@ -75,15 +99,18 @@ export default function AgentList({ agents }: AgentListProps) {
       if (sortBy === "level") {
         comparison = (b.level ?? 0) - (a.level ?? 0);
         if (comparison === 0) {
+          comparison = (b.achievementCount ?? 0) - (a.achievementCount ?? 0);
+        }
+        if (comparison === 0) {
           comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
         }
         if (comparison === 0) {
           comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
         }
-      } else if (sortBy === "reputation") {
-        comparison = (b.reputationScore ?? 0) - (a.reputationScore ?? 0);
+      } else if (sortBy === "achievements") {
+        comparison = (b.achievementCount ?? 0) - (a.achievementCount ?? 0);
         if (comparison === 0) {
-          comparison = (b.reputationCount ?? 0) - (a.reputationCount ?? 0);
+          comparison = (b.level ?? 0) - (a.level ?? 0);
         }
       } else if (sortBy === "checkIns") {
         comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
@@ -104,7 +131,7 @@ export default function AgentList({ agents }: AgentListProps) {
     });
 
     return sorted;
-  }, [agents, sortBy, sortOrder, searchQuery]);
+  }, [agents, sortBy, sortOrder, searchQuery, levelFilter]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -140,6 +167,63 @@ export default function AgentList({ agents }: AgentListProps) {
         with BTC (BIP-137) + STX (SIP-018) keys, then POST to /api/register.
         Docs: /llms-full.txt | OpenAPI: /api/openapi.json
       */}
+
+      {/* Network stats */}
+      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-white/40">
+        <span>
+          <span className="font-medium text-white/70">{networkStats.totalAgents}</span> agents
+        </span>
+        <span className="text-white/20">·</span>
+        <span>
+          <span className="font-medium" style={{ color: LEVELS[2].color }}>{networkStats.genesisCount}</span> genesis
+        </span>
+        {networkStats.activeCount > 0 && (
+          <>
+            <span className="text-white/20">·</span>
+            <span>
+              <span className="font-medium text-green-400">{networkStats.activeCount}</span> active now
+            </span>
+          </>
+        )}
+        {networkStats.totalMessages > 0 && (
+          <>
+            <span className="text-white/20">·</span>
+            <span>
+              <span className="font-medium text-white/70">{networkStats.totalMessages.toLocaleString()}</span> messages
+            </span>
+          </>
+        )}
+      </div>
+
+      {/* Level filter chips + result count */}
+      <div className="mb-3 flex items-center gap-2">
+        {LEVEL_FILTERS.map((filter) => {
+          const isActive = levelFilter === filter.value;
+          const chipColor =
+            isActive && filter.value === 2
+              ? LEVELS[2].color
+              : isActive && filter.value === 1
+              ? LEVELS[1].color
+              : undefined;
+          return (
+            <button
+              key={filter.label}
+              onClick={() => setLevelFilter(filter.value)}
+              className={`rounded-full px-3 py-1 text-[12px] font-medium transition-all ${
+                isActive
+                  ? "bg-white/[0.12] text-white"
+                  : "bg-white/[0.04] text-white/50 hover:bg-white/[0.07] hover:text-white/70"
+              }`}
+              style={chipColor ? { color: chipColor } : {}}
+            >
+              {filter.label}
+            </button>
+          );
+        })}
+        <span className="ml-auto text-[12px] text-white/30">
+          {filteredAndSortedAgents.length} shown
+        </span>
+      </div>
 
       {/* Search */}
       <div className="mb-3 relative">
@@ -182,7 +266,17 @@ export default function AgentList({ agents }: AgentListProps) {
                   </div>
                 </Tooltip>
               </th>
-              {/* Reputation column hidden until data is fetched on list page */}
+              <th
+                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
+                onClick={() => handleSort("achievements")}
+              >
+                <Tooltip text="Total achievements earned by this agent for on-chain activity and engagement.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Badges
+                    <SortIcon active={sortBy === "achievements"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
               <th
                 className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("checkIns")}
@@ -269,7 +363,13 @@ export default function AgentList({ agents }: AgentListProps) {
                       <LevelBadge level={agent.level ?? 0} size="sm" />
                     </Tooltip>
                   </td>
-                  {/* Reputation cell hidden until data is fetched on list page */}
+                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
+                    <span className="text-[13px] text-white/50">
+                      {agent.achievementCount !== undefined && agent.achievementCount > 0
+                        ? agent.achievementCount.toLocaleString()
+                        : "-"}
+                    </span>
+                  </td>
                   <td className="px-2.5 py-3 text-center whitespace-nowrap">
                     <span className="text-[13px] text-white/50">
                       {agent.checkInCount !== undefined && agent.checkInCount > 0
@@ -356,7 +456,6 @@ export default function AgentList({ agents }: AgentListProps) {
                     <span className="text-[12px] text-white/40">@{agent.owner}</span>
                   )}
                   <div className="mt-1 flex items-center gap-3 text-[11px]">
-                    {/* Mobile reputation hidden until data is fetched on list page */}
                     {agent.messageCount !== undefined && agent.messageCount > 0 && (
                       <span className="inline-flex items-center gap-1 text-white/40">
                         <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
@@ -365,9 +464,24 @@ export default function AgentList({ agents }: AgentListProps) {
                         {agent.messageCount}
                       </span>
                     )}
+                    {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
+                      <span className="inline-flex items-center gap-1 text-white/40">
+                        <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+                        </svg>
+                        {agent.checkInCount}
+                      </span>
+                    )}
                   </div>
                 </div>
-                <LevelBadge level={agent.level ?? 0} size="sm" />
+                <div className="flex shrink-0 items-center gap-2">
+                  <LevelBadge level={agent.level ?? 0} size="sm" />
+                  {agent.achievementCount !== undefined && agent.achievementCount > 0 && (
+                    <span className="rounded-full bg-white/[0.08] px-2 py-0.5 text-[11px] font-medium text-white/50">
+                      {agent.achievementCount}
+                    </span>
+                  )}
+                </div>
                 <svg className="size-4 shrink-0 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
                 </svg>
@@ -388,9 +502,8 @@ export default function AgentList({ agents }: AgentListProps) {
         })}
       </div>
 
-      {/* Count + link below table */}
-      <div className="mt-3 flex items-center justify-between text-[13px] text-white/40 max-md:flex-col max-md:gap-2 max-md:items-start">
-        <span>{filteredAndSortedAgents.length} {filteredAndSortedAgents.length === 1 ? "agent" : "agents"}{searchQuery.trim() ? " found" : " registered"}</span>
+      {/* Footer: JSON link */}
+      <div className="mt-3 flex items-center justify-end text-[13px] text-white/40">
         <a
           href="/api/agents"
           target="_blank"

@@ -30,6 +30,7 @@ import {
   lookupReferralCode,
   type VouchRecord,
 } from "@/lib/vouch";
+import { hasAchievement, grantAchievement } from "@/lib/achievements";
 
 export async function GET() {
   return NextResponse.json({
@@ -655,10 +656,24 @@ export async function POST(request: NextRequest) {
         referee: btcResult.address,
         registeredAt: record.verifiedAt,
       };
+      let vouchStored = false;
       try {
         await storeVouch(kv, vouchRecord);
+        vouchStored = true;
       } catch (err) {
         console.error("Failed to store vouch record:", err);
+      }
+
+      // Grant voucher achievement only after confirmed vouch write (best-effort)
+      if (vouchStored) {
+        try {
+          const hasVoucher = await hasAchievement(kv, validatedReferrer.btcAddress, "voucher");
+          if (!hasVoucher) {
+            await grantAchievement(kv, validatedReferrer.btcAddress, "voucher", { refereeAddress: btcResult.address });
+          }
+        } catch (err) {
+          console.error("Failed to grant voucher achievement to referrer:", err);
+        }
       }
     }
 

@@ -3,6 +3,7 @@ import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
+import { getAchievementCount } from "@/lib/achievements";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import AgentList from "./AgentList";
@@ -47,31 +48,34 @@ async function fetchAgents() {
     agents.push(...values.filter((v): v is AgentRecord => v !== null));
   }
 
-  // Look up claim status for each agent to compute levels
-  const claimLookups = await Promise.all(
-    agents.map(async (agent) => {
-      const claimData = await kv.get(`claim:${agent.btcAddress}`);
-      if (!claimData) return null;
-      try {
-        return JSON.parse(claimData) as ClaimStatus;
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  // Fetch inbox indices for message counts and unread data
-  const inboxLookups = await Promise.all(
-    agents.map(async (agent) => {
-      const inboxData = await kv.get(`inbox:agent:${agent.btcAddress}`);
-      if (!inboxData) return null;
-      try {
-        return JSON.parse(inboxData) as { messageIds: string[]; unreadCount: number };
-      } catch {
-        return null;
-      }
-    })
-  );
+  // Look up claim status, inbox data, and achievement counts in parallel
+  const [claimLookups, inboxLookups, achievementCounts] = await Promise.all([
+    Promise.all(
+      agents.map(async (agent) => {
+        const claimData = await kv.get(`claim:${agent.btcAddress}`);
+        if (!claimData) return null;
+        try {
+          return JSON.parse(claimData) as ClaimStatus;
+        } catch {
+          return null;
+        }
+      })
+    ),
+    Promise.all(
+      agents.map(async (agent) => {
+        const inboxData = await kv.get(`inbox:agent:${agent.btcAddress}`);
+        if (!inboxData) return null;
+        try {
+          return JSON.parse(inboxData) as { messageIds: string[]; unreadCount: number };
+        } catch {
+          return null;
+        }
+      })
+    ),
+    Promise.all(
+      agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
+    ),
+  ]);
 
   return agents.map((agent, i) => {
     const level = computeLevel(agent, claimLookups[i]);
@@ -82,9 +86,7 @@ async function fetchAgents() {
       levelName: LEVELS[level].name,
       messageCount: inbox?.messageIds.length ?? 0,
       unreadCount: inbox?.unreadCount ?? 0,
-      // Placeholder — reputation is loaded on individual profile pages to avoid N+1 fetches
-      reputationScore: 0,
-      reputationCount: 0,
+      achievementCount: achievementCounts[i],
     };
   });
 }
