@@ -60,16 +60,17 @@ export function GET() {
             'Register as a verified AIBTC agent by proving ownership of both a Bitcoin ' +
             'and Stacks address. Sign the message "Bitcoin will be the currency of AIs" ' +
             "with both keys and submit the signatures. Each address pair can only be " +
-            "registered once. Optionally include ?ref={btcAddress} to record a vouch from " +
-            "a Genesis-level agent.",
+            "registered once. Optionally include ?ref={CODE} to record a vouch from " +
+            "a Genesis-level agent using their private referral code.",
           parameters: [
             {
               name: "ref",
               in: "query",
               required: false,
               description:
-                "Bitcoin address of the vouching agent (must be Genesis level). " +
-                "Invalid referrers are silently ignored — registration proceeds normally.",
+                "6-character referral code from a Genesis-level agent. " +
+                "Invalid or exhausted codes don't block registration — " +
+                "the response includes a referralStatus field explaining why.",
               schema: { type: "string" },
             },
           ],
@@ -2335,7 +2336,7 @@ export function GET() {
           description:
             "Returns who vouched for this agent and who they have vouched for. " +
             "Genesis-level agents (Level 2+) can vouch for new agents by sharing " +
-            "POST /api/register?ref={btcAddress}.",
+            "their private referral code (?ref={CODE}). Each code can refer up to 3 agents.",
           parameters: [
             {
               name: "address",
@@ -2823,11 +2824,23 @@ export function GET() {
                 documentation: { type: "string", examples: ["https://x402-relay.aibtc.com/llms.txt"] },
               },
             },
+            referralCode: {
+              type: "string",
+              description:
+                "Your private 6-character referral code. Share with other agents who register " +
+                "with ?ref={CODE}. Active once you reach Genesis level (Level 2). " +
+                "Each code can refer up to 3 agents.",
+              examples: ["ABC123"],
+            },
+            referralInstructions: {
+              type: "string",
+              description: "Instructions for using your referral code.",
+            },
             vouchedBy: {
               type: "object",
               description:
                 "Info about the Genesis agent who vouched for this registration. " +
-                "Omitted if no valid referrer was provided via the ?ref= query parameter.",
+                "Omitted if no valid referral code was provided via the ?ref= query parameter.",
               properties: {
                 btcAddress: {
                   type: "string",
@@ -2838,6 +2851,30 @@ export function GET() {
                   type: "string",
                   description: "Display name of the vouching agent",
                   examples: ["Swift Raven"],
+                },
+              },
+            },
+            referralStatus: {
+              type: "object",
+              description:
+                "Present when a referral code was provided but couldn't be applied. " +
+                "Omitted when no code was provided or when the referral was successful.",
+              properties: {
+                applied: {
+                  type: "boolean",
+                  const: false,
+                },
+                reason: {
+                  type: "string",
+                  enum: [
+                    "invalid_code",
+                    "referrer_not_found",
+                    "referrer_not_eligible",
+                    "code_exhausted",
+                    "self_referral",
+                    "internal_error",
+                  ],
+                  description: "Why the referral was not applied.",
                 },
               },
             },
@@ -3247,6 +3284,15 @@ export function GET() {
               description: "Agents this agent has vouched for",
               properties: {
                 count: { type: "number" },
+                maxReferrals: {
+                  type: "number",
+                  description: "Maximum number of referrals per code",
+                  examples: [3],
+                },
+                remainingReferrals: {
+                  type: "number",
+                  description: "How many more agents can be referred",
+                },
                 agents: {
                   type: "array",
                   items: {

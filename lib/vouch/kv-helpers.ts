@@ -3,7 +3,8 @@
  */
 
 import { KV_PREFIXES } from "./constants";
-import type { VouchRecord, VouchAgentIndex } from "./types";
+import { generateClaimCode } from "@/lib/claim-code";
+import type { VouchRecord, VouchAgentIndex, ReferralCodeRecord } from "./types";
 
 /**
  * Build KV key for a vouch record.
@@ -112,4 +113,105 @@ export async function getVouchRecordsByReferrer(
   );
 
   return records.filter((r): r is VouchRecord => r !== null);
+}
+
+// ── Referral Code Helpers ──
+
+/**
+ * Build KV key for an agent's referral code.
+ */
+function buildReferralCodeKey(btcAddress: string): string {
+  return `${KV_PREFIXES.REFERRAL_CODE}${btcAddress}`;
+}
+
+/**
+ * Build KV key for the reverse lookup (code → btcAddress).
+ */
+function buildReferralLookupKey(code: string): string {
+  return `${KV_PREFIXES.REFERRAL_LOOKUP}${code}`;
+}
+
+/**
+ * Store a referral code for an agent and its reverse lookup.
+ */
+export async function storeReferralCode(
+  kv: KVNamespace,
+  btcAddress: string,
+  code: string
+): Promise<void> {
+  const record: ReferralCodeRecord = {
+    code,
+    createdAt: new Date().toISOString(),
+  };
+  await Promise.all([
+    kv.put(buildReferralCodeKey(btcAddress), JSON.stringify(record)),
+    kv.put(buildReferralLookupKey(code), btcAddress),
+  ]);
+}
+
+/**
+ * Get the referral code record for an agent.
+ */
+export async function getReferralCode(
+  kv: KVNamespace,
+  btcAddress: string
+): Promise<ReferralCodeRecord | null> {
+  const data = await kv.get(buildReferralCodeKey(btcAddress));
+  if (!data) return null;
+  try {
+    return JSON.parse(data) as ReferralCodeRecord;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Reverse lookup: resolve a referral code to a BTC address.
+ */
+export async function lookupReferralCode(
+  kv: KVNamespace,
+  code: string
+): Promise<string | null> {
+  return kv.get(buildReferralLookupKey(code));
+}
+
+/**
+ * Delete the reverse lookup for an old referral code.
+ */
+export async function deleteReferralLookup(
+  kv: KVNamespace,
+  code: string
+): Promise<void> {
+  await kv.delete(buildReferralLookupKey(code));
+}
+
+/**
+ * Get the number of agents this referrer has referred.
+ */
+export async function getReferralCount(
+  kv: KVNamespace,
+  btcAddress: string
+): Promise<number> {
+  const index = await getVouchIndex(kv, btcAddress);
+  return index?.refereeAddresses.length ?? 0;
+}
+
+/**
+ * Generate a unique referral code and store it for an agent.
+ * Retries up to 5 times on collision (extremely unlikely with 30^6 namespace).
+ */
+export async function generateAndStoreReferralCode(
+  kv: KVNamespace,
+  btcAddress: string
+): Promise<string> {
+  const MAX_ATTEMPTS = 5;
+  for (let i = 0; i < MAX_ATTEMPTS; i++) {
+    const code = generateClaimCode();
+    const existing = await lookupReferralCode(kv, code);
+    if (!existing) {
+      await storeReferralCode(kv, btcAddress, code);
+      return code;
+    }
+  }
+  throw new Error("Failed to generate unique referral code after 5 attempts");
 }

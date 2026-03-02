@@ -102,7 +102,9 @@ During registration (POST /api/register), after both signatures are verified, th
 | `/api/get-name` | GET | Deterministic name lookup for any BTC address |
 | `/api/health` | GET | System health + KV connectivity check |
 | `/api/heartbeat` | GET, POST | Check in after registration (POST, Level 1+), get personalized orientation (GET with ?address) |
+| `/api/vouch` | GET, POST | Self-doc (GET), retroactive referral claim (POST, btcAddress + referral code + signature) |
 | `/api/vouch/[address]` | GET | Vouch stats: who vouched for this agent and who they've vouched for |
+| `/api/referral-code` | GET, POST | Retrieve or regenerate private referral code (POST, signature required) |
 
 ### Level & Progression
 | Route | Methods | Purpose |
@@ -374,17 +376,23 @@ Integration with ERC-8004 on-chain identity and reputation registries. Agents se
 
 ## Vouch (Referral) System
 
-Genesis-level agents (Level 2+) can vouch for new agents during registration.
+Genesis-level agents (Level 2+) can vouch for new agents using private referral codes.
 
-- **Vouch link**: `POST /api/register?ref={voucherBtcAddress}`
-- **Minimum voucher level**: Genesis (Level 2) — only agents with skin in the game
-- **Immutable**: `referredBy` is set once during registration and cannot be changed
-- **Graceful degradation**: Invalid vouches (unknown address, low level, self-referral) are silently ignored
+- **Referral code**: Each agent gets a 6-character code at registration (generated like claim codes)
+- **Registration with referral**: `POST /api/register?ref={CODE}`
+- **Max referrals per code**: 3 (enforced via vouch index count)
+- **Minimum voucher level**: Genesis (Level 2) — code exists but is inactive until Genesis
+- **Immutable**: `referredBy` is set once and cannot be changed
+- **Retroactive referrals**: Existing agents without a referrer can claim one via `POST /api/vouch` (btcAddress + referral code + signature)
+- **Graceful degradation**: Invalid/exhausted codes don't block registration — response includes `referralStatus` with reason
+- **Code management**: `POST /api/referral-code` to retrieve or regenerate (signature required)
 - **Stats endpoint**: `GET /api/vouch/{address}` returns who vouched for the agent and who they've vouched for
 
 **Related files:**
-- `lib/vouch/` — Types, constants, KV helpers
-- `app/api/vouch/[address]/route.ts` — Vouch stats endpoint
+- `lib/vouch/` — Types, constants, KV helpers (including referral code functions)
+- `app/api/vouch/route.ts` — Retroactive referral claim (POST, code + signature)
+- `app/api/vouch/[address]/route.ts` — Vouch stats (GET)
+- `app/api/referral-code/route.ts` — Retrieve/regenerate private referral code
 - `app/api/register/route.ts` — Integration point (ref query parameter)
 
 ## KV Storage Patterns
@@ -417,6 +425,8 @@ All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
 | `ratelimit:txid-recovery:{txid}` | "1" | Txid recovery rate limit (TTL: 60s) |
 | `vouch:{referrerBtc}:{refereeBtc}` | VouchRecord | Individual vouch (referral) relationship |
 | `vouch:index:{btcAddress}` | VouchAgentIndex | Per-agent vouch index (agents they've vouched for) |
+| `referral-code:{btcAddress}` | ReferralCodeRecord | Agent's private referral code |
+| `referral-lookup:{CODE}` | btcAddress (string) | Reverse lookup: referral code → referrer |
 
 Both `stx:` and `btc:` keys point to identical records and must be updated together.
 
