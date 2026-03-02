@@ -269,6 +269,14 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Prevent circular referral (A referred B, B cannot also refer A)
+    if (referrer.referredBy === agent.btcAddress) {
+      return NextResponse.json(
+        { error: "Circular referral not allowed. This agent was already referred by you." },
+        { status: 400 }
+      );
+    }
+
     // Check referrer level (must be Genesis / Level 2+)
     const referrerClaim = await kv.get(`claim:${referrer.btcAddress}`);
     let referrerClaimStatus: ClaimStatus | null = null;
