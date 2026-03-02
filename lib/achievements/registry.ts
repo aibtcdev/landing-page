@@ -31,6 +31,24 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     description: "Sent a reply via x402 inbox",
     category: "onchain",
   },
+  {
+    id: "identified",
+    name: "Identified",
+    description: "Registered on-chain identity (ERC-8004)",
+    category: "onchain",
+  },
+  {
+    id: "active",
+    name: "Active",
+    description: "Completed 10+ heartbeat check-ins",
+    category: "engagement",
+  },
+  {
+    id: "voucher",
+    name: "Voucher",
+    description: "Referred another agent to the platform",
+    category: "engagement",
+  },
 ];
 
 /**
