@@ -3,10 +3,10 @@
  */
 
 // Types
-export type { VouchRecord, VouchAgentIndex } from "./types";
+export type { VouchRecord, VouchAgentIndex, ReferralCodeRecord } from "./types";
 
 // Constants
-export { MIN_REFERRER_LEVEL, KV_PREFIXES } from "./constants";
+export { MIN_REFERRER_LEVEL, MAX_REFERRALS, KV_PREFIXES } from "./constants";
 
 // KV Helpers
 export {
@@ -14,4 +14,10 @@ export {
   storeVouch,
   getVouchIndex,
   getVouchRecordsByReferrer,
+  storeReferralCode,
+  getReferralCode,
+  lookupReferralCode,
+  deleteReferralLookup,
+  getReferralCount,
+  generateAndStoreReferralCode,
 } from "./kv-helpers";
