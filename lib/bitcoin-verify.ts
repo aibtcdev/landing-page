@@ -142,7 +142,7 @@ function isBip137Signature(sigBytes: Uint8Array): boolean {
 // ---------------------------------------------------------------------------
 
 /**
- * BIP-322 tagged hash: SHA256(SHA256(tag) || SHA256(tag) || msg)
+ * BIP-322 tagged hash (spec-compliant): SHA256(SHA256(tag) || SHA256(tag) || msg)
  * where tag = "BIP0322-signed-message"
  */
 function bip322TaggedHash(message: string): Uint8Array {
@@ -150,6 +150,21 @@ function bip322TaggedHash(message: string): Uint8Array {
   const tagHash = hashSha256Sync(tagBytes);
   const msgBytes = new TextEncoder().encode(message);
   return hashSha256Sync(concatBytes(tagHash, tagHash, msgBytes));
+}
+
+/**
+ * BIP-322 tagged hash (legacy/non-standard): SHA256(SHA256(tag) || SHA256(tag) || varint(msg.len) || msg)
+ *
+ * This was an incorrect implementation that prepended a varint length prefix.
+ * Kept for backward compatibility with agents using older signing tools.
+ * @deprecated — use bip322TaggedHash (spec-compliant) for new signers
+ */
+function bip322TaggedHashLegacy(message: string): Uint8Array {
+  const tagBytes = new TextEncoder().encode("BIP0322-signed-message");
+  const tagHash = hashSha256Sync(tagBytes);
+  const msgBytes = new TextEncoder().encode(message);
+  const varint = encodeVarInt(msgBytes.length);
+  return hashSha256Sync(concatBytes(tagHash, tagHash, varint, msgBytes));
 }
 
 /**
@@ -163,9 +178,10 @@ function bip322TaggedHash(message: string): Uint8Array {
  */
 function bip322BuildToSpendTxId(
   message: string,
-  scriptPubKey: Uint8Array
+  scriptPubKey: Uint8Array,
+  useLegacyHash = false
 ): Uint8Array {
-  const msgHash = bip322TaggedHash(message);
+  const msgHash = useLegacyHash ? bip322TaggedHashLegacy(message) : bip322TaggedHash(message);
   // scriptSig: OP_0 (0x00) push32 (0x20) <32-byte hash>
   const scriptSig = concatBytes(new Uint8Array([0x00, 0x20]), msgHash);
 
@@ -194,6 +210,9 @@ function bip322BuildToSpendTxId(
 
 /**
  * BIP-322 "simple" verification for P2WPKH (bc1q) addresses.
+ *
+ * Tries spec-compliant hash first; falls back to legacy (varint-prepend) hash for
+ * agents using older signing tools, with a deprecation warning on the legacy path.
  */
 export function bip322VerifyP2WPKH(
   message: string,
@@ -218,49 +237,98 @@ export function bip322VerifyP2WPKH(
     );
   }
 
-  // Derive scriptPubKey from witness pubkey
   const scriptPubKey = p2wpkh(pubkeyBytes, BTC_NETWORK).script;
 
-  // Build to_spend txid
-  const toSpendTxid = bip322BuildToSpendTxId(message, scriptPubKey);
-
-  // Build (unsigned) to_sign transaction for sighash computation.
-  // allowUnknownOutputs: true is required for the OP_RETURN output in BIP-322 virtual transactions.
-  const toSignTx = new Transaction({ version: 0, lockTime: 0, allowUnknownOutputs: true });
-  toSignTx.addInput({
-    txid: toSpendTxid,
-    index: 0,
-    sequence: 0,
-    witnessUtxo: { amount: BigInt(0), script: scriptPubKey },
-  });
-  toSignTx.addOutput({ script: Script.encode(["RETURN"]), amount: BigInt(0) });
-
-  // Compute BIP143 witness-v0 sighash
-  // scriptCode for P2WPKH is the P2PKH script: OP_DUP OP_HASH160 <hash160(pubkey)> OP_EQUALVERIFY OP_CHECKSIG
+  // scriptCode for P2WPKH: OP_DUP OP_HASH160 <hash160(pubkey)> OP_EQUALVERIFY OP_CHECKSIG
   const scriptCode = p2pkh(pubkeyBytes).script;
-  const sighash = toSignTx.preimageWitnessV0(0, scriptCode, SigHash.ALL, BigInt(0));
 
-  // Strip hashtype byte from DER signature.
-  // @noble/curves secp256k1.verify() in v2 requires compact (64-byte) format, not DER.
+  // Strip hashtype byte; @noble/curves secp256k1.verify() requires compact (64-byte) format.
   const derSig = ecdsaSigWithHashtype.slice(0, -1);
   const compactSig = parseDERSignature(derSig);
 
-  // Verify ECDSA signature
-  const sigValid = secp256k1.verify(compactSig, sighash, pubkeyBytes, {
-    prehash: false,
-  });
-  if (!sigValid) return false;
+  // Helper: verify ECDSA against a given to_spend txid.
+  // allowUnknownOutputs: true is required for the OP_RETURN output in BIP-322 virtual transactions.
+  const verifySighash = (txid: Uint8Array): boolean => {
+    const tx = new Transaction({ version: 0, lockTime: 0, allowUnknownOutputs: true });
+    tx.addInput({ txid, index: 0, sequence: 0, witnessUtxo: { amount: BigInt(0), script: scriptPubKey } });
+    tx.addOutput({ script: Script.encode(["RETURN"]), amount: BigInt(0) });
+    const sighash = tx.preimageWitnessV0(0, scriptCode, SigHash.ALL, BigInt(0));
+    return secp256k1.verify(compactSig, sighash, pubkeyBytes, { prehash: false });
+  };
 
-  // Confirm derived address matches claimed address
+  // Try spec-compliant hash (BIP-322: no varint prefix).
+  const toSpendTxid = bip322BuildToSpendTxId(message, scriptPubKey);
+  if (!verifySighash(toSpendTxid)) {
+    // Fall back to legacy tagged hash (varint prepend) for agents using older signing tools.
+    const toSpendTxidLegacy = bip322BuildToSpendTxId(message, scriptPubKey, true);
+    if (!verifySighash(toSpendTxidLegacy)) return false;
+    console.warn(
+      "BIP-322 signature uses non-standard tagged hash. Update your signing tool — see aibtcdev/skills or install latest @aibtc/mcp-server."
+    );
+  }
+
+  // Confirm derived address matches claimed address.
   const derivedAddress = p2wpkh(pubkeyBytes, BTC_NETWORK).address;
   return derivedAddress === address;
 }
 
 /**
+ * Compute the BIP341 SIGHASH_DEFAULT sighash for a BIP-322 P2TR virtual to_sign transaction.
+ *
+ * Only hashPrevouts changes between the spec-compliant and legacy verification paths —
+ * extracting this helper avoids duplicating the full sighash assembly.
+ *
+ * @scure/btc-signer stores txid as-is but reverses bytes (P.bytes(32, true)) when encoding
+ * TxHashIdx for BIP341. We must re-reverse toSpendTxid to produce matching wire-format bytes.
+ */
+function bip322P2TRSighash(toSpendTxid: Uint8Array, scriptPubKey: Uint8Array): Uint8Array {
+  // hashPrevouts = SHA256(txid_wire_bytes || vout(4LE))
+  const txidForHashPrevouts = toSpendTxid.slice().reverse();
+  const hashPrevouts = hashSha256Sync(concatBytes(txidForHashPrevouts, writeUint32LE(0)));
+
+  // hashAmounts = SHA256(amount_8LE)  [amount = 0n for virtual input]
+  const hashAmounts = hashSha256Sync(writeUint64LE(BigInt(0)));
+
+  // hashScriptPubkeys = SHA256(varint(scriptPubKey.length) || scriptPubKey)
+  const hashScriptPubkeys = hashSha256Sync(concatBytes(encodeVarInt(scriptPubKey.length), scriptPubKey));
+
+  // hashSequences = SHA256(sequence_4LE)  [sequence = 0]
+  const hashSequences = hashSha256Sync(writeUint32LE(0));
+
+  // hashOutputs = SHA256(amount_8LE || varint(script.length) || script)  [OP_RETURN output]
+  const opReturnScript = Script.encode(["RETURN"]);
+  const hashOutputs = hashSha256Sync(concatBytes(
+    writeUint64LE(BigInt(0)),
+    encodeVarInt(opReturnScript.length),
+    opReturnScript
+  ));
+
+  // sigMsg assembly (BIP341)
+  const sigMsg = concatBytes(
+    new Uint8Array([0x00]), // epoch
+    new Uint8Array([0x00]), // hashType = SIGHASH_DEFAULT
+    writeUint32LE(0),       // nVersion = 0
+    writeUint32LE(0),       // nLockTime = 0
+    hashPrevouts,           // 32 bytes
+    hashAmounts,            // 32 bytes
+    hashScriptPubkeys,      // 32 bytes
+    hashSequences,          // 32 bytes
+    hashOutputs,            // 32 bytes
+    new Uint8Array([0x00]), // spend_type = 0 (key-path, no annex)
+    writeUint32LE(0)        // input_index = 0
+  );
+
+  // tagged_hash("TapSighash", sigMsg) = SHA256(SHA256(tag) || SHA256(tag) || sigMsg)
+  const tagBytes = new TextEncoder().encode("TapSighash");
+  const tagHash = hashSha256Sync(tagBytes);
+  return hashSha256Sync(concatBytes(tagHash, tagHash, sigMsg));
+}
+
+/**
  * BIP-322 "simple" verification for P2TR (bc1p) addresses.
  *
- * Reconstructs the to_sign transaction, computes the BIP341 tapscript sighash manually,
- * verifies the Schnorr signature, and checks the pubkey matches the address.
+ * Tries spec-compliant hash first; falls back to legacy (varint-prepend) hash for
+ * agents using older signing tools, with a deprecation warning on the legacy path.
  */
 export function bip322VerifyP2TR(
   message: string,
@@ -293,69 +361,23 @@ export function bip322VerifyP2TR(
   }
   const tweakedKey = decoded.pubkey;
 
-  // Build scriptPubKey for this P2TR address directly (no double-tweak)
+  // Build scriptPubKey for this P2TR address directly (no double-tweak).
   const scriptPubKey = new Uint8Array([0x51, 0x20, ...tweakedKey]);
 
-  // Build to_spend txid
+  // Try spec-compliant hash first (BIP-322: no varint prefix).
   const toSpendTxid = bip322BuildToSpendTxId(message, scriptPubKey);
+  if (!schnorr.verify(schnorrSig, bip322P2TRSighash(toSpendTxid, scriptPubKey), tweakedKey)) {
+    // Fall back to legacy tagged hash (varint prepend) for agents using older signing tools.
+    const toSpendTxidLegacy = bip322BuildToSpendTxId(message, scriptPubKey, true);
+    if (!schnorr.verify(schnorrSig, bip322P2TRSighash(toSpendTxidLegacy, scriptPubKey), tweakedKey)) {
+      return false;
+    }
+    console.warn(
+      "BIP-322 signature uses non-standard tagged hash. Update your signing tool — see aibtcdev/skills or install latest @aibtc/mcp-server."
+    );
+  }
 
-  // Compute BIP341 sighash manually for SIGHASH_DEFAULT (0x00) key-path spending.
-  // hashPrevouts = SHA256(txid_wire_bytes || vout(4LE))
-  //
-  // @scure/btc-signer stores txid as-is but applies P.bytes(32, true) (reversing) when
-  // encoding TxHashIdx for the BIP341 sighash computation. This means the wire-format txid
-  // used in hashPrevouts is the reverse of what bip322BuildToSpendTxId returns.
-  // We must re-reverse to produce the same bytes that btc-signer uses when signing.
-  const txidForHashPrevouts = toSpendTxid.slice().reverse();
-  const prevouts = concatBytes(txidForHashPrevouts, writeUint32LE(0));
-  const hashPrevouts = hashSha256Sync(prevouts);
-
-  // hashAmounts = SHA256(amount_8LE)  [amount = 0n for virtual input]
-  const amounts = writeUint64LE(BigInt(0));
-  const hashAmounts = hashSha256Sync(amounts);
-
-  // hashScriptPubkeys = SHA256(varint(scriptPubKey.length) || scriptPubKey)
-  const scriptPubKeyWithLen = concatBytes(
-    encodeVarInt(scriptPubKey.length),
-    scriptPubKey
-  );
-  const hashScriptPubkeys = hashSha256Sync(scriptPubKeyWithLen);
-
-  // hashSequences = SHA256(sequence_4LE)  [sequence = 0]
-  const sequences = writeUint32LE(0);
-  const hashSequences = hashSha256Sync(sequences);
-
-  // hashOutputs = SHA256(amount_8LE || varint(script.length) || script)
-  // Output: amount=0n, script=OP_RETURN
-  const opReturnScript = Script.encode(["RETURN"]);
-  const outputBytes = concatBytes(
-    writeUint64LE(BigInt(0)),
-    encodeVarInt(opReturnScript.length),
-    opReturnScript
-  );
-  const hashOutputs = hashSha256Sync(outputBytes);
-
-  // sigMsg assembly (BIP341)
-  const sigMsg = concatBytes(
-    new Uint8Array([0x00]), // epoch
-    new Uint8Array([0x00]), // hashType = SIGHASH_DEFAULT
-    writeUint32LE(0), // nVersion = 0
-    writeUint32LE(0), // nLockTime = 0
-    hashPrevouts, // 32 bytes
-    hashAmounts, // 32 bytes
-    hashScriptPubkeys, // 32 bytes
-    hashSequences, // 32 bytes
-    hashOutputs, // 32 bytes
-    new Uint8Array([0x00]), // spend_type = 0 (key-path, no annex)
-    writeUint32LE(0) // input_index = 0
-  );
-
-  // tagged_hash("TapSighash", sigMsg) = SHA256(SHA256(tag) || SHA256(tag) || sigMsg)
-  const tagBytes = new TextEncoder().encode("TapSighash");
-  const tagHash = hashSha256Sync(tagBytes);
-  const sighash = hashSha256Sync(concatBytes(tagHash, tagHash, sigMsg));
-
-  return schnorr.verify(schnorrSig, sighash, tweakedKey);
+  return true;
 }
 
 // ---------------------------------------------------------------------------
