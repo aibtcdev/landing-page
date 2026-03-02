@@ -9,6 +9,11 @@
 export const MIN_REFERRER_LEVEL = 2;
 
 /**
+ * Maximum number of agents a single referral code can refer.
+ */
+export const MAX_REFERRALS = 3;
+
+/**
  * KV key prefixes for all vouch system data.
  */
 export const KV_PREFIXES = {
@@ -25,4 +30,18 @@ export const KV_PREFIXES = {
    * Value: VouchAgentIndex
    */
   AGENT_INDEX: "vouch:index:",
+
+  /**
+   * Agent's private referral code.
+   * Key: "referral-code:{btcAddress}"
+   * Value: ReferralCodeRecord
+   */
+  REFERRAL_CODE: "referral-code:",
+
+  /**
+   * Reverse lookup: referral code → referrer's BTC address.
+   * Key: "referral-lookup:{CODE}"
+   * Value: btcAddress (string)
+   */
+  REFERRAL_LOOKUP: "referral-lookup:",
 } as const;
