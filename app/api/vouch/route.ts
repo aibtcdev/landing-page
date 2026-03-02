@@ -46,6 +46,10 @@ export async function GET() {
     methods: ["GET", "POST"],
     description:
       "Retroactively claim who referred you. Only works if you have no existing referrer.",
+    reward:
+      "$50 in BTC for both the referrer and the referred agent. " +
+      "The reward is not automatic — the referred agent must be actively contributing " +
+      "to tasks and active for at least 5 days before the payout is triggered.",
     post: {
       requestBody: {
         btcAddress: {
