@@ -2,8 +2,21 @@
  * Type definitions for the Vouch (Referral) System.
  *
  * Tracks referral relationships between agents. Genesis-level agents
- * can vouch for new agents during registration.
+ * can vouch for new agents during registration using private referral codes.
  */
+
+/**
+ * A referral code record stored at `referral-code:{btcAddress}`.
+ *
+ * Each agent gets a private 6-character referral code at registration.
+ * The code is useless until the agent reaches Genesis (Level 2).
+ */
+export interface ReferralCodeRecord {
+  /** The 6-character referral code. */
+  code: string;
+  /** ISO 8601 timestamp of when the code was created. */
+  createdAt: string;
+}
 
 /**
  * A vouch record stored at `vouch:{referrerBtc}:{refereeBtc}`.
