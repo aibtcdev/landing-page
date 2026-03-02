@@ -24,10 +24,14 @@ export async function GET() {
     endpoint: "/api/vouch",
     methods: ["GET", "POST"],
     description:
-      "Retroactively claim who referred you. Only works if you have no existing referrer. " +
-      "Your BTC address is recovered from the signature — no address needed in URL or body.",
+      "Retroactively claim who referred you. Only works if you have no existing referrer.",
     post: {
       requestBody: {
+        btcAddress: {
+          type: "string",
+          required: true,
+          description: "Your Bitcoin address (bc1...)",
+        },
         referralCode: {
           type: "string",
           required: true,
@@ -38,13 +42,14 @@ export async function GET() {
           required: true,
           description:
             'BIP-137/BIP-322 signature of "Claim referral {CODE}" ' +
-            '(e.g., "Claim referral ABC123"). Your BTC address is recovered from the signature.',
+            '(e.g., "Claim referral ABC123").',
         },
       },
       messageToSign: "Claim referral {CODE}",
       example: {
+        btcAddress: "bc1q...",
         referralCode: "ABC123",
-        bitcoinSignature: "H7sI1xVBBz...",
+        bitcoinSignature: "AkgwRQIh...",
       },
       responses: {
         "200": {
@@ -76,25 +81,27 @@ export async function GET() {
  * Retroactively claim a referral for an existing agent.
  * Only works if the agent has no existing referredBy.
  *
- * Body: { referralCode, bitcoinSignature }
+ * Body: { btcAddress, referralCode, bitcoinSignature }
  * Message to sign: "Claim referral {CODE}" (e.g., "Claim referral ABC123")
- * Agent's BTC address is recovered from the signature.
  */
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
+      btcAddress?: string;
       referralCode?: string;
       bitcoinSignature?: string;
     };
 
-    const { referralCode, bitcoinSignature } = body;
+    const { btcAddress, referralCode, bitcoinSignature } = body;
 
-    if (!referralCode || !bitcoinSignature) {
+    if (!btcAddress || !referralCode || !bitcoinSignature) {
       return NextResponse.json(
-        { error: "referralCode and bitcoinSignature are required" },
+        { error: "btcAddress, referralCode, and bitcoinSignature are required" },
         { status: 400 }
       );
     }
+
+    const trimmedAddress = btcAddress.trim();
 
     // Validate code format
     const code = referralCode.trim().toUpperCase();
@@ -105,11 +112,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify signature — address is recovered, not provided
+    // Verify signature
     const expectedMessage = `Claim referral ${code}`;
     let sigResult;
     try {
-      sigResult = verifyBitcoinSignature(bitcoinSignature, expectedMessage);
+      sigResult = verifyBitcoinSignature(bitcoinSignature, expectedMessage, trimmedAddress);
     } catch (e) {
       return NextResponse.json(
         { error: `Invalid signature: ${(e as Error).message}` },
@@ -124,7 +131,18 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const agentBtcAddress = sigResult.address;
+    // Verify the signature is from the claimed address
+    if (sigResult.address !== trimmedAddress) {
+      return NextResponse.json(
+        {
+          error: "Signature does not match the provided btcAddress.",
+          recoveredAddress: sigResult.address,
+        },
+        { status: 403 }
+      );
+    }
+
+    const agentBtcAddress = trimmedAddress;
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;

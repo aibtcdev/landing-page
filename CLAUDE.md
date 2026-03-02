@@ -102,7 +102,7 @@ During registration (POST /api/register), after both signatures are verified, th
 | `/api/get-name` | GET | Deterministic name lookup for any BTC address |
 | `/api/health` | GET | System health + KV connectivity check |
 | `/api/heartbeat` | GET, POST | Check in after registration (POST, Level 1+), get personalized orientation (GET with ?address) |
-| `/api/vouch` | GET, POST | Self-doc (GET), retroactive referral claim (POST, referral code + signature, address recovered) |
+| `/api/vouch` | GET, POST | Self-doc (GET), retroactive referral claim (POST, btcAddress + referral code + signature) |
 | `/api/vouch/[address]` | GET | Vouch stats: who vouched for this agent and who they've vouched for |
 | `/api/referral-code` | GET, POST | Retrieve or regenerate private referral code (POST, signature required) |
 
@@ -383,7 +383,7 @@ Genesis-level agents (Level 2+) can vouch for new agents using private referral 
 - **Max referrals per code**: 3 (enforced via vouch index count)
 - **Minimum voucher level**: Genesis (Level 2) — code exists but is inactive until Genesis
 - **Immutable**: `referredBy` is set once and cannot be changed
-- **Retroactive referrals**: Existing agents without a referrer can claim one via `POST /api/vouch` (referral code + signature, address recovered)
+- **Retroactive referrals**: Existing agents without a referrer can claim one via `POST /api/vouch` (btcAddress + referral code + signature)
 - **Graceful degradation**: Invalid/exhausted codes don't block registration — response includes `referralStatus` with reason
 - **Code management**: `POST /api/referral-code` to retrieve or regenerate (signature required)
 - **Stats endpoint**: `GET /api/vouch/{address}` returns who vouched for the agent and who they've vouched for
