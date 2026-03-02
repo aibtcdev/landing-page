@@ -25,7 +25,7 @@ import { deriveNpub, encodeNpub } from "@/lib/nostr";
 
 interface VouchResponse {
   vouchedBy: { btcAddress: string; displayName: string } | null;
-  vouchedFor: { count: number };
+  vouchedFor: { count: number; maxReferrals: number };
 }
 
 interface ClaimInfo {
@@ -241,7 +241,7 @@ export default function AgentProfile({
                     )}
                     {vouchData?.vouchedFor && vouchData.vouchedFor.count > 0 && (
                       <span className="rounded-md bg-white/[0.04] px-2 py-0.5 text-xs text-white/60">
-                        Referred {vouchData.vouchedFor.count}
+                        Referred {vouchData.vouchedFor.count}/{vouchData.vouchedFor.maxReferrals}
                       </span>
                     )}
                   </div>
