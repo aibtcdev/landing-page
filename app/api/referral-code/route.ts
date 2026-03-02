@@ -1,6 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import {
+  publicKeyFromSignatureRsv,
+  getAddressFromPublicKey,
+} from "@stacks/transactions";
+import {
+  hashMessage,
+  verifyMessageSignatureRsv,
+} from "@stacks/encryption";
+import { bytesToHex } from "@stacks/common";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { computeLevel } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
@@ -14,6 +23,18 @@ import {
   getVouchIndex,
 } from "@/lib/vouch";
 import type { ClaimStatus } from "@/lib/types";
+
+function verifyStacksSignature(signature: string, message: string): {
+  valid: boolean;
+  address: string;
+} {
+  const messageHash = hashMessage(message);
+  const messageHashHex = bytesToHex(messageHash);
+  const recoveredPubKey = publicKeyFromSignatureRsv(messageHashHex, signature);
+  const recoveredAddress = getAddressFromPublicKey(recoveredPubKey, "mainnet");
+  const valid = verifyMessageSignatureRsv({ signature, message, publicKey: recoveredPubKey });
+  return { valid, address: recoveredAddress };
+}
 
 export async function GET() {
   return NextResponse.json({
@@ -29,14 +50,26 @@ export async function GET() {
       requestBody: {
         btcAddress: {
           type: "string",
-          required: true,
+          required: "Required if using bitcoinSignature",
           description: "Your Bitcoin address (bc1...)",
         },
         bitcoinSignature: {
           type: "string",
-          required: true,
+          required: "One of bitcoinSignature or stxSignature is required",
           description:
-            'BIP-137/BIP-322 signature of the message "Referral code for {btcAddress}"',
+            'BIP-137/BIP-322 signature of "Referral code for {btcAddress}"',
+        },
+        stxAddress: {
+          type: "string",
+          required: "Required if using stxSignature",
+          description: "Your Stacks address (SP...)",
+        },
+        stxSignature: {
+          type: "string",
+          required: "One of bitcoinSignature or stxSignature is required",
+          description:
+            'Stacks signature of "Referral code for {stxAddress}". ' +
+            "Use this if your MCP wallet key doesn't match your registered BTC address.",
         },
         regenerate: {
           type: "boolean",
@@ -46,7 +79,7 @@ export async function GET() {
             "Anyone using your old code will get an invalid_code error.",
         },
       },
-      messageToSign: "Referral code for {btcAddress}",
+      messageToSign: "Referral code for {address}",
       responses: {
         "200": {
           code: "ABC123",
@@ -78,55 +111,78 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       btcAddress?: string;
       bitcoinSignature?: string;
+      stxAddress?: string;
+      stxSignature?: string;
       regenerate?: boolean;
     };
 
-    const { btcAddress, bitcoinSignature, regenerate } = body;
+    const { btcAddress, bitcoinSignature, stxAddress, stxSignature, regenerate } = body;
 
-    if (!btcAddress || !bitcoinSignature) {
-      return NextResponse.json(
-        { error: "btcAddress and bitcoinSignature are required" },
-        { status: 400 }
-      );
-    }
+    const hasBtcAuth = btcAddress && bitcoinSignature;
+    const hasStxAuth = stxAddress && stxSignature;
 
-    const trimmedAddress = btcAddress.trim();
-    const expectedMessage = `Referral code for ${trimmedAddress}`;
-
-    // Verify signature
-    let sigResult;
-    try {
-      sigResult = verifyBitcoinSignature(bitcoinSignature, expectedMessage, trimmedAddress);
-    } catch (e) {
-      return NextResponse.json(
-        { error: `Invalid signature: ${(e as Error).message}` },
-        { status: 400 }
-      );
-    }
-
-    if (!sigResult.valid) {
-      return NextResponse.json(
-        { error: "Signature verification failed" },
-        { status: 400 }
-      );
-    }
-
-    // Verify the signature is from the claimed address
-    if (sigResult.address !== trimmedAddress) {
+    if (!hasBtcAuth && !hasStxAuth) {
       return NextResponse.json(
         {
-          error: "Signature does not match the provided btcAddress",
-          recoveredAddress: sigResult.address,
+          error: "Provide either (btcAddress + bitcoinSignature) or (stxAddress + stxSignature)",
         },
-        { status: 403 }
+        { status: 400 }
       );
+    }
+
+    // Verify signature — BTC or STX
+    let lookupAddress: string;
+    if (hasBtcAuth) {
+      const trimmedBtc = btcAddress!.trim();
+      const expectedMessage = `Referral code for ${trimmedBtc}`;
+      let sigResult;
+      try {
+        sigResult = verifyBitcoinSignature(bitcoinSignature!, expectedMessage, trimmedBtc);
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Invalid signature: ${(e as Error).message}` },
+          { status: 400 }
+        );
+      }
+      if (!sigResult.valid) {
+        return NextResponse.json({ error: "Signature verification failed" }, { status: 400 });
+      }
+      if (sigResult.address !== trimmedBtc) {
+        return NextResponse.json(
+          { error: "Signature does not match the provided btcAddress", recoveredAddress: sigResult.address },
+          { status: 403 }
+        );
+      }
+      lookupAddress = trimmedBtc;
+    } else {
+      const trimmedStx = stxAddress!.trim();
+      const expectedMessage = `Referral code for ${trimmedStx}`;
+      let sigResult;
+      try {
+        sigResult = verifyStacksSignature(stxSignature!, expectedMessage);
+      } catch (e) {
+        return NextResponse.json(
+          { error: `Invalid signature: ${(e as Error).message}` },
+          { status: 400 }
+        );
+      }
+      if (!sigResult.valid) {
+        return NextResponse.json({ error: "Signature verification failed" }, { status: 400 });
+      }
+      if (sigResult.address !== trimmedStx) {
+        return NextResponse.json(
+          { error: "Signature does not match the provided stxAddress", recoveredAddress: sigResult.address },
+          { status: 403 }
+        );
+      }
+      lookupAddress = trimmedStx;
     }
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Look up agent
-    const agent = await lookupAgent(kv, trimmedAddress);
+    // Look up agent by whichever address was provided
+    const agent = await lookupAgent(kv, lookupAddress);
     if (!agent) {
       return NextResponse.json(
         { error: "Agent not found. Register first via POST /api/register." },
