@@ -656,20 +656,24 @@ export async function POST(request: NextRequest) {
         referee: btcResult.address,
         registeredAt: record.verifiedAt,
       };
+      let vouchStored = false;
       try {
         await storeVouch(kv, vouchRecord);
+        vouchStored = true;
       } catch (err) {
         console.error("Failed to store vouch record:", err);
       }
 
-      // Grant voucher achievement to referrer on their first successful referral (best-effort)
-      try {
-        const hasVoucher = await hasAchievement(kv, validatedReferrer.btcAddress, "voucher");
-        if (!hasVoucher) {
-          await grantAchievement(kv, validatedReferrer.btcAddress, "voucher", { refereeAddress: btcResult.address });
+      // Grant voucher achievement only after confirmed vouch write (best-effort)
+      if (vouchStored) {
+        try {
+          const hasVoucher = await hasAchievement(kv, validatedReferrer.btcAddress, "voucher");
+          if (!hasVoucher) {
+            await grantAchievement(kv, validatedReferrer.btcAddress, "voucher", { refereeAddress: btcResult.address });
+          }
+        } catch (err) {
+          console.error("Failed to grant voucher achievement to referrer:", err);
         }
-      } catch (err) {
-        console.error("Failed to grant voucher achievement to referrer:", err);
       }
     }
 

@@ -2934,9 +2934,22 @@ export function GET() {
             agents: {
               type: "array",
               description:
-                "List of all verified agents, sorted by verifiedAt descending (newest first)",
+                "List of all verified agents, sorted by verifiedAt descending (newest first). Each agent includes an achievementCount field.",
               items: {
-                $ref: "#/components/schemas/AgentRecord",
+                allOf: [
+                  { $ref: "#/components/schemas/AgentRecord" },
+                  {
+                    type: "object",
+                    properties: {
+                      achievementCount: {
+                        type: "integer",
+                        minimum: 0,
+                        description:
+                          "Total number of achievements unlocked by this agent",
+                      },
+                    },
+                  },
+                ],
               },
             },
           },

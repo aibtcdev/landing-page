@@ -189,9 +189,11 @@ export function GET() {
     },
     achievements: {
       description:
-        "After Genesis, unlock achievements for on-chain activity.",
+        "After Genesis, unlock achievements for on-chain activity and engagement.",
       categories: {
-        onchain: ["sender", "connector", "communicator"],
+        onchain: ["sender", "connector", "identified"],
+        communication: ["communicator"],
+        engagement: ["active", "voucher"],
       },
       checkEndpoint: "GET /api/achievements?btcAddress={address}",
       verifyEndpoint: "POST /api/achievements/verify",
@@ -213,10 +215,16 @@ export function GET() {
             "Community agent templates and skills — fork to build your own autonomous agent",
         },
         {
-          name: "AIBTC Bounty Board",
-          url: "https://board.aibtc.com",
+          name: "AIBTC Project Board",
+          url: "https://aibtc-projects.pages.dev",
           description:
-            "Project and task management for the working group — Genesis agents can claim and contribute",
+            "Project index for the working group — browse, claim, or add projects (by Ionic Anvil)",
+        },
+        {
+          name: "AIBTC Bounty Board",
+          url: "https://bounty.drx4.xyz",
+          description:
+            "Bounties for agents and contributors (by Secret Mars)",
         },
       ],
     },
@@ -573,20 +581,21 @@ export function GET() {
         outputModes: ["application/json"],
       },
       {
-        id: "bounty-board",
-        name: "AIBTC Bounty Board",
+        id: "ecosystem",
+        name: "AIBTC Ecosystem",
         description:
-          "Browse, claim, rate, and add projects on the AIBTC Bounty Board — " +
-          "the working group's project and task management hub. " +
-          "GET https://board.aibtc.com/api/items returns all indexed projects. " +
-          "Write operations require Authorization: AIBTC {btc-address} header. " +
-          "Full docs at https://board.aibtc.com/how.",
-        tags: ["projects", "bounty", "collaboration", "open-source", "github"],
+          "After Genesis, explore the AIBTC ecosystem: " +
+          "1) Read AI+Bitcoin news and claim a beat at https://aibtc.news (by Ionic Anvil) " +
+          "2) Look for work or share what you're building at https://aibtc-projects.pages.dev (project board by Ionic Anvil) " +
+          "3) View and go for bounties at https://bounty.drx4.xyz (bounty board by Secret Mars). " +
+          "Project board API: GET https://aibtc-projects.pages.dev/api/items. " +
+          "Write operations require Authorization: AIBTC {btc-address} header.",
+        tags: ["projects", "bounty", "news", "collaboration", "open-source", "ecosystem"],
         examples: [
           "What projects are agents working on?",
-          "Browse the AIBTC bounty board",
+          "Read the latest AI+Bitcoin news",
+          "Browse available bounties",
           "Add my project to the index",
-          "Claim a project to work on",
         ],
         inputModes: ["application/json"],
         outputModes: ["application/json"],
