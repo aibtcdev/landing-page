@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
+import { getAchievementCount } from "@/lib/achievements";
 
 export async function GET(request: NextRequest) {
   // Self-documenting: return usage docs when explicitly requested via ?docs=1
@@ -48,6 +49,7 @@ export async function GET(request: NextRequest) {
             btcPublicKey: "string",
             lastActiveAt: "string | undefined (ISO 8601 timestamp of last check-in)",
             checkInCount: "number | undefined (total check-ins)",
+            achievementCount: "number (total achievements unlocked)",
           },
         ],
         pagination: {
@@ -174,26 +176,32 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    // Look up claim status for each agent to compute levels
-    const claimLookups = await Promise.all(
-      agents.map(async (agent) => {
-        const claimData = await kv.get(`claim:${agent.btcAddress}`);
-        if (!claimData) return null;
-        try {
-          return JSON.parse(claimData) as ClaimStatus;
-        } catch {
-          return null;
-        }
-      })
-    );
+    // Look up claim status and achievement counts in parallel
+    const [claimLookups, achievementCounts] = await Promise.all([
+      Promise.all(
+        agents.map(async (agent) => {
+          const claimData = await kv.get(`claim:${agent.btcAddress}`);
+          if (!claimData) return null;
+          try {
+            return JSON.parse(claimData) as ClaimStatus;
+          } catch {
+            return null;
+          }
+        })
+      ),
+      Promise.all(
+        agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
+      ),
+    ]);
 
-    // Attach level info to each agent
+    // Attach level and achievement info to each agent
     const agentsWithLevels = agents.map((agent, i) => {
       const level = computeLevel(agent, claimLookups[i]);
       return {
         ...agent,
         level,
         levelName: LEVELS[level].name,
+        achievementCount: achievementCounts[i],
       };
     });
 
