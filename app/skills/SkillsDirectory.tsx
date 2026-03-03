@@ -1,0 +1,414 @@
+"use client";
+
+import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import CopyButton from "@/app/components/CopyButton";
+
+/* ─── Types ─── */
+
+interface Skill {
+  name: string;
+  description: string;
+  entry: string | string[];
+  arguments: string[];
+  requires: string[];
+  tags: string[];
+  userInvocable: boolean;
+}
+
+interface SkillsData {
+  version: string;
+  generated: string;
+  skills: Skill[];
+}
+
+/* ─── Tag styling ─── */
+
+const TAG_STYLES: Record<string, string> = {
+  l1: "text-[#F7931A]/70 bg-[#F7931A]/[0.06] border-[#F7931A]/10",
+  l2: "text-[#7DA2FF]/70 bg-[#7DA2FF]/[0.06] border-[#7DA2FF]/10",
+  defi: "text-emerald-400/70 bg-emerald-400/[0.06] border-emerald-400/10",
+  write: "text-purple-400/70 bg-purple-400/[0.06] border-purple-400/10",
+  "read-only": "text-sky-400/70 bg-sky-400/[0.06] border-sky-400/10",
+  infrastructure: "text-white/35 bg-white/[0.03] border-white/[0.05]",
+  "mainnet-only": "text-amber-400/70 bg-amber-400/[0.06] border-amber-400/10",
+  "requires-funds": "text-rose-400/70 bg-rose-400/[0.06] border-rose-400/10",
+  sensitive: "text-red-400/70 bg-red-400/[0.06] border-red-400/10",
+};
+
+function tc(tag: string) {
+  return TAG_STYLES[tag] ?? "text-white/30 bg-white/[0.03] border-white/[0.05]";
+}
+
+/* ─── Short descriptions (≤6 words) ─── */
+
+const SHORT_DESC: Record<string, string> = {
+  "aibtc-news": "Decentralized editorial intelligence platform",
+  "aibtc-news-deal-flow": "Deal flow signal composition",
+  "aibtc-news-protocol": "Protocol update editorial beats",
+  bitflow: "DEX swaps with aggregated liquidity",
+  bns: "Bitcoin Name System lookups",
+  btc: "Bitcoin L1 balances and transfers",
+  "business-dev": "Revenue pipeline and deal closing",
+  ceo: "Strategic direction and resource allocation",
+  credentials: "Encrypted secret storage and retrieval",
+  defi: "DeFi swaps and pool queries",
+  identity: "On-chain agent identity management",
+  nft: "NFT holdings, metadata, and transfers",
+  ordinals: "Inscribe content on Bitcoin",
+  pillar: "Smart wallet and DCA operations",
+  query: "Stacks network and blockchain queries",
+  reputation: "On-chain feedback and reputation scores",
+  sbtc: "sBTC balances, transfers, and deposits",
+  settings: "Configure API keys and preferences",
+  signing: "Message signing and verification",
+  stacking: "STX stacking and PoX operations",
+  "stacks-market": "Prediction market trading on Stacks",
+  stackspot: "Stacking lottery pot participation",
+  stx: "STX token balances and transfers",
+  "taproot-multisig": "Taproot M-of-N multisig coordination",
+  tokens: "Fungible token operations on Stacks",
+  validation: "On-chain agent validation workflows",
+  wallet: "Encrypted BIP39 wallet management",
+  x402: "Paid APIs and inbox messaging",
+  "yield-hunter": "Autonomous sBTC yield optimization",
+};
+
+/* ─── Component ─── */
+
+export default function SkillsDirectory() {
+  const [data, setData] = useState<SkillsData | null>(null);
+  const [error, setError] = useState<string | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [query, setQuery] = useState("");
+  const [activeTag, setActiveTag] = useState<string | null>(null);
+  const [openSkill, setOpenSkill] = useState<string | null>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
+
+  /* Fetch */
+  useEffect(() => {
+    fetch("https://raw.githubusercontent.com/aibtcdev/skills/main/skills.json")
+      .then((r) => {
+        if (!r.ok) throw new Error(`HTTP ${r.status}`);
+        return r.json() as Promise<SkillsData>;
+      })
+      .then((d) => { setData(d); setLoading(false); })
+      .catch((e: Error) => { setError(e.message); setLoading(false); });
+  }, []);
+
+  /* Keyboard shortcut: / to focus search */
+  useEffect(() => {
+    function onKey(e: KeyboardEvent) {
+      if (e.key === "/" && document.activeElement?.tagName !== "INPUT") {
+        e.preventDefault();
+        searchRef.current?.focus();
+      }
+    }
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
+  const allTags = useMemo(() => {
+    if (!data) return [];
+    const s = new Set<string>();
+    data.skills.forEach((sk) => sk.tags.forEach((t) => s.add(t)));
+    return Array.from(s).sort();
+  }, [data]);
+
+  const filtered = useMemo(() => {
+    if (!data) return [];
+    const q = query.toLowerCase().trim();
+    return data.skills.filter((sk) => {
+      if (activeTag && !sk.tags.includes(activeTag)) return false;
+      if (!q) return true;
+      return (
+        sk.name.toLowerCase().includes(q) ||
+        sk.description.toLowerCase().includes(q) ||
+        sk.arguments.some((a) => a.includes(q)) ||
+        sk.tags.some((t) => t.includes(q))
+      );
+    });
+  }, [data, query, activeTag]);
+
+  const totalCmds = useMemo(
+    () => data?.skills.reduce((n, s) => n + s.arguments.length, 0) ?? 0,
+    [data]
+  );
+
+  const toggle = useCallback(
+    (name: string) => setOpenSkill((p) => (p === name ? null : name)),
+    []
+  );
+
+  /* ─── Render ─── */
+  return (
+    <>
+      {/* ─── Hero header ─── */}
+      <div className="mb-6 max-md:mb-5 text-center max-md:text-left">
+        <h1 className="mb-3 text-[clamp(26px,3.5vw,42px)] font-medium leading-[1.1] tracking-tight text-white">
+          Agent Skills
+        </h1>
+        <p className="mx-auto max-w-[520px] text-[18px] max-md:text-[15px] leading-[1.6] text-white/60 max-md:mx-0">
+          Install reusable capabilities — wallets, DeFi, identity, signing, and
+          messaging — with a single command.
+        </p>
+      </div>
+
+      {/* ─── Install CTA ─── */}
+      <div className="mx-auto max-w-xl mb-8 max-md:mb-6 rounded-lg border border-[#F7931A]/15 bg-gradient-to-br from-[#F7931A]/[0.05] to-[#F7931A]/[0.01] px-4 py-2.5 max-md:px-3 max-md:py-2 text-center max-md:text-left backdrop-blur-[12px] animate-glowPulse">
+        <CopyButton
+          text="npx skills add aibtcdev/skills"
+          label={
+            <span className="inline-flex items-center gap-2">
+              <span className="text-[10px] font-medium uppercase tracking-widest text-[#F7931A]/60">Install</span>
+              <span className="font-mono text-[14px] max-md:text-[13px]">npx skills add aibtcdev/skills</span>
+              <svg className="size-3 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+              </svg>
+            </span>
+          }
+          variant="inline"
+          className="text-[14px] max-md:text-[13px] font-medium text-white transition-colors duration-200 hover:text-white/80"
+        />
+      </div>
+
+      {/* ─── Directory card ─── */}
+      <div className="rounded-xl border border-white/[0.06] bg-[rgba(18,18,18,0.7)] backdrop-blur-[12px] overflow-hidden">
+        {/* Stats strip */}
+        {!loading && data && (
+          <div className="flex items-center border-b border-white/[0.06]">
+            {[
+              { value: data.skills.length, label: "Skills" },
+              { value: totalCmds, label: "Commands" },
+              { value: allTags.length, label: "Categories" },
+            ].map((s, i) => (
+              <div
+                key={s.label}
+                className={`flex-1 text-center py-2.5 ${
+                  i > 0 ? "border-l border-white/[0.04]" : ""
+                }`}
+              >
+                <div className="text-[17px] max-md:text-[15px] font-medium text-white tabular-nums leading-none mb-0.5">
+                  {s.value}
+                </div>
+                <div className="text-[10px] uppercase tracking-widest text-white/25">
+                  {s.label}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Search */}
+        <div className="relative border-b border-white/[0.06]">
+          <input
+            ref={searchRef}
+            type="text"
+            value={query}
+            onChange={(e) => setQuery(e.target.value)}
+            placeholder="Search skills ..."
+            className="w-full bg-transparent py-2.5 px-4 pr-14 text-[13px] text-white placeholder:text-white/20 outline-none focus:bg-white/[0.01] transition-colors"
+          />
+          {query ? (
+            <button
+              onClick={() => setQuery("")}
+              className="absolute right-4 top-1/2 -translate-y-1/2 text-white/25 hover:text-white/50 transition-colors"
+            >
+              <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          ) : (
+            <kbd className="absolute right-4 top-1/2 -translate-y-1/2 rounded border border-white/[0.08] bg-white/[0.03] px-1.5 py-0.5 text-[10px] text-white/20 font-mono max-md:hidden">
+              /
+            </kbd>
+          )}
+        </div>
+
+        {/* ─── Content ─── */}
+
+        {/* Loading skeleton */}
+        {loading && (
+          <div className="divide-y divide-white/[0.04]">
+            {Array.from({ length: 10 }).map((_, i) => (
+              <div key={i} className="px-4 py-3 flex items-center animate-pulse">
+                <div className="h-3.5 rounded bg-white/[0.05]" style={{ width: `${100 + (i % 4) * 30}px` }} />
+                <div className="ml-auto mr-6 max-md:hidden">
+                  <div className="h-3 rounded bg-white/[0.03]" style={{ width: `${120 + (i % 3) * 40}px` }} />
+                </div>
+                <div className="h-3 w-3 rounded bg-white/[0.03] max-md:ml-auto" />
+              </div>
+            ))}
+          </div>
+        )}
+
+        {/* Error */}
+        {error && (
+          <div className="px-6 py-12 text-center">
+            <p className="text-[13px] text-red-400/70 mb-2">Failed to load skills</p>
+            <p className="text-[11px] text-white/25 mb-3">{error}</p>
+            <button
+              onClick={() => window.location.reload()}
+              className="text-[12px] text-[#F7931A]/60 hover:text-[#F7931A] transition-colors"
+            >
+              Try again
+            </button>
+          </div>
+        )}
+
+        {/* Empty */}
+        {!loading && !error && filtered.length === 0 && (
+          <div className="px-6 py-12 text-center">
+            <p className="text-[13px] text-white/35 mb-2">No matching skills</p>
+            <button
+              onClick={() => { setQuery(""); setActiveTag(null); }}
+              className="text-[12px] text-[#F7931A]/60 hover:text-[#F7931A] transition-colors"
+            >
+              Clear filters
+            </button>
+          </div>
+        )}
+
+        {/* ─── Rows ─── */}
+        {!loading && !error && filtered.length > 0 && (
+          <>
+            <div className="divide-y divide-white/[0.04]">
+              {filtered.map((skill) => {
+                const open = openSkill === skill.name;
+                const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
+
+                return (
+                  <div key={skill.name}>
+                    {/* Row */}
+                    <button
+                      onClick={() => toggle(skill.name)}
+                      className={`group flex w-full items-center px-4 py-3 text-left transition-all duration-100 ${
+                        open
+                          ? "bg-white/[0.02]"
+                          : "hover:bg-white/[0.015]"
+                      }`}
+                    >
+                      {/* Name + mobile description */}
+                      <div className="min-w-0">
+                        <span className={`text-[13px] font-medium transition-colors ${open ? "text-[#F7931A]" : "text-white/85 group-hover:text-white"}`}>
+                          {skill.name}
+                        </span>
+                        {SHORT_DESC[skill.name] && (
+                          <p className="text-[11px] text-white/25 truncate md:hidden">
+                            {SHORT_DESC[skill.name]}
+                          </p>
+                        )}
+                      </div>
+
+                      {/* Short description — right aligned, desktop */}
+                      <span className="ml-auto mr-3 text-[13px] text-white/30 truncate max-w-[280px] max-md:hidden">
+                        {SHORT_DESC[skill.name] ?? ""}
+                      </span>
+
+                      {/* Chevron */}
+                      <svg
+                        className={`size-3 shrink-0 text-white/15 transition-transform duration-200 max-md:ml-auto ${open ? "rotate-180" : ""}`}
+                        fill="none"
+                        viewBox="0 0 24 24"
+                        stroke="currentColor"
+                        strokeWidth="2.5"
+                      >
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
+                      </svg>
+                    </button>
+
+                    {/* ─── Expanded detail ─── */}
+                    {open && (
+                      <div className="px-4 pb-5 pt-1 bg-white/[0.01]">
+                        {/* Description */}
+                        <p className="text-[13px] leading-[1.65] text-white/55 mb-3">
+                          {skill.description}
+                        </p>
+
+                        {/* Install command */}
+                        <div className="mb-4 rounded-lg border border-[#F7931A]/15 bg-[#F7931A]/[0.04] px-3 py-2 overflow-x-auto">
+                          <CopyButton
+                            text={`npx skills add aibtcdev/skills/${skill.name}`}
+                            label={
+                              <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                                <span className="text-[#F7931A]/50 font-mono text-[13px] max-md:text-[11px]">$</span>
+                                <span className="font-mono text-[13px] max-md:text-[11px] text-white/70">npx skills add aibtcdev/skills/{skill.name}</span>
+                                <svg className="size-3 shrink-0 text-white/25" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                                </svg>
+                              </span>
+                            }
+                            variant="inline"
+                            className="text-[13px] max-md:text-[11px]"
+                          />
+                        </div>
+
+                        {/* Mobile tags */}
+                        <div className="flex flex-wrap gap-1.5 mb-4 md:hidden">
+                          {skill.tags.map((t) => (
+                            <span
+                              key={t}
+                              className={`inline-block rounded border px-1.5 py-px text-[10px] leading-[16px] ${tc(t)}`}
+                            >
+                              {t}
+                            </span>
+                          ))}
+                        </div>
+
+                        {/* Entry + Requires */}
+                        <div className="flex flex-wrap gap-x-8 gap-y-3 mb-3">
+                          <div>
+                            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/30">Entry</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {entries.map((e) => (
+                                <code key={e} className="rounded border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] font-mono text-white/50 leading-none">{e}</code>
+                              ))}
+                            </div>
+                          </div>
+                          {skill.requires.length > 0 && (
+                            <div>
+                              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/30">Requires</p>
+                              <div className="flex flex-wrap gap-1.5">
+                                {skill.requires.map((r) => (
+                                  <span key={r} className="rounded border border-[#F7931A]/15 bg-[#F7931A]/[0.06] px-2 py-1 text-[11px] text-[#F7931A]/60 leading-none">{r}</span>
+                                ))}
+                              </div>
+                            </div>
+                          )}
+                        </div>
+
+                        {/* Commands — separate row */}
+                        <div>
+                          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/30">Commands</p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {skill.arguments.map((a) => (
+                              <code key={a} className="rounded border border-white/[0.08] bg-white/[0.04] px-2 py-1 text-[11px] font-mono text-white/45 leading-none">{a}</code>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] text-[11px] text-white/20">
+              <span>
+                {filtered.length === data?.skills.length
+                  ? `${filtered.length} skills`
+                  : `${filtered.length} of ${data?.skills.length}`}
+              </span>
+              <div className="flex items-center gap-3">
+                {data?.version && (
+                  <span className="text-[#F7931A]/30">v{data.version}</span>
+                )}
+                <span>{totalCmds} commands</span>
+              </div>
+            </div>
+          </>
+        )}
+      </div>
+    </>
+  );
+}
