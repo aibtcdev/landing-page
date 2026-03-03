@@ -97,11 +97,12 @@ export async function GET(
     );
   }
 
-  // Parse query params for pagination, view, and includes
+  // Parse query params for pagination, view, status filter, and includes
   const url = new URL(request.url);
   const limitParam = url.searchParams.get("limit");
   const offsetParam = url.searchParams.get("offset");
   const viewParam = url.searchParams.get("view") || "all";
+  const statusParam = url.searchParams.get("status") || "all";
   const includePartners = url.searchParams.get("include")?.includes("partners") ?? false;
 
   const limit = limitParam
@@ -119,19 +120,31 @@ export async function GET(
     );
   }
 
+  // Validate status param
+  if (!["unread", "all"].includes(statusParam)) {
+    return NextResponse.json(
+      {
+        error: "Invalid status parameter. Must be 'unread' or 'all'.",
+      },
+      { status: 400 }
+    );
+  }
+
   const view = viewParam as "sent" | "received" | "all";
+  const statusFilter = statusParam as "unread" | "all";
 
   // Fetch data based on view param
   const includeReceived = view === "received" || view === "all";
-  const includeSent = view === "sent" || view === "all";
+  const includeSent = (view === "sent" || view === "all") && statusFilter !== "unread";
 
   // For "all" view, we need enough messages to fill the page after merging
   // and sorting by date. When partners are requested, fetch more so partner
   // computation has a complete picture. Otherwise use limit+offset as the cap.
-  const fetchLimit = view === "all"
-    ? (includePartners ? 100 : limit + offset)
+  // When filtering by unread, fetch all received messages so we can filter then paginate.
+  const fetchLimit = (view === "all" || statusFilter === "unread")
+    ? (includePartners ? 100 : (statusFilter === "unread" ? 1000 : limit + offset))
     : limit;
-  const fetchOffset = view === "all" ? 0 : offset;
+  const fetchOffset = (view === "all" || statusFilter === "unread") ? 0 : offset;
 
   const [receivedResult, sentResult] = await Promise.all([
     includeReceived
@@ -164,8 +177,18 @@ export async function GET(
       new Date(a.message.sentAt).getTime()
   );
 
-  // Apply pagination for "all" view (others already paginated)
-  if (view === "all") {
+  // Apply unread filter (only received messages can be unread)
+  if (statusFilter === "unread") {
+    combined = combined.filter(
+      (item) => item.direction === "received" && !item.message.readAt
+    );
+  }
+
+  // Track filtered count before pagination (for hasMore calculation)
+  const filteredCount = combined.length;
+
+  // Apply pagination for "all" view or when status filter changed the set
+  if (view === "all" || statusFilter === "unread") {
     combined = combined.slice(offset, offset + limit);
   }
 
@@ -185,8 +208,9 @@ export async function GET(
   const receivedCount = receivedResult?.index?.messageIds.length ?? 0;
   const sentCount = sentResult?.index?.messageIds.length ?? 0;
   const unreadCount = receivedResult?.index?.unreadCount ?? 0;
-  const totalCount =
-    view === "all"
+  const totalCount = statusFilter === "unread"
+    ? filteredCount
+    : view === "all"
       ? receivedCount + sentCount
       : view === "received"
         ? receivedCount
@@ -368,6 +392,7 @@ export async function GET(
           satsNet: 0,
         },
         view,
+        status: statusFilter,
         pagination: {
           limit,
           offset,
@@ -389,6 +414,7 @@ export async function GET(
       },
       parameters: {
         view: "Filter messages: 'sent', 'received', or 'all' (default: 'all')",
+        status: "Filter by read status: 'unread' or 'all' (default: 'all'). When 'unread', only received messages without readAt are returned.",
         limit: "Max messages per page (1-100, default: 20)",
         offset: "Number of messages to skip (default: 0)",
       },
@@ -415,6 +441,7 @@ export async function GET(
         satsNet: satsReceived - satsSent,
       },
       view,
+      status: statusFilter,
       pagination: {
         limit,
         offset,
