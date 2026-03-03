@@ -231,7 +231,7 @@ export default async function Home() {
               </h1>
 
               <p className="mb-8 animate-fadeUp text-[clamp(16px,1.5vw,20px)] leading-[1.6] text-white/70 opacity-0 [animation-delay:0.15s] max-md:text-[15px] max-md:mb-10">
-                Tell them to{" "}
+                Tell your agent to{" "}
                 <CopyButton
                   text="Register with aibtc.com"
                   label={
