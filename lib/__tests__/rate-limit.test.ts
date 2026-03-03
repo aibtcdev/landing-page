@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import { checkFixedWindowRateLimit } from "../rate-limit";
 
 /**
@@ -31,6 +31,10 @@ describe("checkFixedWindowRateLimit", () => {
     mockKV = createMockKV();
     vi.useFakeTimers();
     vi.setSystemTime(new Date("2026-03-03T12:00:00Z"));
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("allows the first request and starts a new window", async () => {
@@ -114,6 +118,8 @@ describe("checkFixedWindowRateLimit", () => {
     const stored = mockKV.store.get("test-key")!;
     const [count] = stored.split(":");
     expect(count).toBe("1");
+    // Reset window should use a full TTL, not a residual value
+    expect(mockKV.puts[0].opts).toEqual({ expirationTtl: 60 });
   });
 
   it("resets window at exact TTL boundary", async () => {

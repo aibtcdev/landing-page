@@ -18,6 +18,7 @@ export async function checkFixedWindowRateLimit(
 
   let count = 0;
   let windowStart = now;
+  let isNewWindow = !raw;
 
   if (raw) {
     const parts = raw.split(":");
@@ -29,6 +30,7 @@ export async function checkFixedWindowRateLimit(
     if ((now - windowStart) / 1000 >= ttlSeconds) {
       count = 0;
       windowStart = now;
+      isNewWindow = true;
     }
   }
 
@@ -38,7 +40,7 @@ export async function checkFixedWindowRateLimit(
 
   if (count >= max) return { limited: true, retryAfterSeconds: remainingSeconds, resetAt };
 
-  const value = `${count + 1}:${raw ? windowStart : now}`;
-  await kv.put(key, value, { expirationTtl: raw ? remainingSeconds : ttlSeconds });
+  const value = `${count + 1}:${windowStart}`;
+  await kv.put(key, value, { expirationTtl: isNewWindow ? ttlSeconds : remainingSeconds });
   return { limited: false, retryAfterSeconds: remainingSeconds, resetAt };
 }
