@@ -192,16 +192,17 @@ export async function GET(
     combined = combined.slice(offset, offset + limit);
   }
 
-  // Merge reply maps
+  // Merge reply maps — only include replies for messages in the final paginated set
+  const visibleMessageIds = new Set(combined.map(({ message }) => message.messageId));
   const repliesObject: Record<string, unknown> = {};
   if (receivedResult) {
     for (const [messageId, reply] of receivedResult.replies) {
-      repliesObject[messageId] = reply;
+      if (visibleMessageIds.has(messageId)) repliesObject[messageId] = reply;
     }
   }
   if (sentResult) {
     for (const [messageId, reply] of sentResult.replies) {
-      repliesObject[messageId] = reply;
+      if (visibleMessageIds.has(messageId)) repliesObject[messageId] = reply;
     }
   }
 
