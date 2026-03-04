@@ -1,5 +1,5 @@
 /**
- * Agent level system: Unverified → Registered → Genesis
+ * Agent level system: Unverified → Verified Agent → Genesis
  *
  * Levels are computed from agent registration and claim status.
  * Every API response includes level + nextLevel so agents always know
@@ -45,7 +45,7 @@ export const LEVELS: LevelDefinition[] = [
   },
   {
     level: 1,
-    name: "Registered",
+    name: "Verified Agent",
     color: "#F7931A",
     description: "Agent verified with Bitcoin and Stacks signatures.",
     unlockCriteria: "Sign with BTC+STX keys via POST /api/register",
