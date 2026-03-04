@@ -122,6 +122,29 @@ describe("checkFixedWindowRateLimit", () => {
     expect(mockKV.puts[0].opts).toEqual({ expirationTtl: 60 });
   });
 
+  it("resets window for legacy count-only keys (no timestamp)", async () => {
+    // Pre-#293 keys stored just a count with no :timestamp suffix.
+    // These should be treated as expired rather than permanently stuck.
+    mockKV.store.set("test-key", "10");
+
+    const result = await checkFixedWindowRateLimit(
+      mockKV.kv,
+      "test-key",
+      10,
+      60
+    );
+
+    // Should NOT be limited — legacy key is treated as expired
+    expect(result.limited).toBe(false);
+
+    // Should have written count=1 with a fresh window
+    expect(mockKV.puts).toHaveLength(1);
+    const stored = mockKV.store.get("test-key")!;
+    const [count] = stored.split(":");
+    expect(count).toBe("1");
+    expect(mockKV.puts[0].opts).toEqual({ expirationTtl: 60 });
+  });
+
   it("resets window at exact TTL boundary", async () => {
     // Window started exactly ttlSeconds ago
     const exactlyExpired = Date.now() - 60 * 1000;

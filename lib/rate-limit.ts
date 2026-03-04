@@ -23,7 +23,15 @@ export async function checkFixedWindowRateLimit(
   if (raw) {
     const parts = raw.split(":");
     count = parseInt(parts[0], 10) || 0;
-    windowStart = parseInt(parts[1], 10) || now;
+    const parsedStart = parseInt(parts[1], 10);
+    if (isNaN(parsedStart)) {
+      // Legacy key (count only, no timestamp) — treat as expired window
+      count = 0;
+      windowStart = now;
+      isNewWindow = true;
+    } else {
+      windowStart = parsedStart;
+    }
 
     // If the window has expired (KV key outlived its TTL, e.g. pre-#294
     // stuck keys or eventual consistency lag), start a fresh window.
