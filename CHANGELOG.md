@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.17.2](https://github.com/aibtcdev/landing-page/compare/v1.17.1...v1.17.2) (2026-03-04)
+
+
+### Bug Fixes
+
+* handle cache update errors and add a11y to decorative images ([#331](https://github.com/aibtcdev/landing-page/issues/331)) ([b162eeb](https://github.com/aibtcdev/landing-page/commit/b162eebdffe96279a15e8e0f19c48b1f5847aff4))
+
 ## [1.17.1](https://github.com/aibtcdev/landing-page/compare/v1.17.0...v1.17.1) (2026-03-04)
 
 
