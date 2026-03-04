@@ -34,7 +34,7 @@ export default async function SkillsPage() {
       <div className="relative z-10">
         <Navbar />
 
-        <main className="mx-auto max-w-4xl px-6 pt-36 pb-24 max-md:px-4 max-md:pt-28 max-md:pb-16">
+        <main className="mx-auto max-w-[1100px] px-12 pt-32 pb-24 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-16">
           <SkillsDirectory initialData={skills} />
         </main>
 
