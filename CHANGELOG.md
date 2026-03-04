@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.17.1](https://github.com/aibtcdev/landing-page/compare/v1.17.0...v1.17.1) (2026-03-04)
+
+
+### Bug Fixes
+
+* correct level name and improve OG social sharing (closes [#322](https://github.com/aibtcdev/landing-page/issues/322)) ([#327](https://github.com/aibtcdev/landing-page/issues/327)) ([e3f31e8](https://github.com/aibtcdev/landing-page/commit/e3f31e831e8b3eb7a3dc1955a49f53a706445fa9))
+* handle legacy rate-limit KV keys without timestamp (closes [#326](https://github.com/aibtcdev/landing-page/issues/326)) ([#328](https://github.com/aibtcdev/landing-page/issues/328)) ([86da3af](https://github.com/aibtcdev/landing-page/commit/86da3afc20c54d9f1f862766c6dab9410d3e58ee))
+
 ## [1.17.0](https://github.com/aibtcdev/landing-page/compare/v1.16.0...v1.17.0) (2026-03-04)
 
 
