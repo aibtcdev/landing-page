@@ -128,6 +128,7 @@ async function handleCrawlerAgentPage(
       headers: {
         "Content-Type": "text/html; charset=utf-8",
         "Cache-Control": "public, max-age=300, s-maxage=3600",
+        Vary: "User-Agent",
       },
     });
   } catch {
@@ -165,24 +166,35 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(redirectTarget, request.url), 301);
   }
 
-  // Only intercept CLI tools for remaining middleware logic
+  // Paths that serve different content for CLI (curl/wget) vs browser.
+  // Both branches must set Vary: User-Agent so shared caches key on UA.
+  const cliRewrites: Record<string, string> = {
+    "/": "/llms.txt",
+    "/install": "/install/loop",
+    "/heartbeat": "/heartbeat/cli",
+  };
+
+  const cliRewriteTarget = cliRewrites[path];
+
+  // Deprecated script paths also serve different content for CLI vs browser
+  const cliScriptPaths = new Set(["/vps", "/local", "/update", "/update-skill.sh"]);
+
   if (!isCLI(request)) {
+    if (cliRewriteTarget || cliScriptPaths.has(path)) {
+      const response = NextResponse.next();
+      response.headers.append("Vary", "User-Agent");
+      return response;
+    }
     return NextResponse.next();
   }
 
-  // Root path: rewrite to serve public/llms.txt
-  if (path === "/") {
-    return NextResponse.rewrite(new URL("/llms.txt", request.url));
-  }
-
-  // Install: rewrite to loop installer script for curl/wget
-  if (path === "/install") {
-    return NextResponse.rewrite(new URL("/install/loop", request.url));
-  }
-
-  // Heartbeat: rewrite to CLI route for curl/wget
-  if (path === "/heartbeat") {
-    return NextResponse.rewrite(new URL("/heartbeat/cli", request.url));
+  // CLI tool detected: rewrite to the appropriate route
+  if (cliRewriteTarget) {
+    const response = NextResponse.rewrite(
+      new URL(cliRewriteTarget, request.url)
+    );
+    response.headers.append("Vary", "User-Agent");
+    return response;
   }
 
   if (path === "/skills") {
@@ -225,6 +237,7 @@ export async function middleware(request: NextRequest) {
       headers: {
         "Content-Type": "text/plain; charset=utf-8",
         "Cache-Control": "public, max-age=300, s-maxage=3600",
+        Vary: "User-Agent",
       },
     });
   } catch {
