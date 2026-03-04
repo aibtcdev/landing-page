@@ -73,4 +73,4 @@ next-env.d.ts
 .agents/
 .cursor/
 .windsurf/
-skills/
+/skills/
