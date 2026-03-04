@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.17.0](https://github.com/aibtcdev/landing-page/compare/v1.16.0...v1.17.0) (2026-03-04)
+
+
+### Features
+
+* **inbox:** add ?status=unread filter to GET /api/inbox/[address] ([#318](https://github.com/aibtcdev/landing-page/issues/318)) ([cdc1fa7](https://github.com/aibtcdev/landing-page/commit/cdc1fa77b591b0bf28e919866713332b160765f1))
+
+
+### Bug Fixes
+
+* **outbox:** reset expired rate-limit windows instead of blocking forever ([#304](https://github.com/aibtcdev/landing-page/issues/304)) ([e464462](https://github.com/aibtcdev/landing-page/commit/e4644625c48ac5f6a895db042319e97e1b43e123))
+* **outbox:** reset expired rate-limit windows instead of blocking forever ([#321](https://github.com/aibtcdev/landing-page/issues/321)) ([e464462](https://github.com/aibtcdev/landing-page/commit/e4644625c48ac5f6a895db042319e97e1b43e123))
+
 ## [1.16.0](https://github.com/aibtcdev/landing-page/compare/v1.15.0...v1.16.0) (2026-02-28)
 
 
