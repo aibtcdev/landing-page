@@ -1,11 +1,11 @@
 "use client";
 
-import { useState, useEffect, useCallback, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef } from "react";
 import CopyButton from "@/app/components/CopyButton";
 
 /* ─── Types ─── */
 
-interface Skill {
+export interface Skill {
   name: string;
   description: string;
   entry: string | string[];
@@ -15,7 +15,7 @@ interface Skill {
   userInvocable: boolean;
 }
 
-interface SkillsData {
+export interface SkillsData {
   version: string;
   generated: string;
   skills: Skill[];
@@ -73,27 +73,23 @@ const SHORT_DESC: Record<string, string> = {
   "yield-hunter": "Autonomous sBTC yield optimization",
 };
 
+/* ─── Helpers ─── */
+
+/** Returns a short description: curated if available, otherwise truncated from the manifest. */
+function shortDesc(skill: Skill): string {
+  if (SHORT_DESC[skill.name]) return SHORT_DESC[skill.name];
+  const words = skill.description.split(/\s+/);
+  if (words.length <= 6) return skill.description;
+  return words.slice(0, 6).join(" ") + "...";
+}
+
 /* ─── Component ─── */
 
-export default function SkillsDirectory() {
-  const [data, setData] = useState<SkillsData | null>(null);
-  const [error, setError] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
+export default function SkillsDirectory({ initialData }: { initialData: SkillsData | null }) {
+  const data = initialData;
   const [query, setQuery] = useState("");
-  const [activeTag, setActiveTag] = useState<string | null>(null);
   const [openSkill, setOpenSkill] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
-
-  /* Fetch */
-  useEffect(() => {
-    fetch("https://raw.githubusercontent.com/aibtcdev/skills/main/skills.json")
-      .then((r) => {
-        if (!r.ok) throw new Error(`HTTP ${r.status}`);
-        return r.json() as Promise<SkillsData>;
-      })
-      .then((d) => { setData(d); setLoading(false); })
-      .catch((e: Error) => { setError(e.message); setLoading(false); });
-  }, []);
 
   /* Keyboard shortcut: / to focus search */
   useEffect(() => {
@@ -107,19 +103,11 @@ export default function SkillsDirectory() {
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const allTags = useMemo(() => {
-    if (!data) return [];
-    const s = new Set<string>();
-    data.skills.forEach((sk) => sk.tags.forEach((t) => s.add(t)));
-    return Array.from(s).sort();
-  }, [data]);
-
   const filtered = useMemo(() => {
     if (!data) return [];
     const q = query.toLowerCase().trim();
+    if (!q) return data.skills;
     return data.skills.filter((sk) => {
-      if (activeTag && !sk.tags.includes(activeTag)) return false;
-      if (!q) return true;
       return (
         sk.name.toLowerCase().includes(q) ||
         sk.description.toLowerCase().includes(q) ||
@@ -127,17 +115,19 @@ export default function SkillsDirectory() {
         sk.tags.some((t) => t.includes(q))
       );
     });
-  }, [data, query, activeTag]);
+  }, [data, query]);
 
   const totalCmds = useMemo(
     () => data?.skills.reduce((n, s) => n + s.arguments.length, 0) ?? 0,
     [data]
   );
 
-  const toggle = useCallback(
-    (name: string) => setOpenSkill((p) => (p === name ? null : name)),
-    []
-  );
+  const tagCount = useMemo(() => {
+    if (!data) return 0;
+    const s = new Set<string>();
+    data.skills.forEach((sk) => sk.tags.forEach((t) => s.add(t)));
+    return s.size;
+  }, [data]);
 
   /* ─── Render ─── */
   return (
@@ -174,12 +164,12 @@ export default function SkillsDirectory() {
       {/* ─── Directory card ─── */}
       <div className="rounded-xl border border-white/[0.06] bg-[rgba(18,18,18,0.7)] backdrop-blur-[12px] overflow-hidden">
         {/* Stats strip */}
-        {!loading && data && (
+        {data && (
           <div className="flex items-center border-b border-white/[0.06]">
             {[
               { value: data.skills.length, label: "Skills" },
               { value: totalCmds, label: "Commands" },
-              { value: allTags.length, label: "Categories" },
+              { value: tagCount, label: "Categories" },
             ].map((s, i) => (
               <div
                 key={s.label}
@@ -226,26 +216,10 @@ export default function SkillsDirectory() {
 
         {/* ─── Content ─── */}
 
-        {/* Loading skeleton */}
-        {loading && (
-          <div className="divide-y divide-white/[0.04]">
-            {Array.from({ length: 10 }).map((_, i) => (
-              <div key={i} className="px-4 py-3 flex items-center animate-pulse">
-                <div className="h-3.5 rounded bg-white/[0.05]" style={{ width: `${100 + (i % 4) * 30}px` }} />
-                <div className="ml-auto mr-6 max-md:hidden">
-                  <div className="h-3 rounded bg-white/[0.03]" style={{ width: `${120 + (i % 3) * 40}px` }} />
-                </div>
-                <div className="h-3 w-3 rounded bg-white/[0.03] max-md:ml-auto" />
-              </div>
-            ))}
-          </div>
-        )}
-
-        {/* Error */}
-        {error && (
+        {/* Error (server fetch failed) */}
+        {!data && (
           <div className="px-6 py-12 text-center">
             <p className="text-[13px] text-red-400/70 mb-2">Failed to load skills</p>
-            <p className="text-[11px] text-white/25 mb-3">{error}</p>
             <button
               onClick={() => window.location.reload()}
               className="text-[12px] text-[#F7931A]/60 hover:text-[#F7931A] transition-colors"
@@ -255,12 +229,12 @@ export default function SkillsDirectory() {
           </div>
         )}
 
-        {/* Empty */}
-        {!loading && !error && filtered.length === 0 && (
+        {/* Empty search */}
+        {data && filtered.length === 0 && (
           <div className="px-6 py-12 text-center">
             <p className="text-[13px] text-white/35 mb-2">No matching skills</p>
             <button
-              onClick={() => { setQuery(""); setActiveTag(null); }}
+              onClick={() => setQuery("")}
               className="text-[12px] text-[#F7931A]/60 hover:text-[#F7931A] transition-colors"
             >
               Clear filters
@@ -269,7 +243,7 @@ export default function SkillsDirectory() {
         )}
 
         {/* ─── Rows ─── */}
-        {!loading && !error && filtered.length > 0 && (
+        {data && filtered.length > 0 && (
           <>
             <div className="divide-y divide-white/[0.04]">
               {filtered.map((skill) => {
@@ -280,7 +254,8 @@ export default function SkillsDirectory() {
                   <div key={skill.name}>
                     {/* Row */}
                     <button
-                      onClick={() => toggle(skill.name)}
+                      onClick={() => setOpenSkill(open ? null : skill.name)}
+                      aria-expanded={open}
                       className={`group flex w-full items-center px-4 py-3 text-left transition-all duration-100 ${
                         open
                           ? "bg-white/[0.02]"
@@ -292,16 +267,14 @@ export default function SkillsDirectory() {
                         <span className={`text-[13px] font-medium transition-colors ${open ? "text-[#F7931A]" : "text-white/85 group-hover:text-white"}`}>
                           {skill.name}
                         </span>
-                        {SHORT_DESC[skill.name] && (
-                          <p className="text-[11px] text-white/25 truncate md:hidden">
-                            {SHORT_DESC[skill.name]}
-                          </p>
-                        )}
+                        <p className="text-[11px] text-white/25 truncate md:hidden">
+                          {shortDesc(skill)}
+                        </p>
                       </div>
 
                       {/* Short description — right aligned, desktop */}
                       <span className="ml-auto mr-3 text-[13px] text-white/30 truncate max-w-[280px] max-md:hidden">
-                        {SHORT_DESC[skill.name] ?? ""}
+                        {shortDesc(skill)}
                       </span>
 
                       {/* Chevron */}
@@ -395,12 +368,12 @@ export default function SkillsDirectory() {
             {/* Footer */}
             <div className="flex items-center justify-between px-4 py-2 border-t border-white/[0.06] text-[11px] text-white/20">
               <span>
-                {filtered.length === data?.skills.length
+                {filtered.length === data.skills.length
                   ? `${filtered.length} skills`
-                  : `${filtered.length} of ${data?.skills.length}`}
+                  : `${filtered.length} of ${data.skills.length}`}
               </span>
               <div className="flex items-center gap-3">
-                {data?.version && (
+                {data.version && (
                   <span className="text-[#F7931A]/30">v{data.version}</span>
                 )}
                 <span>{totalCmds} commands</span>
