@@ -176,10 +176,13 @@ export async function middleware(request: NextRequest) {
 
   const cliRewriteTarget = cliRewrites[path];
 
+  // Deprecated script paths also serve different content for CLI vs browser
+  const cliScriptPaths = new Set(["/vps", "/local", "/update", "/update-skill.sh"]);
+
   if (!isCLI(request)) {
-    if (cliRewriteTarget) {
+    if (cliRewriteTarget || cliScriptPaths.has(path)) {
       const response = NextResponse.next();
-      response.headers.set("Vary", "User-Agent");
+      response.headers.append("Vary", "User-Agent");
       return response;
     }
     return NextResponse.next();
@@ -190,7 +193,7 @@ export async function middleware(request: NextRequest) {
     const response = NextResponse.rewrite(
       new URL(cliRewriteTarget, request.url)
     );
-    response.headers.set("Vary", "User-Agent");
+    response.headers.append("Vary", "User-Agent");
     return response;
   }
 
