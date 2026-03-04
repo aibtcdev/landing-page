@@ -92,7 +92,7 @@ export default function AgentStrip() {
                   {/* Avatar + rank */}
                   <div className="relative shrink-0">
                     <div className="size-10 overflow-hidden rounded-full border border-white/10 max-md:size-9">
-                      <img src={face(name)} alt="" className="size-full object-cover" loading="lazy" />
+                      <img src={face(name)} alt="" role="presentation" className="size-full object-cover" loading="lazy" />
                     </div>
                     <div className="absolute -bottom-1 -right-1 flex size-5 items-center justify-center rounded-full bg-black text-[10px] font-semibold text-white/60 ring-1 ring-white/10">
                       {agent.rank}

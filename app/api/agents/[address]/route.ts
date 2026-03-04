@@ -262,7 +262,7 @@ export async function GET(
           Promise.all([
             kv.put(`stx:${agent.stxAddress}`, updated),
             kv.put(`btc:${agent.btcAddress}`, updated),
-          ]);
+          ]).catch((err) => console.error("Failed to update agent cache:", err));
         }
       }).catch(() => {});
     }

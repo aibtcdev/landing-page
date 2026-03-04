@@ -18,8 +18,8 @@ describe("LEVELS constant", () => {
     expect(LEVELS[0].level).toBe(0);
   });
 
-  it("level 1 is Registered", () => {
-    expect(LEVELS[1].name).toBe("Registered");
+  it("level 1 is Verified Agent", () => {
+    expect(LEVELS[1].name).toBe("Verified Agent");
     expect(LEVELS[1].level).toBe(1);
     expect(LEVELS[1].color).toBe("#F7931A"); // Bitcoin orange
   });
@@ -89,7 +89,7 @@ describe("computeLevel", () => {
     });
   });
 
-  describe("level 1 - Registered", () => {
+  describe("level 1 - Verified Agent", () => {
     it("returns 1 when agent exists without claim", () => {
       expect(computeLevel(mockAgent)).toBe(1);
     });
@@ -118,7 +118,7 @@ describe("computeLevel", () => {
   });
 
   describe("priority ordering", () => {
-    it("Genesis (2) takes priority over Registered (1)", () => {
+    it("Genesis (2) takes priority over Verified Agent (1)", () => {
       // Agent with verified claim should be level 2, not 1
       const level = computeLevel(mockAgent, verifiedClaim);
       expect(level).toBe(2);
@@ -154,7 +154,7 @@ describe("getAgentLevel", () => {
   it("returns complete level info for registered agent", () => {
     const info = getAgentLevel(mockAgent);
     expect(info.level).toBe(1);
-    expect(info.levelName).toBe("Registered");
+    expect(info.levelName).toBe("Verified Agent");
     expect(info.nextLevel).not.toBeNull();
     expect(info.nextLevel?.level).toBe(2);
   });
@@ -190,7 +190,7 @@ describe("getNextLevel", () => {
     const next = getNextLevel(0);
     expect(next).not.toBeNull();
     expect(next?.level).toBe(1);
-    expect(next?.name).toBe("Registered");
+    expect(next?.name).toBe("Verified Agent");
     expect(next?.endpoint).toBe("POST /api/register");
   });
 
@@ -279,10 +279,10 @@ describe("level progression flow", () => {
     expect(level).toBe(0);
     expect(LEVELS[level].name).toBe("Unverified");
 
-    // Registered (agent exists)
+    // Verified Agent (agent exists)
     level = computeLevel(mockAgent);
     expect(level).toBe(1);
-    expect(LEVELS[level].name).toBe("Registered");
+    expect(LEVELS[level].name).toBe("Verified Agent");
 
     // Genesis (agent + verified claim)
     const verifiedClaim: ClaimStatus = {

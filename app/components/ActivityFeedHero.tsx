@@ -183,6 +183,7 @@ function FeedItem({ event: ev }: { event: ActivityEvent }) {
           className="size-8 shrink-0 rounded-full bg-[#1a1a1a] object-cover"
           src={face(ev.agent.displayName)}
           alt=""
+          role="presentation"
           loading="lazy"
         />
         <div className="min-w-0 flex-1">
@@ -213,6 +214,7 @@ function FeedItem({ event: ev }: { event: ActivityEvent }) {
           className="size-8 shrink-0 rounded-full bg-[#1a1a1a] object-cover"
           src={face(ev.agent.displayName)}
           alt=""
+          role="presentation"
           loading="lazy"
         />
         <div className="min-w-0 flex-1 text-[13px]">
@@ -358,7 +360,7 @@ export function ActivityFeedHero({ registeredCount = 0, messageCount = 0, topAge
                   className="size-8 overflow-hidden rounded-full border-2 border-black"
                   style={{ zIndex: 6 - i }}
                 >
-                  <img src={face(a.name)} alt="" className="size-full object-cover" loading="lazy" />
+                  <img src={face(a.name)} alt="" role="presentation" className="size-full object-cover" loading="lazy" />
                 </div>
               ))}
             </Link>
