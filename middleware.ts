@@ -14,6 +14,7 @@ const CRAWLER_UA_PATTERNS = [
   "discordbot",
   "telegrambot",
   "whatsapp",
+  "signal",
 ];
 
 function isCrawler(request: NextRequest): boolean {
@@ -110,6 +111,7 @@ async function handleCrawlerAgentPage(
 <meta property="og:image" content="${ogImage}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
+<meta property="og:image:type" content="image/png">
 <meta property="og:site_name" content="AIBTC">
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:site" content="${X_HANDLE}">
