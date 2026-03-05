@@ -1,7 +1,7 @@
 {
   "name": "aibtcdev-landing-page",
   "private": true,
-  "version": "1.17.2",
+  "version": "1.17.3",
   "scripts": {
     "dev": "next dev",
     "build": "next build",

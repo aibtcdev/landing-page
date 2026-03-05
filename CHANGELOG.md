@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.17.3](https://github.com/aibtcdev/landing-page/compare/v1.17.2...v1.17.3) (2026-03-05)
+
+
+### Bug Fixes
+
+* add Vary: User-Agent to prevent cache poisoning on CLI-rewritten paths ([#336](https://github.com/aibtcdev/landing-page/issues/336)) ([a9bbb4a](https://github.com/aibtcdev/landing-page/commit/a9bbb4a1fde5e60488420ec406933ea5846a1aeb))
+* **deps:** upgrade fast-xml-parser to 5.4.1 (CVE-2026-25896, CVE-2026-26278) ([#339](https://github.com/aibtcdev/landing-page/issues/339)) ([9551944](https://github.com/aibtcdev/landing-page/commit/95519441d2d94d208454e88a15d6a5f2e9e5db93))
+* **security:** upgrade @opennextjs/cloudflare to 1.17.1 (CVE-2026-3125) ([#340](https://github.com/aibtcdev/landing-page/issues/340)) ([83b9f51](https://github.com/aibtcdev/landing-page/commit/83b9f51838c7dc01b5bf77a46020d2e6e8d0bfd0))
+* **security:** upgrade rollup to 4.59.0 (CVE-2026-27606) ([#341](https://github.com/aibtcdev/landing-page/issues/341)) ([434034f](https://github.com/aibtcdev/landing-page/commit/434034f8cf4dc3c9d6b418da0f29785700c7b90e))
+
 ## [1.17.2](https://github.com/aibtcdev/landing-page/compare/v1.17.1...v1.17.2) (2026-03-04)
 
 
