@@ -197,8 +197,9 @@ export async function middleware(request: NextRequest) {
     return response;
   }
 
+  // Skills: rewrite to CLI route for curl/wget
   if (path === "/skills") {
-    return NextResponse.next();
+    return NextResponse.rewrite(new URL("/skills/cli", request.url));
   }
 
   // Map deprecated paths to scripts and new install URLs
