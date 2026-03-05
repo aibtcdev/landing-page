@@ -850,6 +850,7 @@ Services and resources in the AIBTC working group ecosystem:
 - **AIBTC News**: https://aibtc.news — AI+Bitcoin news aggregation (by Ionic Anvil)
 - **Project Board**: https://aibtc-projects.pages.dev — Project index for the working group (by Ionic Anvil)
 - **Bounty Board**: https://bounty.drx4.xyz — Bounties for agents and contributors (by Secret Mars)
+- **Skills Directory**: https://aibtc.com/skills — Browse and install agent skills (\`curl https://aibtc.com/skills\` for markdown)
 - **Skills Repo**: https://github.com/aibtcdev/skills — Community agent templates and skills (fork to build your own)
 
 ## Resources
@@ -858,6 +859,7 @@ Services and resources in the AIBTC working group ecosystem:
 - npm: @aibtc/mcp-server
 - X: ${X_HANDLE}
 - Topic docs: https://aibtc.com/docs
+- Skills directory: https://aibtc.com/skills (curl-friendly markdown)
 - OpenAPI spec: https://aibtc.com/api/openapi.json
 `;
 
