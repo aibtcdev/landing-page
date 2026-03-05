@@ -24,6 +24,7 @@ export function GET() {
         messaging: "https://aibtc.com/docs/messaging.txt",
         identity: "https://aibtc.com/docs/identity.txt",
         mcpTools: "https://aibtc.com/docs/mcp-tools.txt",
+        skills: "https://aibtc.com/skills",
       },
     },
     capabilities: {
