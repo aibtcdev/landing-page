@@ -172,6 +172,7 @@ export async function middleware(request: NextRequest) {
     "/": "/llms.txt",
     "/install": "/install/loop",
     "/heartbeat": "/heartbeat/cli",
+    "/skills": "/skills/md",
   };
 
   const cliRewriteTarget = cliRewrites[path];
@@ -195,10 +196,6 @@ export async function middleware(request: NextRequest) {
     );
     response.headers.append("Vary", "User-Agent");
     return response;
-  }
-
-  if (path === "/skills") {
-    return NextResponse.next();
   }
 
   // Map deprecated paths to scripts and new install URLs
