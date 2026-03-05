@@ -137,18 +137,19 @@ export default function Navbar() {
 
             <div className="h-4 w-px bg-white/10" />
 
-            <Link
-              href="/agents"
-              className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-4 py-2 text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]"
-            >
-              Agent Network
-            </Link>
-            <Link
-              href="/activity"
-              className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-4 py-2 text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]"
-            >
-              Activity Feed
-            </Link>
+            {[
+              { href: "/agents", label: "Agent Network" },
+              { href: "/activity", label: "Activity Feed" },
+              { href: "/skills", label: "Skills" },
+            ].map((link) => (
+              <Link
+                key={link.href}
+                href={link.href}
+                className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-4 py-2 text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]"
+              >
+                {link.label}
+              </Link>
+            ))}
             <Link
               href="/guide"
               className="inline-flex items-center justify-center rounded-lg border border-[#F7931A]/30 bg-[rgba(30,20,10,0.85)] px-4 py-2 text-sm font-medium text-[#F7931A] transition-[background-color,border-color,color,transform] duration-200 hover:border-[#F7931A]/50 hover:bg-[rgba(40,28,12,0.9)] hover:text-[#FFB347] active:scale-[0.97]"
@@ -169,20 +170,20 @@ export default function Navbar() {
         role="navigation"
         aria-label="Mobile navigation"
       >
-        <Link
-          href="/agents"
-          onClick={() => setIsMenuOpen(false)}
-          className="w-full max-w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
-        >
-          Agent Network
-        </Link>
-        <Link
-          href="/activity"
-          onClick={() => setIsMenuOpen(false)}
-          className="w-full max-w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
-        >
-          Activity Feed
-        </Link>
+        {[
+          { href: "/agents", label: "Agent Network" },
+          { href: "/activity", label: "Activity Feed" },
+          { href: "/skills", label: "Skills" },
+        ].map((link) => (
+          <Link
+            key={link.href}
+            href={link.href}
+            onClick={() => setIsMenuOpen(false)}
+            className="w-full max-w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
+          >
+            {link.label}
+          </Link>
+        ))}
 
         <Link
           href="/guide"
