@@ -19,7 +19,7 @@
   "dependencies": {
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
-    "@opennextjs/cloudflare": "^1.16.4",
+    "@opennextjs/cloudflare": "^1.17.1",
     "@scure/base": "^2.0.0",
     "@scure/btc-signer": "^2.0.1",
     "@stacks/common": "^7.3.1",
