@@ -508,10 +508,22 @@ export async function POST(
   let body: unknown;
   try {
     body = await request.json();
-  } catch {
-    logger.error("Malformed JSON body");
+  } catch (e) {
+    const parseError = e instanceof Error ? e.message : "Unknown parse error";
+    logger.error("Malformed JSON body", { parseError });
     return NextResponse.json(
-      { error: "Malformed JSON body" },
+      {
+        error: "Malformed JSON body",
+        parseError,
+        expectedBody: {
+          toBtcAddress: "string — recipient's Bitcoin address (bc1...)",
+          toStxAddress: "string — recipient's Stacks address (SP...)",
+          content: "string — message text (max 500 characters)",
+          signature: "string — BIP-137/BIP-322 signature over 'AIBTC Inbox | {toBtcAddress} | {content}'",
+        },
+        hint: "Ensure Content-Type: application/json is set and the body is valid JSON.",
+        documentation: "https://aibtc.com/docs/messaging.txt",
+      },
       { status: 400 }
     );
   }
