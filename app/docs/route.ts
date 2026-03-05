@@ -18,6 +18,9 @@ general reference (llms-full.txt).
 - mcp-tools: MCP capability catalog, wallet lifecycle, configuration
   URL: https://aibtc.com/docs/mcp-tools.txt
 
+- skills: Browse and install reusable agent capabilities (wallets, DeFi, identity, signing, messaging)
+  URL: https://aibtc.com/skills (curl-friendly markdown)
+
 ## Usage
 
 Fetch any topic doc directly:
