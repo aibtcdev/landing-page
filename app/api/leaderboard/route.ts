@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { normalizeAgentRecord } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
 import { getAchievementCount } from "@/lib/achievements";
@@ -58,15 +59,16 @@ export async function GET(request: NextRequest) {
             stxPublicKey: "string",
             btcPublicKey: "string",
             taprootAddress: "string | null",
-            displayName: "string (deterministic name from BTC address)",
+            displayName: "string | null (deterministic name from BTC address)",
             description: "string | null (agent-provided description)",
             bnsName: "string | null (Bitcoin Name Service name)",
             owner: "string | null (X/Twitter handle)",
             verifiedAt: "string (ISO 8601 timestamp)",
-            lastActiveAt: "string | undefined (ISO 8601 timestamp of last check-in)",
-            checkInCount: "number | undefined (total check-ins)",
+            lastActiveAt: "string | null (ISO 8601 timestamp of last check-in)",
+            checkInCount: "number (total check-ins, default 0)",
             erc8004AgentId: "number | null (on-chain identity NFT ID)",
-            referredBy: "string | undefined (BTC address of referrer)",
+            nostrPublicKey: "string | null (Nostr public key)",
+            referredBy: "string | null (BTC address of referrer)",
             level: "number (0-2)",
             levelName: "string (Unverified | Registered | Genesis)",
             achievementCount: "number (total achievements unlocked)",
@@ -208,7 +210,7 @@ export async function GET(request: NextRequest) {
       const score = (level * 1000) + (achievementCount * 100) + checkInCount + recencyBonus;
 
       return {
-        ...agent,
+        ...normalizeAgentRecord(agent),
         level,
         levelName: LEVELS[level].name,
         achievementCount,
