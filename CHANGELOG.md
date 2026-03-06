@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/aibtcdev/landing-page/compare/v1.18.0...v1.19.0) (2026-03-06)
+
+
+### Features
+
+* **api:** return full agent record from all list endpoints ([#350](https://github.com/aibtcdev/landing-page/issues/350)) ([08306af](https://github.com/aibtcdev/landing-page/commit/08306af3ef3545e71e5494c33e67bbfbbd41d630))
+
 ## [1.18.0](https://github.com/aibtcdev/landing-page/compare/v1.17.3...v1.18.0) (2026-03-06)
 
 
