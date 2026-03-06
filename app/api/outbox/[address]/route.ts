@@ -288,11 +288,13 @@ export async function POST(
 
     if (freshMessage?.repliedAt) {
       // All writes completed — true duplicate
-      logger.warn("Reply already exists (complete)", { messageId });
+      logger.info("Reply already exists (complete)", { messageId });
       return NextResponse.json(
         {
           error: "Reply already exists for this message",
           messageId,
+          status: "already_delivered",
+          action: "stop_polling",
           existingReply: {
             repliedAt: existingReply.repliedAt,
             reply: existingReply.reply,
