@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.18.0](https://github.com/aibtcdev/landing-page/compare/v1.17.3...v1.18.0) (2026-03-06)
+
+
+### Features
+
+* **agents:** add reputation score column to agent registry ([#329](https://github.com/aibtcdev/landing-page/issues/329)) ([8b66d59](https://github.com/aibtcdev/landing-page/commit/8b66d5994c738ad0c524c9a586322feca356b14d))
+
+
+### Bug Fixes
+
+* **outbox:** add stop_polling signal to 409 response and reduce log noise ([#346](https://github.com/aibtcdev/landing-page/issues/346)) ([96d159a](https://github.com/aibtcdev/landing-page/commit/96d159aa9beeace24cb52a28eb3ad08e4a472292))
+* **outbox:** include parse error and expected body shape in malformed JSON response ([#345](https://github.com/aibtcdev/landing-page/issues/345)) ([e2d6241](https://github.com/aibtcdev/landing-page/commit/e2d624105708bcf808e7dd70fca90d5f41ed2d75))
+
 ## [1.17.3](https://github.com/aibtcdev/landing-page/compare/v1.17.2...v1.17.3) (2026-03-05)
 
 
