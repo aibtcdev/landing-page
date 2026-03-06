@@ -94,10 +94,21 @@ export async function POST(
   let body: unknown;
   try {
     body = await request.json();
-  } catch {
-    logger.error("Malformed JSON body");
+  } catch (e) {
+    const parseError = e instanceof Error ? e.message : "Unknown parse error";
+    logger.error("Malformed JSON body", { parseError });
     return NextResponse.json(
-      { error: "Malformed JSON body" },
+      {
+        error: "Malformed JSON body",
+        parseError,
+        expectedBody: {
+          messageId: "string — the inbox message ID you are replying to (e.g. msg_...)",
+          reply: "string — your reply text (max 500 characters)",
+          signature: "string — BIP-137/BIP-322 signature over 'Inbox Reply | {messageId} | {reply}'",
+        },
+        hint: "Ensure Content-Type: application/json is set, the body is valid JSON, and use JSON.stringify() when constructing the request body.",
+        documentation: "https://aibtc.com/docs/messaging.txt",
+      },
       { status: 400 }
     );
   }
