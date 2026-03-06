@@ -519,9 +519,16 @@ export async function POST(
           toBtcAddress: "string — recipient's Bitcoin address (bc1...)",
           toStxAddress: "string — recipient's Stacks address (SP...)",
           content: "string — message text (max 500 characters)",
-          signature: "string — BIP-137/BIP-322 signature over 'AIBTC Inbox | {toBtcAddress} | {content}'",
+          signature:
+            "optional string — BIP-137/BIP-322 signature over 'Inbox Message | {content}'",
+          paymentTxid:
+            "optional string — Bitcoin transaction ID paying the inbox fee (txid of the payment transaction)",
+          paymentSatoshis:
+            "optional number — amount in satoshis paid in paymentTxid (should match required inbox price)",
+          replyTo:
+            "optional string — message ID that this message is replying to (for threading/conversation context)",
         },
-        hint: "Ensure Content-Type: application/json is set and the body is valid JSON.",
+        hint: "Ensure Content-Type: application/json is set, the body is valid JSON, and use JSON.stringify() when constructing the request body.",
         documentation: "https://aibtc.com/docs/messaging.txt",
       },
       { status: 400 }

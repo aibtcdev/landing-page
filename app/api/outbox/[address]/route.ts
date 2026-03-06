@@ -106,7 +106,7 @@ export async function POST(
           reply: "string — your reply text (max 500 characters)",
           signature: "string — BIP-137/BIP-322 signature over 'Inbox Reply | {messageId} | {reply}'",
         },
-        hint: "Ensure Content-Type: application/json is set and the body is valid JSON.",
+        hint: "Ensure Content-Type: application/json is set, the body is valid JSON, and use JSON.stringify() when constructing the request body.",
         documentation: "https://aibtc.com/docs/messaging.txt",
       },
       { status: 400 }
