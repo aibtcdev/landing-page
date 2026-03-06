@@ -1,6 +1,7 @@
 "use client";
 
-import { useState, useEffect, useMemo, useRef } from "react";
+import { useState, useEffect, useMemo, useRef, useCallback } from "react";
+import { useSearchParams } from "next/navigation";
 import CopyButton from "@/app/components/CopyButton";
 
 /* ─── Types ─── */
@@ -83,13 +84,59 @@ function shortDesc(skill: Skill): string {
   return words.slice(0, 6).join(" ") + "...";
 }
 
+/** Converts a skill name to a safe HTML id / fragment slug. */
+function toSlug(name: string): string {
+  return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+}
+
 /* ─── Component ─── */
 
 export default function SkillsDirectory({ initialData }: { initialData: SkillsData | null }) {
   const data = initialData;
+  const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [openSkill, setOpenSkill] = useState<string | null>(null);
   const searchRef = useRef<HTMLInputElement>(null);
+  const skillRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  /* Read ?skill= param on mount to open + scroll to a deep-linked skill */
+  useEffect(() => {
+    const skillParam = searchParams.get("skill");
+    if (skillParam && data?.skills.some((s) => s.name === skillParam)) {
+      setOpenSkill(skillParam);
+      // Scroll after render
+      requestAnimationFrame(() => {
+        skillRefs.current[skillParam]?.scrollIntoView({ behavior: "smooth", block: "center" });
+      });
+    }
+    // Also support hash-based deep links (#wallet)
+    if (!skillParam && window.location.hash) {
+      const hash = window.location.hash.slice(1);
+      if (data?.skills.some((s) => s.name === hash)) {
+        setOpenSkill(hash);
+        requestAnimationFrame(() => {
+          skillRefs.current[hash]?.scrollIntoView({ behavior: "smooth", block: "center" });
+        });
+      }
+    }
+  }, [searchParams, data]);
+
+  const toggleSkill = useCallback((name: string) => {
+    setOpenSkill((prev) => (prev === name ? null : name));
+  }, []);
+
+  /* Sync URL when openSkill changes — side effects must stay outside state updater */
+  useEffect(() => {
+    if (typeof window === "undefined") return;
+    const url = new URL(window.location.href);
+    if (openSkill) {
+      url.searchParams.set("skill", openSkill);
+    } else {
+      url.searchParams.delete("skill");
+    }
+    window.history.replaceState(null, "", url.toString());
+  }, [openSkill]);
 
   /* Keyboard shortcut: / to focus search */
   useEffect(() => {
@@ -103,31 +150,45 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
+  /* All unique tags sorted alphabetically */
+  const allTags = useMemo(() => {
+    if (!data) return [];
+    const s = new Set<string>();
+    data.skills.forEach((sk) => sk.tags.forEach((t) => s.add(t)));
+    return [...s].sort();
+  }, [data]);
+
   const filtered = useMemo(() => {
     if (!data) return [];
+    let skills = data.skills;
+
+    // Tag filter
+    if (tagFilter) {
+      skills = skills.filter((sk) => sk.tags.includes(tagFilter));
+    }
+
+    // Text search
     const q = query.toLowerCase().trim();
-    if (!q) return data.skills;
-    return data.skills.filter((sk) => {
-      return (
-        sk.name.toLowerCase().includes(q) ||
-        sk.description.toLowerCase().includes(q) ||
-        sk.arguments.some((a) => a.includes(q)) ||
-        sk.tags.some((t) => t.includes(q))
-      );
-    });
-  }, [data, query]);
+    if (q) {
+      skills = skills.filter((sk) => {
+        return (
+          sk.name.toLowerCase().includes(q) ||
+          sk.description.toLowerCase().includes(q) ||
+          sk.arguments.some((a) => a.includes(q)) ||
+          sk.tags.some((t) => t.includes(q))
+        );
+      });
+    }
+
+    return skills;
+  }, [data, query, tagFilter]);
 
   const totalCmds = useMemo(
     () => data?.skills.reduce((n, s) => n + s.arguments.length, 0) ?? 0,
     [data]
   );
 
-  const tagCount = useMemo(() => {
-    if (!data) return 0;
-    const s = new Set<string>();
-    data.skills.forEach((sk) => sk.tags.forEach((t) => s.add(t)));
-    return s.size;
-  }, [data]);
+  const tagCount = allTags.length;
 
   /* ─── Render ─── */
   return (
@@ -151,7 +212,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
             <span className="inline-flex items-center gap-2">
               <span className="text-[10px] font-medium uppercase tracking-widest text-[#F7931A]/70">Install</span>
               <span className="font-mono text-[15px] max-md:text-[14px]">npx skills add aibtcdev/skills</span>
-              <svg className="size-3.5 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <svg aria-hidden="true" className="size-3.5 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
               </svg>
             </span>
@@ -203,7 +264,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
               onClick={() => setQuery("")}
               className="absolute right-5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60 transition-colors"
             >
-              <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
@@ -213,6 +274,37 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
             </kbd>
           )}
         </div>
+
+        {/* ─── Tag filter chips ─── */}
+        {data && allTags.length > 0 && (
+          <div className="flex flex-wrap items-center gap-1.5 px-5 py-3 border-b border-white/[0.06]">
+            <button
+              aria-pressed={tagFilter === null}
+              onClick={() => setTagFilter(null)}
+              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                tagFilter === null
+                  ? "bg-white/[0.12] text-white"
+                  : "bg-white/[0.04] text-white/50 hover:bg-white/[0.07] hover:text-white/70"
+              }`}
+            >
+              All
+            </button>
+            {allTags.map((tag) => (
+              <button
+                key={tag}
+                aria-pressed={tagFilter === tag}
+                onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+                  tagFilter === tag
+                    ? tc(tag) + " opacity-100"
+                    : tc(tag) + " opacity-60 hover:opacity-80"
+                }`}
+              >
+                {tag}
+              </button>
+            ))}
+          </div>
+        )}
 
         {/* ─── Content ─── */}
 
@@ -234,7 +326,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
           <div className="px-6 py-16 text-center">
             <p className="text-[14px] text-white/50 mb-3">No matching skills</p>
             <button
-              onClick={() => setQuery("")}
+              onClick={() => { setQuery(""); setTagFilter(null); }}
               className="text-[13px] text-[#F7931A]/70 hover:text-[#F7931A] transition-colors"
             >
               Clear filters
@@ -249,12 +341,13 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
               {filtered.map((skill) => {
                 const open = openSkill === skill.name;
                 const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
+                const slug = toSlug(skill.name);
 
                 return (
-                  <div key={skill.name}>
+                  <div key={skill.name} ref={(el) => { skillRefs.current[skill.name] = el; }} id={slug}>
                     {/* Row */}
                     <button
-                      onClick={() => setOpenSkill(open ? null : skill.name)}
+                      onClick={() => toggleSkill(skill.name)}
                       aria-expanded={open}
                       className={`group flex w-full items-center px-5 py-3.5 text-left transition-all duration-100 ${
                         open
@@ -279,6 +372,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
 
                       {/* Chevron */}
                       <svg
+                        aria-hidden="true"
                         className={`size-3.5 shrink-0 text-white/30 transition-transform duration-200 max-md:ml-auto ${open ? "rotate-180" : ""}`}
                         fill="none"
                         viewBox="0 0 24 24"
@@ -292,10 +386,25 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
                     {/* ─── Expanded detail ─── */}
                     {open && (
                       <div className="px-5 pb-5 pt-1 bg-white/[0.015]">
-                        {/* Description */}
-                        <p className="text-[14px] leading-[1.65] text-white/70 mb-4">
-                          {skill.description}
-                        </p>
+                        {/* Description + share link */}
+                        <div className="flex items-start justify-between gap-3 mb-4">
+                          <p className="text-[14px] leading-[1.65] text-white/70">
+                            {skill.description}
+                          </p>
+                          <CopyButton
+                            text={`${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`}
+                            label={
+                              <span className="inline-flex items-center gap-1 text-[11px] text-white/40 hover:text-white/60 transition-colors whitespace-nowrap">
+                                <svg aria-hidden="true" className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                                </svg>
+                                Link
+                              </span>
+                            }
+                            variant="inline"
+                            className="shrink-0"
+                          />
+                        </div>
 
                         {/* Install command */}
                         <div className="mb-4 rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-2.5 overflow-x-auto">
@@ -305,7 +414,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
                               <span className="inline-flex items-center gap-2 whitespace-nowrap">
                                 <span className="text-[#F7931A]/70 font-mono text-[13px] max-md:text-[12px]">$</span>
                                 <span className="font-mono text-[13px] max-md:text-[12px] text-white/80">npx skills add aibtcdev/skills/{skill.name}</span>
-                                <svg className="size-3 shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                                <svg aria-hidden="true" className="size-3 shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                                   <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
                                 </svg>
                               </span>
@@ -377,6 +486,18 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
                   <span className="text-[#F7931A]/50">v{data.version}</span>
                 )}
                 <span>{totalCmds} commands</span>
+                <span className="text-white/20">·</span>
+                <a
+                  href="https://github.com/aibtcdev/skills"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 text-[#F7931A]/60 hover:text-[#F7931A] transition-colors"
+                >
+                  <svg aria-hidden="true" className="size-3" fill="currentColor" viewBox="0 0 16 16">
+                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+                  </svg>
+                  Contribute a skill
+                </a>
               </div>
             </div>
           </>
