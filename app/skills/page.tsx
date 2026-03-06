@@ -1,3 +1,4 @@
+import { Suspense } from "react";
 import type { Metadata } from "next";
 import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
@@ -35,7 +36,9 @@ export default async function SkillsPage() {
         <Navbar />
 
         <main className="mx-auto max-w-[1100px] px-12 pt-32 pb-24 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-16">
-          <SkillsDirectory initialData={skills} />
+          <Suspense>
+            <SkillsDirectory initialData={skills} />
+          </Suspense>
         </main>
 
         <Footer />
