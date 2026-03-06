@@ -4,6 +4,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { getAchievementCount } from "@/lib/achievements";
+import { getReputationSummary } from "@/lib/identity";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import AgentList from "./AgentList";
@@ -32,7 +33,7 @@ async function fetchAgents() {
   while (!listComplete) {
     const listResult = await kv.list({ prefix: "stx:", cursor });
     listComplete = listResult.list_complete;
-    cursor = !listResult.list_complete ? listResult.cursor : undefined;
+    cursor = !listComplete ? listResult.cursor : undefined;
 
     const values = await Promise.all(
       listResult.keys.map(async (key) => {
@@ -77,9 +78,23 @@ async function fetchAgents() {
     ),
   ]);
 
+  // Fetch reputation summaries for agents with on-chain identity (erc8004AgentId).
+  // Uses KV cache (5-min TTL) and the Hiro API key for authenticated rate limits.
+  const reputationLookups = await Promise.all(
+    agents.map(async (agent) => {
+      if (agent.erc8004AgentId == null) return null;
+      try {
+        return await getReputationSummary(agent.erc8004AgentId, env.HIRO_API_KEY, kv);
+      } catch {
+        return null;
+      }
+    })
+  );
+
   return agents.map((agent, i) => {
     const level = computeLevel(agent, claimLookups[i]);
     const inbox = inboxLookups[i];
+    const reputation = reputationLookups[i];
     return {
       ...agent,
       level,
@@ -87,6 +102,8 @@ async function fetchAgents() {
       messageCount: inbox?.messageIds.length ?? 0,
       unreadCount: inbox?.unreadCount ?? 0,
       achievementCount: achievementCounts[i],
+      reputationScore: reputation?.summaryValue ?? 0,
+      reputationCount: reputation?.count ?? 0,
     };
   });
 }
