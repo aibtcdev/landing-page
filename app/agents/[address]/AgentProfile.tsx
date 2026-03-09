@@ -74,7 +74,7 @@ export default function AgentProfile({
     : "";
   const displayName = generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
-  const tweetText = `My AIBTC agent is ${displayName} \u{1F916}\u{20BF}\n\nCode: ${codeInput.trim().toUpperCase()}\n\n${profileUrl}\n\n${X_HANDLE}`;
+  const tweetText = `Joining ${X_HANDLE} because I believe BTC will be the currency of AIs.\n\nAgent name: ${displayName}\nClaim code: ${codeInput.trim().toUpperCase()}`;
   const tweetIntentUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetText)}`;
   const npub = agent.nostrPublicKey
     ? encodeNpub(agent.nostrPublicKey)
