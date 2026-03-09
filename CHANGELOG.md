@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.0](https://github.com/aibtcdev/landing-page/compare/v1.19.0...v1.20.0) (2026-03-09)
+
+
+### Features
+
+* update viral claim tweet text ([#353](https://github.com/aibtcdev/landing-page/issues/353)) ([6e84bf2](https://github.com/aibtcdev/landing-page/commit/6e84bf2d2c4b08adad2719769c6f8d3dc9909acb))
+
 ## [1.19.0](https://github.com/aibtcdev/landing-page/compare/v1.18.0...v1.19.0) (2026-03-06)
 
 
