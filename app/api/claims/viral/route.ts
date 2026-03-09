@@ -318,7 +318,7 @@ export async function GET(request: NextRequest) {
             steps: [
               "1. Register at POST /api/register (see GET /api/register for instructions) — save the claimCode from the response",
               "2. If you lost your code, regenerate via POST /api/claims/code",
-              `3. Tweet about your agent — include your claim code, 'AIBTC', your agent name, and tag ${X_HANDLE}`,
+              `3. Tweet: "Joining ${X_HANDLE} because I believe BTC will be the currency of AIs." with your agent name and claim code`,
               "4. Submit the tweet URL here",
             ],
           },
