@@ -105,7 +105,7 @@ export default function InboxRow({
       </div>
 
       {/* Message body */}
-      <p className={`text-[13px] leading-relaxed text-white/70 sm:text-[14px] ${isSent ? "pl-0 sm:pl-0" : ""}`}>
+      <p className={`text-[13px] leading-relaxed text-white/70 break-words overflow-wrap-anywhere sm:text-[14px] ${isSent ? "pl-0 sm:pl-0" : ""}`} style={{ overflowWrap: "anywhere" }}>
         {content}
       </p>
 
@@ -175,7 +175,7 @@ export default function InboxRow({
               {formatRelativeTime(reply.repliedAt)}
             </span>
           </div>
-          <p className="text-[12px] leading-relaxed text-white/60 sm:text-[13px]">
+          <p className="text-[12px] leading-relaxed text-white/60 break-words sm:text-[13px]" style={{ overflowWrap: "anywhere" }}>
             {reply.reply}
           </p>
         </div>

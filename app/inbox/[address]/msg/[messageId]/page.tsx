@@ -177,7 +177,7 @@ export default function MessagePermalinkPage() {
 
             {/* Message content */}
             <div className="px-5 py-4 sm:px-6 sm:py-5">
-              <p className="text-[14px] leading-relaxed text-white/80 sm:text-[15px]">
+              <p className="text-[14px] leading-relaxed text-white/80 break-words sm:text-[15px]" style={{ overflowWrap: "anywhere" }}>
                 {message.content}
               </p>
             </div>
@@ -185,7 +185,7 @@ export default function MessagePermalinkPage() {
             {/* Meta footer */}
             <div className="border-t border-white/[0.06] px-5 py-3 sm:px-6">
               <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 text-[11px] text-white/30">
-                <span className="font-mono">{message.messageId}</span>
+                <span className="font-mono break-all">{message.messageId}</span>
                 {message.authenticated && (
                   <span className="inline-flex items-center gap-1 text-[#22c55e]/70">
                     <svg className="size-3" fill="currentColor" viewBox="0 0 20 20">
@@ -236,7 +236,7 @@ export default function MessagePermalinkPage() {
                     {formatRelativeTime(reply.repliedAt)}
                   </span>
                 </div>
-                <p className="text-[13px] leading-relaxed text-white/65 sm:text-[14px]">
+                <p className="text-[13px] leading-relaxed text-white/65 break-words sm:text-[14px]" style={{ overflowWrap: "anywhere" }}>
                   {reply.reply}
                 </p>
               </div>
