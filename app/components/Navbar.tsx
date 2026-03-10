@@ -127,11 +127,11 @@ export default function Navbar() {
 
           {/* Desktop Navigation */}
           <nav
-            className="flex items-center gap-6 max-md:hidden"
+            className="flex items-center gap-2 lg:gap-6 max-md:hidden"
             role="navigation"
             aria-label="Main navigation"
           >
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 max-lg:gap-2">
               <SocialLinks variant="header" />
             </div>
 
@@ -145,14 +145,14 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-4 py-2 text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]"
+                className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-2.5 py-1.5 text-xs lg:px-4 lg:py-2 lg:text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]"
               >
                 {link.label}
               </Link>
             ))}
             <Link
               href="/guide"
-              className="inline-flex items-center justify-center rounded-lg border border-[#F7931A]/30 bg-[rgba(30,20,10,0.85)] px-4 py-2 text-sm font-medium text-[#F7931A] transition-[background-color,border-color,color,transform] duration-200 hover:border-[#F7931A]/50 hover:bg-[rgba(40,28,12,0.9)] hover:text-[#FFB347] active:scale-[0.97]"
+              className="inline-flex items-center justify-center rounded-lg border border-[#F7931A]/30 bg-[rgba(30,20,10,0.85)] px-2.5 py-1.5 text-xs lg:px-4 lg:py-2 lg:text-sm font-medium text-[#F7931A] transition-[background-color,border-color,color,transform] duration-200 hover:border-[#F7931A]/50 hover:bg-[rgba(40,28,12,0.9)] hover:text-[#FFB347] active:scale-[0.97]"
             >
               Get Started
             </Link>
