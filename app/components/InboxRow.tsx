@@ -56,23 +56,24 @@ export default function InboxRow({
   return (
     <Link
       href={permalinkHref}
-      className={`group relative block px-4 py-3.5 transition-colors hover:bg-white/[0.03] sm:px-5 sm:py-4 ${isUnread ? "bg-white/[0.04]" : ""}`}
+      className={`group relative block px-4 py-4 transition-colors hover:bg-white/[0.03] sm:px-5 sm:py-5 ${isUnread ? "bg-white/[0.04]" : ""}`}
     >
       {/* Unread left accent */}
       {isUnread && (
-        <div className="absolute left-0 top-3 bottom-3 w-[3px] rounded-r-full bg-[#F7931A]" />
+        <div className="absolute left-0 top-4 bottom-4 w-[3px] rounded-r-full bg-[#F7931A]" />
       )}
 
       {/* Header: direction + avatar + name + sats + time */}
-      <div className="mb-2 flex items-center gap-2 sm:gap-2.5">
-        <span className={`shrink-0 text-[11px] font-medium uppercase tracking-wide sm:text-[12px] ${isSent ? "text-[#7DA2FF]/70" : "text-white/40"}`}>
+      <div className="mb-2.5 flex items-center gap-2.5 sm:gap-3">
+        {/* Direction badge */}
+        <span className={`shrink-0 rounded-md px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider sm:text-[11px] ${isSent ? "bg-[#7DA2FF]/10 text-[#7DA2FF]/80" : "bg-white/[0.06] text-white/50"}`}>
           {isSent ? "To" : "From"}
         </span>
 
         <Link
           href={`/agents/${avatarAddress}`}
           onClick={(e) => e.stopPropagation()}
-          className={`shrink-0 rounded-full border overflow-hidden bg-white/[0.06] ${compact ? "size-7" : "size-7 sm:size-8"} ${isUnread ? "border-[#F7931A]/30" : "border-white/10"}`}
+          className={`shrink-0 rounded-full border overflow-hidden bg-white/[0.06] ${compact ? "size-7" : "size-8 sm:size-9"} ${isUnread ? "border-[#F7931A]/30" : "border-white/10"}`}
         >
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
@@ -80,8 +81,8 @@ export default function InboxRow({
             alt=""
             className="size-full object-cover"
             loading="lazy"
-            width={32}
-            height={32}
+            width={36}
+            height={36}
             onError={(e) => { e.currentTarget.style.display = "none"; }}
           />
         </Link>
@@ -103,14 +104,14 @@ export default function InboxRow({
         </span>
       </div>
 
-      {/* Message body — always fully visible (max 500 chars) */}
-      <p className="text-[13px] leading-relaxed text-white/70 sm:text-[14px]">
+      {/* Message body */}
+      <p className={`text-[13px] leading-relaxed text-white/70 sm:text-[14px] ${isSent ? "pl-0 sm:pl-0" : ""}`}>
         {content}
       </p>
 
       {/* replyTo indicator */}
       {replyTo && (
-        <div className="mt-1.5">
+        <div className="mt-2">
           <Link
             href={`/inbox/${encodeURIComponent(toBtcAddress)}/msg/${encodeURIComponent(replyTo)}`}
             onClick={(e) => e.stopPropagation()}
@@ -124,10 +125,10 @@ export default function InboxRow({
         </div>
       )}
 
-      {/* Status + meta row */}
-      <div className="mt-2 flex items-center gap-2">
+      {/* Status row */}
+      <div className="mt-2.5 flex items-center gap-2">
         {hasReply && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#7DA2FF]/10 px-2 py-0.5 text-[10px] font-medium text-[#7DA2FF] sm:text-[11px]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#7DA2FF]/10 px-2.5 py-1 text-[10px] font-medium text-[#7DA2FF] sm:text-[11px]">
             <svg className="size-3" fill="currentColor" viewBox="0 0 20 20">
               <path fillRule="evenodd" d="M7.707 3.293a1 1 0 010 1.414L5.414 7H11a7 7 0 017 7v2a1 1 0 11-2 0v-2a5 5 0 00-5-5H5.414l2.293 2.293a1 1 0 11-1.414 1.414l-4-4a1 1 0 010-1.414l4-4a1 1 0 011.414 0z" clipRule="evenodd" />
             </svg>
@@ -135,7 +136,7 @@ export default function InboxRow({
           </span>
         )}
         {isAwaiting && (
-          <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-medium text-[#F7931A]/80 sm:text-[11px]">
+          <span className="inline-flex items-center gap-1 rounded-full bg-[#F7931A]/10 px-2.5 py-1 text-[10px] font-medium text-[#F7931A]/80 sm:text-[11px]">
             <span className="size-1.5 animate-pulse rounded-full bg-[#F7931A]" />
             Awaiting reply
           </span>
@@ -150,19 +151,19 @@ export default function InboxRow({
         )}
       </div>
 
-      {/* Reply — always visible inline if it exists */}
+      {/* Reply — visible inline with better visual separation */}
       {reply && (
-        <div className="mt-3 rounded-lg border border-[#7DA2FF]/15 bg-[#7DA2FF]/5 p-3 sm:p-3.5">
-          <div className="mb-1.5 flex items-center gap-2">
-            <Link href={`/agents/${reply.fromAddress}`} onClick={(e) => e.stopPropagation()} className="size-5 shrink-0 overflow-hidden rounded-full border border-[#7DA2FF]/20 bg-white/[0.06]">
+        <div className="mt-4 rounded-xl border border-[#7DA2FF]/15 bg-[#7DA2FF]/[0.04] p-4 sm:p-4.5">
+          <div className="mb-2 flex items-center gap-2.5">
+            <Link href={`/agents/${reply.fromAddress}`} onClick={(e) => e.stopPropagation()} className="size-6 shrink-0 overflow-hidden rounded-full border border-[#7DA2FF]/20 bg-white/[0.06]">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
                 src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(reply.fromAddress)}`}
                 alt=""
                 className="size-full object-cover"
                 loading="lazy"
-                width="20"
-                height="20"
+                width="24"
+                height="24"
                 onError={(e) => { e.currentTarget.style.display = "none"; }}
               />
             </Link>
