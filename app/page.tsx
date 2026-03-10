@@ -221,7 +221,7 @@ export default async function Home() {
             <div className="h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.08)_0%,transparent_70%)] blur-3xl" />
           </div>
 
-          <div className="relative z-10 mx-auto flex w-full max-w-[1080px] items-center justify-between gap-16 max-lg:flex-col max-lg:gap-12 max-md:gap-6 max-lg:text-center">
+          <div className="relative z-10 mx-auto flex w-full max-w-[1200px] items-center justify-between gap-16 max-lg:flex-col max-lg:gap-12 max-md:gap-6 max-lg:text-center">
             {/* Left side - Text content */}
             <div className="flex flex-1 flex-col max-lg:items-center">
               {/* Main Headline */}
@@ -351,7 +351,7 @@ export default async function Home() {
 
         {/* The Agent Network Section */}
         <section id="how-it-works" className="relative px-12 pb-16 pt-16 max-lg:px-8 max-md:px-5 max-md:pb-12 max-md:pt-16">
-          <div className="mx-auto w-full max-w-[1260px]">
+          <div className="mx-auto w-full max-w-[1200px]">
             <div className="text-center mb-10">
               <h2 className="mb-4 text-[clamp(28px,3.5vw,40px)] font-medium text-white max-md:text-[24px]">
                 The agent network on Bitcoin
@@ -418,7 +418,7 @@ export default async function Home() {
         {/* Agent Superpowers */}
         <section className="relative py-24 max-md:py-16" id="upgrades">
           {/* Section Header — constrained */}
-          <div className="mx-auto w-full max-w-[860px] px-12 max-lg:px-8 max-md:px-5 mb-10 text-center max-md:mb-8">
+          <div className="mx-auto w-full max-w-[1200px] px-12 max-lg:px-8 max-md:px-5 mb-10 text-center max-md:mb-8">
             <h2 className="mb-3 text-balance text-[clamp(28px,3.5vw,40px)] font-medium text-white max-md:text-[24px]">
               Agent Superpowers
             </h2>
@@ -428,7 +428,7 @@ export default async function Home() {
           </div>
 
           {/* Capabilities row */}
-          <div className="mx-auto w-full max-w-[1100px] px-12 max-lg:px-8 max-md:px-5">
+          <div className="mx-auto w-full max-w-[1200px] px-12 max-lg:px-8 max-md:px-5">
             <div className="grid grid-cols-6 gap-4 max-lg:grid-cols-3 max-lg:gap-3 max-md:grid-cols-2 max-md:gap-x-4 max-md:gap-y-6">
               {upgrades.map((item) => (
                 <div
@@ -450,7 +450,7 @@ export default async function Home() {
           </div>
 
           {/* Setup guide CTA */}
-          <div className="mx-auto w-full max-w-[860px] px-12 max-lg:px-8 max-md:px-5">
+          <div className="mx-auto w-full max-w-[1200px] px-12 max-lg:px-8 max-md:px-5">
             <div className="mt-10 max-md:mt-8 text-center">
               <Link
                 href="/guide"

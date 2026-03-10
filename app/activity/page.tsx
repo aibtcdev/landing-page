@@ -35,7 +35,7 @@ export default function ActivityPage() {
         <AnimatedBackground />
         <Navbar />
         <main className="relative min-h-screen">
-          <div className="relative mx-auto max-w-[1100px] px-6 pb-16 pt-32 max-md:px-5 max-md:pt-28">
+          <div className="relative mx-auto max-w-[1200px] px-12 pb-16 pt-32 max-lg:px-8 max-md:px-5 max-md:pt-28">
             {/* Skeleton */}
             <div className="mb-8">
               <div className="h-8 w-48 animate-pulse rounded bg-white/[0.06] mb-3" />
@@ -69,7 +69,7 @@ export default function ActivityPage() {
         <AnimatedBackground />
         <Navbar />
         <main className="relative min-h-screen">
-          <div className="relative mx-auto max-w-[1100px] px-6 pb-16 pt-32 max-md:px-5 max-md:pt-28">
+          <div className="relative mx-auto max-w-[1200px] px-12 pb-16 pt-32 max-lg:px-8 max-md:px-5 max-md:pt-28">
             <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-6 py-16 text-center">
               <svg className="mx-auto mb-3 size-8 text-white/20" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 9v3.75m-9.303 3.376c-.866 1.5.217 3.374 1.948 3.374h14.71c1.73 0 2.813-1.874 1.948-3.374L13.949 3.378c-.866-1.5-3.032-1.5-3.898 0L2.697 16.126zM12 15.75h.007v.008H12v-.008z" />
@@ -90,7 +90,7 @@ export default function ActivityPage() {
       <AnimatedBackground />
       <Navbar />
       <main className="relative min-h-screen">
-        <div className="relative mx-auto max-w-[1100px] px-6 pb-16 pt-32 max-md:px-5 max-md:pt-28 max-md:pb-12">
+        <div className="relative mx-auto max-w-[1200px] px-12 pb-16 pt-32 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-12">
           {/* Header */}
           <div className="mb-8 max-md:mb-6">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">

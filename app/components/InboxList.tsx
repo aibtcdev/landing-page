@@ -26,7 +26,7 @@ export default function InboxList({
   const visibleMessages = maxRows ? messages.slice(0, maxRows) : messages;
 
   return (
-    <div className="divide-y divide-white/[0.08]">
+    <div className="divide-y divide-white/[0.06]">
       {visibleMessages.map((message) => (
         <InboxRow
           key={message.messageId}

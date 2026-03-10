@@ -96,8 +96,23 @@ export default function InboxActivity({
   return (
     <div className={className}>
       {/* Header */}
-      <div className="mb-3 flex items-center justify-between gap-2">
-        <h3 className="text-[13px] font-medium text-white sm:text-[14px]">Messages</h3>
+      <div className="mb-4 flex items-center justify-between gap-2">
+        <div className="flex items-center gap-3">
+          <h3 className="text-[14px] font-semibold text-white sm:text-[15px]">Messages</h3>
+          {hasMessages && (
+            <div className="flex items-center gap-2 text-[11px] text-white/40 sm:gap-3 sm:text-[12px]">
+              <span>{receivedCount} received</span>
+              <span className="text-white/15">&middot;</span>
+              <span>{sentCount} sent</span>
+              {repliedCount > 0 && (
+                <>
+                  <span className="text-white/15">&middot;</span>
+                  <span>{repliedCount} replied</span>
+                </>
+              )}
+            </div>
+          )}
+        </div>
         <div className="flex items-center gap-1.5 sm:gap-2">
           {unreadCount > 0 && (
             <span className="inline-flex items-center gap-1 rounded-full border border-[#F7931A]/20 bg-[#F7931A]/10 px-2 py-0.5 text-[10px] font-medium text-[#F7931A] sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[11px]">
@@ -108,7 +123,7 @@ export default function InboxActivity({
           {hasMessages && (
             <button
               onClick={() => setSendModalOpen(true)}
-              className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 text-[10px] font-medium text-white/50 transition-colors hover:border-[#F7931A]/30 hover:bg-[#F7931A]/10 hover:text-[#F7931A] sm:gap-1.5 sm:px-2.5 sm:py-1 sm:text-[11px] cursor-pointer"
+              className="inline-flex items-center gap-1 rounded-full border border-white/[0.08] bg-white/[0.04] px-2.5 py-1 text-[10px] font-medium text-white/50 transition-colors hover:border-[#F7931A]/30 hover:bg-[#F7931A]/10 hover:text-[#F7931A] sm:gap-1.5 sm:px-3 sm:py-1 sm:text-[11px] cursor-pointer"
             >
               <svg className="size-3" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M12 4v16m8-8H4" />
@@ -118,15 +133,6 @@ export default function InboxActivity({
           )}
         </div>
       </div>
-
-      {/* Stats row */}
-      {hasMessages && (
-        <div className="mb-3 flex items-center gap-3 text-[11px] text-white/40 sm:gap-4 sm:text-[12px]">
-          <span>{receivedCount} received</span>
-          <span>{sentCount} sent</span>
-          {repliedCount > 0 && <span>{repliedCount} replied</span>}
-        </div>
-      )}
 
       {/* Empty state — actionable send message prompt */}
       {!hasMessages && (
@@ -160,9 +166,9 @@ export default function InboxActivity({
         </div>
       )}
 
-      {/* Message list — compact row-based with accordion */}
+      {/* Message list */}
       {hasMessages && (
-        <div className="rounded-lg border border-white/[0.08] bg-white/[0.02]">
+        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] overflow-hidden">
           <InboxList messages={messages} replies={replies} ownerBtcAddress={btcAddress} compact maxRows={5} />
         </div>
       )}
