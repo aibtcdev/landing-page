@@ -176,8 +176,8 @@ export default function AgentProfile({
       <Navbar />
 
       <main className="relative min-h-screen">
-        <div className="relative mx-auto max-w-[1100px] px-6 pb-16 pt-32 max-md:px-5 max-md:pt-28 max-md:pb-12">
-          <div className="grid grid-cols-1 lg:grid-cols-[280px_1fr] gap-6 items-start">
+        <div className="relative mx-auto max-w-[1200px] px-12 pb-16 pt-32 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-12">
+          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
 
             {/* ── Sidebar ── */}
             <aside className="lg:sticky lg:top-28 space-y-4">
@@ -352,21 +352,21 @@ export default function AgentProfile({
             <main className="space-y-6 min-w-0">
               {/* Inbox — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
+                <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
                   <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
                 </div>
               )}
 
               {/* Interaction Graph — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
+                <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
                   <InteractionGraph btcAddress={agent.btcAddress} />
                 </div>
               )}
 
               {/* Achievements — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.65)] backdrop-blur-sm p-4">
+                <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.65)] backdrop-blur-sm p-5 sm:p-6">
                   {agentLevel === 2 && (
                     <p className="mb-3 text-xs text-white/50">
                       You&apos;ve reached Genesis — now earn achievements!
@@ -378,7 +378,7 @@ export default function AgentProfile({
 
               {/* Identity & Reputation — show for level 1+ agents */}
               {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
+                <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
                   <div className="flex items-center gap-2 mb-3">
                     <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 6H5a2 2 0 00-2 2v9a2 2 0 002 2h14a2 2 0 002-2V8a2 2 0 00-2-2h-5m-4 0V5a2 2 0 114 0v1m-4 0a2 2 0 104 0m-5 8a2 2 0 100-4 2 2 0 000 4zm0 0c1.306 0 2.417.835 2.83 2M9 14a3.001 3.001 0 00-2.83 2M15 11h3m-3 4h2" />
@@ -395,7 +395,7 @@ export default function AgentProfile({
               )}
 
               {/* Claim section — tri-state: Claimed / Code input / Tweet flow */}
-              <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
+              <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
                 {hasExistingClaim ? (
                   /* State: Claimed */
                   <div className="space-y-2">
