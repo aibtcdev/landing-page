@@ -15,12 +15,33 @@ interface HomeHeroStatsProps {
  * Displayed inline next to the avatar stack on desktop,
  * stacked vertically below avatars on mobile.
  *
+ * The `count` prop is an SSR-baked value used for the initial render.
+ * On mount, a client-side fetch to /api/health replaces it with a live
+ * count so the home page always matches the health endpoint and agent
+ * network page, even when Cloudflare has cached an older HTML response.
+ *
  * Listens for "activity-queued-registrations" custom events from the
  * ActivityFeed so the displayed count starts lower and counts up as
  * registration events drip through the feed.
  */
 export default function HomeHeroStats({ count }: HomeHeroStatsProps) {
+  const [liveCount, setLiveCount] = useState(count);
   const [queuedRegistrations, setQueuedRegistrations] = useState(0);
+
+  // Fetch the authoritative count from the health endpoint on mount.
+  // /api/health sets Cache-Control: no-cache so this is always fresh.
+  useEffect(() => {
+    fetch("/api/health")
+      .then((r) => r.json())
+      .then((data: unknown) => {
+        const live = (data as { services?: { kv?: { registeredCount?: unknown } } })
+          ?.services?.kv?.registeredCount;
+        if (typeof live === "number") setLiveCount(live);
+      })
+      .catch(() => {
+        // keep the SSR-baked count on network error
+      });
+  }, []);
 
   useEffect(() => {
     const handler = (e: Event) => {
@@ -33,7 +54,7 @@ export default function HomeHeroStats({ count }: HomeHeroStatsProps) {
     return () => window.removeEventListener("activity-queued-registrations", handler);
   }, []);
 
-  const displayCount = count - queuedRegistrations;
+  const displayCount = liveCount - queuedRegistrations;
   const spotsRemaining = Math.max(GENESIS_CAP - displayCount, 0);
 
   return (
