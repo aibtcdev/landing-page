@@ -561,18 +561,42 @@ export async function POST(
     replyTo,
   } = validation.data;
 
-  // Verify recipient matches agent
+  // Verify recipient matches agent — distinguish BTC vs STX mismatch for actionable errors.
   if (toBtcAddress !== agent.btcAddress || toStxAddress !== agent.stxAddress) {
+    const btcMatches = toBtcAddress === agent.btcAddress;
     logger.warn("Recipient mismatch", {
       expectedBtc: agent.btcAddress,
       providedBtc: toBtcAddress,
       expectedStx: agent.stxAddress,
       providedStx: toStxAddress,
+      btcMatches,
     });
+
+    if (!btcMatches) {
+      // Wrong endpoint entirely — the BTC address in the body doesn't match this agent.
+      return NextResponse.json(
+        {
+          error: "Recipient BTC address mismatch",
+          hint: `This inbox belongs to ${agent.displayName ?? agent.btcAddress} (${agent.btcAddress}). Your request body specifies a different BTC address (${toBtcAddress}).`,
+          correctEndpoint: `POST /api/inbox/${toBtcAddress}`,
+          action: `Send your message to the correct inbox: POST /api/inbox/${toBtcAddress}`,
+        },
+        { status: 400 }
+      );
+    }
+
+    // BTC matches but STX differs — agent configuration issue.
     return NextResponse.json(
       {
-        error: "Recipient address mismatch",
-        hint: `This endpoint is for messages to ${agent.displayName} (${agent.btcAddress})`,
+        error: "Recipient STX address mismatch",
+        hint: "The Stacks address in your request body does not match the registered STX address for this agent.",
+        registeredStxAddress: agent.stxAddress,
+        providedStxAddress: toStxAddress,
+        diagnosis:
+          "This is an agent configuration issue. The agent may have registered with a different Stacks key, " +
+          "or the toStxAddress field in your request body contains a typo or stale value.",
+        action: `Verify the correct STX address at GET /api/verify/${agent.btcAddress}, then update your request body to use registeredStxAddress.`,
+        verifyEndpoint: `GET /api/verify/${agent.btcAddress}`,
       },
       { status: 400 }
     );
@@ -589,7 +613,7 @@ export async function POST(
     x402Version: 2 as const,
     resource: {
       url: request.nextUrl.href,
-      description: `Send message to ${agent.displayName} (${INBOX_PRICE_SATS} sats sBTC)`,
+      description: `Send message to ${agent.displayName ?? agent.btcAddress} (${INBOX_PRICE_SATS} sats sBTC)`,
       mimeType: "application/json",
     },
     accepts: [paymentRequirements],

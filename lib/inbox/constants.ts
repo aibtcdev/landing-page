@@ -66,9 +66,9 @@ export const OUTBOX_RATE_LIMIT_REGISTERED_MAX = 10;
 export const OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS = 60;
 
 /** Max validation failures per IP per window before 429. */
-export const OUTBOX_RATE_LIMIT_VALIDATION_MAX = 10;
-/** TTL for validation-failure rate limit window (10 minutes). */
-export const OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS = 600;
+export const OUTBOX_RATE_LIMIT_VALIDATION_MAX = 5;
+/** TTL for validation-failure rate limit window (5 minutes). */
+export const OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS = 300;
 
 /** KV key prefixes for inbox system data. */
 export const KV_PREFIXES = {

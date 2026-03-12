@@ -43,6 +43,7 @@ export function normalizeAgentRecord(agent: AgentRecord) {
     checkInCount: agent.checkInCount ?? 0,
     erc8004AgentId: agent.erc8004AgentId ?? null,
     nostrPublicKey: agent.nostrPublicKey ?? null,
+    lastIdentityCheck: agent.lastIdentityCheck ?? null,
     referredBy: agent.referredBy ?? null,
   };
 }
