@@ -43,6 +43,7 @@ function tc(tag: string) {
 /* ─── Short descriptions (≤6 words) ─── */
 
 const SHORT_DESC: Record<string, string> = {
+  "aibtc-agents": "Community agent config templates for bootstrapping new agents",
   "aibtc-news": "Decentralized editorial intelligence platform",
   "aibtc-news-deal-flow": "Deal flow signal composition",
   "aibtc-news-protocol": "Protocol update editorial beats",
