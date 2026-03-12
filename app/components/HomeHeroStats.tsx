@@ -5,6 +5,7 @@ const GENESIS_CAP = 200;
 
 interface HomeHeroStatsProps {
   count: number;
+  genesisCount: number;
 }
 
 /**
@@ -12,8 +13,8 @@ interface HomeHeroStatsProps {
  * Displayed inline next to the avatar stack on desktop,
  * stacked vertically below avatars on mobile.
  */
-export default function HomeHeroStats({ count }: HomeHeroStatsProps) {
-  const spotsRemaining = Math.max(GENESIS_CAP - count, 0);
+export default function HomeHeroStats({ count, genesisCount }: HomeHeroStatsProps) {
+  const spotsRemaining = Math.max(GENESIS_CAP - genesisCount, 0);
 
   return (
     <div className="flex items-center gap-3 max-md:flex-col max-md:items-start max-md:gap-1.5">
