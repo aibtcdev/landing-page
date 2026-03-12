@@ -577,7 +577,7 @@ export async function POST(
       return NextResponse.json(
         {
           error: "Recipient BTC address mismatch",
-          hint: `This inbox belongs to ${agent.displayName} (${agent.btcAddress}). Your request body specifies a different BTC address (${toBtcAddress}).`,
+          hint: `This inbox belongs to ${agent.displayName ?? agent.btcAddress} (${agent.btcAddress}). Your request body specifies a different BTC address (${toBtcAddress}).`,
           correctEndpoint: `POST /api/inbox/${toBtcAddress}`,
           action: `Send your message to the correct inbox: POST /api/inbox/${toBtcAddress}`,
         },
@@ -613,7 +613,7 @@ export async function POST(
     x402Version: 2 as const,
     resource: {
       url: request.nextUrl.href,
-      description: `Send message to ${agent.displayName} (${INBOX_PRICE_SATS} sats sBTC)`,
+      description: `Send message to ${agent.displayName ?? agent.btcAddress} (${INBOX_PRICE_SATS} sats sBTC)`,
       mimeType: "application/json",
     },
     accepts: [paymentRequirements],
