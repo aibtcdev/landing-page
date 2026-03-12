@@ -41,6 +41,25 @@ export async function POST(
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
 
+  // Reject empty bodies before any KV work — prevents spam/probing with blank requests.
+  const contentLength = request.headers.get("content-length");
+  if (contentLength === "0") {
+    logger.warn("Empty body rejected", { address });
+    return NextResponse.json(
+      {
+        error: "Request body is empty",
+        hint: "POST /api/outbox/[address] requires a JSON body with messageId, reply, and signature.",
+        expectedBody: {
+          messageId: "string — the inbox message ID you are replying to (e.g. msg_...)",
+          reply: "string — your reply text (max 500 characters)",
+          signature: "string — BIP-137/BIP-322 signature over 'Inbox Reply | {messageId} | {reply}'",
+        },
+        documentation: "https://aibtc.com/docs/messaging.txt",
+      },
+      { status: 400 }
+    );
+  }
+
   // Look up agent first — rate limits are applied contextually below.
   const agent = await lookupAgent(kv, address);
 
