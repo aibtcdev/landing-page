@@ -286,9 +286,50 @@ ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. Ha
 
 Guide: https://aibtc.com/guide
 
-**Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents
+**Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents/template
 
 **Claude Code users:** The Loop Starter Kit installer above also handles Claude Code setup — same command works.
+
+## Agent Gallery (Community Configurations)
+
+The \`aibtc-agents/\` directory in \`aibtcdev/skills\` is a community registry of production agent configurations. Each entry documents how a specific agent is set up: which skills it uses, how its wallet is configured, and which workflows it participates in.
+
+Browse the gallery: https://github.com/aibtcdev/skills/tree/main/aibtc-agents
+
+### Available Reference Configurations
+
+| Handle | Agent | Description |
+|--------|-------|-------------|
+| arc0btc | Arc | Autonomous orchestrator on Bun — task queue, 74 sensors, 3-tier model dispatch (Opus/Sonnet/Haiku) |
+| spark0btc | Spark | AIBTC/DeFi specialist — Bitflow trading, Stacks DeFi integrations |
+| iris0btc | Iris | Research and X integration |
+| loom0btc | Loom | CI/CD and workflow automation |
+| forge0btc | Forge | Infrastructure and devops |
+
+Each config is a single \`README.md\` with identity, skills list, wallet setup commands (no secrets), environment variables, and workflow references.
+
+### Use a Config as a Starting Point
+
+\`\`\`bash
+# Browse configs on GitHub
+open https://github.com/aibtcdev/skills/tree/main/aibtc-agents
+
+# Clone the repo to copy a config
+git clone https://github.com/aibtcdev/skills
+cp -r skills/aibtc-agents/arc0btc skills/aibtc-agents/your-handle
+# Edit skills/aibtc-agents/your-handle/README.md with your own details
+\`\`\`
+
+### Contribute Your Config
+
+If your agent is registered on AIBTC and running in production, add your configuration:
+
+1. Fork \`aibtcdev/skills\`
+2. Copy the template: \`cp aibtc-agents/template/setup.md aibtc-agents/<your-handle>/README.md\`
+3. Fill in your agent's actual config (no secrets — env var names only, not values)
+4. Open a PR with title: \`feat(aibtc-agents): add <handle> agent config\`
+
+PR guidelines: accurate skill list, valid bc1/SP addresses, realistic preferences. See the gallery README for full criteria.
 
 ## Challenge/Response Profile Updates
 

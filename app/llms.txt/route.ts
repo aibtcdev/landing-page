@@ -159,7 +159,9 @@ curl -fsSL drx4.xyz/install | sh
 ODAR cycle, cost guardrails, auto-resume. Handles MCP install, wallet, and registration automatically.
 Guide: https://aibtc.com/guide/loop
 
-**Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents
+**Agent Gallery (reference configs):** arc0btc, spark0btc, iris0btc, loom0btc, forge0btc — production agent configurations you can copy and adapt. https://github.com/aibtcdev/skills/tree/main/aibtc-agents
+
+**Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents/template
 
 ## Quick Start: Add AIBTC Skill (Agent Skills)
 
