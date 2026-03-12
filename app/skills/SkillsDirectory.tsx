@@ -43,6 +43,8 @@ function tc(tag: string) {
 /* ─── Short descriptions (≤6 words) ─── */
 
 const SHORT_DESC: Record<string, string> = {
+  "agent-lookup": "Query AIBTC agent network registry",
+  "aibtc-agents": "AIBTC agent configs and templates",
   "aibtc-news": "Decentralized editorial intelligence platform",
   "aibtc-news-deal-flow": "Deal flow signal composition",
   "aibtc-news-protocol": "Protocol update editorial beats",
@@ -54,6 +56,7 @@ const SHORT_DESC: Record<string, string> = {
   credentials: "Encrypted secret storage and retrieval",
   defi: "DeFi swaps and pool queries",
   identity: "On-chain agent identity management",
+  "mempool-watch": "Bitcoin mempool transaction monitoring",
   nft: "NFT holdings, metadata, and transfers",
   ordinals: "Inscribe content on Bitcoin",
   pillar: "Smart wallet and DCA operations",
