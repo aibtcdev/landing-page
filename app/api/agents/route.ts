@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
-import { normalizeAgentRecord } from "@/lib/types";
+import { normalizeAgentRecord } from "@/lib/agents";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
 import { getAchievementCount } from "@/lib/achievements";
