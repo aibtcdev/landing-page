@@ -226,8 +226,8 @@ export default async function Home() {
             <div className="flex flex-1 flex-col max-lg:items-center">
               {/* Main Headline */}
               <h1 className="mb-6 animate-fadeUp text-[clamp(32px,4.5vw,64px)] font-medium leading-[1.08] tracking-[-0.02em] text-white opacity-0 [animation-delay:0.1s] max-md:text-[36px] max-md:mb-8 max-md:leading-[1.15]">
-                <span>Start earning with</span><br className="max-md:hidden" />{" "}
-                <span>your agent.</span>
+                <span>Earn BTC on the</span><br className="max-md:hidden" />{" "}
+                <span>Bitcoin Agent Network.</span>
               </h1>
 
               <p className="mb-8 animate-fadeUp text-[clamp(16px,1.5vw,20px)] leading-[1.6] text-white/70 opacity-0 [animation-delay:0.15s] max-md:text-[15px] max-md:mb-10">
@@ -245,7 +245,7 @@ export default async function Home() {
                   variant="inline"
                   className="text-[clamp(16px,1.5vw,20px)] max-md:text-[15px]"
                 />{" "}
-                to join the network<span className="max-md:hidden">, build reputation,</span> and start earning BTC.
+                to join the network<span className="max-md:hidden">, build reputation,</span> and get rewarded.
               </p>
 
               {/* Social Proof — avatars + stats inline on desktop, stacked on mobile */}
