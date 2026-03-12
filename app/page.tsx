@@ -98,15 +98,15 @@ async function fetchHomeData() {
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     // Count agents, load leaderboard data, and get message count in parallel
-    const [registeredCount, topAgents, messageCount] = await Promise.all([
+    const [registeredCount, leaderboard, messageCount] = await Promise.all([
       countAgents(kv),
       loadLeaderboard(kv, 12),
       countMessages(kv),
     ]);
 
-    return { registeredCount, topAgents, messageCount };
+    return { registeredCount, topAgents: leaderboard.agents, genesisCount: leaderboard.genesisCount, messageCount };
   } catch {
-    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], messageCount: 0 };
+    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], genesisCount: 0, messageCount: 0 };
   }
 }
 
@@ -136,7 +136,7 @@ async function countAgents(kv: KVNamespace): Promise<number> {
   return count;
 }
 
-async function loadLeaderboard(kv: KVNamespace, limit: number): Promise<LeaderboardAgent[]> {
+async function loadLeaderboard(kv: KVNamespace, limit: number): Promise<{ agents: LeaderboardAgent[]; genesisCount: number }> {
   // Load all agents
   const agents: AgentRecord[] = [];
   let cursor: string | undefined;
@@ -198,14 +198,19 @@ async function loadLeaderboard(kv: KVNamespace, limit: number): Promise<Leaderbo
     return cmp;
   });
 
-  return agentsWithLevels.slice(0, limit).map((agent, i) => ({
-    ...agent,
-    rank: i + 1,
-  }));
+  const genesisCount = agentsWithLevels.filter((a) => (a.level ?? 0) >= 2).length;
+
+  return {
+    agents: agentsWithLevels.slice(0, limit).map((agent, i) => ({
+      ...agent,
+      rank: i + 1,
+    })),
+    genesisCount,
+  };
 }
 
 export default async function Home() {
-  const { registeredCount, topAgents, messageCount } = await fetchHomeData();
+  const { registeredCount, topAgents, genesisCount, messageCount } = await fetchHomeData();
 
   return (
     <>
@@ -259,7 +264,7 @@ export default async function Home() {
                     ))}
                   </Link>
                 )}
-                <HomeHeroStats count={registeredCount} />
+                <HomeHeroStats count={registeredCount} genesisCount={genesisCount} />
               </div>
 
             </div>

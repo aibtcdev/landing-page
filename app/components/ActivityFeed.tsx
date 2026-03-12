@@ -239,15 +239,6 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const displayMessages = stats.totalMessages - queuedStats.messages;
   const displaySats = stats.totalSatsTransacted - queuedStats.sats;
 
-  // Broadcast agent count adjustment so hero stats can sync
-  useEffect(() => {
-    window.dispatchEvent(
-      new CustomEvent("activity-queued-registrations", {
-        detail: { queuedRegistrations: queuedStats.registrations },
-      })
-    );
-  }, [queuedStats.registrations]);
-
   return (
     <Link href="/activity" className="block space-y-2 group/feed">
     <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] overflow-hidden transition-colors duration-200 group-hover/feed:border-white/[0.12]">
