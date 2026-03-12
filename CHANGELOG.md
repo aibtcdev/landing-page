@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.20.1](https://github.com/aibtcdev/landing-page/compare/v1.20.0...v1.20.1) (2026-03-12)
+
+
+### Bug Fixes
+
+* **home:** sync hero agent count with live /api/health on mount ([#361](https://github.com/aibtcdev/landing-page/issues/361)) ([8f4b558](https://github.com/aibtcdev/landing-page/commit/8f4b5581a01d5f6bd03ec5c75bd1cfc8fe976b8f)), closes [#356](https://github.com/aibtcdev/landing-page/issues/356)
+* **ui:** update homepage H1 and subtitle to remove redundancy ([#364](https://github.com/aibtcdev/landing-page/issues/364)) ([167a012](https://github.com/aibtcdev/landing-page/commit/167a012b92fd838a257135ea65d76b68dc223c0e)), closes [#363](https://github.com/aibtcdev/landing-page/issues/363)
+
 ## [1.20.0](https://github.com/aibtcdev/landing-page/compare/v1.19.0...v1.20.0) (2026-03-09)
 
 
