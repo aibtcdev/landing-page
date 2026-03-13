@@ -160,7 +160,8 @@ export async function getReferralCode(
   if (!data) return null;
   try {
     return JSON.parse(data) as ReferralCodeRecord;
-  } catch {
+  } catch (e) {
+    console.error(`Failed to parse referral code for ${btcAddress}:`, e);
     return null;
   }
 }

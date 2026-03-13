@@ -30,7 +30,8 @@ export async function lookupAgent(
     if (!data) return null;
     try {
       return JSON.parse(data) as AgentRecord;
-    } catch {
+    } catch (e) {
+      console.error(`Failed to parse agent record for taproot ${address}:`, e);
       return null;
     }
   }
@@ -45,7 +46,8 @@ export async function lookupAgent(
 
   try {
     return JSON.parse(data) as AgentRecord;
-  } catch {
+  } catch (e) {
+    console.error(`Failed to parse agent record for address ${address}:`, e);
     return null;
   }
 }

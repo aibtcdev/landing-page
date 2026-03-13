@@ -96,7 +96,8 @@ async function resolveAgentIdToStxAddress(
     );
     const owner = parseClarityValue(result);
     return typeof owner === "string" ? owner : null;
-  } catch {
+  } catch (e) {
+    console.error(`Failed to resolve agent-id ${agentId} on-chain:`, e);
     return null;
   }
 }
@@ -123,7 +124,8 @@ async function findAgentByScan(
         if (!value) return null;
         try {
           return JSON.parse(value) as AgentRecord;
-        } catch {
+        } catch (e) {
+          console.error(`Failed to parse agent record ${key.name}:`, e);
           return null;
         }
       })
@@ -410,8 +412,8 @@ export async function GET(
     if (claimData) {
       try {
         claim = JSON.parse(claimData) as ClaimStatus;
-      } catch {
-        // ignore
+      } catch (e) {
+        console.error(`Failed to parse claim for ${agent.btcAddress}:`, e);
       }
     }
 
@@ -424,7 +426,8 @@ export async function GET(
           hiroApiKey,
           kv
         );
-      } catch {
+      } catch (e) {
+        console.error(`Failed to fetch reputation for agent ${agent.btcAddress}:`, e);
         // Reputation is optional — continue without it
       }
     }
@@ -495,6 +498,7 @@ export async function GET(
       }
     );
   } catch (e) {
+    console.error("Agent resolution error:", e);
     return NextResponse.json(
       { error: `Resolution failed: ${(e as Error).message}` },
       { status: 500 }

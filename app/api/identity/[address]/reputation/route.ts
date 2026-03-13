@@ -24,7 +24,8 @@ async function lookupAgent(
 
   try {
     return JSON.parse(data) as AgentRecord;
-  } catch {
+  } catch (e) {
+    console.error(`Failed to parse agent record for address ${address}:`, e);
     return null;
   }
 }
@@ -158,6 +159,7 @@ export async function GET(
       }
     );
   } catch (e) {
+    console.error("Reputation fetch error:", e);
     return NextResponse.json(
       { error: `Reputation fetch failed: ${(e as Error).message}` },
       { status: 500 }

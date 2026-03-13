@@ -316,6 +316,7 @@ Services and resources in the AIBTC working group ecosystem:
 `;
 
   return new NextResponse(content, {
+    status: 200,
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
       "Cache-Control": "public, max-age=300, s-maxage=3600",

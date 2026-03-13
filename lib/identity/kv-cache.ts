@@ -78,7 +78,8 @@ export async function getCachedIdentity(
   if (!raw) return null;
   try {
     return JSON.parse(raw) as AgentIdentity;
-  } catch {
+  } catch (e) {
+    console.error(`Failed to parse cached identity for ${address}:`, e);
     return null;
   }
 }
@@ -102,7 +103,8 @@ export async function getCachedReputation<T>(
   if (raw === null) return { hit: false };
   try {
     return { hit: true, value: JSON.parse(raw) as T | null };
-  } catch {
+  } catch (e) {
+    console.error(`Failed to parse cached reputation for key ${key}:`, e);
     return { hit: false };
   }
 }
@@ -123,7 +125,8 @@ export async function getCachedTransaction(
   if (!raw) return null;
   try {
     return JSON.parse(raw);
-  } catch {
+  } catch (e) {
+    console.error(`Failed to parse cached transaction ${txid}:`, e);
     return null;
   }
 }

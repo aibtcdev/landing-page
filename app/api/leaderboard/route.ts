@@ -162,7 +162,8 @@ export async function GET(request: NextRequest) {
           if (!value) return null;
           try {
             return JSON.parse(value) as AgentRecord;
-          } catch {
+          } catch (e) {
+            console.error(`Failed to parse agent record ${key.name}:`, e);
             return null;
           }
         })
@@ -177,7 +178,8 @@ export async function GET(request: NextRequest) {
         if (!claimData) return null;
         try {
           return JSON.parse(claimData) as ClaimStatus;
-        } catch {
+        } catch (e) {
+          console.error(`Failed to parse claim for ${agent.btcAddress}:`, e);
           return null;
         }
       })
@@ -287,6 +289,7 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (e) {
+    console.error("Leaderboard fetch error:", e);
     return NextResponse.json(
       { error: `Failed to fetch leaderboard: ${(e as Error).message}` },
       { status: 500 }

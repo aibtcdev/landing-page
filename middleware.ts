@@ -24,7 +24,14 @@ function isCrawler(request: NextRequest): boolean {
 
 function isCLI(request: NextRequest): boolean {
   const ua = request.headers.get("user-agent")?.toLowerCase() || "";
-  return ua.includes("curl") || ua.includes("wget") || ua.includes("httpie");
+  return (
+    ua.includes("curl") ||
+    ua.includes("wget") ||
+    ua.includes("httpie") ||
+    ua.includes("python-requests") ||
+    ua.includes("node-fetch") ||
+    ua.startsWith("http/")
+  );
 }
 
 function getDeprecationBanner(newPath: string): string {

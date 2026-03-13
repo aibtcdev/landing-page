@@ -87,7 +87,8 @@ async function findAgentByBns(
         if (!value) return null;
         try {
           return JSON.parse(value) as AgentRecord;
-        } catch {
+        } catch (e) {
+          console.error(`Failed to parse agent record ${key.name}:`, e);
           return null;
         }
       })
@@ -285,8 +286,8 @@ export async function GET(
     if (claimData) {
       try {
         claim = JSON.parse(claimData) as ClaimStatus;
-      } catch {
-        // ignore parse errors
+      } catch (e) {
+        console.error(`Failed to parse claim for ${agent.btcAddress}:`, e);
       }
     }
 
@@ -295,7 +296,8 @@ export async function GET(
     if (identity) {
       try {
         reputation = await getReputationSummary(identity.agentId, hiroApiKey, kv);
-      } catch {
+      } catch (e) {
+        console.error(`Failed to fetch reputation for agent ${agent.btcAddress}:`, e);
         // Reputation is optional metadata — continue without it
       }
     }
@@ -386,6 +388,7 @@ export async function GET(
       }
     );
   } catch (e) {
+    console.error("Agent profile lookup error:", e);
     return NextResponse.json(
       { error: `Agent lookup failed: ${(e as Error).message}` },
       { status: 500 }

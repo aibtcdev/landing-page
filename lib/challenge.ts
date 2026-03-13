@@ -80,7 +80,8 @@ export async function getChallenge(
 
   try {
     return JSON.parse(value) as ChallengeStoreRecord;
-  } catch {
+  } catch (e) {
+    console.error(`Failed to parse challenge for ${address}:`, e);
     return null;
   }
 }
