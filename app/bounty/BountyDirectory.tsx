@@ -250,10 +250,12 @@ export default function BountyDirectory({
 
       {/* Filters */}
       <div className="flex flex-wrap items-center gap-3">
+        <label htmlFor="bounty-status-filter" className="sr-only">Filter by status</label>
         <select
+          id="bounty-status-filter"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 outline-none transition-[border-color] duration-200 focus:border-white/20"
+          className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 outline-none focus-visible:ring-1 focus-visible:ring-white/20 transition-[border-color] duration-200 focus:border-white/20"
         >
           {STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value} className="bg-[#1a1a1a]">
@@ -262,18 +264,22 @@ export default function BountyDirectory({
           ))}
         </select>
 
+        <label htmlFor="bounty-tag-filter" className="sr-only">Filter by tag or title</label>
         <input
+          id="bounty-tag-filter"
           type="text"
           placeholder="Filter by tag or title..."
           value={tagFilter}
           onChange={(e) => setTagFilter(e.target.value)}
-          className="min-w-[200px] rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 placeholder:text-white/30 outline-none transition-[border-color] duration-200 focus:border-white/20 max-md:min-w-0 max-md:flex-1"
+          className="min-w-[200px] rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 placeholder:text-white/30 outline-none focus-visible:ring-1 focus-visible:ring-white/20 transition-[border-color] duration-200 focus:border-white/20 max-md:min-w-0 max-md:flex-1"
         />
 
+        <label htmlFor="bounty-sort" className="sr-only">Sort bounties</label>
         <select
+          id="bounty-sort"
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 outline-none transition-[border-color] duration-200 focus:border-white/20"
+          className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 outline-none focus-visible:ring-1 focus-visible:ring-white/20 transition-[border-color] duration-200 focus:border-white/20"
         >
           {SORT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value} className="bg-[#1a1a1a]">

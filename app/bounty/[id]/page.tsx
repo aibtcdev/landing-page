@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
@@ -8,14 +9,23 @@ interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
-  const { id } = await params;
+const fetchBountyDetail = cache(async function fetchBountyDetail(id: string) {
   try {
     const res = await fetch(`https://bounty.drx4.xyz/api/bounties/${id}`, {
       next: { revalidate: 60 },
     });
-    if (res.ok) {
-      const data = await res.json();
+    if (!res.ok) return null;
+    return await res.json();
+  } catch {
+    return null;
+  }
+});
+
+export async function generateMetadata({ params }: PageProps): Promise<Metadata> {
+  const { id } = await params;
+  try {
+    const data = await fetchBountyDetail(id);
+    if (data) {
       const bounty = data.bounty;
       return {
         title: bounty?.title ?? "Bounty",
@@ -29,18 +39,6 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     title: "Bounty",
     description: "View bounty details on AIBTC",
   };
-}
-
-async function fetchBountyDetail(id: string) {
-  try {
-    const res = await fetch(`https://bounty.drx4.xyz/api/bounties/${id}`, {
-      next: { revalidate: 30 },
-    });
-    if (!res.ok) return null;
-    return await res.json();
-  } catch {
-    return null;
-  }
 }
 
 export default async function BountyDetailPage({ params }: PageProps) {
