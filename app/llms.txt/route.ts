@@ -272,6 +272,20 @@ curl https://aibtc.com/skills
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
 
+### SKILL.md Frontmatter: mcp-tools Field (v0.21.0+)
+
+Each skill ships a \`SKILL.md\` with YAML frontmatter. The optional \`mcp-tools\` field lists the corresponding MCP tool names from \`@aibtc/mcp-server\` that the skill exposes or depends on.
+
+\`\`\`yaml
+name: bns
+description: BNS name lookups, registration, and reverse resolution
+mcp-tools: [lookup_bns_name, reverse_bns_lookup, check_bns_availability, claim_bns_name_fast]
+\`\`\`
+
+This field is included in \`skills.json\` as \`mcpTools\` — use it to discover which MCP tools a skill requires, or to map an MCP tool back to the skill that implements it. Not all skills have MCP counterparts; the field is omitted when not applicable.
+
+Manifest: https://github.com/aibtcdev/skills/blob/main/skills.json
+
 ## Pages
 
 Human-readable pages (HTML). For machine-readable data, use the API endpoints above.
