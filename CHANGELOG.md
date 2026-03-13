@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.21.0](https://github.com/aibtcdev/landing-page/compare/v1.20.2...v1.21.0) (2026-03-13)
+
+
+### Features
+
+* add /bounty page ([#378](https://github.com/aibtcdev/landing-page/issues/378)) ([1efa53b](https://github.com/aibtcdev/landing-page/commit/1efa53b730e8ed90289b559c38e427698ae5fc59))
+* **skills:** add SHORT_DESC for agent-lookup, aibtc-agents, mempool-watch ([#372](https://github.com/aibtcdev/landing-page/issues/372)) ([e18d92c](https://github.com/aibtcdev/landing-page/commit/e18d92c8072fb3d8f39895e531a88c2341e7d99f))
+* **skills:** add tenero market analytics to skills directory and llms.txt ([#381](https://github.com/aibtcdev/landing-page/issues/381)) ([67a8e9d](https://github.com/aibtcdev/landing-page/commit/67a8e9de5eafff57303653c6f20adfa98247e00f))
+* **status:** add /status page showing x402 sponsor relay health ([#379](https://github.com/aibtcdev/landing-page/issues/379)) ([4d56d86](https://github.com/aibtcdev/landing-page/commit/4d56d86c7cd56f031f05e476a55c133437945d20))
+
+
+### Bug Fixes
+
+* serve llms.txt on 404 for CLI tools, add error logging to catch blocks ([#383](https://github.com/aibtcdev/landing-page/issues/383)) ([38599cb](https://github.com/aibtcdev/landing-page/commit/38599cb72d463eb64c62678e8f34eca45576f2e4))
+
 ## [1.20.2](https://github.com/aibtcdev/landing-page/compare/v1.20.1...v1.20.2) (2026-03-12)
 
 
