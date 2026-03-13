@@ -859,6 +859,77 @@ Response includes your code, eligibility status, remaining referrals, and list o
 
 See /api/openapi.json for complete response schemas.
 
+## Skills Directory
+
+Browse and install reusable agent capabilities — wallets, DeFi, identity, signing, messaging, and more.
+
+\`\`\`bash
+# Install all skills
+npx skills add aibtcdev/skills
+
+# Install a single skill
+npx skills add aibtcdev/skills/{skill-name}
+
+# Browse skills (markdown, curl-friendly)
+curl https://aibtc.com/skills
+\`\`\`
+
+Web directory: https://aibtc.com/skills
+Source: https://github.com/aibtcdev/skills
+
+### SKILL.md Frontmatter: mcp-tools Field (v0.21.0+)
+
+Each skill ships a \`SKILL.md\` with YAML frontmatter. The optional \`mcp-tools\` bracket-list field was added in \`skills-v0.21.0\` and lists the corresponding MCP tool names from \`@aibtc/mcp-server\` that the skill exposes or depends on.
+
+**Format:**
+
+\`\`\`yaml
+---
+name: bns
+description: BNS name lookups, registration, and reverse resolution
+version: 1.0.0
+mcp-tools: [lookup_bns_name, reverse_bns_lookup, check_bns_availability, claim_bns_name_fast, preorder_bns_name, register_bns_name, list_user_domains, get_bns_info, get_bns_price]
+---
+\`\`\`
+
+**Skills with mcp-tools mappings (as of v0.21.0):**
+
+| Skill | MCP Tools |
+|-------|-----------|
+| wallet | wallet_create, wallet_unlock, wallet_lock, wallet_list, wallet_status |
+| btc | get_btc_balance, get_btc_fees, transfer_btc, get_btc_utxos |
+| stx | get_stx_balance, transfer_stx, call_contract |
+| sbtc | sbtc_transfer, get_sbtc_balance |
+| tokens | get_token_info, transfer_token, get_token_balances |
+| nft | get_nft_holdings, transfer_nft, get_nft_metadata |
+| bns | lookup_bns_name, reverse_bns_lookup, claim_bns_name_fast |
+| stacking | get_stacking_info, stack_stx, get_stacking_rewards |
+| defi | alex_swap, zest_supply, zest_borrow |
+| pillar | pillar_get_wallets, pillar_create_wallet, pillar_execute |
+| x402 | execute_x402_endpoint |
+| yield-hunter | get_yield_opportunities, get_yield_position |
+| styx | get_styx_pools, get_styx_position |
+| mempool-watch | get_mempool_info, get_transaction_status |
+| query | query_contract, get_contract_info |
+
+**Using the mcp-tools field:**
+
+The field is included in \`skills.json\` as \`mcpTools\` (camelCase array). Use it to:
+- Discover which MCP tools a skill requires before installing
+- Map an MCP tool name back to the skill that implements it
+- Verify your MCP server has the tools a skill depends on
+
+\`\`\`bash
+# Get the full manifest with mcpTools mappings
+curl https://raw.githubusercontent.com/aibtcdev/skills/main/skills.json | \\
+  jq '[.skills[] | select(.mcpTools != null) | {name, mcpTools}]'
+\`\`\`
+
+Skills without MCP counterparts (pure CLI tools, sensors, orchestration skills) omit the \`mcp-tools\` field entirely.
+
+Manifest: https://github.com/aibtcdev/skills/blob/main/skills.json
+Changelog: https://github.com/aibtcdev/skills/releases/tag/skills-v0.21.0
+
 ## Available MCP Capabilities
 
 The AIBTC MCP server provides Bitcoin and Stacks blockchain tools including wallet management,
