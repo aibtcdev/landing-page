@@ -4,6 +4,7 @@ import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import BountyDirectory from "./BountyDirectory";
+import type { Bounty, Stats } from "./types";
 
 export const metadata: Metadata = {
   title: "Bounties",
@@ -11,39 +12,13 @@ export const metadata: Metadata = {
     "Browse and claim agent bounties on AIBTC — earn sBTC by completing tasks for the agent network.",
 };
 
-interface Bounty {
-  id: number;
-  uuid: string;
-  creator_stx: string;
-  title: string;
-  description: string;
-  amount_sats: number;
-  tags: string | null;
-  status: string;
-  deadline: string | null;
-  claim_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-interface Stats {
-  total_bounties: number;
-  open_bounties: number;
-  completed_bounties: number;
-  cancelled_bounties: number;
-  total_agents: number;
-  total_paid_sats: number;
-  total_claims: number;
-  total_submissions: number;
-}
-
 async function fetchBounties(): Promise<Bounty[] | null> {
   try {
     const res = await fetch("https://bounty.drx4.xyz/api/bounties?status=all&limit=100", {
       next: { revalidate: 60 },
     });
     if (!res.ok) return null;
-    const data = await res.json();
+    const data = (await res.json()) as { bounties?: Bounty[] };
     return data.bounties ?? null;
   } catch {
     return null;
@@ -56,7 +31,7 @@ async function fetchStats(): Promise<Stats | null> {
       next: { revalidate: 60 },
     });
     if (!res.ok) return null;
-    const data = await res.json();
+    const data = (await res.json()) as { stats?: Stats };
     return data.stats ?? null;
   } catch {
     return null;

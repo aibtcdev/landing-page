@@ -4,18 +4,21 @@ import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import BountyDetail from "./BountyDetail";
+import type { BountyData } from "../types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
 }
 
-const fetchBountyDetail = cache(async function fetchBountyDetail(id: string) {
+const fetchBountyDetail = cache(async function fetchBountyDetail(
+  id: string
+): Promise<BountyData | null> {
   try {
     const res = await fetch(`https://bounty.drx4.xyz/api/bounties/${id}`, {
       next: { revalidate: 60 },
     });
     if (!res.ok) return null;
-    return await res.json();
+    return (await res.json()) as BountyData;
   } catch {
     return null;
   }

@@ -2,84 +2,14 @@
 
 import { useState, useMemo } from "react";
 import Link from "next/link";
-
-/* ─── Types ─── */
-
-interface Bounty {
-  id: number;
-  uuid: string;
-  creator_stx: string;
-  title: string;
-  description: string;
-  amount_sats: number;
-  tags: string | null;
-  status: string;
-  deadline: string | null;
-  claim_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-interface Stats {
-  total_bounties: number;
-  open_bounties: number;
-  completed_bounties: number;
-  cancelled_bounties: number;
-  total_agents: number;
-  total_paid_sats: number;
-  total_claims: number;
-  total_submissions: number;
-}
-
-/* ─── Status styling ─── */
-
-const STATUS_STYLES: Record<string, string> = {
-  open: "text-emerald-400/90 bg-emerald-400/[0.08] border-emerald-400/20",
-  claimed: "text-[#7DA2FF]/90 bg-[#7DA2FF]/[0.08] border-[#7DA2FF]/20",
-  submitted: "text-purple-400/90 bg-purple-400/[0.08] border-purple-400/20",
-  approved: "text-amber-400/90 bg-amber-400/[0.08] border-amber-400/20",
-  paid: "text-[#F7931A]/90 bg-[#F7931A]/[0.08] border-[#F7931A]/20",
-  cancelled: "text-white/40 bg-white/[0.04] border-white/[0.06]",
-};
-
-function statusStyle(status: string) {
-  return STATUS_STYLES[status] ?? STATUS_STYLES.cancelled;
-}
-
-/* ─── Helpers ─── */
-
-function formatSats(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
-  return n.toLocaleString();
-}
-
-function truncAddr(addr: string): string {
-  if (addr.length <= 14) return addr;
-  return `${addr.slice(0, 8)}...${addr.slice(-6)}`;
-}
-
-function relativeTime(iso: string): string {
-  const diff = Date.now() - new Date(iso).getTime();
-  const mins = Math.floor(diff / 60000);
-  if (mins < 1) return "just now";
-  if (mins < 60) return `${mins}m ago`;
-  const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
-  const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
-  return `${Math.floor(days / 30)}mo ago`;
-}
-
-function deadlineLabel(deadline: string | null): string | null {
-  if (!deadline) return null;
-  const diff = new Date(deadline).getTime() - Date.now();
-  if (diff < 0) return "Expired";
-  const days = Math.floor(diff / 86400000);
-  if (days === 0) return "Due today";
-  if (days === 1) return "1 day left";
-  return `${days} days left`;
-}
+import type { Bounty, Stats } from "./types";
+import {
+  statusStyle,
+  formatSats,
+  truncAddr,
+  relativeTime,
+  deadlineLabel,
+} from "./utils";
 
 /* ─── Stat Card ─── */
 
@@ -182,6 +112,9 @@ const SORT_OPTIONS = [
   { value: "lowest", label: "Lowest Reward" },
 ];
 
+const FILTER_CONTROL_CLASS =
+  "rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 transition-[border-color] duration-200 focus:border-white/20";
+
 /* ─── Main Component ─── */
 
 export default function BountyDirectory({
@@ -195,18 +128,16 @@ export default function BountyDirectory({
   const [tagFilter, setTagFilter] = useState("");
   const [sort, setSort] = useState("newest");
 
-  const bounties = initialBounties ?? [];
   const stats = initialStats;
 
   const filtered = useMemo(() => {
+    const bounties = initialBounties ?? [];
     let result = bounties;
 
-    // Status filter
     if (statusFilter !== "all") {
       result = result.filter((b) => b.status === statusFilter);
     }
 
-    // Tag filter
     if (tagFilter.trim()) {
       const q = tagFilter.toLowerCase().trim();
       result = result.filter(
@@ -216,7 +147,6 @@ export default function BountyDirectory({
       );
     }
 
-    // Sort
     result = [...result].sort((a, b) => {
       if (sort === "highest") return b.amount_sats - a.amount_sats;
       if (sort === "lowest") return a.amount_sats - b.amount_sats;
@@ -224,7 +154,7 @@ export default function BountyDirectory({
     });
 
     return result;
-  }, [bounties, statusFilter, tagFilter, sort]);
+  }, [initialBounties, statusFilter, tagFilter, sort]);
 
   return (
     <section className="space-y-8">
@@ -255,7 +185,7 @@ export default function BountyDirectory({
           id="bounty-status-filter"
           value={statusFilter}
           onChange={(e) => setStatusFilter(e.target.value)}
-          className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 outline-none focus-visible:ring-1 focus-visible:ring-white/20 transition-[border-color] duration-200 focus:border-white/20"
+          className={FILTER_CONTROL_CLASS}
         >
           {STATUS_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value} className="bg-[#1a1a1a]">
@@ -271,7 +201,7 @@ export default function BountyDirectory({
           placeholder="Filter by tag or title..."
           value={tagFilter}
           onChange={(e) => setTagFilter(e.target.value)}
-          className="min-w-[200px] rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 placeholder:text-white/30 outline-none focus-visible:ring-1 focus-visible:ring-white/20 transition-[border-color] duration-200 focus:border-white/20 max-md:min-w-0 max-md:flex-1"
+          className={`${FILTER_CONTROL_CLASS} min-w-[200px] placeholder:text-white/30 max-md:min-w-0 max-md:flex-1`}
         />
 
         <label htmlFor="bounty-sort" className="sr-only">Sort bounties</label>
@@ -279,7 +209,7 @@ export default function BountyDirectory({
           id="bounty-sort"
           value={sort}
           onChange={(e) => setSort(e.target.value)}
-          className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 outline-none focus-visible:ring-1 focus-visible:ring-white/20 transition-[border-color] duration-200 focus:border-white/20"
+          className={FILTER_CONTROL_CLASS}
         >
           {SORT_OPTIONS.map((opt) => (
             <option key={opt.value} value={opt.value} className="bg-[#1a1a1a]">

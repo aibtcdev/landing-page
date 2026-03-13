@@ -1,108 +1,10 @@
 "use client";
 
 import Link from "next/link";
-
-/* ─── Types ─── */
-
-interface Bounty {
-  id: number;
-  uuid: string;
-  creator_stx: string;
-  title: string;
-  description: string;
-  amount_sats: number;
-  tags: string | null;
-  status: string;
-  deadline: string | null;
-  claim_count: number;
-  created_at: string;
-  updated_at: string;
-}
-
-interface Claim {
-  id: number;
-  bounty_id: number;
-  claimer_btc: string;
-  claimer_stx: string | null;
-  message: string | null;
-  status: string;
-  created_at: string;
-}
-
-interface Submission {
-  id: number;
-  bounty_id: number;
-  claim_id: number;
-  proof_url: string | null;
-  description: string;
-  status: string;
-  reviewer_notes: string | null;
-  created_at: string;
-}
-
-interface Payment {
-  id: number;
-  bounty_id: number;
-  submission_id: number;
-  from_stx: string;
-  to_stx: string;
-  amount_sats: number;
-  tx_hash: string;
-  status: string;
-  verified_at: string | null;
-  created_at: string;
-}
-
-interface BountyData {
-  bounty: Bounty;
-  claims: Claim[];
-  submissions: Submission[];
-  payments: Payment[];
-}
-
-/* ─── Status styling ─── */
-
-const STATUS_STYLES: Record<string, string> = {
-  open: "text-emerald-400/90 bg-emerald-400/[0.08] border-emerald-400/20",
-  claimed: "text-[#7DA2FF]/90 bg-[#7DA2FF]/[0.08] border-[#7DA2FF]/20",
-  submitted: "text-purple-400/90 bg-purple-400/[0.08] border-purple-400/20",
-  approved: "text-amber-400/90 bg-amber-400/[0.08] border-amber-400/20",
-  paid: "text-[#F7931A]/90 bg-[#F7931A]/[0.08] border-[#F7931A]/20",
-  cancelled: "text-white/40 bg-white/[0.04] border-white/[0.06]",
-  active: "text-emerald-400/90 bg-emerald-400/[0.08] border-emerald-400/20",
-  rejected: "text-red-400/90 bg-red-400/[0.08] border-red-400/20",
-  pending: "text-amber-400/90 bg-amber-400/[0.08] border-amber-400/20",
-  confirmed: "text-emerald-400/90 bg-emerald-400/[0.08] border-emerald-400/20",
-  withdrawn: "text-white/40 bg-white/[0.04] border-white/[0.06]",
-  failed: "text-red-400/90 bg-red-400/[0.08] border-red-400/20",
-};
-
-function statusStyle(status: string) {
-  return STATUS_STYLES[status] ?? STATUS_STYLES.cancelled;
-}
+import type { BountyData } from "../types";
+import { statusStyle, formatSats, truncAddr, formatDate } from "../utils";
 
 /* ─── Helpers ─── */
-
-function formatSats(n: number): string {
-  if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
-  if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
-  return n.toLocaleString();
-}
-
-function truncAddr(addr: string): string {
-  if (addr.length <= 14) return addr;
-  return `${addr.slice(0, 8)}...${addr.slice(-6)}`;
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString("en-US", {
-    year: "numeric",
-    month: "short",
-    day: "numeric",
-    hour: "2-digit",
-    minute: "2-digit",
-  });
-}
 
 function linkify(text: string) {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -189,21 +91,29 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+/* ─── Back Link ─── */
+
+function BackLink() {
+  return (
+    <Link
+      href="/bounty"
+      className="inline-flex items-center gap-1.5 text-sm text-white/50 hover:text-white/70 transition-colors"
+    >
+      <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+      </svg>
+      Back to Bounties
+    </Link>
+  );
+}
+
 /* ─── Main Component ─── */
 
 export default function BountyDetail({ data }: { data: BountyData | null }) {
   if (!data || !data.bounty) {
     return (
       <div className="space-y-4">
-        <Link
-          href="/bounty"
-          className="inline-flex items-center gap-1.5 text-sm text-white/50 hover:text-white/70 transition-colors"
-        >
-          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-          </svg>
-          Back to Bounties
-        </Link>
+        <BackLink />
         <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-8 py-16 text-center">
           <p className="text-white/40">Bounty not found.</p>
         </div>
@@ -216,16 +126,7 @@ export default function BountyDetail({ data }: { data: BountyData | null }) {
 
   return (
     <div className="space-y-8">
-      {/* Back link */}
-      <Link
-        href="/bounty"
-        className="inline-flex items-center gap-1.5 text-sm text-white/50 hover:text-white/70 transition-colors"
-      >
-        <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
-        </svg>
-        Back to Bounties
-      </Link>
+      <BackLink />
 
       {/* Bounty Header */}
       <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 max-md:p-4 space-y-5">
