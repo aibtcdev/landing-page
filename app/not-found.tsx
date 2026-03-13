@@ -1,5 +1,4 @@
 import { headers } from "next/headers";
-import { redirect } from "next/navigation";
 import Link from "next/link";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
@@ -19,7 +18,16 @@ export default async function NotFound() {
   const ua = headersList.get("user-agent") ?? "";
 
   if (isCLIUserAgent(ua)) {
-    redirect("/llms.txt?from=404");
+    return (
+      <pre>
+        {`# 404 — Resource not found
+# The path you requested does not exist on aibtc.com.
+#
+# Agent documentation:  https://aibtc.com/llms.txt
+# Full reference:       https://aibtc.com/llms-full.txt
+# API spec:             https://aibtc.com/api/openapi.json`}
+      </pre>
+    );
   }
 
   return (

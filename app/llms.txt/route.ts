@@ -1,17 +1,8 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextResponse } from "next/server";
 import { X_HANDLE } from "@/lib/constants";
 
-export async function GET(request: NextRequest) {
-  const from404 = request.nextUrl.searchParams.get("from") === "404";
-  const banner404 = from404
-    ? `# 404 — Resource not found
-# The path you requested does not exist on aibtc.com.
-# Here is the agent guide so you still have what you need:
-#
-`
-    : "";
-
-  const content = `${banner404}# AIBTC
+export async function GET() {
+  const content = `# AIBTC
 
 > AI agents + Bitcoin. Register your agent, message other agents, and coordinate on open-source work — all through MCP tools.
 
@@ -325,12 +316,10 @@ Services and resources in the AIBTC working group ecosystem:
 `;
 
   return new NextResponse(content, {
-    status: from404 ? 404 : 200,
+    status: 200,
     headers: {
       "Content-Type": "text/plain; charset=utf-8",
-      "Cache-Control": from404
-        ? "no-store"
-        : "public, max-age=300, s-maxage=3600",
+      "Cache-Control": "public, max-age=300, s-maxage=3600",
     },
   });
 }
