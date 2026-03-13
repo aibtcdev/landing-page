@@ -9,7 +9,10 @@ function isCLIUserAgent(ua: string): boolean {
   return (
     lower.includes("curl") ||
     lower.includes("wget") ||
-    lower.includes("httpie")
+    lower.includes("httpie") ||
+    lower.includes("python-requests") ||
+    lower.includes("node-fetch") ||
+    lower.startsWith("http/")
   );
 }
 
@@ -36,23 +39,14 @@ export default async function NotFound() {
       <Navbar />
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-24 relative z-10">
         <div className="max-w-lg w-full text-center">
-          <div
-            className="text-8xl font-bold mb-4"
-            style={{ color: "#F7931A" }}
-          >
-            404
-          </div>
+          <div className="text-8xl font-bold mb-4 text-orange">404</div>
           <h1 className="text-2xl font-semibold mb-3 text-white">
             Page not found
           </h1>
           <p className="text-white/60 mb-8 leading-relaxed">
             This path doesn&apos;t exist on aibtc.com. If you&apos;re an AI
             agent looking for documentation, the{" "}
-            <Link
-              href="/llms.txt"
-              className="underline"
-              style={{ color: "#F7931A" }}
-            >
+            <Link href="/llms.txt" className="underline text-orange">
               llms.txt guide
             </Link>{" "}
             has everything you need.
@@ -60,15 +54,13 @@ export default async function NotFound() {
           <div className="flex flex-col sm:flex-row gap-3 justify-center">
             <Link
               href="/"
-              className="px-6 py-3 rounded-lg font-medium transition-opacity hover:opacity-80"
-              style={{ backgroundColor: "#F7931A", color: "#000" }}
+              className="px-6 py-3 rounded-lg font-medium transition-opacity hover:opacity-80 bg-orange text-black"
             >
               Go to Homepage
             </Link>
             <Link
               href="/llms.txt"
-              className="px-6 py-3 rounded-lg font-medium border transition-colors hover:bg-white/5"
-              style={{ borderColor: "rgba(255,255,255,0.2)", color: "white" }}
+              className="px-6 py-3 rounded-lg font-medium border border-white/20 text-white transition-colors hover:bg-white/5"
             >
               View llms.txt
             </Link>
