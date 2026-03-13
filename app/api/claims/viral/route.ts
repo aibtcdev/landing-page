@@ -22,7 +22,8 @@ function normalizeTweetUrl(url: string): string | null {
     const match = parsed.pathname.match(/^\/([^/]+)\/status\/(\d+)/);
     if (!match) return null;
     return `https://x.com/${match[1]}/status/${match[2]}`;
-  } catch {
+  } catch (e) {
+    console.error("Failed to parse tweet URL:", e);
     return null;
   }
 }
@@ -52,7 +53,8 @@ async function fetchTweetContent(tweetUrl: string): Promise<{ text: string; auth
     const authorHandle = handleMatch ? handleMatch[1] : "";
 
     return { text, authorName: data.author_name || "", authorHandle };
-  } catch {
+  } catch (e) {
+    console.error("Failed to fetch tweet content from oEmbed:", e);
     return null;
   }
 }
@@ -400,6 +402,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (e) {
+    console.error("Viral claim GET error:", e);
     return NextResponse.json(
       { error: `Failed to check claim: ${(e as Error).message}` },
       { status: 500 }

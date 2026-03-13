@@ -84,7 +84,8 @@ export async function lookupBnsName(
 
     await setCachedBnsName(stxAddress, fullName, kv);
     return fullName;
-  } catch {
+  } catch (e) {
+    console.error(`BNS lookup failed for ${stxAddress}:`, e);
     return null;
   }
 }

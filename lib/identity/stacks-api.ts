@@ -88,7 +88,8 @@ export function parseClarityValue(apiResponse: any): any {
     const cv = deserializeCV(apiResponse.result);
     const json = cvToJSON(cv);
     return unwrapCvJson(json);
-  } catch {
+  } catch (e) {
+    console.error("Failed to parse Clarity value from API response:", e);
     return null;
   }
 }
