@@ -271,6 +271,8 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
+Notable skills: btc (L1 balances/transfers), stx (STX transfers), sbtc (sBTC bridging), defi (DEX swaps), tenero (Stacks market analytics — token info, top gainers/losers, whale trades, holder stats), x402 (paid messaging), wallet (BIP39 key management), and more.
+
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
 

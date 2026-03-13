@@ -68,6 +68,7 @@ const SHORT_DESC: Record<string, string> = {
   stacking: "STX stacking and PoX operations",
   "stacks-market": "Prediction market trading on Stacks",
   stackspot: "Stacking lottery pot participation",
+  tenero: "Stacks market analytics and token data",
   stx: "STX token balances and transfers",
   "taproot-multisig": "Taproot M-of-N multisig coordination",
   tokens: "Fungible token operations on Stacks",
