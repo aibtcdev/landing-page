@@ -82,7 +82,7 @@ async function fetchAll(): Promise<StatusData> {
 
 export default function RelayStatus({ initialData }: { initialData: StatusData }) {
   const [data, setData] = useState<StatusData>(initialData);
-  const [lastUpdated, setLastUpdated] = useState<Date>(new Date());
+  const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
   const [refreshing, setRefreshing] = useState(false);
 
   const refresh = useCallback(async () => {
@@ -94,6 +94,10 @@ export default function RelayStatus({ initialData }: { initialData: StatusData }
     } finally {
       setRefreshing(false);
     }
+  }, []);
+
+  useEffect(() => {
+    setLastUpdated(new Date());
   }, []);
 
   useEffect(() => {
@@ -132,7 +136,7 @@ export default function RelayStatus({ initialData }: { initialData: StatusData }
           {/* Animated pulse dot */}
           <span className="relative flex h-3 w-3 shrink-0">
             <span
-              className={`absolute inline-flex h-full w-full animate-ping rounded-full opacity-60 ${dotColor(overall)}`}
+              className={`absolute inline-flex h-full w-full animate-ping motion-reduce:animate-none rounded-full opacity-60 ${dotColor(overall)}`}
             />
             <span
               className={`relative inline-flex h-3 w-3 rounded-full ${dotColor(overall)}`}
@@ -146,7 +150,7 @@ export default function RelayStatus({ initialData }: { initialData: StatusData }
         {/* Last updated + manual refresh */}
         <div className="flex items-center gap-3 text-[13px] text-white/40">
           <span>
-            Updated {formatTs(lastUpdated.toISOString())}
+            Updated {lastUpdated ? formatTs(lastUpdated.toISOString()) : "—"}
           </span>
           <button
             onClick={refresh}
@@ -156,7 +160,7 @@ export default function RelayStatus({ initialData }: { initialData: StatusData }
           >
             <svg
               aria-hidden="true"
-              className={`size-3 ${refreshing ? "animate-spin" : ""}`}
+              className={`size-3 ${refreshing ? "animate-spin motion-reduce:animate-none" : ""}`}
               fill="none"
               viewBox="0 0 24 24"
               stroke="currentColor"
@@ -183,7 +187,7 @@ export default function RelayStatus({ initialData }: { initialData: StatusData }
             </p>
             <span className="relative flex h-2.5 w-2.5">
               {mainnetOk && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
+                <span className="absolute inline-flex h-full w-full animate-ping motion-reduce:animate-none rounded-full bg-emerald-400 opacity-50" />
               )}
               <span
                 className={`relative inline-flex h-2.5 w-2.5 rounded-full ${relayDotColor(
@@ -230,7 +234,7 @@ export default function RelayStatus({ initialData }: { initialData: StatusData }
             </p>
             <span className="relative flex h-2.5 w-2.5">
               {testnetOk && (
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400 opacity-50" />
+                <span className="absolute inline-flex h-full w-full animate-ping motion-reduce:animate-none rounded-full bg-emerald-400 opacity-50" />
               )}
               <span
                 className={`relative inline-flex h-2.5 w-2.5 rounded-full ${relayDotColor(
