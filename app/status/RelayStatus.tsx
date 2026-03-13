@@ -7,19 +7,27 @@ import type {
   TestnetHealth,
   NonceData,
 } from "./page";
+import { SPONSOR_ADDRESS } from "./constants";
 
-const SPONSOR_ADDRESS = "SP1PMPPVCMVW96FSWFV30KJQ4MNBMZ8MRWR3JWQ7";
 const REFRESH_INTERVAL_MS = 30_000;
 
 /* ─── Helpers ─── */
 
-function deriveOverallStatus(data: StatusData): "healthy" | "degraded" | "down" {
+interface OverallStatus {
+  overall: "healthy" | "degraded" | "down";
+  mainnetOk: boolean;
+  testnetOk: boolean;
+}
+
+function deriveOverallStatus(data: StatusData): OverallStatus {
   const mainnetOk = data.mainnet?.status === "ok" || data.mainnet?.status === "healthy";
   const testnetOk = data.testnet?.success === true;
-  if (!data.mainnet && !data.testnet) return "down";
-  if (mainnetOk && testnetOk) return "healthy";
-  if (mainnetOk || testnetOk) return "degraded";
-  return "down";
+  let overall: "healthy" | "degraded" | "down";
+  if (!data.mainnet && !data.testnet) overall = "down";
+  else if (mainnetOk && testnetOk) overall = "healthy";
+  else if (mainnetOk || testnetOk) overall = "degraded";
+  else overall = "down";
+  return { overall, mainnetOk, testnetOk };
 }
 
 function statusLabel(s: "healthy" | "degraded" | "down"): string {
@@ -69,7 +77,7 @@ async function fetchAll(): Promise<StatusData> {
   const mainnetVal = mainnet.status === "fulfilled" ? (mainnet.value as MainnetHealth | null) : null;
   const testnetVal = testnet.status === "fulfilled" ? (testnet.value as TestnetHealth | null) : null;
   const nonceVal = nonce.status === "fulfilled" ? (nonce.value as NonceData | null) : null;
-  const stxRaw = stxData.status === "fulfilled" ? stxData.value : null;
+  const stxRaw = stxData.status === "fulfilled" ? (stxData.value as Record<string, unknown> | null) : null;
   const stxBalance =
     stxRaw && (typeof stxRaw.balance === "string" || typeof stxRaw.balance === "number")
       ? Number(stxRaw.balance) / 1_000_000
@@ -105,9 +113,7 @@ export default function RelayStatus({ initialData }: { initialData: StatusData }
     return () => clearInterval(id);
   }, [refresh]);
 
-  const overall = deriveOverallStatus(data);
-  const mainnetOk = data.mainnet?.status === "ok" || data.mainnet?.status === "healthy";
-  const testnetOk = data.testnet?.success === true;
+  const { overall, mainnetOk, testnetOk } = deriveOverallStatus(data);
 
   return (
     <>

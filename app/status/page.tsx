@@ -4,6 +4,7 @@ import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import RelayStatus from "./RelayStatus";
+import { SPONSOR_ADDRESS } from "./constants";
 
 export const metadata: Metadata = {
   title: "Relay Status",
@@ -44,8 +45,6 @@ export interface StatusData {
   nonce: NonceData | null;
   stxBalance: number | null;
 }
-
-const SPONSOR_ADDRESS = "SP1PMPPVCMVW96FSWFV30KJQ4MNBMZ8MRWR3JWQ7";
 
 async function fetchMainnetHealth(): Promise<MainnetHealth | null> {
   try {
@@ -91,7 +90,7 @@ async function fetchStxBalance(): Promise<number | null> {
       { next: { revalidate: 30 } }
     );
     if (!res.ok) return null;
-    const data = await res.json();
+    const data = (await res.json()) as Record<string, unknown>;
     if (typeof data.balance !== "string" && typeof data.balance !== "number") return null;
     return Number(data.balance) / 1_000_000;
   } catch {
