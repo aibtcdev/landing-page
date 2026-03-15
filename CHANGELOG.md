@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.22.0](https://github.com/aibtcdev/landing-page/compare/v1.21.0...v1.22.0) (2026-03-15)
+
+
+### Features
+
+* **skills:** display author and authorAgent fields from skills.json v0.23.0 ([#385](https://github.com/aibtcdev/landing-page/issues/385)) ([a1af19d](https://github.com/aibtcdev/landing-page/commit/a1af19d77d69a64fca0aded47e8b9d5c2cca7fcf))
+
+
+### Bug Fixes
+
+* **security:** override undici and flatted to patch high CVEs ([#386](https://github.com/aibtcdev/landing-page/issues/386)) ([2080c1f](https://github.com/aibtcdev/landing-page/commit/2080c1f4c6cbac358934ba42af715a32fd26748e))
+
 ## [1.21.0](https://github.com/aibtcdev/landing-page/compare/v1.20.2...v1.21.0) (2026-03-13)
 
 
