@@ -14,6 +14,8 @@ export interface Skill {
   requires: string[];
   tags: string[];
   userInvocable: boolean;
+  author?: string;
+  authorAgent?: string;
 }
 
 export interface SkillsData {
@@ -463,7 +465,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
                         </div>
 
                         {/* Commands — separate row */}
-                        <div>
+                        <div className={(skill.author || skill.authorAgent) ? "mb-3" : ""}>
                           <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Commands</p>
                           <div className="flex flex-wrap gap-1.5">
                             {skill.arguments.map((a) => (
@@ -471,6 +473,18 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
                             ))}
                           </div>
                         </div>
+
+                        {/* Author */}
+                        {(skill.author || skill.authorAgent) && (
+                          <div>
+                            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Created by</p>
+                            <p className="text-[13px] text-white/60">
+                              {skill.author && <span>{skill.author}</span>}
+                              {skill.author && skill.authorAgent && <span className="text-white/30"> / </span>}
+                              {skill.authorAgent && <span>{skill.authorAgent}</span>}
+                            </p>
+                          </div>
+                        )}
                       </div>
                     )}
                   </div>
