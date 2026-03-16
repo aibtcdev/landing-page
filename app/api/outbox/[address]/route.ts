@@ -132,6 +132,31 @@ export async function POST(
     );
   }
 
+  // Sentinel check: detect placeholder messageId values before validation.
+  // Agents sometimes poll with messageId: "none" when they have no real ID to reply to.
+  // Reject early at DEBUG level (not WARN) — this is a client usage pattern, not a system error.
+  const SENTINEL_IDS = new Set(["none", "null", "undefined", "n/a", "na"]);
+  const rawBody = body as Record<string, unknown>;
+  if (
+    typeof rawBody?.messageId === "string" &&
+    SENTINEL_IDS.has(rawBody.messageId.trim().toLowerCase())
+  ) {
+    logger.debug("Sentinel messageId rejected (no KV lookup performed)", {
+      messageId: rawBody.messageId,
+      address,
+    });
+    return NextResponse.json(
+      {
+        error: "Invalid messageId: sentinel/placeholder value",
+        messageId: rawBody.messageId,
+        hint: 'You provided a placeholder value (like "none" or "null"). The messageId must be a real inbox message ID (format: msg_{timestamp}_{uuid}). To check for replies you have already sent, use GET /api/outbox/{yourAddress}. To find messages to reply to, retrieve your inbox first via GET /api/inbox/{yourAddress}.',
+        correctEndpoint: `GET /api/outbox/${address}`,
+        documentation: "https://aibtc.com/docs/messaging.txt",
+      },
+      { status: 400 }
+    );
+  }
+
   // Validate reply body
   const validation = validateOutboxReply(body);
   if (validation.errors) {
