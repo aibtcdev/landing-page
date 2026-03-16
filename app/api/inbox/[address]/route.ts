@@ -546,7 +546,12 @@ export async function POST(
   if (validation.errors) {
     logger.warn("Validation failed", { errors: validation.errors });
     return NextResponse.json(
-      { error: validation.errors.join(", ") },
+      {
+        error: "Validation failed",
+        errors: validation.errors,
+        hints: validation.hints,
+        documentation: "https://aibtc.com/docs/messaging.txt",
+      },
       { status: 400 }
     );
   }

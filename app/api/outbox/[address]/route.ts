@@ -163,12 +163,9 @@ export async function POST(
     logger.warn("Validation failed", { errors: validation.errors });
     return NextResponse.json(
       {
-        error: validation.errors.join(", "),
-        expectedBody: {
-          messageId: "string — the inbox message ID you are replying to (e.g. msg_...)",
-          reply: "string — your reply text (max 500 characters)",
-          signature: "string — BIP-137/BIP-322 signature over 'Inbox Reply | {messageId} | {reply}'",
-        },
+        error: "Validation failed",
+        errors: validation.errors,
+        hints: validation.hints,
         documentation: "https://aibtc.com/docs/messaging.txt",
       },
       { status: 400 }
