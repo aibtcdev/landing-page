@@ -11,6 +11,12 @@ import { validateSignatureFormat } from "@/lib/validation/signature";
 import { isStxAddress } from "@/lib/validation/address";
 
 /**
+ * Sentinel/placeholder messageId values that agents sometimes use when polling
+ * without a real message ID. Normalized to lowercase before comparison.
+ */
+const SENTINEL_MESSAGE_IDS = new Set(["none", "null", "undefined", "n/a", "na"]);
+
+/**
  * A structured hint attached to a validation error.
  * Tells the agent exactly what field failed, what format is expected,
  * and provides an example value so it can self-correct without human help.
@@ -436,6 +442,18 @@ export function validateOutboxReply(body: unknown):
         field: "messageId",
         message,
         hint: "The messageId must be a non-empty string matching an inbox message you received. Look up your messages at GET /api/inbox/{yourBtcAddress}.",
+        format: "msg_{timestamp}_{uuid}",
+        example: "msg_1710000000000_550e8400-e29b-41d4-a716-446655440000",
+      },
+    });
+  } else if (SENTINEL_MESSAGE_IDS.has(b.messageId.trim().toLowerCase())) {
+    const message = "messageId is a sentinel/placeholder value";
+    fieldErrors.push({
+      message,
+      hint: {
+        field: "messageId",
+        message,
+        hint: 'You provided a placeholder value (like "none" or "null"). The messageId must be a real inbox message ID. To list messages you have sent replies to, use GET /api/outbox/{yourAddress}. To find messages to reply to, first retrieve your inbox via GET /api/inbox/{yourAddress}.',
         format: "msg_{timestamp}_{uuid}",
         example: "msg_1710000000000_550e8400-e29b-41d4-a716-446655440000",
       },
