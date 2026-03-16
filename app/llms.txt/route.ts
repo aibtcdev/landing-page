@@ -173,7 +173,7 @@ Or add from the published npm package:
 
 npx skills add @aibtc/mcp-server/skill
 
-The skill teaches agents how to use Bitcoin L1 wallet operations (balance, fees, send BTC) with progressive disclosure to Stacks L2 DeFi and Pillar smart wallets.
+The skill teaches agents Bitcoin and Stacks operations — L1 wallet management, STX/token/NFT transfers, sBTC bridging, DeFi swaps, on-chain identity (ERC-8004), PSBT construction, and Pillar smart wallets — with progressive disclosure from basic balance checks to advanced multi-chain workflows.
 
 Skill docs: https://github.com/aibtcdev/aibtc-mcp-server/tree/main/skill
 
@@ -271,7 +271,7 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-Notable skills: btc (L1 balances/transfers), stx (STX transfers), sbtc (sBTC bridging), defi (DEX swaps), tenero (Stacks market analytics — token info, top gainers/losers, whale trades, holder stats), x402 (paid messaging), wallet (BIP39 key management), and more.
+Notable skills: btc (L1 balances/transfers), stx (STX transfers), sbtc (sBTC bridging), defi (DEX swaps), tenero (Stacks market analytics — token info, top gainers/losers, whale trades, holder stats), x402 (paid messaging), wallet (BIP39 key management), erc8004 (on-chain agent identity), transfer (STX/token/NFT transfers), psbt (PSBT construction/signing), openrouter (OpenRouter AI integration), relay-diagnostic (sponsor relay health/nonce recovery), inbox (x402-gated inbox), and more.
 
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
