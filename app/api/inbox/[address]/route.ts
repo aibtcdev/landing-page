@@ -19,6 +19,11 @@ import {
   DEFAULT_RELAY_URL,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import {
+  hasAchievement,
+  grantAchievement,
+  getAchievementDefinition,
+} from "@/lib/achievements";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
@@ -758,6 +763,17 @@ export async function POST(
         : []),
     ]);
 
+    // Grant "Receiver" achievement on first inbox message received
+    const hasReceiverTxid = await hasAchievement(kv, toBtcAddress, "receiver");
+    if (!hasReceiverTxid) {
+      await grantAchievement(kv, toBtcAddress, "receiver", { messageId });
+      const definition = getAchievementDefinition("receiver");
+      logger.info("Receiver achievement granted", {
+        btcAddress: toBtcAddress,
+        achievementName: definition?.name ?? "Receiver",
+      });
+    }
+
     logger.info("Message stored via txid recovery", {
       messageId,
       fromAddress,
@@ -888,6 +904,17 @@ export async function POST(
       ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
       : []),
   ]);
+
+  // Grant "Receiver" achievement on first inbox message received
+  const hasReceiverX402 = await hasAchievement(kv, toBtcAddress, "receiver");
+  if (!hasReceiverX402) {
+    await grantAchievement(kv, toBtcAddress, "receiver", { messageId });
+    const definition = getAchievementDefinition("receiver");
+    logger.info("Receiver achievement granted", {
+      btcAddress: toBtcAddress,
+      achievementName: definition?.name ?? "Receiver",
+    });
+  }
 
   logger.info("Message stored", {
     messageId,
