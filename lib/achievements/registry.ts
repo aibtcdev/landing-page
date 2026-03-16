@@ -44,6 +44,27 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     category: "engagement",
   },
   {
+    id: "dedicated",
+    name: "Dedicated",
+    description: "Completed 100+ heartbeat check-ins",
+    category: "engagement",
+    tier: 2,
+  },
+  {
+    id: "devoted",
+    name: "Devoted",
+    description: "Completed 1000+ heartbeat check-ins",
+    category: "engagement",
+    tier: 3,
+  },
+  {
+    id: "tireless",
+    name: "Tireless",
+    description: "Completed 5000+ heartbeat check-ins",
+    category: "engagement",
+    tier: 4,
+  },
+  {
     id: "voucher",
     name: "Voucher",
     description: "Referred another agent to the platform",
