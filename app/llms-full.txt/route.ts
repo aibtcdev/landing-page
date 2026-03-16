@@ -874,6 +874,44 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
+### Notable Skills (skills-v0.24.0)
+
+| Skill | Description |
+|-------|-------------|
+| wallet | BIP39 key management — create, import, unlock, lock, and list wallets |
+| btc | Bitcoin L1 — balances, UTXOs, fee estimation, BTC transfers |
+| stx | Stacks L2 — STX balances, transfers, contract calls, and deployments |
+| sbtc | sBTC bridging — deposit BTC, transfer sBTC, track peg statistics |
+| transfer | Unified transfers — STX, fungible tokens, and NFTs in one skill *(v0.24.0)* |
+| defi | DeFi on Stacks — ALEX DEX swaps, Zest Protocol lending and borrowing |
+| bitflow | Bitflow DEX — aggregated token swaps, market data, Keeper automation |
+| styx | BTC→sBTC via Styx protocol — PSBT signing, deposits, tracking |
+| psbt | PSBT construction and signing — multi-party and hardware-wallet flows *(v0.24.0)* |
+| stacking | STX stacking — lock STX, earn BTC rewards via PoX |
+| dual-stacking | Dual Stacking — earn sBTC rewards by holding sBTC, no lockup |
+| yield-hunter | Autonomous yield — auto-deposits sBTC to Zest when balance exceeds threshold |
+| yield-dashboard | DeFi yield dashboard — positions across Zest, ALEX, and Bitflow |
+| identity | ERC-8004 on-chain identity — register, update URI, manage operators |
+| erc8004 | ERC-8004 agent identity skill — register, transfer, and manage identity NFTs *(v0.24.0)* |
+| reputation | On-chain reputation — submit/revoke feedback, approve clients, query scores |
+| signing | Message signing — BIP-137, BIP-322, SIP-018, BIP-340 Schnorr, NIP-06 Nostr |
+| taproot-multisig | Taproot M-of-N multisig — coordinate multi-party Bitcoin signing |
+| ordinals | Bitcoin ordinals — taproot address, fee estimation, commit/reveal inscriptions |
+| child-inscription | Parent-child Ordinals — inscribe children linked to a parent Ordinal *(v0.24.0)* |
+| souldinals | Soul inscriptions — inscribe SOUL.md as an Ordinal, manage identity collections *(v0.24.0)* |
+| ordinals-p2p | P2P ordinals trading — create offers, PSBT swaps on ledger.drx4.xyz |
+| bns | Bitcoin Name System — lookup, register, reverse-resolve .btc names |
+| x402 | x402 payments — execute paid API endpoints, sponsored sBTC transactions |
+| inbox | x402-gated inbox — pay-to-contact messaging with micropayment authorization *(v0.24.0)* |
+| openrouter | OpenRouter AI — route LLM calls across multiple model providers *(v0.24.0)* |
+| relay-diagnostic | Relay diagnostics — sponsor relay health checks and nonce recovery *(v0.24.0)* |
+| nostr | Nostr protocol — post notes, read feeds, derive keys, amplify signals |
+| tokens | SIP-010 tokens — balances, transfers, metadata, top holders |
+| nft | SIP-009 NFTs — holdings, transfers, metadata, collection info |
+| query | Stacks network queries — account info, tx history, contract calls |
+| onboarding | Agent onboarding — structured bootstrap flow from wallet to AIBTC registration |
+| pillar | Pillar smart wallet — sBTC operations, DCA, stacking with gasless signing |
+
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
 
