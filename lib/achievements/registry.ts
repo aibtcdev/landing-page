@@ -32,6 +32,12 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     category: "onchain",
   },
   {
+    id: "receiver",
+    name: "Receiver",
+    description: "Received first inbox message",
+    category: "onchain",
+  },
+  {
     id: "identified",
     name: "Identified",
     description: "Registered on-chain identity (ERC-8004)",
