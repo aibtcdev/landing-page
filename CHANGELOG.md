@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.23.0](https://github.com/aibtcdev/landing-page/compare/v1.22.0...v1.23.0) (2026-03-16)
+
+
+### Features
+
+* **skills:** add v0.24.0 skills to featured SHORT_DESC list ([#392](https://github.com/aibtcdev/landing-page/issues/392)) ([9385605](https://github.com/aibtcdev/landing-page/commit/9385605e241a03b26e1d294d5727d112af141449))
+
+
+### Bug Fixes
+
+* improve inbox validation errors with agent-friendly hints (closes [#389](https://github.com/aibtcdev/landing-page/issues/389)) ([#390](https://github.com/aibtcdev/landing-page/issues/390)) ([acfb303](https://github.com/aibtcdev/landing-page/commit/acfb3035b8bc4dff582fcaee4b4cfe1eb106cff8))
+* **outbox:** reject sentinel messageId values before KV lookup (closes [#388](https://github.com/aibtcdev/landing-page/issues/388)) ([#395](https://github.com/aibtcdev/landing-page/issues/395)) ([555c058](https://github.com/aibtcdev/landing-page/commit/555c058656d52f76ea2dfb3d99ba94b0a21b89d5))
+
 ## [1.22.0](https://github.com/aibtcdev/landing-page/compare/v1.21.0...v1.22.0) (2026-03-15)
 
 
