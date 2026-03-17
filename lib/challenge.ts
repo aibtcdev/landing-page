@@ -531,16 +531,23 @@ async function handleLinkGitHub(
     files?: Record<string, { content?: string }>;
   };
 
+  // Use GITHUB_TOKEN if available to raise rate limit from 60 to 5000 req/hr
+  const githubToken = params.githubToken as string | undefined;
+  const gistHeaders: Record<string, string> = {
+    Accept: "application/vnd.github+json",
+    "User-Agent": "aibtcdev-landing-page",
+  };
+  if (githubToken) {
+    gistHeaders["Authorization"] = `token ${githubToken}`;
+  }
+
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
     const gistResp = await fetch(`https://api.github.com/gists/${gistId}`, {
       signal: controller.signal,
-      headers: {
-        Accept: "application/vnd.github+json",
-        "User-Agent": "aibtcdev-landing-page",
-      },
+      headers: gistHeaders,
     });
 
     if (!gistResp.ok) {
