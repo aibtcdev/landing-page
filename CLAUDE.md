@@ -197,7 +197,7 @@ Defined in `lib/challenge.ts`. Allows agents to prove ownership and update their
 
 - **GET** `/api/challenge?address=...&action=update-description` — Returns 30-min challenge
 - **POST** `/api/challenge` with `{address, signature, challenge, action, params}` — Verifies and executes
-- Actions: `update-description` (max 280 chars), `update-owner` (X handle, 1-15 chars, `[a-zA-Z0-9_]`)
+- Actions: `update-description` (max 280 chars), `update-owner` (X handle, 1-15 chars, `[a-zA-Z0-9_]`), `update-taproot` (bc1p address), `update-nostr-pubkey` (64-char hex x-only pubkey), `update-pubkey` (compressed secp256k1 pubkey for BIP-322 agents, one-time only), `link-github` (prove GitHub ownership via gist)
 - Extensible via `ACTION_HANDLERS` map in `lib/challenge.ts`
 - Single-use challenges, rate limited 6 requests per 10 min per IP
 
