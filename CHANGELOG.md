@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.24.0](https://github.com/aibtcdev/landing-page/compare/v1.23.0...v1.24.0) (2026-03-17)
+
+
+### Features
+
+* GitHub profile linking via gist challenge ([#398](https://github.com/aibtcdev/landing-page/issues/398)) ([4abede6](https://github.com/aibtcdev/landing-page/commit/4abede6d4665b397674809daa3c8d90ab7516f2a))
+
+
+### Bug Fixes
+
+* update dead bounty.drx4.xyz URLs to aibtc.com/bounty ([#402](https://github.com/aibtcdev/landing-page/issues/402)) ([6034e77](https://github.com/aibtcdev/landing-page/commit/6034e77e5aac56772271a285e91715c7ca7a726a))
+* warn when btcPublicKey is empty after BIP-322 verification (closes [#399](https://github.com/aibtcdev/landing-page/issues/399)) ([#401](https://github.com/aibtcdev/landing-page/issues/401)) ([5d12a41](https://github.com/aibtcdev/landing-page/commit/5d12a4112ec0db2510b5c9c61a36803e7abd0379))
+
 ## [1.23.0](https://github.com/aibtcdev/landing-page/compare/v1.22.0...v1.23.0) (2026-03-16)
 
 
