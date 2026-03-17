@@ -48,6 +48,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     name: "Active",
     description: "Completed 10+ heartbeat check-ins",
     category: "engagement",
+    tier: 1,
   },
   {
     id: "dedicated",
