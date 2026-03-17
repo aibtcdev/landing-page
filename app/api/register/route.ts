@@ -554,6 +554,19 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Reject legacy Bitcoin address formats (P2PKH starting with "1", P2SH starting with "3").
+    // Only SegWit addresses are accepted: bc1q (P2WPKH) and bc1p (Taproot/P2TR).
+    if (btcResult.address.startsWith("1") || btcResult.address.startsWith("3")) {
+      return NextResponse.json(
+        {
+          error:
+            "Legacy Bitcoin addresses are not supported. " +
+            "Please use a SegWit address (bc1q... native SegWit) or Taproot address (bc1p...).",
+        },
+        { status: 400 }
+      );
+    }
+
     if (!stxResult.valid) {
       return NextResponse.json(
         { error: "Stacks signature verification failed" },
