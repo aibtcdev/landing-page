@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
+import { normalizeAgentRecord } from "@/lib/agents";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -12,27 +13,27 @@ export async function GET(request: NextRequest) {
       method: "GET",
       description: "Discover agents by capability. Returns agents that have declared specific skills.",
       queryParameters: {
-        skill: {
+        capability: {
           type: "string",
           description: "Filter agents by capability slug (e.g. 'btc', 'defi', 'code-review'). Without this param, returns all distinct capabilities with counts.",
-          example: "?skill=btc",
+          example: "?capability=btc",
         },
         limit: { type: "number", description: "Max agents to return (default 50, max 100)", default: 50 },
         offset: { type: "number", description: "Pagination offset", default: 0 },
       },
       examples: {
         listAll: "/api/capabilities (all capabilities with counts)",
-        filterBySkill: "/api/capabilities?skill=btc",
-        paginateResults: "/api/capabilities?skill=defi&limit=10&offset=20",
+        filterByCapability: "/api/capabilities?capability=btc",
+        paginateResults: "/api/capabilities?capability=defi&limit=10&offset=20",
       },
     });
   }
 
   try {
     const { env } = await getCloudflareContext({ async: true });
-    const kv = (env as any).VERIFIED_AGENTS as KVNamespace;
+    const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    const skill = searchParams.get("skill");
+    const capability = searchParams.get("capability");
     const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
     const offset = parseInt(searchParams.get("offset") || "0", 10);
 
@@ -59,19 +60,16 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    if (skill) {
+    if (capability) {
       // Filter agents that have this capability
-      const slug = skill.toLowerCase();
+      const slug = capability.toLowerCase();
       const matching = allAgents.filter(a => a.capabilities?.includes(slug));
       const paginated = matching.slice(offset, offset + limit);
       return NextResponse.json({
-        skill,
+        capability,
         agents: paginated.map(a => ({
-          stxAddress: a.stxAddress,
-          btcAddress: a.btcAddress,
-          displayName: a.displayName,
+          ...normalizeAgentRecord(a),
           capabilities: a.capabilities,
-          lastActiveAt: a.lastActiveAt,
         })),
         pagination: {
           total: matching.length,
@@ -82,7 +80,7 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // No skill filter: return capability inventory with counts
+    // No capability filter: return capability inventory with counts
     const counts: Record<string, number> = {};
     for (const agent of allAgents) {
       for (const cap of agent.capabilities!) {

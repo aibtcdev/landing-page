@@ -519,7 +519,8 @@ export async function POST(request: NextRequest) {
           return NextResponse.json({ error: `Invalid capability "${cap}": must be lowercase alphanumeric with hyphens, max 50 chars` }, { status: 400 });
         }
       }
-      sanitizedCapabilities = capabilities.length > 0 ? capabilities : null;
+      const uniqueCapabilities = [...new Set(capabilities)];
+      sanitizedCapabilities = uniqueCapabilities.length > 0 ? uniqueCapabilities : null;
     }
 
     let btcResult;
