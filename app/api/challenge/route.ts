@@ -365,8 +365,8 @@ export async function POST(request: NextRequest) {
     // Delete challenge (single-use)
     await deleteChallenge(kv, address);
 
-    // Execute action
-    const actionResult = await executeAction(action, params, agent, kv);
+    // Execute action (inject challenge string so handlers can verify challenge content in external resources)
+    const actionResult = await executeAction(action, { ...params, challenge }, agent, kv);
 
     if (!actionResult.success) {
       return NextResponse.json(

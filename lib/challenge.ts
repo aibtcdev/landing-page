@@ -533,7 +533,10 @@ async function handleLinkGitHub(
 
   try {
     const gistResp = await fetch(`https://api.github.com/gists/${gistId}`, {
-      headers: { Accept: "application/vnd.github+json" },
+      headers: {
+        Accept: "application/vnd.github+json",
+        "User-Agent": "aibtcdev-landing-page",
+      },
     });
 
     if (!gistResp.ok) {
@@ -563,6 +566,27 @@ async function handleLinkGitHub(
       success: false,
       updated: agent,
       error: `Gist owner mismatch. Gist is owned by "${gistOwner}", but you claimed "${trimmedUsername}".`,
+    };
+  }
+
+  // Verify gist contains the challenge string
+  const challenge = params.challenge as string | undefined;
+  if (!challenge) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Challenge string missing from request context.",
+    };
+  }
+  const files = gist.files ?? {};
+  const challengeFound = Object.values(files as Record<string, { content?: string }>).some(
+    (file) => file.content?.includes(challenge)
+  );
+  if (!challengeFound) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Challenge string not found in any gist file. The gist must contain the challenge string you received from GET /api/challenge.",
     };
   }
 
