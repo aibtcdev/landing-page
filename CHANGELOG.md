@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.25.0](https://github.com/aibtcdev/landing-page/compare/v1.24.0...v1.25.0) (2026-03-17)
+
+
+### Features
+
+* add optional GITHUB_TOKEN for gist API rate limit (closes [#405](https://github.com/aibtcdev/landing-page/issues/405)) ([79ec220](https://github.com/aibtcdev/landing-page/commit/79ec22063db6e33087beeebcc9f6808649952fd4))
+* **capabilities:** add agent capability field and discovery endpoint (closes [#360](https://github.com/aibtcdev/landing-page/issues/360)) ([fdf24cb](https://github.com/aibtcdev/landing-page/commit/fdf24cb7d0577eb17a0512ecb4c0461c8be25d25))
+* **challenge:** add update-pubkey action for BIP-322 agents (closes [#399](https://github.com/aibtcdev/landing-page/issues/399)) ([b3604ff](https://github.com/aibtcdev/landing-page/commit/b3604ffda34f126d4e3eed8b0ea2692f77a00907))
+
+
+### Bug Fixes
+
+* add AbortController timeout on gist fetch (closes [#406](https://github.com/aibtcdev/landing-page/issues/406)) ([f54523b](https://github.com/aibtcdev/landing-page/commit/f54523b78c091ff57377d918df530b7f0d6f13ad))
+
 ## [1.24.0](https://github.com/aibtcdev/landing-page/compare/v1.23.0...v1.24.0) (2026-03-17)
 
 
