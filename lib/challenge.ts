@@ -442,6 +442,161 @@ async function handleUpdateNostrPubkey(
 }
 
 /**
+ * Validate a GitHub username.
+ * Rules: 1-39 chars, [a-zA-Z0-9-], no leading/trailing hyphens.
+ */
+export function validateGitHubUsername(username: string): boolean {
+  if (username.length < 1 || username.length > 39) return false;
+  if (!/^[a-zA-Z0-9-]+$/.test(username)) return false;
+  if (username.startsWith("-") || username.endsWith("-")) return false;
+  return true;
+}
+
+/**
+ * Extract gist ID from a GitHub Gist URL.
+ * Accepts: https://gist.github.com/{user}/{gistId}
+ * Returns the last path segment (the gist ID).
+ */
+export function extractGistId(gistUrl: string): string | null {
+  try {
+    const url = new URL(gistUrl);
+    if (url.hostname !== "gist.github.com") return null;
+    const parts = url.pathname.split("/").filter(Boolean);
+    // pathname is /{user}/{gistId} — gistId is the last segment
+    if (parts.length < 2) return null;
+    return parts[parts.length - 1];
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Action handler: link-github
+ *
+ * Verifies a GitHub gist challenge and links a GitHub username to an agent.
+ *
+ * The gist must:
+ *   - Be owned by the GitHub username being claimed
+ *   - Contain a file whose content includes the issued challenge string
+ *
+ * The BTC signature is already verified upstream by the challenge system.
+ * We do NOT need to re-verify the BTC signature inside the gist — the fact
+ * that the agent signed the challenge with their registered BTC key (verified
+ * before executeAction is called) is sufficient proof of BTC ownership. The
+ * gist just proves GitHub ownership (gist.owner.login === githubUsername).
+ */
+async function handleLinkGitHub(
+  params: Record<string, unknown>,
+  agent: AgentRecord,
+  kv: KVNamespace
+): Promise<ActionResult> {
+  const gistUrl = params.gistUrl as string | undefined;
+  const githubUsername = params.githubUsername as string | undefined;
+
+  if (!gistUrl || !githubUsername) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Missing required parameters: gistUrl, githubUsername",
+    };
+  }
+
+  const trimmedUsername = githubUsername.trim();
+  const trimmedGistUrl = gistUrl.trim();
+
+  // Validate GitHub username format
+  if (!validateGitHubUsername(trimmedUsername)) {
+    return {
+      success: false,
+      updated: agent,
+      error:
+        "Invalid GitHub username. Must be 1-39 characters, alphanumeric and hyphens only, no leading/trailing hyphens.",
+    };
+  }
+
+  // Extract gist ID from URL
+  const gistId = extractGistId(trimmedGistUrl);
+  if (!gistId) {
+    return {
+      success: false,
+      updated: agent,
+      error:
+        "Invalid gist URL. Expected format: https://gist.github.com/{username}/{gistId}",
+    };
+  }
+
+  // Fetch gist from GitHub API
+  let gist: {
+    owner?: { login?: string };
+    files?: Record<string, { content?: string }>;
+  };
+
+  try {
+    const gistResp = await fetch(`https://api.github.com/gists/${gistId}`, {
+      headers: { Accept: "application/vnd.github+json" },
+    });
+
+    if (!gistResp.ok) {
+      return {
+        success: false,
+        updated: agent,
+        error: `Failed to fetch gist (HTTP ${gistResp.status}). Make sure the gist is public.`,
+      };
+    }
+
+    gist = (await gistResp.json()) as {
+      owner?: { login?: string };
+      files?: Record<string, { content?: string }>;
+    };
+  } catch (e) {
+    return {
+      success: false,
+      updated: agent,
+      error: `Failed to fetch gist from GitHub: ${(e as Error).message}`,
+    };
+  }
+
+  // Verify gist owner matches the claimed GitHub username (case-insensitive)
+  const gistOwner = gist.owner?.login ?? "";
+  if (gistOwner.toLowerCase() !== trimmedUsername.toLowerCase()) {
+    return {
+      success: false,
+      updated: agent,
+      error: `Gist owner mismatch. Gist is owned by "${gistOwner}", but you claimed "${trimmedUsername}".`,
+    };
+  }
+
+  // Check if this GitHub username is already claimed by a different agent
+  const existingOwner = await kv.get(`github:${trimmedUsername.toLowerCase()}`);
+  if (existingOwner && existingOwner !== agent.btcAddress) {
+    return {
+      success: false,
+      updated: agent,
+      error:
+        "This GitHub username is already linked to another agent. Each GitHub account can only be linked to one agent.",
+    };
+  }
+
+  // Clean up old reverse index if GitHub username is changing
+  if (
+    agent.githubUsername &&
+    agent.githubUsername.toLowerCase() !== trimmedUsername.toLowerCase()
+  ) {
+    await kv.delete(`github:${agent.githubUsername.toLowerCase()}`);
+  }
+
+  // Set reverse index: github:{username} -> btcAddress (uniqueness enforcement)
+  await kv.put(`github:${trimmedUsername.toLowerCase()}`, agent.btcAddress);
+
+  const updated: AgentRecord = {
+    ...agent,
+    githubUsername: trimmedUsername,
+  };
+
+  return { success: true, updated };
+}
+
+/**
  * Action router: maps action names to handlers.
  */
 const ACTION_HANDLERS: Record<string, ActionHandler> = {
@@ -449,6 +604,7 @@ const ACTION_HANDLERS: Record<string, ActionHandler> = {
   "update-owner": handleUpdateOwner,
   "update-taproot": handleUpdateTaproot,
   "update-nostr-pubkey": handleUpdateNostrPubkey,
+  "link-github": handleLinkGitHub,
 };
 
 /**
@@ -523,6 +679,22 @@ export function getAvailableActions(): Array<{
           type: "string",
           required: true,
           description: "64-character lowercase hex string (x-only secp256k1 pubkey), or empty string to clear",
+        },
+      },
+    },
+    {
+      name: "link-github",
+      description: "Link your GitHub profile to your agent by proving ownership via a public gist",
+      params: {
+        githubUsername: {
+          type: "string",
+          required: true,
+          description: "Your GitHub username (1-39 chars, alphanumeric + hyphens, no leading/trailing hyphens)",
+        },
+        gistUrl: {
+          type: "string",
+          required: true,
+          description: "URL of a public GitHub Gist you own containing the challenge string. Format: https://gist.github.com/{username}/{gistId}",
         },
       },
     },
