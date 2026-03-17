@@ -125,6 +125,25 @@ export async function GET(request: NextRequest) {
             },
           },
         },
+        linkGitHub: {
+          flow: [
+            "1. GET /api/challenge?address=bc1q...&action=link-github to get a challenge",
+            "2. Create a public GitHub Gist containing the challenge message",
+            "3. POST /api/challenge with gistUrl and githubUsername in params",
+          ],
+          getChallengeUrl: "https://aibtc.com/api/challenge?address=bc1q...&action=link-github",
+          postBody: {
+            address: "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
+            signature: "H7sI1xVBBz...",
+            challenge: "Challenge: link-github for bc1q... at 2026-02-08T12:00:00.000Z",
+            action: "link-github",
+            params: {
+              githubUsername: "my-github-username",
+              gistUrl: "https://gist.github.com/my-github-username/abc123def456",
+            },
+          },
+          gistFormat: "Create a public gist with a file containing at minimum the challenge string on its own line. The gist must be owned by the GitHub account you are claiming.",
+        },
       },
     }, {
       headers: {
@@ -346,8 +365,8 @@ export async function POST(request: NextRequest) {
     // Delete challenge (single-use)
     await deleteChallenge(kv, address);
 
-    // Execute action
-    const actionResult = await executeAction(action, params, agent, kv);
+    // Execute action (inject challenge string so handlers can verify challenge content in external resources)
+    const actionResult = await executeAction(action, { ...params, challenge }, agent, kv);
 
     if (!actionResult.success) {
       return NextResponse.json(
@@ -388,6 +407,7 @@ export async function POST(request: NextRequest) {
         bnsName: updatedAgent.bnsName,
         verifiedAt: updatedAgent.verifiedAt,
         owner: updatedAgent.owner,
+        githubUsername: updatedAgent.githubUsername ?? null,
       },
       ...levelInfo,
     });

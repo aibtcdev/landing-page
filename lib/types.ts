@@ -20,6 +20,8 @@ export interface AgentRecord {
   lastIdentityCheck?: string;
   /** BTC address of the agent who vouched for this agent during registration (immutable once set). */
   referredBy?: string;
+  /** GitHub username linked via gist challenge. */
+  githubUsername?: string | null;
 }
 
 /**
