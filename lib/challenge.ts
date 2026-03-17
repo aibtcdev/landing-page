@@ -733,9 +733,9 @@ async function handleUpdatePubkey(
   }
 
   // Derive nostrPublicKey: x-only pubkey = last 64 hex chars of compressed key (strip prefix).
-  // Only set if agent.nostrPublicKey is currently empty/null.
+  // Only set if agent.nostrPublicKey is currently missing or empty.
   const xOnlyHex = normalized.slice(2); // strip 02/03 prefix → 64-char x-only hex
-  const nostrPublicKey = agent.nostrPublicKey ?? xOnlyHex;
+  const nostrPublicKey = agent.nostrPublicKey || xOnlyHex;
 
   const updated: AgentRecord = {
     ...agent,

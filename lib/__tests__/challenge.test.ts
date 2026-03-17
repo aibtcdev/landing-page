@@ -572,6 +572,194 @@ describe("executeAction: update-taproot", () => {
   });
 });
 
+describe("executeAction: update-pubkey", () => {
+  // Real secp256k1 generator point (G) — known pubkey/address test vector
+  const VALID_PUBKEY = "0279be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+  const P2WPKH_ADDRESS = "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4";
+  const P2TR_ADDRESS = "bc1pmfr3p9j00pfxjh0zmgp99y8zftmd3s5pmedqhyptwy6lm87hf5sspknck9";
+
+  const baseAgent = {
+    stxAddress: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+    btcAddress: P2WPKH_ADDRESS,
+    stxPublicKey: "03abc",
+    btcPublicKey: "", // BIP-322 agent — empty pubkey
+    verifiedAt: "2026-01-01T00:00:00.000Z",
+  };
+
+  it("sets btcPublicKey for P2WPKH agent with matching key", async () => {
+    const kv = createMockKV();
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: VALID_PUBKEY },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.updated.btcPublicKey).toBe(VALID_PUBKEY);
+  });
+
+  it("auto-populates nostrPublicKey from x-only key", async () => {
+    const kv = createMockKV();
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: VALID_PUBKEY },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(true);
+    // x-only = compressed pubkey with 02/03 prefix stripped
+    expect(result.updated.nostrPublicKey).toBe(VALID_PUBKEY.slice(2));
+  });
+
+  it("does not overwrite existing nostrPublicKey", async () => {
+    const kv = createMockKV();
+    const existingNostr = "abcdef1234567890abcdef1234567890abcdef1234567890abcdef1234567890";
+    const agent = { ...baseAgent, nostrPublicKey: existingNostr };
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: VALID_PUBKEY },
+      agent,
+      kv
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.updated.nostrPublicKey).toBe(existingNostr);
+  });
+
+  it("overwrites empty-string nostrPublicKey", async () => {
+    const kv = createMockKV();
+    const agent = { ...baseAgent, nostrPublicKey: "" };
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: VALID_PUBKEY },
+      agent,
+      kv
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.updated.nostrPublicKey).toBe(VALID_PUBKEY.slice(2));
+  });
+
+  it("sets btcPublicKey for P2TR agent with matching key", async () => {
+    const kv = createMockKV();
+    const p2trAgent = { ...baseAgent, btcAddress: P2TR_ADDRESS };
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: VALID_PUBKEY },
+      p2trAgent,
+      kv
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.updated.btcPublicKey).toBe(VALID_PUBKEY);
+  });
+
+  it("rejects when btcPublicKey is already set", async () => {
+    const kv = createMockKV();
+    const agentWithKey = { ...baseAgent, btcPublicKey: "02aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa" };
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: VALID_PUBKEY },
+      agentWithKey,
+      kv
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("already set");
+  });
+
+  it("rejects missing btcPublicKey param", async () => {
+    const kv = createMockKV();
+    const result = await executeAction("update-pubkey", {}, baseAgent, kv);
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Missing required parameter");
+  });
+
+  it("rejects non-string btcPublicKey", async () => {
+    const kv = createMockKV();
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: 12345 },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid type");
+  });
+
+  it("rejects invalid format (wrong length)", async () => {
+    const kv = createMockKV();
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: "02abcd" },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid btcPublicKey format");
+  });
+
+  it("rejects invalid format (wrong prefix)", async () => {
+    const kv = createMockKV();
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: "04" + "a".repeat(64) },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("Invalid btcPublicKey format");
+  });
+
+  it("rejects pubkey that does not derive to registered address", async () => {
+    const kv = createMockKV();
+    // Valid format but different key — won't match bc1qw508d6...
+    const wrongKey = "0379be667ef9dcbbac55a06295ce870b07029bfcdb2dce28d959f2815b16f81798";
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: wrongKey },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("does not match");
+  });
+
+  it("rejects unsupported address type", async () => {
+    const kv = createMockKV();
+    const legacyAgent = { ...baseAgent, btcAddress: "1A1zP1eP5QGefi2DMPTfTL5SLmv7DivfNa" };
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: VALID_PUBKEY },
+      legacyAgent,
+      kv
+    );
+
+    expect(result.success).toBe(false);
+    expect(result.error).toContain("not supported");
+  });
+
+  it("normalizes uppercase pubkey input", async () => {
+    const kv = createMockKV();
+    const result = await executeAction(
+      "update-pubkey",
+      { btcPublicKey: VALID_PUBKEY.toUpperCase() },
+      baseAgent,
+      kv
+    );
+
+    expect(result.success).toBe(true);
+    expect(result.updated.btcPublicKey).toBe(VALID_PUBKEY);
+  });
+});
+
 describe("getAvailableActions", () => {
   it("includes update-taproot action", () => {
     const actions = getAvailableActions();
@@ -586,11 +774,20 @@ describe("getAvailableActions", () => {
     expect(taprootAction?.params.taprootAddress.required).toBe(true);
   });
 
+  it("includes update-pubkey action", () => {
+    const actions = getAvailableActions();
+    const pubkeyAction = actions.find(a => a.name === "update-pubkey");
+    expect(pubkeyAction).toBeDefined();
+    expect(pubkeyAction?.params).toHaveProperty("btcPublicKey");
+    expect(pubkeyAction?.params.btcPublicKey.required).toBe(true);
+  });
+
   it("includes all expected actions", () => {
     const actions = getAvailableActions();
     const names = actions.map(a => a.name);
     expect(names).toContain("update-description");
     expect(names).toContain("update-owner");
     expect(names).toContain("update-taproot");
+    expect(names).toContain("update-pubkey");
   });
 });
