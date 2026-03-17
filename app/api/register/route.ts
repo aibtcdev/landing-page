@@ -534,6 +534,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // BIP-322 wallets (bc1q/bc1p) don't expose the public key via signature recovery.
+    // Log a warning so operators can track agents with missing btcPublicKey.
+    // Registration is NOT blocked — BIP-322 agents register successfully with an empty publicKey.
+    if (btcResult.publicKey === "") {
+      console.warn(
+        `[register] btcPublicKey unavailable for address ${btcResult.address}: ` +
+        "BIP-322 signatures do not expose the public key via recovery. " +
+        "Nostr npub derivation from btcPublicKey will not work for this agent."
+      );
+    }
+
     if (!stxResult.valid) {
       return NextResponse.json(
         { error: "Stacks signature verification failed" },
