@@ -7,6 +7,8 @@
 
 import type { AgentRecord } from "@/lib/types";
 import { validateNostrPubkey } from "@/lib/nostr";
+import { p2wpkh, p2tr, NETWORK as BTC_NETWORK } from "@scure/btc-signer";
+import { hex } from "@scure/base";
 
 export interface Challenge {
   message: string;
@@ -641,6 +643,114 @@ async function handleLinkGitHub(
 }
 
 /**
+ * Action handler: update-pubkey
+ *
+ * Allows BIP-322 agents (bc1q/bc1p) to submit their compressed public key.
+ * BIP-322 signatures do not expose the public key via recovery, so this action
+ * provides a self-service path to set btcPublicKey after registration.
+ *
+ * One-time only: once btcPublicKey is set it cannot be changed. The key is
+ * verified by deriving the agent's registered Bitcoin address from it.
+ */
+async function handleUpdatePubkey(
+  params: Record<string, unknown>,
+  agent: AgentRecord,
+  _kv: KVNamespace
+): Promise<ActionResult> {
+  const btcPublicKey = params.btcPublicKey as string | undefined;
+
+  if (btcPublicKey === undefined) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Missing required parameter: btcPublicKey",
+    };
+  }
+
+  if (typeof btcPublicKey !== "string") {
+    return {
+      success: false,
+      updated: agent,
+      error: "Invalid type for btcPublicKey. Expected string.",
+    };
+  }
+
+  // One-time-only: reject if btcPublicKey is already set.
+  // The cryptographic binding between address and public key is critical — once
+  // established it must not change.
+  if (agent.btcPublicKey) {
+    return {
+      success: false,
+      updated: agent,
+      error: "btcPublicKey is already set and cannot be changed.",
+    };
+  }
+
+  const normalized = btcPublicKey.trim().toLowerCase();
+
+  // Validate: compressed secp256k1 pubkey — 33 bytes as 66 hex chars, 02 or 03 prefix.
+  if (!/^(02|03)[0-9a-f]{64}$/.test(normalized)) {
+    return {
+      success: false,
+      updated: agent,
+      error:
+        "Invalid btcPublicKey format. Must be a 66-character lowercase hex string (compressed secp256k1 pubkey with 02 or 03 prefix).",
+    };
+  }
+
+  // Derive the Bitcoin address from the supplied public key and verify it matches.
+  let derivedAddress: string | undefined;
+  try {
+    const pubkeyBytes = hex.decode(normalized);
+    const btcAddress = agent.btcAddress;
+
+    if (btcAddress.startsWith("bc1q") || btcAddress.startsWith("tb1q")) {
+      // P2WPKH: derive address directly from compressed pubkey
+      derivedAddress = p2wpkh(pubkeyBytes, BTC_NETWORK).address;
+    } else if (btcAddress.startsWith("bc1p") || btcAddress.startsWith("tb1p")) {
+      // P2TR (key-path): x-only pubkey is the compressed key with prefix stripped.
+      // p2tr(xOnlyKey, undefined, network) applies the TapTweak and derives the address.
+      const xOnlyBytes = pubkeyBytes.slice(1); // strip 02/03 prefix → 32-byte x-only key
+      derivedAddress = p2tr(xOnlyBytes, undefined, BTC_NETWORK).address;
+    } else {
+      return {
+        success: false,
+        updated: agent,
+        error: `update-pubkey only supports bc1q (P2WPKH) and bc1p (P2TR) addresses. Agent address type not supported: ${btcAddress.slice(0, 4)}`,
+      };
+    }
+  } catch (e) {
+    return {
+      success: false,
+      updated: agent,
+      error: `Failed to derive Bitcoin address from pubkey: ${(e as Error).message}`,
+    };
+  }
+
+  if (derivedAddress !== agent.btcAddress) {
+    return {
+      success: false,
+      updated: agent,
+      error: `Public key does not match your registered Bitcoin address. Derived: ${derivedAddress ?? "unknown"}, Expected: ${agent.btcAddress}`,
+    };
+  }
+
+  // Derive nostrPublicKey: x-only pubkey = last 64 hex chars of compressed key (strip prefix).
+  // Only set if agent.nostrPublicKey is currently empty/null.
+  const xOnlyHex = normalized.slice(2); // strip 02/03 prefix → 64-char x-only hex
+  const nostrPublicKey =
+    agent.nostrPublicKey ? agent.nostrPublicKey : xOnlyHex;
+
+  const updated: AgentRecord = {
+    ...agent,
+    btcPublicKey: normalized,
+    nostrPublicKey,
+  };
+
+  return { success: true, updated };
+}
+
+/**
  * Action router: maps action names to handlers.
  */
 const ACTION_HANDLERS: Record<string, ActionHandler> = {
@@ -648,6 +758,7 @@ const ACTION_HANDLERS: Record<string, ActionHandler> = {
   "update-owner": handleUpdateOwner,
   "update-taproot": handleUpdateTaproot,
   "update-nostr-pubkey": handleUpdateNostrPubkey,
+  "update-pubkey": handleUpdatePubkey,
   "link-github": handleLinkGitHub,
 };
 
@@ -723,6 +834,19 @@ export function getAvailableActions(): Array<{
           type: "string",
           required: true,
           description: "64-character lowercase hex string (x-only secp256k1 pubkey), or empty string to clear",
+        },
+      },
+    },
+    {
+      name: "update-pubkey",
+      description:
+        "Set your Bitcoin compressed public key (one-time only, for BIP-322 agents whose public key was not recoverable at registration). The supplied key is verified by deriving your registered Bitcoin address from it. Also auto-populates nostrPublicKey if not already set.",
+      params: {
+        btcPublicKey: {
+          type: "string",
+          required: true,
+          description:
+            "Compressed secp256k1 public key: 66 lowercase hex chars with 02 or 03 prefix (33 bytes). Use get_wallet_info or wallet_status from the AIBTC MCP server to retrieve your public key.",
         },
       },
     },
