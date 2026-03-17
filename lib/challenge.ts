@@ -531,8 +531,12 @@ async function handleLinkGitHub(
     files?: Record<string, { content?: string }>;
   };
 
+  const controller = new AbortController();
+  const timeoutId = setTimeout(() => controller.abort(), 5000);
+
   try {
     const gistResp = await fetch(`https://api.github.com/gists/${gistId}`, {
+      signal: controller.signal,
       headers: {
         Accept: "application/vnd.github+json",
         "User-Agent": "aibtcdev-landing-page",
@@ -552,11 +556,20 @@ async function handleLinkGitHub(
       files?: Record<string, { content?: string }>;
     };
   } catch (e) {
+    if ((e as Error).name === "AbortError") {
+      return {
+        success: false,
+        updated: agent,
+        error: "GitHub API request timed out after 5 seconds. Please try again.",
+      };
+    }
     return {
       success: false,
       updated: agent,
       error: `Failed to fetch gist from GitHub: ${(e as Error).message}`,
     };
+  } finally {
+    clearTimeout(timeoutId);
   }
 
   // Verify gist owner matches the claimed GitHub username (case-insensitive)
