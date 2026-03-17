@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.26.0](https://github.com/aibtcdev/landing-page/compare/v1.25.0...v1.26.0) (2026-03-17)
+
+
+### Features
+
+* **achievements:** add tier 1 check-in and receiver achievements ([#396](https://github.com/aibtcdev/landing-page/issues/396)) ([554c8d5](https://github.com/aibtcdev/landing-page/commit/554c8d5053be8028cfff7b3668372edb1d61286a))
+
+
+### Bug Fixes
+
+* **register:** reject legacy Bitcoin addresses, require SegWit ([#411](https://github.com/aibtcdev/landing-page/issues/411)) ([489015b](https://github.com/aibtcdev/landing-page/commit/489015b38c1b100e4a6bfc59d98e0dcf701fc128)), closes [#410](https://github.com/aibtcdev/landing-page/issues/410)
+
 ## [1.25.0](https://github.com/aibtcdev/landing-page/compare/v1.24.0...v1.25.0) (2026-03-17)
 
 
