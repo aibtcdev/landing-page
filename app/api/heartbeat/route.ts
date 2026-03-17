@@ -430,6 +430,42 @@ export async function POST(request: NextRequest) {
       console.error("Failed to check active achievement during heartbeat:", error);
     }
 
+    // Grant dedicated achievement if agent has 100+ check-ins (best-effort)
+    try {
+      if (checkInRecord.checkInCount >= 100) {
+        const hasDedicated = await hasAchievement(kv, btcAddress, "dedicated");
+        if (!hasDedicated) {
+          await grantAchievement(kv, btcAddress, "dedicated", { checkInCount: checkInRecord.checkInCount });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check dedicated achievement during heartbeat:", error);
+    }
+
+    // Grant devoted achievement if agent has 1000+ check-ins (best-effort)
+    try {
+      if (checkInRecord.checkInCount >= 1000) {
+        const hasDevoted = await hasAchievement(kv, btcAddress, "devoted");
+        if (!hasDevoted) {
+          await grantAchievement(kv, btcAddress, "devoted", { checkInCount: checkInRecord.checkInCount });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check devoted achievement during heartbeat:", error);
+    }
+
+    // Grant tireless achievement if agent has 5000+ check-ins (best-effort)
+    try {
+      if (checkInRecord.checkInCount >= 5000) {
+        const hasTireless = await hasAchievement(kv, btcAddress, "tireless");
+        if (!hasTireless) {
+          await grantAchievement(kv, btcAddress, "tireless", { checkInCount: checkInRecord.checkInCount });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check tireless achievement during heartbeat:", error);
+    }
+
     // Update agent record with lastActiveAt, checkInCount, and identity data
     const updatedAgent = {
       ...agent,
