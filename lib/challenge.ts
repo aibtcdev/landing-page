@@ -448,10 +448,7 @@ async function handleUpdateNostrPubkey(
  * Rules: 1-39 chars, [a-zA-Z0-9-], no leading/trailing hyphens.
  */
 export function validateGitHubUsername(username: string): boolean {
-  if (username.length < 1 || username.length > 39) return false;
-  if (!/^[a-zA-Z0-9-]+$/.test(username)) return false;
-  if (username.startsWith("-") || username.endsWith("-")) return false;
-  return true;
+  return /^[a-zA-Z0-9]([a-zA-Z0-9-]{0,37}[a-zA-Z0-9])?$/.test(username);
 }
 
 /**
@@ -601,7 +598,7 @@ async function handleLinkGitHub(
     };
   }
   const files = gist.files ?? {};
-  const challengeFound = Object.values(files as Record<string, { content?: string }>).some(
+  const challengeFound = Object.values(files).some(
     (file) => file.content?.includes(challenge)
   );
   if (!challengeFound) {
@@ -657,7 +654,7 @@ async function handleUpdatePubkey(
   agent: AgentRecord,
   _kv: KVNamespace
 ): Promise<ActionResult> {
-  const btcPublicKey = params.btcPublicKey as string | undefined;
+  const btcPublicKey = params.btcPublicKey;
 
   if (btcPublicKey === undefined) {
     return {
@@ -738,8 +735,7 @@ async function handleUpdatePubkey(
   // Derive nostrPublicKey: x-only pubkey = last 64 hex chars of compressed key (strip prefix).
   // Only set if agent.nostrPublicKey is currently empty/null.
   const xOnlyHex = normalized.slice(2); // strip 02/03 prefix → 64-char x-only hex
-  const nostrPublicKey =
-    agent.nostrPublicKey ? agent.nostrPublicKey : xOnlyHex;
+  const nostrPublicKey = agent.nostrPublicKey ?? xOnlyHex;
 
   const updated: AgentRecord = {
     ...agent,
