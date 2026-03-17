@@ -402,6 +402,7 @@ export async function POST(request: NextRequest) {
       taprootSignature?: string;
       btcAddress?: string;
       nostrPublicKey?: string;
+      capabilities?: unknown;
     };
     const {
       bitcoinSignature,
@@ -411,6 +412,7 @@ export async function POST(request: NextRequest) {
       taprootSignature,
       btcAddress: btcAddressHint,
       nostrPublicKey,
+      capabilities,
     } = body;
 
     if (!bitcoinSignature || !stacksSignature) {
@@ -501,6 +503,24 @@ export async function POST(request: NextRequest) {
         { error: "Invalid nostrPublicKey. Must be a 64-character lowercase hex string (x-only secp256k1 pubkey)." },
         { status: 400 }
       );
+    }
+
+    let sanitizedCapabilities: string[] | null = null;
+    if (capabilities !== undefined && capabilities !== null) {
+      if (!Array.isArray(capabilities)) {
+        return NextResponse.json({ error: 'capabilities must be an array of strings' }, { status: 400 });
+      }
+      if (capabilities.length > 20) {
+        return NextResponse.json({ error: 'capabilities max 20 items' }, { status: 400 });
+      }
+      const validCap = /^[a-z0-9][a-z0-9-]{0,49}$/;
+      for (const cap of capabilities) {
+        if (typeof cap !== 'string' || !validCap.test(cap)) {
+          return NextResponse.json({ error: `Invalid capability "${cap}": must be lowercase alphanumeric with hyphens, max 50 chars` }, { status: 400 });
+        }
+      }
+      const uniqueCapabilities = [...new Set(capabilities)];
+      sanitizedCapabilities = uniqueCapabilities.length > 0 ? uniqueCapabilities : null;
     }
 
     let btcResult;
@@ -626,6 +646,7 @@ export async function POST(request: NextRequest) {
       btcPublicKey: btcResult.publicKey,
       taprootAddress: sanitizedTaprootAddress,
       nostrPublicKey: sanitizedNostrPublicKey,
+      capabilities: sanitizedCapabilities,
       bnsName: bnsName || null,
       displayName,
       description: sanitizedDescription,
