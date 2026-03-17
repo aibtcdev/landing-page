@@ -534,17 +534,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // BIP-322 wallets (bc1q/bc1p) don't expose the public key via signature recovery.
-    // Log a warning so operators can track agents with missing btcPublicKey.
-    // Registration is NOT blocked — BIP-322 agents register successfully with an empty publicKey.
-    if (btcResult.publicKey === "") {
-      console.warn(
-        `[register] btcPublicKey unavailable for address ${btcResult.address}: ` +
-        "BIP-322 signatures do not expose the public key via recovery. " +
-        "Nostr npub derivation from btcPublicKey will not work for this agent."
-      );
-    }
-
     if (!stxResult.valid) {
       return NextResponse.json(
         { error: "Stacks signature verification failed" },
@@ -558,6 +547,18 @@ export async function POST(request: NextRequest) {
     const log = env.LOGS && isLogsRPC(env.LOGS)
       ? createLogger(env.LOGS, ctx, { rayId, path: "/api/register" })
       : createConsoleLogger({ rayId, path: "/api/register" });
+
+    // BIP-322 wallets (bc1q/bc1p) don't expose the public key via signature recovery.
+    // Log a warning so operators can track agents with missing btcPublicKey.
+    // Registration is NOT blocked — BIP-322 agents register successfully with an empty publicKey.
+    const btcPublicKeyMissing = !btcResult.publicKey;
+    if (btcPublicKeyMissing) {
+      log.warn(
+        `btcPublicKey unavailable for address ${btcResult.address}: ` +
+        "BIP-322 signatures do not expose the public key via recovery. " +
+        "Nostr npub derivation from btcPublicKey will not work for this agent."
+      );
+    }
 
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
@@ -787,6 +788,17 @@ export async function POST(request: NextRequest) {
           hint: "Referral codes changed from BTC addresses to 6-character codes. Ask your referrer for their code via POST /api/referral-code.",
         }),
       };
+    }
+
+    // BIP-322 agents (bc1q/bc1p) register with an empty btcPublicKey because BIP-322
+    // signatures do not expose the public key via recovery. Surface this in the response
+    // so agents know to submit their public key via the challenge system.
+    if (btcPublicKeyMissing) {
+      responseBody.btcPublicKeyMissing = true;
+      responseBody.btcPublicKeyHint =
+        "Your wallet uses BIP-322 signing which does not expose the public key during verification. " +
+        "Submit your compressed public key to enable Nostr integration and full platform features. " +
+        `Use the challenge system: GET /api/challenge?address=${btcResult.address}&action=update-pubkey`;
     }
 
     return NextResponse.json(responseBody);
