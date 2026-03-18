@@ -198,6 +198,7 @@ export async function GET(request: NextRequest) {
       identified: 300,    // ERC-8004 on-chain identity — identity investment
       receiver: 200,      // Received first inbox message — demand signal
       voucher: 200,       // Referred another agent — network growth
+      "sbtc-holder": 200, // Holds sBTC — bridged BTC → Stacks
       active: 50,         // 10+ check-ins (tier 1)
       dedicated: 75,      // 100+ check-ins (tier 2)
       devoted: 100,       // 1000+ check-ins (tier 3)
@@ -213,7 +214,7 @@ export async function GET(request: NextRequest) {
       const checkInCount = agent.checkInCount || 0;
 
       // Level points — register is low-barrier, Genesis meaningful but not dominant
-      const levelPoints = level === 2 ? 500 : level === 1 ? 100 : 0;
+      const levelPoints = level === 2 ? 400 : level === 1 ? 100 : 0;
 
       // Weighted achievement score — each achievement valued by economic signal
       const achievementScore = achievementIds.reduce(
