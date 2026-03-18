@@ -9,6 +9,7 @@ import {
   getCachedTransaction,
   setCachedTransaction,
 } from "@/lib/identity/kv-cache";
+import { buildHiroHeaders } from "@/lib/identity/stacks-api";
 
 /** Rate limit window for achievement verification (5 minutes) */
 export const ACHIEVEMENT_VERIFY_RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -112,45 +113,50 @@ export async function verifySenderAchievement(
 }
 
 /**
- * Verify if an agent has STX stacked via Proof of Transfer (Stacker achievement).
+ * Verify if a Stacks address has STX stacked via Proof of Transfer (Stacker achievement).
  *
- * Checks the Stacks account balance endpoint for a non-zero `locked` field,
- * which indicates active PoX participation.
+ * Queries the Stacks Extended API stacking endpoint and checks if locked > 0.
  * Uses KV cache with 5-minute TTL to avoid excessive API calls.
  *
  * @param stxAddress - Stacks address to check
  * @param kv - Cloudflare KV namespace
- * @returns true if the agent has STX locked in PoX, false otherwise
+ * @param hiroApiKey - Optional Hiro API key for higher rate limits
+ * @returns true if the address has STX locked via PoX, false otherwise
  */
 export async function verifyStackerAchievement(
   stxAddress: string,
-  kv: KVNamespace
+  kv: KVNamespace,
+  hiroApiKey?: string
 ): Promise<boolean> {
   try {
-    const cacheKey = `stacks-account:${stxAddress}`;
-    let accountData = await getCachedTransaction(cacheKey, kv);
+    const cacheKey = `stacks-stacking:${stxAddress}`;
+    let stackingData = await getCachedTransaction(cacheKey, kv);
 
-    if (!accountData) {
-      const url = `https://api.hiro.so/v2/accounts/${stxAddress}?proof=0`;
+    if (!stackingData) {
+      const url = `https://api.hiro.so/extended/v1/address/${stxAddress}/stacking`;
       const resp = await fetch(url, {
+        headers: buildHiroHeaders(hiroApiKey),
         signal: AbortSignal.timeout(10000),
       });
 
       if (!resp.ok) {
         console.error(
-          `Failed to fetch Stacks account for ${stxAddress}: ${resp.status}`
+          `Failed to fetch stacking data for ${stxAddress}: ${resp.status}`
         );
         return false;
       }
 
-      accountData = (await resp.json()) as { locked: string };
-      await setCachedTransaction(cacheKey, accountData, kv);
+      stackingData = (await resp.json()) as { locked?: string };
+      await setCachedTransaction(cacheKey, stackingData, kv);
     }
 
-    const data = accountData as { locked: string };
-    return BigInt(data.locked ?? "0") > 0n;
+    const data = stackingData as { locked?: string };
+    return !!data.locked && data.locked !== "0";
   } catch (error) {
-    console.error(`Failed to verify stacker achievement for ${stxAddress}:`, error);
+    console.error(
+      `Failed to verify stacker achievement for ${stxAddress}:`,
+      error
+    );
     return false;
   }
 }

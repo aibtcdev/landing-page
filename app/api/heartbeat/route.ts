@@ -407,13 +407,13 @@ export async function POST(request: NextRequest) {
       console.error("Failed to check sender achievement during heartbeat:", error);
     }
 
-    // Proactively check stacker achievement (has STX locked in PoX, best-effort)
+    // Proactively check stacker achievement (STX locked via PoX, best-effort)
     try {
-      const stackerRateLimit = await checkRateLimit(kv, btcAddress, "stacker");
-      if (stackerRateLimit.allowed) {
+      const rateLimit = await checkRateLimit(kv, btcAddress, "stacker");
+      if (rateLimit.allowed) {
         const hasStacker = await hasAchievement(kv, btcAddress, "stacker");
         if (!hasStacker) {
-          const isStacking = await verifyStackerAchievement(agent.stxAddress, kv);
+          const isStacking = await verifyStackerAchievement(agent.stxAddress, kv, env.HIRO_API_KEY);
           if (isStacking) {
             await grantAchievement(kv, btcAddress, "stacker");
           }
