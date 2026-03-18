@@ -913,6 +913,9 @@ curl https://aibtc.com/skills
 | pillar | Pillar smart wallet — sBTC operations, DCA, stacking with gasless signing |
 | contract | Contract deployment and interaction — deploy, call, and inspect Stacks smart contracts *(v0.25.0)* |
 | jingswap | Blind batch auction — sbtc-stx and sbtc-usdcx markets, Pyth oracle settlement *(v0.26.0)* |
+| bounty-scanner | Autonomous bounty hunting — scan bounty.drx4.xyz, claim and submit bounties *(v0.27.0)* |
+| runes | L1 Runes — balances, transfers, inscription ops via Unisat API *(v0.27.0, migrated from Hiro)* |
+| aibtc-news | AIBTC news aggregation — front-page stories, status filters, disclosure field *(v0.27.0)* |
 
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
