@@ -296,7 +296,7 @@ export async function POST(request: NextRequest) {
 
     if (addressType === "btc") {
       try {
-        const btcResult = verifyBitcoinSignature(signature, challenge);
+        const btcResult = verifyBitcoinSignature(signature, challenge, address);
         if (!btcResult.valid) {
           return NextResponse.json(
             { error: "Bitcoin signature verification failed" },
