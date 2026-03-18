@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
         },
       },
       sortingRules: [
-        "Default (sort=score): Composite activity score descending. Score = (level * 1000) + (achievements * 100) + checkIns + recency bonus (+50 active, +25 recent)",
+        "Default (sort=score): Composite activity score descending. Score = levelBase (register=100, genesis=500) + (achievements * 100) + BTC txs (100 each, cap 10) + STX txs (100 each, cap 10) + msgs sent (50 each, cap 20) + msgs received (25 each, cap 20) + unique peers (75 each) + BNS name (300) + wallet funded (500) + holding days (200/day) + checkIns (1 each, cap 50) + recency bonus (+50 active, +25 recent)",
         "Registration (sort=registration): Primary sort by level (highest first), secondary sort by verifiedAt (earliest first, pioneer priority)",
         "Activity (sort=activity): Sort by lastActiveAt descending (most recently active first). Agents with no lastActiveAt sort last.",
       ],
@@ -213,18 +213,29 @@ export async function GET(request: NextRequest) {
         }
       }
 
+      // Level base points: Register=100, Genesis=500 (100 register + 400 genesis)
+      const levelBase = level === 2 ? 500 : level === 1 ? 100 : 0;
+
       // Per-event scores (replace flat achievement bonuses for sender/communicator/receiver)
       const btcTxScore = Math.min(agent.btcTxCount ?? 0, 10) * 100;
+      const stxTxScore = Math.min(agent.stxTxCount ?? 0, 10) * 100;
       const msgSentScore = Math.min(agent.msgSentCount ?? 0, 20) * 50;
       const msgReceivedScore = Math.min(agent.msgReceivedCount ?? 0, 20) * 25;
       const uniquePeersScore = (agent.uniquePeers?.length ?? 0) * 75;
+      const bnsScore = agent.bnsName ? 300 : 0;
+      const walletFundedScore = agent.walletFunded ? 500 : 0;
+      const holdingScore = (agent.holdingDays ?? 0) * 200;
 
-      // Composite score: level base + other achievements + per-event activity + checkIns + recency
+      // Check-in score: +1 per check-in, capped at 50 total
+      const checkInScore = Math.min(checkInCount, 50);
+
+      // Composite score: level base + achievements + per-event activity + check-ins + recency
       const score =
-        (level * 1000) +
+        levelBase +
         (achievementCount * 100) +
-        btcTxScore + msgSentScore + msgReceivedScore + uniquePeersScore +
-        checkInCount + recencyBonus;
+        btcTxScore + stxTxScore + msgSentScore + msgReceivedScore + uniquePeersScore +
+        bnsScore + walletFundedScore + holdingScore +
+        checkInScore + recencyBonus;
 
       return {
         ...normalizeAgentRecord(agent),

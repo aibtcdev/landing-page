@@ -27,6 +27,11 @@ import {
   hasAchievement,
   grantAchievement,
 } from "@/lib/achievements";
+import {
+  verifyWalletFunded,
+  getStxTxCount,
+  verifyPositiveBalance,
+} from "@/lib/achievements/verify";
 
 /**
  * Build personalized orientation data for an agent.
@@ -510,6 +515,49 @@ export async function POST(request: NextRequest) {
       console.error("Failed to check tireless achievement during heartbeat:", error);
     }
 
+    // Track wallet funded signal (best-effort: has the wallet received any incoming BTC?)
+    let walletFunded = agent.walletFunded;
+    if (!walletFunded) {
+      try {
+        walletFunded = await verifyWalletFunded(btcAddress, kv);
+      } catch (error) {
+        console.error("Failed to check wallet funded during heartbeat:", error);
+      }
+    }
+
+    // Track STX tx count (best-effort, rate-limited to sender check cadence)
+    let stxTxCount = agent.stxTxCount ?? 0;
+    if (agent.stxAddress) {
+      try {
+        const rateLimit = await checkRateLimit(kv, btcAddress, "stx-tx-count");
+        if (rateLimit.allowed) {
+          stxTxCount = await getStxTxCount(agent.stxAddress, kv);
+          await setRateLimit(kv, btcAddress, "stx-tx-count");
+        }
+      } catch (error) {
+        console.error("Failed to update STX tx count during heartbeat:", error);
+      }
+    }
+
+    // Track holding days (best-effort: once per calendar day if positive balance)
+    let holdingDays = agent.holdingDays ?? 0;
+    let lastHoldingBonusAt = agent.lastHoldingBonusAt;
+    if (agent.stxAddress) {
+      try {
+        const today = new Date().toISOString().split("T")[0];
+        const lastBonusDay = lastHoldingBonusAt?.split("T")[0];
+        if (today !== lastBonusDay) {
+          const hasBalance = await verifyPositiveBalance(agent.stxAddress, kv);
+          if (hasBalance) {
+            holdingDays += 1;
+            lastHoldingBonusAt = new Date().toISOString();
+          }
+        }
+      } catch (error) {
+        console.error("Failed to update holding days during heartbeat:", error);
+      }
+    }
+
     // Update agent record with lastActiveAt, checkInCount, and identity data
     const updatedAgent = {
       ...agent,
@@ -517,6 +565,10 @@ export async function POST(request: NextRequest) {
       checkInCount: checkInRecord.checkInCount,
       erc8004AgentId: identityAgentId,
       lastIdentityCheck: identityCheckPerformed ? new Date().toISOString() : agent.lastIdentityCheck,
+      walletFunded,
+      stxTxCount,
+      holdingDays,
+      lastHoldingBonusAt,
     };
 
     // Write updates to both btc: and stx: keys, fetch inbox in parallel

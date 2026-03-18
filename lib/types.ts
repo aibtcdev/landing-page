@@ -25,12 +25,20 @@ export interface AgentRecord {
   githubUsername?: string | null;
   /** Count of outgoing BTC transactions (updated at achievement verify time). */
   btcTxCount?: number;
+  /** Count of outgoing STX transactions (updated at achievement verify time). */
+  stxTxCount?: number;
+  /** Whether the agent's wallet has ever received an incoming BTC transaction. */
+  walletFunded?: boolean;
   /** Count of x402 inbox messages sent (updated at inbox send time). */
   msgSentCount?: number;
   /** Count of inbox messages received (updated at inbox route). */
   msgReceivedCount?: number;
   /** List of unique STX addresses transacted with via inbox. */
   uniquePeers?: string[];
+  /** Number of days the agent held a positive STX or sBTC balance (incremented once per calendar day at check-in). */
+  holdingDays?: number;
+  /** ISO timestamp of the last day the holding bonus was applied. */
+  lastHoldingBonusAt?: string;
 }
 
 /**

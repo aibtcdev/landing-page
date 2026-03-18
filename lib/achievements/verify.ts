@@ -160,6 +160,156 @@ export async function getBtcTxCount(
 }
 
 /**
+ * Verify if an agent's wallet has ever received any incoming BTC transaction (Fund Wallet signal).
+ *
+ * Reuses the same mempool.space cache as verifySenderAchievement.
+ * Returns false on error rather than throwing.
+ *
+ * @param btcAddress - Bitcoin address to check
+ * @param kv - Cloudflare KV namespace
+ * @returns true if the address has received any BTC, false otherwise
+ */
+export async function verifyWalletFunded(
+  btcAddress: string,
+  kv: KVNamespace
+): Promise<boolean> {
+  try {
+    const cacheKey = `mempool-addr:${btcAddress}`;
+    let txs = await getCachedTransaction(cacheKey, kv);
+
+    if (!txs) {
+      const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
+      const mempoolResp = await fetch(mempoolUrl, {
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!mempoolResp.ok) {
+        console.error(
+          `Failed to fetch mempool data for ${btcAddress}: ${mempoolResp.status}`
+        );
+        return false;
+      }
+
+      txs = (await mempoolResp.json()) as Array<{
+        vout: Array<{ scriptpubkey_address: string }>;
+      }>;
+
+      await setCachedTransaction(cacheKey, txs, kv);
+    }
+
+    // Check if any transaction has this address as an output (incoming funds)
+    return (txs as Array<{ vout: Array<{ scriptpubkey_address: string }> }>).some(
+      (tx) => tx.vout.some((output) => output.scriptpubkey_address === btcAddress)
+    );
+  } catch (error) {
+    console.error(`Failed to verify wallet funded for ${btcAddress}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Count outgoing Stacks transactions for an agent.
+ *
+ * Queries the Stacks Extended API for transactions sent by the agent's address.
+ * Uses KV cache with 5-minute TTL.
+ *
+ * @param stxAddress - Stacks address to check
+ * @param kv - Cloudflare KV namespace
+ * @param hiroApiKey - Optional Hiro API key for higher rate limits
+ * @returns Count of outgoing Stacks transactions
+ */
+export async function getStxTxCount(
+  stxAddress: string,
+  kv: KVNamespace,
+  hiroApiKey?: string
+): Promise<number> {
+  try {
+    const cacheKey = `stx-txs:${stxAddress}`;
+    let cached = await getCachedTransaction(cacheKey, kv);
+
+    if (!cached) {
+      const url = `https://api.hiro.so/extended/v1/address/${stxAddress}/transactions?limit=50`;
+      const resp = await fetch(url, {
+        headers: buildHiroHeaders(hiroApiKey),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!resp.ok) {
+        console.error(`Failed to fetch STX txs for ${stxAddress}: ${resp.status}`);
+        return 0;
+      }
+
+      cached = await resp.json();
+      await setCachedTransaction(cacheKey, cached, kv);
+    }
+
+    const results = (
+      cached as { results?: Array<{ sender_address: string }> }
+    ).results ?? [];
+    return results.filter((tx) => tx.sender_address === stxAddress).length;
+  } catch (error) {
+    console.error(`Failed to count STX txs for ${stxAddress}:`, error);
+    return 0;
+  }
+}
+
+/**
+ * Verify if an agent holds a positive STX or sBTC balance (Holding signal).
+ *
+ * Reuses the same Stacks balance cache as verifysBtcHolderAchievement.
+ * Returns false on error rather than throwing.
+ *
+ * @param stxAddress - Stacks address to check
+ * @param kv - Cloudflare KV namespace
+ * @param hiroApiKey - Optional Hiro API key for higher rate limits
+ * @returns true if the agent holds any STX or sBTC balance
+ */
+export async function verifyPositiveBalance(
+  stxAddress: string,
+  kv: KVNamespace,
+  hiroApiKey?: string
+): Promise<boolean> {
+  try {
+    const cacheKey = `sbtc-balance:${stxAddress}`;
+    let balanceData = await getCachedTransaction(cacheKey, kv);
+
+    if (!balanceData) {
+      const balanceUrl = `https://api.hiro.so/extended/v1/address/${stxAddress}/balances`;
+      const balanceResp = await fetch(balanceUrl, {
+        headers: buildHiroHeaders(hiroApiKey),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!balanceResp.ok) {
+        console.error(
+          `Failed to fetch balances for ${stxAddress}: ${balanceResp.status}`
+        );
+        return false;
+      }
+
+      balanceData = await balanceResp.json();
+      await setCachedTransaction(cacheKey, balanceData, kv);
+    }
+
+    const stxBalance = parseInt(
+      (balanceData as { stx?: { balance: string } }).stx?.balance ?? "0",
+      10
+    );
+    if (stxBalance > 0) return true;
+
+    const fungibleTokens = (
+      balanceData as { fungible_tokens?: Record<string, { balance: string }> }
+    ).fungible_tokens ?? {};
+    const sBtcKey = "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc-token";
+    const sBtcBalance = parseInt(fungibleTokens[sBtcKey]?.balance ?? "0", 10);
+    return sBtcBalance > 0;
+  } catch (error) {
+    console.error(`Failed to verify positive balance for ${stxAddress}:`, error);
+    return false;
+  }
+}
+
+/**
  * Verify if an agent has STX stacked via Proof of Transfer (Stacker achievement).
  *
  * Checks the Stacks Extended API stacking endpoint for locked STX > 0.
