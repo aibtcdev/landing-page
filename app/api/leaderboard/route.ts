@@ -5,6 +5,19 @@ import { normalizeAgentRecord } from "@/lib/agents";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
 import { getAchievementCount } from "@/lib/achievements";
+import { getAgentInbox, getSentIndex } from "@/lib/inbox";
+
+// Scoring weights for economic activity incentives (see issue #230)
+const SCORE_WEIGHTS = {
+  register: 100,        // Flat bonus for level 1 (was level * 1000)
+  genesis: 400,         // Additional flat bonus for level 2 (was level * 1000)
+  achievement: 100,     // Per achievement unlocked
+  checkinMax: 50,       // Max check-ins counted (prevents farming)
+  bnsName: 300,         // BNS name registered
+  receivedMessage: 25,  // Per x402 inbox message received
+  sentMessageMax: 20,   // Max sent messages scored per leaderboard period
+  sentMessage: 50,      // Per x402 message sent (up to sentMessageMax)
+} as const;
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -91,7 +104,7 @@ export async function GET(request: NextRequest) {
         },
       },
       sortingRules: [
-        "Default (sort=score): Composite activity score descending. Score = (level * 1000) + (achievements * 100) + checkIns + recency bonus (+50 active, +25 recent)",
+        "Default (sort=score): Composite activity score descending. Score = register(100) + genesis(+400) + achievements(×100) + checkIns(capped 50) + bnsName(300) + receivedMsgs(×25) + sentMsgs(×50, cap 20) + recency(+50/+25)",
         "Registration (sort=registration): Primary sort by level (highest first), secondary sort by verifiedAt (earliest first, pioneer priority)",
         "Activity (sort=activity): Sort by lastActiveAt descending (most recently active first). Agents with no lastActiveAt sort last.",
       ],
@@ -185,10 +198,12 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Fetch achievement counts for all agents
-    const achievementCounts = await Promise.all(
-      agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
-    );
+    // Fetch achievement counts, inbox received counts, and sent counts for all agents
+    const [achievementCounts, inboxIndices, sentIndices] = await Promise.all([
+      Promise.all(agents.map((agent) => getAchievementCount(kv, agent.btcAddress))),
+      Promise.all(agents.map((agent) => getAgentInbox(kv, agent.btcAddress))),
+      Promise.all(agents.map((agent) => getSentIndex(kv, agent.btcAddress))),
+    ]);
 
     // Compute levels and build ranked list with composite scores
     const now = Date.now();
@@ -196,6 +211,22 @@ export async function GET(request: NextRequest) {
       const level = computeLevel(agent, claims[i]);
       const achievementCount = achievementCounts[i];
       const checkInCount = agent.checkInCount || 0;
+
+      // Level bonuses (flat, not multiplier — incentivize economic activity over level farming)
+      const levelScore = level >= 1 ? SCORE_WEIGHTS.register : 0;
+      const genesisScore = level >= 2 ? SCORE_WEIGHTS.genesis : 0;
+
+      // Check-in score capped at 50 to prevent farming
+      const checkInScore = Math.min(checkInCount, SCORE_WEIGHTS.checkinMax);
+
+      // BNS name registered
+      const bnsScore = agent.bnsName ? SCORE_WEIGHTS.bnsName : 0;
+
+      // x402 inbox message scores
+      const receivedCount = inboxIndices[i]?.messageIds.length ?? 0;
+      const sentCount = sentIndices[i]?.messageIds.length ?? 0;
+      const receivedScore = receivedCount * SCORE_WEIGHTS.receivedMessage;
+      const sentScore = Math.min(sentCount, SCORE_WEIGHTS.sentMessageMax) * SCORE_WEIGHTS.sentMessage;
 
       // Calculate recency bonus
       let recencyBonus = 0;
@@ -208,8 +239,8 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Composite score: (level * 1000) + (achievements * 100) + checkIns + recency
-      const score = (level * 1000) + (achievementCount * 100) + checkInCount + recencyBonus;
+      // Composite score: level bonuses + achievements + check-ins (capped) + BNS + x402 + recency
+      const score = levelScore + genesisScore + (achievementCount * SCORE_WEIGHTS.achievement) + checkInScore + bnsScore + receivedScore + sentScore + recencyBonus;
 
       return {
         ...normalizeAgentRecord(agent),
