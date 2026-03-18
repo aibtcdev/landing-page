@@ -421,8 +421,8 @@ export async function POST(request: NextRequest) {
           if (isStacking) {
             await grantAchievement(kv, btcAddress, "stacker");
           }
+          await setRateLimit(kv, btcAddress, "stacker");
         }
-        await setRateLimit(kv, btcAddress, "stacker");
       }
     } catch (error) {
       console.error("Failed to check stacker achievement during heartbeat:", error);
