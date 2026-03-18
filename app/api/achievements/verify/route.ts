@@ -8,6 +8,7 @@ import {
 import {
   verifySenderAchievement,
   verifyInscriberAchievement,
+  verifySbtcHolderAchievement,
   verifyStackerAchievement,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,
@@ -35,6 +36,14 @@ export function GET() {
           name: "Sender",
           description: "Transferred BTC from wallet",
           verification: "Checks mempool.space for outgoing Bitcoin transactions",
+        },
+        "sbtc-holder": {
+          id: "sbtc-holder",
+          name: "sBTC Holder",
+          description:
+            "Holds a non-zero sBTC balance — bridged Bitcoin to Stacks",
+          verification:
+            "Calls get-balance on the sBTC SIP-010 contract via Stacks API",
         },
         connector: {
           id: "connector",
@@ -218,6 +227,7 @@ export async function POST(request: NextRequest) {
     // Per-achievement rate limit check
     const achievementsToCheck = [
       "sender",
+      "sbtc-holder",
       "stacker",
       ...(txid ? ["connector"] : []),
       ...(inscriptionId ? ["inscriber"] : []),
@@ -323,6 +333,38 @@ export async function POST(request: NextRequest) {
         }
       } else {
         alreadyHad.push("stacker");
+      }
+    }
+
+    // Check sbtc-holder achievement (unless rate-limited)
+    if (!rateLimited.includes("sbtc-holder")) {
+      checked.push("sbtc-holder");
+      await setRateLimit(kv, btcAddress, "sbtc-holder");
+
+      const hasSbtcHolder = await hasAchievement(kv, btcAddress, "sbtc-holder");
+
+      if (!hasSbtcHolder) {
+        try {
+          const holdsSbtc = await verifySbtcHolderAchievement(
+            agent.stxAddress,
+            kv,
+            hiroApiKey
+          );
+
+          if (holdsSbtc) {
+            const record = await grantAchievement(kv, btcAddress, "sbtc-holder");
+            const definition = getAchievementDefinition("sbtc-holder");
+            earned.push({
+              id: "sbtc-holder",
+              name: definition?.name ?? "sBTC Holder",
+              unlockedAt: record.unlockedAt,
+            });
+          }
+        } catch (e) {
+          console.error("Failed to check sbtc-holder achievement:", e);
+        }
+      } else {
+        alreadyHad.push("sbtc-holder");
       }
     }
 

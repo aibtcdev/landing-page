@@ -29,6 +29,7 @@ export {
 // Verification
 export {
   verifySenderAchievement,
+  verifySbtcHolderAchievement,
   verifyStackerAchievement,
   verifyConnectorAchievement,
   checkRateLimit,
