@@ -117,6 +117,8 @@ export function GET() {
         mempoolSpace: "https://mempool.space/api/address/{btcAddress}/txs",
         stacksAPI:
           "https://api.hiro.so/extended/v1/tx/{txid}",
+        unisatAPI:
+          "https://open-api.unisat.io/v1/indexer/inscription/info/{inscriptionId}",
       },
       documentation: {
         achievements: "https://aibtc.com/api/achievements",
@@ -161,12 +163,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Validate inscriptionId if provided
+    // Validate inscriptionId if provided (format: {64-char txid}i{index})
     if (inscriptionId && !/^[a-fA-F0-9]{64}i\d+$/.test(inscriptionId)) {
       return NextResponse.json(
         {
           error:
-            "inscriptionId must be in Ordinals format: {64-char hex txid}i{index} (e.g. abc...i0)",
+            "inscriptionId must be a valid ordinal inscription ID in the format {txid}i{index} (e.g. 'abc123...i0')",
         },
         { status: 400 }
       );
@@ -523,32 +525,43 @@ export async function POST(request: NextRequest) {
     // Check inscriber achievement (only if inscriptionId provided and not rate-limited)
     if (inscriptionId && !rateLimited.includes("inscriber")) {
       checked.push("inscriber");
+
       await setRateLimit(kv, btcAddress, "inscriber");
 
       const hasInscriber = await hasAchievement(kv, btcAddress, "inscriber");
 
       if (!hasInscriber) {
-        const result = await verifyInscriberAchievement(
-          btcAddress,
-          inscriptionId,
-          kv,
-          unisatApiKey
-        );
-
-        if (result.verified) {
-          const record = await grantAchievement(kv, btcAddress, "inscriber", {
+        try {
+          const result = await verifyInscriberAchievement(
+            btcAddress,
             inscriptionId,
-          });
-          const definition = getAchievementDefinition("inscriber");
-          earned.push({
-            id: "inscriber",
-            name: definition?.name ?? "Inscriber",
-            unlockedAt: record.unlockedAt,
-          });
-        } else if (result.error) {
+            kv,
+            unisatApiKey
+          );
+
+          if (result.verified) {
+            const record = await grantAchievement(kv, btcAddress, "inscriber", {
+              inscriptionId,
+            });
+            const definition = getAchievementDefinition("inscriber");
+            earned.push({
+              id: "inscriber",
+              name: definition?.name ?? "Inscriber",
+              unlockedAt: record.unlockedAt,
+            });
+          } else {
+            return NextResponse.json(
+              { error: result.error ?? "Inscription verification failed" },
+              { status: 400 }
+            );
+          }
+        } catch (e) {
+          console.error("Failed to check inscriber achievement:", e);
           return NextResponse.json(
-            { error: result.error },
-            { status: 400 }
+            {
+              error: `Inscriber verification failed: ${(e as Error).message}`,
+            },
+            { status: 500 }
           );
         }
       } else {

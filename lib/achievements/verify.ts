@@ -122,8 +122,11 @@ const SOUL_DOCUMENT_MARKERS = [
 /**
  * Verify if an agent has inscribed a soul document on Bitcoin L1 (Inscriber achievement).
  *
- * Checks the Unisat API for the inscription, validates it's held by the btcAddress,
- * and confirms the content matches the soul document format (SOUL.md markers).
+ * Accepts an inscription ID (format: {txid}i{index}, e.g. "abc123...i0") submitted by the agent.
+ * Uses Unisat API to verify:
+ * 1. The inscription exists and is currently held by btcAddress
+ * 2. The inscription content is text-based (soul documents are text/plain or text/markdown)
+ * 3. The content matches soul document format (SOUL.md markers)
  *
  * @param btcAddress - Bitcoin address to verify as current inscription holder
  * @param inscriptionId - Ordinals inscription ID (format: {txid}i{index})
@@ -138,15 +141,8 @@ export async function verifyInscriberAchievement(
   unisatApiKey?: string
 ): Promise<{ verified: boolean; error?: string }> {
   try {
-    // Validate inscription ID format: {64-char hex}i{index}
-    if (!/^[a-fA-F0-9]{64}i\d+$/.test(inscriptionId)) {
-      return {
-        verified: false,
-        error: "inscriptionId must be in format {txid}i{index} (e.g. abc...i0)",
-      };
-    }
+    const cacheKey = `unisat-inscription:${inscriptionId}`;
 
-    const cacheKey = `inscription-info:${inscriptionId}`;
     type InscriptionInfo = {
       inscriptionId: string;
       address: string;
@@ -158,13 +154,13 @@ export async function verifyInscriberAchievement(
     let info = await getCachedTransaction(cacheKey, kv) as InscriptionInfo | null;
 
     if (!info) {
-      const infoUrl = `https://open-api.unisat.io/v1/indexer/inscription/info/${inscriptionId}`;
-      const headers: Record<string, string> = {};
+      const url = `https://open-api.unisat.io/v1/indexer/inscription/info/${inscriptionId}`;
+      const headers: HeadersInit = { Accept: "application/json" };
       if (unisatApiKey) {
         headers["Authorization"] = `Bearer ${unisatApiKey}`;
       }
 
-      const resp = await fetch(infoUrl, {
+      const resp = await fetch(url, {
         headers,
         signal: AbortSignal.timeout(10000),
       });
@@ -182,8 +178,11 @@ export async function verifyInscriberAchievement(
         data: InscriptionInfo;
       };
 
-      if (json.code !== 0) {
-        return { verified: false, error: `Unisat API error: ${json.msg}` };
+      if (json.code !== 0 || !json.data) {
+        return {
+          verified: false,
+          error: `Inscription not found: ${json.msg}`,
+        };
       }
 
       info = json.data;
@@ -198,7 +197,7 @@ export async function verifyInscriberAchievement(
       };
     }
 
-    // Verify content type is text (soul documents are plaintext/markdown)
+    // Verify content type is text (soul documents are text/plain or text/markdown)
     const contentType = info.contentType ?? "";
     if (!contentType.startsWith("text/")) {
       return {
