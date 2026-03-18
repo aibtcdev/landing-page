@@ -9,6 +9,7 @@ import {
   verifySenderAchievement,
   verifyStackerAchievement,
   verifysBtcHolderAchievement,
+  getBtcTxCount,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,
 } from "@/lib/achievements/verify";
@@ -248,6 +249,24 @@ export async function POST(request: NextRequest) {
         }
       } else {
         alreadyHad.push("sender");
+      }
+
+      // Always refresh btcTxCount from mempool (cache hit after verifySenderAchievement)
+      try {
+        const txCount = await getBtcTxCount(btcAddress, kv);
+        const agentJson = await kv.get(`btc:${btcAddress}`);
+        if (agentJson) {
+          const agentRecord = JSON.parse(agentJson) as import("@/lib/types").AgentRecord;
+          if ((agentRecord.btcTxCount ?? 0) !== txCount) {
+            const updated = { ...agentRecord, btcTxCount: txCount };
+            await Promise.all([
+              kv.put(`stx:${agentRecord.stxAddress}`, JSON.stringify(updated)),
+              kv.put(`btc:${btcAddress}`, JSON.stringify(updated)),
+            ]);
+          }
+        }
+      } catch (e) {
+        console.error("Failed to update btcTxCount:", e);
       }
     }
 

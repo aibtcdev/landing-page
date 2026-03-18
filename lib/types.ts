@@ -23,6 +23,14 @@ export interface AgentRecord {
   referredBy?: string;
   /** GitHub username linked via gist challenge. */
   githubUsername?: string | null;
+  /** Count of outgoing BTC transactions (updated at achievement verify time). */
+  btcTxCount?: number;
+  /** Count of x402 inbox messages sent (updated at inbox send time). */
+  msgSentCount?: number;
+  /** Count of inbox messages received (updated at inbox route). */
+  msgReceivedCount?: number;
+  /** List of unique STX addresses transacted with via inbox. */
+  uniquePeers?: string[];
 }
 
 /**

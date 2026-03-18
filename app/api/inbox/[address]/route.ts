@@ -20,6 +20,7 @@ import {
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { hasAchievement, grantAchievement } from "@/lib/achievements";
+import type { AgentRecord } from "@/lib/types";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
@@ -61,6 +62,44 @@ function verifySenderSignature(
       { error: "Sender signature verification failed: invalid format" },
       { status: 400 }
     );
+  }
+}
+
+/**
+ * Update msgSentCount/msgReceivedCount and uniquePeers on an agent record.
+ * Reads current record, applies increments, writes back to both stx: and btc: KV keys.
+ * Best-effort — errors are caught and logged, never thrown.
+ */
+async function updateInboxStats(
+  kv: KVNamespace,
+  btcAddress: string,
+  {
+    incrementSent,
+    incrementReceived,
+    addPeer,
+  }: { incrementSent?: boolean; incrementReceived?: boolean; addPeer?: string }
+): Promise<void> {
+  try {
+    const agentJson = await kv.get(`btc:${btcAddress}`);
+    if (!agentJson) return;
+    const record = JSON.parse(agentJson) as AgentRecord;
+    const updated: AgentRecord = { ...record };
+
+    if (incrementSent) updated.msgSentCount = (record.msgSentCount ?? 0) + 1;
+    if (incrementReceived) updated.msgReceivedCount = (record.msgReceivedCount ?? 0) + 1;
+    if (addPeer) {
+      const peers = record.uniquePeers ?? [];
+      if (!peers.includes(addPeer)) {
+        updated.uniquePeers = [...peers, addPeer];
+      }
+    }
+
+    await Promise.all([
+      kv.put(`stx:${record.stxAddress}`, JSON.stringify(updated)),
+      kv.put(`btc:${btcAddress}`, JSON.stringify(updated)),
+    ]);
+  } catch (err) {
+    console.error(`Failed to update inbox stats for ${btcAddress}:`, err);
   }
 }
 
@@ -773,6 +812,21 @@ export async function POST(
       console.error("Failed to check receiver achievement during inbox store:", error);
     }
 
+    // Update per-event counters (best-effort, non-blocking)
+    const recipientStxAddress = agent.stxAddress;
+    await Promise.all([
+      updateInboxStats(kv, toBtcAddress, {
+        incrementReceived: true,
+        ...(senderAgent ? { addPeer: senderAgent.stxAddress } : {}),
+      }),
+      ...(senderAgent
+        ? [updateInboxStats(kv, senderAgent.btcAddress, {
+            incrementSent: true,
+            addPeer: recipientStxAddress,
+          })]
+        : []),
+    ]);
+
     logger.info("Message stored via txid recovery", {
       messageId,
       fromAddress,
@@ -917,6 +971,21 @@ export async function POST(
   } catch (error) {
     console.error("Failed to check receiver achievement during inbox store:", error);
   }
+
+  // Update per-event counters (best-effort, non-blocking)
+  const recipientStxAddress = agent.stxAddress;
+  await Promise.all([
+    updateInboxStats(kv, toBtcAddress, {
+      incrementReceived: true,
+      ...(senderAgent ? { addPeer: senderAgent.stxAddress } : {}),
+    }),
+    ...(senderAgent
+      ? [updateInboxStats(kv, senderAgent.btcAddress, {
+          incrementSent: true,
+          addPeer: recipientStxAddress,
+        })]
+      : []),
+  ]);
 
   logger.info("Message stored", {
     messageId,

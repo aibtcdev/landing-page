@@ -22,6 +22,7 @@ export {
   getAgentAchievements,
   getAchievementRecord,
   getAchievementCount,
+  getAgentAchievementIds,
   hasAchievement,
   grantAchievement,
 } from "./kv";
@@ -31,6 +32,7 @@ export {
   verifySenderAchievement,
   verifyStackerAchievement,
   verifysBtcHolderAchievement,
+  getBtcTxCount,
   checkRateLimit,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,

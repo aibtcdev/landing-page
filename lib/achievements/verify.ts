@@ -113,6 +113,53 @@ export async function verifySenderAchievement(
 }
 
 /**
+ * Count outgoing Bitcoin transactions for an agent.
+ *
+ * Uses the same mempool.space cache as verifySenderAchievement.
+ * Returns 0 on error rather than throwing.
+ *
+ * @param btcAddress - Bitcoin address to check
+ * @param kv - Cloudflare KV namespace
+ * @returns Count of transactions where this address appears as an input
+ */
+export async function getBtcTxCount(
+  btcAddress: string,
+  kv: KVNamespace
+): Promise<number> {
+  try {
+    const cacheKey = `mempool-addr:${btcAddress}`;
+    let txs = await getCachedTransaction(cacheKey, kv);
+
+    if (!txs) {
+      const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
+      const mempoolResp = await fetch(mempoolUrl, {
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!mempoolResp.ok) {
+        console.error(
+          `Failed to fetch mempool data for ${btcAddress}: ${mempoolResp.status}`
+        );
+        return 0;
+      }
+
+      txs = (await mempoolResp.json()) as Array<{
+        vin: Array<{ prevout: { scriptpubkey_address: string } }>;
+      }>;
+
+      await setCachedTransaction(cacheKey, txs, kv);
+    }
+
+    return (txs as Array<{ vin: Array<{ prevout: { scriptpubkey_address: string } }> }>).filter(
+      (tx) => tx.vin.some((input) => input.prevout.scriptpubkey_address === btcAddress)
+    ).length;
+  } catch (error) {
+    console.error(`Failed to count BTC txs for ${btcAddress}:`, error);
+    return 0;
+  }
+}
+
+/**
  * Verify if an agent has STX stacked via Proof of Transfer (Stacker achievement).
  *
  * Checks the Stacks Extended API stacking endpoint for locked STX > 0.

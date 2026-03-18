@@ -4,7 +4,7 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { normalizeAgentRecord } from "@/lib/agents";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
-import { getAchievementCount } from "@/lib/achievements";
+import { getAgentAchievementIds } from "@/lib/achievements";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -185,16 +185,21 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Fetch achievement counts for all agents
-    const achievementCounts = await Promise.all(
-      agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
+    // Fetch achievement ID lists for all agents (one KV read per agent via index)
+    const achievementIdLists = await Promise.all(
+      agents.map((agent) => getAgentAchievementIds(kv, agent.btcAddress))
     );
+
+    // Achievements replaced by per-event scoring — excluded from flat count
+    const PER_EVENT_ACHIEVEMENTS = new Set(["sender", "communicator", "receiver"]);
 
     // Compute levels and build ranked list with composite scores
     const now = Date.now();
     let ranked = agents.map((agent, i) => {
       const level = computeLevel(agent, claims[i]);
-      const achievementCount = achievementCounts[i];
+      const achievementIds = achievementIdLists[i];
+      // Count achievements excluding those replaced by per-event scoring
+      const achievementCount = achievementIds.filter((id) => !PER_EVENT_ACHIEVEMENTS.has(id)).length;
       const checkInCount = agent.checkInCount || 0;
 
       // Calculate recency bonus
@@ -208,14 +213,24 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Composite score: (level * 1000) + (achievements * 100) + checkIns + recency
-      const score = (level * 1000) + (achievementCount * 100) + checkInCount + recencyBonus;
+      // Per-event scores (replace flat achievement bonuses for sender/communicator/receiver)
+      const btcTxScore = Math.min(agent.btcTxCount ?? 0, 10) * 100;
+      const msgSentScore = Math.min(agent.msgSentCount ?? 0, 20) * 50;
+      const msgReceivedScore = Math.min(agent.msgReceivedCount ?? 0, 20) * 25;
+      const uniquePeersScore = (agent.uniquePeers?.length ?? 0) * 75;
+
+      // Composite score: level base + other achievements + per-event activity + checkIns + recency
+      const score =
+        (level * 1000) +
+        (achievementCount * 100) +
+        btcTxScore + msgSentScore + msgReceivedScore + uniquePeersScore +
+        checkInCount + recencyBonus;
 
       return {
         ...normalizeAgentRecord(agent),
         level,
         levelName: LEVELS[level].name,
-        achievementCount,
+        achievementCount: achievementIds.length, // total for display
         score,
       };
     });
