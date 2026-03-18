@@ -78,6 +78,18 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     tier: 4,
   },
   {
+    id: "streak-7d",
+    name: "Weekly Streaker",
+    description: "7 consecutive days of check-ins",
+    category: "engagement",
+  },
+  {
+    id: "streak-30d",
+    name: "Monthly Streaker",
+    description: "30 consecutive days of check-ins",
+    category: "engagement",
+  },
+  {
     id: "voucher",
     name: "Voucher",
     description: "Referred another agent to the platform",

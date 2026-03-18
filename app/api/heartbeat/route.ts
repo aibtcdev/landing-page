@@ -488,6 +488,30 @@ export async function POST(request: NextRequest) {
       console.error("Failed to check tireless achievement during heartbeat:", error);
     }
 
+    // Grant streak-7d achievement if agent has 7+ consecutive days (best-effort)
+    try {
+      if ((checkInRecord.currentStreak ?? 0) >= 7) {
+        const hasStreak7 = await hasAchievement(kv, btcAddress, "streak-7d");
+        if (!hasStreak7) {
+          await grantAchievement(kv, btcAddress, "streak-7d", { streak: checkInRecord.currentStreak });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check streak-7d achievement during heartbeat:", error);
+    }
+
+    // Grant streak-30d achievement if agent has 30+ consecutive days (best-effort)
+    try {
+      if ((checkInRecord.currentStreak ?? 0) >= 30) {
+        const hasStreak30 = await hasAchievement(kv, btcAddress, "streak-30d");
+        if (!hasStreak30) {
+          await grantAchievement(kv, btcAddress, "streak-30d", { streak: checkInRecord.currentStreak });
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check streak-30d achievement during heartbeat:", error);
+    }
+
     // Update agent record with lastActiveAt, checkInCount, and identity data
     const updatedAgent = {
       ...agent,

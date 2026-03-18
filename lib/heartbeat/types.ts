@@ -16,6 +16,10 @@ export interface CheckInRecord {
   btcAddress: string;
   checkInCount: number;
   lastCheckInAt: string;
+  /** ISO date (YYYY-MM-DD) of the last check-in, used for streak tracking. */
+  lastCheckInDate?: string;
+  /** Number of consecutive calendar days with at least one check-in. */
+  currentStreak?: number;
 }
 
 /**

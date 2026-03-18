@@ -6,6 +6,18 @@ import { CHECK_IN_PREFIX } from "./constants";
 import type { CheckInRecord } from "./types";
 
 /**
+ * Get the ISO date string for the day before the given date.
+ *
+ * @param isoDate - Date in YYYY-MM-DD format
+ * @returns Previous day in YYYY-MM-DD format
+ */
+function getPreviousDate(isoDate: string): string {
+  const date = new Date(isoDate + "T00:00:00Z");
+  date.setUTCDate(date.getUTCDate() - 1);
+  return date.toISOString().split("T")[0];
+}
+
+/**
  * Fetch the check-in record for a specific Bitcoin address.
  *
  * @param kv - Cloudflare KV namespace
@@ -57,17 +69,32 @@ export async function updateCheckInRecord(
 ): Promise<CheckInRecord> {
   const current = existing !== undefined ? existing : await getCheckInRecord(kv, btcAddress);
 
-  const record: CheckInRecord = current
-    ? {
-        btcAddress,
-        checkInCount: current.checkInCount + 1,
-        lastCheckInAt: timestamp,
-      }
-    : {
-        btcAddress,
-        checkInCount: 1,
-        lastCheckInAt: timestamp,
-      };
+  const today = new Date().toISOString().split("T")[0];
+  let currentStreak: number;
+
+  if (!current) {
+    currentStreak = 1;
+  } else {
+    const lastDate = current.lastCheckInDate;
+    if (lastDate === today) {
+      // Already checked in today — keep existing streak
+      currentStreak = current.currentStreak ?? 1;
+    } else if (lastDate === getPreviousDate(today)) {
+      // Consecutive day — increment streak
+      currentStreak = (current.currentStreak ?? 1) + 1;
+    } else {
+      // Gap > 1 day — reset streak
+      currentStreak = 1;
+    }
+  }
+
+  const record: CheckInRecord = {
+    btcAddress,
+    checkInCount: current ? current.checkInCount + 1 : 1,
+    lastCheckInAt: timestamp,
+    lastCheckInDate: today,
+    currentStreak,
+  };
 
   const key = `${CHECK_IN_PREFIX}${btcAddress}`;
   await kv.put(key, JSON.stringify(record));
