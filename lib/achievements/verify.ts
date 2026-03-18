@@ -123,6 +123,8 @@ export async function verifySenderAchievement(
  * @param unisatApiKey - Unisat API key (Bearer token)
  * @returns true if the inscription is owned by btcAddress, false otherwise
  */
+const INSCRIPTION_ID_RE = /^[a-fA-F0-9]{64}i\d+$/;
+
 export async function verifyInscriberAchievement(
   inscriptionId: string,
   btcAddress: string,
@@ -130,6 +132,11 @@ export async function verifyInscriberAchievement(
   unisatApiKey?: string
 ): Promise<boolean> {
   try {
+    if (!INSCRIPTION_ID_RE.test(inscriptionId)) {
+      console.error(`Invalid inscriptionId format: ${inscriptionId}`);
+      return false;
+    }
+
     const cacheKey = `unisat-inscription:${inscriptionId}`;
     let inscriptionData = await getCachedTransaction(cacheKey, kv);
 
@@ -161,7 +168,7 @@ export async function verifyInscriberAchievement(
       await setCachedTransaction(cacheKey, inscriptionData, kv);
     }
 
-    const data = (inscriptionData as { code: number; data?: { address?: string } });
+    const data = inscriptionData as { code: number; data?: { address?: string } };
     if (data.code !== 0 || !data.data?.address) {
       return false;
     }
