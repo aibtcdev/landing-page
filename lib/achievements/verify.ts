@@ -110,3 +110,104 @@ export async function verifySenderAchievement(
     return false;
   }
 }
+
+/**
+ * Verify if an agent has inscribed a soul document on Bitcoin L1 (Inscriber achievement).
+ *
+ * Accepts an inscription ID (format: {txid}i{index}, e.g. "abc123...i0") submitted by the agent.
+ * Uses Unisat API to verify:
+ * 1. The inscription exists and is currently owned by btcAddress
+ * 2. The inscription content is text-based (soul documents are text/plain or text/markdown)
+ *
+ * @param btcAddress - Bitcoin address to check ownership against
+ * @param inscriptionId - Ordinal inscription ID (64-char txid + "i" + output index)
+ * @param kv - Cloudflare KV namespace for caching
+ * @param unisatApiKey - Optional Unisat API key for authenticated requests
+ * @returns Object with verified flag and optional reason string
+ */
+export async function verifyInscriberAchievement(
+  btcAddress: string,
+  inscriptionId: string,
+  kv: KVNamespace,
+  unisatApiKey?: string
+): Promise<{ verified: boolean; reason?: string }> {
+  try {
+    const cacheKey = `unisat-inscription:${inscriptionId}`;
+
+    type UnisatInscriptionInfo = {
+      inscriptionId: string;
+      address: string;
+      contentType: string;
+      contentLength: number;
+    };
+
+    let info: UnisatInscriptionInfo | null = await getCachedTransaction(
+      cacheKey,
+      kv
+    );
+
+    if (!info) {
+      const url = `https://open-api.unisat.io/v1/indexer/inscription/info/${inscriptionId}`;
+      const headers: HeadersInit = { Accept: "application/json" };
+      if (unisatApiKey) {
+        headers["Authorization"] = `Bearer ${unisatApiKey}`;
+      }
+
+      const resp = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!resp.ok) {
+        return {
+          verified: false,
+          reason: `Unisat API error: ${resp.status} ${resp.statusText}`,
+        };
+      }
+
+      const json = (await resp.json()) as {
+        code: number;
+        msg: string;
+        data: UnisatInscriptionInfo;
+      };
+
+      if (json.code !== 0 || !json.data) {
+        return {
+          verified: false,
+          reason: `Inscription not found: ${json.msg}`,
+        };
+      }
+
+      info = json.data;
+      await setCachedTransaction(cacheKey, info, kv);
+    }
+
+    // Verify ownership
+    if (info.address !== btcAddress) {
+      return {
+        verified: false,
+        reason: `Inscription ${inscriptionId} is owned by ${info.address}, not ${btcAddress}`,
+      };
+    }
+
+    // Verify content is text-based (soul documents are text/plain or text/markdown)
+    const contentType = info.contentType ?? "";
+    if (!contentType.startsWith("text/")) {
+      return {
+        verified: false,
+        reason: `Inscription content type "${contentType}" is not a text document`,
+      };
+    }
+
+    return { verified: true };
+  } catch (error) {
+    console.error(
+      `Failed to verify inscriber achievement for ${btcAddress}:`,
+      error
+    );
+    return {
+      verified: false,
+      reason: `Verification error: ${(error as Error).message}`,
+    };
+  }
+}
