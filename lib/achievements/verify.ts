@@ -162,3 +162,71 @@ export async function verifyStackerAchievement(
     return false;
   }
 }
+
+/**
+ * Verify if an inscription belongs to the given Bitcoin address (Inscriber achievement).
+ *
+ * Queries the Unisat Ordinals indexer to check that the inscription's current owner
+ * matches btcAddress. Uses KV cache with 5-minute TTL to avoid excessive API calls.
+ *
+ * @param inscriptionId - Inscription ID to verify (e.g., "abc123i0")
+ * @param btcAddress - Bitcoin address that should own the inscription
+ * @param kv - Cloudflare KV namespace
+ * @param unisatApiKey - Unisat API key (Bearer token)
+ * @returns true if the inscription is owned by btcAddress, false otherwise
+ */
+const INSCRIPTION_ID_RE = /^[a-fA-F0-9]{64}i\d+$/;
+
+export async function verifyInscriberAchievement(
+  inscriptionId: string,
+  btcAddress: string,
+  kv: KVNamespace,
+  unisatApiKey?: string
+): Promise<boolean> {
+  try {
+    if (!INSCRIPTION_ID_RE.test(inscriptionId)) {
+      console.error(`Invalid inscriptionId format: ${inscriptionId}`);
+      return false;
+    }
+
+    const cacheKey = `unisat-inscription:${inscriptionId}`;
+    let inscriptionData = await getCachedTransaction(cacheKey, kv);
+
+    if (!inscriptionData) {
+      const url = `https://open-api.unisat.io/v1/indexer/inscription/info/${inscriptionId}`;
+      const headers: Record<string, string> = {
+        "Content-Type": "application/json",
+      };
+      if (unisatApiKey) {
+        headers["Authorization"] = `Bearer ${unisatApiKey}`;
+      }
+
+      const resp = await fetch(url, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!resp.ok) {
+        console.error(
+          `Failed to fetch inscription ${inscriptionId} from Unisat: ${resp.status}`
+        );
+        return false;
+      }
+
+      inscriptionData = (await resp.json()) as {
+        code: number;
+        data?: { address?: string };
+      };
+      await setCachedTransaction(cacheKey, inscriptionData, kv);
+    }
+
+    if (inscriptionData.code !== 0 || !inscriptionData.data?.address) {
+      return false;
+    }
+
+    return data.data.address === btcAddress;
+  } catch (error) {
+    console.error(`Failed to verify inscriber achievement for ${inscriptionId}:`, error);
+    return false;
+  }
+}
