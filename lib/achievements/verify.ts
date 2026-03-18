@@ -9,6 +9,7 @@ import {
   getCachedTransaction,
   setCachedTransaction,
 } from "@/lib/identity/kv-cache";
+import { buildHiroHeaders } from "@/lib/identity/stacks-api";
 
 /** Rate limit window for achievement verification (5 minutes) */
 export const ACHIEVEMENT_VERIFY_RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -107,6 +108,57 @@ export async function verifySenderAchievement(
     return hasOutgoingTx;
   } catch (error) {
     console.error(`Failed to verify sender achievement for ${btcAddress}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Verify if an agent has STX stacked via Proof of Transfer (Stacker achievement).
+ *
+ * Checks the Stacks Extended API stacking endpoint for locked STX > 0.
+ * Uses KV cache with 5-minute TTL to avoid excessive API calls.
+ *
+ * @param stxAddress - Stacks address to check
+ * @param kv - Cloudflare KV namespace
+ * @param hiroApiKey - Optional Hiro API key for higher rate limits
+ * @returns true if the agent has STX currently stacked, false otherwise
+ */
+export async function verifyStackerAchievement(
+  stxAddress: string,
+  kv: KVNamespace,
+  hiroApiKey?: string
+): Promise<boolean> {
+  try {
+    const cacheKey = `stacking:${stxAddress}`;
+    let stackingData = await getCachedTransaction(cacheKey, kv);
+
+    if (!stackingData) {
+      const stackingUrl = `https://api.hiro.so/extended/v1/address/${stxAddress}/stacking`;
+      const stackingResp = await fetch(stackingUrl, {
+        headers: buildHiroHeaders(hiroApiKey),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (stackingResp.status === 404) {
+        // 404 means no stacking data — not stacking
+        return false;
+      }
+
+      if (!stackingResp.ok) {
+        console.error(
+          `Failed to fetch stacking data for ${stxAddress}: ${stackingResp.status}`
+        );
+        return false;
+      }
+
+      stackingData = (await stackingResp.json()) as { locked: string };
+      await setCachedTransaction(cacheKey, stackingData, kv);
+    }
+
+    const locked = parseInt((stackingData as { locked: string }).locked ?? "0", 10);
+    return locked > 0;
+  } catch (error) {
+    console.error(`Failed to verify stacker achievement for ${stxAddress}:`, error);
     return false;
   }
 }

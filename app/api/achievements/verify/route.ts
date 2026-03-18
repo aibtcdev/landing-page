@@ -7,6 +7,7 @@ import {
 } from "@/lib/achievements";
 import {
   verifySenderAchievement,
+  verifyStackerAchievement,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,
 } from "@/lib/achievements/verify";
@@ -176,7 +177,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Per-achievement rate limit check
-    const achievementsToCheck = ["sender", ...(txid ? ["connector"] : [])];
+    const achievementsToCheck = ["sender", "stacker", ...(txid ? ["connector"] : [])];
     const rateLimitKeys = achievementsToCheck.map(
       (id) => `ratelimit:achievement-verify:${btcAddress}:${id}`
     );
@@ -246,6 +247,38 @@ export async function POST(request: NextRequest) {
         }
       } else {
         alreadyHad.push("sender");
+      }
+    }
+
+    // Check stacker achievement (unless rate-limited)
+    if (!rateLimited.includes("stacker")) {
+      checked.push("stacker");
+      await setRateLimit(kv, btcAddress, "stacker");
+
+      const hasStacker = await hasAchievement(kv, btcAddress, "stacker");
+
+      if (!hasStacker) {
+        try {
+          const isStacking = await verifyStackerAchievement(
+            agent.stxAddress,
+            kv,
+            hiroApiKey
+          );
+
+          if (isStacking) {
+            const record = await grantAchievement(kv, btcAddress, "stacker");
+            const definition = getAchievementDefinition("stacker");
+            earned.push({
+              id: "stacker",
+              name: definition?.name ?? "Stacker",
+              unlockedAt: record.unlockedAt,
+            });
+          }
+        } catch (e) {
+          console.error("Failed to check stacker achievement:", e);
+        }
+      } else {
+        alreadyHad.push("stacker");
       }
     }
 

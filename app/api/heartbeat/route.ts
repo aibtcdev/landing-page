@@ -20,6 +20,7 @@ import { detectAgentIdentity } from "@/lib/identity/detection";
 import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import {
   verifySenderAchievement,
+  verifyStackerAchievement,
   checkRateLimit,
   setRateLimit,
   hasAchievement,
@@ -404,6 +405,27 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       // Best-effort: log and continue if achievement check fails
       console.error("Failed to check sender achievement during heartbeat:", error);
+    }
+
+    // Proactively check stacker achievement (best-effort)
+    try {
+      const rateLimit = await checkRateLimit(kv, btcAddress, "stacker");
+      if (rateLimit.allowed && agent.stxAddress) {
+        const hasStacker = await hasAchievement(kv, btcAddress, "stacker");
+        if (!hasStacker) {
+          const isStacking = await verifyStackerAchievement(
+            agent.stxAddress,
+            kv,
+            env.HIRO_API_KEY
+          );
+          if (isStacking) {
+            await grantAchievement(kv, btcAddress, "stacker");
+          }
+        }
+        await setRateLimit(kv, btcAddress, "stacker");
+      }
+    } catch (error) {
+      console.error("Failed to check stacker achievement during heartbeat:", error);
     }
 
     // Grant identified achievement if agent has an on-chain identity (best-effort)
