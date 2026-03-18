@@ -110,3 +110,47 @@ export async function verifySenderAchievement(
     return false;
   }
 }
+
+/**
+ * Verify if an agent has STX stacked via Proof of Transfer (Stacker achievement).
+ *
+ * Checks the Stacks account balance endpoint for a non-zero `locked` field,
+ * which indicates active PoX participation.
+ * Uses KV cache with 5-minute TTL to avoid excessive API calls.
+ *
+ * @param stxAddress - Stacks address to check
+ * @param kv - Cloudflare KV namespace
+ * @returns true if the agent has STX locked in PoX, false otherwise
+ */
+export async function verifyStackerAchievement(
+  stxAddress: string,
+  kv: KVNamespace
+): Promise<boolean> {
+  try {
+    const cacheKey = `stacks-account:${stxAddress}`;
+    let accountData = await getCachedTransaction(cacheKey, kv);
+
+    if (!accountData) {
+      const url = `https://api.hiro.so/v2/accounts/${stxAddress}?proof=0`;
+      const resp = await fetch(url, {
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!resp.ok) {
+        console.error(
+          `Failed to fetch Stacks account for ${stxAddress}: ${resp.status}`
+        );
+        return false;
+      }
+
+      accountData = (await resp.json()) as { locked: string };
+      await setCachedTransaction(cacheKey, accountData, kv);
+    }
+
+    const data = accountData as { locked: string };
+    return BigInt(data.locked ?? "0") > 0n;
+  } catch (error) {
+    console.error(`Failed to verify stacker achievement for ${stxAddress}:`, error);
+    return false;
+  }
+}
