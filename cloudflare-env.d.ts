@@ -3,6 +3,7 @@ interface CloudflareEnv {
   VERIFIED_AGENTS: KVNamespace;
   ARC_ADMIN_API_KEY: string; // Admin API key for /api/admin/* endpoints
   HIRO_API_KEY?: string; // Hiro API key for authenticated Stacks API requests (set via wrangler secret)
+  UNISAT_API_KEY?: string; // Unisat API key for Ordinals indexer requests (set via wrangler secret)
   GITHUB_TOKEN?: string; // GitHub personal access token for authenticated API requests (raises rate limit from 60 to 5000 req/hr)
   LOGS?: unknown; // Worker-logs RPC service binding (type guarded via isLogsRPC)
   X402_NETWORK?: "mainnet" | "testnet"; // Stacks network for x402 verification
