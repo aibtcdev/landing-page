@@ -29,6 +29,7 @@ export {
 // Verification
 export {
   verifySenderAchievement,
+  verifyStackerAchievement,
   checkRateLimit,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,

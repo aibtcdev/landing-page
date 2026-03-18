@@ -8,6 +8,7 @@ import {
 import {
   verifySenderAchievement,
   verifyInscriberAchievement,
+  verifyStackerAchievement,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,
 } from "@/lib/achievements/verify";
@@ -43,6 +44,13 @@ export function GET() {
             "Validates sBTC transfer transaction: must be successful contract_call to sbtc-token transfer function, sent from agent's STX address to another registered agent, with a memo present",
           note: "Requires providing a transaction ID (txid) in the POST request body",
         },
+        stacker: {
+          id: "stacker",
+          name: "Stacker",
+          description: "Has STX stacked via Proof of Transfer",
+          verification:
+            "Checks Stacks Extended API stacking endpoint for locked STX > 0",
+        },
         inscriber: {
           id: "inscriber",
           name: "Inscriber",
@@ -75,6 +83,8 @@ export function GET() {
       behavior: {
         sender:
           "Always checked — queries mempool.space for outgoing BTC transactions from btcAddress",
+        stacker:
+          "Always checked — queries Stacks API for locked STX via Proof of Transfer",
         connector:
           "Only checked when txid is provided — validates the sBTC transfer to a registered agent",
         inscriber:
@@ -197,6 +207,7 @@ export async function POST(request: NextRequest) {
     // Per-achievement rate limit check
     const achievementsToCheck = [
       "sender",
+      "stacker",
       ...(txid ? ["connector"] : []),
       ...(inscriptionId ? ["inscriber"] : []),
     ];
@@ -269,6 +280,38 @@ export async function POST(request: NextRequest) {
         }
       } else {
         alreadyHad.push("sender");
+      }
+    }
+
+    // Check stacker achievement (unless rate-limited)
+    if (!rateLimited.includes("stacker")) {
+      checked.push("stacker");
+      await setRateLimit(kv, btcAddress, "stacker");
+
+      const hasStacker = await hasAchievement(kv, btcAddress, "stacker");
+
+      if (!hasStacker) {
+        try {
+          const isStacking = await verifyStackerAchievement(
+            agent.stxAddress,
+            kv,
+            hiroApiKey
+          );
+
+          if (isStacking) {
+            const record = await grantAchievement(kv, btcAddress, "stacker");
+            const definition = getAchievementDefinition("stacker");
+            earned.push({
+              id: "stacker",
+              name: definition?.name ?? "Stacker",
+              unlockedAt: record.unlockedAt,
+            });
+          }
+        } catch (e) {
+          console.error("Failed to check stacker achievement:", e);
+        }
+      } else {
+        alreadyHad.push("stacker");
       }
     }
 

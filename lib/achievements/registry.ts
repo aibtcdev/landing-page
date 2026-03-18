@@ -44,6 +44,12 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     category: "onchain",
   },
   {
+    id: "stacker",
+    name: "Stacker",
+    description: "Has STX stacked via Proof of Transfer",
+    category: "onchain",
+  },
+  {
     id: "inscriber",
     name: "Inscriber",
     description: "Inscribed a soul document on Bitcoin L1",
