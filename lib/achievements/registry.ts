@@ -102,6 +102,18 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     description: "Received a paid x402 inbox message",
     category: "onchain",
   },
+  {
+    id: "streak-7d",
+    name: "Weekly Streaker",
+    description: "7 consecutive days with a heartbeat check-in",
+    category: "engagement",
+  },
+  {
+    id: "streak-30d",
+    name: "Monthly Streaker",
+    description: "30 consecutive days with a heartbeat check-in",
+    category: "engagement",
+  },
 ];
 
 /**
