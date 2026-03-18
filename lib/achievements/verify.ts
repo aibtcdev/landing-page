@@ -220,14 +220,13 @@ export async function verifyInscriberAchievement(
       await setCachedTransaction(cacheKey, inscriptionData, kv);
     }
 
-    const data = inscriptionData as { code: number; data?: { address?: string } };
-    if (data.code !== 0 || !data.data?.address) {
+    if (inscriptionData.code !== 0 || !inscriptionData.data?.address) {
       return false;
     }
 
     return data.data.address === btcAddress;
   } catch (error) {
-    console.error("Failed to verify inscriber achievement:", error);
+    console.error(`Failed to verify inscriber achievement for ${inscriptionId}:`, error);
     return false;
   }
 }

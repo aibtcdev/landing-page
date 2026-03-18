@@ -168,6 +168,17 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate inscriptionId if provided (64-hex txid + 'i' + output index)
+    if (inscriptionId && !/^[a-fA-F0-9]{64}i\d+$/.test(inscriptionId)) {
+      return NextResponse.json(
+        {
+          error:
+            "inscriptionId must be a valid inscription ID (64-hex txid + 'i' + output index)",
+        },
+        { status: 400 }
+      );
+    }
+
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const hiroApiKey = env.HIRO_API_KEY as string | undefined;
