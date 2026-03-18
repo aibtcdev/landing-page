@@ -9,6 +9,12 @@ import {
   getCachedTransaction,
   setCachedTransaction,
 } from "@/lib/identity/kv-cache";
+import {
+  callReadOnly,
+  parseClarityValue,
+} from "@/lib/identity/stacks-api";
+import { principalCV } from "@stacks/transactions";
+import { SBTC_CONTRACTS } from "@/lib/inbox";
 
 /** Rate limit window for achievement verification (5 minutes) */
 export const ACHIEVEMENT_VERIFY_RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -107,6 +113,50 @@ export async function verifySenderAchievement(
     return hasOutgoingTx;
   } catch (error) {
     console.error(`Failed to verify sender achievement for ${btcAddress}:`, error);
+    return false;
+  }
+}
+
+/**
+ * Verify if a Stacks address holds a non-zero sBTC balance (sBTC Holder achievement).
+ *
+ * Calls the sBTC token contract's get-balance read-only function and checks if
+ * the returned balance is greater than zero. Uses KV cache with 5-minute TTL.
+ *
+ * @param stxAddress - Stacks address to check
+ * @param kv - Cloudflare KV namespace
+ * @param hiroApiKey - Optional Hiro API key for higher rate limits
+ * @returns true if the address holds any sBTC, false otherwise
+ */
+export async function verifySbtcHolderAchievement(
+  stxAddress: string,
+  kv: KVNamespace,
+  hiroApiKey?: string
+): Promise<boolean> {
+  try {
+    const cacheKey = `sbtc-balance:${stxAddress}`;
+    let cachedBalance = await getCachedTransaction(cacheKey, kv);
+
+    if (!cachedBalance) {
+      const { address, name } = SBTC_CONTRACTS.mainnet;
+      const contract = `${address}.${name}`;
+      const response = await callReadOnly(
+        contract,
+        "get-balance",
+        [principalCV(stxAddress)],
+        hiroApiKey
+      );
+      cachedBalance = { balance: parseClarityValue(response) };
+      await setCachedTransaction(cacheKey, cachedBalance, kv);
+    }
+
+    const data = cachedBalance as { balance: string | null };
+    return !!data.balance && data.balance !== "0";
+  } catch (error) {
+    console.error(
+      `Failed to verify sbtc-holder achievement for ${stxAddress}:`,
+      error
+    );
     return false;
   }
 }

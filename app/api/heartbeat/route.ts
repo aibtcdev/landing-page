@@ -20,6 +20,7 @@ import { detectAgentIdentity } from "@/lib/identity/detection";
 import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import {
   verifySenderAchievement,
+  verifySbtcHolderAchievement,
   checkRateLimit,
   setRateLimit,
   hasAchievement,
@@ -404,6 +405,23 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       // Best-effort: log and continue if achievement check fails
       console.error("Failed to check sender achievement during heartbeat:", error);
+    }
+
+    // Proactively check sbtc-holder achievement (sBTC balance > 0, best-effort)
+    try {
+      const rateLimit = await checkRateLimit(kv, btcAddress, "sbtc-holder");
+      if (rateLimit.allowed) {
+        const hasSbtcHolder = await hasAchievement(kv, btcAddress, "sbtc-holder");
+        if (!hasSbtcHolder) {
+          const holdsSbtc = await verifySbtcHolderAchievement(agent.stxAddress, kv, env.HIRO_API_KEY);
+          if (holdsSbtc) {
+            await grantAchievement(kv, btcAddress, "sbtc-holder");
+          }
+        }
+        await setRateLimit(kv, btcAddress, "sbtc-holder");
+      }
+    } catch (error) {
+      console.error("Failed to check sbtc-holder achievement during heartbeat:", error);
     }
 
     // Grant identified achievement if agent has an on-chain identity (best-effort)
