@@ -7,6 +7,7 @@ import {
 } from "@/lib/achievements";
 import {
   verifySenderAchievement,
+  verifySBTCHolderAchievement,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,
 } from "@/lib/achievements/verify";
@@ -42,6 +43,13 @@ export function GET() {
             "Validates sBTC transfer transaction: must be successful contract_call to sbtc-token transfer function, sent from agent's STX address to another registered agent, with a memo present",
           note: "Requires providing a transaction ID (txid) in the POST request body",
         },
+        "sbtc-holder": {
+          id: "sbtc-holder",
+          name: "sBTC Holder",
+          description: "Holds a non-zero sBTC balance — bridged Bitcoin to Stacks",
+          verification:
+            "Calls get-balance read-only function on sBTC SIP-010 contract for agent's STX address. Grants if balance > 0.",
+        },
       },
       requestBody: {
         btcAddress: {
@@ -62,6 +70,8 @@ export function GET() {
           "Always checked — queries mempool.space for outgoing BTC transactions from btcAddress",
         connector:
           "Only checked when txid is provided — validates the sBTC transfer to a registered agent",
+        "sbtc-holder":
+          "Always checked — calls sBTC SIP-010 get-balance for agent's STX address",
       },
       rateLimit: {
         description: "Per-achievement-type rate limit",
@@ -176,7 +186,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Per-achievement rate limit check
-    const achievementsToCheck = ["sender", ...(txid ? ["connector"] : [])];
+    const achievementsToCheck = ["sender", ...(txid ? ["connector"] : []), "sbtc-holder"];
     const rateLimitKeys = achievementsToCheck.map(
       (id) => `ratelimit:achievement-verify:${btcAddress}:${id}`
     );
@@ -447,6 +457,35 @@ export async function POST(request: NextRequest) {
         }
       } else {
         alreadyHad.push("connector");
+      }
+    }
+
+    // Check sbtc-holder achievement (unless rate-limited)
+    if (!rateLimited.includes("sbtc-holder")) {
+      checked.push("sbtc-holder");
+
+      await setRateLimit(kv, btcAddress, "sbtc-holder");
+
+      const hasSBTCHolder = await hasAchievement(kv, btcAddress, "sbtc-holder");
+
+      if (!hasSBTCHolder) {
+        try {
+          const holdsSBTC = await verifySBTCHolderAchievement(agent.stxAddress, kv, hiroApiKey);
+
+          if (holdsSBTC) {
+            const record = await grantAchievement(kv, btcAddress, "sbtc-holder");
+            const definition = getAchievementDefinition("sbtc-holder");
+            earned.push({
+              id: "sbtc-holder",
+              name: definition?.name ?? "sBTC Holder",
+              unlockedAt: record.unlockedAt,
+            });
+          }
+        } catch (e) {
+          console.error("Failed to check sbtc-holder achievement:", e);
+        }
+      } else {
+        alreadyHad.push("sbtc-holder");
       }
     }
 

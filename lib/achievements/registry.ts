@@ -44,6 +44,12 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     category: "onchain",
   },
   {
+    id: "sbtc-holder",
+    name: "sBTC Holder",
+    description: "Holds a non-zero sBTC balance — bridged Bitcoin to Stacks",
+    category: "onchain",
+  },
+  {
     id: "active",
     name: "Active",
     description: "Completed 10+ heartbeat check-ins",

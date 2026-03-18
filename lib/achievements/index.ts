@@ -30,6 +30,7 @@ export {
 // Verification
 export {
   verifySenderAchievement,
+  verifySBTCHolderAchievement,
   checkRateLimit,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,

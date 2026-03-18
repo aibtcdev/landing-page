@@ -9,6 +9,11 @@ import {
   getCachedTransaction,
   setCachedTransaction,
 } from "@/lib/identity/kv-cache";
+import { principalCV } from "@stacks/transactions";
+import {
+  callReadOnly,
+  parseClarityValue,
+} from "@/lib/identity/stacks-api";
 
 /** Rate limit window for achievement verification (5 minutes) */
 export const ACHIEVEMENT_VERIFY_RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -107,6 +112,50 @@ export async function verifySenderAchievement(
     return hasOutgoingTx;
   } catch (error) {
     console.error(`Failed to verify sender achievement for ${btcAddress}:`, error);
+    return false;
+  }
+}
+
+const SBTC_TOKEN_CONTRACT = "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token";
+
+/**
+ * Verify if an agent holds any sBTC balance (sBTC Holder achievement).
+ *
+ * Calls the sBTC SIP-010 get-balance read-only function for the agent's STX address.
+ * Uses KV cache with 5-minute TTL to avoid excessive API calls.
+ *
+ * @param stxAddress - Agent's Stacks address
+ * @param kv - Cloudflare KV namespace
+ * @param hiroApiKey - Optional Hiro API key for authenticated requests
+ * @returns true if the agent holds any sBTC, false otherwise
+ */
+export async function verifySBTCHolderAchievement(
+  stxAddress: string,
+  kv: KVNamespace,
+  hiroApiKey?: string
+): Promise<boolean> {
+  try {
+    const cacheKey = `sbtc-balance:${stxAddress}`;
+    const cached = await getCachedTransaction(cacheKey, kv);
+
+    let balance: string | null = null;
+    if (cached !== null) {
+      balance = cached as string;
+    } else {
+      const result = await callReadOnly(
+        SBTC_TOKEN_CONTRACT,
+        "get-balance",
+        [principalCV(stxAddress)],
+        hiroApiKey
+      );
+      const parsed = parseClarityValue(result);
+      balance = parsed !== null ? String(parsed) : "0";
+      await setCachedTransaction(cacheKey, balance, kv);
+    }
+
+    return Number(balance ?? "0") > 0;
+  } catch (error) {
+    console.error(`Failed to verify sbtc-holder achievement for ${stxAddress}:`, error);
     return false;
   }
 }
