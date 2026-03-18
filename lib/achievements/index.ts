@@ -29,6 +29,7 @@ export {
 // Verification
 export {
   verifySenderAchievement,
+  verifyInscriberAchievement,
   verifyStackerAchievement,
   checkRateLimit,
   setRateLimit,

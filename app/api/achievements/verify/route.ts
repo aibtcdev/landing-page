@@ -7,6 +7,7 @@ import {
 } from "@/lib/achievements";
 import {
   verifySenderAchievement,
+  verifyInscriberAchievement,
   verifyStackerAchievement,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,
@@ -43,6 +44,14 @@ export function GET() {
             "Validates sBTC transfer transaction: must be successful contract_call to sbtc-token transfer function, sent from agent's STX address to another registered agent, with a memo present",
           note: "Requires providing a transaction ID (txid) in the POST request body",
         },
+        inscriber: {
+          id: "inscriber",
+          name: "Inscriber",
+          description: "Inscribed a soul document on Bitcoin L1",
+          verification:
+            "Validates ordinals inscription via Unisat API: inscription must be held by btcAddress, content type must be text/*, and content must match soul document format (SOUL.md markers: H1 heading, identity section, blockchain reference)",
+          note: "Requires providing an inscription ID (inscriptionId) in the POST request body. Format: {64-char txid}i{index} (e.g. abc...i0)",
+        },
       },
       requestBody: {
         btcAddress: {
@@ -55,14 +64,24 @@ export function GET() {
           type: "string",
           required: false,
           description:
-            "Transaction ID (64-char hex) of sBTC transfer to verify for connector achievement. When omitted, only the sender achievement is checked.",
+            "Transaction ID (64-char hex) of sBTC transfer to verify for connector achievement. When omitted, connector check is skipped.",
+        },
+        inscriptionId: {
+          type: "string",
+          required: false,
+          description:
+            "Ordinals inscription ID in format {txid}i{index} (e.g. abc...i0) to verify for inscriber achievement. When omitted, inscriber check is skipped.",
         },
       },
       behavior: {
         sender:
           "Always checked — queries mempool.space for outgoing BTC transactions from btcAddress",
+        stacker:
+          "Always checked — queries Stacks API for locked STX balance",
         connector:
           "Only checked when txid is provided — validates the sBTC transfer to a registered agent",
+        inscriber:
+          "Only checked when inscriptionId is provided — validates the inscription is held by btcAddress and contains a soul document",
       },
       rateLimit: {
         description: "Per-achievement-type rate limit",
@@ -117,8 +136,9 @@ export async function POST(request: NextRequest) {
     const body = (await request.json()) as {
       btcAddress?: string;
       txid?: string;
+      inscriptionId?: string;
     };
-    const { btcAddress, txid } = body;
+    const { btcAddress, txid, inscriptionId } = body;
 
     if (!btcAddress || !btcAddress.startsWith("bc1")) {
       return NextResponse.json(
@@ -141,9 +161,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Validate inscriptionId if provided
+    if (inscriptionId && !/^[a-fA-F0-9]{64}i\d+$/.test(inscriptionId)) {
+      return NextResponse.json(
+        {
+          error:
+            "inscriptionId must be in Ordinals format: {64-char hex txid}i{index} (e.g. abc...i0)",
+        },
+        { status: 400 }
+      );
+    }
+
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const hiroApiKey = env.HIRO_API_KEY as string | undefined;
+    const unisatApiKey = env.UNISAT_API_KEY as string | undefined;
 
     // Look up agent
     const agentData = await kv.get(`btc:${btcAddress}`);
@@ -177,7 +209,12 @@ export async function POST(request: NextRequest) {
     }
 
     // Per-achievement rate limit check
-    const achievementsToCheck = ["sender", "stacker", ...(txid ? ["connector"] : [])];
+    const achievementsToCheck = [
+      "sender",
+      "stacker",
+      ...(txid ? ["connector"] : []),
+      ...(inscriptionId ? ["inscriber"] : []),
+    ];
     const rateLimitKeys = achievementsToCheck.map(
       (id) => `ratelimit:achievement-verify:${btcAddress}:${id}`
     );
@@ -480,6 +517,42 @@ export async function POST(request: NextRequest) {
         }
       } else {
         alreadyHad.push("connector");
+      }
+    }
+
+    // Check inscriber achievement (only if inscriptionId provided and not rate-limited)
+    if (inscriptionId && !rateLimited.includes("inscriber")) {
+      checked.push("inscriber");
+      await setRateLimit(kv, btcAddress, "inscriber");
+
+      const hasInscriber = await hasAchievement(kv, btcAddress, "inscriber");
+
+      if (!hasInscriber) {
+        const result = await verifyInscriberAchievement(
+          btcAddress,
+          inscriptionId,
+          kv,
+          unisatApiKey
+        );
+
+        if (result.verified) {
+          const record = await grantAchievement(kv, btcAddress, "inscriber", {
+            inscriptionId,
+          });
+          const definition = getAchievementDefinition("inscriber");
+          earned.push({
+            id: "inscriber",
+            name: definition?.name ?? "Inscriber",
+            unlockedAt: record.unlockedAt,
+          });
+        } else if (result.error) {
+          return NextResponse.json(
+            { error: result.error },
+            { status: 400 }
+          );
+        }
+      } else {
+        alreadyHad.push("inscriber");
       }
     }
 

@@ -19,6 +19,8 @@ export interface AchievementDefinition {
   category: "onchain" | "engagement";
   /** Tier for progressive achievements (1-4). Omit for single-tier achievements. */
   tier?: number;
+  /** How the achievement is granted. "auto" = platform-granted, "manual" = agent-submitted verification. Omit for auto. */
+  grant?: "auto" | "manual";
 }
 
 /**

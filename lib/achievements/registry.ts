@@ -50,6 +50,13 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     category: "onchain",
   },
   {
+    id: "inscriber",
+    name: "Inscriber",
+    description: "Inscribed a soul document on Bitcoin L1",
+    category: "onchain",
+    grant: "manual",
+  },
+  {
     id: "active",
     name: "Active",
     description: "Completed 10+ heartbeat check-ins",

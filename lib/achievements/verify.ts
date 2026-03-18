@@ -112,6 +112,142 @@ export async function verifySenderAchievement(
   }
 }
 
+/** Regex patterns that must all match for content to qualify as a soul document */
+const SOUL_DOCUMENT_MARKERS = [
+  /^#\s+\w+/m, // Markdown H1 heading (agent name)
+  /identity/i, // Identity section reference
+  /bitcoin|stacks|btc|stx/i, // Blockchain reference
+];
+
+/**
+ * Verify if an agent has inscribed a soul document on Bitcoin L1 (Inscriber achievement).
+ *
+ * Checks the Unisat API for the inscription, validates it's held by the btcAddress,
+ * and confirms the content matches the soul document format (SOUL.md markers).
+ *
+ * @param btcAddress - Bitcoin address to verify as current inscription holder
+ * @param inscriptionId - Ordinals inscription ID (format: {txid}i{index})
+ * @param kv - Cloudflare KV namespace for caching
+ * @param unisatApiKey - Optional Unisat API key (required for production; free tier: 5 req/s)
+ * @returns Object with verified flag and optional error message
+ */
+export async function verifyInscriberAchievement(
+  btcAddress: string,
+  inscriptionId: string,
+  kv: KVNamespace,
+  unisatApiKey?: string
+): Promise<{ verified: boolean; error?: string }> {
+  try {
+    // Validate inscription ID format: {64-char hex}i{index}
+    if (!/^[a-fA-F0-9]{64}i\d+$/.test(inscriptionId)) {
+      return {
+        verified: false,
+        error: "inscriptionId must be in format {txid}i{index} (e.g. abc...i0)",
+      };
+    }
+
+    const cacheKey = `inscription-info:${inscriptionId}`;
+    type InscriptionInfo = {
+      inscriptionId: string;
+      address: string;
+      contentType: string;
+      contentLength: number;
+      contentBody?: string;
+    };
+
+    let info = await getCachedTransaction(cacheKey, kv) as InscriptionInfo | null;
+
+    if (!info) {
+      const infoUrl = `https://open-api.unisat.io/v1/indexer/inscription/info/${inscriptionId}`;
+      const headers: Record<string, string> = {};
+      if (unisatApiKey) {
+        headers["Authorization"] = `Bearer ${unisatApiKey}`;
+      }
+
+      const resp = await fetch(infoUrl, {
+        headers,
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!resp.ok) {
+        return {
+          verified: false,
+          error: `Unisat API error: ${resp.status} ${resp.statusText}`,
+        };
+      }
+
+      const json = (await resp.json()) as {
+        code: number;
+        msg: string;
+        data: InscriptionInfo;
+      };
+
+      if (json.code !== 0) {
+        return { verified: false, error: `Unisat API error: ${json.msg}` };
+      }
+
+      info = json.data;
+      await setCachedTransaction(cacheKey, info, kv);
+    }
+
+    // Verify the inscription is currently held by the submitting address
+    if (info.address !== btcAddress) {
+      return {
+        verified: false,
+        error: `Inscription ${inscriptionId} is held by ${info.address}, not ${btcAddress}`,
+      };
+    }
+
+    // Verify content type is text (soul documents are plaintext/markdown)
+    const contentType = info.contentType ?? "";
+    if (!contentType.startsWith("text/")) {
+      return {
+        verified: false,
+        error: `Inscription content type must be text/* (found: ${contentType})`,
+      };
+    }
+
+    // Use contentBody from info if available, otherwise fetch from ordinals
+    let content = info.contentBody;
+    if (!content) {
+      const contentUrl = `https://ordinals.com/content/${inscriptionId}`;
+      const contentResp = await fetch(contentUrl, {
+        signal: AbortSignal.timeout(10000),
+      });
+      if (!contentResp.ok) {
+        return {
+          verified: false,
+          error: `Failed to fetch inscription content: ${contentResp.status}`,
+        };
+      }
+      content = await contentResp.text();
+    }
+
+    // Validate content contains soul document markers
+    const isSoulDocument = SOUL_DOCUMENT_MARKERS.every((marker) =>
+      marker.test(content!)
+    );
+    if (!isSoulDocument) {
+      return {
+        verified: false,
+        error:
+          "Inscription content does not match soul document format (must be a SOUL.md-formatted identity document)",
+      };
+    }
+
+    return { verified: true };
+  } catch (error) {
+    console.error(
+      `Failed to verify inscriber achievement for ${btcAddress}:`,
+      error
+    );
+    return {
+      verified: false,
+      error: `Verification failed: ${(error as Error).message}`,
+    };
+  }
+}
+
 /**
  * Verify if an agent has STX stacked via Proof of Transfer (Stacker achievement).
  *
