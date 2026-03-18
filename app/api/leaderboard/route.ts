@@ -4,7 +4,7 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { normalizeAgentRecord } from "@/lib/agents";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
-import { getAchievementCount } from "@/lib/achievements";
+import { getAgentAchievementIds } from "@/lib/achievements";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -91,7 +91,7 @@ export async function GET(request: NextRequest) {
         },
       },
       sortingRules: [
-        "Default (sort=score): Composite activity score descending. Score = (level * 1000) + (achievements * 100) + checkIns + recency bonus (+50 active, +25 recent)",
+        "Default (sort=score): Composite activity score descending. Score = levelPoints + achievementScore + min(checkIns, 50) + bnsBonus + recencyBonus. Level: L1=100, L2=500. Achievement weights: sender=500, connector=400, communicator/identified=300, receiver/voucher=200, active=50, dedicated=75, devoted=100, tireless=125. BNS name: +300. Recency: +25 active (<1h), +10 recent (<6h).",
         "Registration (sort=registration): Primary sort by level (highest first), secondary sort by verifiedAt (earliest first, pioneer priority)",
         "Activity (sort=activity): Sort by lastActiveAt descending (most recently active first). Agents with no lastActiveAt sort last.",
       ],
@@ -185,31 +185,61 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Fetch achievement counts for all agents
-    const achievementCounts = await Promise.all(
-      agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
+    // Fetch achievement IDs for all agents (single KV read per agent)
+    const agentAchievementIds = await Promise.all(
+      agents.map((agent) => getAgentAchievementIds(kv, agent.btcAddress))
     );
+
+    // Per-achievement point values — economic activity weighted over passive behavior
+    const ACHIEVEMENT_WEIGHTS: Record<string, number> = {
+      sender: 500,        // Transferred BTC — skin in the game
+      connector: 400,     // Sent sBTC to a registered agent — economic + social
+      communicator: 300,  // Sent x402 inbox reply — paid economic activity
+      identified: 300,    // ERC-8004 on-chain identity — identity investment
+      receiver: 200,      // Received first inbox message — demand signal
+      voucher: 200,       // Referred another agent — network growth
+      active: 50,         // 10+ check-ins (tier 1)
+      dedicated: 75,      // 100+ check-ins (tier 2)
+      devoted: 100,       // 1000+ check-ins (tier 3)
+      tireless: 125,      // 5000+ check-ins (tier 4)
+    };
 
     // Compute levels and build ranked list with composite scores
     const now = Date.now();
     let ranked = agents.map((agent, i) => {
       const level = computeLevel(agent, claims[i]);
-      const achievementCount = achievementCounts[i];
+      const achievementIds = agentAchievementIds[i];
+      const achievementCount = achievementIds.length;
       const checkInCount = agent.checkInCount || 0;
 
-      // Calculate recency bonus
+      // Level points — register is low-barrier, Genesis meaningful but not dominant
+      const levelPoints = level === 2 ? 500 : level === 1 ? 100 : 0;
+
+      // Weighted achievement score — each achievement valued by economic signal
+      const achievementScore = achievementIds.reduce(
+        (sum, id) => sum + (ACHIEVEMENT_WEIGHTS[id] ?? 100),
+        0
+      );
+
+      // Check-ins capped at 50 — proves liveness but can't dominate ranking
+      const cappedCheckIns = Math.min(checkInCount, 50);
+
+      // BNS name signals identity investment
+      const bnsBonus = agent.bnsName ? 300 : 0;
+
+      // Recency bonus — reduced to prevent daily passive check-in farming
       let recencyBonus = 0;
       if (agent.lastActiveAt) {
         const timeSinceActive = now - new Date(agent.lastActiveAt).getTime();
         if (timeSinceActive < ACTIVITY_THRESHOLDS.active) {
-          recencyBonus = 50; // Active within last hour
+          recencyBonus = 25; // Active within last hour
         } else if (timeSinceActive < ACTIVITY_THRESHOLDS.recent) {
-          recencyBonus = 25; // Active within last 6 hours
+          recencyBonus = 10; // Active within last 6 hours
         }
       }
 
-      // Composite score: (level * 1000) + (achievements * 100) + checkIns + recency
-      const score = (level * 1000) + (achievementCount * 100) + checkInCount + recencyBonus;
+      // Composite score: economic activity > passive behavior
+      const score = levelPoints + achievementScore + cappedCheckIns + bnsBonus + recencyBonus;
 
       return {
         ...normalizeAgentRecord(agent),

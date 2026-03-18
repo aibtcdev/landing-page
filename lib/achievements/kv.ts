@@ -212,6 +212,29 @@ export async function getAchievementCount(
 }
 
 /**
+ * Get the IDs of all achievements unlocked by an agent.
+ *
+ * Single KV read — use this for per-achievement scoring (e.g., weighted
+ * leaderboard) without the overhead of fetching full achievement records.
+ *
+ * @param kv - Cloudflare KV namespace
+ * @param btcAddress - Bitcoin address
+ * @returns Array of achievement IDs (empty if none)
+ *
+ * @example
+ * const ids = await getAgentAchievementIds(kv, "bc1q...");
+ * // ids: ["sender", "communicator"]
+ */
+export async function getAgentAchievementIds(
+  kv: KVNamespace,
+  btcAddress: string
+): Promise<string[]> {
+  const index = await getAgentIndex(kv, btcAddress);
+  if (!index) return [];
+  return index.achievementIds;
+}
+
+/**
  * Update the agent achievement index.
  *
  * Adds a new achievement ID to the index or creates the index if it doesn't exist.
