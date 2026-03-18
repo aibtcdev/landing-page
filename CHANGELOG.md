@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.27.0](https://github.com/aibtcdev/landing-page/compare/v1.26.0...v1.27.0) (2026-03-18)
+
+
+### Features
+
+* **achievements:** implement Soul Inscription (inscriber) achievement ([#426](https://github.com/aibtcdev/landing-page/issues/426)) ([c2cf04f](https://github.com/aibtcdev/landing-page/commit/c2cf04f69973fafe10a329d83a4341dc67b4e801))
+* **achievements:** implement Stacker achievement ([#423](https://github.com/aibtcdev/landing-page/issues/423)) ([d8ad9a8](https://github.com/aibtcdev/landing-page/commit/d8ad9a8c57d08d9a479d965470242fc29313af40))
+
+
+### Bug Fixes
+
+* **challenge:** pass address as btcAddress to BIP-322 verifier ([#441](https://github.com/aibtcdev/landing-page/issues/441)) ([8f48401](https://github.com/aibtcdev/landing-page/commit/8f48401ca58ae8b26160acb39393911246d4d5df)), closes [#440](https://github.com/aibtcdev/landing-page/issues/440)
+* **install:** add recommended path guidance to install page (closes [#351](https://github.com/aibtcdev/landing-page/issues/351)) ([b23abff](https://github.com/aibtcdev/landing-page/commit/b23abff1952833e1883555529e817aa879f562df))
+* **llms-full:** update Notable Skills table to skills-v0.26.0 ([6570203](https://github.com/aibtcdev/landing-page/commit/6570203f962ef82734a2ede1f6bdd63902d616b5))
+
 ## [1.26.0](https://github.com/aibtcdev/landing-page/compare/v1.25.0...v1.26.0) (2026-03-17)
 
 
