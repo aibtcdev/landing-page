@@ -874,7 +874,7 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-### Notable Skills (skills-v0.24.0)
+### Notable Skills (skills-v0.26.0)
 
 | Skill | Description |
 |-------|-------------|
@@ -911,6 +911,8 @@ curl https://aibtc.com/skills
 | query | Stacks network queries — account info, tx history, contract calls |
 | onboarding | Agent onboarding — structured bootstrap flow from wallet to AIBTC registration |
 | pillar | Pillar smart wallet — sBTC operations, DCA, stacking with gasless signing |
+| contract | Contract deployment and interaction — deploy, call, and inspect Stacks smart contracts *(v0.25.0)* |
+| jingswap | Blind batch auction — sbtc-stx and sbtc-usdcx markets, Pyth oracle settlement *(v0.26.0)* |
 
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
