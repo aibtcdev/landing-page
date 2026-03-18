@@ -30,6 +30,7 @@ export {
 export {
   verifySenderAchievement,
   verifyStackerAchievement,
+  verifySbtcHolderAchievement,
   checkRateLimit,
   setRateLimit,
   ACHIEVEMENT_VERIFY_RATE_LIMIT_MS,
