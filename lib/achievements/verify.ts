@@ -175,10 +175,7 @@ export async function verifyInscriberAchievement(
 
     return data.data.address === btcAddress;
   } catch (error) {
-    console.error(
-      `Failed to verify inscriber achievement for ${btcAddress}:`,
-      error
-    );
+    console.error("Failed to verify inscriber achievement:", error);
     return false;
   }
 }
