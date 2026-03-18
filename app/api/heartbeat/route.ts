@@ -21,6 +21,7 @@ import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import {
   verifySenderAchievement,
   verifyStackerAchievement,
+  verifysBtcHolderAchievement,
   checkRateLimit,
   setRateLimit,
   hasAchievement,
@@ -426,6 +427,27 @@ export async function POST(request: NextRequest) {
       }
     } catch (error) {
       console.error("Failed to check stacker achievement during heartbeat:", error);
+    }
+
+    // Proactively check sbtc-holder achievement (best-effort)
+    try {
+      const rateLimit = await checkRateLimit(kv, btcAddress, "sbtc-holder");
+      if (rateLimit.allowed && agent.stxAddress) {
+        const hasSbtcHolder = await hasAchievement(kv, btcAddress, "sbtc-holder");
+        if (!hasSbtcHolder) {
+          const holdsSbtc = await verifysBtcHolderAchievement(
+            agent.stxAddress,
+            kv,
+            env.HIRO_API_KEY
+          );
+          if (holdsSbtc) {
+            await grantAchievement(kv, btcAddress, "sbtc-holder");
+          }
+        }
+        await setRateLimit(kv, btcAddress, "sbtc-holder");
+      }
+    } catch (error) {
+      console.error("Failed to check sbtc-holder achievement during heartbeat:", error);
     }
 
     // Grant identified achievement if agent has an on-chain identity (best-effort)

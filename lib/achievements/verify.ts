@@ -162,3 +162,59 @@ export async function verifyStackerAchievement(
     return false;
   }
 }
+
+/**
+ * Verify if an agent holds any sBTC balance (sBTC Holder achievement).
+ *
+ * Checks the Stacks Extended API balances endpoint for a non-zero sBTC
+ * SIP-010 fungible token balance. Uses KV cache with 5-minute TTL.
+ *
+ * @param stxAddress - Stacks address to check
+ * @param kv - Cloudflare KV namespace
+ * @param hiroApiKey - Optional Hiro API key for higher rate limits
+ * @returns true if the agent holds any sBTC, false otherwise
+ */
+export async function verifysBtcHolderAchievement(
+  stxAddress: string,
+  kv: KVNamespace,
+  hiroApiKey?: string
+): Promise<boolean> {
+  try {
+    const cacheKey = `sbtc-balance:${stxAddress}`;
+    let balanceData = await getCachedTransaction(cacheKey, kv);
+
+    if (!balanceData) {
+      const balanceUrl = `https://api.hiro.so/extended/v1/address/${stxAddress}/balances`;
+      const balanceResp = await fetch(balanceUrl, {
+        headers: buildHiroHeaders(hiroApiKey),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!balanceResp.ok) {
+        console.error(
+          `Failed to fetch balances for ${stxAddress}: ${balanceResp.status}`
+        );
+        return false;
+      }
+
+      balanceData = await balanceResp.json();
+      await setCachedTransaction(cacheKey, balanceData, kv);
+    }
+
+    const fungibleTokens = (
+      balanceData as {
+        fungible_tokens?: Record<string, { balance: string }>;
+      }
+    ).fungible_tokens ?? {};
+    const sBtcKey =
+      "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc-token";
+    const sBtcBalance = fungibleTokens[sBtcKey]?.balance ?? "0";
+    return parseInt(sBtcBalance, 10) > 0;
+  } catch (error) {
+    console.error(
+      `Failed to verify sbtc-holder achievement for ${stxAddress}:`,
+      error
+    );
+    return false;
+  }
+}
