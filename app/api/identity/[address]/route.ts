@@ -52,22 +52,25 @@ export async function GET(
       );
     }
 
-    // erc8004AgentId: number = confirmed identity, null = checked and not found,
-    // undefined = never checked. Only hit Hiro when undefined (first time).
-    if (agent.erc8004AgentId !== undefined) {
+    // Positive result in KV — return immediately
+    if (agent.erc8004AgentId != null) {
       return NextResponse.json(
-        { agentId: agent.erc8004AgentId ?? null },
-        {
-          headers: {
-            "Cache-Control": agent.erc8004AgentId != null
-              ? "public, max-age=300, s-maxage=600"
-              : "public, max-age=60, s-maxage=120",
-          },
-        }
+        { agentId: agent.erc8004AgentId },
+        { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
       );
     }
 
-    // First check — fetch from Hiro
+    // For null/undefined, rate-limit Hiro calls via a short-lived KV key (5 min TTL)
+    const rateLimitKey = `identity-check:${agent.stxAddress}`;
+    const recentlyChecked = await kv.get(rateLimitKey);
+    if (recentlyChecked) {
+      return NextResponse.json(
+        { agentId: null },
+        { headers: { "Cache-Control": "public, max-age=60, s-maxage=120" } }
+      );
+    }
+
+    // Fetch from Hiro
     const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
     const assetId = `${contract}::agent-identity`;
     const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
@@ -99,6 +102,11 @@ export async function GET(
         kv.put(`stx:${agent.stxAddress}`, updated),
         kv.put(`btc:${agent.btcAddress}`, updated),
       ]);
+    }
+
+    // If still null, set rate limit so we don't hammer Hiro (5 min TTL)
+    if (agentId == null) {
+      await kv.put(rateLimitKey, "1", { expirationTtl: 300 });
     }
 
     const cacheHeader = agentId != null
