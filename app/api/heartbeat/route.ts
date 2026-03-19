@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { getAgentLevel, getNextLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
@@ -409,6 +410,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Track whether any achievement was newly granted (affects cache invalidation).
+    // Must be initialized before ALL achievement checks, not just the later ones.
+    let achievementGranted = false;
+
     // Proactively check sender achievement (lightweight, best-effort)
     try {
       const rateLimit = await checkRateLimit(kv, btcAddress, "sender");
@@ -418,6 +423,7 @@ export async function POST(request: NextRequest) {
           const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv);
           if (hasOutgoingTx) {
             await grantAchievement(kv, btcAddress, "sender");
+            achievementGranted = true;
           }
         }
         await setRateLimit(kv, btcAddress, "sender");
@@ -440,6 +446,7 @@ export async function POST(request: NextRequest) {
           );
           if (isStacking) {
             await grantAchievement(kv, btcAddress, "stacker");
+            achievementGranted = true;
           }
           await setRateLimit(kv, btcAddress, "stacker");
         }
@@ -461,6 +468,7 @@ export async function POST(request: NextRequest) {
           );
           if (holdsSbtc) {
             await grantAchievement(kv, btcAddress, "sbtc-holder");
+            achievementGranted = true;
           }
           await setRateLimit(kv, btcAddress, "sbtc-holder");
         }
@@ -485,6 +493,7 @@ export async function POST(request: NextRequest) {
               txid: connectorResult.txid,
               recipientAddress: connectorResult.recipientAddress,
             });
+            achievementGranted = true;
           }
           await setRateLimit(kv, btcAddress, "connector");
         }
@@ -499,6 +508,7 @@ export async function POST(request: NextRequest) {
         const hasIdentified = await hasAchievement(kv, btcAddress, "identified");
         if (!hasIdentified) {
           await grantAchievement(kv, btcAddress, "identified", { agentId: identityAgentId });
+          achievementGranted = true;
         }
       }
     } catch (error) {
@@ -511,6 +521,7 @@ export async function POST(request: NextRequest) {
         const hasActive = await hasAchievement(kv, btcAddress, "active");
         if (!hasActive) {
           await grantAchievement(kv, btcAddress, "active", { checkInCount: checkInRecord.checkInCount });
+          achievementGranted = true;
         }
       }
     } catch (error) {
@@ -523,6 +534,7 @@ export async function POST(request: NextRequest) {
         const hasDedicated = await hasAchievement(kv, btcAddress, "dedicated");
         if (!hasDedicated) {
           await grantAchievement(kv, btcAddress, "dedicated", { checkInCount: checkInRecord.checkInCount });
+          achievementGranted = true;
         }
       }
     } catch (error) {
@@ -535,6 +547,7 @@ export async function POST(request: NextRequest) {
         const hasDevoted = await hasAchievement(kv, btcAddress, "devoted");
         if (!hasDevoted) {
           await grantAchievement(kv, btcAddress, "devoted", { checkInCount: checkInRecord.checkInCount });
+          achievementGranted = true;
         }
       }
     } catch (error) {
@@ -547,6 +560,7 @@ export async function POST(request: NextRequest) {
         const hasTireless = await hasAchievement(kv, btcAddress, "tireless");
         if (!hasTireless) {
           await grantAchievement(kv, btcAddress, "tireless", { checkInCount: checkInRecord.checkInCount });
+          achievementGranted = true;
         }
       }
     } catch (error) {
@@ -559,6 +573,7 @@ export async function POST(request: NextRequest) {
         const hasStreak7d = await hasAchievement(kv, btcAddress, "streak-7d");
         if (!hasStreak7d) {
           await grantAchievement(kv, btcAddress, "streak-7d", { currentStreak: checkInRecord.currentStreak });
+          achievementGranted = true;
         }
       }
     } catch (error) {
@@ -571,6 +586,7 @@ export async function POST(request: NextRequest) {
         const hasStreak30d = await hasAchievement(kv, btcAddress, "streak-30d");
         if (!hasStreak30d) {
           await grantAchievement(kv, btcAddress, "streak-30d", { currentStreak: checkInRecord.currentStreak });
+          achievementGranted = true;
         }
       }
     } catch (error) {
@@ -591,6 +607,15 @@ export async function POST(request: NextRequest) {
       kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent)),
       kv.get(`inbox:agent:${btcAddress}`),
     ]);
+
+    // Only invalidate cached agent list when listing-relevant fields changed
+    // (identity detection or achievement grants). Pure timestamp/count updates
+    // are tolerated as stale for up to 2 min TTL — avoids negating the cache
+    // on high-frequency heartbeats.
+    const identityChanged = identityAgentId !== agent.erc8004AgentId;
+    if (identityChanged || achievementGranted) {
+      await invalidateAgentListCache(kv);
+    }
 
     // Build orientation and level info (single getAgentLevel call inside getOrientation)
     const unreadCount = parseUnreadCount(inboxIndexData);

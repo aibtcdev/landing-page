@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import type { Logger } from "@/lib/logging";
 import { lookupAgent } from "@/lib/agent-lookup";
@@ -942,6 +943,9 @@ export async function POST(
     senderBtcAddress: senderAgent?.btcAddress ?? null,
     paymentTxid: message.paymentTxid,
   });
+
+  // Invalidate cached agent list (inbox message count changed)
+  await invalidateAgentListCache(kv);
 
   // Build payment-response header (base64-encoded per x402 v2 spec)
   const paymentResponseData = {

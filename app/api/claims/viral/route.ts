@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import { generateName } from "@/lib/name-generator";
 import { getNextLevel } from "@/lib/levels";
 import { X_HANDLE } from "@/lib/constants";
@@ -243,6 +244,10 @@ export async function POST(request: NextRequest) {
         ? agentsKv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent))
         : Promise.resolve(),
     ]);
+
+    // Invalidate cached agent list after all KV writes complete
+    // (level changed to Genesis + owner updated)
+    await invalidateAgentListCache(agentsKv);
 
     return NextResponse.json({
       success: true,

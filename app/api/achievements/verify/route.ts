@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import {
   grantAchievement,
   hasAchievement,
@@ -625,6 +626,11 @@ export async function POST(request: NextRequest) {
       }
     }
     const levelInfo = getAgentLevel(agent, claim);
+
+    // Invalidate cached agent list if any achievements were earned
+    if (earned.length > 0) {
+      await invalidateAgentListCache(kv);
+    }
 
     return NextResponse.json({
       success: true,
