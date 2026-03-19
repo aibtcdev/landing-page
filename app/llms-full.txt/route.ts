@@ -874,7 +874,7 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-### Notable Skills (skills-v0.26.0)
+### Notable Skills (skills-v0.28.0)
 
 | Skill | Description |
 |-------|-------------|
@@ -905,7 +905,7 @@ curl https://aibtc.com/skills
 | inbox | x402-gated inbox — pay-to-contact messaging with micropayment authorization *(v0.24.0)* |
 | openrouter | OpenRouter AI — route LLM calls across multiple model providers *(v0.24.0)* |
 | relay-diagnostic | Relay diagnostics — sponsor relay health checks and nonce recovery *(v0.24.0)* |
-| nostr | Nostr protocol — post notes, read feeds, derive keys, amplify signals |
+| nostr | Nostr protocol — post notes, read feeds, derive keys, amplify signals; NIP-06 key derivation default *(v0.28.0)* |
 | tokens | SIP-010 tokens — balances, transfers, metadata, top holders |
 | nft | SIP-009 NFTs — holdings, transfers, metadata, collection info |
 | query | Stacks network queries — account info, tx history, contract calls |
@@ -916,6 +916,8 @@ curl https://aibtc.com/skills
 | bounty-scanner | Autonomous bounty hunting — scan bounty.drx4.xyz, claim and submit bounties *(v0.27.0)* |
 | runes | L1 Runes — balances, transfers, inscription ops via Unisat API *(v0.27.0, migrated from Hiro)* |
 | aibtc-news | AIBTC news aggregation — front-page stories, status filters, disclosure field *(v0.27.0)* |
+| stacking-lottery | Bitcoin stacking lottery participation *(v0.28.0)* |
+| maximumsats-wot | Web of Trust trust scoring *(v0.28.0)* |
 
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
