@@ -1,17 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
-import { detectAgentIdentity } from "@/lib/identity/detection";
-import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 
 /**
  * GET /api/identity/:address — Detect on-chain ERC-8004 identity for an agent.
  *
- * Runs the O(N) identity scan server-side so clients avoid CORS issues and
- * sequential Stacks API calls from the browser. If found, persists the
- * agentId back to KV on both btc: and stx: keys for future lookups.
- * If not found, persists `erc8004AgentId: null` with a `lastIdentityCheck`
- * timestamp to avoid repeating the scan on every profile view.
+ * Fetches ERC-8004 identity directly from Hiro NFT holdings API.
+ * Uses three-state caching: undefined = never checked (hit Hiro),
+ * null = checked and not found (return cached), number = confirmed.
+ * Persists result to KV on both btc: and stx: keys.
  *
  * Returns: { agentId: number | null }
  */
@@ -55,56 +52,70 @@ export async function GET(
       );
     }
 
-    // Cache check: if we checked recently (positive or negative), return cached result
-    const isCheckedRecently =
-      agent.lastIdentityCheck &&
-      Date.now() - new Date(agent.lastIdentityCheck).getTime() < IDENTITY_CHECK_TTL_MS;
-
-    if (isCheckedRecently) {
-      if (agent.erc8004AgentId !== undefined && agent.erc8004AgentId !== null) {
-        return NextResponse.json(
-          { agentId: agent.erc8004AgentId },
-          { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
-        );
-      }
-      if (agent.erc8004AgentId === null) {
-        return NextResponse.json(
-          { agentId: null },
-          { headers: { "Cache-Control": "public, max-age=60, s-maxage=120" } }
-        );
-      }
-    }
-
-    // Run the identity scan server-side
-    const identity = await detectAgentIdentity(agent.stxAddress, env.HIRO_API_KEY, kv);
-
-    // Persist the result (positive or negative) to KV on both keys
-    agent.erc8004AgentId = identity ? identity.agentId : null;
-    agent.lastIdentityCheck = new Date().toISOString();
-    const updated = JSON.stringify(agent);
-    await Promise.all([
-      kv.put(`stx:${agent.stxAddress}`, updated),
-      kv.put(`btc:${agent.btcAddress}`, updated),
-    ]);
-
-    if (identity) {
+    // Positive result in KV — return immediately
+    if (agent.erc8004AgentId != null) {
       return NextResponse.json(
-        { agentId: identity.agentId },
-        {
-          headers: {
-            "Cache-Control": "public, max-age=300, s-maxage=600",
-          },
-        }
+        { agentId: agent.erc8004AgentId },
+        { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
       );
     }
 
+    // For null/undefined, rate-limit Hiro calls via a short-lived KV key (5 min TTL)
+    const rateLimitKey = `identity-check:${agent.stxAddress}`;
+    const recentlyChecked = await kv.get(rateLimitKey);
+    if (recentlyChecked) {
+      return NextResponse.json(
+        { agentId: null },
+        { headers: { "Cache-Control": "public, max-age=60, s-maxage=120" } }
+      );
+    }
+
+    // Fetch from Hiro
+    const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
+    const assetId = `${contract}::agent-identity`;
+    const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
+
+    const headers: Record<string, string> = {};
+    if (env.HIRO_API_KEY) headers["X-Hiro-API-Key"] = env.HIRO_API_KEY;
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
+      return NextResponse.json(
+        { error: `Hiro API error: ${resp.status}` },
+        { status: 502 }
+      );
+    }
+
+    const data = await resp.json() as {
+      results?: Array<{ value: { repr: string } }>;
+    };
+
+    const repr = data.results?.[0]?.value?.repr;
+    const match = repr?.match(/^u(\d+)$/);
+    const agentId = match ? Number(match[1]) : null;
+
+    // Persist to KV if changed
+    if (agentId !== agent.erc8004AgentId) {
+      agent.erc8004AgentId = agentId;
+      const updated = JSON.stringify(agent);
+      await Promise.all([
+        kv.put(`stx:${agent.stxAddress}`, updated),
+        kv.put(`btc:${agent.btcAddress}`, updated),
+      ]);
+    }
+
+    // If still null, set rate limit so we don't hammer Hiro (5 min TTL)
+    if (agentId == null) {
+      await kv.put(rateLimitKey, "1", { expirationTtl: 300 });
+    }
+
+    const cacheHeader = agentId != null
+      ? "public, max-age=300, s-maxage=600"
+      : "public, max-age=60, s-maxage=120";
+
     return NextResponse.json(
-      { agentId: null },
-      {
-        headers: {
-          "Cache-Control": "public, max-age=60, s-maxage=120",
-        },
-      }
+      { agentId },
+      { headers: { "Cache-Control": cacheHeader } }
     );
   } catch (e) {
     return NextResponse.json(

@@ -87,7 +87,15 @@ async function resolveIdentity(
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
-  // Direct Hiro NFT holdings check — single GET, no retries, no callReadOnly
+  // Positive result — skip Hiro
+  if (agent.erc8004AgentId != null) return agent;
+
+  // For null/undefined, rate-limit Hiro calls (5 min TTL key)
+  const rateLimitKey = `identity-check:${agent.stxAddress}`;
+  const recentlyChecked = await kv.get(rateLimitKey);
+  if (recentlyChecked) return agent;
+
+  // Fetch from Hiro
   try {
     const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
     const assetId = `${contract}::agent-identity`;
@@ -114,6 +122,10 @@ async function resolveIdentity(
         kv.put(`stx:${agent.stxAddress}`, updated),
         kv.put(`btc:${agent.btcAddress}`, updated),
       ]);
+    }
+    // Rate-limit negative results (5 min TTL)
+    if (newAgentId == null) {
+      await kv.put(rateLimitKey, "1", { expirationTtl: 300 });
     }
   } catch {
     /* best-effort */
