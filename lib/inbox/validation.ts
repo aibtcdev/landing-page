@@ -132,14 +132,12 @@ export function validateInboxMessage(body: unknown):
         replyTo?: string;
       };
       errors?: never;
-      hints?: never;
     }
-  | { data?: never; errors: string[]; hints: ValidationHint[] } {
+  | { data?: never; errors: ValidationHint[] } {
   if (!body || typeof body !== "object") {
     const message = "Request body must be a JSON object";
     return {
-      errors: [message],
-      hints: [
+      errors: [
         {
           field: "body",
           message,
@@ -350,8 +348,7 @@ export function validateInboxMessage(body: unknown):
 
   if (fieldErrors.length > 0) {
     return {
-      errors: fieldErrors.map((e) => e.message),
-      hints: fieldErrors.map((e) => e.hint),
+      errors: fieldErrors.map((e) => e.hint),
     };
   }
 
@@ -396,14 +393,12 @@ export function validateOutboxReply(body: unknown):
         signature: string;
       };
       errors?: never;
-      hints?: never;
     }
-  | { data?: never; errors: string[]; hints: ValidationHint[] } {
+  | { data?: never; errors: ValidationHint[] } {
   if (!body || typeof body !== "object") {
     const message = "Request body must be a JSON object";
     return {
-      errors: [message],
-      hints: [
+      errors: [
         {
           field: "body",
           message,
@@ -526,8 +521,7 @@ export function validateOutboxReply(body: unknown):
 
   if (fieldErrors.length > 0) {
     return {
-      errors: fieldErrors.map((e) => e.message),
-      hints: fieldErrors.map((e) => e.hint),
+      errors: fieldErrors.map((e) => e.hint),
     };
   }
 
@@ -558,14 +552,12 @@ export function validateMarkRead(body: unknown):
         signature: string;
       };
       errors?: never;
-      hints?: never;
     }
-  | { data?: never; errors: string[]; hints: ValidationHint[] } {
+  | { data?: never; errors: ValidationHint[] } {
   if (!body || typeof body !== "object") {
     const message = "Request body must be a JSON object";
     return {
-      errors: [message],
-      hints: [
+      errors: [
         {
           field: "body",
           message,
@@ -640,8 +632,7 @@ export function validateMarkRead(body: unknown):
 
   if (fieldErrors.length > 0) {
     return {
-      errors: fieldErrors.map((e) => e.message),
-      hints: fieldErrors.map((e) => e.hint),
+      errors: fieldErrors.map((e) => e.hint),
     };
   }
 

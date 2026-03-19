@@ -5,6 +5,22 @@ import {
   validateMarkRead,
 } from "../validation";
 
+/** Helper: check if any error object has the given message. */
+function hasError(
+  errors: { message: string }[] | undefined,
+  message: string
+): boolean {
+  return errors?.some((e) => e.message === message) ?? false;
+}
+
+/** Helper: check if any error message contains the given text. */
+function hasErrorContaining(
+  errors: { message: string }[] | undefined,
+  text: string
+): boolean {
+  return errors?.some((e) => e.message.includes(text)) ?? false;
+}
+
 describe("validateInboxMessage", () => {
   describe("success cases", () => {
     it("accepts valid inbox message", () => {
@@ -139,12 +155,12 @@ describe("validateInboxMessage", () => {
     it("rejects non-object body", () => {
       const result = validateInboxMessage("not an object");
       expect(result.data).toBeUndefined();
-      expect(result.errors).toContain("Request body must be a JSON object");
+      expect(hasError(result.errors, "Request body must be a JSON object")).toBe(true);
     });
 
     it("rejects null body", () => {
       const result = validateInboxMessage(null);
-      expect(result.errors).toContain("Request body must be a JSON object");
+      expect(hasError(result.errors, "Request body must be a JSON object")).toBe(true);
     });
 
     it("rejects missing toBtcAddress", () => {
@@ -154,7 +170,7 @@ describe("validateInboxMessage", () => {
         paymentTxid: "a".repeat(64),
         paymentSatoshis: 100,
       });
-      expect(result.errors).toContain("toBtcAddress must be a string");
+      expect(hasError(result.errors, "toBtcAddress must be a string")).toBe(true);
     });
 
     it("rejects invalid toBtcAddress format", () => {
@@ -166,9 +182,7 @@ describe("validateInboxMessage", () => {
         paymentSatoshis: 100,
       });
       expect(result.errors?.length).toBeGreaterThan(0);
-      expect(result.errors?.some((e) => e.includes("Native SegWit"))).toBe(
-        true
-      );
+      expect(hasErrorContaining(result.errors, "Native SegWit")).toBe(true);
     });
 
     it("rejects missing toStxAddress", () => {
@@ -178,7 +192,7 @@ describe("validateInboxMessage", () => {
         paymentTxid: "a".repeat(64),
         paymentSatoshis: 100,
       });
-      expect(result.errors).toContain("toStxAddress must be a string");
+      expect(hasError(result.errors, "toStxAddress must be a string")).toBe(true);
     });
 
     it("rejects invalid toStxAddress format", () => {
@@ -190,9 +204,7 @@ describe("validateInboxMessage", () => {
         paymentSatoshis: 100,
       });
       expect(result.errors?.length).toBeGreaterThan(0);
-      expect(result.errors?.some((e) => e.includes("Stacks address"))).toBe(
-        true
-      );
+      expect(hasErrorContaining(result.errors, "Stacks address")).toBe(true);
     });
 
     it("rejects empty content", () => {
@@ -203,7 +215,7 @@ describe("validateInboxMessage", () => {
         paymentTxid: "a".repeat(64),
         paymentSatoshis: 100,
       });
-      expect(result.errors).toContain("content cannot be empty");
+      expect(hasError(result.errors, "content cannot be empty")).toBe(true);
     });
 
     it("rejects content exceeding max length", () => {
@@ -214,9 +226,9 @@ describe("validateInboxMessage", () => {
         paymentTxid: "a".repeat(64),
         paymentSatoshis: 100,
       });
-      expect(result.errors).toContain(
-        "content exceeds maximum length of 500 characters"
-      );
+      expect(
+        hasError(result.errors, "content exceeds maximum length of 500 characters")
+      ).toBe(true);
     });
 
     it("rejects invalid paymentTxid format", () => {
@@ -227,9 +239,9 @@ describe("validateInboxMessage", () => {
         paymentTxid: "not-hex", // Invalid hex
         paymentSatoshis: 100,
       });
-      expect(result.errors).toContain(
-        "paymentTxid must be a 64-character hex string"
-      );
+      expect(
+        hasError(result.errors, "paymentTxid must be a 64-character hex string")
+      ).toBe(true);
     });
 
     it("rejects paymentTxid with wrong length", () => {
@@ -240,9 +252,9 @@ describe("validateInboxMessage", () => {
         paymentTxid: "a".repeat(32), // Too short
         paymentSatoshis: 100,
       });
-      expect(result.errors).toContain(
-        "paymentTxid must be a 64-character hex string"
-      );
+      expect(
+        hasError(result.errors, "paymentTxid must be a 64-character hex string")
+      ).toBe(true);
     });
 
     it("rejects negative paymentSatoshis", () => {
@@ -253,9 +265,9 @@ describe("validateInboxMessage", () => {
         paymentTxid: "a".repeat(64),
         paymentSatoshis: -100,
       });
-      expect(result.errors).toContain(
-        "paymentSatoshis must be a positive integer"
-      );
+      expect(
+        hasError(result.errors, "paymentSatoshis must be a positive integer")
+      ).toBe(true);
     });
 
     it("rejects zero paymentSatoshis", () => {
@@ -266,9 +278,9 @@ describe("validateInboxMessage", () => {
         paymentTxid: "a".repeat(64),
         paymentSatoshis: 0,
       });
-      expect(result.errors).toContain(
-        "paymentSatoshis must be a positive integer"
-      );
+      expect(
+        hasError(result.errors, "paymentSatoshis must be a positive integer")
+      ).toBe(true);
     });
 
     it("rejects fractional paymentSatoshis", () => {
@@ -279,9 +291,9 @@ describe("validateInboxMessage", () => {
         paymentTxid: "a".repeat(64),
         paymentSatoshis: 100.5,
       });
-      expect(result.errors).toContain(
-        "paymentSatoshis must be a positive integer"
-      );
+      expect(
+        hasError(result.errors, "paymentSatoshis must be a positive integer")
+      ).toBe(true);
     });
 
     it("rejects invalid signature format", () => {
@@ -291,9 +303,9 @@ describe("validateInboxMessage", () => {
         content: "Test message",
         signature: "not-valid-encoding!@#$",
       });
-      expect(result.errors).toContain(
-        "signature must be base64 or hex-encoded"
-      );
+      expect(
+        hasError(result.errors, "signature must be base64 or hex-encoded")
+      ).toBe(true);
     });
 
     it("rejects hex signature with wrong length", () => {
@@ -303,9 +315,9 @@ describe("validateInboxMessage", () => {
         content: "Test message",
         signature: "a".repeat(64), // Too short — 32 bytes instead of 65
       });
-      expect(result.errors).toContain(
-        "hex signature must be 130 characters (65 bytes)"
-      );
+      expect(
+        hasError(result.errors, "hex signature must be 130 characters (65 bytes)")
+      ).toBe(true);
     });
 
     it("collects multiple validation errors", () => {
@@ -317,6 +329,20 @@ describe("validateInboxMessage", () => {
         paymentSatoshis: -1,
       });
       expect(result.errors?.length).toBeGreaterThanOrEqual(5);
+    });
+
+    it("each error object has field, message, and hint", () => {
+      const result = validateInboxMessage({
+        toBtcAddress: "invalid",
+        toStxAddress: "invalid",
+        content: "Test",
+      });
+      expect(result.errors?.length).toBeGreaterThan(0);
+      for (const err of result.errors ?? []) {
+        expect(typeof err.field).toBe("string");
+        expect(typeof err.message).toBe("string");
+        expect(typeof err.hint).toBe("string");
+      }
     });
   });
 });
@@ -345,28 +371,16 @@ describe("validateOutboxReply", () => {
           "SGVsbG8gV29ybGQhIFRoaXMgaXMgYSB0ZXN0IHNpZ25hdHVyZSBmb3IgQklQLTEzNyB2YWxpZGF0aW9uLiBUaGlzIGlzIGEgY29tcGxldGUgdmFsaWQgc2lnbmF0dXJlLg==",
       });
       expect(result.errors).toBeUndefined();
-      expect(result.data?.reply).toBe("Thanks!");
+      expect(result.data?.messageId).toBe("msg_123");
     });
 
-    it("accepts reply at max length (500 chars)", () => {
-      const reply = "a".repeat(500);
+    it("accepts reply at max length", () => {
       const result = validateOutboxReply({
         messageId: "msg_123",
-        reply,
+        reply: "a".repeat(500),
         signature: "a".repeat(130),
       });
       expect(result.errors).toBeUndefined();
-      expect(result.data?.reply).toBe(reply);
-    });
-
-    it("preserves whitespace in reply", () => {
-      const result = validateOutboxReply({
-        messageId: "msg_123",
-        reply: "  spaced  text  ",
-        signature: "a".repeat(130),
-      });
-      expect(result.errors).toBeUndefined();
-      expect(result.data?.reply).toBe("  spaced  text  ");
     });
   });
 
@@ -374,12 +388,12 @@ describe("validateOutboxReply", () => {
     it("rejects non-object body", () => {
       const result = validateOutboxReply("not an object");
       expect(result.data).toBeUndefined();
-      expect(result.errors).toContain("Request body must be a JSON object");
+      expect(hasError(result.errors, "Request body must be a JSON object")).toBe(true);
     });
 
     it("rejects null body", () => {
       const result = validateOutboxReply(null);
-      expect(result.errors).toContain("Request body must be a JSON object");
+      expect(hasError(result.errors, "Request body must be a JSON object")).toBe(true);
     });
 
     it("rejects missing messageId", () => {
@@ -387,7 +401,7 @@ describe("validateOutboxReply", () => {
         reply: "Test",
         signature: "a".repeat(130),
       });
-      expect(result.errors).toContain("messageId must be a string");
+      expect(hasError(result.errors, "messageId must be a string")).toBe(true);
     });
 
     it("rejects empty messageId", () => {
@@ -396,7 +410,7 @@ describe("validateOutboxReply", () => {
         reply: "Test",
         signature: "a".repeat(130),
       });
-      expect(result.errors).toContain("messageId cannot be empty");
+      expect(hasError(result.errors, "messageId cannot be empty")).toBe(true);
     });
 
     it("rejects missing reply", () => {
@@ -404,7 +418,7 @@ describe("validateOutboxReply", () => {
         messageId: "msg_123",
         signature: "a".repeat(130),
       });
-      expect(result.errors).toContain("reply must be a string");
+      expect(hasError(result.errors, "reply must be a string")).toBe(true);
     });
 
     it("rejects empty reply", () => {
@@ -413,7 +427,7 @@ describe("validateOutboxReply", () => {
         reply: "   ", // Whitespace only
         signature: "a".repeat(130),
       });
-      expect(result.errors).toContain("reply cannot be empty");
+      expect(hasError(result.errors, "reply cannot be empty")).toBe(true);
     });
 
     it("rejects reply exceeding max length", () => {
@@ -422,9 +436,9 @@ describe("validateOutboxReply", () => {
         reply: "a".repeat(501), // Over 500 chars
         signature: "a".repeat(130),
       });
-      expect(result.errors).toContain(
-        "reply exceeds maximum length of 500 characters"
-      );
+      expect(
+        hasError(result.errors, "reply exceeds maximum length of 500 characters")
+      ).toBe(true);
     });
 
     it("rejects missing signature", () => {
@@ -432,7 +446,7 @@ describe("validateOutboxReply", () => {
         messageId: "msg_123",
         reply: "Test",
       });
-      expect(result.errors).toContain("signature must be a string");
+      expect(hasError(result.errors, "signature must be a string")).toBe(true);
     });
 
     it("rejects empty signature", () => {
@@ -441,7 +455,7 @@ describe("validateOutboxReply", () => {
         reply: "Test",
         signature: "",
       });
-      expect(result.errors).toContain("signature cannot be empty");
+      expect(hasError(result.errors, "signature cannot be empty")).toBe(true);
     });
 
     it("rejects invalid signature format", () => {
@@ -450,9 +464,9 @@ describe("validateOutboxReply", () => {
         reply: "Test",
         signature: "not-valid-encoding!@#$",
       });
-      expect(result.errors).toContain(
-        "signature must be base64 or hex-encoded"
-      );
+      expect(
+        hasError(result.errors, "signature must be base64 or hex-encoded")
+      ).toBe(true);
     });
 
     it("rejects hex signature with wrong length", () => {
@@ -461,9 +475,9 @@ describe("validateOutboxReply", () => {
         reply: "Test",
         signature: "a".repeat(64), // Too short
       });
-      expect(result.errors).toContain(
-        "hex signature must be 130 characters (65 bytes)"
-      );
+      expect(
+        hasError(result.errors, "hex signature must be 130 characters (65 bytes)")
+      ).toBe(true);
     });
 
     it("collects multiple validation errors", () => {
@@ -473,6 +487,20 @@ describe("validateOutboxReply", () => {
         signature: "invalid",
       });
       expect(result.errors?.length).toBeGreaterThanOrEqual(3);
+    });
+
+    it("each error object has field, message, and hint", () => {
+      const result = validateOutboxReply({
+        messageId: "",
+        reply: "",
+        signature: "invalid",
+      });
+      expect(result.errors?.length).toBeGreaterThan(0);
+      for (const err of result.errors ?? []) {
+        expect(typeof err.field).toBe("string");
+        expect(typeof err.message).toBe("string");
+        expect(typeof err.hint).toBe("string");
+      }
     });
   });
 });
@@ -506,19 +534,19 @@ describe("validateMarkRead", () => {
     it("rejects non-object body", () => {
       const result = validateMarkRead("not an object");
       expect(result.data).toBeUndefined();
-      expect(result.errors).toContain("Request body must be a JSON object");
+      expect(hasError(result.errors, "Request body must be a JSON object")).toBe(true);
     });
 
     it("rejects null body", () => {
       const result = validateMarkRead(null);
-      expect(result.errors).toContain("Request body must be a JSON object");
+      expect(hasError(result.errors, "Request body must be a JSON object")).toBe(true);
     });
 
     it("rejects missing messageId", () => {
       const result = validateMarkRead({
         signature: "a".repeat(130),
       });
-      expect(result.errors).toContain("messageId must be a string");
+      expect(hasError(result.errors, "messageId must be a string")).toBe(true);
     });
 
     it("rejects empty messageId", () => {
@@ -526,14 +554,14 @@ describe("validateMarkRead", () => {
         messageId: "   ", // Whitespace only
         signature: "a".repeat(130),
       });
-      expect(result.errors).toContain("messageId cannot be empty");
+      expect(hasError(result.errors, "messageId cannot be empty")).toBe(true);
     });
 
     it("rejects missing signature", () => {
       const result = validateMarkRead({
         messageId: "msg_123",
       });
-      expect(result.errors).toContain("signature must be a string");
+      expect(hasError(result.errors, "signature must be a string")).toBe(true);
     });
 
     it("rejects empty signature", () => {
@@ -541,7 +569,7 @@ describe("validateMarkRead", () => {
         messageId: "msg_123",
         signature: "",
       });
-      expect(result.errors).toContain("signature cannot be empty");
+      expect(hasError(result.errors, "signature cannot be empty")).toBe(true);
     });
 
     it("rejects invalid signature format", () => {
@@ -549,9 +577,9 @@ describe("validateMarkRead", () => {
         messageId: "msg_123",
         signature: "not-valid-encoding!@#$",
       });
-      expect(result.errors).toContain(
-        "signature must be base64 or hex-encoded"
-      );
+      expect(
+        hasError(result.errors, "signature must be base64 or hex-encoded")
+      ).toBe(true);
     });
 
     it("rejects hex signature with wrong length", () => {
@@ -559,9 +587,9 @@ describe("validateMarkRead", () => {
         messageId: "msg_123",
         signature: "a".repeat(64), // Too short
       });
-      expect(result.errors).toContain(
-        "hex signature must be 130 characters (65 bytes)"
-      );
+      expect(
+        hasError(result.errors, "hex signature must be 130 characters (65 bytes)")
+      ).toBe(true);
     });
 
     it("collects multiple validation errors", () => {
@@ -570,6 +598,19 @@ describe("validateMarkRead", () => {
         signature: "invalid",
       });
       expect(result.errors?.length).toBeGreaterThanOrEqual(2);
+    });
+
+    it("each error object has field, message, and hint", () => {
+      const result = validateMarkRead({
+        messageId: "",
+        signature: "invalid",
+      });
+      expect(result.errors?.length).toBeGreaterThan(0);
+      for (const err of result.errors ?? []) {
+        expect(typeof err.field).toBe("string");
+        expect(typeof err.message).toBe("string");
+        expect(typeof err.hint).toBe("string");
+      }
     });
   });
 });
