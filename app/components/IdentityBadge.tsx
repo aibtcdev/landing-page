@@ -1,3 +1,6 @@
+"use client";
+
+import { useState, useEffect } from "react";
 import Link from "next/link";
 
 interface IdentityBadgeProps {
@@ -5,12 +8,41 @@ interface IdentityBadgeProps {
   stxAddress: string;
 }
 
+const CONTRACT = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
+
 export default function IdentityBadge({
-  agentId,
+  agentId: initialAgentId,
   stxAddress,
 }: IdentityBadgeProps) {
+  const [agentId, setAgentId] = useState(initialAgentId);
+  const [loading, setLoading] = useState(initialAgentId === undefined);
+
+  useEffect(() => {
+    if (initialAgentId !== undefined) return;
+
+    const assetId = `${CONTRACT}::agent-identity`;
+    const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
+
+    fetch(url)
+      .then((r) => r.json())
+      .then((data: any) => {
+        const repr = data.results?.[0]?.value?.repr;
+        const match = repr?.match(/^u(\d+)$/);
+        if (match) setAgentId(Number(match[1]));
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, [initialAgentId, stxAddress]);
+
+  if (loading) {
+    return (
+      <div className="inline-flex items-center gap-2 px-4 py-2 rounded-lg border border-white/[0.06] bg-white/[0.03]">
+        <span className="text-xs text-white/40">Checking identity…</span>
+      </div>
+    );
+  }
+
   if (agentId !== undefined) {
-    // Agent has registered on-chain
     return (
       <div className="inline-flex max-w-full items-center gap-2 px-4 py-2 rounded-lg border border-blue-500/20 bg-blue-500/10">
         <svg
