@@ -89,13 +89,14 @@ async function resolveIdentity(
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
-  // Cache check: skip scan if we already have a positive identity result
-  // and checked within the TTL window. Always re-detect when erc8004AgentId
-  // is null — previous detection may have failed due to transient API errors.
+  // Cache check: use full TTL for positive results, shorter TTL for negative
+  // results so transient API failures don't suppress detection for too long.
+  const ttl = agent.erc8004AgentId != null
+    ? IDENTITY_CHECK_TTL_MS
+    : IDENTITY_CHECK_TTL_MS / 12; // ~5 min for negative results
   const isCheckedRecently =
-    agent.erc8004AgentId != null &&
     agent.lastIdentityCheck &&
-    Date.now() - new Date(agent.lastIdentityCheck).getTime() < IDENTITY_CHECK_TTL_MS;
+    Date.now() - new Date(agent.lastIdentityCheck).getTime() < ttl;
 
   if (isCheckedRecently) {
     return agent;
