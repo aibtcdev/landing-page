@@ -32,7 +32,7 @@ export async function detectAgentIdentity(
     // Query NFT holdings for this address filtered to the identity registry contract.
     // This is O(1) instead of O(N) — a single API call regardless of total NFTs minted.
     const [contractAddress, contractName] = IDENTITY_REGISTRY_CONTRACT.split(".");
-    const assetId = `${contractAddress}.${contractName}::agent-id`;
+    const assetId = `${contractAddress}.${contractName}::agent-identity`;
     const holdingsUrl = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
     const headers = buildHiroHeaders(hiroApiKey);
