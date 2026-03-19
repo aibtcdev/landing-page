@@ -7,8 +7,6 @@ import { lookupAgent } from "@/lib/agent-lookup";
 import { getAgentLevel, computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { lookupBnsName } from "@/lib/bns";
-import { detectAgentIdentity } from "@/lib/identity/detection";
-import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import { X_HANDLE } from "@/lib/constants";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
@@ -89,29 +87,36 @@ async function resolveIdentity(
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
-  // Cache check: skip scan if we checked within the TTL window.
-  // Both positive (has identity) and negative (no identity) results are
-  // cached — the expensive O(N) on-chain scan only runs once per TTL period.
-  const isCheckedRecently =
-    agent.lastIdentityCheck &&
-    Date.now() - new Date(agent.lastIdentityCheck).getTime() < IDENTITY_CHECK_TTL_MS;
-
-  if (isCheckedRecently) {
-    return agent;
-  }
-
-  // Run the O(N) identity scan server-side
+  // Direct Hiro NFT holdings check — single GET, no retries, no callReadOnly
   try {
-    const identity = await detectAgentIdentity(agent.stxAddress, hiroApiKey, kv);
-    agent.erc8004AgentId = identity ? identity.agentId : null;
-    agent.lastIdentityCheck = new Date().toISOString();
-    const updated = JSON.stringify(agent);
-    await Promise.all([
-      kv.put(`stx:${agent.stxAddress}`, updated),
-      kv.put(`btc:${agent.btcAddress}`, updated),
-    ]);
+    const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
+    const assetId = `${contract}::agent-identity`;
+    const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
+
+    const headers: Record<string, string> = {};
+    if (hiroApiKey) headers["X-Hiro-API-Key"] = hiroApiKey;
+
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) return agent;
+
+    const data = await resp.json() as {
+      results?: Array<{ value: { repr: string } }>;
+    };
+
+    const repr = data.results?.[0]?.value?.repr;
+    const match = repr?.match(/^u(\d+)$/);
+    const newAgentId = match ? Number(match[1]) : null;
+
+    if (newAgentId !== agent.erc8004AgentId) {
+      agent.erc8004AgentId = newAgentId;
+      const updated = JSON.stringify(agent);
+      await Promise.all([
+        kv.put(`stx:${agent.stxAddress}`, updated),
+        kv.put(`btc:${agent.btcAddress}`, updated),
+      ]);
+    }
   } catch {
-    /* identity detection is best-effort */
+    /* best-effort */
   }
 
   return agent;

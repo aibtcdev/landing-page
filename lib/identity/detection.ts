@@ -67,16 +67,21 @@ export async function detectAgentIdentity(
     }
     const agentId = Number(tokenIdMatch[1]);
 
-    // Fetch the token URI
-    const uriResult = await callReadOnly(
-      IDENTITY_REGISTRY_CONTRACT,
-      "get-token-uri",
-      [uintCV(agentId)],
-      hiroApiKey
-    );
-    const uri = parseClarityValue(uriResult);
+    // Fetch the token URI (best-effort — identity is valid even without URI)
+    let uri = "";
+    try {
+      const uriResult = await callReadOnly(
+        IDENTITY_REGISTRY_CONTRACT,
+        "get-token-uri",
+        [uintCV(agentId)],
+        hiroApiKey
+      );
+      uri = parseClarityValue(uriResult) || "";
+    } catch (error) {
+      console.warn("Failed to fetch token URI for agent", agentId, error);
+    }
 
-    const identity: AgentIdentity = { agentId, owner: stxAddress, uri: uri || "" };
+    const identity: AgentIdentity = { agentId, owner: stxAddress, uri };
     // Cache the result
     await setCachedIdentity(stxAddress, identity, kv);
     return identity;
