@@ -224,7 +224,7 @@ export async function verifyInscriberAchievement(
       return false;
     }
 
-    return data.data.address === btcAddress;
+    return inscriptionData.data.address === btcAddress;
   } catch (error) {
     console.error(`Failed to verify inscriber achievement for ${inscriptionId}:`, error);
     return false;
