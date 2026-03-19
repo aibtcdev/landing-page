@@ -9,7 +9,12 @@ import {
   getCachedTransaction,
   setCachedTransaction,
 } from "@/lib/identity/kv-cache";
-import { buildHiroHeaders } from "@/lib/identity/stacks-api";
+import {
+  buildHiroHeaders,
+  callReadOnly,
+  parseClarityValue,
+} from "@/lib/identity/stacks-api";
+import { standardPrincipalCV } from "@stacks/transactions";
 
 /** Rate limit window for achievement verification (5 minutes) */
 export const ACHIEVEMENT_VERIFY_RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -136,11 +141,6 @@ export async function verifySbtcHolderAchievement(
     let balanceData = await getCachedTransaction(cacheKey, kv);
 
     if (!balanceData) {
-      const { callReadOnly, parseClarityValue } = await import(
-        "@/lib/identity/stacks-api"
-      );
-      const { standardPrincipalCV } = await import("@stacks/transactions");
-
       const response = await callReadOnly(
         SBTC_CONTRACT,
         "get-balance",
@@ -149,7 +149,11 @@ export async function verifySbtcHolderAchievement(
       );
 
       const parsed = parseClarityValue(response);
-      balanceData = { balance: parsed ?? "0" };
+      if (parsed === null) {
+        // Transient API failure — don't cache a false "0", allow retry next time
+        return false;
+      }
+      balanceData = { balance: parsed };
       await setCachedTransaction(cacheKey, balanceData, kv);
     }
 
