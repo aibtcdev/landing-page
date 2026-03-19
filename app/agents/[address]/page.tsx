@@ -8,7 +8,6 @@ import { getAgentLevel, computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { lookupBnsName } from "@/lib/bns";
 import { detectAgentIdentity } from "@/lib/identity/detection";
-import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import { X_HANDLE } from "@/lib/constants";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
@@ -89,29 +88,19 @@ async function resolveIdentity(
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
-  // Cache check: use full TTL for positive results, shorter TTL for negative
-  // results so transient API failures don't suppress detection for too long.
-  const ttl = agent.erc8004AgentId != null
-    ? IDENTITY_CHECK_TTL_MS
-    : IDENTITY_CHECK_TTL_MS / 12; // ~5 min for negative results
-  const isCheckedRecently =
-    agent.lastIdentityCheck &&
-    Date.now() - new Date(agent.lastIdentityCheck).getTime() < ttl;
-
-  if (isCheckedRecently) {
-    return agent;
-  }
-
-  // Run the O(N) identity scan server-side
+  // Always fetch identity from Hiro — single fast GET request
   try {
     const identity = await detectAgentIdentity(agent.stxAddress, hiroApiKey, kv);
-    agent.erc8004AgentId = identity ? identity.agentId : null;
-    agent.lastIdentityCheck = new Date().toISOString();
-    const updated = JSON.stringify(agent);
-    await Promise.all([
-      kv.put(`stx:${agent.stxAddress}`, updated),
-      kv.put(`btc:${agent.btcAddress}`, updated),
-    ]);
+    const newAgentId = identity ? identity.agentId : null;
+    // Only write KV if the value actually changed
+    if (newAgentId !== agent.erc8004AgentId) {
+      agent.erc8004AgentId = newAgentId;
+      const updated = JSON.stringify(agent);
+      await Promise.all([
+        kv.put(`stx:${agent.stxAddress}`, updated),
+        kv.put(`btc:${agent.btcAddress}`, updated),
+      ]);
+    }
   } catch {
     /* identity detection is best-effort */
   }
