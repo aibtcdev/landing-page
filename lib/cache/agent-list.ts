@@ -164,7 +164,9 @@ async function rebuildAgentListCache(
     cachedAt: new Date().toISOString(),
   };
 
-  // Store with TTL (awaited to ensure persistence in Workers runtime)
+  // Store with TTL (awaited to ensure persistence in Workers runtime).
+  // Size ceiling: CachedAgent ~500 bytes/agent. KV max value = 25MB → ~50k agent ceiling.
+  // Above that, consider paginated cache shards or D1/Durable Objects.
   try {
     await kv.put(CACHE_KEY, JSON.stringify(snapshot), {
       expirationTtl: CACHE_TTL_SECONDS,

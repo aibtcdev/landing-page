@@ -113,6 +113,9 @@ export async function GET(request: NextRequest) {
     // Lazy BNS refresh: for agents without bnsName but with stxAddress,
     // attempt BNS lookup and persist if found. Capped to avoid excessive
     // external API calls, and fire-and-forget so it doesn't block the response.
+    // Note: BNS updates write to source KV records but don't invalidate the
+    // agent list cache — updated names appear after natural TTL expiry (~2 min).
+    // This is intentional: BNS changes are rare and not time-critical.
     const hiroApiKey = env.HIRO_API_KEY;
     const MAX_BNS_REFRESH_PER_REQUEST = 10;
     const agentsNeedingBns = cachedAgents.filter(
