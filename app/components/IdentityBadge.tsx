@@ -38,8 +38,8 @@ export default function IdentityBadge({
     return (
       <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
         <div className="flex items-center gap-3">
-          <div className="size-8 rounded-full bg-white/[0.06] animate-pulse" />
-          <div className="h-3 w-24 rounded bg-white/[0.06] animate-pulse" />
+          <div className="size-8 rounded-full bg-white/[0.06] animate-pulse motion-reduce:animate-none" />
+          <div className="h-3 w-24 rounded bg-white/[0.06] animate-pulse motion-reduce:animate-none" />
         </div>
       </div>
     );
