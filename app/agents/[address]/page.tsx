@@ -96,7 +96,7 @@ async function resolveIdentity(
     const headers: Record<string, string> = {};
     if (hiroApiKey) headers["X-Hiro-API-Key"] = hiroApiKey;
 
-    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(5000) });
+    const resp = await fetch(url, { headers });
     if (!resp.ok) return agent;
 
     const data = await resp.json() as {
