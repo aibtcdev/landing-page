@@ -16,8 +16,7 @@ import {
   validateCheckInBody,
   type HeartbeatOrientation,
 } from "@/lib/heartbeat";
-import { detectAgentIdentity } from "@/lib/identity/detection";
-import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
+import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "@/lib/identity/constants";
 import {
   verifySenderAchievement,
   verifySbtcHolderAchievement,
@@ -366,28 +365,47 @@ export async function POST(request: NextRequest) {
     // Update check-in record (pass existing to avoid redundant KV read)
     const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp, existingCheckIn);
 
-    // Detect on-chain identity if not already stored or stale (uses shared 1h cache)
+    // Detect on-chain identity using direct Hiro fetch with KV sentinel rate-limiting.
+    // Same approach as /api/identity/[address]: KV sentinel key prevents re-checking
+    // negative results within 5 minutes, regardless of JSON serialization of null vs undefined.
     let identityAgentId = agent.erc8004AgentId;
     let identityCheckPerformed = false;
-    const shouldCheckIdentity =
-      agent.erc8004AgentId == null ||
-      !agent.lastIdentityCheck ||
-      Date.now() - new Date(agent.lastIdentityCheck).getTime() > IDENTITY_CHECK_TTL_MS;
 
-    if (shouldCheckIdentity) {
-      try {
-        const identity = await detectAgentIdentity(agent.stxAddress, env.HIRO_API_KEY, kv);
-        if (identity) {
-          identityAgentId = identity.agentId;
-        } else {
-          // Explicitly record that an identity check was performed but no identity was found
-          identityAgentId = null;
+    if (identityAgentId == null) {
+      // Check KV sentinel before hitting Hiro (5-minute rate limit on negative results)
+      const identitySentinelKey = `identity-check:${agent.stxAddress}`;
+      const recentlyChecked = await kv.get(identitySentinelKey);
+
+      if (!recentlyChecked) {
+        try {
+          const [contractAddress, contractName] = IDENTITY_REGISTRY_CONTRACT.split(".");
+          const assetId = `${contractAddress}.${contractName}::agent-identity`;
+          const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
+
+          const hiroHeaders: Record<string, string> = {};
+          if (env.HIRO_API_KEY) hiroHeaders["X-Hiro-API-Key"] = env.HIRO_API_KEY;
+
+          const resp = await fetch(url, { headers: hiroHeaders });
+
+          if (resp.ok) {
+            const data = await resp.json() as { results?: Array<{ value: { repr: string } }> };
+            const repr = data.results?.[0]?.value?.repr;
+            const tokenMatch = repr?.match(/^u(\d+)$/);
+            identityAgentId = tokenMatch ? Number(tokenMatch[1]) : null;
+            identityCheckPerformed = true;
+
+            // Set sentinel for negative results to avoid hammering Hiro (5-min TTL)
+            if (identityAgentId == null) {
+              await kv.put(identitySentinelKey, "1", { expirationTtl: 300 });
+            }
+          } else {
+            // On Hiro error, log but don't set sentinel so we retry on next heartbeat
+            console.warn(`Identity check Hiro error ${resp.status} for ${agent.stxAddress}`);
+          }
+        } catch (error) {
+          // Don't fail check-in on identity detection errors
+          console.error("Identity detection failed during heartbeat:", error);
         }
-        identityCheckPerformed = true;
-      } catch (error) {
-        // Log error but don't fail check-in if identity detection fails
-        // Don't update lastIdentityCheck on error to allow retry on next heartbeat
-        console.error("Identity detection failed during heartbeat:", error);
       }
     }
 
@@ -565,7 +583,6 @@ export async function POST(request: NextRequest) {
       lastActiveAt: timestamp,
       checkInCount: checkInRecord.checkInCount,
       erc8004AgentId: identityAgentId,
-      lastIdentityCheck: identityCheckPerformed ? new Date().toISOString() : agent.lastIdentityCheck,
     };
 
     // Write updates to both btc: and stx: keys, fetch inbox in parallel
