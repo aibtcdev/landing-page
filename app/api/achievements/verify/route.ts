@@ -453,10 +453,20 @@ export async function POST(request: NextRequest) {
             );
           }
 
-          if (tx.sender_address !== agent.stxAddress) {
+          // Check sender: accept either tx.sender_address or the "sender" function arg
+          // (relay-mediated transfers have the relay as tx.sender_address but the agent as the sender arg)
+          const senderArg = tx.contract_call.function_args?.find(
+            (arg) => arg.name === "sender"
+          );
+          const senderArgAddress = senderArg?.repr.replace(/^'/, "");
+          const isSender =
+            tx.sender_address === agent.stxAddress ||
+            senderArgAddress === agent.stxAddress;
+
+          if (!isSender) {
             return NextResponse.json(
               {
-                error: `Transaction ${txid} sender (${tx.sender_address}) does not match agent STX address (${agent.stxAddress})`,
+                error: `Transaction ${txid} sender (${tx.sender_address}) and sender arg (${senderArgAddress ?? "missing"}) do not match agent STX address (${agent.stxAddress})`,
               },
               { status: 400 }
             );

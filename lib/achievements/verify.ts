@@ -175,6 +175,119 @@ export async function verifyStackerAchievement(
  * @param unisatApiKey - Unisat API key (Bearer token)
  * @returns true if the inscription is owned by btcAddress, false otherwise
  */
+/**
+ * sBTC token contract identifier used for connector achievement verification.
+ */
+const SBTC_CONTRACT_ID =
+  "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token";
+
+/**
+ * Verify if an agent has sent an sBTC transfer with memo to a registered agent (Connector achievement).
+ *
+ * Scans the agent's recent Stacks transactions for qualifying sBTC transfers.
+ * A qualifying transfer must:
+ * - Be a successful contract_call to sbtc-token transfer
+ * - Have the agent as the sender (via function args, to support relay-mediated txs)
+ * - Have a registered agent as the recipient
+ * - Include a memo
+ *
+ * @param stxAddress - Agent's Stacks address
+ * @param kv - Cloudflare KV namespace (to check recipient registration)
+ * @param hiroApiKey - Optional Hiro API key for higher rate limits
+ * @returns Object with qualifying txid and recipientAddress, or null if none found
+ */
+export async function verifyConnectorAchievement(
+  stxAddress: string,
+  kv: KVNamespace,
+  hiroApiKey?: string
+): Promise<{ txid: string; recipientAddress: string } | null> {
+  try {
+    const cacheKey = `stx-txs:${stxAddress}`;
+    let txs = await getCachedTransaction(cacheKey, kv);
+
+    if (!txs) {
+      const txsUrl = `https://api.hiro.so/extended/v1/address/${stxAddress}/transactions?limit=50`;
+      const resp = await fetch(txsUrl, {
+        headers: buildHiroHeaders(hiroApiKey),
+        signal: AbortSignal.timeout(10000),
+      });
+
+      if (!resp.ok) {
+        console.error(
+          `Failed to fetch transactions for ${stxAddress}: ${resp.status}`
+        );
+        return null;
+      }
+
+      const data = (await resp.json()) as {
+        results: Array<{
+          tx_id: string;
+          tx_status: string;
+          tx_type: string;
+          sender_address: string;
+          contract_call?: {
+            contract_id: string;
+            function_name: string;
+            function_args?: Array<{ name: string; repr: string }>;
+          };
+        }>;
+      };
+      txs = data.results;
+      await setCachedTransaction(cacheKey, txs, kv);
+    }
+
+    // Find a qualifying sBTC transfer
+    for (const tx of txs as Array<{
+      tx_id: string;
+      tx_status: string;
+      tx_type: string;
+      sender_address: string;
+      contract_call?: {
+        contract_id: string;
+        function_name: string;
+        function_args?: Array<{ name: string; repr: string }>;
+      };
+    }>) {
+      if (tx.tx_status !== "success") continue;
+      if (tx.tx_type !== "contract_call") continue;
+      if (!tx.contract_call) continue;
+      if (tx.contract_call.contract_id !== SBTC_CONTRACT_ID) continue;
+      if (tx.contract_call.function_name !== "transfer") continue;
+
+      const args = tx.contract_call.function_args;
+      if (!args) continue;
+
+      // Check sender arg matches agent (supports relay-mediated transfers)
+      const senderArg = args.find((a) => a.name === "sender");
+      if (!senderArg) continue;
+      const senderAddress = senderArg.repr.replace(/^'/, "");
+      if (senderAddress !== stxAddress) continue;
+
+      // Check memo is present
+      const memoArg = args.find((a) => a.name === "memo");
+      if (!memoArg || memoArg.repr.includes("none")) continue;
+
+      // Check recipient is a registered agent
+      const recipientArg = args.find((a) => a.name === "recipient");
+      if (!recipientArg) continue;
+      const recipientAddress = recipientArg.repr.replace(/^'/, "");
+
+      const recipientData = await kv.get(`stx:${recipientAddress}`);
+      if (!recipientData) continue;
+
+      return { txid: tx.tx_id, recipientAddress };
+    }
+
+    return null;
+  } catch (error) {
+    console.error(
+      `Failed to verify connector achievement for ${stxAddress}:`,
+      error
+    );
+    return null;
+  }
+}
+
 const INSCRIPTION_ID_RE = /^[a-fA-F0-9]{64}i\d+$/;
 
 export async function verifyInscriberAchievement(
