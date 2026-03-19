@@ -5,11 +5,10 @@ import { lookupAgent } from "@/lib/agent-lookup";
 /**
  * GET /api/identity/:address — Detect on-chain ERC-8004 identity for an agent.
  *
- * Runs the O(N) identity scan server-side so clients avoid CORS issues and
- * sequential Stacks API calls from the browser. If found, persists the
- * agentId back to KV on both btc: and stx: keys for future lookups.
- * If not found, persists `erc8004AgentId: null` with a `lastIdentityCheck`
- * timestamp to avoid repeating the scan on every profile view.
+ * Fetches ERC-8004 identity directly from Hiro NFT holdings API.
+ * Uses three-state caching: undefined = never checked (hit Hiro),
+ * null = checked and not found (return cached), number = confirmed.
+ * Persists result to KV on both btc: and stx: keys.
  *
  * Returns: { agentId: number | null }
  */
@@ -53,15 +52,22 @@ export async function GET(
       );
     }
 
-    // If we already have a positive result in KV, return it without hitting Hiro
-    if (agent.erc8004AgentId != null) {
+    // erc8004AgentId: number = confirmed identity, null = checked and not found,
+    // undefined = never checked. Only hit Hiro when undefined (first time).
+    if (agent.erc8004AgentId !== undefined) {
       return NextResponse.json(
-        { agentId: agent.erc8004AgentId },
-        { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
+        { agentId: agent.erc8004AgentId ?? null },
+        {
+          headers: {
+            "Cache-Control": agent.erc8004AgentId != null
+              ? "public, max-age=300, s-maxage=600"
+              : "public, max-age=60, s-maxage=120",
+          },
+        }
       );
     }
 
-    // Only fetch from Hiro when agentId is unknown
+    // First check — fetch from Hiro
     const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
     const assetId = `${contract}::agent-identity`;
     const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;

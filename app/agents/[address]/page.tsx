@@ -87,8 +87,9 @@ async function resolveIdentity(
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
-  // Skip Hiro call if we already have a positive result
-  if (agent.erc8004AgentId != null) return agent;
+  // Skip Hiro call if we have a definitive result (number or null).
+  // Only fetch when undefined (never checked).
+  if (agent.erc8004AgentId !== undefined) return agent;
 
   // Fetch from Hiro only when agentId is unknown
   try {
