@@ -4,7 +4,8 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { normalizeAgentRecord } from "@/lib/agents";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
-import { getAchievementCount } from "@/lib/achievements";
+import { getAgentAchievementIds } from "@/lib/achievements";
+import { SCORING, computeLevelBonus, computeCheckInBonus } from "@/lib/scoring";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -91,7 +92,7 @@ export async function GET(request: NextRequest) {
         },
       },
       sortingRules: [
-        "Default (sort=score): Composite activity score descending. Score = (level * 1000) + (achievements * 100) + checkIns + recency bonus (+50 active, +25 recent)",
+        "Default (sort=score): Composite activity score descending. Score = levelBonus (100 registered / 500 genesis) + (achievements * 100) + min(checkIns, 50) + bnsName (300) + recency bonus (+50 active, +25 recent)",
         "Registration (sort=registration): Primary sort by level (highest first), secondary sort by verifiedAt (earliest first, pioneer priority)",
         "Activity (sort=activity): Sort by lastActiveAt descending (most recently active first). Agents with no lastActiveAt sort last.",
       ],
@@ -185,31 +186,43 @@ export async function GET(request: NextRequest) {
       })
     );
 
-    // Fetch achievement counts for all agents
-    const achievementCounts = await Promise.all(
-      agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
+    // Fetch achievement IDs and counts for all agents (single KV read per agent)
+    const agentAchievements = await Promise.all(
+      agents.map((agent) => getAgentAchievementIds(kv, agent.btcAddress))
     );
 
     // Compute levels and build ranked list with composite scores
     const now = Date.now();
     let ranked = agents.map((agent, i) => {
       const level = computeLevel(agent, claims[i]);
-      const achievementCount = achievementCounts[i];
+      const { count: achievementCount } = agentAchievements[i];
       const checkInCount = agent.checkInCount || 0;
 
-      // Calculate recency bonus
+      // Level bonus: 100 for registered, 500 for genesis (was level * 1000)
+      const levelBonus = computeLevelBonus(level);
+
+      // Check-in bonus: capped at 50 to reduce passive farming advantage
+      const checkInBonus = computeCheckInBonus(checkInCount);
+
+      // BNS name bonus: +300 for having a registered BNS name
+      const bnsBonus = agent.bnsName ? SCORING.BNS_NAME : 0;
+
+      // Achievement bonus: 100 per achievement
+      const achievementBonus = achievementCount * SCORING.ACHIEVEMENT_BASE;
+
+      // Recency bonus
       let recencyBonus = 0;
       if (agent.lastActiveAt) {
         const timeSinceActive = now - new Date(agent.lastActiveAt).getTime();
         if (timeSinceActive < ACTIVITY_THRESHOLDS.active) {
-          recencyBonus = 50; // Active within last hour
+          recencyBonus = SCORING.RECENCY_ACTIVE;
         } else if (timeSinceActive < ACTIVITY_THRESHOLDS.recent) {
-          recencyBonus = 25; // Active within last 6 hours
+          recencyBonus = SCORING.RECENCY_RECENT;
         }
       }
 
-      // Composite score: (level * 1000) + (achievements * 100) + checkIns + recency
-      const score = (level * 1000) + (achievementCount * 100) + checkInCount + recencyBonus;
+      // Composite score: levelBonus + checkInBonus + bnsBonus + achievementBonus + recencyBonus
+      const score = levelBonus + checkInBonus + bnsBonus + achievementBonus + recencyBonus;
 
       return {
         ...normalizeAgentRecord(agent),
