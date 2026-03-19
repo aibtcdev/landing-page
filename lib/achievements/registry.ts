@@ -96,6 +96,12 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
     description: "Referred another agent to the platform",
     category: "engagement",
   },
+  {
+    id: "x402-earner",
+    name: "x402 Earner",
+    description: "Received a paid x402 inbox message",
+    category: "onchain",
+  },
 ];
 
 /**

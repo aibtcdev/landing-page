@@ -773,6 +773,11 @@ export async function POST(
       console.error("Failed to check receiver achievement during inbox store:", error);
     }
 
+    // Grant x402-earner achievement to recipient on first x402 payment received (idempotent)
+    await grantAchievement(kv, toBtcAddress, "x402-earner", { messageId, paymentTxid }).catch((err) =>
+      logger.warn("grantAchievement failed (non-fatal)", { err, toBtcAddress })
+    );
+
     logger.info("Message stored via txid recovery", {
       messageId,
       fromAddress,
@@ -917,6 +922,11 @@ export async function POST(
   } catch (error) {
     console.error("Failed to check receiver achievement during inbox store:", error);
   }
+
+  // Grant x402-earner achievement to recipient on first x402 payment received (idempotent)
+  await grantAchievement(kv, toBtcAddress, "x402-earner", { messageId, paymentTxid: message.paymentTxid }).catch((err) =>
+    logger.warn("grantAchievement failed (non-fatal)", { err, toBtcAddress })
+  );
 
   logger.info("Message stored", {
     messageId,
