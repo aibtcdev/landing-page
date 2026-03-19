@@ -185,13 +185,12 @@ export async function POST(
       }
     }
 
-    logger.warn("Validation failed", { errors: validation.errors });
+    logger.warn("Validation failed", { errors: validation.errors.map((e) => e.message) });
     return NextResponse.json(
       {
-        error: "Validation failed",
+        error: "validation_failed",
         errors: validation.errors,
-        hints: validation.hints,
-        documentation: "https://aibtc.com/docs/messaging.txt",
+        docs_url: "https://aibtc.com/llms.txt",
       },
       { status: 400 }
     );

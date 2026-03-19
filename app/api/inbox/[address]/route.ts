@@ -545,13 +545,12 @@ export async function POST(
   // Validate message body (paymentTxid/paymentSatoshis are optional for the initial 402 request)
   const validation = validateInboxMessage(body);
   if (validation.errors) {
-    logger.warn("Validation failed", { errors: validation.errors });
+    logger.warn("Validation failed", { errors: validation.errors.map((e) => e.message) });
     return NextResponse.json(
       {
-        error: "Validation failed",
+        error: "validation_failed",
         errors: validation.errors,
-        hints: validation.hints,
-        documentation: "https://aibtc.com/docs/messaging.txt",
+        docs_url: "https://aibtc.com/llms.txt",
       },
       { status: 400 }
     );
