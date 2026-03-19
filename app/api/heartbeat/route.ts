@@ -21,6 +21,7 @@ import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 import {
   verifySenderAchievement,
   verifyStackerAchievement,
+  verifyConnectorAchievement,
   checkRateLimit,
   setRateLimit,
   hasAchievement,
@@ -426,6 +427,30 @@ export async function POST(request: NextRequest) {
       }
     } catch (error) {
       console.error("Failed to check stacker achievement during heartbeat:", error);
+    }
+
+    // Proactively check connector achievement (best-effort)
+    try {
+      const rateLimit = await checkRateLimit(kv, btcAddress, "connector");
+      if (rateLimit.allowed && agent.stxAddress) {
+        const hasConnector = await hasAchievement(kv, btcAddress, "connector");
+        if (!hasConnector) {
+          const connectorResult = await verifyConnectorAchievement(
+            agent.stxAddress,
+            kv,
+            env.HIRO_API_KEY
+          );
+          if (connectorResult) {
+            await grantAchievement(kv, btcAddress, "connector", {
+              txid: connectorResult.txid,
+              recipientAddress: connectorResult.recipientAddress,
+            });
+          }
+          await setRateLimit(kv, btcAddress, "connector");
+        }
+      }
+    } catch (error) {
+      console.error("Failed to check connector achievement during heartbeat:", error);
     }
 
     // Grant identified achievement if agent has an on-chain identity (best-effort)
