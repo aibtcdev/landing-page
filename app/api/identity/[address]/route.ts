@@ -1,8 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
-import { detectAgentIdentity } from "@/lib/identity/detection";
-import { IDENTITY_CHECK_TTL_MS } from "@/lib/identity/constants";
 
 /**
  * GET /api/identity/:address — Detect on-chain ERC-8004 identity for an agent.
@@ -55,56 +53,47 @@ export async function GET(
       );
     }
 
-    // Cache check: if we checked recently (positive or negative), return cached result
-    const isCheckedRecently =
-      agent.lastIdentityCheck &&
-      Date.now() - new Date(agent.lastIdentityCheck).getTime() < IDENTITY_CHECK_TTL_MS;
+    // Fetch identity directly from Hiro NFT holdings API
+    const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
+    const assetId = `${contract}::agent-identity`;
+    const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
-    if (isCheckedRecently) {
-      if (agent.erc8004AgentId !== undefined && agent.erc8004AgentId !== null) {
-        return NextResponse.json(
-          { agentId: agent.erc8004AgentId },
-          { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
-        );
-      }
-      if (agent.erc8004AgentId === null) {
-        return NextResponse.json(
-          { agentId: null },
-          { headers: { "Cache-Control": "public, max-age=60, s-maxage=120" } }
-        );
-      }
-    }
+    const headers: Record<string, string> = {};
+    if (env.HIRO_API_KEY) headers["X-Hiro-API-Key"] = env.HIRO_API_KEY;
 
-    // Run the identity scan server-side
-    const identity = await detectAgentIdentity(agent.stxAddress, env.HIRO_API_KEY, kv);
-
-    // Persist the result (positive or negative) to KV on both keys
-    agent.erc8004AgentId = identity ? identity.agentId : null;
-    agent.lastIdentityCheck = new Date().toISOString();
-    const updated = JSON.stringify(agent);
-    await Promise.all([
-      kv.put(`stx:${agent.stxAddress}`, updated),
-      kv.put(`btc:${agent.btcAddress}`, updated),
-    ]);
-
-    if (identity) {
+    const resp = await fetch(url, { headers });
+    if (!resp.ok) {
       return NextResponse.json(
-        { agentId: identity.agentId },
-        {
-          headers: {
-            "Cache-Control": "public, max-age=300, s-maxage=600",
-          },
-        }
+        { error: `Hiro API error: ${resp.status}` },
+        { status: 502 }
       );
     }
 
+    const data = await resp.json() as {
+      results?: Array<{ value: { repr: string } }>;
+    };
+
+    const repr = data.results?.[0]?.value?.repr;
+    const match = repr?.match(/^u(\d+)$/);
+    const agentId = match ? Number(match[1]) : null;
+
+    // Persist to KV if changed
+    if (agentId !== agent.erc8004AgentId) {
+      agent.erc8004AgentId = agentId;
+      const updated = JSON.stringify(agent);
+      await Promise.all([
+        kv.put(`stx:${agent.stxAddress}`, updated),
+        kv.put(`btc:${agent.btcAddress}`, updated),
+      ]);
+    }
+
+    const cacheHeader = agentId != null
+      ? "public, max-age=300, s-maxage=600"
+      : "public, max-age=60, s-maxage=120";
+
     return NextResponse.json(
-      { agentId: null },
-      {
-        headers: {
-          "Cache-Control": "public, max-age=60, s-maxage=120",
-        },
-      }
+      { agentId },
+      { headers: { "Cache-Control": cacheHeader } }
     );
   } catch (e) {
     return NextResponse.json(
