@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import { generateName } from "@/lib/name-generator";
 import { getNextLevel } from "@/lib/levels";
 import { X_HANDLE } from "@/lib/constants";
@@ -233,6 +234,9 @@ export async function POST(request: NextRequest) {
     };
 
     await agentsKv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
+
+    // Invalidate cached agent list (level changed to Genesis)
+    void invalidateAgentListCache(agentsKv);
 
     // Update agent record with owner (X handle) and create reverse index
     const updatedAgent = { ...agent, owner: ownerHandle };

@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import {
   publicKeyFromSignatureRsv,
   getAddressFromPublicKey,
@@ -834,6 +835,9 @@ export async function POST(request: NextRequest) {
         "Submit your compressed public key to enable Nostr integration and full platform features. " +
         `Use the challenge system: GET /api/challenge?address=${btcResult.address}&action=update-pubkey`;
     }
+
+    // Invalidate cached agent list so listings reflect the new registration
+    void invalidateAgentListCache(kv);
 
     return NextResponse.json(responseBody);
   } catch (e) {

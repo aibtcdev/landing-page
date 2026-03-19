@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { getAgentLevel, getNextLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
@@ -591,6 +592,9 @@ export async function POST(request: NextRequest) {
       kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent)),
       kv.get(`inbox:agent:${btcAddress}`),
     ]);
+
+    // Invalidate cached agent list (check-in count and lastActiveAt changed)
+    void invalidateAgentListCache(kv);
 
     // Build orientation and level info (single getAgentLevel call inside getOrientation)
     const unreadCount = parseUnreadCount(inboxIndexData);

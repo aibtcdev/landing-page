@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { generateName } from "@/lib/name-generator";
 import { computeLevel } from "@/lib/levels";
@@ -318,6 +319,9 @@ export async function POST(request: NextRequest) {
       registeredAt: agent.verifiedAt,
     };
     await storeVouch(kv, vouchRecord);
+
+    // Invalidate cached agent list (referredBy changed, achievement may be granted)
+    void invalidateAgentListCache(kv);
 
     // Grant voucher achievement to referrer on their first successful referral (best-effort)
     try {

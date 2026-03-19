@@ -1,9 +1,6 @@
 import type { Metadata } from "next";
-import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord, ClaimStatus } from "@/lib/types";
-import { computeLevel, LEVELS } from "@/lib/levels";
-import { getAchievementCount } from "@/lib/achievements";
+import { getCachedAgentList } from "@/lib/cache";
 import { getReputationSummary } from "@/lib/identity";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
@@ -25,61 +22,10 @@ export const metadata: Metadata = {
 async function fetchAgents() {
   const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
-
-  const agents: AgentRecord[] = [];
-  let cursor: string | undefined;
-  let listComplete = false;
-
-  while (!listComplete) {
-    const listResult = await kv.list({ prefix: "stx:", cursor });
-    listComplete = listResult.list_complete;
-    cursor = !listResult.list_complete ? listResult.cursor : undefined;
-
-    const values = await Promise.all(
-      listResult.keys.map(async (key) => {
-        const value = await kv.get(key.name);
-        if (!value) return null;
-        try {
-          return JSON.parse(value) as AgentRecord;
-        } catch {
-          return null;
-        }
-      })
-    );
-    agents.push(...values.filter((v): v is AgentRecord => v !== null));
-  }
-
-  // Look up claim status, inbox data, and achievement counts in parallel
-  const [claimLookups, inboxLookups, achievementCounts] = await Promise.all([
-    Promise.all(
-      agents.map(async (agent) => {
-        const claimData = await kv.get(`claim:${agent.btcAddress}`);
-        if (!claimData) return null;
-        try {
-          return JSON.parse(claimData) as ClaimStatus;
-        } catch {
-          return null;
-        }
-      })
-    ),
-    Promise.all(
-      agents.map(async (agent) => {
-        const inboxData = await kv.get(`inbox:agent:${agent.btcAddress}`);
-        if (!inboxData) return null;
-        try {
-          return JSON.parse(inboxData) as { messageIds: string[]; unreadCount: number };
-        } catch {
-          return null;
-        }
-      })
-    ),
-    Promise.all(
-      agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
-    ),
-  ]);
+  const { agents } = await getCachedAgentList(kv);
 
   // Fetch reputation summaries for agents with on-chain identity (erc8004AgentId).
-  // Chunked to avoid overwhelming the Stacks API with unbounded parallel requests.
+  // This is the only external API call — chunked to avoid overwhelming the Stacks API.
   const REPUTATION_CONCURRENCY = 10;
   const reputationLookups: (Awaited<ReturnType<typeof getReputationSummary>> | null)[] = new Array(agents.length).fill(null);
   for (let i = 0; i < agents.length; i += REPUTATION_CONCURRENCY) {
@@ -98,16 +44,29 @@ async function fetchAgents() {
   }
 
   return agents.map((agent, i) => {
-    const level = computeLevel(agent, claimLookups[i]);
-    const inbox = inboxLookups[i];
     const reputation = reputationLookups[i];
     return {
-      ...agent,
-      level,
-      levelName: LEVELS[level].name,
-      messageCount: inbox?.messageIds.length ?? 0,
-      unreadCount: inbox?.unreadCount ?? 0,
-      achievementCount: achievementCounts[i],
+      // Convert CachedAgent (null) to AgentRecord-compatible shape (undefined)
+      stxAddress: agent.stxAddress,
+      btcAddress: agent.btcAddress,
+      stxPublicKey: agent.stxPublicKey,
+      btcPublicKey: agent.btcPublicKey,
+      taprootAddress: agent.taprootAddress ?? undefined,
+      displayName: agent.displayName ?? undefined,
+      description: agent.description ?? undefined,
+      bnsName: agent.bnsName ?? undefined,
+      owner: agent.owner ?? undefined,
+      verifiedAt: agent.verifiedAt,
+      lastActiveAt: agent.lastActiveAt ?? undefined,
+      checkInCount: agent.checkInCount,
+      erc8004AgentId: agent.erc8004AgentId ?? undefined,
+      nostrPublicKey: agent.nostrPublicKey ?? undefined,
+      referredBy: agent.referredBy ?? undefined,
+      level: agent.level,
+      levelName: agent.levelName,
+      messageCount: agent.messageCount,
+      unreadCount: agent.unreadCount,
+      achievementCount: agent.achievementCount,
       reputationScore: reputation?.summaryValue ?? 0,
       reputationCount: reputation?.count ?? 0,
     };

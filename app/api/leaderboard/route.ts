@@ -1,11 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord, ClaimStatus } from "@/lib/types";
-import { normalizeAgentRecord } from "@/lib/agents";
-import { computeLevel, LEVELS } from "@/lib/levels";
+import { LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
-import { getAgentAchievementIds } from "@/lib/achievements";
 import { SCORING, computeLevelBonus, computeCheckInBonus } from "@/lib/scoring";
+import { getCachedAgentList } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -144,59 +142,12 @@ export async function GET(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Load all agents
-    const agents: AgentRecord[] = [];
-    let cursor: string | undefined;
-    let listComplete = false;
+    const { agents: cachedAgents } = await getCachedAgentList(kv);
 
-    while (!listComplete) {
-      const listResult = await kv.list<AgentRecord>({
-        prefix: "stx:",
-        cursor,
-      });
-      listComplete = listResult.list_complete;
-      cursor = !listResult.list_complete ? listResult.cursor : undefined;
-
-      const values = await Promise.all(
-        listResult.keys.map(async (key) => {
-          const value = await kv.get(key.name);
-          if (!value) return null;
-          try {
-            return JSON.parse(value) as AgentRecord;
-          } catch (e) {
-            console.error(`Failed to parse agent record ${key.name}:`, e);
-            return null;
-          }
-        })
-      );
-      agents.push(...values.filter((v): v is AgentRecord => v !== null));
-    }
-
-    // Look up claims for all agents
-    const claims = await Promise.all(
-      agents.map(async (agent) => {
-        const claimData = await kv.get(`claim:${agent.btcAddress}`);
-        if (!claimData) return null;
-        try {
-          return JSON.parse(claimData) as ClaimStatus;
-        } catch (e) {
-          console.error(`Failed to parse claim for ${agent.btcAddress}:`, e);
-          return null;
-        }
-      })
-    );
-
-    // Fetch achievement IDs and counts for all agents (single KV read per agent)
-    const agentAchievements = await Promise.all(
-      agents.map((agent) => getAgentAchievementIds(kv, agent.btcAddress))
-    );
-
-    // Compute levels and build ranked list with composite scores
+    // Build ranked list with composite scores from cached data
     const now = Date.now();
-    let ranked = agents.map((agent, i) => {
-      const level = computeLevel(agent, claims[i]);
-      const { count: achievementCount } = agentAchievements[i];
-      const checkInCount = agent.checkInCount || 0;
+    let ranked = cachedAgents.map((agent) => {
+      const { level, achievementCount, checkInCount } = agent;
 
       // Level bonus: 100 for registered, 500 for genesis (was level * 1000)
       const levelBonus = computeLevelBonus(level);
@@ -225,10 +176,7 @@ export async function GET(request: NextRequest) {
       const score = levelBonus + checkInBonus + bnsBonus + achievementBonus + recencyBonus;
 
       return {
-        ...normalizeAgentRecord(agent),
-        level,
-        levelName: LEVELS[level].name,
-        achievementCount,
+        ...agent,
         score,
       };
     });
@@ -297,7 +245,7 @@ export async function GET(request: NextRequest) {
       },
       {
         headers: {
-          "Cache-Control": "public, max-age=30, s-maxage=120",
+          "Cache-Control": "public, max-age=60, s-maxage=300",
         },
       }
     );

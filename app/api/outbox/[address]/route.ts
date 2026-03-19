@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
@@ -435,6 +436,9 @@ export async function POST(
     toBtcAddress: outboxReply.toBtcAddress,
     ...(isRecovery && { recovered: true }),
   });
+
+  // Invalidate cached agent list (communicator achievement may have been granted)
+  void invalidateAgentListCache(kv);
 
   return NextResponse.json(
     {

@@ -7,8 +7,7 @@ import Footer from "./components/Footer";
 import CopyButton from "./components/CopyButton";
 import HomeHeroStats from "./components/HomeHeroStats";
 import ActivityFeed from "./components/ActivityFeed";
-import type { AgentRecord, ClaimStatus } from "@/lib/types";
-import { computeLevel, LEVELS } from "@/lib/levels";
+import { getCachedAgentList } from "@/lib/cache";
 
 export const dynamic = "force-dynamic";
 
@@ -82,7 +81,7 @@ interface LeaderboardAgent {
   rank: number;
   stxAddress: string;
   btcAddress: string;
-  displayName?: string;
+  displayName?: string | null;
   bnsName?: string | null;
   verifiedAt: string;
   level: number;
@@ -90,123 +89,42 @@ interface LeaderboardAgent {
 }
 
 /**
- * Fetch health data and leaderboard data from KV in parallel.
+ * Fetch home page data from the cached agent list (single KV read).
  */
 async function fetchHomeData() {
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const { agents, stats } = await getCachedAgentList(kv);
 
-    // Count agents, load leaderboard data, and get message count in parallel
-    const [registeredCount, leaderboard, messageCount] = await Promise.all([
-      countAgents(kv),
-      loadLeaderboard(kv, 12),
-      countMessages(kv),
-    ]);
+    // Sort: level desc, then check-ins desc, then recent first
+    const sorted = [...agents].sort((a, b) => {
+      let cmp = b.level - a.level;
+      if (cmp === 0) cmp = b.checkInCount - a.checkInCount;
+      if (cmp === 0) cmp = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
+      return cmp;
+    });
 
-    return { registeredCount, topAgents: leaderboard.agents, genesisCount: leaderboard.genesisCount, messageCount };
-  } catch {
-    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], genesisCount: 0, messageCount: 0 };
-  }
-}
-
-async function countMessages(kv: KVNamespace): Promise<number> {
-  let count = 0;
-  let cursor: string | undefined;
-  let complete = false;
-  while (!complete) {
-    const page = await kv.list({ prefix: "inbox:message:", cursor });
-    count += page.keys.length;
-    complete = page.list_complete;
-    cursor = !page.list_complete ? page.cursor : undefined;
-  }
-  return count;
-}
-
-async function countAgents(kv: KVNamespace): Promise<number> {
-  let count = 0;
-  let cursor: string | undefined;
-  let complete = false;
-  while (!complete) {
-    const page = await kv.list({ prefix: "stx:", cursor });
-    count += page.keys.length;
-    complete = page.list_complete;
-    cursor = !page.list_complete ? page.cursor : undefined;
-  }
-  return count;
-}
-
-async function loadLeaderboard(kv: KVNamespace, limit: number): Promise<{ agents: LeaderboardAgent[]; genesisCount: number }> {
-  // Load all agents
-  const agents: AgentRecord[] = [];
-  let cursor: string | undefined;
-  let listComplete = false;
-
-  while (!listComplete) {
-    const listResult = await kv.list({ prefix: "stx:", cursor });
-    listComplete = listResult.list_complete;
-    cursor = !listResult.list_complete ? listResult.cursor : undefined;
-
-    const values = await Promise.all(
-      listResult.keys.map(async (key) => {
-        const value = await kv.get(key.name);
-        if (!value) return null;
-        try {
-          return JSON.parse(value) as AgentRecord;
-        } catch {
-          return null;
-        }
-      })
-    );
-    agents.push(...values.filter((v): v is AgentRecord => v !== null));
-  }
-
-  // Look up claims in parallel
-  const claims = await Promise.all(
-    agents.map(async (agent) => {
-      const claimData = await kv.get(`claim:${agent.btcAddress}`);
-      if (!claimData) return null;
-      try {
-        return JSON.parse(claimData) as ClaimStatus;
-      } catch {
-        return null;
-      }
-    })
-  );
-
-  // Compute levels and sort
-  const agentsWithLevels = agents.map((agent, i) => {
-    const level = computeLevel(agent, claims[i]);
-    return {
+    const topAgents: LeaderboardAgent[] = sorted.slice(0, 12).map((agent, i) => ({
+      rank: i + 1,
       stxAddress: agent.stxAddress,
       btcAddress: agent.btcAddress,
       displayName: agent.displayName,
       bnsName: agent.bnsName,
       verifiedAt: agent.verifiedAt,
-      level,
-      levelName: LEVELS[level].name,
-      lastActiveAt: agent.lastActiveAt,
-      checkInCount: agent.checkInCount,
+      level: agent.level,
+      levelName: agent.levelName,
+    }));
+
+    return {
+      registeredCount: stats.total,
+      topAgents,
+      genesisCount: stats.genesisCount,
+      messageCount: stats.messageCount,
     };
-  });
-
-  // Sort: level desc, then check-ins desc, then recent first
-  agentsWithLevels.sort((a, b) => {
-    let cmp = (b.level ?? 0) - (a.level ?? 0);
-    if (cmp === 0) cmp = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
-    if (cmp === 0) cmp = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
-    return cmp;
-  });
-
-  const genesisCount = agentsWithLevels.filter((a) => (a.level ?? 0) >= 2).length;
-
-  return {
-    agents: agentsWithLevels.slice(0, limit).map((agent, i) => ({
-      ...agent,
-      rank: i + 1,
-    })),
-    genesisCount,
-  };
+  } catch {
+    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], genesisCount: 0, messageCount: 0 };
+  }
 }
 
 export default async function Home() {

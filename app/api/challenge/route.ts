@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { invalidateAgentListCache } from "@/lib/cache";
 import {
   generateChallenge,
   storeChallenge,
@@ -402,6 +403,9 @@ export async function POST(request: NextRequest) {
     }
 
     const levelInfo = getAgentLevel(updatedAgent, claim);
+
+    // Invalidate cached agent list (profile fields changed)
+    void invalidateAgentListCache(kv);
 
     return NextResponse.json({
       success: true,
