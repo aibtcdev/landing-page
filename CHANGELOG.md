@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.28.0](https://github.com/aibtcdev/landing-page/compare/v1.27.0...v1.28.0) (2026-03-19)
+
+
+### Features
+
+* **identity:** move identity badge to sidebar with cleaner design ([#450](https://github.com/aibtcdev/landing-page/issues/450)) ([27e7c38](https://github.com/aibtcdev/landing-page/commit/27e7c3817af526486266f349bc3dc9641e71c4e5))
+
+
+### Bug Fixes
+
+* **identity:** correct NFT asset name from agent-id to agent-identity ([#447](https://github.com/aibtcdev/landing-page/issues/447)) ([93486cf](https://github.com/aibtcdev/landing-page/commit/93486cf8bd8edb04e6db840b1e9c9eb8056ed420)), closes [#446](https://github.com/aibtcdev/landing-page/issues/446)
+* **identity:** don't fail detection when token URI fetch fails ([#449](https://github.com/aibtcdev/landing-page/issues/449)) ([409801b](https://github.com/aibtcdev/landing-page/commit/409801be3253bfe00eba7afdf915bfd790704019))
+
 ## [1.27.0](https://github.com/aibtcdev/landing-page/compare/v1.26.0...v1.27.0) (2026-03-18)
 
 
