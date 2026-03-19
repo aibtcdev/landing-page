@@ -53,7 +53,15 @@ export async function GET(
       );
     }
 
-    // Fetch identity directly from Hiro NFT holdings API
+    // If we already have a positive result in KV, return it without hitting Hiro
+    if (agent.erc8004AgentId != null) {
+      return NextResponse.json(
+        { agentId: agent.erc8004AgentId },
+        { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
+      );
+    }
+
+    // Only fetch from Hiro when agentId is unknown
     const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
     const assetId = `${contract}::agent-identity`;
     const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;

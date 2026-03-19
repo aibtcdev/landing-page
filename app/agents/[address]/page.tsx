@@ -87,7 +87,10 @@ async function resolveIdentity(
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
-  // Direct Hiro NFT holdings check — single GET, no retries, no callReadOnly
+  // Skip Hiro call if we already have a positive result
+  if (agent.erc8004AgentId != null) return agent;
+
+  // Fetch from Hiro only when agentId is unknown
   try {
     const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
     const assetId = `${contract}::agent-identity`;
