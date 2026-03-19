@@ -945,7 +945,7 @@ export async function POST(
   });
 
   // Invalidate cached agent list (inbox message count changed)
-  void invalidateAgentListCache(kv);
+  await invalidateAgentListCache(kv);
 
   // Build payment-response header (base64-encoded per x402 v2 spec)
   const paymentResponseData = {

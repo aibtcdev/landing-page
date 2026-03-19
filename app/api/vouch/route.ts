@@ -321,7 +321,7 @@ export async function POST(request: NextRequest) {
     await storeVouch(kv, vouchRecord);
 
     // Invalidate cached agent list (referredBy changed, achievement may be granted)
-    void invalidateAgentListCache(kv);
+    await invalidateAgentListCache(kv);
 
     // Grant voucher achievement to referrer on their first successful referral (best-effort)
     try {

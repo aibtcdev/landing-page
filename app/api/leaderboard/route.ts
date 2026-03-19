@@ -176,7 +176,24 @@ export async function GET(request: NextRequest) {
       const score = levelBonus + checkInBonus + bnsBonus + achievementBonus + recencyBonus;
 
       return {
-        ...agent,
+        stxAddress: agent.stxAddress,
+        btcAddress: agent.btcAddress,
+        stxPublicKey: agent.stxPublicKey,
+        btcPublicKey: agent.btcPublicKey,
+        taprootAddress: agent.taprootAddress,
+        displayName: agent.displayName,
+        description: agent.description,
+        bnsName: agent.bnsName,
+        owner: agent.owner,
+        verifiedAt: agent.verifiedAt,
+        lastActiveAt: agent.lastActiveAt,
+        checkInCount: agent.checkInCount,
+        erc8004AgentId: agent.erc8004AgentId,
+        nostrPublicKey: agent.nostrPublicKey,
+        referredBy: agent.referredBy,
+        level: agent.level,
+        levelName: agent.levelName,
+        achievementCount: agent.achievementCount,
         score,
       };
     });

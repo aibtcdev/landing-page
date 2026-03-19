@@ -629,7 +629,7 @@ export async function POST(request: NextRequest) {
 
     // Invalidate cached agent list if any achievements were earned
     if (earned.length > 0) {
-      void invalidateAgentListCache(kv);
+      await invalidateAgentListCache(kv);
     }
 
     return NextResponse.json({

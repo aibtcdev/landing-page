@@ -837,7 +837,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Invalidate cached agent list so listings reflect the new registration
-    void invalidateAgentListCache(kv);
+    await invalidateAgentListCache(kv);
 
     return NextResponse.json(responseBody);
   } catch (e) {

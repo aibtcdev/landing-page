@@ -262,7 +262,7 @@ export async function DELETE(request: NextRequest) {
     );
 
     // Invalidate cached agent list
-    void invalidateAgentListCache(kv);
+    await invalidateAgentListCache(kv);
 
     return NextResponse.json({
       success: true,

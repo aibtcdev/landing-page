@@ -26,7 +26,8 @@ export async function getCachedAgentList(
     try {
       return JSON.parse(cached) as CachedAgentList;
     } catch {
-      // Corrupted cache — fall through to rebuild
+      // Corrupted cache — delete before rebuilding to prevent repeated parse failures
+      await kv.delete(CACHE_KEY).catch(() => {});
     }
   }
 
@@ -163,12 +164,14 @@ async function rebuildAgentListCache(
     cachedAt: new Date().toISOString(),
   };
 
-  // Store with TTL — fire-and-forget
-  void kv
-    .put(CACHE_KEY, JSON.stringify(snapshot), {
+  // Store with TTL (awaited to ensure persistence in Workers runtime)
+  try {
+    await kv.put(CACHE_KEY, JSON.stringify(snapshot), {
       expirationTtl: CACHE_TTL_SECONDS,
-    })
-    .catch(() => {});
+    });
+  } catch {
+    // Best-effort — snapshot is still returned even if write fails
+  }
 
   return snapshot;
 }

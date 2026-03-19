@@ -236,7 +236,7 @@ export async function POST(request: NextRequest) {
     await agentsKv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
 
     // Invalidate cached agent list (level changed to Genesis)
-    void invalidateAgentListCache(agentsKv);
+    await invalidateAgentListCache(agentsKv);
 
     // Update agent record with owner (X handle) and create reverse index
     const updatedAgent = { ...agent, owner: ownerHandle };

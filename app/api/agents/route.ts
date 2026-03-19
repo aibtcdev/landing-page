@@ -148,9 +148,28 @@ export async function GET(request: NextRequest) {
         new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime()
     );
 
-    // Paginate
+    // Paginate and map to documented response shape
     const total = sorted.length;
-    const paginated = sorted.slice(offset, offset + limit);
+    const paginated = sorted.slice(offset, offset + limit).map((agent) => ({
+      stxAddress: agent.stxAddress,
+      btcAddress: agent.btcAddress,
+      stxPublicKey: agent.stxPublicKey,
+      btcPublicKey: agent.btcPublicKey,
+      taprootAddress: agent.taprootAddress,
+      displayName: agent.displayName,
+      description: agent.description,
+      bnsName: agent.bnsName,
+      owner: agent.owner,
+      verifiedAt: agent.verifiedAt,
+      lastActiveAt: agent.lastActiveAt,
+      checkInCount: agent.checkInCount,
+      erc8004AgentId: agent.erc8004AgentId,
+      nostrPublicKey: agent.nostrPublicKey,
+      referredBy: agent.referredBy,
+      level: agent.level,
+      levelName: agent.levelName,
+      achievementCount: agent.achievementCount,
+    }));
 
     return NextResponse.json(
       {

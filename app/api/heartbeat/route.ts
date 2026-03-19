@@ -594,7 +594,7 @@ export async function POST(request: NextRequest) {
     ]);
 
     // Invalidate cached agent list (check-in count and lastActiveAt changed)
-    void invalidateAgentListCache(kv);
+    await invalidateAgentListCache(kv);
 
     // Build orientation and level info (single getAgentLevel call inside getOrientation)
     const unreadCount = parseUnreadCount(inboxIndexData);

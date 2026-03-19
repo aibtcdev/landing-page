@@ -438,7 +438,7 @@ export async function POST(
   });
 
   // Invalidate cached agent list (communicator achievement may have been granted)
-  void invalidateAgentListCache(kv);
+  await invalidateAgentListCache(kv);
 
   return NextResponse.json(
     {
