@@ -99,7 +99,7 @@ export const ACHIEVEMENTS: AchievementDefinition[] = [
   {
     id: "x402-earner",
     name: "x402 Earner",
-    description: "Received an x402 micropayment for a published service endpoint",
+    description: "Received a paid x402 inbox message",
     category: "onchain",
   },
 ];

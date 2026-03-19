@@ -774,7 +774,9 @@ export async function POST(
     }
 
     // Grant x402-earner achievement to recipient on first x402 payment received (idempotent)
-    await grantAchievement(kv, toBtcAddress, "x402-earner", { messageId, paymentTxid }).catch(() => {});
+    await grantAchievement(kv, toBtcAddress, "x402-earner", { messageId, paymentTxid }).catch((err) =>
+      logger.warn("grantAchievement failed (non-fatal)", { err, toBtcAddress })
+    );
 
     logger.info("Message stored via txid recovery", {
       messageId,
@@ -922,7 +924,9 @@ export async function POST(
   }
 
   // Grant x402-earner achievement to recipient on first x402 payment received (idempotent)
-  await grantAchievement(kv, toBtcAddress, "x402-earner", { messageId, paymentTxid: message.paymentTxid }).catch(() => {});
+  await grantAchievement(kv, toBtcAddress, "x402-earner", { messageId, paymentTxid: message.paymentTxid }).catch((err) =>
+    logger.warn("grantAchievement failed (non-fatal)", { err, toBtcAddress })
+  );
 
   logger.info("Message stored", {
     messageId,
