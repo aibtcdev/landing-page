@@ -9,7 +9,12 @@ import {
   getCachedTransaction,
   setCachedTransaction,
 } from "@/lib/identity/kv-cache";
-import { buildHiroHeaders } from "@/lib/identity/stacks-api";
+import {
+  buildHiroHeaders,
+  callReadOnly,
+  parseClarityValue,
+} from "@/lib/identity/stacks-api";
+import { standardPrincipalCV } from "@stacks/transactions";
 
 /** Rate limit window for achievement verification (5 minutes) */
 export const ACHIEVEMENT_VERIFY_RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -108,6 +113,57 @@ export async function verifySenderAchievement(
     return hasOutgoingTx;
   } catch (error) {
     console.error(`Failed to verify sender achievement for ${btcAddress}:`, error);
+    return false;
+  }
+}
+
+/** sBTC SIP-010 contract on mainnet. */
+const SBTC_CONTRACT = "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token";
+
+/**
+ * Verify if an agent holds a non-zero sBTC balance (sBTC Holder achievement).
+ *
+ * Calls the `get-balance` read-only function on the sBTC SIP-010 contract.
+ * Uses KV cache with 5-minute TTL to avoid excessive API calls.
+ *
+ * @param stxAddress - Stacks address to check
+ * @param kv - Cloudflare KV namespace
+ * @param hiroApiKey - Optional Hiro API key for higher rate limits
+ * @returns true if the agent holds any sBTC, false otherwise
+ */
+export async function verifySbtcHolderAchievement(
+  stxAddress: string,
+  kv: KVNamespace,
+  hiroApiKey?: string
+): Promise<boolean> {
+  try {
+    const cacheKey = `sbtc-balance:${stxAddress}`;
+    let balanceData = await getCachedTransaction(cacheKey, kv);
+
+    if (!balanceData) {
+      const response = await callReadOnly(
+        SBTC_CONTRACT,
+        "get-balance",
+        [standardPrincipalCV(stxAddress)],
+        hiroApiKey
+      );
+
+      const parsed = parseClarityValue(response);
+      if (parsed === null) {
+        // Transient API failure — don't cache a false "0", allow retry next time
+        return false;
+      }
+      balanceData = { balance: parsed };
+      await setCachedTransaction(cacheKey, balanceData, kv);
+    }
+
+    const balance = (balanceData as { balance: string }).balance ?? "0";
+    return balance !== "0" && balance !== "";
+  } catch (error) {
+    console.error(
+      `Failed to verify sbtc-holder achievement for ${stxAddress}:`,
+      error
+    );
     return false;
   }
 }
