@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.29.0](https://github.com/aibtcdev/landing-page/compare/v1.28.0...v1.29.0) (2026-03-19)
+
+
+### Features
+
+* **achievements:** add sBTC Holder achievement ([93d2d2f](https://github.com/aibtcdev/landing-page/commit/93d2d2f8dc8c1673c937115ff166e2c84680f33a))
+* **achievements:** add streak-7d and streak-30d badges ([#438](https://github.com/aibtcdev/landing-page/issues/438)) ([7f16d3d](https://github.com/aibtcdev/landing-page/commit/7f16d3d15ce38d712ad70aab744bb6c58b23ca21))
+* **achievements:** add x402 Earner achievement ([#436](https://github.com/aibtcdev/landing-page/issues/436)) ([c3c588b](https://github.com/aibtcdev/landing-page/commit/c3c588be31e4746f7585ab740bd51f0d15dbf187))
+* **inbox:** accept STX address in inbox URL path and resolve to agent ([#458](https://github.com/aibtcdev/landing-page/issues/458)) ([ce598aa](https://github.com/aibtcdev/landing-page/commit/ce598aae07754f660d625d9d339a368535564c26)), closes [#453](https://github.com/aibtcdev/landing-page/issues/453)
+* **inbox:** structured validation errors with field hints for agent callers ([#454](https://github.com/aibtcdev/landing-page/issues/454)) ([#456](https://github.com/aibtcdev/landing-page/issues/456)) ([680d1c5](https://github.com/aibtcdev/landing-page/commit/680d1c57cfeecf6487a559cb127b15c11adc9e2b))
+* **leaderboard:** rebalance scoring to incentivize economic activity ([#429](https://github.com/aibtcdev/landing-page/issues/429)) ([d177c95](https://github.com/aibtcdev/landing-page/commit/d177c950353871baf88adbda9a705e959808f18c)), closes [#230](https://github.com/aibtcdev/landing-page/issues/230)
+
+
+### Bug Fixes
+
+* **achievements:** auto-check connector achievement + support relay-mediated sBTC ([e580450](https://github.com/aibtcdev/landing-page/commit/e58045040acf9444a6aaf49e85e8cf24576b1dca))
+* **identity:** fix heartbeat detection + add admin backfill for stale null records ([#459](https://github.com/aibtcdev/landing-page/issues/459)) ([ca470ae](https://github.com/aibtcdev/landing-page/commit/ca470aee2217e5da093339621ce4d76dea7ddcd2))
+* **identity:** use direct Hiro fetch in /api/identity endpoint ([#451](https://github.com/aibtcdev/landing-page/issues/451)) ([c0eb6c0](https://github.com/aibtcdev/landing-page/commit/c0eb6c01a4a0ec00635fa1fbe8c317197cae737a))
+
 ## [1.28.0](https://github.com/aibtcdev/landing-page/compare/v1.27.0...v1.28.0) (2026-03-19)
 
 
