@@ -7,7 +7,6 @@ import { lookupAgent } from "@/lib/agent-lookup";
 import { getAgentLevel, computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { lookupBnsName } from "@/lib/bns";
-import { detectAgentIdentity } from "@/lib/identity/detection";
 import { X_HANDLE } from "@/lib/constants";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
@@ -88,11 +87,26 @@ async function resolveIdentity(
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
-  // Always fetch identity from Hiro — single fast GET request
+  // Direct Hiro NFT holdings check — single GET, no retries, no callReadOnly
   try {
-    const identity = await detectAgentIdentity(agent.stxAddress, hiroApiKey, kv);
-    const newAgentId = identity ? identity.agentId : null;
-    // Only write KV if the value actually changed
+    const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
+    const assetId = `${contract}::agent-identity`;
+    const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
+
+    const headers: Record<string, string> = {};
+    if (hiroApiKey) headers["X-Hiro-API-Key"] = hiroApiKey;
+
+    const resp = await fetch(url, { headers, signal: AbortSignal.timeout(5000) });
+    if (!resp.ok) return agent;
+
+    const data = await resp.json() as {
+      results?: Array<{ value: { repr: string } }>;
+    };
+
+    const repr = data.results?.[0]?.value?.repr;
+    const match = repr?.match(/^u(\d+)$/);
+    const newAgentId = match ? Number(match[1]) : null;
+
     if (newAgentId !== agent.erc8004AgentId) {
       agent.erc8004AgentId = newAgentId;
       const updated = JSON.stringify(agent);
@@ -102,7 +116,7 @@ async function resolveIdentity(
       ]);
     }
   } catch {
-    /* identity detection is best-effort */
+    /* best-effort */
   }
 
   return agent;
