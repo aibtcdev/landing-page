@@ -235,9 +235,6 @@ export async function POST(request: NextRequest) {
 
     await agentsKv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
 
-    // Invalidate cached agent list (level changed to Genesis)
-    await invalidateAgentListCache(agentsKv);
-
     // Update agent record with owner (X handle) and create reverse index
     const updatedAgent = { ...agent, owner: ownerHandle };
     await Promise.all([
@@ -247,6 +244,10 @@ export async function POST(request: NextRequest) {
         ? agentsKv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent))
         : Promise.resolve(),
     ]);
+
+    // Invalidate cached agent list after all KV writes complete
+    // (level changed to Genesis + owner updated)
+    await invalidateAgentListCache(agentsKv);
 
     return NextResponse.json({
       success: true,

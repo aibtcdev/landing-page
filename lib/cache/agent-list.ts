@@ -14,8 +14,14 @@ import type { CachedAgent, CachedAgentList } from "./types";
 const CACHE_KEY = "cache:agent-list";
 const CACHE_TTL_SECONDS = 120; // 2 minutes
 
+// Sentinel key written during rebuild to prevent thundering herd.
+// Short TTL ensures it doesn't block reads if a rebuild crashes.
+const BUILDING_KEY = "cache:agent-list:building";
+const BUILDING_TTL_SECONDS = 30;
+
 /**
  * Get the cached agent list from KV, rebuilding if stale or missing.
+ * Uses a sentinel key to prevent multiple concurrent rebuilds (thundering herd).
  */
 export async function getCachedAgentList(
   kv: KVNamespace
@@ -31,8 +37,31 @@ export async function getCachedAgentList(
     }
   }
 
-  // Cache miss — rebuild from KV
-  return rebuildAgentListCache(kv);
+  // Cache miss — check if another request is already rebuilding
+  const building = await kv.get(BUILDING_KEY);
+  if (building) {
+    // Another request is rebuilding. Return empty fallback rather than
+    // piling on with another full O(N) rebuild.
+    return {
+      agents: [],
+      stats: { total: 0, genesisCount: 0, messageCount: 0 },
+      cachedAt: new Date().toISOString(),
+    };
+  }
+
+  // Claim the rebuild with a sentinel (best-effort)
+  try {
+    await kv.put(BUILDING_KEY, "1", { expirationTtl: BUILDING_TTL_SECONDS });
+  } catch {
+    // If sentinel write fails, proceed anyway — worst case is a duplicate rebuild
+  }
+
+  try {
+    return await rebuildAgentListCache(kv);
+  } finally {
+    // Clear sentinel after rebuild (success or failure)
+    await kv.delete(BUILDING_KEY).catch(() => {});
+  }
 }
 
 /**
@@ -51,6 +80,11 @@ export async function invalidateAgentListCache(
 /**
  * Rebuild the agent list cache from individual KV records.
  * This is the expensive operation that the cache avoids on every page load.
+ *
+ * Concurrency note: KV has no batch-get API, so we use Promise.all to
+ * parallelize reads within each page (up to 1000 per KV list page).
+ * At current scale (<10k agents) this is well within Workers limits.
+ * If the registry grows beyond ~10k, consider chunked concurrency.
  */
 async function rebuildAgentListCache(
   kv: KVNamespace
@@ -111,18 +145,7 @@ async function rebuildAgentListCache(
     ),
   ]);
 
-  // 3. Count messages (separate prefix scan)
-  let messageCount = 0;
-  let msgCursor: string | undefined;
-  let msgComplete = false;
-  while (!msgComplete) {
-    const page = await kv.list({ prefix: "inbox:message:", cursor: msgCursor });
-    messageCount += page.keys.length;
-    msgComplete = page.list_complete;
-    msgCursor = !page.list_complete ? page.cursor : undefined;
-  }
-
-  // 4. Build cached agents
+  // 3. Build cached agents
   const cachedAgents: CachedAgent[] = agents.map((agent, i) => {
     const level = computeLevel(agent, claims[i]);
     const inbox = inboxData[i];
@@ -153,6 +176,13 @@ async function rebuildAgentListCache(
   });
 
   const genesisCount = cachedAgents.filter((a) => a.level >= 2).length;
+
+  // Derive total message count from already-fetched inbox data
+  // (avoids a separate O(M) kv.list scan over inbox:message:* keys)
+  const messageCount = inboxData.reduce(
+    (sum, inbox) => sum + (inbox?.messageIds.length ?? 0),
+    0
+  );
 
   const snapshot: CachedAgentList = {
     agents: cachedAgents,

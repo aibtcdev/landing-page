@@ -410,6 +410,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    // Track whether any achievement was newly granted (affects cache invalidation).
+    // Must be initialized before ALL achievement checks, not just the later ones.
+    let achievementGranted = false;
+
     // Proactively check sender achievement (lightweight, best-effort)
     try {
       const rateLimit = await checkRateLimit(kv, btcAddress, "sender");
@@ -419,6 +423,7 @@ export async function POST(request: NextRequest) {
           const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv);
           if (hasOutgoingTx) {
             await grantAchievement(kv, btcAddress, "sender");
+            achievementGranted = true;
           }
         }
         await setRateLimit(kv, btcAddress, "sender");
@@ -441,6 +446,7 @@ export async function POST(request: NextRequest) {
           );
           if (isStacking) {
             await grantAchievement(kv, btcAddress, "stacker");
+            achievementGranted = true;
           }
           await setRateLimit(kv, btcAddress, "stacker");
         }
@@ -462,6 +468,7 @@ export async function POST(request: NextRequest) {
           );
           if (holdsSbtc) {
             await grantAchievement(kv, btcAddress, "sbtc-holder");
+            achievementGranted = true;
           }
           await setRateLimit(kv, btcAddress, "sbtc-holder");
         }
@@ -486,6 +493,7 @@ export async function POST(request: NextRequest) {
               txid: connectorResult.txid,
               recipientAddress: connectorResult.recipientAddress,
             });
+            achievementGranted = true;
           }
           await setRateLimit(kv, btcAddress, "connector");
         }
@@ -493,9 +501,6 @@ export async function POST(request: NextRequest) {
     } catch (error) {
       console.error("Failed to check connector achievement during heartbeat:", error);
     }
-
-    // Track whether any achievement was newly granted (affects cache invalidation)
-    let achievementGranted = false;
 
     // Grant identified achievement if agent has an on-chain identity (best-effort)
     try {
