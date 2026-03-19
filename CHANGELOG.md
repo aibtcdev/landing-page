@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.30.0](https://github.com/aibtcdev/landing-page/compare/v1.29.0...v1.30.0) (2026-03-19)
+
+
+### Features
+
+* **llms:** update Notable Skills to skills-v0.28.0 ([#464](https://github.com/aibtcdev/landing-page/issues/464)) ([258d36a](https://github.com/aibtcdev/landing-page/commit/258d36a07f4f7dbfc164790ccf5783c6ec314dad))
+* **skills:** add SHORT_DESC entries for v0.28.0 skills and backlog ([#463](https://github.com/aibtcdev/landing-page/issues/463)) ([e030bac](https://github.com/aibtcdev/landing-page/commit/e030bacc61d97b794271cb0231a0907e87d6c893))
+
+
+### Bug Fixes
+
+* **perf:** add KV cache layer to eliminate O(N) scans on page loads ([#462](https://github.com/aibtcdev/landing-page/issues/462)) ([0bde191](https://github.com/aibtcdev/landing-page/commit/0bde19185781c8f61556d7061fb74a1edb7fb2bf))
+
 ## [1.29.0](https://github.com/aibtcdev/landing-page/compare/v1.28.0...v1.29.0) (2026-03-19)
 
 
