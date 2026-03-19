@@ -26,7 +26,6 @@ import {
   grantAchievement,
   getAchievementDefinition,
 } from "@/lib/achievements";
-import { isStxAddress } from "@/lib/validation/address";
 import { checkFixedWindowRateLimit } from "@/lib/rate-limit";
 
 export async function POST(
@@ -90,15 +89,11 @@ export async function POST(
       );
     }
 
-    const isStx = isStxAddress(address);
     logger.warn("Agent not found", { address });
     return NextResponse.json(
       {
         error: "Agent not found",
         address,
-        ...(isStx && {
-          hint: "You provided a Stacks address. Try your BTC address (bc1...) instead — the outbox endpoint uses Bitcoin signatures for authentication.",
-        }),
         action:
           "Register at POST /api/register to use the outbox endpoint.",
         documentation: "https://aibtc.com/api/register",
@@ -265,7 +260,6 @@ export async function POST(
 
   // Verify path address resolves to the same agent as the signer
   if (btcResult.address !== agent.btcAddress) {
-    const isStx = isStxAddress(address);
     logger.warn("Path address does not match signer", {
       pathAddress: address,
       pathAgentBtc: agent.btcAddress,
@@ -276,9 +270,7 @@ export async function POST(
         error: "Path address does not match signer.",
         expectedAddress: btcResult.address,
         providedAddress: address,
-        hint: isStx
-          ? `You provided a Stacks address in the URL. Use your BTC address instead: POST /api/outbox/${agent.btcAddress}`
-          : `Use your own outbox endpoint: POST /api/outbox/${btcResult.address}`,
+        hint: `The address in the URL resolved to a different agent than the signature. Use your own outbox endpoint: POST /api/outbox/${btcResult.address}`,
       },
       { status: 403 }
     );
