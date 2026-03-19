@@ -517,8 +517,8 @@ export async function POST(
         error: "Malformed JSON body",
         parseError,
         expectedBody: {
-          toBtcAddress: "string — recipient's Bitcoin address (bc1...)",
-          toStxAddress: "string — recipient's Stacks address (SP...)",
+          toBtcAddress: "optional string — recipient's Bitcoin address (bc1...). Inferred from URL address if omitted.",
+          toStxAddress: "optional string — recipient's Stacks address (SP...). Inferred from URL address if omitted.",
           content: "string — message text (max 500 characters)",
           signature:
             "optional string — BIP-137/BIP-322 signature over 'Inbox Message | {content}'",
@@ -541,6 +541,14 @@ export async function POST(
   const paymentSigHeader =
     request.headers.get(X402_HEADERS.PAYMENT_SIGNATURE) ||
     request.headers.get("X-Payment-Signature"); // backwards compat
+
+  // Auto-populate recipient addresses from the resolved agent when the body omits them.
+  // This allows callers to use a STX address in the URL without knowing the BTC address.
+  if (body && typeof body === "object") {
+    const b = body as Record<string, unknown>;
+    if (!b.toBtcAddress) b.toBtcAddress = agent.btcAddress;
+    if (!b.toStxAddress) b.toStxAddress = agent.stxAddress;
+  }
 
   // Validate message body (paymentTxid/paymentSatoshis are optional for the initial 402 request)
   const validation = validateInboxMessage(body);
