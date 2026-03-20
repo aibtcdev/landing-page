@@ -918,6 +918,8 @@ curl https://aibtc.com/skills
 | aibtc-news | AIBTC news aggregation — front-page stories, status filters, disclosure field *(v0.27.0)* |
 | stacking-lottery | Bitcoin stacking lottery participation *(v0.28.0)* |
 | maximumsats-wot | Web of Trust trust scoring *(v0.28.0)* |
+| nostr-wot | Nostr Web of Trust — trust scoring and sybil detection; 52K+ pubkeys, zap-weighted trust edges; free tier + L402 paid fallback *(v0.29.0)* |
+| arxiv-research | arXiv paper monitoring — LLMs, autonomous agents, and AI infrastructure digests; relevance-scored; no API key required *(v0.29.0)* |
 
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
