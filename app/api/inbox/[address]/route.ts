@@ -725,7 +725,10 @@ export async function POST(
             hint: "The transaction is not yet confirmed on Stacks. Try again after the retryAfterSeconds period.",
             retryAfterSeconds: 300,
           },
-          { status: 400 }
+          {
+            status: 409,
+            headers: { "Retry-After": "300" },
+          }
         );
       }
 

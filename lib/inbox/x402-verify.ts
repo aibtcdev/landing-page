@@ -142,8 +142,8 @@ export async function verifyInboxPayment(
       "CLIENT_NONCE_CONFLICT",
       "CLIENT_BAD_NONCE",
     ]);
-    /** Cap on relay-specified retryAfter delay (ms) to stay within Worker CPU budget. */
-    const MAX_RELAY_RETRY_AFTER_MS = 35_000;
+    /** Cap on relay-specified retryAfter delay (ms) to keep total request under ~25s. */
+    const MAX_RELAY_RETRY_AFTER_MS = 10_000;
 
     const relayBody = JSON.stringify({
       transaction: paymentPayload.payload.transaction,
@@ -191,7 +191,11 @@ export async function verifyInboxPayment(
 
         // If still not ok after retry (or was non-retryable), fail.
         if (!relayResponse.ok) {
-          const retryErrorText = await relayResponse.text();
+          // After retry: read the new response body. For non-retryable 409s,
+          // reuse the already-consumed errorBody instead of reading twice.
+          const retryErrorText = relayError.retryable
+            ? await relayResponse.text()
+            : errorBody;
           log.error("Sponsor relay failed", {
             status: relayResponse.status,
             error: retryErrorText,
@@ -366,9 +370,13 @@ export async function verifyTxidPayment(
         if (response.status === 404) {
           // Cache the negative result to prevent repeated lookups for the same unconfirmed txid.
           if (kv) {
-            kv.put(pendingCacheKey, JSON.stringify({ status: "not_found", checkedAt: new Date().toISOString() }), {
-              expirationTtl: 300,
-            }).catch((err) => console.warn("[verifyTxidPayment] KV pending cache write failed:", String(err)));
+            try {
+              await kv.put(pendingCacheKey, JSON.stringify({ status: "not_found", checkedAt: new Date().toISOString() }), {
+                expirationTtl: 300,
+              });
+            } catch (err) {
+              log.warn("[verifyTxidPayment] KV pending cache write failed", { error: String(err), txid: fullTxid });
+            }
           }
           return {
             success: false,
@@ -398,9 +406,13 @@ export async function verifyTxidPayment(
     log.warn("Transaction not successful", { status: txData.tx_status });
     // Cache the pending/failed state to prevent redundant API calls.
     if (kv) {
-      kv.put(pendingCacheKey, JSON.stringify({ status: txData.tx_status, checkedAt: new Date().toISOString() }), {
-        expirationTtl: 300,
-      }).catch((err) => console.warn("[verifyTxidPayment] KV pending cache write failed:", String(err)));
+      try {
+        await kv.put(pendingCacheKey, JSON.stringify({ status: txData.tx_status, checkedAt: new Date().toISOString() }), {
+          expirationTtl: 300,
+        });
+      } catch (err) {
+        log.warn("[verifyTxidPayment] KV pending cache write failed", { error: String(err), txid: fullTxid });
+      }
     }
     return {
       success: false,

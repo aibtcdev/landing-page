@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { InboxMessage } from "@/lib/inbox/types";
+import type { InboxMessage, InboxAgentIndex } from "@/lib/inbox/types";
 import { INBOX_PRICE_SATS } from "@/lib/inbox/constants";
 import type { AchievementAgentIndex, AchievementRecord } from "@/lib/achievements/types";
 import { ACHIEVEMENTS } from "@/lib/achievements/registry";
@@ -72,15 +72,16 @@ export async function buildActivityData(kv: KVNamespace): Promise<ActivityRespon
     })
     .slice(0, TOP_ACTIVE_AGENTS);
 
-  // --- 3. Collect events from top active agents ---
-  // O(TOP_ACTIVE_AGENTS * 6) KV reads: 3 messages + 3 achievements per agent
-  const events: ActivityEvent[] = [];
+  // --- 3. Precompute agent lookup map for O(1) sender resolution ---
+  const agentByStx = new Map(cachedAgents.map((a) => [a.stxAddress, a]));
 
+  // --- 4. Collect events from top active agents ---
+  // O(TOP_ACTIVE_AGENTS * 6) KV reads: 3 messages + 3 achievements per agent
   const eventPromises = sortedAgents.map(async (agent) => {
     const agentEvents: ActivityEvent[] = [];
 
     // Fetch inbox index for this agent
-    const inboxIndex = await kv.get<{ messageIds: string[]; unreadCount: number }>(
+    const inboxIndex = await kv.get<InboxAgentIndex>(
       `inbox:agent:${agent.btcAddress}`,
       "json"
     );
@@ -101,10 +102,8 @@ export async function buildActivityData(kv: KVNamespace): Promise<ActivityRespon
       // Add message events
       for (const message of messages) {
         if (message) {
-          // Find sender agent for display name
-          const senderAgent = cachedAgents.find(
-            (a) => a.stxAddress === message.fromAddress
-          );
+          // Find sender agent for display name (O(1) Map lookup)
+          const senderAgent = agentByStx.get(message.fromAddress);
 
           agentEvents.push({
             type: "message",
@@ -295,6 +294,7 @@ export async function GET(request: NextRequest) {
             "Cache-Control": "public, max-age=60, s-maxage=120",
             "X-Cache": "HIT",
             "X-Cache-Age": Math.floor(cachedAge / 1000).toString(),
+            ...CORS_HEADERS,
           },
         });
       }
@@ -309,6 +309,7 @@ export async function GET(request: NextRequest) {
           headers: {
             "Cache-Control": "public, max-age=30, s-maxage=60",
             "X-Cache": "STALE",
+            ...CORS_HEADERS,
           },
         });
       }
@@ -318,6 +319,7 @@ export async function GET(request: NextRequest) {
           headers: {
             "Cache-Control": "no-store",
             "X-Cache": "MISS-BUILDING",
+            ...CORS_HEADERS,
           },
         }
       );
@@ -351,6 +353,7 @@ export async function GET(request: NextRequest) {
       headers: {
         "Cache-Control": "public, max-age=60, s-maxage=120",
         "X-Cache": "MISS",
+        ...CORS_HEADERS,
       },
     });
   } catch (error) {
