@@ -698,12 +698,14 @@ export async function POST(
       );
     }
 
+    const hiroApiKey = env.HIRO_API_KEY as string | undefined;
     const txidResult = await verifyTxidPayment(
       paymentTxid,
       agent.stxAddress,
       network,
       logger,
-      kv
+      kv,
+      hiroApiKey
     );
 
     if (!txidResult.success) {
@@ -856,11 +858,33 @@ export async function POST(
       error: paymentResult.error,
       errorCode: paymentResult.errorCode,
     });
+
+    // Bug #468: Track nonce conflicts per recipient to detect cascading failures.
+    // If the error mentions nonce conflict, increment a counter in KV.
+    const isNonceConflict = paymentResult.error?.includes("nonce conflict");
+    if (isNonceConflict) {
+      const nonceTrackKey = `nonce-conflict:${agent.stxAddress}`;
+      const existing = await kv.get(nonceTrackKey);
+      const count = existing ? parseInt(existing, 10) + 1 : 1;
+      await kv.put(nonceTrackKey, String(count), { expirationTtl: 3600 }).catch(() => {});
+      logger.warn("Nonce conflict tracked", {
+        recipientStx: agent.stxAddress,
+        conflictCount: count,
+      });
+    }
+
+    // Include the settlement txid (if any) so the client can use txid recovery
+    const recoveryTxid = paymentResult.settleResult?.transaction;
+
     return NextResponse.json(
       {
         ...paymentRequiredBody,
         error: paymentResult.error || "Payment verification failed",
         errorCode: paymentResult.errorCode,
+        ...(recoveryTxid && {
+          recoveryHint: "If your sBTC transfer succeeded on-chain, resubmit with paymentTxid for manual recovery.",
+          paymentTxid: recoveryTxid,
+        }),
       },
       {
         status: 402,

@@ -29,6 +29,7 @@ import {
 import { INBOX_PRICE_SATS, RELAY_SETTLE_TIMEOUT_MS, SBTC_CONTRACTS } from "./constants";
 import type { Logger } from "../logging";
 import { stacksApiFetch } from "../stacks-api-fetch";
+import { buildHiroHeaders } from "../identity/stacks-api";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 
 const NOOP_LOGGER: Logger = {
@@ -37,6 +38,22 @@ const NOOP_LOGGER: Logger = {
   warn: () => {},
   error: () => {},
 };
+
+/** Max relay nonce-conflict retry delay in milliseconds. */
+const MAX_NONCE_RETRY_DELAY_MS = 30_000;
+
+/** TTL for pending txid cache entries (seconds). */
+const PENDING_TX_CACHE_TTL = 5 * 60; // 5 minutes
+
+/** Max attempts before declaring a pending tx as terminal. */
+const PENDING_TX_MAX_ATTEMPTS = 5;
+
+/** Shape of a pending-tx negative cache entry in KV. */
+interface PendingTxCacheEntry {
+  status: "pending";
+  firstSeen: string;
+  attempts: number;
+}
 
 /** Subset of Stacks API transaction response used for sBTC transfer validation. */
 interface StacksTxData {
@@ -136,48 +153,115 @@ export async function verifyInboxPayment(
     });
 
     try {
+      const relayBody = JSON.stringify({
+        transaction: paymentPayload.payload.transaction,
+        settle: {
+          expectedRecipient: recipientStxAddress,
+          minAmount: paymentRequirements.amount,
+          tokenType: "sBTC",
+        },
+      });
+
       const relayResponse = await fetch(`${relayUrl}/relay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transaction: paymentPayload.payload.transaction,
-          settle: {
-            expectedRecipient: recipientStxAddress,
-            minAmount: paymentRequirements.amount,
-            tokenType: "sBTC",
-          },
-        }),
+        body: relayBody,
         signal: AbortSignal.timeout(RELAY_SETTLE_TIMEOUT_MS),
       });
 
       if (!relayResponse.ok) {
         const errorText = await relayResponse.text();
-        log.error("Sponsor relay failed", {
-          status: relayResponse.status,
-          error: errorText,
-        });
-        return {
-          success: false,
-          error: `Sponsor relay failed: ${errorText}`,
-          errorCode: X402_ERROR_CODES.UNEXPECTED_SETTLE_ERROR,
-        };
-      }
 
-      // Map relay response to SettlementResponseV2 format.
-      // Relay returns {success, txid, settlement: {sender, recipient, amount, ...}}
-      // SettlementResponseV2 expects {success, transaction, payer, network}.
-      const relayData = (await relayResponse.json()) as {
-        success: boolean;
-        txid?: string;
-        settlement?: { sender?: string };
-      };
-      settleResult = {
-        success: relayData.success,
-        transaction: relayData.txid || "",
-        payer: relayData.settlement?.sender || "",
-        network: networkCAIP2,
-      };
-      log.debug("Sponsor relay result", { relayData, settleResult });
+        // Bug #468: Handle 409 NONCE_CONFLICT with backoff retry.
+        // The relay returns 409 with retryAfter when a nonce conflict occurs.
+        // Wait the specified duration and retry once before treating as terminal.
+        if (relayResponse.status === 409) {
+          let retryAfterMs = 0;
+          try {
+            const errorBody = JSON.parse(errorText) as {
+              errorCode?: string;
+              retryAfter?: number;
+              txid?: string;
+            };
+            if (errorBody.retryAfter && errorBody.retryAfter > 0) {
+              retryAfterMs = Math.min(errorBody.retryAfter * 1000, MAX_NONCE_RETRY_DELAY_MS);
+            }
+            log.warn("Sponsor relay nonce conflict, retrying", {
+              errorCode: errorBody.errorCode,
+              retryAfterMs,
+              txid: errorBody.txid,
+            });
+          } catch {
+            log.warn("Sponsor relay 409 (unparseable body), retrying", { errorText });
+            retryAfterMs = 5_000; // Default 5s backoff for unparseable 409
+          }
+
+          if (retryAfterMs > 0) {
+            await new Promise((resolve) => setTimeout(resolve, retryAfterMs));
+          }
+
+          // Retry once
+          const retryResponse = await fetch(`${relayUrl}/relay`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: relayBody,
+            signal: AbortSignal.timeout(RELAY_SETTLE_TIMEOUT_MS),
+          });
+
+          if (!retryResponse.ok) {
+            const retryErrorText = await retryResponse.text();
+            log.error("Sponsor relay nonce conflict retry also failed", {
+              status: retryResponse.status,
+              error: retryErrorText,
+            });
+            return {
+              success: false,
+              error: `Sponsor relay nonce conflict (retry failed): ${retryErrorText}`,
+              errorCode: X402_ERROR_CODES.UNEXPECTED_SETTLE_ERROR,
+            };
+          }
+
+          // Retry succeeded — parse as normal
+          const retryData = (await retryResponse.json()) as {
+            success: boolean;
+            txid?: string;
+            settlement?: { sender?: string };
+          };
+          settleResult = {
+            success: retryData.success,
+            transaction: retryData.txid || "",
+            payer: retryData.settlement?.sender || "",
+            network: networkCAIP2,
+          };
+          log.info("Sponsor relay nonce conflict resolved on retry", { settleResult });
+        } else {
+          log.error("Sponsor relay failed", {
+            status: relayResponse.status,
+            error: errorText,
+          });
+          return {
+            success: false,
+            error: `Sponsor relay failed: ${errorText}`,
+            errorCode: X402_ERROR_CODES.UNEXPECTED_SETTLE_ERROR,
+          };
+        }
+      } else {
+        // Map relay response to SettlementResponseV2 format.
+        // Relay returns {success, txid, settlement: {sender, recipient, amount, ...}}
+        // SettlementResponseV2 expects {success, transaction, payer, network}.
+        const relayData = (await relayResponse.json()) as {
+          success: boolean;
+          txid?: string;
+          settlement?: { sender?: string };
+        };
+        settleResult = {
+          success: relayData.success,
+          transaction: relayData.txid || "",
+          payer: relayData.settlement?.sender || "",
+          network: networkCAIP2,
+        };
+        log.debug("Sponsor relay result", { relayData, settleResult });
+      }
     } catch (error) {
       log.error("Sponsor relay exception", { error: String(error) });
       return {
@@ -263,7 +347,8 @@ export async function verifyTxidPayment(
   recipientStxAddress: string,
   network: "mainnet" | "testnet" = "mainnet",
   logger?: Logger,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  hiroApiKey?: string
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
 
@@ -290,15 +375,75 @@ export async function verifyTxidPayment(
     log.info("Txid verification: cache hit", { txid: fullTxid });
     txData = cachedTx;
   } else {
+    // Bug #469: Check pending-tx negative cache before hitting Hiro.
+    // When a tx was recently seen as 404, avoid hammering the API.
+    const pendingCacheKey = `cache:tx-pending:${normalizedTxid}`;
+    if (kv) {
+      const pendingRaw = await kv.get(pendingCacheKey);
+      if (pendingRaw) {
+        try {
+          const pending = JSON.parse(pendingRaw) as PendingTxCacheEntry;
+          if (pending.attempts >= PENDING_TX_MAX_ATTEMPTS) {
+            log.warn("Txid pending cache: max attempts reached", {
+              txid: fullTxid,
+              attempts: pending.attempts,
+              firstSeen: pending.firstSeen,
+            });
+            return {
+              success: false,
+              error: `Transaction ${fullTxid} has not confirmed after ${pending.attempts} attempts (first seen: ${pending.firstSeen}). Submit a fresh payment.`,
+              errorCode: "TXID_NOT_CONFIRMED_TERMINAL",
+            };
+          }
+          // Still under max attempts — increment and return pending status
+          const updated: PendingTxCacheEntry = {
+            ...pending,
+            attempts: pending.attempts + 1,
+          };
+          await kv.put(pendingCacheKey, JSON.stringify(updated), {
+            expirationTtl: PENDING_TX_CACHE_TTL,
+          });
+          log.info("Txid pending cache: still unconfirmed", {
+            txid: fullTxid,
+            attempts: updated.attempts,
+          });
+          return {
+            success: false,
+            error: `Transaction is still pending confirmation (attempt ${updated.attempts}/${PENDING_TX_MAX_ATTEMPTS}). Retry after 60 seconds.`,
+            errorCode: "TXID_PENDING",
+          };
+        } catch {
+          // Corrupted cache entry — ignore and re-fetch
+        }
+      }
+    }
+
     try {
+      // Bug #467: Include Hiro API key header to avoid 429 rate limits.
+      const headers = buildHiroHeaders(hiroApiKey);
       const response = await stacksApiFetch(`${apiBase}/extended/v1/tx/${fullTxid}`, {
         method: "GET",
+        headers,
       });
       if (!response.ok) {
         if (response.status === 404) {
+          // Bug #469: Write a pending cache entry so the next retry doesn't
+          // immediately hit Hiro again for the same unconfirmed txid.
+          if (kv) {
+            const entry: PendingTxCacheEntry = {
+              status: "pending",
+              firstSeen: new Date().toISOString(),
+              attempts: 1,
+            };
+            await kv.put(pendingCacheKey, JSON.stringify(entry), {
+              expirationTtl: PENDING_TX_CACHE_TTL,
+            }).catch((err) => {
+              log.warn("Failed to write pending tx cache", { error: String(err) });
+            });
+          }
           return {
             success: false,
-            error: "Transaction not found. It may not be confirmed yet.",
+            error: "Transaction not found. It may not be confirmed yet. Retry after 60 seconds.",
             errorCode: "TXID_NOT_FOUND",
           };
         }
@@ -309,6 +454,11 @@ export async function verifyTxidPayment(
         };
       }
       txData = (await response.json()) as StacksTxData;
+
+      // Transaction found — clear any stale pending cache entry
+      if (kv) {
+        kv.delete(pendingCacheKey).catch(() => {});
+      }
     } catch (error) {
       log.error("Failed to fetch transaction", { error: String(error) });
       return {
