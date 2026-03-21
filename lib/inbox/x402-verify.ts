@@ -29,6 +29,7 @@ import {
 import { INBOX_PRICE_SATS, RELAY_SETTLE_TIMEOUT_MS, SBTC_CONTRACTS } from "./constants";
 import type { Logger } from "../logging";
 import { stacksApiFetch } from "../stacks-api-fetch";
+import { buildHiroHeaders } from "../identity/stacks-api";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 
 const NOOP_LOGGER: Logger = {
@@ -135,22 +136,73 @@ export async function verifyInboxPayment(
       relayUrl,
     });
 
-    try {
-      const relayResponse = await fetch(`${relayUrl}/relay`, {
+    /** Relay error codes that warrant a single retry after the relay's retryAfter delay. */
+    const RELAY_RETRYABLE_CODES = new Set([
+      "NONCE_CONFLICT",
+      "CLIENT_NONCE_CONFLICT",
+      "CLIENT_BAD_NONCE",
+    ]);
+    /** Cap on relay-specified retryAfter delay (ms) to stay within Worker CPU budget. */
+    const MAX_RELAY_RETRY_AFTER_MS = 35_000;
+
+    const relayBody = JSON.stringify({
+      transaction: paymentPayload.payload.transaction,
+      settle: {
+        expectedRecipient: recipientStxAddress,
+        minAmount: paymentRequirements.amount,
+        tokenType: "sBTC",
+      },
+    });
+
+    /** Perform one relay call and return the Response. */
+    const callRelay = () =>
+      fetch(`${relayUrl}/relay`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          transaction: paymentPayload.payload.transaction,
-          settle: {
-            expectedRecipient: recipientStxAddress,
-            minAmount: paymentRequirements.amount,
-            tokenType: "sBTC",
-          },
-        }),
+        body: relayBody,
         signal: AbortSignal.timeout(RELAY_SETTLE_TIMEOUT_MS),
       });
 
-      if (!relayResponse.ok) {
+    try {
+      let relayResponse = await callRelay();
+
+      // Handle retryable relay errors (e.g. NONCE_CONFLICT) with a single backoff retry.
+      if (!relayResponse.ok && relayResponse.status === 409) {
+        const errorBody = await relayResponse.text();
+        let relayError: { code?: string; retryable?: boolean; retryAfter?: number } = {};
+        try {
+          relayError = JSON.parse(errorBody);
+        } catch {
+          // Non-JSON body — treat as non-retryable
+        }
+
+        if (relayError.retryable && RELAY_RETRYABLE_CODES.has(relayError.code ?? "")) {
+          const retryDelayMs = Math.min(
+            (relayError.retryAfter ?? 30) * 1000,
+            MAX_RELAY_RETRY_AFTER_MS
+          );
+          log.warn("Relay returned retryable error, backing off before retry", {
+            code: relayError.code,
+            retryDelayMs,
+          });
+          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
+          relayResponse = await callRelay();
+        }
+
+        // If still not ok after retry (or was non-retryable), fail.
+        if (!relayResponse.ok) {
+          const retryErrorText = await relayResponse.text();
+          log.error("Sponsor relay failed", {
+            status: relayResponse.status,
+            error: retryErrorText,
+          });
+          return {
+            success: false,
+            error: `Sponsor relay failed: ${retryErrorText}`,
+            errorCode: X402_ERROR_CODES.UNEXPECTED_SETTLE_ERROR,
+          };
+        }
+      } else if (!relayResponse.ok) {
         const errorText = await relayResponse.text();
         log.error("Sponsor relay failed", {
           status: relayResponse.status,
@@ -263,7 +315,8 @@ export async function verifyTxidPayment(
   recipientStxAddress: string,
   network: "mainnet" | "testnet" = "mainnet",
   logger?: Logger,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  hiroApiKey?: string
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
 
@@ -282,6 +335,20 @@ export async function verifyTxidPayment(
     network,
   });
 
+  // Negative cache: if this txid was recently checked and found unconfirmed, skip the API call.
+  const pendingCacheKey = `inbox:pending-txid:${normalizedTxid}`;
+  if (kv) {
+    const pendingEntry = await kv.get(pendingCacheKey);
+    if (pendingEntry) {
+      log.info("Txid verification: pending cache hit, skipping API call", { txid: fullTxid });
+      return {
+        success: false,
+        error: "Transaction is not yet confirmed. Check back in a few minutes.",
+        errorCode: "TXID_PENDING",
+      };
+    }
+  }
+
   let txData: StacksTxData;
 
   // Confirmed transactions are immutable -- check cache first
@@ -293,9 +360,16 @@ export async function verifyTxidPayment(
     try {
       const response = await stacksApiFetch(`${apiBase}/extended/v1/tx/${fullTxid}`, {
         method: "GET",
+        headers: buildHiroHeaders(hiroApiKey),
       });
       if (!response.ok) {
         if (response.status === 404) {
+          // Cache the negative result to prevent repeated lookups for the same unconfirmed txid.
+          if (kv) {
+            kv.put(pendingCacheKey, JSON.stringify({ status: "not_found", checkedAt: new Date().toISOString() }), {
+              expirationTtl: 300,
+            }).catch((err) => console.warn("[verifyTxidPayment] KV pending cache write failed:", String(err)));
+          }
           return {
             success: false,
             error: "Transaction not found. It may not be confirmed yet.",
@@ -322,6 +396,12 @@ export async function verifyTxidPayment(
   // Require confirmed, successful transaction
   if (txData.tx_status !== "success") {
     log.warn("Transaction not successful", { status: txData.tx_status });
+    // Cache the pending/failed state to prevent redundant API calls.
+    if (kv) {
+      kv.put(pendingCacheKey, JSON.stringify({ status: txData.tx_status, checkedAt: new Date().toISOString() }), {
+        expirationTtl: 300,
+      }).catch((err) => console.warn("[verifyTxidPayment] KV pending cache write failed:", String(err)));
+    }
     return {
       success: false,
       error: `Transaction status is "${txData.tx_status}", expected "success"`,
