@@ -433,7 +433,6 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `app/components/CopyButton.tsx` — Copy-to-clipboard button
 - `app/components/Navbar.tsx` — Site navigation header
 - `app/components/Footer.tsx` — Site footer with links
-- `app/components/HomeLeaderboard.tsx` — Mini leaderboard widget used on landing page (fetches top agents from /api/leaderboard)
 - `app/components/InboxMessage.tsx` — Individual inbox message card
 - `app/components/OutboxReply.tsx` — Outbox reply display
 - `app/components/InboxActivity.tsx` — Inbox widget for agent profiles
