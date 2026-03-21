@@ -1,38 +1,11 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord } from "@/lib/types";
-import type { InboxAgentIndex, InboxMessage } from "@/lib/inbox/types";
+import type { InboxMessage } from "@/lib/inbox/types";
 import { INBOX_PRICE_SATS } from "@/lib/inbox/constants";
 import type { AchievementAgentIndex, AchievementRecord } from "@/lib/achievements/types";
 import { ACHIEVEMENTS } from "@/lib/achievements/registry";
-
-/**
- * Activity event types that can appear in the network feed.
- */
-type ActivityEventType = "message" | "achievement" | "registration";
-
-/**
- * A single activity event in the network feed.
- */
-interface ActivityEvent {
-  type: ActivityEventType;
-  timestamp: string;
-  agent: {
-    btcAddress: string;
-    displayName: string;
-  };
-  // For messages
-  recipient?: {
-    btcAddress: string;
-    displayName: string;
-  };
-  paymentSatoshis?: number;
-  messagePreview?: string;
-  messageId?: string;
-  // For achievements
-  achievementId?: string;
-  achievementName?: string;
-}
+import { getCachedAgentList } from "@/lib/cache";
+import type { ActivityEvent, ActivityResponse } from "@/app/components/activity-shared";
 
 /**
  * Aggregate network statistics.
@@ -42,14 +15,6 @@ interface NetworkStats {
   activeAgents: number;
   totalMessages: number;
   totalSatsTransacted: number;
-}
-
-/**
- * Response format for GET /api/activity.
- */
-interface ActivityResponse {
-  events: ActivityEvent[];
-  stats: NetworkStats;
 }
 
 /**
@@ -66,10 +31,179 @@ const CORS_HEADERS = {
 };
 
 const CACHE_KEY = "cache:activity";
+const BUILDING_KEY = "cache:activity:building";
 const CACHE_TTL_SECONDS = 120; // 2 minutes
+const BUILDING_TTL_SECONDS = 30;
 const MAX_EVENTS = 40;
 const TOP_ACTIVE_AGENTS = 20;
 const ACTIVE_DAYS_THRESHOLD = 7;
+
+/**
+ * Assemble activity data using the shared agent-list cache.
+ *
+ * Uses getCachedAgentList() (single KV read on cache hit) instead of
+ * an independent O(N) KV scan. Only the per-agent event detail fetches
+ * (recent messages and achievements for top 20 active agents) remain as
+ * targeted KV reads — O(20 * 6) rather than O(N).
+ */
+export async function buildActivityData(kv: KVNamespace): Promise<ActivityResponse> {
+  // --- 1. Get agent data from the shared cache (single KV read on hit) ---
+  const { agents: cachedAgents, stats: agentStats } = await getCachedAgentList(kv);
+
+  const now = Date.now();
+  const activeCutoff = now - ACTIVE_DAYS_THRESHOLD * 24 * 60 * 60 * 1000;
+
+  // Derive stats from cached agent list
+  const activeAgents = cachedAgents.filter((agent) => {
+    if (!agent.lastActiveAt) return false;
+    return new Date(agent.lastActiveAt).getTime() >= activeCutoff;
+  });
+
+  const totalMessages = agentStats.messageCount;
+  const totalSatsTransacted = totalMessages * INBOX_PRICE_SATS;
+
+  // --- 2. Identify top 20 active agents for event collection ---
+  const sortedAgents = [...cachedAgents]
+    .filter((a) => a.lastActiveAt)
+    .sort((a, b) => {
+      const aTime = new Date(a.lastActiveAt!).getTime();
+      const bTime = new Date(b.lastActiveAt!).getTime();
+      return bTime - aTime;
+    })
+    .slice(0, TOP_ACTIVE_AGENTS);
+
+  // --- 3. Collect events from top active agents ---
+  // O(TOP_ACTIVE_AGENTS * 6) KV reads: 3 messages + 3 achievements per agent
+  const events: ActivityEvent[] = [];
+
+  const eventPromises = sortedAgents.map(async (agent) => {
+    const agentEvents: ActivityEvent[] = [];
+
+    // Fetch inbox index for this agent
+    const inboxIndex = await kv.get<{ messageIds: string[]; unreadCount: number }>(
+      `inbox:agent:${agent.btcAddress}`,
+      "json"
+    );
+
+    if (inboxIndex && inboxIndex.messageIds.length > 0) {
+      // Fetch most recent 3 messages for the event feed
+      const recentMessageIds = inboxIndex.messageIds.slice(-3).reverse();
+      const messages = await Promise.all(
+        recentMessageIds.map(async (messageId) => {
+          const message = await kv.get<InboxMessage>(
+            `inbox:message:${messageId}`,
+            "json"
+          );
+          return message;
+        })
+      );
+
+      // Add message events
+      for (const message of messages) {
+        if (message) {
+          // Find sender agent for display name
+          const senderAgent = cachedAgents.find(
+            (a) => a.stxAddress === message.fromAddress
+          );
+
+          agentEvents.push({
+            type: "message",
+            timestamp: message.sentAt,
+            agent: {
+              btcAddress: senderAgent?.btcAddress || message.fromAddress,
+              displayName: senderAgent?.displayName || "Unknown Agent",
+            },
+            recipient: {
+              btcAddress: agent.btcAddress,
+              displayName: agent.displayName || agent.btcAddress,
+            },
+            paymentSatoshis: message.paymentSatoshis,
+            messagePreview: message.content.length > 80
+              ? message.content.slice(0, 80) + "…"
+              : message.content,
+            messageId: message.messageId,
+          });
+        }
+      }
+    }
+
+    // Fetch achievement index
+    const achievementIndex = await kv.get<AchievementAgentIndex>(
+      `achievements:${agent.btcAddress}`,
+      "json"
+    );
+
+    if (achievementIndex && achievementIndex.achievementIds.length > 0) {
+      // Fetch most recent 3 achievements
+      const recentAchievementIds = achievementIndex.achievementIds.slice(-3).reverse();
+      const achievements = await Promise.all(
+        recentAchievementIds.map(async (achievementId) => {
+          const achievement = await kv.get<AchievementRecord>(
+            `achievement:${agent.btcAddress}:${achievementId}`,
+            "json"
+          );
+          return achievement;
+        })
+      );
+
+      // Add achievement events
+      for (const achievement of achievements) {
+        if (achievement) {
+          const def = ACHIEVEMENTS.find((a) => a.id === achievement.achievementId);
+          agentEvents.push({
+            type: "achievement",
+            timestamp: achievement.unlockedAt,
+            agent: {
+              btcAddress: agent.btcAddress,
+              displayName: agent.displayName || agent.btcAddress,
+            },
+            achievementId: achievement.achievementId,
+            achievementName: def?.name || achievement.achievementId,
+          });
+        }
+      }
+    }
+
+    // Add registration event (if agent recently verified)
+    const verifiedTime = new Date(agent.verifiedAt).getTime();
+    const daysSinceVerified = (now - verifiedTime) / (1000 * 60 * 60 * 24);
+    if (daysSinceVerified <= 30) {
+      agentEvents.push({
+        type: "registration",
+        timestamp: agent.verifiedAt,
+        agent: {
+          btcAddress: agent.btcAddress,
+          displayName: agent.displayName || agent.btcAddress,
+        },
+      });
+    }
+
+    return agentEvents;
+  });
+
+  const allEvents = (await Promise.all(eventPromises)).flat();
+
+  // Sort all events by timestamp descending, take top N
+  const sortedEvents = allEvents
+    .sort((a, b) => {
+      const aTime = new Date(a.timestamp).getTime();
+      const bTime = new Date(b.timestamp).getTime();
+      return bTime - aTime;
+    })
+    .slice(0, MAX_EVENTS);
+
+  const stats: NetworkStats = {
+    totalAgents: agentStats.total,
+    activeAgents: activeAgents.length,
+    totalMessages,
+    totalSatsTransacted,
+  };
+
+  return {
+    events: sortedEvents,
+    stats,
+  };
+}
 
 /**
  * GET /api/activity
@@ -77,7 +211,8 @@ const ACTIVE_DAYS_THRESHOLD = 7;
  * Returns recent network activity (messages, achievements, registrations)
  * and aggregate statistics (total agents, active agents, messages, sats).
  *
- * Caches result in KV for 2 minutes to avoid expensive scans on every page load.
+ * Caches result in KV for 2 minutes. Uses the shared agent-list cache
+ * to derive stats and identify top active agents — no independent O(N) scan.
  */
 export async function GET(request: NextRequest) {
   // Self-documenting: return usage docs when explicitly requested via ?docs=1
@@ -119,7 +254,7 @@ export async function GET(request: NextRequest) {
         },
       },
       cachingStrategy: {
-        description: "Response is cached in KV for 2 minutes to prevent expensive scans on every page load",
+        description: "Response is cached in KV for 2 minutes. Stats derived from shared agent-list cache (no independent O(N) scan). Only event detail fetches for top 20 active agents remain as targeted KV reads.",
         ttl: CACHE_TTL_SECONDS,
         key: CACHE_KEY,
       },
@@ -165,215 +300,52 @@ export async function GET(request: NextRequest) {
       }
     }
 
-    // Cache miss or stale — regenerate activity feed
-    const agents: AgentRecord[] = [];
-    let cursor: string | undefined;
-    let listComplete = false;
-
-    // List all agents (same pattern as /api/agents)
-    while (!listComplete) {
-      const listResult = await kv.list<AgentRecord>({
-        prefix: "stx:",
-        cursor,
-      });
-      listComplete = listResult.list_complete;
-      cursor = !listResult.list_complete ? listResult.cursor : undefined;
-
-      const values = await Promise.all(
-        listResult.keys.map(async (key) => {
-          const value = await kv.get(key.name);
-          if (!value) return null;
-          try {
-            return JSON.parse(value) as AgentRecord;
-          } catch (e) {
-            console.error(`Failed to parse agent record ${key.name}:`, e);
-            return null;
-          }
-        })
-      );
-      agents.push(...values.filter((v): v is AgentRecord => v !== null));
-    }
-
-    // Compute aggregate stats
-    const now = Date.now();
-    const activeCutoff = now - ACTIVE_DAYS_THRESHOLD * 24 * 60 * 60 * 1000;
-    const activeAgents = agents.filter((agent) => {
-      if (!agent.lastActiveAt) return false;
-      return new Date(agent.lastActiveAt).getTime() >= activeCutoff;
-    });
-
-    // Sort agents by lastActiveAt descending, take top N most active
-    const sortedAgents = [...agents]
-      .filter((a) => a.lastActiveAt)
-      .sort((a, b) => {
-        const aTime = new Date(a.lastActiveAt!).getTime();
-        const bTime = new Date(b.lastActiveAt!).getTime();
-        return bTime - aTime;
-      })
-      .slice(0, TOP_ACTIVE_AGENTS);
-
-    // Compute network-wide totals from ALL agents' inbox indices
-    let totalMessages = 0;
-    let totalSatsTransacted = 0;
-
-    // TODO: Consider maintaining a pre-built activity index that updates
-    // incrementally in the inbox POST handler to avoid scanning all agents
-    // on cache miss. Current cost is O(N) KV reads where N = total agents.
-    const allInboxPromises = agents.map(async (agent) => {
-      const inboxIndex = await kv.get<InboxAgentIndex>(
-        `inbox:agent:${agent.btcAddress}`,
-        "json"
-      );
-      if (inboxIndex) {
-        totalMessages += inboxIndex.messageIds.length;
-        // Estimate sats from message count (each message costs INBOX_PRICE_SATS)
-        // This avoids fetching every message just for the total
-        totalSatsTransacted += inboxIndex.messageIds.length * INBOX_PRICE_SATS;
-      }
-    });
-    await Promise.all(allInboxPromises);
-
-    // Collect events from top active agents
-    const events: ActivityEvent[] = [];
-
-    // Fetch inbox and achievement indices for top active agents
-    const eventPromises = sortedAgents.map(async (agent) => {
-      const agentEvents: ActivityEvent[] = [];
-
-      // Fetch inbox index (may re-fetch for top agents, but cached by runtime)
-      const inboxIndex = await kv.get<InboxAgentIndex>(
-        `inbox:agent:${agent.btcAddress}`,
-        "json"
-      );
-
-      if (inboxIndex && inboxIndex.messageIds.length > 0) {
-        // Fetch most recent 3 messages for the event feed
-        const recentMessageIds = inboxIndex.messageIds.slice(-3).reverse();
-        const messages = await Promise.all(
-          recentMessageIds.map(async (messageId) => {
-            const message = await kv.get<InboxMessage>(
-              `inbox:message:${messageId}`,
-              "json"
-            );
-            return message;
-          })
-        );
-
-        // Add message events
-        for (const message of messages) {
-          if (message) {
-
-            // Find sender agent for display name
-            const senderAgent = agents.find(
-              (a) => a.stxAddress === message.fromAddress
-            );
-
-            agentEvents.push({
-              type: "message",
-              timestamp: message.sentAt,
-              agent: {
-                btcAddress: senderAgent?.btcAddress || message.fromAddress,
-                displayName: senderAgent?.displayName || "Unknown Agent",
-              },
-              recipient: {
-                btcAddress: agent.btcAddress,
-                displayName: agent.displayName || agent.btcAddress,
-              },
-              paymentSatoshis: message.paymentSatoshis,
-              messagePreview: message.content.length > 80
-                ? message.content.slice(0, 80) + "…"
-                : message.content,
-              messageId: message.messageId,
-            });
-          }
-        }
-      }
-
-      // Fetch achievement index
-      const achievementIndex = await kv.get<AchievementAgentIndex>(
-        `achievements:${agent.btcAddress}`,
-        "json"
-      );
-
-      if (achievementIndex && achievementIndex.achievementIds.length > 0) {
-        // Fetch most recent 3 achievements
-        const recentAchievementIds = achievementIndex.achievementIds.slice(-3).reverse();
-        const achievements = await Promise.all(
-          recentAchievementIds.map(async (achievementId) => {
-            const achievement = await kv.get<AchievementRecord>(
-              `achievement:${agent.btcAddress}:${achievementId}`,
-              "json"
-            );
-            return achievement;
-          })
-        );
-
-        // Add achievement events
-        for (const achievement of achievements) {
-          if (achievement) {
-            const def = ACHIEVEMENTS.find((a) => a.id === achievement.achievementId);
-            agentEvents.push({
-              type: "achievement",
-              timestamp: achievement.unlockedAt,
-              agent: {
-                btcAddress: agent.btcAddress,
-                displayName: agent.displayName || agent.btcAddress,
-              },
-              achievementId: achievement.achievementId,
-              achievementName: def?.name || achievement.achievementId,
-            });
-          }
-        }
-      }
-
-      // Add registration event (if agent recently verified)
-      const verifiedTime = new Date(agent.verifiedAt).getTime();
-      const daysSinceVerified = (now - verifiedTime) / (1000 * 60 * 60 * 24);
-      if (daysSinceVerified <= 30) {
-        agentEvents.push({
-          type: "registration",
-          timestamp: agent.verifiedAt,
-          agent: {
-            btcAddress: agent.btcAddress,
-            displayName: agent.displayName || agent.btcAddress,
+    // Cache miss — check if another request is already rebuilding (thundering herd guard)
+    const building = await kv.get(BUILDING_KEY);
+    if (building) {
+      // Return stale data if available, otherwise a minimal fallback
+      if (cached && cached.data) {
+        return NextResponse.json(cached.data, {
+          headers: {
+            "Cache-Control": "public, max-age=30, s-maxage=60",
+            "X-Cache": "STALE",
           },
         });
       }
+      return NextResponse.json(
+        { events: [], stats: { totalAgents: 0, activeAgents: 0, totalMessages: 0, totalSatsTransacted: 0 } },
+        {
+          headers: {
+            "Cache-Control": "no-store",
+            "X-Cache": "MISS-BUILDING",
+          },
+        }
+      );
+    }
 
-      return agentEvents;
-    });
+    // Claim rebuild with sentinel (best-effort)
+    try {
+      await kv.put(BUILDING_KEY, "1", { expirationTtl: BUILDING_TTL_SECONDS });
+    } catch {
+      // Proceed anyway — worst case is a duplicate rebuild
+    }
 
-    const allEvents = (await Promise.all(eventPromises)).flat();
+    let response: ActivityResponse;
+    try {
+      response = await buildActivityData(kv);
 
-    // Sort all events by timestamp descending, take top N
-    const sortedEvents = allEvents
-      .sort((a, b) => {
-        const aTime = new Date(a.timestamp).getTime();
-        const bTime = new Date(b.timestamp).getTime();
-        return bTime - aTime;
-      })
-      .slice(0, MAX_EVENTS);
-
-    const stats: NetworkStats = {
-      totalAgents: agents.length,
-      activeAgents: activeAgents.length,
-      totalMessages,
-      totalSatsTransacted,
-    };
-
-    const response: ActivityResponse = {
-      events: sortedEvents,
-      stats,
-    };
-
-    // Cache the response
-    const cacheData: CachedActivity = {
-      data: response,
-      cachedAt: new Date().toISOString(),
-    };
-    await kv.put(CACHE_KEY, JSON.stringify(cacheData), {
-      expirationTtl: CACHE_TTL_SECONDS,
-    });
+      // Cache the response
+      const cacheData: CachedActivity = {
+        data: response,
+        cachedAt: new Date().toISOString(),
+      };
+      await kv.put(CACHE_KEY, JSON.stringify(cacheData), {
+        expirationTtl: CACHE_TTL_SECONDS,
+      });
+    } finally {
+      // Clear sentinel after rebuild (success or failure)
+      await kv.delete(BUILDING_KEY).catch(() => {});
+    }
 
     return NextResponse.json(response, {
       headers: {
