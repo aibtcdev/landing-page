@@ -8,8 +8,10 @@ import CopyButton from "./components/CopyButton";
 import HomeHeroStats from "./components/HomeHeroStats";
 import ActivityFeed from "./components/ActivityFeed";
 import { getCachedAgentList } from "@/lib/cache";
+import { buildActivityData } from "./api/activity/route";
+import type { ActivityResponse } from "./components/activity-shared";
 
-export const dynamic = "force-dynamic";
+export const revalidate = 120;
 
 
 // Agent upgrades — prompt + copy cards
@@ -90,6 +92,8 @@ interface LeaderboardAgent {
 
 /**
  * Fetch home page data from the cached agent list (single KV read).
+ * Also builds activity feed data for server-side rendering — no extra
+ * KV scan since buildActivityData() re-uses the same agent-list cache.
  */
 async function fetchHomeData() {
   try {
@@ -116,19 +120,31 @@ async function fetchHomeData() {
       levelName: agent.levelName,
     }));
 
+    // Build activity data for server-side rendering.
+    // buildActivityData() calls getCachedAgentList() internally — it hits
+    // the already-warm cache, so this is a cache read + ~120 KV reads for
+    // top-agent events, not an O(N) scan.
+    let activityData: ActivityResponse | undefined;
+    try {
+      activityData = await buildActivityData(kv);
+    } catch {
+      // Graceful degradation: ActivityFeed will fall back to client-side fetch
+    }
+
     return {
       registeredCount: stats.total,
       topAgents,
       genesisCount: stats.genesisCount,
       messageCount: stats.messageCount,
+      activityData,
     };
   } catch {
-    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], genesisCount: 0, messageCount: 0 };
+    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], genesisCount: 0, messageCount: 0, activityData: undefined };
   }
 }
 
 export default async function Home() {
-  const { registeredCount, topAgents, genesisCount, messageCount } = await fetchHomeData();
+  const { registeredCount, topAgents, genesisCount, messageCount, activityData } = await fetchHomeData();
 
   return (
     <>
@@ -189,7 +205,7 @@ export default async function Home() {
 
             {/* Right side - Activity feed */}
             <div className="animate-fadeUp opacity-0 [animation-delay:0.4s] w-full max-w-[520px] min-w-0 max-lg:max-w-full text-left">
-              <ActivityFeed />
+              <ActivityFeed initialData={activityData} />
             </div>
           </div>
 

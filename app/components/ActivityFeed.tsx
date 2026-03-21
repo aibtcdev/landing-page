@@ -15,7 +15,11 @@ import {
 /**
  * Activity feed component for homepage.
  *
- * Fetches from GET /api/activity and displays:
+ * Accepts optional `initialData` from the server-rendered page for
+ * zero-skeleton first paint. SWR uses it as fallbackData and revalidates
+ * in the background every 30s.
+ *
+ * Displays:
  * - Recent event feed (messages, achievements, registrations)
  * - Paid messages stat bar that counts up to the real total
  *
@@ -24,11 +28,11 @@ import {
  * SWR polling (30s). Stats count up from a starting point and converge
  * on the real API totals when the queue is exhausted.
  */
-export default function ActivityFeed() {
+export default function ActivityFeed({ initialData }: { initialData?: ActivityResponse }) {
   const { data, error, isLoading: loading } = useSWR<ActivityResponse>(
     "/api/activity",
     fetcher,
-    { refreshInterval: 30_000 }
+    { refreshInterval: 30_000, fallbackData: initialData }
   );
 
   // Show fewer rows on mobile — hooks must be before early returns
