@@ -339,28 +339,29 @@ export async function verifyTxidPayment(
     network,
   });
 
-  // Negative cache: if this txid was recently checked and found unconfirmed, skip the API call.
   const pendingCacheKey = `inbox:pending-txid:${normalizedTxid}`;
-  if (kv) {
-    const pendingEntry = await kv.get(pendingCacheKey);
-    if (pendingEntry) {
-      log.info("Txid verification: pending cache hit, skipping API call", { txid: fullTxid });
-      return {
-        success: false,
-        error: "Transaction is not yet confirmed. Check back in a few minutes.",
-        errorCode: "TXID_PENDING",
-      };
-    }
-  }
-
   let txData: StacksTxData;
 
-  // Confirmed transactions are immutable -- check cache first
+  // 1. Confirmed transactions are immutable -- check positive cache first
   const cachedTx = await getCachedTransaction(normalizedTxid, kv) as StacksTxData | null;
   if (cachedTx) {
     log.info("Txid verification: cache hit", { txid: fullTxid });
     txData = cachedTx;
   } else {
+    // 2. Negative cache: if this txid was recently checked and found unconfirmed, skip the API call.
+    if (kv) {
+      const pendingEntry = await kv.get(pendingCacheKey);
+      if (pendingEntry) {
+        log.info("Txid verification: pending cache hit, skipping API call", { txid: fullTxid });
+        return {
+          success: false,
+          error: "Transaction is not yet confirmed. Check back in a few minutes.",
+          errorCode: "TXID_PENDING",
+        };
+      }
+    }
+
+    // 3. Fetch from API
     try {
       const response = await stacksApiFetch(`${apiBase}/extended/v1/tx/${fullTxid}`, {
         method: "GET",

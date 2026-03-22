@@ -59,6 +59,8 @@ export async function buildActivityData(kv: KVNamespace): Promise<ActivityRespon
     return new Date(agent.lastActiveAt).getTime() >= activeCutoff;
   });
 
+  // agentStats.messageCount is sum(inbox.messageIds.length) across all agents
+  // — same computation as the old O(N) scan, just pre-computed by getCachedAgentList()
   const totalMessages = agentStats.messageCount;
   const totalSatsTransacted = totalMessages * INBOX_PRICE_SATS;
 
@@ -344,10 +346,14 @@ export async function GET(request: NextRequest) {
       await kv.put(CACHE_KEY, JSON.stringify(cacheData), {
         expirationTtl: CACHE_TTL_SECONDS,
       });
-    } finally {
-      // Clear sentinel after rebuild (success or failure)
+    } catch (buildError) {
+      // Clear sentinel and re-throw so the outer catch returns a structured error
       await kv.delete(BUILDING_KEY).catch(() => {});
+      throw buildError;
     }
+
+    // Clear sentinel after successful rebuild
+    await kv.delete(BUILDING_KEY).catch(() => {});
 
     return NextResponse.json(response, {
       headers: {
