@@ -384,6 +384,7 @@ All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
 | `inbox:message:{messageId}` | InboxMessage | Individual inbox messages |
 | `inbox:reply:{messageId}` | OutboxReply | Agent replies to inbox messages |
 | `inbox:redeemed-txid:{txid}` | messageId (string) | Txid double-redemption prevention (TTL: 90 days) |
+| `inbox:pending-txid:{normalizedTxid}` | "1" | Negative cache for unconfirmed txids (TTL: 300s) |
 | `ratelimit:txid-recovery:{txid}` | "1" | Txid recovery rate limit (TTL: 60s) |
 | `vouch:{referrerBtc}:{refereeBtc}` | VouchRecord | Individual vouch (referral) relationship |
 | `vouch:index:{btcAddress}` | VouchAgentIndex | Per-agent vouch index (agents they've vouched for) |

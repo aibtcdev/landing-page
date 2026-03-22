@@ -14,16 +14,10 @@ import {
   cvToJSON,
 } from "@stacks/transactions";
 import { STACKS_API_BASE } from "./constants";
-import { stacksApiFetch } from "../stacks-api-fetch";
+import { stacksApiFetch, buildHiroHeaders, detect429 } from "../stacks-api-fetch";
 
-/** Build headers for Hiro API requests, optionally including an API key. */
-export function buildHiroHeaders(hiroApiKey?: string): Record<string, string> {
-  const headers: Record<string, string> = {};
-  if (hiroApiKey) {
-    headers["X-Hiro-API-Key"] = hiroApiKey;
-  }
-  return headers;
-}
+// Re-export from shared location for backwards compatibility
+export { buildHiroHeaders, detect429 };
 
 /**
  * Call a read-only function on a Stacks smart contract.
@@ -206,22 +200,3 @@ function unwrapCvJson(node: any): any {
   return node;
 }
 
-/**
- * Detect 429 rate limit responses and log cf-ray for observability.
- *
- * @returns Object with isRateLimited flag for caller branching
- */
-export function detect429(response: Response): {
-  isRateLimited: boolean;
-} {
-  const isRateLimited = response.status === 429;
-
-  if (isRateLimited) {
-    const cfRay = response.headers.get("cf-ray");
-    console.warn(
-      `Rate limit detected (429) on ${response.url}${cfRay ? ` [cf-ray: ${cfRay}]` : ""}`
-    );
-  }
-
-  return { isRateLimited };
-}

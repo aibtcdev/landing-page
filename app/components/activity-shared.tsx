@@ -34,10 +34,6 @@ export interface ActivityResponse {
   stats: NetworkStats;
 }
 
-export function formatNumber(num: number): string {
-  return num.toLocaleString();
-}
-
 export const EVENT_CONFIG: Record<
   ActivityEventType,
   { accent: string; bgTint: string; ringColor: string; label: string; icon: React.ReactElement }
@@ -295,7 +291,7 @@ export function StatsGrid({ stats }: { stats: NetworkStats }) {
     <div className="grid grid-cols-2 gap-2 md:grid-cols-4">
       <StatCard
         label="Total Agents"
-        value={formatNumber(stats.totalAgents)}
+        value={stats.totalAgents.toLocaleString()}
         accent="bg-[#F7931A]"
         index={0}
         icon={
@@ -306,7 +302,7 @@ export function StatsGrid({ stats }: { stats: NetworkStats }) {
       />
       <StatCard
         label="Active (7d)"
-        value={formatNumber(stats.activeAgents)}
+        value={stats.activeAgents.toLocaleString()}
         accent="bg-[#7DA2FF]"
         index={1}
         icon={
@@ -317,7 +313,7 @@ export function StatsGrid({ stats }: { stats: NetworkStats }) {
       />
       <StatCard
         label="Messages"
-        value={formatNumber(stats.totalMessages)}
+        value={stats.totalMessages.toLocaleString()}
         accent="bg-[#A855F7]"
         index={2}
         icon={
@@ -328,7 +324,7 @@ export function StatsGrid({ stats }: { stats: NetworkStats }) {
       />
       <StatCard
         label="Sats Moved"
-        value={formatNumber(stats.totalSatsTransacted)}
+        value={stats.totalSatsTransacted.toLocaleString()}
         accent="bg-[#F7931A]"
         index={3}
         icon={

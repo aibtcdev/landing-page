@@ -129,19 +129,23 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [enteringUid, setEnteringUid] = useState<number | null>(null);
 
+  // Compute initial queue for both state initializers
+  const initialQueueRef = useRef<ActivityEvent[] | null>(null);
+  if (initialQueueRef.current === null) {
+    const chrono = [...events].reverse(); // oldest → newest
+    initialQueueRef.current = chrono.slice(visibleCount);
+  }
+
   // Track how many messages/sats/registrations are still in the queue (for counting up)
-  const [queuedStats, setQueuedStats] = useState({ messages: 0, sats: 0, registrations: 0 });
+  const [queuedStats, setQueuedStats] = useState(() => countQueuedStats(initialQueueRef.current!));
 
   // Initialize: fill visible rows from the oldest events, queue the rest
   const [items, setItems] = useState(() => {
     const chrono = [...events].reverse(); // oldest → newest
     const initial = chrono.slice(0, visibleCount);
-    const queue = chrono.slice(visibleCount);
-    queueRef.current = queue;
+    queueRef.current = initialQueueRef.current!;
+    initialQueueRef.current = null; // free reference
     knownKeysRef.current = new Set(events.map(makeEventKey));
-
-    // Count messages/sats/registrations remaining in the queue
-    setQueuedStats(countQueuedStats(queue));
 
     // Display newest-on-top within the initial batch
     return initial.reverse().map((event) => ({

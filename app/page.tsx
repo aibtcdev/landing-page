@@ -8,7 +8,7 @@ import CopyButton from "./components/CopyButton";
 import HomeHeroStats from "./components/HomeHeroStats";
 import ActivityFeed from "./components/ActivityFeed";
 import { getCachedAgentList } from "@/lib/cache";
-import { buildActivityData } from "./api/activity/route";
+import { buildActivityData } from "@/lib/activity";
 import type { ActivityResponse } from "./components/activity-shared";
 
 export const revalidate = 120;
@@ -80,14 +80,8 @@ const upgrades = [
 
 
 interface LeaderboardAgent {
-  rank: number;
-  stxAddress: string;
   btcAddress: string;
   displayName?: string | null;
-  bnsName?: string | null;
-  verifiedAt: string;
-  level: number;
-  levelName: string;
 }
 
 /**
@@ -109,15 +103,9 @@ async function fetchHomeData() {
       return cmp;
     });
 
-    const topAgents: LeaderboardAgent[] = sorted.slice(0, 12).map((agent, i) => ({
-      rank: i + 1,
-      stxAddress: agent.stxAddress,
+    const topAgents: LeaderboardAgent[] = sorted.slice(0, 12).map((agent) => ({
       btcAddress: agent.btcAddress,
       displayName: agent.displayName,
-      bnsName: agent.bnsName,
-      verifiedAt: agent.verifiedAt,
-      level: agent.level,
-      levelName: agent.levelName,
     }));
 
     // Build activity data for server-side rendering.

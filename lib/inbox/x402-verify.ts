@@ -28,8 +28,7 @@ import {
 } from "./x402-config";
 import { INBOX_PRICE_SATS, RELAY_SETTLE_TIMEOUT_MS, SBTC_CONTRACTS } from "./constants";
 import type { Logger } from "../logging";
-import { stacksApiFetch } from "../stacks-api-fetch";
-import { buildHiroHeaders } from "../identity/stacks-api";
+import { stacksApiFetch, buildHiroHeaders } from "../stacks-api-fetch";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 
 const NOOP_LOGGER: Logger = {
@@ -370,11 +369,10 @@ export async function verifyTxidPayment(
       if (!response.ok) {
         if (response.status === 404) {
           // Cache the negative result to prevent repeated lookups for the same unconfirmed txid.
+          // Value is unused — only existence matters. TTL handles expiry.
           if (kv) {
             try {
-              await kv.put(pendingCacheKey, JSON.stringify({ status: "not_found", checkedAt: new Date().toISOString() }), {
-                expirationTtl: 300,
-              });
+              await kv.put(pendingCacheKey, "1", { expirationTtl: 300 });
             } catch (err) {
               log.warn("[verifyTxidPayment] KV pending cache write failed", { error: String(err), txid: fullTxid });
             }
@@ -406,11 +404,10 @@ export async function verifyTxidPayment(
   if (txData.tx_status !== "success") {
     log.warn("Transaction not successful", { status: txData.tx_status });
     // Cache the pending/failed state to prevent redundant API calls.
+    // Value is unused — only existence matters. TTL handles expiry.
     if (kv) {
       try {
-        await kv.put(pendingCacheKey, JSON.stringify({ status: txData.tx_status, checkedAt: new Date().toISOString() }), {
-          expirationTtl: 300,
-        });
+        await kv.put(pendingCacheKey, "1", { expirationTtl: 300 });
       } catch (err) {
         log.warn("[verifyTxidPayment] KV pending cache write failed", { error: String(err), txid: fullTxid });
       }
