@@ -952,8 +952,10 @@ export async function POST(
 
     const errorCode = paymentResult.errorCode;
     const retryAfterSeconds = paymentResult.retryAfterSeconds ?? 5;
-    const relayCode = paymentResult.relayCode;
-    const relayDetail = paymentResult.relayDetail;
+    const relayDiag = {
+      ...(paymentResult.relayCode && { relayCode: paymentResult.relayCode }),
+      ...(paymentResult.relayDetail && { relayDetail: paymentResult.relayDetail }),
+    };
 
     // NONCE_CONFLICT — retryable; same tx hex is idempotent within 5 min.
     if (errorCode === "NONCE_CONFLICT") {
@@ -981,8 +983,7 @@ export async function POST(
           code: errorCode,
           retryable: false,
           nextSteps: "The sBTC transfer was not sent — your funds are safe. Retry with a new payment.",
-          ...(relayCode && { relayCode }),
-          ...(relayDetail && { relayDetail }),
+          ...relayDiag,
         },
         { status: 502 }
       );
@@ -996,8 +997,7 @@ export async function POST(
           code: errorCode,
           retryable: false,
           nextSteps: "Check that the transfer amount, asset, and recipient match requirements. Submit a new payment.",
-          ...(relayCode && { relayCode }),
-          ...(relayDetail && { relayDetail }),
+          ...relayDiag,
         },
         { status: 422 }
       );
@@ -1012,8 +1012,7 @@ export async function POST(
           retryable: true,
           retryAfter: 10,
           nextSteps: "Relay was slow — retry the request",
-          ...(relayCode && { relayCode }),
-          ...(relayDetail && { relayDetail }),
+          ...relayDiag,
         },
         {
           status: 502,
@@ -1048,8 +1047,7 @@ export async function POST(
           retryable: true,
           retryAfter: 60,
           nextSteps: "Your transaction was submitted but confirmation timed out. Resubmit with the confirmed paymentTxid once it appears on-chain.",
-          ...(relayCode && { relayCode }),
-          ...(relayDetail && { relayDetail }),
+          ...relayDiag,
         },
         {
           status: 409,

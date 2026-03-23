@@ -115,6 +115,49 @@ export interface InboxPaymentVerification {
   retryAfterSeconds?: number;
 }
 
+/**
+ * Extract a structured relay error code and retryAfter from an exception string.
+ * Relay errors often embed JSON like: {"code":"BROADCAST_FAILED","retryAfter":5}
+ */
+function parseRelayException(error: unknown): {
+  errorStr: string;
+  embeddedCode: string | undefined;
+  embeddedRetryAfter: number | undefined;
+} {
+  const errorStr = String(error);
+  let embeddedCode: string | undefined;
+  let embeddedRetryAfter: number | undefined;
+  try {
+    const jsonMatch = errorStr.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as { code?: string; retryAfter?: number };
+      embeddedCode = parsed.code;
+      embeddedRetryAfter = parsed.retryAfter;
+    }
+  } catch { /* ignore parse failure */ }
+  return { errorStr, embeddedCode, embeddedRetryAfter };
+}
+
+/**
+ * Build a failed InboxPaymentVerification from a relay exception.
+ * Shared by both sponsored and non-sponsored settlement catch blocks.
+ */
+function relayExceptionResult(
+  errorPrefix: string,
+  error: unknown
+): InboxPaymentVerification {
+  const { errorStr, embeddedCode, embeddedRetryAfter } = parseRelayException(error);
+  const mappedCode = mapRelayErrorCode(embeddedCode, 500);
+  return {
+    success: false,
+    error: `${errorPrefix}: ${errorStr}`,
+    errorCode: mappedCode,
+    ...(embeddedCode != null && { relayCode: embeddedCode }),
+    ...(errorStr && { relayDetail: errorStr }),
+    ...(embeddedRetryAfter != null && { retryAfterSeconds: embeddedRetryAfter }),
+  };
+}
+
 /** Relay error codes that warrant a single immediate retry (relay is idempotent within 5 min). */
 const RELAY_RETRYABLE_CODES = new Set([
   "NONCE_CONFLICT",
@@ -357,28 +400,9 @@ export async function verifyInboxPayment(
       };
       log.debug("Sponsor relay result", { relayData, settleResult, relayPaymentStatus });
     } catch (error) {
-      const errorStr = String(error);
-      // Extract structured relay code from exception (same approach as non-sponsored path).
-      let embeddedCode: string | undefined;
-      let embeddedRetryAfter: number | undefined;
-      try {
-        const jsonMatch = errorStr.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]) as { code?: string; retryAfter?: number };
-          embeddedCode = parsed.code;
-          embeddedRetryAfter = parsed.retryAfter;
-        }
-      } catch { /* ignore parse failure */ }
-      const mappedCode = mapRelayErrorCode(embeddedCode, 500);
-      log.error("Sponsor relay exception", { error: errorStr, embeddedCode, mappedCode });
-      return {
-        success: false,
-        error: `Sponsor relay error: ${errorStr}`,
-        errorCode: mappedCode,
-        ...(embeddedCode != null && { relayCode: embeddedCode }),
-        ...(errorStr && { relayDetail: errorStr }),
-        ...(embeddedRetryAfter != null && { retryAfterSeconds: embeddedRetryAfter }),
-      };
+      const result = relayExceptionResult("Sponsor relay error", error);
+      log.error("Sponsor relay exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
+      return result;
     }
   } else {
     log.debug("Settling non-sponsored transaction via relay", {
@@ -393,36 +417,9 @@ export async function verifyInboxPayment(
       });
       log.debug("Relay settle result", { settleResult });
     } catch (error) {
-      const errorStr = String(error);
-      // Try to extract a structured relay code from the thrown error message.
-      // Relay errors often embed JSON like: {"code":"BROADCAST_FAILED",...}
-      let embeddedCode: string | undefined;
-      let embeddedRetryAfter: number | undefined;
-      try {
-        const jsonMatch = errorStr.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]) as { code?: string; retryAfter?: number };
-          embeddedCode = parsed.code;
-          embeddedRetryAfter = parsed.retryAfter;
-        }
-      } catch {
-        // Ignore parse failure — fall back to generic code
-      }
-      // Reuse the shared mapping function; treat thrown exceptions as 500 (server error).
-      const mappedCode = mapRelayErrorCode(embeddedCode, 500);
-      log.error("Relay settlement exception", {
-        error: errorStr,
-        embeddedCode,
-        mappedCode,
-      });
-      return {
-        success: false,
-        error: `Payment settlement error: ${errorStr}`,
-        errorCode: mappedCode,
-        ...(embeddedCode != null && { relayCode: embeddedCode }),
-        ...(errorStr && { relayDetail: errorStr }),
-        ...(embeddedRetryAfter != null && { retryAfterSeconds: embeddedRetryAfter }),
-      };
+      const result = relayExceptionResult("Payment settlement error", error);
+      log.error("Relay settlement exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
+      return result;
     }
   }
 
