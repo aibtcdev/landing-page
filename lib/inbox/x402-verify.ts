@@ -146,6 +146,7 @@ export async function verifyInboxPayment(
 
     const relayBody = JSON.stringify({
       transaction: paymentPayload.payload.transaction,
+      maxTimeoutSeconds: 15,
       settle: {
         expectedRecipient: recipientStxAddress,
         minAmount: paymentRequirements.amount,

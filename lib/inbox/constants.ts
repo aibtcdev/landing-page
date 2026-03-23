@@ -45,10 +45,11 @@ export const SBTC_CONTRACTS = {
 } as const;
 
 /**
- * Relay settlement timeout (ms). 30s balances generous wait time against
- * Worker limits. Senders can fall back to txid recovery if this expires.
+ * Relay settlement timeout (ms). Set to 20s (5s margin over the 15s relay
+ * polling limit passed via maxTimeoutSeconds). Senders can fall back to
+ * txid recovery if this expires.
  */
-export const RELAY_SETTLE_TIMEOUT_MS = 30_000;
+export const RELAY_SETTLE_TIMEOUT_MS = 20_000;
 
 /** TTL for redeemed txid KV keys (90 days). On-chain record is source of truth. */
 export const REDEEMED_TXID_TTL_SECONDS = 90 * 24 * 60 * 60;
