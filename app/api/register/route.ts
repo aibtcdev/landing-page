@@ -414,6 +414,17 @@ function verifyStacksSignature(signature: string): {
   };
 }
 
+/** Build a structured JSON error response for registration failures. */
+function registrationError(
+  error: string,
+  code: string,
+  hint: string,
+  status: number,
+  retryable = false
+): NextResponse {
+  return NextResponse.json({ error, code, retryable, hint }, { status });
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = (await request.json()) as {
@@ -438,9 +449,11 @@ export async function POST(request: NextRequest) {
     } = body;
 
     if (!bitcoinSignature || !stacksSignature) {
-      return NextResponse.json(
-        { error: "Both bitcoinSignature and stacksSignature are required" },
-        { status: 400 }
+      return registrationError(
+        "Both bitcoinSignature and stacksSignature are required",
+        "MISSING_SIGNATURES",
+        "Provide both bitcoinSignature and stacksSignature in the request body. Use the AIBTC MCP server tools btc_sign_message and stacks_sign_message to generate them.",
+        400
       );
     }
 
@@ -448,9 +461,11 @@ export async function POST(request: NextRequest) {
     if (description) {
       const trimmed = description.trim();
       if (trimmed.length > 280) {
-        return NextResponse.json(
-          { error: "Description must be 280 characters or less" },
-          { status: 400 }
+        return registrationError(
+          "Description must be 280 characters or less",
+          "INVALID_INPUT",
+          "Shorten your description to 280 characters or fewer before resubmitting.",
+          400
         );
       }
       sanitizedDescription = trimmed;
@@ -460,9 +475,11 @@ export async function POST(request: NextRequest) {
     if (taprootAddress) {
       const trimmed = taprootAddress.trim();
       if (trimmed.length > 0 && !validateTaprootAddress(trimmed)) {
-        return NextResponse.json(
-          { error: "Invalid taproot address. Must start with bc1p (Bech32m format)." },
-          { status: 400 }
+        return registrationError(
+          "Invalid taproot address. Must start with bc1p (Bech32m format).",
+          "INVALID_TAPROOT_ADDRESS",
+          "Provide a valid Taproot address starting with bc1p. Use the MCP tool taproot_get_pubkey to retrieve your taproot address.",
+          400
         );
       }
       sanitizedTaprootAddress = trimmed || null;
@@ -471,13 +488,12 @@ export async function POST(request: NextRequest) {
     // If taprootAddress is provided, require a BIP-322 P2TR signature proving ownership
     if (sanitizedTaprootAddress) {
       if (!taprootSignature) {
-        return NextResponse.json(
-          {
-            error:
-              "taprootSignature is required when taprootAddress is provided. " +
-              "Sign the message \"" + EXPECTED_MESSAGE + "\" with your taproot key (BIP-322 P2TR).",
-          },
-          { status: 400 }
+        return registrationError(
+          "taprootSignature is required when taprootAddress is provided. " +
+            "Sign the message \"" + EXPECTED_MESSAGE + "\" with your taproot key (BIP-322 P2TR).",
+          "INVALID_TAPROOT_SIGNATURE",
+          "Sign the registration message with your taproot key and include it as taprootSignature.",
+          400
         );
       }
       let taprootOwnershipValid = false;
@@ -488,62 +504,76 @@ export async function POST(request: NextRequest) {
           sanitizedTaprootAddress
         );
       } catch (e) {
-        return NextResponse.json(
-          {
-            error: `Invalid taproot signature: ${(e as Error).message}`,
-          },
-          { status: 400 }
+        return registrationError(
+          `Invalid taproot signature: ${(e as Error).message}`,
+          "INVALID_TAPROOT_SIGNATURE",
+          `Ensure you signed the exact message "${EXPECTED_MESSAGE}" using BIP-322 P2TR with the private key for your taproot address.`,
+          400
         );
       }
       if (!taprootOwnershipValid) {
-        return NextResponse.json(
-          {
-            error:
-              "Taproot signature verification failed. " +
-              "Ensure you signed \"" + EXPECTED_MESSAGE + "\" with the private key for " +
-              sanitizedTaprootAddress,
-          },
-          { status: 400 }
+        return registrationError(
+          "Taproot signature verification failed. " +
+            "Ensure you signed \"" + EXPECTED_MESSAGE + "\" with the private key for " +
+            sanitizedTaprootAddress,
+          "INVALID_TAPROOT_SIGNATURE",
+          `Ensure you signed the exact message "${EXPECTED_MESSAGE}" using BIP-322 P2TR with the private key for your taproot address.`,
+          400
         );
       }
     }
+
+    const NOSTR_PUBKEY_ERROR = "Invalid nostrPublicKey. Must be a 64-character lowercase hex string (x-only secp256k1 pubkey).";
+    const NOSTR_PUBKEY_HINT = "Provide a 64-character lowercase hex x-only secp256k1 pubkey. Use the MCP tool nostr_get_pubkey to retrieve your Nostr public key.";
 
     let sanitizedNostrPublicKey: string | null = null;
     if (typeof nostrPublicKey === "string") {
       const trimmed = nostrPublicKey.trim().toLowerCase();
       if (trimmed.length > 0) {
         if (!validateNostrPubkey(trimmed)) {
-          return NextResponse.json(
-            { error: "Invalid nostrPublicKey. Must be a 64-character lowercase hex string (x-only secp256k1 pubkey)." },
-            { status: 400 }
-          );
+          return registrationError(NOSTR_PUBKEY_ERROR, "INVALID_NOSTR_PUBKEY", NOSTR_PUBKEY_HINT, 400);
         }
         sanitizedNostrPublicKey = trimmed;
       }
     } else if (nostrPublicKey !== undefined && nostrPublicKey !== null) {
-      return NextResponse.json(
-        { error: "Invalid nostrPublicKey. Must be a 64-character lowercase hex string (x-only secp256k1 pubkey)." },
-        { status: 400 }
-      );
+      return registrationError(NOSTR_PUBKEY_ERROR, "INVALID_NOSTR_PUBKEY", NOSTR_PUBKEY_HINT, 400);
     }
 
     let sanitizedCapabilities: string[] | null = null;
     if (capabilities !== undefined && capabilities !== null) {
       if (!Array.isArray(capabilities)) {
-        return NextResponse.json({ error: 'capabilities must be an array of strings' }, { status: 400 });
+        return registrationError(
+          "capabilities must be an array of strings",
+          "INVALID_CAPABILITIES",
+          "Provide capabilities as a JSON array of lowercase alphanumeric strings, e.g. [\"bitcoin-trading\", \"nft-minting\"].",
+          400
+        );
       }
       if (capabilities.length > 20) {
-        return NextResponse.json({ error: 'capabilities max 20 items' }, { status: 400 });
+        return registrationError(
+          "capabilities max 20 items",
+          "INVALID_CAPABILITIES",
+          "Reduce your capabilities list to 20 items or fewer.",
+          400
+        );
       }
       const validCap = /^[a-z0-9][a-z0-9-]{0,49}$/;
       for (const cap of capabilities) {
         if (typeof cap !== 'string' || !validCap.test(cap)) {
-          return NextResponse.json({ error: `Invalid capability "${cap}": must be lowercase alphanumeric with hyphens, max 50 chars` }, { status: 400 });
+          return registrationError(
+            `Invalid capability "${cap}": must be lowercase alphanumeric with hyphens, max 50 chars`,
+            "INVALID_CAPABILITIES",
+            "Each capability must be lowercase alphanumeric with hyphens only, starting with a letter or digit, max 50 characters. Example: \"bitcoin-trading\".",
+            400
+          );
         }
       }
       const uniqueCapabilities = [...new Set(capabilities)];
       sanitizedCapabilities = uniqueCapabilities.length > 0 ? uniqueCapabilities : null;
     }
+
+    const BTC_SIG_HINT = `Use btc_sign_message from the AIBTC MCP server to sign the exact message "${EXPECTED_MESSAGE}" with your Bitcoin key.`;
+    const STX_SIG_HINT = `Use stacks_sign_message from the AIBTC MCP server to sign the exact message "${EXPECTED_MESSAGE}" with your Stacks key.`;
 
     let btcResult;
     try {
@@ -553,9 +583,11 @@ export async function POST(request: NextRequest) {
         btcAddressHint?.trim()
       );
     } catch (e) {
-      return NextResponse.json(
-        { error: `Invalid Bitcoin signature: ${(e as Error).message}` },
-        { status: 400 }
+      return registrationError(
+        `Invalid Bitcoin signature: ${(e as Error).message}`,
+        "INVALID_BTC_SIGNATURE",
+        BTC_SIG_HINT,
+        400
       );
     }
 
@@ -563,36 +595,41 @@ export async function POST(request: NextRequest) {
     try {
       stxResult = verifyStacksSignature(stacksSignature);
     } catch (e) {
-      return NextResponse.json(
-        { error: `Invalid Stacks signature: ${(e as Error).message}` },
-        { status: 400 }
+      return registrationError(
+        `Invalid Stacks signature: ${(e as Error).message}`,
+        "INVALID_STX_SIGNATURE",
+        STX_SIG_HINT,
+        400
       );
     }
 
     if (!btcResult.valid) {
-      return NextResponse.json(
-        { error: "Bitcoin signature verification failed" },
-        { status: 400 }
+      return registrationError(
+        "Bitcoin signature verification failed",
+        "INVALID_BTC_SIGNATURE",
+        BTC_SIG_HINT,
+        400
       );
     }
 
     // Reject legacy Bitcoin address formats (P2PKH starting with "1", P2SH starting with "3").
     // Only SegWit addresses are accepted: bc1q (P2WPKH) and bc1p (Taproot/P2TR).
     if (btcResult.address.startsWith("1") || btcResult.address.startsWith("3")) {
-      return NextResponse.json(
-        {
-          error:
-            "Legacy Bitcoin addresses are not supported. " +
-            "Please use a SegWit address (bc1q... native SegWit) or Taproot address (bc1p...).",
-        },
-        { status: 400 }
+      return registrationError(
+        "Legacy Bitcoin addresses are not supported. " +
+          "Please use a SegWit address (bc1q... native SegWit) or Taproot address (bc1p...).",
+        "LEGACY_ADDRESS",
+        "Use a Native SegWit address starting with bc1q or a Taproot address starting with bc1p. The AIBTC MCP server creates a bc1q address by default.",
+        400
       );
     }
 
     if (!stxResult.valid) {
-      return NextResponse.json(
-        { error: "Stacks signature verification failed" },
-        { status: 400 }
+      return registrationError(
+        "Stacks signature verification failed",
+        "INVALID_STX_SIGNATURE",
+        STX_SIG_HINT,
+        400
       );
     }
 
@@ -624,11 +661,11 @@ export async function POST(request: NextRequest) {
     ]);
 
     if (existingStx) {
-      return NextResponse.json(
-        {
-          error: "Stacks address already registered. Each address can only be registered once.",
-        },
-        { status: 409 }
+      return registrationError(
+        "Stacks address already registered. Each address can only be registered once.",
+        "STX_ADDRESS_TAKEN",
+        "This Stacks address is already registered. Look up your agent at GET /api/agents/" + stxResult.address,
+        409
       );
     }
 
@@ -637,20 +674,23 @@ export async function POST(request: NextRequest) {
       try {
         existingRecord = JSON.parse(existingBtc);
       } catch {
-        return NextResponse.json(
-          { error: "Existing record is corrupted. Contact support." },
-          { status: 500 }
+        return registrationError(
+          "Existing record is corrupted. Contact support.",
+          "INTERNAL_ERROR",
+          "The existing agent record could not be parsed. Contact support at https://aibtc.com/.well-known/agent.json",
+          500,
+          false
         );
       }
 
       if (isPartialAgentRecord(existingRecord)) {
         // Partial record: allow upgrade to full registration
       } else {
-        return NextResponse.json(
-          {
-            error: "Bitcoin address already registered. Each address can only be registered once.",
-          },
-          { status: 409 }
+        return registrationError(
+          "Bitcoin address already registered. Each address can only be registered once.",
+          "BTC_ADDRESS_TAKEN",
+          "This Bitcoin address is already registered. Look up your agent at GET /api/agents/" + btcResult.address,
+          409
         );
       }
     }
@@ -707,9 +747,11 @@ export async function POST(request: NextRequest) {
       // Check if this taproot address is already claimed by another agent
       const existingTaprootOwner = await kv.get(`taproot:${sanitizedTaprootAddress}`);
       if (existingTaprootOwner && existingTaprootOwner !== btcResult.address) {
-        return NextResponse.json(
-          { error: "This taproot address is already claimed by another agent." },
-          { status: 409 }
+        return registrationError(
+          "This taproot address is already claimed by another agent.",
+          "TAPROOT_ADDRESS_TAKEN",
+          "This taproot address is linked to a different agent. Use a different taproot address or omit taprootAddress.",
+          409
         );
       }
       kvWrites.push(kv.put(`taproot:${sanitizedTaprootAddress}`, btcResult.address));
@@ -862,9 +904,12 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json(responseBody);
   } catch (e) {
-    return NextResponse.json(
-      { error: `Verification failed: ${(e as Error).message}` },
-      { status: 500 }
+    return registrationError(
+      `Verification failed: ${(e as Error).message}`,
+      "INTERNAL_ERROR",
+      "An unexpected error occurred. Retry in a few seconds. If the problem persists, check https://aibtc.com/api/health",
+      500,
+      true
     );
   }
 }

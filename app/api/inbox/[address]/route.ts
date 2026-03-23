@@ -708,11 +708,9 @@ export async function POST(
     );
 
     if (!txidResult.success) {
-      // TXID_NOT_FOUND / TXID_PENDING: indexer lag — transaction is in mempool but not yet
-      // visible to the Stacks API. Typically resolves within seconds; 15s retry is appropriate.
-      const isIndexerLag =
-        txidResult.errorCode === "TXID_PENDING" ||
-        txidResult.errorCode === "TXID_NOT_FOUND";
+      // TXID_NOT_FOUND: indexer lag — transaction is not yet visible to the Stacks API.
+      // Typically resolves within seconds; 15s retry is appropriate.
+      const isIndexerLag = txidResult.errorCode === "TXID_NOT_FOUND";
 
       // TX_NOT_CONFIRMED: transaction is known to the API but tx_status !== "success".
       // This is a block-level wait (~10 min per Stacks block); 15s retry would produce
@@ -774,6 +772,27 @@ export async function POST(
           },
           {
             status: 429,
+            headers: { "Retry-After": String(retryAfter) },
+          }
+        );
+      }
+
+      if (txidResult.errorCode === "API_ERROR" && txidResult.retryAfterSeconds != null) {
+        const retryAfter = txidResult.retryAfterSeconds;
+        logger.warn("Txid verification failed due to upstream API error (retryable)", {
+          error: txidResult.error,
+          retryAfter,
+        });
+        return NextResponse.json(
+          {
+            error: txidResult.error || "Stacks API unavailable. Please retry shortly.",
+            code: "API_ERROR",
+            retryable: true,
+            retryAfter,
+            nextSteps: `Stacks API returned a server error — retry in ${retryAfter} seconds`,
+          },
+          {
+            status: 502,
             headers: { "Retry-After": String(retryAfter) },
           }
         );
@@ -933,6 +952,10 @@ export async function POST(
 
     const errorCode = paymentResult.errorCode;
     const retryAfterSeconds = paymentResult.retryAfterSeconds ?? 5;
+    const relayDiag = {
+      ...(paymentResult.relayCode && { relayCode: paymentResult.relayCode }),
+      ...(paymentResult.relayDetail && { relayDetail: paymentResult.relayDetail }),
+    };
 
     // NONCE_CONFLICT — retryable; same tx hex is idempotent within 5 min.
     if (errorCode === "NONCE_CONFLICT") {
@@ -943,6 +966,7 @@ export async function POST(
           retryable: true,
           retryAfter: retryAfterSeconds,
           nextSteps: "Retry the payment — the relay had a transient nonce collision",
+          ...relayDiag,
         },
         {
           status: 409,
@@ -951,7 +975,8 @@ export async function POST(
       );
     }
 
-    // BROADCAST_FAILED — relay could not submit tx; funds safe, try new payment.
+    // BROADCAST_FAILED — relay could not submit tx to the network; funds safe, retry with new payment.
+    // Distinct from SETTLEMENT_FAILED where the tx was broadcast but rejected on-chain.
     if (errorCode === "BROADCAST_FAILED") {
       return NextResponse.json(
         {
@@ -959,8 +984,23 @@ export async function POST(
           code: errorCode,
           retryable: false,
           nextSteps: "The sBTC transfer was not sent — your funds are safe. Retry with a new payment.",
+          ...relayDiag,
         },
         { status: 502 }
+      );
+    }
+
+    // SETTLEMENT_FAILED — tx was broadcast but aborted on-chain (e.g. post-condition failure); not retryable as-is.
+    if (errorCode === "SETTLEMENT_FAILED") {
+      return NextResponse.json(
+        {
+          error: "Transaction was broadcast but rejected on-chain by contract post-conditions. This is not retryable with the same payment.",
+          code: errorCode,
+          retryable: false,
+          nextSteps: "Check that the transfer amount, asset, and recipient match requirements. Submit a new payment.",
+          ...relayDiag,
+        },
+        { status: 422 }
       );
     }
 
@@ -973,6 +1013,7 @@ export async function POST(
           retryable: true,
           retryAfter: 10,
           nextSteps: "Relay was slow — retry the request",
+          ...relayDiag,
         },
         {
           status: 502,
@@ -1007,6 +1048,7 @@ export async function POST(
           retryable: true,
           retryAfter: 60,
           nextSteps: "Your transaction was submitted but confirmation timed out. Resubmit with the confirmed paymentTxid once it appears on-chain.",
+          ...relayDiag,
         },
         {
           status: 409,

@@ -60,7 +60,8 @@ interface StacksTxData {
  * Typed error codes for x402 inbox payment failures.
  *
  * - NONCE_CONFLICT: wallet nonce race; same tx hex is idempotent within 5 min — retry immediately.
- * - BROADCAST_FAILED: relay could not broadcast tx; funds safe, retry with new payment.
+ * - BROADCAST_FAILED: relay could not submit tx to the network; funds safe, retry with new payment.
+ * - SETTLEMENT_FAILED: tx was broadcast but aborted on-chain (e.g. post-condition failure); not retryable as-is.
  * - SETTLEMENT_TIMEOUT: relay gave up polling but tx was broadcast; recover via paymentTxid.
  * - INSUFFICIENT_FUNDS: sBTC balance too low.
  * - PAYMENT_REJECTED: relay or verifier rejected the payment (bad payload, wrong recipient, etc.).
@@ -69,6 +70,7 @@ interface StacksTxData {
 export type InboxPaymentErrorCode =
   | "NONCE_CONFLICT"
   | "BROADCAST_FAILED"
+  | "SETTLEMENT_FAILED"
   | "SETTLEMENT_TIMEOUT"
   | "INSUFFICIENT_FUNDS"
   | "PAYMENT_REJECTED"
@@ -79,7 +81,6 @@ export type InboxPaymentErrorCode =
  * These are distinct from relay settlement errors.
  */
 export type TxidPaymentErrorCode =
-  | "TXID_PENDING"
   | "TXID_NOT_FOUND"
   | "API_ERROR"
   | "RATE_LIMITED"
@@ -101,6 +102,10 @@ export interface InboxPaymentVerification {
   messageId?: string;
   error?: string;
   errorCode?: InboxPaymentErrorCode | TxidPaymentErrorCode | (string & {});
+  /** Raw error code returned by the relay, for agent diagnostics. */
+  relayCode?: string;
+  /** Raw error detail or message from the relay, for agent diagnostics. */
+  relayDetail?: string;
   settleResult?: SettlementResponseV2;
   /** Settlement status from relay: "confirmed" when tx is final, "pending" when relay timed out but tx was broadcast. */
   paymentStatus?: RelayPaymentStatus;
@@ -108,6 +113,49 @@ export interface InboxPaymentVerification {
   receiptId?: string;
   /** Seconds to wait before retrying (only set for retryable errors like NONCE_CONFLICT). */
   retryAfterSeconds?: number;
+}
+
+/**
+ * Extract a structured relay error code and retryAfter from an exception string.
+ * Relay errors often embed JSON like: {"code":"BROADCAST_FAILED","retryAfter":5}
+ */
+function parseRelayException(error: unknown): {
+  errorStr: string;
+  embeddedCode: string | undefined;
+  embeddedRetryAfter: number | undefined;
+} {
+  const errorStr = String(error);
+  let embeddedCode: string | undefined;
+  let embeddedRetryAfter: number | undefined;
+  try {
+    const jsonMatch = errorStr.match(/\{[\s\S]*\}/);
+    if (jsonMatch) {
+      const parsed = JSON.parse(jsonMatch[0]) as { code?: string; retryAfter?: number };
+      embeddedCode = parsed.code;
+      embeddedRetryAfter = parsed.retryAfter;
+    }
+  } catch { /* ignore parse failure */ }
+  return { errorStr, embeddedCode, embeddedRetryAfter };
+}
+
+/**
+ * Build a failed InboxPaymentVerification from a relay exception.
+ * Shared by both sponsored and non-sponsored settlement catch blocks.
+ */
+function relayExceptionResult(
+  errorPrefix: string,
+  error: unknown
+): InboxPaymentVerification {
+  const { errorStr, embeddedCode, embeddedRetryAfter } = parseRelayException(error);
+  const mappedCode = mapRelayErrorCode(embeddedCode, 500);
+  return {
+    success: false,
+    error: `${errorPrefix}: ${errorStr}`,
+    errorCode: mappedCode,
+    ...(embeddedCode != null && { relayCode: embeddedCode }),
+    ...(errorStr && { relayDetail: errorStr }),
+    ...(embeddedRetryAfter != null && { retryAfterSeconds: embeddedRetryAfter }),
+  };
 }
 
 /** Relay error codes that warrant a single immediate retry (relay is idempotent within 5 min). */
@@ -132,7 +180,7 @@ function mapRelayErrorCode(
   if (relayCode === "BROADCAST_FAILED" || relayCode === "TX_BROADCAST_ERROR") return "BROADCAST_FAILED";
   if (relayCode === "SETTLEMENT_TIMEOUT" || relayCode === "POLL_TIMEOUT") return "SETTLEMENT_TIMEOUT";
   if (relayCode === "INSUFFICIENT_FUNDS" || relayCode === "BALANCE_ERROR") return "INSUFFICIENT_FUNDS";
-  if (relayCode === "SETTLEMENT_FAILED") return "BROADCAST_FAILED";
+  if (relayCode === "SETTLEMENT_FAILED") return "SETTLEMENT_FAILED";
   if (httpStatus >= 500) return "RELAY_ERROR";
   return "PAYMENT_REJECTED";
 }
@@ -273,6 +321,8 @@ export async function verifyInboxPayment(
             success: false,
             error: finalErrorBody,
             errorCode: mappedCode,
+            ...(finalRelayError.code != null && { relayCode: finalRelayError.code }),
+            ...(finalErrorBody && { relayDetail: finalErrorBody }),
             ...(finalRelayError.retryAfter != null && { retryAfterSeconds: finalRelayError.retryAfter }),
           };
         }
@@ -295,6 +345,8 @@ export async function verifyInboxPayment(
           success: false,
           error: errorText,
           errorCode: mappedCode,
+          ...(relayErrorParsed.code != null && { relayCode: relayErrorParsed.code }),
+          ...(errorText && { relayDetail: errorText }),
           ...(relayErrorParsed.retryAfter != null && { retryAfterSeconds: relayErrorParsed.retryAfter }),
         };
       }
@@ -326,6 +378,8 @@ export async function verifyInboxPayment(
           success: false,
           error: relayData.error || "Relay settlement failed",
           errorCode: mappedCode,
+          relayCode: relayData.code,
+          ...(relayData.error && { relayDetail: relayData.error }),
           ...(relayData.retryAfter != null && { retryAfterSeconds: relayData.retryAfter }),
         };
       }
@@ -346,26 +400,9 @@ export async function verifyInboxPayment(
       };
       log.debug("Sponsor relay result", { relayData, settleResult, relayPaymentStatus });
     } catch (error) {
-      const errorStr = String(error);
-      // Extract structured relay code from exception (same approach as non-sponsored path).
-      let embeddedCode: string | undefined;
-      let embeddedRetryAfter: number | undefined;
-      try {
-        const jsonMatch = errorStr.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]) as { code?: string; retryAfter?: number };
-          embeddedCode = parsed.code;
-          embeddedRetryAfter = parsed.retryAfter;
-        }
-      } catch { /* ignore parse failure */ }
-      const mappedCode = mapRelayErrorCode(embeddedCode, 500);
-      log.error("Sponsor relay exception", { error: errorStr, embeddedCode, mappedCode });
-      return {
-        success: false,
-        error: `Sponsor relay error: ${errorStr}`,
-        errorCode: mappedCode,
-        ...(embeddedRetryAfter != null && { retryAfterSeconds: embeddedRetryAfter }),
-      };
+      const result = relayExceptionResult("Sponsor relay error", error);
+      log.error("Sponsor relay exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
+      return result;
     }
   } else {
     log.debug("Settling non-sponsored transaction via relay", {
@@ -380,34 +417,9 @@ export async function verifyInboxPayment(
       });
       log.debug("Relay settle result", { settleResult });
     } catch (error) {
-      const errorStr = String(error);
-      // Try to extract a structured relay code from the thrown error message.
-      // Relay errors often embed JSON like: {"code":"BROADCAST_FAILED",...}
-      let embeddedCode: string | undefined;
-      let embeddedRetryAfter: number | undefined;
-      try {
-        const jsonMatch = errorStr.match(/\{[\s\S]*\}/);
-        if (jsonMatch) {
-          const parsed = JSON.parse(jsonMatch[0]) as { code?: string; retryAfter?: number };
-          embeddedCode = parsed.code;
-          embeddedRetryAfter = parsed.retryAfter;
-        }
-      } catch {
-        // Ignore parse failure — fall back to generic code
-      }
-      // Reuse the shared mapping function; treat thrown exceptions as 500 (server error).
-      const mappedCode = mapRelayErrorCode(embeddedCode, 500);
-      log.error("Relay settlement exception", {
-        error: errorStr,
-        embeddedCode,
-        mappedCode,
-      });
-      return {
-        success: false,
-        error: `Payment settlement error: ${errorStr}`,
-        errorCode: mappedCode,
-        ...(embeddedRetryAfter != null && { retryAfterSeconds: embeddedRetryAfter }),
-      };
+      const result = relayExceptionResult("Payment settlement error", error);
+      log.error("Relay settlement exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
+      return result;
     }
   }
 
@@ -496,15 +508,23 @@ export async function verifyTxidPayment(
     log.info("Txid verification: cache hit", { txid: fullTxid });
     txData = cachedTx;
   } else {
-    // 2. Negative cache: if this txid was recently checked and found unconfirmed, skip the API call.
+    // 2. Negative cache: if this txid was recently checked, skip the API call.
+    //    Cached value distinguishes "not_found" (404) from "not_confirmed" (seen but pending).
     if (kv) {
       const pendingEntry = await kv.get(pendingCacheKey);
       if (pendingEntry) {
-        log.info("Txid verification: pending cache hit, skipping API call", { txid: fullTxid });
+        log.info("Txid verification: pending cache hit, skipping API call", { txid: fullTxid, cachedState: pendingEntry });
+        if (pendingEntry === "not_confirmed") {
+          return {
+            success: false,
+            error: "Transaction is known but not yet confirmed.",
+            errorCode: "TX_NOT_CONFIRMED",
+          };
+        }
         return {
           success: false,
-          error: "Transaction is not yet confirmed. Check back in a few minutes.",
-          errorCode: "TXID_PENDING",
+          error: "Transaction not found. It may not be confirmed yet.",
+          errorCode: "TXID_NOT_FOUND",
         };
       }
     }
@@ -517,11 +537,10 @@ export async function verifyTxidPayment(
       });
       if (!response.ok) {
         if (response.status === 404) {
-          // Cache the negative result to prevent repeated lookups for the same unconfirmed txid.
-          // Value is unused — only existence matters. TTL handles expiry.
+          // Cache the negative result to prevent repeated lookups.
           if (kv) {
             try {
-              await kv.put(pendingCacheKey, "1", { expirationTtl: 300 });
+              await kv.put(pendingCacheKey, "not_found", { expirationTtl: 300 });
             } catch (err) {
               log.warn("[verifyTxidPayment] KV pending cache write failed", { error: String(err), txid: fullTxid });
             }
@@ -554,6 +573,7 @@ export async function verifyTxidPayment(
           success: false,
           error: `Stacks API error: ${response.status}`,
           errorCode: "API_ERROR",
+          ...(response.status >= 500 && { retryAfterSeconds: 30 }),
         };
       }
       txData = (await response.json()) as StacksTxData;
@@ -563,6 +583,7 @@ export async function verifyTxidPayment(
         success: false,
         error: `Failed to verify transaction: ${String(error)}`,
         errorCode: "API_ERROR",
+        retryAfterSeconds: 30,
       };
     }
   }
@@ -571,10 +592,9 @@ export async function verifyTxidPayment(
   if (txData.tx_status !== "success") {
     log.warn("Transaction not successful", { status: txData.tx_status });
     // Cache the pending/failed state to prevent redundant API calls.
-    // Value is unused — only existence matters. TTL handles expiry.
     if (kv) {
       try {
-        await kv.put(pendingCacheKey, "1", { expirationTtl: 300 });
+        await kv.put(pendingCacheKey, "not_confirmed", { expirationTtl: 300 });
       } catch (err) {
         log.warn("[verifyTxidPayment] KV pending cache write failed", { error: String(err), txid: fullTxid });
       }
