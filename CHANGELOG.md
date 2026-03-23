@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.31.1](https://github.com/aibtcdev/landing-page/compare/v1.31.0...v1.31.1) (2026-03-23)
+
+
+### Bug Fixes
+
+* **inbox:** settlement timeout handling and error surfacing ([#477](https://github.com/aibtcdev/landing-page/issues/477)) ([d7a7d9b](https://github.com/aibtcdev/landing-page/commit/d7a7d9b66a9a27709ed5f47102e853b6f504ba40))
+
 ## [1.31.0](https://github.com/aibtcdev/landing-page/compare/v1.30.0...v1.31.0) (2026-03-23)
 
 
