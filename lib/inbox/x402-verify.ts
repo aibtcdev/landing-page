@@ -508,11 +508,19 @@ export async function verifyTxidPayment(
     log.info("Txid verification: cache hit", { txid: fullTxid });
     txData = cachedTx;
   } else {
-    // 2. Negative cache: if this txid was recently checked and found unconfirmed, skip the API call.
+    // 2. Negative cache: if this txid was recently checked, skip the API call.
+    //    Cached value distinguishes "not_found" (404) from "not_confirmed" (seen but pending).
     if (kv) {
       const pendingEntry = await kv.get(pendingCacheKey);
       if (pendingEntry) {
-        log.info("Txid verification: pending cache hit, skipping API call", { txid: fullTxid });
+        log.info("Txid verification: pending cache hit, skipping API call", { txid: fullTxid, cachedState: pendingEntry });
+        if (pendingEntry === "not_confirmed") {
+          return {
+            success: false,
+            error: "Transaction is known but not yet confirmed.",
+            errorCode: "TX_NOT_CONFIRMED",
+          };
+        }
         return {
           success: false,
           error: "Transaction not found. It may not be confirmed yet.",
@@ -529,11 +537,10 @@ export async function verifyTxidPayment(
       });
       if (!response.ok) {
         if (response.status === 404) {
-          // Cache the negative result to prevent repeated lookups for the same unconfirmed txid.
-          // Value is unused — only existence matters. TTL handles expiry.
+          // Cache the negative result to prevent repeated lookups.
           if (kv) {
             try {
-              await kv.put(pendingCacheKey, "1", { expirationTtl: 300 });
+              await kv.put(pendingCacheKey, "not_found", { expirationTtl: 300 });
             } catch (err) {
               log.warn("[verifyTxidPayment] KV pending cache write failed", { error: String(err), txid: fullTxid });
             }
@@ -585,10 +592,9 @@ export async function verifyTxidPayment(
   if (txData.tx_status !== "success") {
     log.warn("Transaction not successful", { status: txData.tx_status });
     // Cache the pending/failed state to prevent redundant API calls.
-    // Value is unused — only existence matters. TTL handles expiry.
     if (kv) {
       try {
-        await kv.put(pendingCacheKey, "1", { expirationTtl: 300 });
+        await kv.put(pendingCacheKey, "not_confirmed", { expirationTtl: 300 });
       } catch (err) {
         log.warn("[verifyTxidPayment] KV pending cache write failed", { error: String(err), txid: fullTxid });
       }

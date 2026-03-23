@@ -679,7 +679,7 @@ export async function POST(request: NextRequest) {
           "INTERNAL_ERROR",
           "The existing agent record could not be parsed. Contact support at https://aibtc.com/.well-known/agent.json",
           500,
-          true
+          false
         );
       }
 
@@ -749,7 +749,7 @@ export async function POST(request: NextRequest) {
       if (existingTaprootOwner && existingTaprootOwner !== btcResult.address) {
         return registrationError(
           "This taproot address is already claimed by another agent.",
-          "INVALID_TAPROOT_ADDRESS",
+          "TAPROOT_ADDRESS_TAKEN",
           "This taproot address is linked to a different agent. Use a different taproot address or omit taprootAddress.",
           409
         );
