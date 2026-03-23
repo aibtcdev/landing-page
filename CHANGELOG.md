@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.31.0](https://github.com/aibtcdev/landing-page/compare/v1.30.0...v1.31.0) (2026-03-23)
+
+
+### Features
+
+* **llms:** update Notable Skills to skills-v0.29.0 ([#470](https://github.com/aibtcdev/landing-page/issues/470)) ([74c0416](https://github.com/aibtcdev/landing-page/commit/74c0416d903fe43e5833160b017af0744d637a24))
+
+
+### Bug Fixes
+
+* home page performance, inbox payment resilience, and achievements audit ([#472](https://github.com/aibtcdev/landing-page/issues/472)) ([3144d1f](https://github.com/aibtcdev/landing-page/commit/3144d1f1a5aa3ab4f81409f384ba172198e16007))
+
 ## [1.30.0](https://github.com/aibtcdev/landing-page/compare/v1.29.0...v1.30.0) (2026-03-19)
 
 
