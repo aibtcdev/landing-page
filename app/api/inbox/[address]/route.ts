@@ -703,10 +703,35 @@ export async function POST(
       agent.stxAddress,
       network,
       logger,
-      kv
+      kv,
+      env.HIRO_API_KEY
     );
 
     if (!txidResult.success) {
+      const isPending =
+        txidResult.errorCode === "TXID_PENDING" ||
+        txidResult.errorCode === "TXID_NOT_FOUND" ||
+        txidResult.errorCode === "TX_NOT_CONFIRMED";
+
+      if (isPending) {
+        logger.warn("Txid verification pending", {
+          error: txidResult.error,
+          errorCode: txidResult.errorCode,
+        });
+        return NextResponse.json(
+          {
+            error: txidResult.error || "Transaction not yet confirmed",
+            errorCode: txidResult.errorCode,
+            hint: "The transaction is not yet confirmed on Stacks. Try again after the retryAfterSeconds period.",
+            retryAfterSeconds: 300,
+          },
+          {
+            status: 409,
+            headers: { "Retry-After": "300" },
+          }
+        );
+      }
+
       logger.error("Txid verification failed", {
         error: txidResult.error,
         errorCode: txidResult.errorCode,
