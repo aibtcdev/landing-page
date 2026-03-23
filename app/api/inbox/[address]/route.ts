@@ -721,13 +721,14 @@ export async function POST(
         return NextResponse.json(
           {
             error: txidResult.error || "Transaction not yet confirmed",
-            errorCode: txidResult.errorCode,
-            hint: "The transaction is not yet confirmed on Stacks. Try again after the retryAfterSeconds period.",
-            retryAfterSeconds: 300,
+            code: txidResult.errorCode,
+            retryable: true,
+            retryAfter: 15,
+            nextSteps: "Transaction is not yet indexed — retry shortly",
           },
           {
             status: 409,
-            headers: { "Retry-After": "300" },
+            headers: { "Retry-After": "15" },
           }
         );
       }
@@ -739,8 +740,9 @@ export async function POST(
       return NextResponse.json(
         {
           error: txidResult.error || "Transaction verification failed",
-          errorCode: txidResult.errorCode,
-          hint: "Ensure the transaction is confirmed, is an sBTC transfer of >= 100 sats, and the recipient matches.",
+          code: txidResult.errorCode,
+          retryable: false,
+          nextSteps: "Ensure the transaction is confirmed, is an sBTC transfer of >= 100 sats, and the recipient matches.",
         },
         { status: 400 }
       );
@@ -891,9 +893,10 @@ export async function POST(
       return NextResponse.json(
         {
           error: `Nonce conflict: another transaction from your wallet is pending. Retry after ${retryAfterSeconds}s.`,
-          errorCode,
-          retryAfterSeconds,
-          hint: "Your x402 client can retry with the same payment payload (idempotent within 5 minutes).",
+          code: errorCode,
+          retryable: true,
+          retryAfter: retryAfterSeconds,
+          nextSteps: "Retry the payment — the relay had a transient nonce collision",
         },
         {
           status: 409,
@@ -907,8 +910,9 @@ export async function POST(
       return NextResponse.json(
         {
           error: "Transaction broadcast failed. The relay could not submit your transaction to the network.",
-          errorCode,
-          hint: "The sBTC transfer was not sent. Your funds are safe — retry with a new payment.",
+          code: errorCode,
+          retryable: false,
+          nextSteps: "The sBTC transfer was not sent — your funds are safe. Retry with a new payment.",
         },
         { status: 502 }
       );
@@ -919,10 +923,15 @@ export async function POST(
       return NextResponse.json(
         {
           error: "Relay service error. Try again in a moment.",
-          errorCode,
-          hint: "The payment relay encountered an internal error. Your funds were not transferred.",
+          code: errorCode,
+          retryable: true,
+          retryAfter: 10,
+          nextSteps: "Relay was slow — retry the request",
         },
-        { status: 502 }
+        {
+          status: 502,
+          headers: { "Retry-After": "10" },
+        }
       );
     }
 
@@ -932,7 +941,9 @@ export async function POST(
         {
           ...paymentRequiredBody,
           error: `Insufficient sBTC balance. You need at least ${INBOX_PRICE_SATS} sats to send a message.`,
-          errorCode,
+          code: errorCode,
+          retryable: false,
+          nextSteps: "Fund your wallet with sufficient sBTC before retrying",
         },
         {
           status: 402,
@@ -946,9 +957,10 @@ export async function POST(
       return NextResponse.json(
         {
           error: "Payment broadcast but settlement confirmation timed out.",
-          errorCode,
-          hint: "Your transaction was submitted to the network but we could not confirm it in time. Use paymentTxid recovery: resubmit with the confirmed transaction ID once it appears on-chain.",
-          retryAfterSeconds: 60,
+          code: errorCode,
+          retryable: true,
+          retryAfter: 60,
+          nextSteps: "Your transaction was submitted but confirmation timed out. Resubmit with the confirmed paymentTxid once it appears on-chain.",
         },
         {
           status: 409,
@@ -963,7 +975,9 @@ export async function POST(
       {
         ...paymentRequiredBody,
         error: "Payment could not be processed. Please try again.",
-        errorCode: errorCode ?? "PAYMENT_REJECTED",
+        code: errorCode ?? "PAYMENT_REJECTED",
+        retryable: false,
+        nextSteps: "Check your payment payload and try again. If the problem persists, verify your sBTC balance.",
       },
       {
         status: 402,
