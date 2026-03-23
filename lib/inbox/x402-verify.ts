@@ -29,7 +29,7 @@ import {
 import { INBOX_PRICE_SATS, RELAY_SETTLE_TIMEOUT_MS, SBTC_CONTRACTS } from "./constants";
 import type { RelayPaymentStatus } from "./types";
 import type { Logger } from "../logging";
-import { stacksApiFetch, buildHiroHeaders } from "../stacks-api-fetch";
+import { stacksApiFetch, buildHiroHeaders, parseRetryAfterMs } from "../stacks-api-fetch";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 
 const NOOP_LOGGER: Logger = {
@@ -82,6 +82,7 @@ export type TxidPaymentErrorCode =
   | "TXID_PENDING"
   | "TXID_NOT_FOUND"
   | "API_ERROR"
+  | "RATE_LIMITED"
   | "TX_NOT_CONFIRMED"
   | "INVALID_TX_TYPE"
   | "NOT_SBTC_TRANSFER"
@@ -530,6 +531,24 @@ export async function verifyTxidPayment(
             errorCode: "TXID_NOT_FOUND",
           };
         }
+
+        if (response.status === 429) {
+          // All 429 retries exhausted by stacksApiFetch — surface as RATE_LIMITED so
+          // the caller can return HTTP 429 with Retry-After guidance to the agent.
+          const retryAfterMs = parseRetryAfterMs(response);
+          const retryAfterSeconds = retryAfterMs != null ? Math.ceil(retryAfterMs / 1000) : 30;
+          log.warn("[verifyTxidPayment] Stacks API rate limit exhausted", {
+            txid: fullTxid,
+            retryAfterSeconds,
+          });
+          return {
+            success: false,
+            error: "Stacks API rate limit reached. Please retry after a short delay.",
+            errorCode: "RATE_LIMITED",
+            retryAfterSeconds,
+          };
+        }
+
         return {
           success: false,
           error: `Stacks API error: ${response.status}`,

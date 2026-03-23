@@ -6,9 +6,9 @@
  * lib/identity/stacks-api.ts and verifyTxidPayment() in lib/inbox/x402-verify.ts.
  *
  * Retry strategy:
- * - 3 attempts (initial + 2 retries)
- * - Delays: 500ms, 1000ms, 2000ms (doubles each attempt)
- * - Respects Retry-After header on 429 (capped at 10s)
+ * - 429 rate-limit responses: up to 5 attempts with 1s base delay (1s, 2s, 4s, 8s, 16s)
+ * - 5xx server errors: up to 3 attempts with 500ms base delay (500ms, 1s, 2s)
+ * - Respects Retry-After header on 429 (capped at 30s)
  * - Per-attempt timeout: 8 seconds
  * - Returns the final Response after all retries — callers check status
  */
@@ -45,8 +45,14 @@ export function detect429(response: Response): {
 /** Per-attempt fetch timeout in milliseconds. */
 const PER_ATTEMPT_TIMEOUT_MS = 8_000;
 
-/** Maximum delay from Retry-After header (milliseconds). */
-const MAX_RETRY_AFTER_MS = 10_000;
+/** Maximum delay from Retry-After header (milliseconds). Increased to 30s for 429 resilience. */
+const MAX_RETRY_AFTER_MS = 30_000;
+
+/** Default max retries for 429 rate-limit responses (separate budget from 5xx errors). */
+export const RATE_LIMIT_RETRIES = 5;
+
+/** Base delay for 429-specific exponential backoff (1s → 2s → 4s → 8s → 16s). */
+export const RATE_LIMIT_BASE_DELAY_MS = 1_000;
 
 /**
  * Determine if a response status warrants a retry.
@@ -61,7 +67,7 @@ function isRetryableStatus(status: number): boolean {
  * Handles numeric seconds only (not HTTP-date format).
  * Returns null if header is absent or unparseable.
  */
-function parseRetryAfterMs(response: Response): number | null {
+export function parseRetryAfterMs(response: Response): number | null {
   const headerValue = response.headers.get("Retry-After");
   if (!headerValue) return null;
   const seconds = parseInt(headerValue, 10);
@@ -77,17 +83,23 @@ function sleep(ms: number): Promise<void> {
  * Fetch a Stacks API URL with exponential backoff retry on 429/5xx responses.
  *
  * Each attempt uses an independent AbortSignal with a per-attempt timeout.
- * If a Retry-After header is present on a 429, that delay takes precedence
- * over the exponential backoff (capped at MAX_RETRY_AFTER_MS).
  *
- * On successful response (2xx or 4xx that is not retryable), returns immediately.
- * After all retries are exhausted, returns the last Response so the caller
- * can inspect status and body.
+ * 429 rate-limit responses use a separate retry budget (retries429, default 5)
+ * with a longer base delay (1s, 2s, 4s, 8s, 16s) to absorb burst rate limits.
+ * The Retry-After header from Hiro takes precedence over computed backoff (capped at 30s).
+ *
+ * 5xx server errors use the standard retry budget (retries, default 3) with
+ * 500ms base delay (500ms, 1s, 2s).
+ *
+ * On successful response (2xx or non-retryable 4xx), returns immediately.
+ * After all retries for a given error type are exhausted, returns the last
+ * Response so the caller can inspect status and body.
  *
  * @param url - URL to fetch
  * @param options - Fetch options (method, headers, body). Signal is injected per-attempt.
- * @param retries - Total number of attempts (default: 3)
- * @param baseDelayMs - Base delay for exponential backoff in ms (default: 500)
+ * @param retries - Max attempts for 5xx errors (default: 3)
+ * @param baseDelayMs - Base delay for 5xx exponential backoff in ms (default: 500)
+ * @param retries429 - Max attempts for 429 rate-limit errors (default: RATE_LIMIT_RETRIES = 5)
  * @returns The final Response object
  * @throws Only on network-level errors (DNS failure, connection refused) after all retries
  */
@@ -95,16 +107,25 @@ export async function stacksApiFetch(
   url: string,
   options: RequestInit,
   retries = 3,
-  baseDelayMs = 500
+  baseDelayMs = 500,
+  retries429 = RATE_LIMIT_RETRIES
 ): Promise<Response> {
   const tag = "[stacksApiFetch]";
 
-  for (let attempt = 0; attempt < retries; attempt++) {
+  // Separate retry budgets for 429 and 5xx
+  let attempts429 = 0;
+  let attempts5xx = 0;
+
+  // Total attempt loop — bounded by the larger of the two budgets
+  const maxTotalAttempts = retries429 + retries;
+  let totalAttempts = 0;
+
+  while (totalAttempts < maxTotalAttempts) {
+    totalAttempts++;
     const attemptOptions: RequestInit = {
       ...options,
       signal: AbortSignal.timeout(PER_ATTEMPT_TIMEOUT_MS),
     };
-    const isLastAttempt = attempt === retries - 1;
 
     try {
       const response = await fetch(url, attemptOptions);
@@ -113,32 +134,61 @@ export async function stacksApiFetch(
         return response;
       }
 
-      if (isLastAttempt) {
-        console.warn(`${tag} All ${retries} attempts exhausted for ${url} (status: ${response.status})`);
-        return response;
-      }
+      const is429 = response.status === 429;
 
-      // Prefer Retry-After header on 429, otherwise exponential backoff
-      const retryAfterMs = response.status === 429 ? parseRetryAfterMs(response) : null;
-      const delayMs = retryAfterMs ?? baseDelayMs * Math.pow(2, attempt);
-      console.warn(
-        `${tag} ${response.status} on ${url}, attempt ${attempt + 1}/${retries}, retrying in ${delayMs}ms`
-      );
-      await sleep(delayMs);
+      if (is429) {
+        attempts429++;
+        if (attempts429 >= retries429) {
+          // Exhausted 429 retry budget — return final response to caller
+          console.warn(
+            `${tag} 429 retry budget exhausted (${retries429} attempts) for ${url}`
+          );
+          return response;
+        }
+
+        // Prefer Retry-After header, otherwise exponential backoff with 1s base
+        const retryAfterMs =
+          parseRetryAfterMs(response) ??
+          RATE_LIMIT_BASE_DELAY_MS * Math.pow(2, attempts429 - 1);
+        const delayMs = Math.min(retryAfterMs, MAX_RETRY_AFTER_MS);
+        console.warn(
+          `${tag} 429 on ${url}, attempt ${attempts429}/${retries429}, retrying in ${delayMs}ms`
+        );
+        await sleep(delayMs);
+      } else {
+        // 5xx error
+        attempts5xx++;
+        if (attempts5xx >= retries) {
+          console.warn(
+            `${tag} 5xx retry budget exhausted (${retries} attempts) for ${url} (status: ${response.status})`
+          );
+          return response;
+        }
+
+        const delayMs = baseDelayMs * Math.pow(2, attempts5xx - 1);
+        console.warn(
+          `${tag} ${response.status} on ${url}, attempt ${attempts5xx}/${retries}, retrying in ${delayMs}ms`
+        );
+        await sleep(delayMs);
+      }
     } catch (error) {
-      if (isLastAttempt) {
-        console.warn(`${tag} All ${retries} attempts exhausted for ${url} (${String(error)})`);
+      // Network-level error — counts against the 5xx budget
+      attempts5xx++;
+      if (attempts5xx >= retries) {
+        console.warn(
+          `${tag} Network error budget exhausted (${retries} attempts) for ${url} (${String(error)})`
+        );
         throw error;
       }
 
-      const delayMs = baseDelayMs * Math.pow(2, attempt);
+      const delayMs = baseDelayMs * Math.pow(2, attempts5xx - 1);
       console.warn(
-        `${tag} Network error on ${url}, attempt ${attempt + 1}/${retries}, retrying in ${delayMs}ms`
+        `${tag} Network error on ${url}, attempt ${attempts5xx}/${retries}, retrying in ${delayMs}ms`
       );
       await sleep(delayMs);
     }
   }
 
-  // Unreachable -- loop always returns or throws on final attempt
+  // Unreachable -- loop always returns or throws when a budget is exhausted
   throw new Error(`${tag} Unexpected: retry loop exited without return`);
 }

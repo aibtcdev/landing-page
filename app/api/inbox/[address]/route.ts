@@ -759,6 +759,26 @@ export async function POST(
         );
       }
 
+      if (txidResult.errorCode === "RATE_LIMITED") {
+        const retryAfter = txidResult.retryAfterSeconds ?? 30;
+        logger.warn("Txid verification rate limited by Stacks API", {
+          retryAfter,
+        });
+        return NextResponse.json(
+          {
+            error: txidResult.error || "Stacks API rate limit reached. Please retry after a short delay.",
+            code: "RATE_LIMITED",
+            retryable: true,
+            retryAfter,
+            nextSteps: `Rate limited by Stacks API — retry in ${retryAfter} seconds`,
+          },
+          {
+            status: 429,
+            headers: { "Retry-After": String(retryAfter) },
+          }
+        );
+      }
+
       logger.error("Txid verification failed", {
         error: txidResult.error,
         errorCode: txidResult.errorCode,
