@@ -708,11 +708,9 @@ export async function POST(
     );
 
     if (!txidResult.success) {
-      // TXID_NOT_FOUND / TXID_PENDING: indexer lag — transaction is in mempool but not yet
-      // visible to the Stacks API. Typically resolves within seconds; 15s retry is appropriate.
-      const isIndexerLag =
-        txidResult.errorCode === "TXID_PENDING" ||
-        txidResult.errorCode === "TXID_NOT_FOUND";
+      // TXID_NOT_FOUND: indexer lag — transaction is not yet visible to the Stacks API.
+      // Typically resolves within seconds; 15s retry is appropriate.
+      const isIndexerLag = txidResult.errorCode === "TXID_NOT_FOUND";
 
       // TX_NOT_CONFIRMED: transaction is known to the API but tx_status !== "success".
       // This is a block-level wait (~10 min per Stacks block); 15s retry would produce
@@ -774,6 +772,27 @@ export async function POST(
           },
           {
             status: 429,
+            headers: { "Retry-After": String(retryAfter) },
+          }
+        );
+      }
+
+      if (txidResult.errorCode === "API_ERROR" && txidResult.retryAfterSeconds != null) {
+        const retryAfter = txidResult.retryAfterSeconds;
+        logger.warn("Txid verification failed due to upstream API error (retryable)", {
+          error: txidResult.error,
+          retryAfter,
+        });
+        return NextResponse.json(
+          {
+            error: txidResult.error || "Stacks API unavailable. Please retry shortly.",
+            code: "API_ERROR",
+            retryable: true,
+            retryAfter,
+            nextSteps: `Stacks API returned a server error — retry in ${retryAfter} seconds`,
+          },
+          {
+            status: 502,
             headers: { "Retry-After": String(retryAfter) },
           }
         );

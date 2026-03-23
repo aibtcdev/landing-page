@@ -81,7 +81,6 @@ export type InboxPaymentErrorCode =
  * These are distinct from relay settlement errors.
  */
 export type TxidPaymentErrorCode =
-  | "TXID_PENDING"
   | "TXID_NOT_FOUND"
   | "API_ERROR"
   | "RATE_LIMITED"
@@ -519,8 +518,8 @@ export async function verifyTxidPayment(
         log.info("Txid verification: pending cache hit, skipping API call", { txid: fullTxid });
         return {
           success: false,
-          error: "Transaction is not yet confirmed. Check back in a few minutes.",
-          errorCode: "TXID_PENDING",
+          error: "Transaction not found. It may not be confirmed yet.",
+          errorCode: "TXID_NOT_FOUND",
         };
       }
     }
@@ -570,6 +569,7 @@ export async function verifyTxidPayment(
           success: false,
           error: `Stacks API error: ${response.status}`,
           errorCode: "API_ERROR",
+          ...(response.status >= 500 && { retryAfterSeconds: 30 }),
         };
       }
       txData = (await response.json()) as StacksTxData;
@@ -579,6 +579,7 @@ export async function verifyTxidPayment(
         success: false,
         error: `Failed to verify transaction: ${String(error)}`,
         errorCode: "API_ERROR",
+        retryAfterSeconds: 30,
       };
     }
   }
