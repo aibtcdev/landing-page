@@ -884,7 +884,7 @@ export async function POST(
     });
 
     const errorCode = paymentResult.errorCode;
-    const retryAfterSeconds = paymentResult.retryAfterSeconds ?? 30;
+    const retryAfterSeconds = paymentResult.retryAfterSeconds ?? 5;
 
     // NONCE_CONFLICT — retryable; same tx hex is idempotent within 5 min.
     if (errorCode === "NONCE_CONFLICT") {
@@ -958,10 +958,11 @@ export async function POST(
     }
 
     // Default / PAYMENT_REJECTED — return 402 with payment requirements.
+    // Sanitize: don't leak raw relay internals to clients.
     return NextResponse.json(
       {
         ...paymentRequiredBody,
-        error: paymentResult.error || "Payment verification failed",
+        error: "Payment could not be processed. Please try again.",
         errorCode: errorCode ?? "PAYMENT_REJECTED",
       },
       {
