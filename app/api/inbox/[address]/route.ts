@@ -932,6 +932,8 @@ export async function POST(
     ...(senderBtcAddress && { senderBtcAddress }),
     ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
     ...(replyTo && { replyTo }),
+    ...(paymentResult.paymentStatus && { paymentStatus: paymentResult.paymentStatus }),
+    ...(paymentResult.receiptId && { receiptId: paymentResult.receiptId }),
   };
 
   await Promise.all([
@@ -992,6 +994,7 @@ export async function POST(
         sentAt: now,
         authenticated,
         ...(senderBtcAddress && { senderBtcAddress }),
+        ...(paymentResult.paymentStatus && { paymentStatus: paymentResult.paymentStatus }),
       },
     },
     {
