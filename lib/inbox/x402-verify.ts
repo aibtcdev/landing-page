@@ -56,6 +56,25 @@ interface StacksTxData {
 }
 
 /**
+ * Typed error codes for x402 inbox payment failures.
+ *
+ * - NONCE_CONFLICT: wallet nonce race; same tx hex is idempotent within 5 min — retry immediately.
+ * - BROADCAST_FAILED: relay could not broadcast tx; funds safe, retry with new payment.
+ * - SETTLEMENT_TIMEOUT: relay gave up polling but tx was broadcast; recover via paymentTxid.
+ * - INSUFFICIENT_FUNDS: sBTC balance too low.
+ * - PAYMENT_REJECTED: relay or verifier rejected the payment (bad payload, wrong recipient, etc.).
+ * - RELAY_ERROR: relay 5xx or unexpected failure.
+ */
+export type InboxPaymentErrorCode =
+  | "NONCE_CONFLICT"
+  | "BROADCAST_FAILED"
+  | "SETTLEMENT_TIMEOUT"
+  | "INSUFFICIENT_FUNDS"
+  | "PAYMENT_REJECTED"
+  | "RELAY_ERROR"
+  | string; // pass-through for other x402 / txid error codes
+
+/**
  * Result of x402 payment verification for inbox messages.
  */
 export interface InboxPaymentVerification {
@@ -65,12 +84,14 @@ export interface InboxPaymentVerification {
   /** @deprecated Message IDs are now always generated server-side in the route handler. */
   messageId?: string;
   error?: string;
-  errorCode?: string;
+  errorCode?: InboxPaymentErrorCode;
   settleResult?: SettlementResponseV2;
   /** Settlement status from relay: "confirmed" when tx is final, "pending" when relay timed out but tx was broadcast. */
   paymentStatus?: "confirmed" | "pending";
   /** Relay receipt ID for polling final confirmation when paymentStatus is "pending". */
   receiptId?: string;
+  /** Seconds to wait before retrying (only set for retryable errors like NONCE_CONFLICT). */
+  retryAfterSeconds?: number;
 }
 
 /**
@@ -142,14 +163,31 @@ export async function verifyInboxPayment(
       relayUrl,
     });
 
-    /** Relay error codes that warrant a single retry after the relay's retryAfter delay. */
+    /** Relay error codes that warrant a single immediate retry (relay is idempotent within 5 min). */
     const RELAY_RETRYABLE_CODES = new Set([
       "NONCE_CONFLICT",
       "CLIENT_NONCE_CONFLICT",
       "CLIENT_BAD_NONCE",
     ]);
-    /** Cap on relay-specified retryAfter delay (ms) to keep total request under ~25s. */
-    const MAX_RELAY_RETRY_AFTER_MS = 10_000;
+
+    /**
+     * Map a relay error code to a typed InboxPaymentErrorCode.
+     * Relay codes come back in {code} field of error JSON bodies.
+     */
+    function mapRelayErrorCode(
+      relayCode: string | undefined,
+      httpStatus: number
+    ): InboxPaymentErrorCode {
+      if (!relayCode) {
+        return httpStatus >= 500 ? "RELAY_ERROR" : "PAYMENT_REJECTED";
+      }
+      if (RELAY_RETRYABLE_CODES.has(relayCode)) return "NONCE_CONFLICT";
+      if (relayCode === "BROADCAST_FAILED" || relayCode === "TX_BROADCAST_ERROR") return "BROADCAST_FAILED";
+      if (relayCode === "SETTLEMENT_TIMEOUT" || relayCode === "POLL_TIMEOUT") return "SETTLEMENT_TIMEOUT";
+      if (relayCode === "INSUFFICIENT_FUNDS" || relayCode === "BALANCE_ERROR") return "INSUFFICIENT_FUNDS";
+      if (httpStatus >= 500) return "RELAY_ERROR";
+      return "PAYMENT_REJECTED";
+    }
 
     const relayBody = JSON.stringify({
       transaction: paymentPayload.payload.transaction,
@@ -173,7 +211,8 @@ export async function verifyInboxPayment(
     try {
       let relayResponse = await callRelay();
 
-      // Handle retryable relay errors (e.g. NONCE_CONFLICT) with a single backoff retry.
+      // Handle retryable relay errors (e.g. NONCE_CONFLICT) with a single immediate retry.
+      // The relay is idempotent for the same tx hex within 5 minutes — no sleep needed.
       if (!relayResponse.ok && relayResponse.status === 409) {
         const errorBody = await relayResponse.text();
         let relayError: { code?: string; retryable?: boolean; retryAfter?: number } = {};
@@ -184,45 +223,61 @@ export async function verifyInboxPayment(
         }
 
         if (relayError.retryable && RELAY_RETRYABLE_CODES.has(relayError.code ?? "")) {
-          const retryDelayMs = Math.min(
-            (relayError.retryAfter ?? 30) * 1000,
-            MAX_RELAY_RETRY_AFTER_MS
-          );
-          log.warn("Relay returned retryable error, backing off before retry", {
+          log.warn("Relay returned retryable nonce error, retrying immediately (idempotent tx hex)", {
             code: relayError.code,
-            retryDelayMs,
+            retryAfter: relayError.retryAfter,
           });
-          await new Promise((resolve) => setTimeout(resolve, retryDelayMs));
           relayResponse = await callRelay();
         }
 
-        // If still not ok after retry (or was non-retryable), fail.
+        // If still not ok after retry (or was non-retryable), return structured error.
         if (!relayResponse.ok) {
           // After retry: read the new response body. For non-retryable 409s,
           // reuse the already-consumed errorBody instead of reading twice.
-          const retryErrorText = relayError.retryable
-            ? await relayResponse.text()
-            : errorBody;
+          let finalErrorBody = errorBody;
+          let finalRelayError = relayError;
+          if (relayError.retryable) {
+            finalErrorBody = await relayResponse.text();
+            try {
+              finalRelayError = JSON.parse(finalErrorBody);
+            } catch {
+              // Non-JSON — use raw text
+            }
+          }
+          const mappedCode = mapRelayErrorCode(finalRelayError.code, relayResponse.status);
           log.error("Sponsor relay failed", {
             status: relayResponse.status,
-            error: retryErrorText,
+            code: finalRelayError.code,
+            mappedCode,
+            error: finalErrorBody,
           });
           return {
             success: false,
-            error: `Sponsor relay failed: ${retryErrorText}`,
-            errorCode: X402_ERROR_CODES.UNEXPECTED_SETTLE_ERROR,
+            error: finalErrorBody,
+            errorCode: mappedCode,
+            ...(finalRelayError.retryAfter != null && { retryAfterSeconds: finalRelayError.retryAfter }),
           };
         }
       } else if (!relayResponse.ok) {
         const errorText = await relayResponse.text();
+        let relayErrorParsed: { code?: string; retryable?: boolean; retryAfter?: number } = {};
+        try {
+          relayErrorParsed = JSON.parse(errorText);
+        } catch {
+          // Non-JSON body
+        }
+        const mappedCode = mapRelayErrorCode(relayErrorParsed.code, relayResponse.status);
         log.error("Sponsor relay failed", {
           status: relayResponse.status,
+          code: relayErrorParsed.code,
+          mappedCode,
           error: errorText,
         });
         return {
           success: false,
-          error: `Sponsor relay failed: ${errorText}`,
-          errorCode: X402_ERROR_CODES.UNEXPECTED_SETTLE_ERROR,
+          error: errorText,
+          errorCode: mappedCode,
+          ...(relayErrorParsed.retryAfter != null && { retryAfterSeconds: relayErrorParsed.retryAfter }),
         };
       }
 
@@ -270,13 +325,42 @@ export async function verifyInboxPayment(
       });
       log.debug("Relay settle result", { settleResult });
     } catch (error) {
+      const errorStr = String(error);
+      // Try to extract a structured relay code from the thrown error message.
+      // Relay errors often embed JSON like: {"code":"BROADCAST_FAILED",...}
+      let embeddedCode: string | undefined;
+      let embeddedRetryAfter: number | undefined;
+      try {
+        const jsonMatch = errorStr.match(/\{[\s\S]*\}/);
+        if (jsonMatch) {
+          const parsed = JSON.parse(jsonMatch[0]) as { code?: string; retryAfter?: number };
+          embeddedCode = parsed.code;
+          embeddedRetryAfter = parsed.retryAfter;
+        }
+      } catch {
+        // Ignore parse failure — fall back to generic code
+      }
+      const mappedCode: InboxPaymentErrorCode = embeddedCode
+        ? (embeddedCode === "NONCE_CONFLICT" || embeddedCode === "CLIENT_NONCE_CONFLICT" || embeddedCode === "CLIENT_BAD_NONCE"
+            ? "NONCE_CONFLICT"
+            : embeddedCode === "BROADCAST_FAILED" || embeddedCode === "TX_BROADCAST_ERROR"
+              ? "BROADCAST_FAILED"
+              : embeddedCode === "SETTLEMENT_TIMEOUT" || embeddedCode === "POLL_TIMEOUT"
+                ? "SETTLEMENT_TIMEOUT"
+                : embeddedCode === "INSUFFICIENT_FUNDS" || embeddedCode === "BALANCE_ERROR"
+                  ? "INSUFFICIENT_FUNDS"
+                  : "RELAY_ERROR")
+        : "RELAY_ERROR";
       log.error("Relay settlement exception", {
-        error: String(error),
+        error: errorStr,
+        embeddedCode,
+        mappedCode,
       });
       return {
         success: false,
-        error: `Payment settlement error: ${String(error)}`,
-        errorCode: X402_ERROR_CODES.UNEXPECTED_SETTLE_ERROR,
+        error: `Payment settlement error: ${errorStr}`,
+        errorCode: mappedCode,
+        ...(embeddedRetryAfter != null && { retryAfterSeconds: embeddedRetryAfter }),
       };
     }
   }
