@@ -60,7 +60,8 @@ interface StacksTxData {
  * Typed error codes for x402 inbox payment failures.
  *
  * - NONCE_CONFLICT: wallet nonce race; same tx hex is idempotent within 5 min — retry immediately.
- * - BROADCAST_FAILED: relay could not broadcast tx; funds safe, retry with new payment.
+ * - BROADCAST_FAILED: relay could not submit tx to the network; funds safe, retry with new payment.
+ * - SETTLEMENT_FAILED: tx was broadcast but aborted on-chain (e.g. post-condition failure); not retryable as-is.
  * - SETTLEMENT_TIMEOUT: relay gave up polling but tx was broadcast; recover via paymentTxid.
  * - INSUFFICIENT_FUNDS: sBTC balance too low.
  * - PAYMENT_REJECTED: relay or verifier rejected the payment (bad payload, wrong recipient, etc.).
@@ -69,6 +70,7 @@ interface StacksTxData {
 export type InboxPaymentErrorCode =
   | "NONCE_CONFLICT"
   | "BROADCAST_FAILED"
+  | "SETTLEMENT_FAILED"
   | "SETTLEMENT_TIMEOUT"
   | "INSUFFICIENT_FUNDS"
   | "PAYMENT_REJECTED"
@@ -101,6 +103,10 @@ export interface InboxPaymentVerification {
   messageId?: string;
   error?: string;
   errorCode?: InboxPaymentErrorCode | TxidPaymentErrorCode | (string & {});
+  /** Raw error code returned by the relay, for agent diagnostics. */
+  relayCode?: string;
+  /** Raw error detail or message from the relay, for agent diagnostics. */
+  relayDetail?: string;
   settleResult?: SettlementResponseV2;
   /** Settlement status from relay: "confirmed" when tx is final, "pending" when relay timed out but tx was broadcast. */
   paymentStatus?: RelayPaymentStatus;
@@ -132,7 +138,7 @@ function mapRelayErrorCode(
   if (relayCode === "BROADCAST_FAILED" || relayCode === "TX_BROADCAST_ERROR") return "BROADCAST_FAILED";
   if (relayCode === "SETTLEMENT_TIMEOUT" || relayCode === "POLL_TIMEOUT") return "SETTLEMENT_TIMEOUT";
   if (relayCode === "INSUFFICIENT_FUNDS" || relayCode === "BALANCE_ERROR") return "INSUFFICIENT_FUNDS";
-  if (relayCode === "SETTLEMENT_FAILED") return "BROADCAST_FAILED";
+  if (relayCode === "SETTLEMENT_FAILED") return "SETTLEMENT_FAILED";
   if (httpStatus >= 500) return "RELAY_ERROR";
   return "PAYMENT_REJECTED";
 }
@@ -273,6 +279,8 @@ export async function verifyInboxPayment(
             success: false,
             error: finalErrorBody,
             errorCode: mappedCode,
+            ...(finalRelayError.code != null && { relayCode: finalRelayError.code }),
+            ...(finalErrorBody && { relayDetail: finalErrorBody }),
             ...(finalRelayError.retryAfter != null && { retryAfterSeconds: finalRelayError.retryAfter }),
           };
         }
@@ -295,6 +303,8 @@ export async function verifyInboxPayment(
           success: false,
           error: errorText,
           errorCode: mappedCode,
+          ...(relayErrorParsed.code != null && { relayCode: relayErrorParsed.code }),
+          ...(errorText && { relayDetail: errorText }),
           ...(relayErrorParsed.retryAfter != null && { retryAfterSeconds: relayErrorParsed.retryAfter }),
         };
       }
@@ -326,6 +336,8 @@ export async function verifyInboxPayment(
           success: false,
           error: relayData.error || "Relay settlement failed",
           errorCode: mappedCode,
+          relayCode: relayData.code,
+          ...(relayData.error && { relayDetail: relayData.error }),
           ...(relayData.retryAfter != null && { retryAfterSeconds: relayData.retryAfter }),
         };
       }
@@ -364,6 +376,8 @@ export async function verifyInboxPayment(
         success: false,
         error: `Sponsor relay error: ${errorStr}`,
         errorCode: mappedCode,
+        ...(embeddedCode != null && { relayCode: embeddedCode }),
+        ...(errorStr && { relayDetail: errorStr }),
         ...(embeddedRetryAfter != null && { retryAfterSeconds: embeddedRetryAfter }),
       };
     }
@@ -406,6 +420,8 @@ export async function verifyInboxPayment(
         success: false,
         error: `Payment settlement error: ${errorStr}`,
         errorCode: mappedCode,
+        ...(embeddedCode != null && { relayCode: embeddedCode }),
+        ...(errorStr && { relayDetail: errorStr }),
         ...(embeddedRetryAfter != null && { retryAfterSeconds: embeddedRetryAfter }),
       };
     }
