@@ -49,7 +49,26 @@ export interface InboxMessage {
    * Format: "msg_..." (matches the messageId pattern).
    */
   replyTo?: string;
+  /**
+   * Payment settlement status from the x402 relay.
+   * "confirmed" = relay confirmed the transaction on-chain.
+   * "pending" = relay timed out but the transaction was broadcast (will eventually confirm).
+   * Absent for messages delivered via txid recovery path.
+   */
+  paymentStatus?: RelayPaymentStatus;
+  /**
+   * Relay receipt ID for polling final confirmation when paymentStatus is "pending".
+   * Can be used with the relay's /verify/:receiptId endpoint.
+   */
+  receiptId?: string;
 }
+
+/**
+ * Settlement status reported by the x402 relay.
+ * - "confirmed": relay confirmed the transaction on-chain.
+ * - "pending": relay timed out but the transaction was broadcast (will eventually confirm).
+ */
+export type RelayPaymentStatus = "confirmed" | "pending";
 
 /**
  * An outbox reply record stored at `inbox:reply:{messageId}`.

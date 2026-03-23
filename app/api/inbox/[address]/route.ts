@@ -880,12 +880,90 @@ export async function POST(
     logger.error("Payment verification failed", {
       error: paymentResult.error,
       errorCode: paymentResult.errorCode,
+      retryAfterSeconds: paymentResult.retryAfterSeconds,
     });
+
+    const errorCode = paymentResult.errorCode;
+    const retryAfterSeconds = paymentResult.retryAfterSeconds ?? 5;
+
+    // NONCE_CONFLICT — retryable; same tx hex is idempotent within 5 min.
+    if (errorCode === "NONCE_CONFLICT") {
+      return NextResponse.json(
+        {
+          error: `Nonce conflict: another transaction from your wallet is pending. Retry after ${retryAfterSeconds}s.`,
+          errorCode,
+          retryAfterSeconds,
+          hint: "Your x402 client can retry with the same payment payload (idempotent within 5 minutes).",
+        },
+        {
+          status: 409,
+          headers: { "Retry-After": String(retryAfterSeconds) },
+        }
+      );
+    }
+
+    // BROADCAST_FAILED — relay could not submit tx; funds safe, try new payment.
+    if (errorCode === "BROADCAST_FAILED") {
+      return NextResponse.json(
+        {
+          error: "Transaction broadcast failed. The relay could not submit your transaction to the network.",
+          errorCode,
+          hint: "The sBTC transfer was not sent. Your funds are safe — retry with a new payment.",
+        },
+        { status: 502 }
+      );
+    }
+
+    // RELAY_ERROR — relay 5xx or unexpected failure.
+    if (errorCode === "RELAY_ERROR") {
+      return NextResponse.json(
+        {
+          error: "Relay service error. Try again in a moment.",
+          errorCode,
+          hint: "The payment relay encountered an internal error. Your funds were not transferred.",
+        },
+        { status: 502 }
+      );
+    }
+
+    // INSUFFICIENT_FUNDS — not enough sBTC.
+    if (errorCode === "INSUFFICIENT_FUNDS") {
+      return NextResponse.json(
+        {
+          ...paymentRequiredBody,
+          error: `Insufficient sBTC balance. You need at least ${INBOX_PRICE_SATS} sats to send a message.`,
+          errorCode,
+        },
+        {
+          status: 402,
+          headers: { [X402_HEADERS.PAYMENT_REQUIRED]: paymentRequiredHeader },
+        }
+      );
+    }
+
+    // SETTLEMENT_TIMEOUT — relay gave up polling but tx was broadcast; use txid recovery.
+    if (errorCode === "SETTLEMENT_TIMEOUT") {
+      return NextResponse.json(
+        {
+          error: "Payment broadcast but settlement confirmation timed out.",
+          errorCode,
+          hint: "Your transaction was submitted to the network but we could not confirm it in time. Use paymentTxid recovery: resubmit with the confirmed transaction ID once it appears on-chain.",
+          retryAfterSeconds: 60,
+        },
+        {
+          status: 409,
+          headers: { "Retry-After": "60" },
+        }
+      );
+    }
+
+    // Default / PAYMENT_REJECTED — return 402 with payment requirements.
+    // Sanitize: don't leak raw relay internals to clients.
     return NextResponse.json(
       {
         ...paymentRequiredBody,
-        error: paymentResult.error || "Payment verification failed",
-        errorCode: paymentResult.errorCode,
+        error: "Payment could not be processed. Please try again.",
+        errorCode: errorCode ?? "PAYMENT_REJECTED",
       },
       {
         status: 402,
@@ -932,6 +1010,8 @@ export async function POST(
     ...(senderBtcAddress && { senderBtcAddress }),
     ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
     ...(replyTo && { replyTo }),
+    ...(paymentResult.paymentStatus && { paymentStatus: paymentResult.paymentStatus }),
+    ...(paymentResult.receiptId && { receiptId: paymentResult.receiptId }),
   };
 
   await Promise.all([
@@ -992,6 +1072,7 @@ export async function POST(
         sentAt: now,
         authenticated,
         ...(senderBtcAddress && { senderBtcAddress }),
+        ...(paymentResult.paymentStatus && { paymentStatus: paymentResult.paymentStatus }),
       },
     },
     {

@@ -11,6 +11,7 @@ export type {
   OutboxReply,
   InboxAgentIndex,
   SentMessageIndex,
+  RelayPaymentStatus,
 } from "./types";
 
 // Constants
