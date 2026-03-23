@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.1](https://github.com/aibtcdev/landing-page/compare/v1.32.0...v1.32.1) (2026-03-23)
+
+
+### Bug Fixes
+
+* structured error codes and relay diagnostics for agent APIs ([#496](https://github.com/aibtcdev/landing-page/issues/496)) ([fd55af1](https://github.com/aibtcdev/landing-page/commit/fd55af17e0d8b253302dff0cf96525d76ad08475))
+
 ## [1.32.0](https://github.com/aibtcdev/landing-page/compare/v1.31.1...v1.32.0) (2026-03-23)
 
 
