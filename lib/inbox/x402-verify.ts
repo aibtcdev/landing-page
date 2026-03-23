@@ -27,6 +27,7 @@ import {
   DEFAULT_RELAY_URL,
 } from "./x402-config";
 import { INBOX_PRICE_SATS, RELAY_SETTLE_TIMEOUT_MS, SBTC_CONTRACTS } from "./constants";
+import type { RelayPaymentStatus } from "./types";
 import type { Logger } from "../logging";
 import { stacksApiFetch, buildHiroHeaders } from "../stacks-api-fetch";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
@@ -87,11 +88,37 @@ export interface InboxPaymentVerification {
   errorCode?: InboxPaymentErrorCode;
   settleResult?: SettlementResponseV2;
   /** Settlement status from relay: "confirmed" when tx is final, "pending" when relay timed out but tx was broadcast. */
-  paymentStatus?: "confirmed" | "pending";
+  paymentStatus?: RelayPaymentStatus;
   /** Relay receipt ID for polling final confirmation when paymentStatus is "pending". */
   receiptId?: string;
   /** Seconds to wait before retrying (only set for retryable errors like NONCE_CONFLICT). */
   retryAfterSeconds?: number;
+}
+
+/** Relay error codes that warrant a single immediate retry (relay is idempotent within 5 min). */
+const RELAY_RETRYABLE_CODES = new Set([
+  "NONCE_CONFLICT",
+  "CLIENT_NONCE_CONFLICT",
+  "CLIENT_BAD_NONCE",
+]);
+
+/**
+ * Map a relay error code to a typed InboxPaymentErrorCode.
+ * Used by both sponsored and non-sponsored settlement paths.
+ */
+function mapRelayErrorCode(
+  relayCode: string | undefined,
+  httpStatus: number
+): InboxPaymentErrorCode {
+  if (!relayCode) {
+    return httpStatus >= 500 ? "RELAY_ERROR" : "PAYMENT_REJECTED";
+  }
+  if (RELAY_RETRYABLE_CODES.has(relayCode)) return "NONCE_CONFLICT";
+  if (relayCode === "BROADCAST_FAILED" || relayCode === "TX_BROADCAST_ERROR") return "BROADCAST_FAILED";
+  if (relayCode === "SETTLEMENT_TIMEOUT" || relayCode === "POLL_TIMEOUT") return "SETTLEMENT_TIMEOUT";
+  if (relayCode === "INSUFFICIENT_FUNDS" || relayCode === "BALANCE_ERROR") return "INSUFFICIENT_FUNDS";
+  if (httpStatus >= 500) return "RELAY_ERROR";
+  return "PAYMENT_REJECTED";
 }
 
 /**
@@ -155,39 +182,13 @@ export async function verifyInboxPayment(
   // Route all transactions through the relay (sponsored and non-sponsored)
   let settleResult: SettlementResponseV2;
   // Relay-specific fields populated only for sponsored transactions.
-  let relayPaymentStatus: "confirmed" | "pending" | undefined;
+  let relayPaymentStatus: RelayPaymentStatus | undefined;
   let relayReceiptId: string | undefined;
 
   if (isSponsored) {
     log.debug("Routing sponsored transaction to relay", {
       relayUrl,
     });
-
-    /** Relay error codes that warrant a single immediate retry (relay is idempotent within 5 min). */
-    const RELAY_RETRYABLE_CODES = new Set([
-      "NONCE_CONFLICT",
-      "CLIENT_NONCE_CONFLICT",
-      "CLIENT_BAD_NONCE",
-    ]);
-
-    /**
-     * Map a relay error code to a typed InboxPaymentErrorCode.
-     * Relay codes come back in {code} field of error JSON bodies.
-     */
-    function mapRelayErrorCode(
-      relayCode: string | undefined,
-      httpStatus: number
-    ): InboxPaymentErrorCode {
-      if (!relayCode) {
-        return httpStatus >= 500 ? "RELAY_ERROR" : "PAYMENT_REJECTED";
-      }
-      if (RELAY_RETRYABLE_CODES.has(relayCode)) return "NONCE_CONFLICT";
-      if (relayCode === "BROADCAST_FAILED" || relayCode === "TX_BROADCAST_ERROR") return "BROADCAST_FAILED";
-      if (relayCode === "SETTLEMENT_TIMEOUT" || relayCode === "POLL_TIMEOUT") return "SETTLEMENT_TIMEOUT";
-      if (relayCode === "INSUFFICIENT_FUNDS" || relayCode === "BALANCE_ERROR") return "INSUFFICIENT_FUNDS";
-      if (httpStatus >= 500) return "RELAY_ERROR";
-      return "PAYMENT_REJECTED";
-    }
 
     const relayBody = JSON.stringify({
       transaction: paymentPayload.payload.transaction,
@@ -340,17 +341,8 @@ export async function verifyInboxPayment(
       } catch {
         // Ignore parse failure — fall back to generic code
       }
-      const mappedCode: InboxPaymentErrorCode = embeddedCode
-        ? (embeddedCode === "NONCE_CONFLICT" || embeddedCode === "CLIENT_NONCE_CONFLICT" || embeddedCode === "CLIENT_BAD_NONCE"
-            ? "NONCE_CONFLICT"
-            : embeddedCode === "BROADCAST_FAILED" || embeddedCode === "TX_BROADCAST_ERROR"
-              ? "BROADCAST_FAILED"
-              : embeddedCode === "SETTLEMENT_TIMEOUT" || embeddedCode === "POLL_TIMEOUT"
-                ? "SETTLEMENT_TIMEOUT"
-                : embeddedCode === "INSUFFICIENT_FUNDS" || embeddedCode === "BALANCE_ERROR"
-                  ? "INSUFFICIENT_FUNDS"
-                  : "RELAY_ERROR")
-        : "RELAY_ERROR";
+      // Reuse the shared mapping function; treat thrown exceptions as 500 (server error).
+      const mappedCode = mapRelayErrorCode(embeddedCode, 500);
       log.error("Relay settlement exception", {
         error: errorStr,
         embeddedCode,
