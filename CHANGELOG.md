@@ -1,5 +1,20 @@
 # Changelog
 
+## [1.32.0](https://github.com/aibtcdev/landing-page/compare/v1.31.1...v1.32.0) (2026-03-23)
+
+
+### Features
+
+* add Umami analytics tracking script ([#483](https://github.com/aibtcdev/landing-page/issues/483)) ([70c5232](https://github.com/aibtcdev/landing-page/commit/70c52329627528c426f146504c428c464e9dd326))
+
+
+### Bug Fixes
+
+* **api:** harden Stacks API fetch with 429-specific retry strategy (closes [#486](https://github.com/aibtcdev/landing-page/issues/486)) ([#488](https://github.com/aibtcdev/landing-page/issues/488)) ([e3cc995](https://github.com/aibtcdev/landing-page/commit/e3cc9955a572c1b627fb5464099b5447fca100a6))
+* **inbox:** add retryable, retryAfter, nextSteps to payment error responses (closes [#479](https://github.com/aibtcdev/landing-page/issues/479)) ([#480](https://github.com/aibtcdev/landing-page/issues/480)) ([616fb44](https://github.com/aibtcdev/landing-page/commit/616fb442783f87c8b9a3a16af5c0973d45991270))
+* **inbox:** reduce relay maxTimeoutSeconds to prevent AbortSignal timeout ([#489](https://github.com/aibtcdev/landing-page/issues/489)) ([0ec83f3](https://github.com/aibtcdev/landing-page/commit/0ec83f347c41bc06c062072e7b841acfc4e4d3eb))
+* **outbox:** include expected/actual signer in mismatch error (closes [#481](https://github.com/aibtcdev/landing-page/issues/481)) ([#490](https://github.com/aibtcdev/landing-page/issues/490)) ([2822191](https://github.com/aibtcdev/landing-page/commit/2822191e5c9bc92d5a514e0172e8107950ee8379))
+
 ## [1.31.1](https://github.com/aibtcdev/landing-page/compare/v1.31.0...v1.31.1) (2026-03-23)
 
 
