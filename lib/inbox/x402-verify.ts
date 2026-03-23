@@ -67,6 +67,10 @@ export interface InboxPaymentVerification {
   error?: string;
   errorCode?: string;
   settleResult?: SettlementResponseV2;
+  /** Settlement status from relay: "confirmed" when tx is final, "pending" when relay timed out but tx was broadcast. */
+  paymentStatus?: "confirmed" | "pending";
+  /** Relay receipt ID for polling final confirmation when paymentStatus is "pending". */
+  receiptId?: string;
 }
 
 /**
@@ -129,6 +133,9 @@ export async function verifyInboxPayment(
 
   // Route all transactions through the relay (sponsored and non-sponsored)
   let settleResult: SettlementResponseV2;
+  // Relay-specific fields populated only for sponsored transactions.
+  let relayPaymentStatus: "confirmed" | "pending" | undefined;
+  let relayReceiptId: string | undefined;
 
   if (isSponsored) {
     log.debug("Routing sponsored transaction to relay", {
@@ -220,20 +227,28 @@ export async function verifyInboxPayment(
       }
 
       // Map relay response to SettlementResponseV2 format.
-      // Relay returns {success, txid, settlement: {sender, recipient, amount, ...}}
+      // Relay returns {success, txid, receiptId, settlement: {status, sender, recipient, amount, ...}}
+      // settlement.status can be "confirmed" or "pending" (pending = relay timed out, tx was broadcast).
       // SettlementResponseV2 expects {success, transaction, payer, network}.
       const relayData = (await relayResponse.json()) as {
         success: boolean;
         txid?: string;
-        settlement?: { sender?: string };
+        receiptId?: string;
+        settlement?: { status?: string; sender?: string; recipient?: string; amount?: string };
       };
+
+      // Treat "pending" as success — the tx was broadcast even if settlement hasn't confirmed.
+      const relaySuccess = relayData.success === true;
+      relayPaymentStatus = (relayData.settlement?.status === "pending" ? "pending" : "confirmed");
+      relayReceiptId = relayData.receiptId;
+
       settleResult = {
-        success: relayData.success,
+        success: relaySuccess,
         transaction: relayData.txid || "",
         payer: relayData.settlement?.sender || "",
         network: networkCAIP2,
       };
-      log.debug("Sponsor relay result", { relayData, settleResult });
+      log.debug("Sponsor relay result", { relayData, settleResult, relayPaymentStatus });
     } catch (error) {
       log.error("Sponsor relay exception", { error: String(error) });
       return {
@@ -297,6 +312,7 @@ export async function verifyInboxPayment(
     payerStxAddress,
     paymentTxid,
     recipientStxAddress,
+    paymentStatus: relayPaymentStatus,
   });
 
   return {
@@ -304,6 +320,8 @@ export async function verifyInboxPayment(
     payerStxAddress,
     paymentTxid,
     settleResult,
+    ...(relayPaymentStatus && { paymentStatus: relayPaymentStatus }),
+    ...(relayReceiptId && { receiptId: relayReceiptId }),
   };
 }
 
