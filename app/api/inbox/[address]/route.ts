@@ -708,27 +708,53 @@ export async function POST(
     );
 
     if (!txidResult.success) {
-      const isPending =
+      // TXID_NOT_FOUND / TXID_PENDING: indexer lag — transaction is in mempool but not yet
+      // visible to the Stacks API. Typically resolves within seconds; 15s retry is appropriate.
+      const isIndexerLag =
         txidResult.errorCode === "TXID_PENDING" ||
-        txidResult.errorCode === "TXID_NOT_FOUND" ||
-        txidResult.errorCode === "TX_NOT_CONFIRMED";
+        txidResult.errorCode === "TXID_NOT_FOUND";
 
-      if (isPending) {
-        logger.warn("Txid verification pending", {
+      // TX_NOT_CONFIRMED: transaction is known to the API but tx_status !== "success".
+      // This is a block-level wait (~10 min per Stacks block); 15s retry would produce
+      // 40+ retries per block interval. Use 600s instead.
+      const isBlockWait = txidResult.errorCode === "TX_NOT_CONFIRMED";
+
+      if (isIndexerLag) {
+        logger.warn("Txid verification pending (indexer lag)", {
           error: txidResult.error,
           errorCode: txidResult.errorCode,
         });
         return NextResponse.json(
           {
-            error: txidResult.error || "Transaction not yet confirmed",
+            error: txidResult.error || "Transaction not yet indexed",
             code: txidResult.errorCode,
             retryable: true,
             retryAfter: 15,
-            nextSteps: "Transaction is not yet indexed — retry shortly",
+            nextSteps: "Transaction is not yet indexed — retry in 15 seconds",
           },
           {
             status: 409,
             headers: { "Retry-After": "15" },
+          }
+        );
+      }
+
+      if (isBlockWait) {
+        logger.warn("Txid verification pending (awaiting block confirmation)", {
+          error: txidResult.error,
+          errorCode: txidResult.errorCode,
+        });
+        return NextResponse.json(
+          {
+            error: txidResult.error || "Transaction is pending confirmation",
+            code: txidResult.errorCode,
+            retryable: true,
+            retryAfter: 600,
+            nextSteps: "Transaction is awaiting block confirmation — retry in ~10 minutes",
+          },
+          {
+            status: 409,
+            headers: { "Retry-After": "600" },
           }
         );
       }
