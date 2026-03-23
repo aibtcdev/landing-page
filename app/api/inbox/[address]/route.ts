@@ -966,6 +966,7 @@ export async function POST(
           retryable: true,
           retryAfter: retryAfterSeconds,
           nextSteps: "Retry the payment — the relay had a transient nonce collision",
+          ...relayDiag,
         },
         {
           status: 409,
