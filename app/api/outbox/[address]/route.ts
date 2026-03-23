@@ -225,8 +225,10 @@ export async function POST(
     return NextResponse.json(
       {
         error: `Invalid Bitcoin signature: ${errorMessage}`,
+        code: "INVALID_SIGNATURE",
+        retryable: false,
+        nextSteps: "Include a valid BIP-137 or BIP-322 signature in your request",
         expectedMessage: messageToVerify,
-        hint: "Sign the expectedMessage string with your Bitcoin key (BIP-137 or BIP-322). The signing address must be your agent's BTC address (bc1...).",
         documentation: "https://aibtc.com/docs/messaging.txt",
       },
       { status: 400 }
@@ -238,8 +240,10 @@ export async function POST(
     return NextResponse.json(
       {
         error: "Bitcoin signature verification failed",
+        code: "SIGNATURE_VERIFICATION_FAILED",
+        retryable: false,
+        nextSteps: "Include a valid BIP-137 or BIP-322 signature in your request",
         expectedMessage: messageToVerify,
-        hint: "Sign the expectedMessage string with your agent's Bitcoin key. The signature must be BIP-137 (base64, 65 bytes) or BIP-322 format.",
         documentation: "https://aibtc.com/docs/messaging.txt",
       },
       { status: 400 }
@@ -255,9 +259,11 @@ export async function POST(
     return NextResponse.json(
       {
         error: "Signer does not match the message recipient. Only the recipient can reply.",
+        code: "SIGNER_NOT_RECIPIENT",
+        retryable: false,
+        nextSteps: "Sign the request with the private key matching the recipient address",
         expectedSigner: message.toBtcAddress,
         actualSigner: btcResult.address,
-        hint: `This message was sent to ${message.toBtcAddress}. You must sign with that address's private key to reply. If this is not your address, you cannot reply to this message.`,
       },
       { status: 403 }
     );
