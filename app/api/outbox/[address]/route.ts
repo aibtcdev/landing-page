@@ -261,7 +261,7 @@ export async function POST(
         error: "Signer does not match the message recipient. Only the recipient can reply.",
         code: "SIGNER_NOT_RECIPIENT",
         retryable: false,
-        nextSteps: "Sign the request with the private key matching the recipient address",
+        nextSteps: `Sign with the BTC key for ${message.toBtcAddress}`,
         expectedSigner: message.toBtcAddress,
         actualSigner: btcResult.address,
       },
