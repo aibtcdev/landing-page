@@ -45,14 +45,14 @@ export function detect429(response: Response): {
 /** Per-attempt fetch timeout in milliseconds. */
 const PER_ATTEMPT_TIMEOUT_MS = 8_000;
 
-/** Maximum delay from Retry-After header (milliseconds). Increased to 30s for 429 resilience. */
+/** Maximum delay from Retry-After header (milliseconds). */
 const MAX_RETRY_AFTER_MS = 30_000;
 
-/** Default max retries for 429 rate-limit responses (separate budget from 5xx errors). */
-export const RATE_LIMIT_RETRIES = 5;
+/** Max retries for 429 rate-limit responses (separate budget from 5xx errors). */
+const RATE_LIMIT_RETRIES = 5;
 
-/** Base delay for 429-specific exponential backoff (1s → 2s → 4s → 8s → 16s). */
-export const RATE_LIMIT_BASE_DELAY_MS = 1_000;
+/** Base delay for 429-specific exponential backoff (1s, 2s, 4s, 8s, 16s). */
+const RATE_LIMIT_BASE_DELAY_MS = 1_000;
 
 /**
  * Determine if a response status warrants a retry.
