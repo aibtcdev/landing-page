@@ -73,7 +73,21 @@ export type InboxPaymentErrorCode =
   | "INSUFFICIENT_FUNDS"
   | "PAYMENT_REJECTED"
   | "RELAY_ERROR";
-// Unknown relay codes are normalized to the above by mapRelayErrorCode()
+
+/**
+ * Error codes used by the txid recovery path (verifyTxidPayment).
+ * These are distinct from relay settlement errors.
+ */
+export type TxidPaymentErrorCode =
+  | "TXID_PENDING"
+  | "TXID_NOT_FOUND"
+  | "API_ERROR"
+  | "TX_NOT_CONFIRMED"
+  | "INVALID_TX_TYPE"
+  | "NOT_SBTC_TRANSFER"
+  | "INVALID_TX_ARGS"
+  | "INSUFFICIENT_AMOUNT"
+  | "RECIPIENT_MISMATCH";
 
 /**
  * Result of x402 payment verification for inbox messages.
@@ -85,7 +99,7 @@ export interface InboxPaymentVerification {
   /** @deprecated Message IDs are now always generated server-side in the route handler. */
   messageId?: string;
   error?: string;
-  errorCode?: InboxPaymentErrorCode;
+  errorCode?: InboxPaymentErrorCode | TxidPaymentErrorCode | (string & {});
   settleResult?: SettlementResponseV2;
   /** Settlement status from relay: "confirmed" when tx is final, "pending" when relay timed out but tx was broadcast. */
   paymentStatus?: RelayPaymentStatus;
