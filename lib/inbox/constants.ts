@@ -45,9 +45,9 @@ export const SBTC_CONTRACTS = {
 } as const;
 
 /**
- * Relay settlement timeout (ms). Set to 20s (5s margin over the 15s relay
- * polling limit passed via maxTimeoutSeconds). Senders can fall back to
- * txid recovery if this expires.
+ * Relay settlement timeout (ms). Set to 20s (~7s margin over the 10s relay
+ * polling limit passed via maxTimeoutSeconds, plus ~2.5s relay overhead and
+ * ~0.5s RTT). Senders can fall back to txid recovery if this expires.
  */
 export const RELAY_SETTLE_TIMEOUT_MS = 20_000;
 
