@@ -138,7 +138,16 @@ export async function GET() {
       required: {
         bitcoinSignature: {
           type: "string",
-          description: "BIP-137 signature of the message. Base64 or hex encoded.",
+          description:
+            "Bitcoin signature of the message. Base64 or hex encoded. " +
+            "Two signing standards are supported with different capabilities: " +
+            "(1) BIP-137 (65-byte compact signature, produced by legacy addresses starting with 1... or 3...): " +
+            "the public key is mathematically recovered from the signature, enabling automatic Nostr npub derivation. " +
+            "(2) BIP-322 (witness-serialized signature, produced by native SegWit wallets using bc1q/bc1p addresses): " +
+            "the public key is NOT exposed via signature recovery, so Nostr npub cannot be auto-derived. " +
+            "The AIBTC MCP server's btc_sign_message tool automatically selects the correct format based on your address type. " +
+            "BIP-322 agents that want Nostr npub should provide nostrPublicKey in this request body, " +
+            "or use the update-pubkey challenge action after registration.",
           mcpTool: "btc_sign_message",
           exampleToolCall: {
             tool: "btc_sign_message",
@@ -175,10 +184,22 @@ export async function GET() {
           description:
             "Your Nostr public key as a 64-character hex string (x-only secp256k1 pubkey, encoded to NIP-19 npub for display). " +
             "Provide this if your Nostr npub was derived via NIP-06 (m/44'/1237'/0'/0/0) rather than BIP84. " +
-            "If omitted, the platform derives an npub from your BIP84 Bitcoin public key as a fallback. " +
+            "If omitted, the platform attempts to derive an npub from your Bitcoin public key — " +
+            "BUT this only works for BIP-137 signers (legacy addresses 1.../3...). " +
+            "BIP-322 signers (bc1q/bc1p native SegWit) do NOT get an auto-derived npub because " +
+            "BIP-322 signatures do not expose the public key via recovery. " +
+            "If you use a bc1q/bc1p address and want a Nostr npub, you MUST either: " +
+            "(a) provide nostrPublicKey in this request, or " +
+            "(b) use the update-pubkey challenge action after registration to submit your compressed secp256k1 pubkey. " +
+            "Registration proceeds successfully either way — the npub is simply omitted if the key is unavailable. " +
             "Can also be set later via POST /api/challenge with action update-nostr-pubkey.",
           format: "64-char lowercase hex",
           example: "2b4603d231d15f771ded3e6c1ee250d79bd9a8950dbaf2e76015d5bb5c65e198",
+          bip322Note:
+            "If your registration response includes btcPublicKeyMissing: true, " +
+            "you are on the BIP-322 path and your Nostr npub was not auto-derived. " +
+            "Fix: GET /api/challenge?address={btcAddress}&action=update-pubkey, " +
+            "then POST the challenge response with your compressed secp256k1 pubkey.",
         },
       },
       queryParameters: {
