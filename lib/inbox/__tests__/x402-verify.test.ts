@@ -1,0 +1,110 @@
+import { describe, it, expect } from "vitest";
+import { verifyInboxPayment } from "../x402-verify";
+import type { PaymentPayloadV2 } from "x402-stacks";
+import { networkToCAIP2 } from "x402-stacks";
+import { getSBTCAsset } from "../x402-config";
+
+describe("verifyInboxPayment", () => {
+  const recipientStxAddress = "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
+  const network = "mainnet";
+  const networkCAIP2 = networkToCAIP2(network);
+  const expectedAsset = getSBTCAsset(network);
+
+  describe("INVALID_TRANSACTION_FORMAT", () => {
+    it("returns INVALID_TRANSACTION_FORMAT for raw hex string (not serialized tx)", async () => {
+      // Raw hex "0x0030..." triggers TransactionVersion parse error
+      // because byte 0x30 (ASCII '0') is not a valid TransactionVersion
+      const payload = {
+        payload: { transaction: "0030aabbccdd" },
+        accepted: { asset: expectedAsset },
+        resource: { url: `https://aibtc.com/api/inbox/test`, network: networkCAIP2 },
+      } as unknown as PaymentPayloadV2;
+
+      const result = await verifyInboxPayment(
+        payload,
+        recipientStxAddress,
+        network,
+        "https://fake-relay.test"
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("INVALID_TRANSACTION_FORMAT");
+      expect(result.error).toBe("Invalid payment transaction format");
+    });
+
+    it("returns INVALID_TRANSACTION_FORMAT for completely invalid data", async () => {
+      const payload = {
+        payload: { transaction: "not-a-transaction" },
+        accepted: { asset: expectedAsset },
+        resource: { url: `https://aibtc.com/api/inbox/test`, network: networkCAIP2 },
+      } as unknown as PaymentPayloadV2;
+
+      const result = await verifyInboxPayment(
+        payload,
+        recipientStxAddress,
+        network,
+        "https://fake-relay.test"
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("INVALID_TRANSACTION_FORMAT");
+    });
+
+    it("returns INVALID_TRANSACTION_FORMAT for truncated transaction hex", async () => {
+      // A single valid-looking byte prefix that's too short to be a real transaction
+      const payload = {
+        payload: { transaction: "0001" },
+        accepted: { asset: expectedAsset },
+        resource: { url: `https://aibtc.com/api/inbox/test`, network: networkCAIP2 },
+      } as unknown as PaymentPayloadV2;
+
+      const result = await verifyInboxPayment(
+        payload,
+        recipientStxAddress,
+        network,
+        "https://fake-relay.test"
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("INVALID_TRANSACTION_FORMAT");
+    });
+  });
+
+  describe("sBTC-only validation", () => {
+    it("rejects non-sBTC payment asset", async () => {
+      const payload = {
+        payload: { transaction: "some-tx" },
+        accepted: { asset: "stx:mainnet/STX" },
+        resource: { url: `https://aibtc.com/api/inbox/test`, network: networkCAIP2 },
+      } as unknown as PaymentPayloadV2;
+
+      const result = await verifyInboxPayment(
+        payload,
+        recipientStxAddress,
+        network,
+        "https://fake-relay.test"
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Inbox messages require sBTC payment");
+    });
+
+    it("rejects missing transaction in payload", async () => {
+      const payload = {
+        payload: {},
+        accepted: { asset: expectedAsset },
+        resource: { url: `https://aibtc.com/api/inbox/test`, network: networkCAIP2 },
+      } as unknown as PaymentPayloadV2;
+
+      const result = await verifyInboxPayment(
+        payload,
+        recipientStxAddress,
+        network,
+        "https://fake-relay.test"
+      );
+
+      expect(result.success).toBe(false);
+      expect(result.error).toBe("Inbox messages require sBTC payment");
+    });
+  });
+});

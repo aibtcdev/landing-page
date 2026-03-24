@@ -20,7 +20,7 @@ import type {
   SettlementResponseV2,
   PaymentRequirementsV2,
 } from "x402-stacks";
-import { deserializeTransaction, AuthType } from "@stacks/transactions";
+import { deserializeTransaction, AuthType, type StacksTransactionWire } from "@stacks/transactions";
 import {
   buildInboxPaymentRequirements,
   getSBTCAsset,
@@ -242,7 +242,7 @@ export async function verifyInboxPayment(
 
   // Determine if transaction is sponsored using stacks.js deserialization
   const txHex = paymentPayload.payload.transaction;
-  let tx;
+  let tx: StacksTransactionWire;
   try {
     tx = deserializeTransaction(txHex);
   } catch (error) {
@@ -251,7 +251,7 @@ export async function verifyInboxPayment(
     return {
       success: false,
       error: "Invalid payment transaction format",
-      errorCode: "INVALID_TRANSACTION_FORMAT" as InboxPaymentErrorCode,
+      errorCode: "INVALID_TRANSACTION_FORMAT",
     };
   }
   const isSponsored = tx.auth.authType === AuthType.Sponsored;
