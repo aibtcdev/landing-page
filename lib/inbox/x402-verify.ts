@@ -66,6 +66,7 @@ interface StacksTxData {
  * - INSUFFICIENT_FUNDS: sBTC balance too low.
  * - PAYMENT_REJECTED: relay or verifier rejected the payment (bad payload, wrong recipient, etc.).
  * - RELAY_ERROR: relay 5xx or unexpected failure.
+ * - INVALID_TRANSACTION_FORMAT: payload contains invalid data (e.g. raw hex instead of serialized Stacks tx).
  */
 export type InboxPaymentErrorCode =
   | "NONCE_CONFLICT"
@@ -74,7 +75,8 @@ export type InboxPaymentErrorCode =
   | "SETTLEMENT_TIMEOUT"
   | "INSUFFICIENT_FUNDS"
   | "PAYMENT_REJECTED"
-  | "RELAY_ERROR";
+  | "RELAY_ERROR"
+  | "INVALID_TRANSACTION_FORMAT";
 
 /**
  * Error codes used by the txid recovery path (verifyTxidPayment).
@@ -240,7 +242,18 @@ export async function verifyInboxPayment(
 
   // Determine if transaction is sponsored using stacks.js deserialization
   const txHex = paymentPayload.payload.transaction;
-  const tx = deserializeTransaction(txHex);
+  let tx;
+  try {
+    tx = deserializeTransaction(txHex);
+  } catch (error) {
+    const errMsg = String(error);
+    log.warn("Failed to deserialize transaction", { error: errMsg });
+    return {
+      success: false,
+      error: "Invalid payment transaction format",
+      errorCode: "INVALID_TRANSACTION_FORMAT" as InboxPaymentErrorCode,
+    };
+  }
   const isSponsored = tx.auth.authType === AuthType.Sponsored;
 
   // Route all transactions through the relay (sponsored and non-sponsored)

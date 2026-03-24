@@ -990,6 +990,21 @@ export async function POST(
       );
     }
 
+    // INVALID_TRANSACTION_FORMAT — payload contains invalid data (e.g. raw hex instead of serialized Stacks tx).
+    if (errorCode === "INVALID_TRANSACTION_FORMAT") {
+      return NextResponse.json(
+        {
+          error: "Invalid payment transaction format",
+          code: errorCode,
+          retryable: false,
+          details: "Could not deserialize Stacks transaction — ensure you are sending a serialized transaction (via serializeTransaction()), not a raw hex string",
+          hint: "The payment-signature header should contain a base64-encoded JSON object with a 'transaction' field containing the hex-serialized Stacks transaction",
+          documentation: "https://aibtc.com/docs/messaging.txt",
+        },
+        { status: 400 }
+      );
+    }
+
     // SETTLEMENT_FAILED — tx was broadcast but aborted on-chain (e.g. post-condition failure); not retryable as-is.
     if (errorCode === "SETTLEMENT_FAILED") {
       return NextResponse.json(
