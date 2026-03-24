@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LevelBadge from "../components/LevelBadge";
@@ -27,6 +27,54 @@ type SortField = "level" | "achievements" | "reputation" | "checkIns" | "joined"
 type SortOrder = "asc" | "desc";
 interface AgentListProps {
   agents: Agent[];
+}
+
+/** Fetch reputation scores client-side for agents with on-chain identity. */
+function useReputationData(agents: Agent[]): Map<string, { score: number; count: number }> {
+  const [reputationMap, setReputationMap] = useState<Map<string, { score: number; count: number }>>(new Map());
+
+  // Stable key: sorted list of btcAddress:agentId pairs that need reputation
+  const agentsWithIdentity = useMemo(
+    () => agents.filter((a) => a.erc8004AgentId != null).map((a) => ({ btcAddress: a.btcAddress, stxAddress: a.stxAddress })),
+    [agents]
+  );
+
+  useEffect(() => {
+    if (agentsWithIdentity.length === 0) return;
+
+    let cancelled = false;
+
+    async function fetchAll() {
+      const results = await Promise.allSettled(
+        agentsWithIdentity.map(async (agent) => {
+          const res = await fetch(`/api/identity/${agent.btcAddress}/reputation?type=summary`);
+          if (!res.ok) return null;
+          const data = (await res.json()) as { summary?: { summaryValue: number; count: number } };
+          if (!data.summary) return null;
+          return {
+            btcAddress: agent.btcAddress,
+            score: data.summary.summaryValue,
+            count: data.summary.count,
+          };
+        })
+      );
+
+      if (cancelled) return;
+
+      const map = new Map<string, { score: number; count: number }>();
+      for (const result of results) {
+        if (result.status === "fulfilled" && result.value) {
+          map.set(result.value.btcAddress, { score: result.value.score, count: result.value.count });
+        }
+      }
+      setReputationMap(map);
+    }
+
+    fetchAll();
+    return () => { cancelled = true; };
+  }, [agentsWithIdentity]);
+
+  return reputationMap;
 }
 
 function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
@@ -60,20 +108,33 @@ export default function AgentList({ agents }: AgentListProps) {
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
 
+  // Fetch reputation data client-side to avoid blocking SSR
+  const reputationMap = useReputationData(agents);
+
+  // Merge reputation data into agents
+  const enrichedAgents = useMemo(() => {
+    if (reputationMap.size === 0) return agents;
+    return agents.map((agent) => {
+      const rep = reputationMap.get(agent.btcAddress);
+      if (!rep) return agent;
+      return { ...agent, reputationScore: rep.score, reputationCount: rep.count };
+    });
+  }, [agents, reputationMap]);
+
   // Network stats computed from all agents (not filtered)
   const networkStats = useMemo(() => {
-    const totalAgents = agents.length;
-    const genesisCount = agents.filter((a) => (a.level ?? 0) >= 2).length;
-    const activeCount = agents.filter((a) => {
+    const totalAgents = enrichedAgents.length;
+    const genesisCount = enrichedAgents.filter((a) => (a.level ?? 0) >= 2).length;
+    const activeCount = enrichedAgents.filter((a) => {
       if (!a.lastActiveAt) return false;
       return Date.now() - new Date(a.lastActiveAt).getTime() < ACTIVITY_THRESHOLDS.active;
     }).length;
-    const totalMessages = agents.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
+    const totalMessages = enrichedAgents.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
     return { totalAgents, genesisCount, activeCount, totalMessages };
-  }, [agents]);
+  }, [enrichedAgents]);
 
   const filteredAndSortedAgents = useMemo(() => {
-    let filtered = agents;
+    let filtered = enrichedAgents;
 
     // Level filter
     if (levelFilter !== null) {
@@ -138,7 +199,7 @@ export default function AgentList({ agents }: AgentListProps) {
     });
 
     return sorted;
-  }, [agents, sortBy, sortOrder, searchQuery, levelFilter]);
+  }, [enrichedAgents, sortBy, sortOrder, searchQuery, levelFilter]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {

@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCachedAgentList } from "@/lib/cache";
-import { getReputationSummary } from "@/lib/identity";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import AgentList from "./AgentList";
@@ -24,53 +23,30 @@ async function fetchAgents() {
   const kv = env.VERIFIED_AGENTS as KVNamespace;
   const { agents } = await getCachedAgentList(kv);
 
-  // Fetch reputation summaries for agents with on-chain identity (erc8004AgentId).
-  // This is the only external API call — chunked to avoid overwhelming the Stacks API.
-  const REPUTATION_CONCURRENCY = 10;
-  const reputationLookups: (Awaited<ReturnType<typeof getReputationSummary>> | null)[] = new Array(agents.length).fill(null);
-  for (let i = 0; i < agents.length; i += REPUTATION_CONCURRENCY) {
-    const chunk = agents.slice(i, i + REPUTATION_CONCURRENCY);
-    const results = await Promise.all(
-      chunk.map(async (agent) => {
-        if (agent.erc8004AgentId == null) return null;
-        try {
-          return await getReputationSummary(agent.erc8004AgentId, undefined, kv);
-        } catch {
-          return null;
-        }
-      })
-    );
-    results.forEach((r, j) => { reputationLookups[i + j] = r; });
-  }
-
-  return agents.map((agent, i) => {
-    const reputation = reputationLookups[i];
-    return {
-      // Convert CachedAgent (null) to AgentRecord-compatible shape (undefined)
-      stxAddress: agent.stxAddress,
-      btcAddress: agent.btcAddress,
-      stxPublicKey: agent.stxPublicKey,
-      btcPublicKey: agent.btcPublicKey,
-      taprootAddress: agent.taprootAddress ?? undefined,
-      displayName: agent.displayName ?? undefined,
-      description: agent.description ?? undefined,
-      bnsName: agent.bnsName ?? undefined,
-      owner: agent.owner ?? undefined,
-      verifiedAt: agent.verifiedAt,
-      lastActiveAt: agent.lastActiveAt ?? undefined,
-      checkInCount: agent.checkInCount,
-      erc8004AgentId: agent.erc8004AgentId ?? undefined,
-      nostrPublicKey: agent.nostrPublicKey ?? undefined,
-      referredBy: agent.referredBy ?? undefined,
-      level: agent.level,
-      levelName: agent.levelName,
-      messageCount: agent.messageCount,
-      unreadCount: agent.unreadCount,
-      achievementCount: agent.achievementCount,
-      reputationScore: reputation?.summaryValue ?? 0,
-      reputationCount: reputation?.count ?? 0,
-    };
-  });
+  // Reputation data is fetched client-side in AgentList to avoid blocking SSR
+  // on external Stacks API calls (which can timeout under rate limits).
+  return agents.map((agent) => ({
+    stxAddress: agent.stxAddress,
+    btcAddress: agent.btcAddress,
+    stxPublicKey: agent.stxPublicKey,
+    btcPublicKey: agent.btcPublicKey,
+    taprootAddress: agent.taprootAddress ?? undefined,
+    displayName: agent.displayName ?? undefined,
+    description: agent.description ?? undefined,
+    bnsName: agent.bnsName ?? undefined,
+    owner: agent.owner ?? undefined,
+    verifiedAt: agent.verifiedAt,
+    lastActiveAt: agent.lastActiveAt ?? undefined,
+    checkInCount: agent.checkInCount,
+    erc8004AgentId: agent.erc8004AgentId ?? undefined,
+    nostrPublicKey: agent.nostrPublicKey ?? undefined,
+    referredBy: agent.referredBy ?? undefined,
+    level: agent.level,
+    levelName: agent.levelName,
+    messageCount: agent.messageCount,
+    unreadCount: agent.unreadCount,
+    achievementCount: agent.achievementCount,
+  }));
 }
 
 export default async function AgentsPage() {
