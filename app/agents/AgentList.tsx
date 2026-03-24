@@ -46,7 +46,7 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
   useEffect(() => {
     if (agentsWithIdentity.length === 0) return;
 
-    let cancelled = false;
+    const controller = new AbortController();
 
     async function fetchAll() {
       const MAX_CONCURRENT = 5;
@@ -54,13 +54,15 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
       let currentIndex = 0;
 
       async function worker() {
-        while (!cancelled) {
+        while (!controller.signal.aborted) {
           const index = currentIndex++;
           if (index >= agentsWithIdentity.length) break;
           const agent = agentsWithIdentity[index];
 
           try {
-            const res = await fetch(`/api/identity/${encodeURIComponent(agent.btcAddress)}/reputation?type=summary`);
+            const res = await fetch(`/api/identity/${encodeURIComponent(agent.btcAddress)}/reputation?type=summary`, {
+              signal: controller.signal,
+            });
             if (!res.ok) continue;
             const data = (await res.json()) as { summary?: { summaryValue: number; count: number } };
             if (!data.summary) continue;
@@ -78,7 +80,7 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
       const workerCount = Math.min(MAX_CONCURRENT, agentsWithIdentity.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
-      if (cancelled) return;
+      if (controller.signal.aborted) return;
 
       const map = new Map<string, { score: number; count: number }>();
       for (const result of results) {
@@ -88,7 +90,7 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
     }
 
     fetchAll();
-    return () => { cancelled = true; };
+    return () => { controller.abort(); };
   }, [agentsWithIdentity]);
 
   return reputationMap;
