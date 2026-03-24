@@ -33,9 +33,13 @@ interface AgentListProps {
 function useReputationData(agents: Agent[]): Map<string, { score: number; count: number }> {
   const [reputationMap, setReputationMap] = useState<Map<string, { score: number; count: number }>>(new Map());
 
-  // Stable key: sorted list of btcAddress:agentId pairs that need reputation
+  // Sorted by btcAddress for stable identity across renders
   const agentsWithIdentity = useMemo(
-    () => agents.filter((a) => a.erc8004AgentId != null).map((a) => ({ btcAddress: a.btcAddress, stxAddress: a.stxAddress })),
+    () =>
+      agents
+        .filter((a) => a.erc8004AgentId != null)
+        .map((a) => ({ btcAddress: a.btcAddress, agentId: a.erc8004AgentId }))
+        .sort((a, b) => a.btcAddress.localeCompare(b.btcAddress)),
     [agents]
   );
 
@@ -45,27 +49,40 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
     let cancelled = false;
 
     async function fetchAll() {
-      const results = await Promise.allSettled(
-        agentsWithIdentity.map(async (agent) => {
-          const res = await fetch(`/api/identity/${agent.btcAddress}/reputation?type=summary`);
-          if (!res.ok) return null;
-          const data = (await res.json()) as { summary?: { summaryValue: number; count: number } };
-          if (!data.summary) return null;
-          return {
-            btcAddress: agent.btcAddress,
-            score: data.summary.summaryValue,
-            count: data.summary.count,
-          };
-        })
-      );
+      const MAX_CONCURRENT = 5;
+      const results: { btcAddress: string; score: number; count: number }[] = [];
+      let currentIndex = 0;
+
+      async function worker() {
+        while (!cancelled) {
+          const index = currentIndex++;
+          if (index >= agentsWithIdentity.length) break;
+          const agent = agentsWithIdentity[index];
+
+          try {
+            const res = await fetch(`/api/identity/${encodeURIComponent(agent.btcAddress)}/reputation?type=summary`);
+            if (!res.ok) continue;
+            const data = (await res.json()) as { summary?: { summaryValue: number; count: number } };
+            if (!data.summary) continue;
+            results.push({
+              btcAddress: agent.btcAddress,
+              score: data.summary.summaryValue,
+              count: data.summary.count,
+            });
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      const workerCount = Math.min(MAX_CONCURRENT, agentsWithIdentity.length);
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
 
       if (cancelled) return;
 
       const map = new Map<string, { score: number; count: number }>();
       for (const result of results) {
-        if (result.status === "fulfilled" && result.value) {
-          map.set(result.value.btcAddress, { score: result.value.score, count: result.value.count });
-        }
+        map.set(result.btcAddress, { score: result.score, count: result.count });
       }
       setReputationMap(map);
     }
