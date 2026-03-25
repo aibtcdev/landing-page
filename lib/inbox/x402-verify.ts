@@ -366,16 +366,17 @@ export async function verifyInboxPayment(
     try {
       let relayResponse = await callRelay();
 
-      // Handle retryable relay errors (e.g. NONCE_CONFLICT) with a single immediate retry.
-      // The relay is idempotent for the same tx hex within 5 minutes — no sleep needed.
+      // Handle retryable relay errors (e.g. NONCE_CONFLICT) with optional backoff.
+      // The relay is idempotent for the same tx hex within 5 minutes.
+      // When relay provides retryAfter, we sleep up to 15s before retrying to stay
+      // within the 20s AbortSignal budget. If retryAfter >= 15s, we skip the retry
+      // and propagate the error so the client can honour the full backoff.
       if (!relayResponse.ok && relayResponse.status === 409) {
         const errorBody = await relayResponse.text();
         const relayError = parseRelayErrorBody(errorBody);
+        let didRetry = false;
 
         if (relayError.retryable && RELAY_RETRYABLE_CODES.has(relayError.code ?? "")) {
-          // Cap wait to 15s to stay within the 20s AbortSignal budget.
-          // If retryAfter >= 15s, skip the retry — propagate the error so the
-          // client can honour the backoff instead of burning the request budget.
           const waitMs = Math.min((relayError.retryAfter ?? 0) * 1000, 15_000);
           if (waitMs >= 15_000) {
             log.warn("Relay retryAfter >= 15s — skipping retry to avoid timeout", {
@@ -397,14 +398,15 @@ export async function verifyInboxPayment(
               });
             }
             relayResponse = await callRelay();
+            didRetry = true;
           }
         }
 
-        // If still not ok after retry (or was non-retryable), return structured error.
+        // If still not ok after retry (or was non-retryable / retry skipped), return structured error.
         if (!relayResponse.ok) {
-          // After retry: read the new response body. For non-retryable 409s,
-          // reuse the already-consumed errorBody instead of reading twice.
-          const finalErrorBody = relayError.retryable
+          // After a successful retry call, read the new response body.
+          // Otherwise reuse the already-consumed original errorBody to avoid bodyUsed errors.
+          const finalErrorBody = didRetry
             ? await relayResponse.text()
             : errorBody;
           return buildRelayErrorResult(finalErrorBody, relayResponse.status, log);
