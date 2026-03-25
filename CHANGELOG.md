@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.34.0](https://github.com/aibtcdev/landing-page/compare/v1.33.0...v1.34.0) (2026-03-25)
+
+
+### Features
+
+* **skills:** add paperboy v0.34.0 + clarity v0.33.0 to static content ([#508](https://github.com/aibtcdev/landing-page/issues/508)) ([9dfdd9b](https://github.com/aibtcdev/landing-page/commit/9dfdd9b804bf60716f0c4d7485793edfc951778a))
+
+
+### Bug Fixes
+
+* **inbox:** payment resilience — relay backoff, TooMuchChaining, circuit breaker ([#507](https://github.com/aibtcdev/landing-page/issues/507)) ([7d9fb2a](https://github.com/aibtcdev/landing-page/commit/7d9fb2af223ca1912921284c5afc83af7f94d04e))
+
 ## [1.33.0](https://github.com/aibtcdev/landing-page/compare/v1.32.1...v1.33.0) (2026-03-25)
 
 
