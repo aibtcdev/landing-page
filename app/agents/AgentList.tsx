@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useMemo } from "react";
+import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import LevelBadge from "../components/LevelBadge";
@@ -27,6 +27,73 @@ type SortField = "level" | "achievements" | "reputation" | "checkIns" | "joined"
 type SortOrder = "asc" | "desc";
 interface AgentListProps {
   agents: Agent[];
+}
+
+/** Fetch reputation scores client-side for agents with on-chain identity. */
+function useReputationData(agents: Agent[]): Map<string, { score: number; count: number }> {
+  const [reputationMap, setReputationMap] = useState<Map<string, { score: number; count: number }>>(new Map());
+
+  // Sorted by btcAddress for stable identity across renders
+  const agentsWithIdentity = useMemo(
+    () =>
+      agents
+        .filter((a) => a.erc8004AgentId != null)
+        .map((a) => ({ btcAddress: a.btcAddress, agentId: a.erc8004AgentId }))
+        .sort((a, b) => a.btcAddress.localeCompare(b.btcAddress)),
+    [agents]
+  );
+
+  useEffect(() => {
+    if (agentsWithIdentity.length === 0) return;
+
+    const controller = new AbortController();
+
+    async function fetchAll() {
+      const MAX_CONCURRENT = 5;
+      const results: { btcAddress: string; score: number; count: number }[] = [];
+      let currentIndex = 0;
+
+      async function worker() {
+        while (!controller.signal.aborted) {
+          const index = currentIndex++;
+          if (index >= agentsWithIdentity.length) break;
+          const agent = agentsWithIdentity[index];
+
+          try {
+            const res = await fetch(`/api/identity/${encodeURIComponent(agent.btcAddress)}/reputation?type=summary`, {
+              signal: controller.signal,
+            });
+            if (!res.ok) continue;
+            const data = (await res.json()) as { summary?: { summaryValue: number; count: number } };
+            if (!data.summary) continue;
+            results.push({
+              btcAddress: agent.btcAddress,
+              score: data.summary.summaryValue,
+              count: data.summary.count,
+            });
+          } catch {
+            continue;
+          }
+        }
+      }
+
+      const workerCount = Math.min(MAX_CONCURRENT, agentsWithIdentity.length);
+      await Promise.all(Array.from({ length: workerCount }, () => worker()));
+
+      if (controller.signal.aborted) return;
+
+      const map = new Map<string, { score: number; count: number }>();
+      for (const result of results) {
+        map.set(result.btcAddress, { score: result.score, count: result.count });
+      }
+      setReputationMap(map);
+    }
+
+    fetchAll();
+    return () => { controller.abort(); };
+  }, [agentsWithIdentity]);
+
+  return reputationMap;
 }
 
 function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
@@ -60,20 +127,33 @@ export default function AgentList({ agents }: AgentListProps) {
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
 
+  // Fetch reputation data client-side to avoid blocking SSR
+  const reputationMap = useReputationData(agents);
+
+  // Merge reputation data into agents
+  const enrichedAgents = useMemo(() => {
+    if (reputationMap.size === 0) return agents;
+    return agents.map((agent) => {
+      const rep = reputationMap.get(agent.btcAddress);
+      if (!rep) return agent;
+      return { ...agent, reputationScore: rep.score, reputationCount: rep.count };
+    });
+  }, [agents, reputationMap]);
+
   // Network stats computed from all agents (not filtered)
   const networkStats = useMemo(() => {
-    const totalAgents = agents.length;
-    const genesisCount = agents.filter((a) => (a.level ?? 0) >= 2).length;
-    const activeCount = agents.filter((a) => {
+    const totalAgents = enrichedAgents.length;
+    const genesisCount = enrichedAgents.filter((a) => (a.level ?? 0) >= 2).length;
+    const activeCount = enrichedAgents.filter((a) => {
       if (!a.lastActiveAt) return false;
       return Date.now() - new Date(a.lastActiveAt).getTime() < ACTIVITY_THRESHOLDS.active;
     }).length;
-    const totalMessages = agents.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
+    const totalMessages = enrichedAgents.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
     return { totalAgents, genesisCount, activeCount, totalMessages };
-  }, [agents]);
+  }, [enrichedAgents]);
 
   const filteredAndSortedAgents = useMemo(() => {
-    let filtered = agents;
+    let filtered = enrichedAgents;
 
     // Level filter
     if (levelFilter !== null) {
@@ -138,7 +218,7 @@ export default function AgentList({ agents }: AgentListProps) {
     });
 
     return sorted;
-  }, [agents, sortBy, sortOrder, searchQuery, levelFilter]);
+  }, [enrichedAgents, sortBy, sortOrder, searchQuery, levelFilter]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
