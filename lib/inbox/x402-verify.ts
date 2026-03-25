@@ -465,7 +465,7 @@ export async function verifyInboxPayment(
           error: relayData.error || "Relay settlement failed",
           errorCode: mappedCode,
           relayCode: relayData.code,
-          ...(relayData.details && { relayDetail: relayData.details }),
+          ...((relayData.details || relayData.error) && { relayDetail: relayData.details || relayData.error }),
           ...(retryAfterSeconds != null && { retryAfterSeconds }),
         };
       }
