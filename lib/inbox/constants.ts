@@ -78,3 +78,29 @@ export const KV_PREFIXES = {
   AGENT_INDEX: "inbox:agent:",     // inbox:agent:{btcAddress} -> InboxAgentIndex
   SENT_INDEX: "inbox:sent:",       // inbox:sent:{btcAddress} -> SentMessageIndex
 } as const;
+
+// --- Circuit breaker constants ---
+
+/**
+ * KV key for the x402 relay circuit breaker state.
+ * Suffixed with ":count" for the failure counter key.
+ */
+export const RELAY_CIRCUIT_BREAKER_KEY = "inbox:relay:circuit-breaker";
+
+/**
+ * Number of consecutive relay failures that trip the circuit breaker.
+ * Once tripped, relay calls are blocked until the TTL expires.
+ */
+export const RELAY_CIRCUIT_BREAKER_THRESHOLD = 5;
+
+/**
+ * Seconds the circuit breaker stays open after tripping (5 minutes).
+ * Also the rolling window for counting failures.
+ */
+export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 300;
+
+/**
+ * Seconds clients should wait before retrying when circuit is open.
+ * Matches RELAY_CIRCUIT_BREAKER_TTL_SECONDS.
+ */
+export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 300;
