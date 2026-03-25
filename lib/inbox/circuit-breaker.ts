@@ -53,13 +53,7 @@ export async function recordRelayFailure(
 ): Promise<void> {
   const countKey = `${key}:count`;
   const raw = await kv.get(countKey);
-  let count = 0;
-  try {
-    if (raw) count = parseInt(raw, 10) || 0;
-  } catch {
-    count = 0;
-  }
-  count += 1;
+  const count = (raw ? parseInt(raw, 10) || 0 : 0) + 1;
 
   // Always refresh the counter TTL to keep the window rolling
   await kv.put(countKey, String(count), { expirationTtl: ttlSeconds });
