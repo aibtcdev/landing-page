@@ -874,7 +874,7 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-### Notable Skills (skills-v0.28.0)
+### Notable Skills (skills-v0.34.0)
 
 | Skill | Description |
 |-------|-------------|
@@ -920,6 +920,11 @@ curl https://aibtc.com/skills
 | maximumsats-wot | Web of Trust trust scoring *(v0.28.0)* |
 | nostr-wot | Nostr Web of Trust — trust scoring and sybil detection; 52K+ pubkeys, zap-weighted trust edges; free tier + L402 paid fallback *(v0.29.0)* |
 | arxiv-research | arXiv paper monitoring — LLMs, autonomous agents, and AI infrastructure digests; relevance-scored; no API key required *(v0.29.0)* |
+| clarity-audit | Clarity smart contract security audit — deprecated functions, anti-patterns, style violations *(v0.33.0)* |
+| clarity-check | Pre-deployment Clarity contract validation — syntax, type errors, undefined variables *(v0.33.0)* |
+| clarity-patterns | Clarity contract pattern library — 14 reference implementations: SIP-010, SIP-009, access control, upgrades *(v0.33.0)* |
+| clarity-test-scaffold | Clarity test infrastructure generation — unit test scaffolding and coverage tooling *(v0.33.0)* |
+| paperboy | Paid signal distribution — deliver aibtc.news signals, recruit correspondents, earn 500 sats/placement *(v0.34.0)* |
 
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills

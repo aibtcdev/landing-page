@@ -81,6 +81,7 @@ const SHORT_DESC: Record<string, string> = {
   openrouter: "OpenRouter AI model integration",
   ordinals: "Inscribe content on Bitcoin",
   "ordinals-p2p": "Peer-to-peer Ordinals trading",
+  paperboy: "Deliver signals, recruit correspondents",
   pillar: "Smart wallet and DCA operations",
   psbt: "Bitcoin PSBT construction and signing",
   query: "Stacks network and blockchain queries",
