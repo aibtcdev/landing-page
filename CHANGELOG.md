@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.33.0](https://github.com/aibtcdev/landing-page/compare/v1.32.1...v1.33.0) (2026-03-25)
+
+
+### Features
+
+* **skills:** add clarity-* SHORT_DESC entries and llms.txt notable skills for v0.33.0 ([#505](https://github.com/aibtcdev/landing-page/issues/505)) ([8cf5776](https://github.com/aibtcdev/landing-page/commit/8cf57760e6ab6ae752b53ee0b62de67dbe803fdd))
+
+
+### Bug Fixes
+
+* move reputation fetching client-side to unblock agents page ([#504](https://github.com/aibtcdev/landing-page/issues/504)) ([4d8338d](https://github.com/aibtcdev/landing-page/commit/4d8338dbc2577cb3dff295a92360ba71b3930ed5))
+* return 400 with structured error for invalid transaction format ([#501](https://github.com/aibtcdev/landing-page/issues/501)) ([d3fc5f6](https://github.com/aibtcdev/landing-page/commit/d3fc5f6644125ce9bc5cf4b11160646b6a4f5b48))
+
 ## [1.32.1](https://github.com/aibtcdev/landing-page/compare/v1.32.0...v1.32.1) (2026-03-23)
 
 
