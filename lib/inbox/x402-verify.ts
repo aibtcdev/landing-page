@@ -173,11 +173,12 @@ function relayExceptionResult(
   };
 }
 
-/** Relay error codes that warrant a single immediate retry (relay is idempotent within 5 min). */
+/** Relay error codes that warrant a single retry with backoff (relay is idempotent within 5 min). */
 const RELAY_RETRYABLE_CODES = new Set([
   "NONCE_CONFLICT",
   "CLIENT_NONCE_CONFLICT",
   "CLIENT_BAD_NONCE",
+  "TOO_MUCH_CHAINING",
 ]);
 
 /** Parse a relay error response body into a structured object. */
@@ -357,12 +358,13 @@ export async function verifyInboxPayment(
     try {
       let relayResponse = await callRelay();
 
-      // Handle retryable relay errors (e.g. NONCE_CONFLICT) with optional backoff.
+      // Handle retryable relay errors (e.g. NONCE_CONFLICT, TOO_MUCH_CHAINING) with optional backoff.
       // The relay is idempotent for the same tx hex within 5 minutes.
       // When relay provides retryAfter, we sleep up to 15s before retrying to stay
       // within the 20s AbortSignal budget. If retryAfter >= 15s, we skip the retry
       // and propagate the error so the client can honour the full backoff.
-      if (!relayResponse.ok && relayResponse.status === 409) {
+      // HTTP 409 = nonce conflict, HTTP 429 = chaining limit (TOO_MUCH_CHAINING).
+      if (!relayResponse.ok && (relayResponse.status === 409 || relayResponse.status === 429)) {
         const errorBody = await relayResponse.text();
         const relayError = parseRelayErrorBody(errorBody);
         let didRetry = false;
