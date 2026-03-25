@@ -15,6 +15,7 @@ import {
   listSentMessages,
   INBOX_PRICE_SATS,
   REDEEMED_TXID_TTL_SECONDS,
+  RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
   buildInboxPaymentRequirements,
   buildSenderAuthMessage,
   DEFAULT_RELAY_URL,
@@ -940,7 +941,8 @@ export async function POST(
     agent.stxAddress,
     network,
     relayUrl,
-    logger
+    logger,
+    kv
   );
 
   if (!paymentResult.success) {
@@ -1019,20 +1021,28 @@ export async function POST(
       );
     }
 
-    // RELAY_ERROR — relay 5xx or unexpected failure.
+    // RELAY_ERROR — relay 5xx, unexpected failure, or circuit breaker open.
+    // Use the retryAfterSeconds from the verification result (circuit breaker returns 300s,
+    // ordinary relay errors default to 10s).
     if (errorCode === "RELAY_ERROR") {
+      const relayRetryAfter = paymentResult.retryAfterSeconds ?? 10;
+      const isCircuitOpen = relayRetryAfter >= RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS;
       return NextResponse.json(
         {
-          error: "Relay service error. Try again in a moment.",
+          error: isCircuitOpen
+            ? "Relay is temporarily unavailable due to repeated failures. Please retry later."
+            : "Relay service error. Try again in a moment.",
           code: errorCode,
           retryable: true,
-          retryAfter: 10,
-          nextSteps: "Relay was slow — retry the request",
+          retryAfter: relayRetryAfter,
+          nextSteps: isCircuitOpen
+            ? `Relay circuit breaker is open — retry in ${relayRetryAfter} seconds`
+            : "Relay was slow — retry the request",
           ...relayDiag,
         },
         {
-          status: 502,
-          headers: { "Retry-After": "10" },
+          status: isCircuitOpen ? 503 : 502,
+          headers: { "Retry-After": String(relayRetryAfter) },
         }
       );
     }

@@ -26,8 +26,21 @@ import {
   getSBTCAsset,
   DEFAULT_RELAY_URL,
 } from "./x402-config";
-import { INBOX_PRICE_SATS, RELAY_SETTLE_TIMEOUT_MS, SBTC_CONTRACTS } from "./constants";
+import {
+  INBOX_PRICE_SATS,
+  RELAY_SETTLE_TIMEOUT_MS,
+  SBTC_CONTRACTS,
+  RELAY_CIRCUIT_BREAKER_KEY,
+  RELAY_CIRCUIT_BREAKER_THRESHOLD,
+  RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
+  RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
+} from "./constants";
 import type { RelayPaymentStatus } from "./types";
+import {
+  checkCircuitBreaker,
+  recordRelayFailure,
+  resetCircuitBreaker,
+} from "./circuit-breaker";
 import type { Logger } from "../logging";
 import { stacksApiFetch, buildHiroHeaders, parseRetryAfterMs } from "../stacks-api-fetch";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
@@ -160,12 +173,48 @@ function relayExceptionResult(
   };
 }
 
-/** Relay error codes that warrant a single immediate retry (relay is idempotent within 5 min). */
+/** Relay error codes that warrant a single retry with backoff (relay is idempotent within 5 min). */
 const RELAY_RETRYABLE_CODES = new Set([
   "NONCE_CONFLICT",
   "CLIENT_NONCE_CONFLICT",
   "CLIENT_BAD_NONCE",
+  "TOO_MUCH_CHAINING",
 ]);
+
+/** Parse a relay error response body into a structured object. */
+function parseRelayErrorBody(
+  body: string
+): { code?: string; retryable?: boolean; retryAfter?: number } {
+  try {
+    return JSON.parse(body);
+  } catch {
+    return {};
+  }
+}
+
+/** Build a failed InboxPaymentVerification from a relay HTTP error response. */
+function buildRelayErrorResult(
+  errorBody: string,
+  httpStatus: number,
+  log: Logger
+): InboxPaymentVerification {
+  const parsed = parseRelayErrorBody(errorBody);
+  const mappedCode = mapRelayErrorCode(parsed.code, httpStatus);
+  log.error("Sponsor relay failed", {
+    status: httpStatus,
+    code: parsed.code,
+    mappedCode,
+    error: errorBody,
+  });
+  return {
+    success: false,
+    error: errorBody,
+    errorCode: mappedCode,
+    ...(parsed.code != null && { relayCode: parsed.code }),
+    ...(errorBody && { relayDetail: errorBody }),
+    ...(parsed.retryAfter != null && { retryAfterSeconds: parsed.retryAfter }),
+  };
+}
 
 /**
  * Map a relay error code to a typed InboxPaymentErrorCode.
@@ -199,9 +248,28 @@ export async function verifyInboxPayment(
   recipientStxAddress: string,
   network: "mainnet" | "testnet" = "mainnet",
   relayUrl: string = DEFAULT_RELAY_URL,
-  logger?: Logger
+  logger?: Logger,
+  kv?: KVNamespace
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
+
+  // Check circuit breaker before attempting any relay call.
+  // When open, return 503-equivalent immediately to shed load.
+  if (kv) {
+    const cbState = await checkCircuitBreaker(kv, RELAY_CIRCUIT_BREAKER_KEY);
+    if (cbState.open) {
+      log.warn("Relay circuit breaker open — blocking request", {
+        openedAt: cbState.openedAt,
+        retryAfterSeconds: RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
+      });
+      return {
+        success: false,
+        error: "Relay is temporarily unavailable. Please retry shortly.",
+        errorCode: "RELAY_ERROR",
+        retryAfterSeconds: RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
+      };
+    }
+  }
 
   // Validate network and asset
   const networkCAIP2 = networkToCAIP2(network);
@@ -290,78 +358,64 @@ export async function verifyInboxPayment(
     try {
       let relayResponse = await callRelay();
 
-      // Handle retryable relay errors (e.g. NONCE_CONFLICT) with a single immediate retry.
-      // The relay is idempotent for the same tx hex within 5 minutes — no sleep needed.
-      if (!relayResponse.ok && relayResponse.status === 409) {
+      // Handle retryable relay errors (e.g. NONCE_CONFLICT, TOO_MUCH_CHAINING) with optional backoff.
+      // The relay is idempotent for the same tx hex within 5 minutes.
+      // When relay provides retryAfter, we sleep up to 15s before retrying to stay
+      // within the 20s AbortSignal budget. If retryAfter >= 15s, we skip the retry
+      // and propagate the error so the client can honour the full backoff.
+      // HTTP 409 = nonce conflict, HTTP 429 = chaining limit (TOO_MUCH_CHAINING).
+      if (!relayResponse.ok && (relayResponse.status === 409 || relayResponse.status === 429)) {
         const errorBody = await relayResponse.text();
-        let relayError: { code?: string; retryable?: boolean; retryAfter?: number } = {};
-        try {
-          relayError = JSON.parse(errorBody);
-        } catch {
-          // Non-JSON body — treat as non-retryable
-        }
+        const relayError = parseRelayErrorBody(errorBody);
+        let didRetry = false;
 
         if (relayError.retryable && RELAY_RETRYABLE_CODES.has(relayError.code ?? "")) {
-          log.warn("Relay returned retryable nonce error, retrying immediately (idempotent tx hex)", {
-            code: relayError.code,
-            retryAfter: relayError.retryAfter,
-          });
-          relayResponse = await callRelay();
+          const waitMs = Math.min((relayError.retryAfter ?? 0) * 1000, 15_000);
+          if (waitMs >= 15_000) {
+            log.warn("Relay retryAfter >= 15s — skipping retry to avoid timeout", {
+              code: relayError.code,
+              retryAfter: relayError.retryAfter,
+            });
+            // Fall through to the non-ok handler below with the original errorBody
+          } else {
+            if (waitMs > 0) {
+              log.warn("Relay returned retryable nonce error, waiting before retry", {
+                code: relayError.code,
+                retryAfter: relayError.retryAfter,
+                waitMs,
+              });
+              await new Promise((r) => setTimeout(r, waitMs));
+            } else {
+              log.warn("Relay returned retryable nonce error, retrying immediately (idempotent tx hex)", {
+                code: relayError.code,
+              });
+            }
+            relayResponse = await callRelay();
+            didRetry = true;
+          }
         }
 
-        // If still not ok after retry (or was non-retryable), return structured error.
+        // If still not ok after retry (or was non-retryable / retry skipped), return structured error.
         if (!relayResponse.ok) {
-          // After retry: read the new response body. For non-retryable 409s,
-          // reuse the already-consumed errorBody instead of reading twice.
-          let finalErrorBody = errorBody;
-          let finalRelayError = relayError;
-          if (relayError.retryable) {
-            finalErrorBody = await relayResponse.text();
-            try {
-              finalRelayError = JSON.parse(finalErrorBody);
-            } catch {
-              // Non-JSON — use raw text
-            }
-          }
-          const mappedCode = mapRelayErrorCode(finalRelayError.code, relayResponse.status);
-          log.error("Sponsor relay failed", {
-            status: relayResponse.status,
-            code: finalRelayError.code,
-            mappedCode,
-            error: finalErrorBody,
-          });
-          return {
-            success: false,
-            error: finalErrorBody,
-            errorCode: mappedCode,
-            ...(finalRelayError.code != null && { relayCode: finalRelayError.code }),
-            ...(finalErrorBody && { relayDetail: finalErrorBody }),
-            ...(finalRelayError.retryAfter != null && { retryAfterSeconds: finalRelayError.retryAfter }),
-          };
+          // After a successful retry call, read the new response body.
+          // Otherwise reuse the already-consumed original errorBody to avoid bodyUsed errors.
+          const finalErrorBody = didRetry
+            ? await relayResponse.text()
+            : errorBody;
+          return buildRelayErrorResult(finalErrorBody, relayResponse.status, log);
         }
       } else if (!relayResponse.ok) {
         const errorText = await relayResponse.text();
-        let relayErrorParsed: { code?: string; retryable?: boolean; retryAfter?: number } = {};
-        try {
-          relayErrorParsed = JSON.parse(errorText);
-        } catch {
-          // Non-JSON body
+        // Record 5xx relay failures toward the circuit breaker threshold.
+        if (kv && relayResponse.status >= 500) {
+          await recordRelayFailure(
+            kv,
+            RELAY_CIRCUIT_BREAKER_KEY,
+            RELAY_CIRCUIT_BREAKER_THRESHOLD,
+            RELAY_CIRCUIT_BREAKER_TTL_SECONDS
+          );
         }
-        const mappedCode = mapRelayErrorCode(relayErrorParsed.code, relayResponse.status);
-        log.error("Sponsor relay failed", {
-          status: relayResponse.status,
-          code: relayErrorParsed.code,
-          mappedCode,
-          error: errorText,
-        });
-        return {
-          success: false,
-          error: errorText,
-          errorCode: mappedCode,
-          ...(relayErrorParsed.code != null && { relayCode: relayErrorParsed.code }),
-          ...(errorText && { relayDetail: errorText }),
-          ...(relayErrorParsed.retryAfter != null && { retryAfterSeconds: relayErrorParsed.retryAfter }),
-        };
+        return buildRelayErrorResult(errorText, relayResponse.status, log);
       }
 
       // Map relay response to SettlementResponseV2 format.
@@ -375,6 +429,7 @@ export async function verifyInboxPayment(
         code?: string;
         error?: string;
         retryAfter?: number;
+        details?: string;
         settlement?: { status?: string; sender?: string; recipient?: string; amount?: string };
       };
 
@@ -384,6 +439,7 @@ export async function verifyInboxPayment(
         const mappedCode = mapRelayErrorCode(relayData.code, 200);
         log.error("Relay returned structured failure", {
           code: relayData.code,
+          details: relayData.details,
           mappedCode,
           error: relayData.error,
         });
@@ -392,7 +448,7 @@ export async function verifyInboxPayment(
           error: relayData.error || "Relay settlement failed",
           errorCode: mappedCode,
           relayCode: relayData.code,
-          ...(relayData.error && { relayDetail: relayData.error }),
+          ...((relayData.details || relayData.error) && { relayDetail: relayData.details || relayData.error }),
           ...(relayData.retryAfter != null && { retryAfterSeconds: relayData.retryAfter }),
         };
       }
@@ -415,6 +471,15 @@ export async function verifyInboxPayment(
     } catch (error) {
       const result = relayExceptionResult("Sponsor relay error", error);
       log.error("Sponsor relay exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
+      // Network-level exceptions (fetch failures, timeouts) count as relay failures.
+      if (kv) {
+        await recordRelayFailure(
+          kv,
+          RELAY_CIRCUIT_BREAKER_KEY,
+          RELAY_CIRCUIT_BREAKER_THRESHOLD,
+          RELAY_CIRCUIT_BREAKER_TTL_SECONDS
+        );
+      }
       return result;
     }
   } else {
@@ -432,6 +497,15 @@ export async function verifyInboxPayment(
     } catch (error) {
       const result = relayExceptionResult("Payment settlement error", error);
       log.error("Relay settlement exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
+      // Network-level exceptions (fetch failures, timeouts) count as relay failures.
+      if (kv) {
+        await recordRelayFailure(
+          kv,
+          RELAY_CIRCUIT_BREAKER_KEY,
+          RELAY_CIRCUIT_BREAKER_THRESHOLD,
+          RELAY_CIRCUIT_BREAKER_TTL_SECONDS
+        );
+      }
       return result;
     }
   }
@@ -461,6 +535,11 @@ export async function verifyInboxPayment(
       errorCode: X402_ERROR_CODES.SENDER_MISMATCH,
       settleResult,
     };
+  }
+
+  // Relay succeeded — reset circuit breaker so past failures don't linger.
+  if (kv) {
+    await resetCircuitBreaker(kv, RELAY_CIRCUIT_BREAKER_KEY);
   }
 
   log.info("Inbox payment verified", {

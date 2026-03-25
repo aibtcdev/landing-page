@@ -25,10 +25,22 @@ export {
   SBTC_CONTRACTS,
   KV_PREFIXES,
   REDEEMED_TXID_TTL_SECONDS,
+  RELAY_CIRCUIT_BREAKER_KEY,
+  RELAY_CIRCUIT_BREAKER_THRESHOLD,
+  RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
+  RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
   buildMarkReadMessage,
   buildReplyMessage,
   buildSenderAuthMessage,
 } from "./constants";
+
+// Circuit Breaker
+export type { CircuitBreakerState } from "./circuit-breaker";
+export {
+  checkCircuitBreaker,
+  recordRelayFailure,
+  resetCircuitBreaker,
+} from "./circuit-breaker";
 
 // Validation
 export {
