@@ -180,15 +180,6 @@ const RELAY_RETRYABLE_CODES = new Set([
   "CLIENT_BAD_NONCE",
 ]);
 
-/**
- * Relay `details` values that indicate transient conditions.
- * These are mapped to NONCE_CONFLICT (retryable) rather than a permanent failure.
- */
-const TRANSIENT_RELAY_DETAILS = new Set([
-  "TooMuchChaining",
-  "ConflictingNonceInMempool",
-]);
-
 /** Parse a relay error response body into a structured object. */
 function parseRelayErrorBody(
   body: string
@@ -436,7 +427,6 @@ export async function verifyInboxPayment(
         code?: string;
         error?: string;
         retryAfter?: number;
-        /** Detail field that may carry transient error names like "TooMuchChaining". */
         details?: string;
         settlement?: { status?: string; sender?: string; recipient?: string; amount?: string };
       };
@@ -444,20 +434,11 @@ export async function verifyInboxPayment(
       // Handle structured failure returned with HTTP 200 (e.g. {success:false, code:"SETTLEMENT_FAILED"}).
       // Only pass through if not a "pending" settlement (pending is treated as success above).
       if (!relayData.success && relayData.settlement?.status !== "pending" && relayData.code) {
-        const isTransientDetail = relayData.details != null && TRANSIENT_RELAY_DETAILS.has(relayData.details);
-
-        const mappedCode = isTransientDetail
-          ? "NONCE_CONFLICT"
-          : mapRelayErrorCode(relayData.code, 200);
-        const retryAfterSeconds = isTransientDetail
-          ? (relayData.retryAfter ?? 60)
-          : relayData.retryAfter;
-
+        const mappedCode = mapRelayErrorCode(relayData.code, 200);
         log.error("Relay returned structured failure", {
           code: relayData.code,
           details: relayData.details,
           mappedCode,
-          isTransientDetail,
           error: relayData.error,
         });
         return {
@@ -466,7 +447,7 @@ export async function verifyInboxPayment(
           errorCode: mappedCode,
           relayCode: relayData.code,
           ...((relayData.details || relayData.error) && { relayDetail: relayData.details || relayData.error }),
-          ...(retryAfterSeconds != null && { retryAfterSeconds }),
+          ...(relayData.retryAfter != null && { retryAfterSeconds: relayData.retryAfter }),
         };
       }
 
