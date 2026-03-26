@@ -30,7 +30,7 @@
     },
     {
       "binding": "X402_RELAY",
-      "service": "x402-sponsor-relay",
+      "service": "x402-sponsor-relay-production",
       "entrypoint": "RelayRPC"
     }
   ]
