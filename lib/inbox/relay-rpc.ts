@@ -121,9 +121,6 @@ export function mapRPCErrorCode(
   return RPC_ERROR_CODE_MAP[code] ?? "RELAY_ERROR";
 }
 
-/** Terminal statuses where polling should stop. */
-const TERMINAL_STATUSES = new Set(["confirmed", "failed", "replaced", "not_found"]);
-
 /** In-progress statuses where we keep polling. */
 const PENDING_STATUSES = new Set(["queued", "submitted", "broadcasting", "mempool"]);
 
@@ -165,7 +162,15 @@ export async function submitViaRPC(
     };
   }
 
-  const paymentId = submitResult.paymentId!;
+  const paymentId = submitResult.paymentId;
+  if (!paymentId) {
+    log.warn("RPC: submitPayment accepted but missing paymentId");
+    return {
+      success: false,
+      error: "Relay accepted payment but did not return a paymentId",
+      errorCode: "RELAY_ERROR",
+    };
+  }
   log.debug("RPC: payment queued", {
     paymentId,
     status: submitResult.status,

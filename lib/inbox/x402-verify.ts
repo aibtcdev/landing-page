@@ -352,7 +352,7 @@ export async function verifyInboxPayment(
       const settle = {
         expectedRecipient: recipientStxAddress,
         minAmount: paymentRequirements.amount,
-        tokenType: "sBTC" as const,
+        tokenType: "sBTC",
       };
 
       try {
