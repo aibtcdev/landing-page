@@ -104,3 +104,12 @@ export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 300;
  * Matches RELAY_CIRCUIT_BREAKER_TTL_SECONDS.
  */
 export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 300;
+
+// --- RPC service binding polling constants ---
+
+/** Interval between checkPayment() polls (ms). */
+export const RPC_POLL_INTERVAL_MS = 2_000;
+/** Maximum number of checkPayment() polls before giving up. */
+export const RPC_POLL_MAX_ATTEMPTS = 8;
+/** Total RPC timeout budget (ms). Must fit within Workers 30s CPU limit. */
+export const RPC_TOTAL_TIMEOUT_MS = 18_000;

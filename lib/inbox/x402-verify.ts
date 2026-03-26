@@ -80,6 +80,9 @@ interface StacksTxData {
  * - PAYMENT_REJECTED: relay or verifier rejected the payment (bad payload, wrong recipient, etc.).
  * - RELAY_ERROR: relay 5xx or unexpected failure.
  * - INVALID_TRANSACTION_FORMAT: payload contains invalid data (e.g. raw hex instead of serialized Stacks tx).
+ * - SENDER_NONCE_STALE: RPC path — submitted nonce is below the current account nonce (pre-enqueue rejection).
+ * - SENDER_NONCE_DUPLICATE: RPC path — a transaction with this nonce is already queued (pre-enqueue rejection).
+ * - SENDER_NONCE_GAP: RPC path — submitted nonce creates a gap above the current account nonce (pre-enqueue rejection).
  */
 export type InboxPaymentErrorCode =
   | "NONCE_CONFLICT"
@@ -89,7 +92,10 @@ export type InboxPaymentErrorCode =
   | "INSUFFICIENT_FUNDS"
   | "PAYMENT_REJECTED"
   | "RELAY_ERROR"
-  | "INVALID_TRANSACTION_FORMAT";
+  | "INVALID_TRANSACTION_FORMAT"
+  | "SENDER_NONCE_STALE"
+  | "SENDER_NONCE_DUPLICATE"
+  | "SENDER_NONCE_GAP";
 
 /**
  * Error codes used by the txid recovery path (verifyTxidPayment).
