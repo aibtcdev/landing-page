@@ -21,12 +21,17 @@
       "remote": true
     }
   ],
-  // Service binding for worker-logs RPC
+  // Service bindings: worker-logs RPC and x402 sponsor relay RPC
   "services": [
     {
       "binding": "LOGS",
       "service": "worker-logs-production",
       "entrypoint": "LogsRPC"
+    },
+    {
+      "binding": "X402_RELAY",
+      "service": "x402-sponsor-relay",
+      "entrypoint": "RelayRPC"
     }
   ]
 }
