@@ -384,12 +384,26 @@ export async function verifyInboxPayment(
         };
         relayPaymentStatus = rpcResult.paymentStatus;
       } catch (error) {
+        // Differentiate queue backpressure (AbortSignal timeout) from genuine network failure.
+        // RPC service bindings can also throw DOMException { name: "TimeoutError" } on timeout.
+        // These represent a slow relay, not a relay outage; do NOT trip the circuit breaker.
+        if (error instanceof DOMException && error.name === "TimeoutError") {
+          log.warn("RPC relay timeout (queue backpressure) — not counting as relay failure", {
+            viaRPC: true,
+          });
+          return {
+            success: false,
+            error: "Relay timed out (queue backpressure). Recover via paymentTxid if sBTC was broadcast.",
+            errorCode: "SETTLEMENT_TIMEOUT",
+          };
+        }
         const result = relayExceptionResult("RPC relay error", error);
         log.error("RPC relay exception", {
           error: result.error,
           relayCode: result.relayCode,
           errorCode: result.errorCode,
         });
+        // Only genuine network/RPC failures count toward the circuit breaker threshold.
         if (kv) {
           await recordRelayFailure(
             kv,
@@ -537,9 +551,23 @@ export async function verifyInboxPayment(
         };
         log.debug("Sponsor relay result", { relayData, settleResult, relayPaymentStatus });
       } catch (error) {
+        // Differentiate queue backpressure (AbortSignal timeout) from genuine network failure.
+        // AbortSignal.timeout() throws DOMException { name: "TimeoutError" } — the relay is slow
+        // but may be healthy; do NOT trip the circuit breaker for these.
+        // fetch() network failures throw TypeError — the relay is unreachable; record failure.
+        if (error instanceof DOMException && error.name === "TimeoutError") {
+          log.warn("Sponsor relay timeout (queue backpressure) — not counting as relay failure", {
+            relayUrl,
+          });
+          return {
+            success: false,
+            error: "Relay timed out (queue backpressure). Recover via paymentTxid if sBTC was broadcast.",
+            errorCode: "SETTLEMENT_TIMEOUT",
+          };
+        }
         const result = relayExceptionResult("Sponsor relay error", error);
         log.error("Sponsor relay exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
-        // Network-level exceptions (fetch failures, timeouts) count as relay failures.
+        // Only genuine network failures (TypeError) count as relay failures toward the circuit breaker.
         if (kv) {
           await recordRelayFailure(
             kv,
@@ -564,9 +592,23 @@ export async function verifyInboxPayment(
       });
       log.debug("Relay settle result", { settleResult });
     } catch (error) {
+      // Differentiate queue backpressure (AbortSignal timeout) from genuine network failure.
+      // AbortSignal.timeout() throws DOMException { name: "TimeoutError" } — the relay is slow
+      // but may be healthy; do NOT trip the circuit breaker for these.
+      // fetch() network failures throw TypeError — the relay is unreachable; record failure.
+      if (error instanceof DOMException && error.name === "TimeoutError") {
+        log.warn("Non-sponsored relay timeout (queue backpressure) — not counting as relay failure", {
+          relayUrl,
+        });
+        return {
+          success: false,
+          error: "Relay timed out (queue backpressure). Recover via paymentTxid if sBTC was broadcast.",
+          errorCode: "SETTLEMENT_TIMEOUT",
+        };
+      }
       const result = relayExceptionResult("Payment settlement error", error);
       log.error("Relay settlement exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
-      // Network-level exceptions (fetch failures, timeouts) count as relay failures.
+      // Only genuine network failures (TypeError) count as relay failures toward the circuit breaker.
       if (kv) {
         await recordRelayFailure(
           kv,

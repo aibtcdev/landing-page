@@ -469,7 +469,9 @@ describe("submitViaRPC", () => {
       expect(rpc.checkPayment).toHaveBeenCalledTimes(8);
     });
 
-    it("preserves txid from last check result on exhaustion", async () => {
+    it("treats mempool exhaustion as pending success (tx was broadcast)", async () => {
+      // When all polls return "mempool", the tx is broadcast but not yet confirmed.
+      // This is treated as pending success — mirrors the HTTP path's "settlement.status === pending" handling.
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
@@ -487,8 +489,10 @@ describe("submitViaRPC", () => {
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
       expect(result.paymentTxid).toBe("broadcast-but-not-confirmed");
+      expect(result.paymentStatus).toBe("pending");
+      expect(result.paymentId).toBe("pay-exhaust-txid");
     });
   });
 
