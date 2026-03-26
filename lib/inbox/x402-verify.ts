@@ -188,7 +188,7 @@ function relayExceptionResult(
  * RPC service-binding timeout).  Timeouts indicate a slow relay, not a relay
  * outage, so they must NOT trip the circuit breaker.
  */
-function isRelayTimeout(error: unknown): boolean {
+export function isRelayTimeout(error: unknown): boolean {
   return error instanceof DOMException && error.name === "TimeoutError";
 }
 

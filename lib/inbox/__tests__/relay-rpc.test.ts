@@ -494,6 +494,29 @@ describe("submitViaRPC", () => {
       expect(result.paymentStatus).toBe("pending");
       expect(result.paymentId).toBe("pay-exhaust-txid");
     });
+
+    it("falls back to SETTLEMENT_TIMEOUT when mempool status has no txid", async () => {
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay-no-txid",
+          status: "queued",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay-no-txid",
+          status: "mempool",
+          // no txid — can't treat as pending success
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
+      expect(result.paymentId).toBe("pay-no-txid");
+    });
   });
 
   describe("multi-poll — confirmed after several attempts", () => {

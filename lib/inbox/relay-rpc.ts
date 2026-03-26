@@ -240,14 +240,15 @@ export async function submitViaRPC(
   // Exhausted all poll attempts or hit total deadline.
   // If the last known status was "mempool", the tx was broadcast and is awaiting confirmation.
   // Treat this as pending success — mirrors the HTTP path's "settlement.status === pending" handling.
-  if (lastCheckResult?.status === "mempool") {
+  // Only treat as pending success when a txid is present; otherwise fall back to SETTLEMENT_TIMEOUT.
+  if (lastCheckResult?.status === "mempool" && lastCheckResult.txid) {
     log.info("RPC: poll exhausted but tx is in mempool — treating as pending success", {
       paymentId,
       txid: lastCheckResult.txid,
     });
     return {
       success: true,
-      paymentTxid: lastCheckResult.txid || "",
+      paymentTxid: lastCheckResult.txid,
       paymentStatus: "pending",
       paymentId,
     };

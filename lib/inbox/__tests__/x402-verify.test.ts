@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { verifyInboxPayment } from "../x402-verify";
+import { verifyInboxPayment, isRelayTimeout } from "../x402-verify";
 import type { PaymentPayloadV2 } from "x402-stacks";
 import { networkToCAIP2 } from "x402-stacks";
 import { getSBTCAsset } from "../x402-config";
@@ -106,5 +106,31 @@ describe("verifyInboxPayment", () => {
       expect(result.success).toBe(false);
       expect(result.error).toBe("Inbox messages require sBTC payment");
     });
+  });
+});
+
+describe("isRelayTimeout", () => {
+  it("returns true for DOMException with TimeoutError name", () => {
+    const error = new DOMException("The operation was aborted", "TimeoutError");
+    expect(isRelayTimeout(error)).toBe(true);
+  });
+
+  it("returns false for TypeError (network failure)", () => {
+    expect(isRelayTimeout(new TypeError("fetch failed"))).toBe(false);
+  });
+
+  it("returns false for DOMException with non-timeout name", () => {
+    const error = new DOMException("Aborted", "AbortError");
+    expect(isRelayTimeout(error)).toBe(false);
+  });
+
+  it("returns false for generic Error", () => {
+    expect(isRelayTimeout(new Error("something broke"))).toBe(false);
+  });
+
+  it("returns false for non-Error values", () => {
+    expect(isRelayTimeout("timeout")).toBe(false);
+    expect(isRelayTimeout(null)).toBe(false);
+    expect(isRelayTimeout(undefined)).toBe(false);
   });
 });
