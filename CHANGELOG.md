@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.1](https://github.com/aibtcdev/landing-page/compare/v1.35.0...v1.35.1) (2026-03-26)
+
+
+### Bug Fixes
+
+* **inbox:** x402 circuit breaker resilience — stop misclassifying timeouts as failures ([#520](https://github.com/aibtcdev/landing-page/issues/520)) ([3db0277](https://github.com/aibtcdev/landing-page/commit/3db027781451cb609a4a8a20c716ba9406d0aaf1))
+
 ## [1.35.0](https://github.com/aibtcdev/landing-page/compare/v1.34.0...v1.35.0) (2026-03-26)
 
 
