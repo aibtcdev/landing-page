@@ -444,7 +444,7 @@ describe("submitViaRPC", () => {
       expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
       expect(result.error).toContain("paymentTxid");
       expect(result.paymentId).toBe("pay-exhaust-001");
-      expect(rpc.checkPayment).toHaveBeenCalledTimes(8);
+      expect(rpc.checkPayment).toHaveBeenCalledTimes(12);
     });
 
     it("returns SETTLEMENT_TIMEOUT when all poll attempts return broadcasting", async () => {
@@ -466,7 +466,7 @@ describe("submitViaRPC", () => {
 
       expect(result.success).toBe(false);
       expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
-      expect(rpc.checkPayment).toHaveBeenCalledTimes(8);
+      expect(rpc.checkPayment).toHaveBeenCalledTimes(12);
     });
 
     it("treats mempool exhaustion as pending success (tx was broadcast)", async () => {

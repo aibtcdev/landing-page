@@ -89,27 +89,35 @@ export const RELAY_CIRCUIT_BREAKER_KEY = "inbox:relay:circuit-breaker";
 
 /**
  * Number of consecutive relay failures that trip the circuit breaker.
- * Once tripped, relay calls are blocked until the TTL expires.
+ * Set to 10 to match the sponsor wallet pool size — one bad wallet
+ * should not trip the breaker for the entire pool.
  */
-export const RELAY_CIRCUIT_BREAKER_THRESHOLD = 5;
+export const RELAY_CIRCUIT_BREAKER_THRESHOLD = 10;
 
 /**
- * Seconds the circuit breaker stays open after tripping (5 minutes).
+ * Seconds the circuit breaker stays open after tripping (1 minute).
+ * Observed relay recovery time is ~60s; 300s was a 5x overshoot.
  * Also the rolling window for counting failures.
  */
-export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 300;
+export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 60;
 
 /**
  * Seconds clients should wait before retrying when circuit is open.
  * Matches RELAY_CIRCUIT_BREAKER_TTL_SECONDS.
  */
-export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 300;
+export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 60;
 
 // --- RPC service binding polling constants ---
 
 /** Interval between checkPayment() polls (ms). */
 export const RPC_POLL_INTERVAL_MS = 2_000;
-/** Maximum number of checkPayment() polls before giving up. */
-export const RPC_POLL_MAX_ATTEMPTS = 8;
-/** Total RPC timeout budget (ms). Must fit within Workers 30s CPU limit. */
-export const RPC_TOTAL_TIMEOUT_MS = 18_000;
+/**
+ * Maximum number of checkPayment() polls before giving up.
+ * Increased from 8 to 12 to give burst traffic queue backlog more room to drain.
+ */
+export const RPC_POLL_MAX_ATTEMPTS = 12;
+/**
+ * Total RPC timeout budget (ms). Must fit within Workers 30s CPU limit.
+ * 12 attempts x 2s interval + ~2s overhead = 26s, safely under the 30s limit.
+ */
+export const RPC_TOTAL_TIMEOUT_MS = 26_000;
