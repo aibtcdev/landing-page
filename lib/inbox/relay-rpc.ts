@@ -10,7 +10,7 @@
  */
 
 import type { Logger } from "../logging";
-import type { InboxPaymentVerification } from "./x402-verify";
+import type { InboxPaymentErrorCode, InboxPaymentVerification } from "./x402-verify";
 import {
   RPC_POLL_INTERVAL_MS,
   RPC_POLL_MAX_ATTEMPTS,
@@ -58,6 +58,27 @@ export interface RelayRPC {
   checkPayment(paymentId: string): Promise<RelayCheckResult>;
 }
 
+/** Maps raw RPC relay error codes to typed InboxPaymentErrorCode values. */
+const RPC_ERROR_CODE_MAP: Record<string, InboxPaymentErrorCode> = {
+  // Pre-enqueue nonce rejections (SENDER_NONCE_*)
+  SENDER_NONCE_STALE: "SENDER_NONCE_STALE",
+  SENDER_NONCE_DUPLICATE: "SENDER_NONCE_DUPLICATE",
+  SENDER_NONCE_GAP: "SENDER_NONCE_GAP",
+  // Broadcast failures
+  BROADCAST_FAILED: "BROADCAST_FAILED",
+  TX_BROADCAST_ERROR: "BROADCAST_FAILED",
+  // Settlement
+  SETTLEMENT_FAILED: "SETTLEMENT_FAILED",
+  // Insufficient funds
+  INSUFFICIENT_FUNDS: "INSUFFICIENT_FUNDS",
+  BALANCE_ERROR: "INSUFFICIENT_FUNDS",
+  // Nonce conflicts (retryable)
+  NONCE_CONFLICT: "NONCE_CONFLICT",
+  CLIENT_NONCE_CONFLICT: "NONCE_CONFLICT",
+  CLIENT_BAD_NONCE: "NONCE_CONFLICT",
+  TOO_MUCH_CHAINING: "NONCE_CONFLICT",
+};
+
 /**
  * Map an RPC relay error code to a typed InboxPaymentErrorCode.
  * Covers both pre-enqueue nonce rejections (SENDER_NONCE_*) and
@@ -65,21 +86,9 @@ export interface RelayRPC {
  */
 export function mapRPCErrorCode(
   code: string | undefined
-): import("./x402-verify").InboxPaymentErrorCode {
+): InboxPaymentErrorCode {
   if (!code) return "RELAY_ERROR";
-  if (code === "SENDER_NONCE_STALE") return "SENDER_NONCE_STALE";
-  if (code === "SENDER_NONCE_DUPLICATE") return "SENDER_NONCE_DUPLICATE";
-  if (code === "SENDER_NONCE_GAP") return "SENDER_NONCE_GAP";
-  if (code === "BROADCAST_FAILED" || code === "TX_BROADCAST_ERROR") return "BROADCAST_FAILED";
-  if (code === "SETTLEMENT_FAILED") return "SETTLEMENT_FAILED";
-  if (code === "INSUFFICIENT_FUNDS" || code === "BALANCE_ERROR") return "INSUFFICIENT_FUNDS";
-  if (
-    code === "NONCE_CONFLICT" ||
-    code === "CLIENT_NONCE_CONFLICT" ||
-    code === "CLIENT_BAD_NONCE" ||
-    code === "TOO_MUCH_CHAINING"
-  ) return "NONCE_CONFLICT";
-  return "RELAY_ERROR";
+  return RPC_ERROR_CODE_MAP[code] ?? "RELAY_ERROR";
 }
 
 /**

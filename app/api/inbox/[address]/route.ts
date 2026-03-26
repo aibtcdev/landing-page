@@ -1083,61 +1083,38 @@ export async function POST(
       );
     }
 
-    // SENDER_NONCE_STALE — RPC path: sender nonce is below current account nonce (replay protection).
-    // The sender must re-sign with the current nonce; retry is immediate after re-signing.
-    if (errorCode === "SENDER_NONCE_STALE") {
+    // SENDER_NONCE_* — RPC path nonce rejections. All return HTTP 409 with retry guidance.
+    const nonceErrors: Record<string, { error: string; retryAfter: number; nextSteps: string }> = {
+      SENDER_NONCE_STALE: {
+        error: "Payment rejected: your transaction nonce is stale (below current account nonce). Re-sign your transaction with the current nonce and retry.",
+        retryAfter: 0,
+        nextSteps: "Fetch the current account nonce, re-sign your transaction, and resubmit.",
+      },
+      SENDER_NONCE_DUPLICATE: {
+        error: "Payment rejected: a transaction with this nonce is already queued. Wait for it to settle or use a different nonce.",
+        retryAfter: 30,
+        nextSteps: "Wait 30 seconds for the queued transaction to settle, then retry. If you intended a new payment, increment the nonce.",
+      },
+      SENDER_NONCE_GAP: {
+        error: "Payment rejected: your transaction nonce skips ahead of the current account nonce. Sign with the correct sequential nonce.",
+        retryAfter: 0,
+        nextSteps: "Fetch the current account nonce, re-sign your transaction with the next sequential nonce, and resubmit.",
+      },
+    };
+    const nonceError = errorCode ? nonceErrors[errorCode] : undefined;
+    if (nonceError) {
       return NextResponse.json(
         {
-          error: "Payment rejected: your transaction nonce is stale (below current account nonce). Re-sign your transaction with the current nonce and retry.",
+          error: nonceError.error,
           code: errorCode,
           retryable: true,
-          retryAfter: 0,
-          nextSteps: "Fetch the current account nonce, re-sign your transaction, and resubmit.",
+          retryAfter: nonceError.retryAfter,
+          nextSteps: nonceError.nextSteps,
           ...relayDiag,
         },
         {
           status: 409,
-          headers: { "Retry-After": "0" },
-        }
-      );
-    }
-
-    // SENDER_NONCE_DUPLICATE — RPC path: a transaction with this nonce is already queued.
-    // The sender should wait for the queued tx to settle before retrying with the same nonce,
-    // or use the next sequential nonce for a new transaction.
-    if (errorCode === "SENDER_NONCE_DUPLICATE") {
-      return NextResponse.json(
-        {
-          error: "Payment rejected: a transaction with this nonce is already queued. Wait for it to settle or use a different nonce.",
-          code: errorCode,
-          retryable: true,
-          retryAfter: 30,
-          nextSteps: "Wait 30 seconds for the queued transaction to settle, then retry. If you intended a new payment, increment the nonce.",
-          ...relayDiag,
-        },
-        {
-          status: 409,
-          headers: { "Retry-After": "30" },
-        }
-      );
-    }
-
-    // SENDER_NONCE_GAP — RPC path: submitted nonce is higher than expected, creating a gap.
-    // Stacks transactions must be sequential; gaps block all higher-nonce transactions.
-    // The sender should re-sign with the correct sequential nonce.
-    if (errorCode === "SENDER_NONCE_GAP") {
-      return NextResponse.json(
-        {
-          error: "Payment rejected: your transaction nonce skips ahead of the current account nonce. Sign with the correct sequential nonce.",
-          code: errorCode,
-          retryable: true,
-          retryAfter: 0,
-          nextSteps: "Fetch the current account nonce, re-sign your transaction with the next sequential nonce, and resubmit.",
-          ...relayDiag,
-        },
-        {
-          status: 409,
-          headers: { "Retry-After": "0" },
+          headers: { "Retry-After": String(nonceError.retryAfter) },
         }
       );
     }
