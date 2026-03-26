@@ -66,6 +66,7 @@ next-env.d.ts
 .open-next
 .wrangler
 .planning/
+.quests/
 .claude/
 
 # AI tools / agents
