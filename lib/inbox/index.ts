@@ -37,13 +37,14 @@ export {
   buildSenderAuthMessage,
 } from "./constants";
 
-// RPC Types
+// RPC Types and Helpers
 export type {
   RelayRPC,
   RelaySubmitParams,
   RelaySubmitResult,
   RelayCheckResult,
 } from "./relay-rpc";
+export { submitViaRPC, mapRPCErrorCode } from "./relay-rpc";
 
 // Circuit Breaker
 export type { CircuitBreakerState } from "./circuit-breaker";
