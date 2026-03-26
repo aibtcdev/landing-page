@@ -444,7 +444,7 @@ describe("submitViaRPC", () => {
       expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
       expect(result.error).toContain("paymentTxid");
       expect(result.paymentId).toBe("pay-exhaust-001");
-      expect(rpc.checkPayment).toHaveBeenCalledTimes(8);
+      expect(rpc.checkPayment).toHaveBeenCalledTimes(12);
     });
 
     it("returns SETTLEMENT_TIMEOUT when all poll attempts return broadcasting", async () => {
@@ -466,10 +466,12 @@ describe("submitViaRPC", () => {
 
       expect(result.success).toBe(false);
       expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
-      expect(rpc.checkPayment).toHaveBeenCalledTimes(8);
+      expect(rpc.checkPayment).toHaveBeenCalledTimes(12);
     });
 
-    it("preserves txid from last check result on exhaustion", async () => {
+    it("treats mempool exhaustion as pending success (tx was broadcast)", async () => {
+      // When all polls return "mempool", the tx is broadcast but not yet confirmed.
+      // This is treated as pending success — mirrors the HTTP path's "settlement.status === pending" handling.
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
@@ -487,8 +489,33 @@ describe("submitViaRPC", () => {
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
-      expect(result.success).toBe(false);
+      expect(result.success).toBe(true);
       expect(result.paymentTxid).toBe("broadcast-but-not-confirmed");
+      expect(result.paymentStatus).toBe("pending");
+      expect(result.paymentId).toBe("pay-exhaust-txid");
+    });
+
+    it("falls back to SETTLEMENT_TIMEOUT when mempool status has no txid", async () => {
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay-no-txid",
+          status: "queued",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay-no-txid",
+          status: "mempool",
+          // no txid — can't treat as pending success
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
+      expect(result.paymentId).toBe("pay-no-txid");
     });
   });
 

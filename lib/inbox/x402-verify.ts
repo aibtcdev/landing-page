@@ -183,6 +183,54 @@ function relayExceptionResult(
   };
 }
 
+/**
+ * Check whether an error is a DOMException timeout (AbortSignal.timeout() or
+ * RPC service-binding timeout).  Timeouts indicate a slow relay, not a relay
+ * outage, so they must NOT trip the circuit breaker.
+ */
+export function isRelayTimeout(error: unknown): boolean {
+  return error instanceof DOMException && error.name === "TimeoutError";
+}
+
+/**
+ * Shared catch-block handler for relay exceptions (RPC and HTTP paths).
+ *
+ * - Timeouts return SETTLEMENT_TIMEOUT without tripping the circuit breaker.
+ * - All other exceptions record a circuit breaker failure and return the
+ *   parsed relay error.
+ */
+async function handleRelayException(
+  label: string,
+  error: unknown,
+  log: Logger,
+  kv: KVNamespace | undefined
+): Promise<InboxPaymentVerification> {
+  if (isRelayTimeout(error)) {
+    log.warn(`${label} timeout (queue backpressure) — not counting as relay failure`);
+    return {
+      success: false,
+      error: "Relay timed out (queue backpressure). Recover via paymentTxid if sBTC was broadcast.",
+      errorCode: "SETTLEMENT_TIMEOUT",
+    };
+  }
+
+  const result = relayExceptionResult(`${label} error`, error);
+  log.error(`${label} exception`, {
+    error: result.error,
+    relayCode: result.relayCode,
+    errorCode: result.errorCode,
+  });
+  if (kv) {
+    await recordRelayFailure(
+      kv,
+      RELAY_CIRCUIT_BREAKER_KEY,
+      RELAY_CIRCUIT_BREAKER_THRESHOLD,
+      RELAY_CIRCUIT_BREAKER_TTL_SECONDS
+    );
+  }
+  return result;
+}
+
 /** Relay error codes that warrant a single retry with backoff (relay is idempotent within 5 min). */
 const RELAY_RETRYABLE_CODES = new Set([
   "NONCE_CONFLICT",
@@ -384,21 +432,7 @@ export async function verifyInboxPayment(
         };
         relayPaymentStatus = rpcResult.paymentStatus;
       } catch (error) {
-        const result = relayExceptionResult("RPC relay error", error);
-        log.error("RPC relay exception", {
-          error: result.error,
-          relayCode: result.relayCode,
-          errorCode: result.errorCode,
-        });
-        if (kv) {
-          await recordRelayFailure(
-            kv,
-            RELAY_CIRCUIT_BREAKER_KEY,
-            RELAY_CIRCUIT_BREAKER_THRESHOLD,
-            RELAY_CIRCUIT_BREAKER_TTL_SECONDS
-          );
-        }
-        return result;
+        return handleRelayException("RPC relay", error, log, kv);
       }
     } else {
       // --- HTTP fallback path: original fetch() logic ---
@@ -537,18 +571,7 @@ export async function verifyInboxPayment(
         };
         log.debug("Sponsor relay result", { relayData, settleResult, relayPaymentStatus });
       } catch (error) {
-        const result = relayExceptionResult("Sponsor relay error", error);
-        log.error("Sponsor relay exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
-        // Network-level exceptions (fetch failures, timeouts) count as relay failures.
-        if (kv) {
-          await recordRelayFailure(
-            kv,
-            RELAY_CIRCUIT_BREAKER_KEY,
-            RELAY_CIRCUIT_BREAKER_THRESHOLD,
-            RELAY_CIRCUIT_BREAKER_TTL_SECONDS
-          );
-        }
-        return result;
+        return handleRelayException("Sponsor relay", error, log, kv);
       }
     }
   } else {
@@ -564,18 +587,7 @@ export async function verifyInboxPayment(
       });
       log.debug("Relay settle result", { settleResult });
     } catch (error) {
-      const result = relayExceptionResult("Payment settlement error", error);
-      log.error("Relay settlement exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
-      // Network-level exceptions (fetch failures, timeouts) count as relay failures.
-      if (kv) {
-        await recordRelayFailure(
-          kv,
-          RELAY_CIRCUIT_BREAKER_KEY,
-          RELAY_CIRCUIT_BREAKER_THRESHOLD,
-          RELAY_CIRCUIT_BREAKER_TTL_SECONDS
-        );
-      }
-      return result;
+      return handleRelayException("Non-sponsored relay", error, log, kv);
     }
   }
 
