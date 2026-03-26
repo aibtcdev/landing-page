@@ -471,7 +471,11 @@ export async function verifyInboxPayment(
     } catch (error) {
       const result = relayExceptionResult("Sponsor relay error", error);
       log.error("Sponsor relay exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
-      // Network-level exceptions (fetch failures, timeouts) count as relay failures.
+      // Network-level exceptions (fetch failures, timeouts) count as relay failures toward
+      // the circuit breaker. Note: timeouts are ambiguous — the tx may have been broadcast
+      // successfully before the timeout. Agents should check paymentTxid recovery if they
+      // see SETTLEMENT_TIMEOUT errors. A future improvement could count timeouts at reduced
+      // weight (e.g. 0.5) since they don't conclusively indicate relay unavailability.
       if (kv) {
         await recordRelayFailure(
           kv,
@@ -497,7 +501,10 @@ export async function verifyInboxPayment(
     } catch (error) {
       const result = relayExceptionResult("Payment settlement error", error);
       log.error("Relay settlement exception", { error: result.error, relayCode: result.relayCode, errorCode: result.errorCode });
-      // Network-level exceptions (fetch failures, timeouts) count as relay failures.
+      // Network-level exceptions (fetch failures, timeouts) count as relay failures toward
+      // the circuit breaker. Timeouts are ambiguous — the tx may have been broadcast before
+      // the timeout fired. See the sponsored path catch block for a note on potential
+      // reduced-weight counting for timeouts in a future improvement.
       if (kv) {
         await recordRelayFailure(
           kv,

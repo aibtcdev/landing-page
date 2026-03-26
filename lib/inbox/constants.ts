@@ -90,17 +90,20 @@ export const RELAY_CIRCUIT_BREAKER_KEY = "inbox:relay:circuit-breaker";
 /**
  * Number of consecutive relay failures that trip the circuit breaker.
  * Once tripped, relay calls are blocked until the TTL expires.
+ * Raised from 5 to 10 to avoid tripping on transient relay hiccups.
  */
-export const RELAY_CIRCUIT_BREAKER_THRESHOLD = 5;
+export const RELAY_CIRCUIT_BREAKER_THRESHOLD = 10;
 
 /**
- * Seconds the circuit breaker stays open after tripping (5 minutes).
+ * Seconds the circuit breaker stays open after tripping (2 minutes).
  * Also the rolling window for counting failures.
+ * Reduced from 300s to 120s so agents recover faster after a relay blip.
  */
-export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 300;
+export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 120;
 
 /**
  * Seconds clients should wait before retrying when circuit is open.
  * Matches RELAY_CIRCUIT_BREAKER_TTL_SECONDS.
+ * Reduced from 300s to 120s in line with the shorter TTL.
  */
-export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 300;
+export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 120;
