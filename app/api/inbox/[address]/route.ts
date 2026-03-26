@@ -942,7 +942,8 @@ export async function POST(
     network,
     relayUrl,
     logger,
-    kv
+    kv,
+    env.X402_RELAY
   );
 
   if (!paymentResult.success) {
