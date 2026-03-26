@@ -41,6 +41,8 @@ import {
   recordRelayFailure,
   resetCircuitBreaker,
 } from "./circuit-breaker";
+import type { RelayRPC } from "./relay-rpc";
+import { submitViaRPC } from "./relay-rpc";
 import type { Logger } from "../logging";
 import { stacksApiFetch, buildHiroHeaders, parseRetryAfterMs } from "../stacks-api-fetch";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
@@ -255,7 +257,8 @@ export async function verifyInboxPayment(
   network: "mainnet" | "testnet" = "mainnet",
   relayUrl: string = DEFAULT_RELAY_URL,
   logger?: Logger,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  relayRPC?: RelayRPC
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
 
@@ -339,7 +342,64 @@ export async function verifyInboxPayment(
   if (isSponsored) {
     log.debug("Routing sponsored transaction to relay", {
       relayUrl,
+      viaRPC: !!relayRPC,
     });
+
+    // --- RPC path: use service binding when available ---
+    if (relayRPC) {
+      const submitParams = {
+        transaction: txHex,
+        settle: {
+          expectedRecipient: recipientStxAddress,
+          minAmount: paymentRequirements.amount,
+          tokenType: "sBTC",
+        },
+      };
+
+      try {
+        const rpcResult = await submitViaRPC(relayRPC, submitParams, log);
+
+        // RPC failure: record circuit breaker for RELAY_ERROR codes, then return
+        if (!rpcResult.success) {
+          if (kv && rpcResult.errorCode === "RELAY_ERROR") {
+            await recordRelayFailure(
+              kv,
+              RELAY_CIRCUIT_BREAKER_KEY,
+              RELAY_CIRCUIT_BREAKER_THRESHOLD,
+              RELAY_CIRCUIT_BREAKER_TTL_SECONDS
+            );
+          }
+          return rpcResult;
+        }
+
+        // RPC success: translate result into settleResult for the shared success path
+        settleResult = {
+          success: true,
+          transaction: rpcResult.paymentTxid || "",
+          payer: rpcResult.payerStxAddress || "",
+          network: networkCAIP2,
+        };
+        relayPaymentStatus = rpcResult.paymentStatus;
+        relayReceiptId = rpcResult.receiptId;
+      } catch (error) {
+        const result = relayExceptionResult("RPC relay error", error);
+        log.error("RPC relay exception", {
+          error: result.error,
+          relayCode: result.relayCode,
+          errorCode: result.errorCode,
+        });
+        if (kv) {
+          await recordRelayFailure(
+            kv,
+            RELAY_CIRCUIT_BREAKER_KEY,
+            RELAY_CIRCUIT_BREAKER_THRESHOLD,
+            RELAY_CIRCUIT_BREAKER_TTL_SECONDS
+          );
+        }
+        return result;
+      }
+    } else {
+    // --- HTTP fallback path: original fetch() logic ---
 
     const relayBody = JSON.stringify({
       transaction: paymentPayload.payload.transaction,
@@ -488,6 +548,7 @@ export async function verifyInboxPayment(
       }
       return result;
     }
+    } // end HTTP fallback else branch
   } else {
     log.debug("Settling non-sponsored transaction via relay", {
       relayUrl,
