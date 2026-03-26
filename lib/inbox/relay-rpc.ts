@@ -14,6 +14,7 @@ import type { InboxPaymentErrorCode, InboxPaymentVerification } from "./x402-ver
 import {
   RPC_POLL_INTERVAL_MS,
   RPC_POLL_MAX_ATTEMPTS,
+  RPC_TOTAL_TIMEOUT_MS,
 } from "./constants";
 
 /** Parameters for RelayRPC.submitPayment() */
@@ -110,6 +111,8 @@ export async function submitViaRPC(
   params: RelaySubmitParams,
   log: Logger
 ): Promise<InboxPaymentVerification> {
+  const deadline = Date.now() + RPC_TOTAL_TIMEOUT_MS;
+
   // Step 1: Submit the payment to the relay queue
   log.debug("RPC: submitting payment", { transaction: params.transaction.slice(0, 16) + "..." });
   const submitResult = await rpc.submitPayment(params);
@@ -134,14 +137,20 @@ export async function submitViaRPC(
   const { paymentId } = submitResult;
   log.debug("RPC: payment queued", { paymentId });
 
-  // Step 2: Poll for settlement result
+  // Step 2: Poll for settlement result (bounded by both attempt count and total deadline)
+  let lastCheckResult: RelayCheckResult | undefined;
   for (let attempt = 0; attempt < RPC_POLL_MAX_ATTEMPTS; attempt++) {
+    if (Date.now() >= deadline) {
+      log.warn("RPC: total timeout reached before poll", { paymentId, attempt });
+      break;
+    }
+
     if (attempt > 0) {
-      // Wait between polls (skip wait on first check — allow immediate status check)
       await new Promise<void>((resolve) => setTimeout(resolve, RPC_POLL_INTERVAL_MS));
     }
 
     const checkResult = await rpc.checkPayment(paymentId);
+    lastCheckResult = checkResult;
     log.debug("RPC: checkPayment", { attempt, paymentId, status: checkResult.status });
 
     if (checkResult.status === "confirmed") {
@@ -152,6 +161,7 @@ export async function submitViaRPC(
         payerStxAddress: checkResult.settlement?.sender || "",
         paymentTxid: checkResult.txid || "",
         paymentStatus,
+        paymentId,
         ...(checkResult.receiptId && { receiptId: checkResult.receiptId }),
       };
     }
@@ -168,6 +178,8 @@ export async function submitViaRPC(
         success: false,
         error: checkResult.error || "Payment settlement failed",
         errorCode,
+        paymentId,
+        ...(checkResult.txid && { paymentTxid: checkResult.txid }),
         ...(checkResult.code != null && { relayCode: checkResult.code }),
         ...(checkResult.error && { relayDetail: checkResult.error }),
       };
@@ -179,6 +191,8 @@ export async function submitViaRPC(
         success: false,
         error: "Relay timed out waiting for settlement. Recover via paymentTxid.",
         errorCode: "SETTLEMENT_TIMEOUT",
+        paymentId,
+        ...(checkResult.txid && { paymentTxid: checkResult.txid }),
         ...(checkResult.receiptId && { receiptId: checkResult.receiptId }),
       };
     }
@@ -186,11 +200,14 @@ export async function submitViaRPC(
     // status is "queued" or "processing" — keep polling
   }
 
-  // Exhausted all poll attempts
-  log.warn("RPC: poll max attempts reached", { paymentId, attempts: RPC_POLL_MAX_ATTEMPTS });
+  // Exhausted all poll attempts or hit total deadline
+  log.warn("RPC: poll exhausted", { paymentId, attempts: RPC_POLL_MAX_ATTEMPTS });
   return {
     success: false,
     error: "RPC poll timed out waiting for settlement. Recover via paymentTxid.",
     errorCode: "SETTLEMENT_TIMEOUT",
+    paymentId,
+    ...(lastCheckResult?.txid && { paymentTxid: lastCheckResult.txid }),
+    ...(lastCheckResult?.receiptId && { receiptId: lastCheckResult.receiptId }),
   };
 }

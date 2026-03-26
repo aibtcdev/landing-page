@@ -136,6 +136,8 @@ export interface InboxPaymentVerification {
   receiptId?: string;
   /** Seconds to wait before retrying (only set for retryable errors like NONCE_CONFLICT). */
   retryAfterSeconds?: number;
+  /** RPC payment ID for continued polling or log correlation. */
+  paymentId?: string;
 }
 
 /**

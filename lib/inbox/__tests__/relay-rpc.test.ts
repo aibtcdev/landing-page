@@ -634,7 +634,7 @@ describe("submitViaRPC", () => {
       await resultPromise;
 
       expect(mockLogger.warn).toHaveBeenCalledWith(
-        "RPC: poll max attempts reached",
+        "RPC: poll exhausted",
         expect.objectContaining({ paymentId: "pay-log-exhaust" })
       );
     });
