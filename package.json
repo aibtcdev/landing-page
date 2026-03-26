@@ -34,7 +34,8 @@
   },
   "overrides": {
     "undici": ">=7.24.0",
-    "flatted": ">=3.4.0"
+    "flatted": ">=3.4.0",
+    "picomatch": ">=4.0.4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260212.0",
