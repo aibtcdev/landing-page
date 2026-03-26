@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.0](https://github.com/aibtcdev/landing-page/compare/v1.34.0...v1.35.0) (2026-03-26)
+
+
+### Features
+
+* migrate inbox payments to x402 relay RPC service binding ([#516](https://github.com/aibtcdev/landing-page/issues/516)) ([89d524f](https://github.com/aibtcdev/landing-page/commit/89d524f7d26e79e548d36d4ca481cd6361b3645c))
+
 ## [1.34.0](https://github.com/aibtcdev/landing-page/compare/v1.33.0...v1.34.0) (2026-03-25)
 
 
