@@ -8,4 +8,5 @@ interface CloudflareEnv {
   LOGS?: unknown; // Worker-logs RPC service binding (type guarded via isLogsRPC)
   X402_NETWORK?: "mainnet" | "testnet"; // Stacks network for x402 verification
   X402_RELAY_URL?: string; // x402 relay URL for all payment settlement (default: https://x402-relay.aibtc.com)
+  X402_RELAY?: import("./lib/inbox/relay-rpc").RelayRPC; // x402 sponsor relay RPC service binding (undefined in local dev)
 }
