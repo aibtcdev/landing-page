@@ -29,10 +29,22 @@ export {
   RELAY_CIRCUIT_BREAKER_THRESHOLD,
   RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
+  RPC_POLL_INTERVAL_MS,
+  RPC_POLL_MAX_ATTEMPTS,
+  RPC_TOTAL_TIMEOUT_MS,
   buildMarkReadMessage,
   buildReplyMessage,
   buildSenderAuthMessage,
 } from "./constants";
+
+// RPC Types and Helpers
+export type {
+  RelayRPC,
+  RelaySettleOptions,
+  RelaySubmitResult,
+  RelayCheckResult,
+} from "./relay-rpc";
+export { submitViaRPC, mapRPCErrorCode } from "./relay-rpc";
 
 // Circuit Breaker
 export type { CircuitBreakerState } from "./circuit-breaker";

@@ -25,6 +25,25 @@ import { hasAchievement, grantAchievement } from "@/lib/achievements";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
+/** Static lookup for SENDER_NONCE_* error responses (RPC path). */
+const SENDER_NONCE_ERRORS: Record<string, { error: string; retryAfter: number; nextSteps: string }> = {
+  SENDER_NONCE_STALE: {
+    error: "Payment rejected: your transaction nonce is stale (below current account nonce). Re-sign your transaction with the current nonce and retry.",
+    retryAfter: 0,
+    nextSteps: "Fetch the current account nonce, re-sign your transaction, and resubmit.",
+  },
+  SENDER_NONCE_DUPLICATE: {
+    error: "Payment rejected: a transaction with this nonce is already queued. Wait for it to settle or use a different nonce.",
+    retryAfter: 30,
+    nextSteps: "Wait 30 seconds for the queued transaction to settle, then retry. If you intended a new payment, increment the nonce.",
+  },
+  SENDER_NONCE_GAP: {
+    error: "Payment rejected: your transaction nonce skips ahead of the current account nonce. Sign with the correct sequential nonce.",
+    retryAfter: 0,
+    nextSteps: "Fetch the current account nonce, re-sign your transaction with the next sequential nonce, and resubmit.",
+  },
+};
+
 /**
  * Verify optional Bitcoin sender signature over message content.
  * Supports both BIP-137 (address recovered from signature) and BIP-322
@@ -942,7 +961,8 @@ export async function POST(
     network,
     relayUrl,
     logger,
-    kv
+    kv,
+    env.X402_RELAY
   );
 
   if (!paymentResult.success) {
@@ -1078,6 +1098,25 @@ export async function POST(
         {
           status: 409,
           headers: { "Retry-After": "60" },
+        }
+      );
+    }
+
+    // SENDER_NONCE_* — RPC path nonce rejections. All return HTTP 409 with retry guidance.
+    const nonceError = errorCode ? SENDER_NONCE_ERRORS[errorCode] : undefined;
+    if (nonceError) {
+      return NextResponse.json(
+        {
+          error: nonceError.error,
+          code: errorCode,
+          retryable: true,
+          retryAfter: nonceError.retryAfter,
+          nextSteps: nonceError.nextSteps,
+          ...relayDiag,
+        },
+        {
+          status: 409,
+          headers: { "Retry-After": String(nonceError.retryAfter) },
         }
       );
     }
