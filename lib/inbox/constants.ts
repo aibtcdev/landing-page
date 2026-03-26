@@ -111,10 +111,7 @@ export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 60;
 
 /** Interval between checkPayment() polls (ms). */
 export const RPC_POLL_INTERVAL_MS = 2_000;
-/**
- * Maximum number of checkPayment() polls before giving up.
- * Increased from 8 to 12 to give burst traffic queue backlog more room to drain.
- */
+/** Maximum number of checkPayment() polls before giving up. */
 export const RPC_POLL_MAX_ATTEMPTS = 12;
 /**
  * Total RPC timeout budget (ms). Must fit within Workers 30s CPU limit.
