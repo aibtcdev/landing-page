@@ -3,6 +3,7 @@
  *
  * These interfaces match the RelayRPC WorkerEntrypoint exposed by the
  * x402-sponsor-relay worker (x402Stacks/x402-sponsor-relay).
+ * Source of truth: x402-sponsor-relay/src/rpc.ts
  *
  * submitViaRPC() replaces the HTTP fetch path in verifyInboxPayment()
  * when a service binding is available, using submitPayment() + polling
@@ -17,45 +18,68 @@ import {
   RPC_TOTAL_TIMEOUT_MS,
 } from "./constants";
 
-/** Parameters for RelayRPC.submitPayment() */
-export interface RelaySubmitParams {
-  transaction: string;          // hex-serialized Stacks transaction
-  maxTimeoutSeconds?: number;   // optional polling limit for the relay
-  settle?: {
-    expectedRecipient: string;
-    minAmount: string;
-    tokenType: string;
-  };
+// ---------------------------------------------------------------------------
+// Types matching x402-sponsor-relay/src/rpc.ts SubmitPaymentResult
+// ---------------------------------------------------------------------------
+
+/** Settlement options passed to submitPayment (mirrors relay SettleOptions). */
+export interface RelaySettleOptions {
+  expectedRecipient: string;
+  minAmount: string;
+  tokenType?: string;
+  expectedSender?: string;
+  maxTimeoutSeconds?: number;
 }
 
-/** Response from RelayRPC.submitPayment() */
+/** Sender nonce health info returned by the relay. */
+export interface RelaySenderNonceInfo {
+  provided: number;
+  expected: number;
+  healthy: boolean;
+  warning?: string;
+}
+
+/** Response from RelayRPC.submitPayment(). Mirrors SubmitPaymentResult. */
 export interface RelaySubmitResult {
-  paymentId: string;
-  status: "queued" | "rejected";
-  error?: string;
-  code?: string;               // e.g. SENDER_NONCE_STALE
-  retryAfter?: number;
-}
-
-/** Response from RelayRPC.checkPayment() */
-export interface RelayCheckResult {
-  paymentId: string;
-  status: "queued" | "processing" | "confirmed" | "failed" | "timeout";
-  txid?: string;
-  receiptId?: string;
+  accepted: boolean;
+  paymentId?: string;
+  status?: string;
+  senderNonce?: RelaySenderNonceInfo;
+  warning?: {
+    code: string;
+    detail: string;
+    senderNonce: { provided: number; expected: number; lastSeen: number };
+    help: string;
+    action: string;
+  };
   error?: string;
   code?: string;
-  settlement?: {
-    status: string;
-    sender?: string;
-    recipient?: string;
-    amount?: string;
-  };
+  retryable?: boolean;
+  help?: string;
+  action?: string;
+  checkStatusUrl?: string;
 }
 
-/** Typed interface for the X402_RELAY service binding RPC methods. */
+/** Response from RelayRPC.checkPayment(). Mirrors CheckPaymentResult. */
+export interface RelayCheckResult {
+  paymentId: string;
+  status: string;
+  txid?: string;
+  blockHeight?: number;
+  confirmedAt?: string;
+  explorerUrl?: string;
+  error?: string;
+  errorCode?: string;
+  retryable?: boolean;
+  senderNonceInfo?: RelaySenderNonceInfo;
+}
+
+/**
+ * Typed interface for the X402_RELAY service binding RPC methods.
+ * Must match the actual relay WorkerEntrypoint method signatures.
+ */
 export interface RelayRPC {
-  submitPayment(params: RelaySubmitParams): Promise<RelaySubmitResult>;
+  submitPayment(txHex: string, settle?: RelaySettleOptions): Promise<RelaySubmitResult>;
   checkPayment(paymentId: string): Promise<RelayCheckResult>;
 }
 
@@ -65,6 +89,9 @@ const RPC_ERROR_CODE_MAP: Record<string, InboxPaymentErrorCode> = {
   SENDER_NONCE_STALE: "SENDER_NONCE_STALE",
   SENDER_NONCE_DUPLICATE: "SENDER_NONCE_DUPLICATE",
   SENDER_NONCE_GAP: "SENDER_NONCE_GAP",
+  // Validation errors
+  INVALID_TRANSACTION: "PAYMENT_REJECTED",
+  NOT_SPONSORED: "PAYMENT_REJECTED",
   // Broadcast failures
   BROADCAST_FAILED: "BROADCAST_FAILED",
   TX_BROADCAST_ERROR: "BROADCAST_FAILED",
@@ -78,6 +105,8 @@ const RPC_ERROR_CODE_MAP: Record<string, InboxPaymentErrorCode> = {
   CLIENT_NONCE_CONFLICT: "NONCE_CONFLICT",
   CLIENT_BAD_NONCE: "NONCE_CONFLICT",
   TOO_MUCH_CHAINING: "NONCE_CONFLICT",
+  // Internal
+  INTERNAL_ERROR: "RELAY_ERROR",
 };
 
 /**
@@ -92,32 +121,35 @@ export function mapRPCErrorCode(
   return RPC_ERROR_CODE_MAP[code] ?? "RELAY_ERROR";
 }
 
+/** Terminal statuses where polling should stop. */
+const TERMINAL_STATUSES = new Set(["confirmed", "failed", "replaced", "not_found"]);
+
+/** In-progress statuses where we keep polling. */
+const PENDING_STATUSES = new Set(["queued", "submitted", "broadcasting", "mempool"]);
+
 /**
  * Submit a sponsored payment via RPC service binding and poll for settlement.
  *
- * Calls submitPayment() to enqueue the transaction, then polls checkPayment()
- * at RPC_POLL_INTERVAL_MS intervals up to RPC_POLL_MAX_ATTEMPTS times.
+ * Calls submitPayment(txHex, settle) to enqueue the transaction, then polls
+ * checkPayment() at RPC_POLL_INTERVAL_MS intervals up to RPC_POLL_MAX_ATTEMPTS
+ * times or RPC_TOTAL_TIMEOUT_MS total.
  *
  * Throws on RPC call exceptions — the caller is responsible for catching
  * those and recording circuit breaker failures.
- *
- * @param rpc - The X402_RELAY service binding instance
- * @param params - Transaction params (transaction hex + settle constraints)
- * @param log - Logger instance for diagnostics
- * @returns InboxPaymentVerification with success/failure details
  */
 export async function submitViaRPC(
   rpc: RelayRPC,
-  params: RelaySubmitParams,
+  txHex: string,
+  settle: RelaySettleOptions | undefined,
   log: Logger
 ): Promise<InboxPaymentVerification> {
   const deadline = Date.now() + RPC_TOTAL_TIMEOUT_MS;
 
   // Step 1: Submit the payment to the relay queue
-  log.debug("RPC: submitting payment", { transaction: params.transaction.slice(0, 16) + "..." });
-  const submitResult = await rpc.submitPayment(params);
+  log.debug("RPC: submitting payment", { transaction: txHex.slice(0, 16) + "..." });
+  const submitResult = await rpc.submitPayment(txHex, settle);
 
-  if (submitResult.status === "rejected") {
+  if (!submitResult.accepted) {
     const errorCode = mapRPCErrorCode(submitResult.code);
     log.warn("RPC: submitPayment rejected", {
       code: submitResult.code,
@@ -130,12 +162,15 @@ export async function submitViaRPC(
       errorCode,
       ...(submitResult.code != null && { relayCode: submitResult.code }),
       ...(submitResult.error && { relayDetail: submitResult.error }),
-      ...(submitResult.retryAfter != null && { retryAfterSeconds: submitResult.retryAfter }),
     };
   }
 
-  const { paymentId } = submitResult;
-  log.debug("RPC: payment queued", { paymentId });
+  const paymentId = submitResult.paymentId!;
+  log.debug("RPC: payment queued", {
+    paymentId,
+    status: submitResult.status,
+    ...(submitResult.warning && { warning: submitResult.warning.code }),
+  });
 
   // Step 2: Poll for settlement result (bounded by both attempt count and total deadline)
   let lastCheckResult: RelayCheckResult | undefined;
@@ -154,50 +189,47 @@ export async function submitViaRPC(
     log.debug("RPC: checkPayment", { attempt, paymentId, status: checkResult.status });
 
     if (checkResult.status === "confirmed") {
-      const isPending = checkResult.settlement?.status === "pending";
-      const paymentStatus = isPending ? "pending" : "confirmed";
       return {
         success: true,
-        payerStxAddress: checkResult.settlement?.sender || "",
         paymentTxid: checkResult.txid || "",
-        paymentStatus,
+        paymentStatus: "confirmed",
         paymentId,
-        ...(checkResult.receiptId && { receiptId: checkResult.receiptId }),
       };
     }
 
-    if (checkResult.status === "failed") {
-      const errorCode = mapRPCErrorCode(checkResult.code);
+    if (checkResult.status === "failed" || checkResult.status === "replaced") {
+      const errorCode = mapRPCErrorCode(checkResult.errorCode);
       log.warn("RPC: payment failed", {
         paymentId,
-        code: checkResult.code,
-        errorCode,
+        status: checkResult.status,
+        errorCode: checkResult.errorCode,
         error: checkResult.error,
       });
       return {
         success: false,
-        error: checkResult.error || "Payment settlement failed",
+        error: checkResult.error || `Payment ${checkResult.status}`,
         errorCode,
         paymentId,
         ...(checkResult.txid && { paymentTxid: checkResult.txid }),
-        ...(checkResult.code != null && { relayCode: checkResult.code }),
+        ...(checkResult.errorCode != null && { relayCode: checkResult.errorCode }),
         ...(checkResult.error && { relayDetail: checkResult.error }),
       };
     }
 
-    if (checkResult.status === "timeout") {
-      log.warn("RPC: relay timed out polling payment", { paymentId });
+    if (checkResult.status === "not_found") {
+      log.warn("RPC: payment not found", { paymentId });
       return {
         success: false,
-        error: "Relay timed out waiting for settlement. Recover via paymentTxid.",
-        errorCode: "SETTLEMENT_TIMEOUT",
+        error: "Payment not found in relay — it may have expired.",
+        errorCode: "RELAY_ERROR",
         paymentId,
-        ...(checkResult.txid && { paymentTxid: checkResult.txid }),
-        ...(checkResult.receiptId && { receiptId: checkResult.receiptId }),
       };
     }
 
-    // status is "queued" or "processing" — keep polling
+    // status is "queued", "submitted", "broadcasting", "mempool" — keep polling
+    if (!PENDING_STATUSES.has(checkResult.status)) {
+      log.warn("RPC: unexpected status", { paymentId, status: checkResult.status });
+    }
   }
 
   // Exhausted all poll attempts or hit total deadline
@@ -208,6 +240,5 @@ export async function submitViaRPC(
     errorCode: "SETTLEMENT_TIMEOUT",
     paymentId,
     ...(lastCheckResult?.txid && { paymentTxid: lastCheckResult.txid }),
-    ...(lastCheckResult?.receiptId && { receiptId: lastCheckResult.receiptId }),
   };
 }

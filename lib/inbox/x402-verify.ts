@@ -20,7 +20,7 @@ import type {
   SettlementResponseV2,
   PaymentRequirementsV2,
 } from "x402-stacks";
-import { deserializeTransaction, AuthType, type StacksTransactionWire } from "@stacks/transactions";
+import { deserializeTransaction, AuthType, StacksWireType, addressToString, addressHashModeToVersion, type StacksTransactionWire } from "@stacks/transactions";
 import {
   buildInboxPaymentRequirements,
   getSBTCAsset,
@@ -349,17 +349,14 @@ export async function verifyInboxPayment(
 
     // --- RPC path: use service binding when available ---
     if (relayRPC) {
-      const submitParams = {
-        transaction: txHex,
-        settle: {
-          expectedRecipient: recipientStxAddress,
-          minAmount: paymentRequirements.amount,
-          tokenType: "sBTC",
-        },
+      const settle = {
+        expectedRecipient: recipientStxAddress,
+        minAmount: paymentRequirements.amount,
+        tokenType: "sBTC" as const,
       };
 
       try {
-        const rpcResult = await submitViaRPC(relayRPC, submitParams, log);
+        const rpcResult = await submitViaRPC(relayRPC, txHex, settle, log);
 
         // RPC failure: record circuit breaker for RELAY_ERROR codes, then return
         if (!rpcResult.success) {
@@ -374,15 +371,18 @@ export async function verifyInboxPayment(
           return rpcResult;
         }
 
-        // RPC success: translate result into settleResult for the shared success path
+        // RPC success: translate result into settleResult for the shared success path.
+        // checkPayment() doesn't return sender address — derive from the tx origin.
+        const sc = tx.auth.spendingCondition;
+        const senderVersion = addressHashModeToVersion(sc.hashMode, network);
+        const senderAddress = addressToString({ type: StacksWireType.Address, version: senderVersion, hash160: sc.signer });
         settleResult = {
           success: true,
           transaction: rpcResult.paymentTxid || "",
-          payer: rpcResult.payerStxAddress || "",
+          payer: senderAddress,
           network: networkCAIP2,
         };
         relayPaymentStatus = rpcResult.paymentStatus;
-        relayReceiptId = rpcResult.receiptId;
       } catch (error) {
         const result = relayExceptionResult("RPC relay error", error);
         log.error("RPC relay exception", {

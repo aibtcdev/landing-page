@@ -40,7 +40,7 @@ export {
 // RPC Types and Helpers
 export type {
   RelayRPC,
-  RelaySubmitParams,
+  RelaySettleOptions,
   RelaySubmitResult,
   RelayCheckResult,
 } from "./relay-rpc";

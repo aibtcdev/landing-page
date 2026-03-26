@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { mapRPCErrorCode, submitViaRPC } from "../relay-rpc";
-import type { RelayRPC, RelaySubmitParams } from "../relay-rpc";
+import type { RelayRPC, RelaySettleOptions } from "../relay-rpc";
 import type { Logger } from "@/lib/logging";
 
 const mockLogger: Logger = {
@@ -10,13 +10,11 @@ const mockLogger: Logger = {
   error: vi.fn(),
 };
 
-const baseParams: RelaySubmitParams = {
-  transaction: "aabbccdd112233445566778899001122334455667788990011223344556677889900",
-  settle: {
-    expectedRecipient: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-    minAmount: "100",
-    tokenType: "sBTC",
-  },
+const baseTxHex = "aabbccdd112233445566778899001122334455667788990011223344556677889900";
+const baseSettle: RelaySettleOptions = {
+  expectedRecipient: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+  minAmount: "100",
+  tokenType: "sBTC",
 };
 
 describe("mapRPCErrorCode", () => {
@@ -88,6 +86,22 @@ describe("mapRPCErrorCode", () => {
     });
   });
 
+  describe("validation error codes", () => {
+    it("maps INVALID_TRANSACTION to PAYMENT_REJECTED", () => {
+      expect(mapRPCErrorCode("INVALID_TRANSACTION")).toBe("PAYMENT_REJECTED");
+    });
+
+    it("maps NOT_SPONSORED to PAYMENT_REJECTED", () => {
+      expect(mapRPCErrorCode("NOT_SPONSORED")).toBe("PAYMENT_REJECTED");
+    });
+  });
+
+  describe("internal error codes", () => {
+    it("maps INTERNAL_ERROR to RELAY_ERROR", () => {
+      expect(mapRPCErrorCode("INTERNAL_ERROR")).toBe("RELAY_ERROR");
+    });
+  });
+
   describe("unknown codes", () => {
     it("returns RELAY_ERROR for unrecognized code", () => {
       expect(mapRPCErrorCode("COMPLETELY_UNKNOWN_CODE")).toBe("RELAY_ERROR");
@@ -113,15 +127,14 @@ describe("submitViaRPC", () => {
     it("returns failure when submitPayment is rejected with SENDER_NONCE_STALE", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "",
-          status: "rejected",
+          accepted: false,
           code: "SENDER_NONCE_STALE",
           error: "nonce is stale",
         }),
         checkPayment: vi.fn(),
       };
 
-      const result = await submitViaRPC(rpc, baseParams, mockLogger);
+      const result = await submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
 
       expect(result.success).toBe(false);
       expect(result.errorCode).toBe("SENDER_NONCE_STALE");
@@ -133,108 +146,93 @@ describe("submitViaRPC", () => {
     it("returns failure when submitPayment is rejected with SENDER_NONCE_DUPLICATE", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "",
-          status: "rejected",
+          accepted: false,
           code: "SENDER_NONCE_DUPLICATE",
           error: "duplicate nonce in queue",
         }),
         checkPayment: vi.fn(),
       };
 
-      const result = await submitViaRPC(rpc, baseParams, mockLogger);
+      const result = await submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
 
       expect(result.success).toBe(false);
       expect(result.errorCode).toBe("SENDER_NONCE_DUPLICATE");
     });
 
-    it("returns failure when submitPayment is rejected with SENDER_NONCE_GAP", async () => {
+    it("returns failure when submitPayment is rejected with INVALID_TRANSACTION", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "",
-          status: "rejected",
-          code: "SENDER_NONCE_GAP",
-          error: "nonce gap detected",
+          accepted: false,
+          code: "INVALID_TRANSACTION",
+          error: "Could not deserialize transaction",
+          retryable: false,
         }),
         checkPayment: vi.fn(),
       };
 
-      const result = await submitViaRPC(rpc, baseParams, mockLogger);
+      const result = await submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
 
       expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("SENDER_NONCE_GAP");
+      expect(result.errorCode).toBe("PAYMENT_REJECTED");
     });
 
     it("returns RELAY_ERROR when submitPayment is rejected without code", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "",
-          status: "rejected",
+          accepted: false,
           error: "unknown rejection reason",
         }),
         checkPayment: vi.fn(),
       };
 
-      const result = await submitViaRPC(rpc, baseParams, mockLogger);
+      const result = await submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
 
       expect(result.success).toBe(false);
       expect(result.errorCode).toBe("RELAY_ERROR");
       expect(result.error).toBe("unknown rejection reason");
     });
 
-    it("includes retryAfterSeconds when submitPayment returns retryAfter", async () => {
-      const rpc: RelayRPC = {
-        submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "",
-          status: "rejected",
-          code: "SENDER_NONCE_DUPLICATE",
-          error: "already queued",
-          retryAfter: 5,
-        }),
-        checkPayment: vi.fn(),
-      };
-
-      const result = await submitViaRPC(rpc, baseParams, mockLogger);
-
-      expect(result.success).toBe(false);
-      expect(result.retryAfterSeconds).toBe(5);
-    });
-
-    it("omits retryAfterSeconds when submitPayment does not include retryAfter", async () => {
-      const rpc: RelayRPC = {
-        submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "",
-          status: "rejected",
-          code: "SENDER_NONCE_STALE",
-        }),
-        checkPayment: vi.fn(),
-      };
-
-      const result = await submitViaRPC(rpc, baseParams, mockLogger);
-
-      expect(result.success).toBe(false);
-      expect(result.retryAfterSeconds).toBeUndefined();
-    });
-
     it("uses default error message when submitPayment rejection has no error field", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "",
-          status: "rejected",
+          accepted: false,
         }),
         checkPayment: vi.fn(),
       };
 
-      const result = await submitViaRPC(rpc, baseParams, mockLogger);
+      const result = await submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Payment submission rejected by relay");
     });
+
+    it("passes txHex and settle as separate args to submitPayment", async () => {
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay-args-check",
+          status: "queued",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay-args-check",
+          status: "confirmed",
+          txid: "args-txid",
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      await resultPromise;
+
+      expect(rpc.submitPayment).toHaveBeenCalledWith(baseTxHex, baseSettle);
+    });
   });
 
   describe("successful settlement paths", () => {
-    it("returns success on confirmed payment with sender and txid", async () => {
+    it("returns success on confirmed payment with txid", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-001",
           status: "queued",
         }),
@@ -242,98 +240,71 @@ describe("submitViaRPC", () => {
           paymentId: "pay-001",
           status: "confirmed",
           txid: "abc123txid",
-          settlement: {
-            status: "confirmed",
-            sender: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-            recipient: "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE",
-            amount: "100",
-          },
+          blockHeight: 12345,
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
       expect(result.success).toBe(true);
-      expect(result.payerStxAddress).toBe("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
       expect(result.paymentTxid).toBe("abc123txid");
       expect(result.paymentStatus).toBe("confirmed");
+      expect(result.paymentId).toBe("pay-001");
       expect(rpc.checkPayment).toHaveBeenCalledWith("pay-001");
     });
 
-    it("returns paymentStatus pending when settlement.status is pending", async () => {
+    it("includes paymentId in success result", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-002",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
           paymentId: "pay-002",
           status: "confirmed",
-          txid: "pendingTxid",
-          settlement: {
-            status: "pending",
-            sender: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-          },
+          txid: "txid002",
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
       expect(result.success).toBe(true);
-      expect(result.paymentStatus).toBe("pending");
-      expect(result.paymentTxid).toBe("pendingTxid");
+      expect(result.paymentId).toBe("pay-002");
     });
 
-    it("includes receiptId when checkPayment returns one", async () => {
+    it("handles nonce gap warning (accepted=true with warning)", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-003",
-          status: "queued",
-        }),
-        checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-003",
-          status: "confirmed",
-          txid: "txidWithReceipt",
-          receiptId: "rcpt-abc",
-          settlement: {
-            status: "confirmed",
-            sender: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+          accepted: true,
+          paymentId: "pay-gap",
+          status: "queued_with_warning",
+          warning: {
+            code: "SENDER_NONCE_GAP",
+            detail: "nonce gap detected",
+            senderNonce: { provided: 5, expected: 3, lastSeen: 2 },
+            help: "https://...",
+            action: "check nonce",
           },
         }),
-      };
-
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
-      await vi.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(result.success).toBe(true);
-      expect(result.receiptId).toBe("rcpt-abc");
-    });
-
-    it("handles missing sender in settlement (returns empty string)", async () => {
-      const rpc: RelayRPC = {
-        submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-004",
-          status: "queued",
-        }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-004",
+          paymentId: "pay-gap",
           status: "confirmed",
-          txid: "txidNoSender",
-          settlement: { status: "confirmed" },
+          txid: "gap-txid",
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
+      // Nonce gap is accepted — should proceed to polling and succeed
       expect(result.success).toBe(true);
-      expect(result.payerStxAddress).toBe("");
+      expect(result.paymentTxid).toBe("gap-txid");
     });
   });
 
@@ -341,18 +312,19 @@ describe("submitViaRPC", () => {
     it("returns failure when checkPayment returns status failed", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-fail-001",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
           paymentId: "pay-fail-001",
           status: "failed",
-          code: "BROADCAST_FAILED",
+          errorCode: "BROADCAST_FAILED",
           error: "tx rejected by mempool",
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
@@ -362,9 +334,10 @@ describe("submitViaRPC", () => {
       expect(result.relayDetail).toBe("tx rejected by mempool");
     });
 
-    it("returns RELAY_ERROR when checkPayment fails without code", async () => {
+    it("returns RELAY_ERROR when checkPayment fails without errorCode", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-fail-002",
           status: "queued",
         }),
@@ -375,7 +348,7 @@ describe("submitViaRPC", () => {
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
@@ -386,6 +359,7 @@ describe("submitViaRPC", () => {
     it("uses default error message when failed check has no error field", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-fail-003",
           status: "queued",
         }),
@@ -395,57 +369,56 @@ describe("submitViaRPC", () => {
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
       expect(result.success).toBe(false);
-      expect(result.error).toBe("Payment settlement failed");
+      expect(result.error).toBe("Payment failed");
     });
-  });
 
-  describe("relay timeout response", () => {
-    it("returns SETTLEMENT_TIMEOUT when checkPayment returns timeout status", async () => {
+    it("returns failure when checkPayment returns replaced status", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-timeout-001",
+          accepted: true,
+          paymentId: "pay-replaced",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-timeout-001",
-          status: "timeout",
+          paymentId: "pay-replaced",
+          status: "replaced",
+          error: "sponsor replaced transaction",
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
       expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
-      expect(result.error).toContain("paymentTxid");
+      expect(result.error).toBe("sponsor replaced transaction");
     });
 
-    it("includes receiptId in timeout result when checkPayment provides one", async () => {
+    it("returns failure when checkPayment returns not_found", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-timeout-002",
+          accepted: true,
+          paymentId: "pay-notfound",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-timeout-002",
-          status: "timeout",
-          receiptId: "rcpt-timeout-xyz",
+          paymentId: "pay-notfound",
+          status: "not_found",
+          error: "Payment pay-notfound not found or expired",
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
       expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
-      expect(result.receiptId).toBe("rcpt-timeout-xyz");
+      expect(result.errorCode).toBe("RELAY_ERROR");
     });
   });
 
@@ -453,6 +426,7 @@ describe("submitViaRPC", () => {
     it("returns SETTLEMENT_TIMEOUT when all poll attempts return queued", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-exhaust-001",
           status: "queued",
         }),
@@ -462,30 +436,31 @@ describe("submitViaRPC", () => {
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
       expect(result.success).toBe(false);
       expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
       expect(result.error).toContain("paymentTxid");
-      // Should have polled exactly RPC_POLL_MAX_ATTEMPTS (8) times
+      expect(result.paymentId).toBe("pay-exhaust-001");
       expect(rpc.checkPayment).toHaveBeenCalledTimes(8);
     });
 
-    it("returns SETTLEMENT_TIMEOUT when all poll attempts return processing", async () => {
+    it("returns SETTLEMENT_TIMEOUT when all poll attempts return broadcasting", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-exhaust-002",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
           paymentId: "pay-exhaust-002",
-          status: "processing",
+          status: "broadcasting",
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
@@ -493,40 +468,60 @@ describe("submitViaRPC", () => {
       expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
       expect(rpc.checkPayment).toHaveBeenCalledTimes(8);
     });
+
+    it("preserves txid from last check result on exhaustion", async () => {
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay-exhaust-txid",
+          status: "queued",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay-exhaust-txid",
+          status: "mempool",
+          txid: "broadcast-but-not-confirmed",
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.paymentTxid).toBe("broadcast-but-not-confirmed");
+    });
   });
 
   describe("multi-poll — confirmed after several attempts", () => {
-    it("succeeds after polling through queued and processing states", async () => {
+    it("succeeds after polling through queued, broadcasting, and mempool states", async () => {
       let callCount = 0;
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-multi-001",
           status: "queued",
         }),
         checkPayment: vi.fn().mockImplementation(async () => {
           callCount++;
           if (callCount === 1) return { paymentId: "pay-multi-001", status: "queued" };
-          if (callCount === 2) return { paymentId: "pay-multi-001", status: "processing" };
+          if (callCount === 2) return { paymentId: "pay-multi-001", status: "broadcasting" };
+          if (callCount === 3) return { paymentId: "pay-multi-001", status: "mempool", txid: "multi-poll-txid" };
           return {
             paymentId: "pay-multi-001",
             status: "confirmed",
             txid: "multi-poll-txid",
-            settlement: {
-              status: "confirmed",
-              sender: "SPMultiPollSender",
-            },
+            blockHeight: 99999,
           };
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
       expect(result.success).toBe(true);
       expect(result.paymentTxid).toBe("multi-poll-txid");
-      expect(result.payerStxAddress).toBe("SPMultiPollSender");
-      expect(rpc.checkPayment).toHaveBeenCalledTimes(3);
+      expect(rpc.checkPayment).toHaveBeenCalledTimes(4);
     });
   });
 
@@ -537,7 +532,7 @@ describe("submitViaRPC", () => {
         checkPayment: vi.fn(),
       };
 
-      await expect(submitViaRPC(rpc, baseParams, mockLogger)).rejects.toThrow(
+      await expect(submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger)).rejects.toThrow(
         "RPC connection refused"
       );
     });
@@ -547,16 +542,15 @@ describe("submitViaRPC", () => {
     it("re-throws when checkPayment rejects with an exception", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-throw-001",
           status: "queued",
         }),
         checkPayment: vi.fn().mockRejectedValue(new Error("RPC stream closed")),
       };
 
-      // Attach the rejection handler synchronously before running timers
-      // to avoid the PromiseRejectionHandledWarning unhandled rejection.
       const resultPromise = expect(
-        submitViaRPC(rpc, baseParams, mockLogger)
+        submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger)
       ).rejects.toThrow("RPC stream closed");
       await vi.runAllTimersAsync();
       await resultPromise;
@@ -567,6 +561,7 @@ describe("submitViaRPC", () => {
     it("logs debug on submit and on each poll check", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-log-001",
           status: "queued",
         }),
@@ -574,11 +569,10 @@ describe("submitViaRPC", () => {
           paymentId: "pay-log-001",
           status: "confirmed",
           txid: "log-txid",
-          settlement: { status: "confirmed", sender: "SPLogSender" },
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       await resultPromise;
 
@@ -588,7 +582,7 @@ describe("submitViaRPC", () => {
       );
       expect(mockLogger.debug).toHaveBeenCalledWith(
         "RPC: payment queued",
-        { paymentId: "pay-log-001" }
+        expect.objectContaining({ paymentId: "pay-log-001" })
       );
       expect(mockLogger.debug).toHaveBeenCalledWith(
         "RPC: checkPayment",
@@ -599,15 +593,14 @@ describe("submitViaRPC", () => {
     it("logs warn on submitPayment rejection", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
-          paymentId: "",
-          status: "rejected",
+          accepted: false,
           code: "SENDER_NONCE_STALE",
           error: "stale nonce",
         }),
         checkPayment: vi.fn(),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       await resultPromise;
 
@@ -620,6 +613,7 @@ describe("submitViaRPC", () => {
     it("logs warn on poll exhaustion", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
           paymentId: "pay-log-exhaust",
           status: "queued",
         }),
@@ -629,7 +623,7 @@ describe("submitViaRPC", () => {
         }),
       };
 
-      const resultPromise = submitViaRPC(rpc, baseParams, mockLogger);
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       await resultPromise;
 
