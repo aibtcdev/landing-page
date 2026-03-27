@@ -34,7 +34,10 @@ import {
   RELAY_CIRCUIT_BREAKER_THRESHOLD,
   RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
+  PAYMENT_FAILURE_RETRY_AFTER_SECONDS,
+  CACHEABLE_PAYMENT_FAILURE_CODES,
 } from "./constants";
+import { getCachedPaymentFailure, cachePaymentFailure } from "./payment-cache";
 import type { RelayPaymentStatus } from "./types";
 import {
   checkCircuitBreaker,
@@ -383,6 +386,37 @@ export async function verifyInboxPayment(
   }
   const isSponsored = tx.auth.authType === AuthType.Sponsored;
 
+  // Extract sender STX address from the spending condition (works for both sponsored
+  // and standard auth types — sponsored tx uses the origin's spending condition).
+  const sc = tx.auth.spendingCondition;
+  const senderVersion = addressHashModeToVersion(sc.hashMode, network);
+  const senderStxAddress = addressToString({
+    type: StacksWireType.Address,
+    version: senderVersion,
+    hash160: sc.signer,
+  });
+
+  // Check per-sender payment failure cache before hitting the relay.
+  // When a sender's wallet had insufficient funds recently, skip the relay and
+  // return the cached error immediately with Retry-After guidance.
+  if (kv) {
+    const cached = await getCachedPaymentFailure(kv, senderStxAddress);
+    if (cached) {
+      log.warn("Payment failure cache hit — skipping relay", {
+        senderStxAddress,
+        errorCode: cached.errorCode,
+        cachedAt: cached.cachedAt,
+      });
+      return {
+        success: false,
+        error:
+          "Payment rejected: insufficient sBTC balance (cached). Please add sBTC to your wallet before retrying.",
+        errorCode: "INSUFFICIENT_FUNDS",
+        retryAfterSeconds: PAYMENT_FAILURE_RETRY_AFTER_SECONDS,
+      };
+    }
+  }
+
   // Route all transactions through the relay (sponsored and non-sponsored)
   let settleResult: SettlementResponseV2;
   // Relay-specific fields populated only for sponsored transactions.
@@ -406,7 +440,7 @@ export async function verifyInboxPayment(
       try {
         const rpcResult = await submitViaRPC(relayRPC, txHex, settle, log);
 
-        // RPC failure: record circuit breaker for RELAY_ERROR codes, then return
+        // RPC failure: record circuit breaker for RELAY_ERROR codes, cache for INSUFFICIENT_FUNDS, then return
         if (!rpcResult.success) {
           if (kv && rpcResult.errorCode === "RELAY_ERROR") {
             await recordRelayFailure(
@@ -416,14 +450,16 @@ export async function verifyInboxPayment(
               RELAY_CIRCUIT_BREAKER_TTL_SECONDS
             );
           }
+          if (kv && rpcResult.errorCode && CACHEABLE_PAYMENT_FAILURE_CODES.has(rpcResult.errorCode)) {
+            await cachePaymentFailure(kv, senderStxAddress, rpcResult.errorCode);
+          }
           return rpcResult;
         }
 
         // RPC success: translate result into settleResult for the shared success path.
-        // checkPayment() doesn't return sender address — derive from the tx origin.
-        const sc = tx.auth.spendingCondition;
-        const senderVersion = addressHashModeToVersion(sc.hashMode, network);
-        const senderAddress = addressToString({ type: StacksWireType.Address, version: senderVersion, hash160: sc.signer });
+        // checkPayment() doesn't return sender address — senderStxAddress was already
+        // derived from the tx origin above (before the cache check).
+        const senderAddress = senderStxAddress;
         settleResult = {
           success: true,
           transaction: rpcResult.paymentTxid || "",
@@ -504,7 +540,11 @@ export async function verifyInboxPayment(
             const finalErrorBody = didRetry
               ? await relayResponse.text()
               : errorBody;
-            return buildRelayErrorResult(finalErrorBody, relayResponse.status, log);
+            const errorResult = buildRelayErrorResult(finalErrorBody, relayResponse.status, log);
+            if (kv && errorResult.errorCode && CACHEABLE_PAYMENT_FAILURE_CODES.has(errorResult.errorCode)) {
+              await cachePaymentFailure(kv, senderStxAddress, errorResult.errorCode);
+            }
+            return errorResult;
           }
         } else if (!relayResponse.ok) {
           const errorText = await relayResponse.text();
@@ -517,7 +557,11 @@ export async function verifyInboxPayment(
               RELAY_CIRCUIT_BREAKER_TTL_SECONDS
             );
           }
-          return buildRelayErrorResult(errorText, relayResponse.status, log);
+          const errorResult = buildRelayErrorResult(errorText, relayResponse.status, log);
+          if (kv && errorResult.errorCode && CACHEABLE_PAYMENT_FAILURE_CODES.has(errorResult.errorCode)) {
+            await cachePaymentFailure(kv, senderStxAddress, errorResult.errorCode);
+          }
+          return errorResult;
         }
 
         // Map relay response to SettlementResponseV2 format.
@@ -545,6 +589,9 @@ export async function verifyInboxPayment(
             mappedCode,
             error: relayData.error,
           });
+          if (kv && CACHEABLE_PAYMENT_FAILURE_CODES.has(mappedCode)) {
+            await cachePaymentFailure(kv, senderStxAddress, mappedCode);
+          }
           return {
             success: false,
             error: relayData.error || "Relay settlement failed",
@@ -587,7 +634,11 @@ export async function verifyInboxPayment(
       });
       log.debug("Relay settle result", { settleResult });
     } catch (error) {
-      return handleRelayException("Non-sponsored relay", error, log, kv);
+      const result = await handleRelayException("Non-sponsored relay", error, log, kv);
+      if (kv && result.errorCode && CACHEABLE_PAYMENT_FAILURE_CODES.has(result.errorCode)) {
+        await cachePaymentFailure(kv, senderStxAddress, result.errorCode);
+      }
+      return result;
     }
   }
 

@@ -12,6 +12,7 @@ export type {
   InboxAgentIndex,
   SentMessageIndex,
   RelayPaymentStatus,
+  PaymentFailureCache,
 } from "./types";
 
 // Constants
@@ -32,10 +33,17 @@ export {
   RPC_POLL_INTERVAL_MS,
   RPC_POLL_MAX_ATTEMPTS,
   RPC_TOTAL_TIMEOUT_MS,
+  PAYMENT_FAILURE_CACHE_PREFIX,
+  PAYMENT_FAILURE_CACHE_TTL_SECONDS,
+  PAYMENT_FAILURE_RETRY_AFTER_SECONDS,
+  CACHEABLE_PAYMENT_FAILURE_CODES,
   buildMarkReadMessage,
   buildReplyMessage,
   buildSenderAuthMessage,
 } from "./constants";
+
+// Payment Failure Cache
+export { getCachedPaymentFailure, cachePaymentFailure } from "./payment-cache";
 
 // RPC Types and Helpers
 export type {
