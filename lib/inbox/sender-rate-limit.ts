@@ -17,7 +17,6 @@
 
 import {
   deserializeTransaction,
-  AuthType,
   StacksWireType,
   addressToString,
   addressHashModeToVersion,
@@ -33,8 +32,8 @@ import {
 /**
  * Extract the sender STX address from a serialized Stacks transaction hex string.
  *
- * Works for both standard and sponsored auth types — sponsored transactions use
- * the origin's spending condition (same extraction logic as x402-verify.ts).
+ * Uses the origin's spending condition, which works for both standard and
+ * sponsored auth types (the origin is the sender in both cases).
  *
  * Returns null if deserialization fails (invalid hex, truncated payload, etc.).
  * Callers should treat null as "sender unknown" and skip rate limiting.
@@ -46,9 +45,7 @@ export function extractSenderStxAddress(
   if (!txHex) return null;
   try {
     const tx = deserializeTransaction(txHex);
-    const sc = tx.auth.authType === AuthType.Sponsored
-      ? tx.auth.spendingCondition
-      : tx.auth.spendingCondition;
+    const sc = tx.auth.spendingCondition;
     const senderVersion = addressHashModeToVersion(sc.hashMode, network);
     return addressToString({
       type: StacksWireType.Address,

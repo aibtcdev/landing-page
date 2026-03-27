@@ -386,8 +386,8 @@ export async function verifyInboxPayment(
   }
   const isSponsored = tx.auth.authType === AuthType.Sponsored;
 
-  // Extract sender STX address from the spending condition (works for both sponsored
-  // and standard auth types — sponsored tx uses the origin's spending condition).
+  // Extract sender STX address from the origin's spending condition
+  // (works for both standard and sponsored auth types).
   const sc = tx.auth.spendingCondition;
   const senderVersion = addressHashModeToVersion(sc.hashMode, network);
   const senderStxAddress = addressToString({

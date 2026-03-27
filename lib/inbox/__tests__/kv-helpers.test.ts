@@ -7,32 +7,7 @@ import {
   getMessage,
 } from "../kv-helpers";
 import type { InboxAgentIndex, InboxMessage } from "../types";
-
-/**
- * Create a mock KV namespace for testing.
- *
- * Implements get/put/delete operations using an in-memory Map.
- */
-function createMockKV(): KVNamespace {
-  const store = new Map<string, string>();
-
-  return {
-    get: async (key: string) => store.get(key) ?? null,
-    put: async (key: string, value: string) => {
-      store.set(key, value);
-    },
-    delete: async (key: string) => {
-      store.delete(key);
-    },
-    list: async () => ({
-      keys: [],
-      list_complete: true,
-      cursor: "",
-      cacheStatus: null,
-    }),
-    getWithMetadata: async () => ({ value: null, metadata: null, cacheStatus: null }),
-  } as unknown as KVNamespace;
-}
+import { createMockKV } from "./kv-mock";
 
 describe("decrementUnreadCount", () => {
   let kv: KVNamespace;

@@ -5,79 +5,11 @@ import {
   PAYMENT_FAILURE_CACHE_PREFIX,
   PAYMENT_FAILURE_CACHE_TTL_SECONDS,
 } from "../constants";
-
-/**
- * Create a mock KV namespace for testing.
- *
- * Implements get/put/delete operations using an in-memory Map.
- */
-function createMockKV(): KVNamespace {
-  const store = new Map<string, string>();
-
-  return {
-    get: async (key: string) => store.get(key) ?? null,
-    put: async (key: string, value: string) => {
-      store.set(key, value);
-    },
-    delete: async (key: string) => {
-      store.delete(key);
-    },
-    list: async () => ({
-      keys: [],
-      list_complete: true,
-      cursor: "",
-      cacheStatus: null,
-    }),
-    getWithMetadata: async () => ({ value: null, metadata: null, cacheStatus: null }),
-  } as unknown as KVNamespace;
-}
-
-/**
- * KV mock that also captures put options (e.g. expirationTtl) for TTL assertions.
- */
-interface PutCall {
-  key: string;
-  value: string;
-  options?: KVNamespacePutOptions;
-}
-
-function createMockKVWithOptions(): { kv: KVNamespace; putCalls: PutCall[] } {
-  const store = new Map<string, string>();
-  const putCalls: PutCall[] = [];
-
-  const kv = {
-    get: async (key: string) => store.get(key) ?? null,
-    put: async (key: string, value: string, options?: KVNamespacePutOptions) => {
-      store.set(key, value);
-      putCalls.push({ key, value, options });
-    },
-    delete: async (key: string) => {
-      store.delete(key);
-    },
-    list: async () => ({
-      keys: [],
-      list_complete: true,
-      cursor: "",
-      cacheStatus: null,
-    }),
-    getWithMetadata: async () => ({ value: null, metadata: null, cacheStatus: null }),
-  } as unknown as KVNamespace;
-
-  return { kv, putCalls };
-}
-
-/**
- * KV that throws on every operation — used to verify fail-open behavior.
- */
-function createThrowingKV(): KVNamespace {
-  return {
-    get: async () => { throw new Error("KV read failure"); },
-    put: async () => { throw new Error("KV write failure"); },
-    delete: async () => { throw new Error("KV delete failure"); },
-    list: async () => { throw new Error("KV list failure"); },
-    getWithMetadata: async () => { throw new Error("KV getWithMetadata failure"); },
-  } as unknown as KVNamespace;
-}
+import {
+  createMockKV,
+  createMockKVWithOptions,
+  createThrowingKV,
+} from "./kv-mock";
 
 describe("getCachedPaymentFailure", () => {
   let kv: KVNamespace;
