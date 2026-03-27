@@ -122,17 +122,16 @@ async function fetchHomeData() {
     return {
       registeredCount: stats.total,
       topAgents,
-      genesisCount: stats.genesisCount,
       messageCount: stats.messageCount,
       activityData,
     };
   } catch {
-    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], genesisCount: 0, messageCount: 0, activityData: undefined };
+    return { registeredCount: 0, topAgents: [] as LeaderboardAgent[], messageCount: 0, activityData: undefined };
   }
 }
 
 export default async function Home() {
-  const { registeredCount, topAgents, genesisCount, messageCount, activityData } = await fetchHomeData();
+  const { registeredCount, topAgents, messageCount, activityData } = await fetchHomeData();
 
   return (
     <>
@@ -186,7 +185,7 @@ export default async function Home() {
                     ))}
                   </Link>
                 )}
-                <HomeHeroStats count={registeredCount} genesisCount={genesisCount} />
+                <HomeHeroStats count={registeredCount} />
               </div>
 
             </div>
