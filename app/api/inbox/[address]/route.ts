@@ -19,6 +19,7 @@ import {
   buildInboxPaymentRequirements,
   buildSenderAuthMessage,
   DEFAULT_RELAY_URL,
+  checkSenderRateLimit,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { hasAchievement, grantAchievement } from "@/lib/achievements";
@@ -667,6 +668,64 @@ export async function POST(
         [X402_HEADERS.PAYMENT_REQUIRED]: paymentRequiredHeader,
       },
     });
+  }
+
+  // Per-sender rate limit: only applies when a payment-signature header is present.
+  // Requests without a payment-signature get a 402 regardless, so rate limiting them
+  // here would block legitimate first-time callers who haven't seen the 402 yet.
+  //
+  // IMPORTANT: The payment-signature payload is client-controlled and unverified at this
+  // point. Keying on a sender STX address extracted from it would let an attacker spoof
+  // arbitrary senders and rate-limit victims. Instead, we key on a hash of the raw
+  // payment-signature header — each unique payload gets its own rate-limit bucket.
+  //
+  // We intentionally do NOT extract the sender address or check the failure-tier here.
+  // That would require deserializing the unverified transaction, duplicating work that
+  // verifyInboxPayment() does with proper error handling. Instead, the normal 10s window
+  // applies uniformly. The payment failure cache inside verifyInboxPayment() provides
+  // the real protection: cached INSUFFICIENT_FUNDS responses skip the relay entirely,
+  // so even at 1 req/10s a broke agent never floods the relay after the first failure.
+  if (paymentSigHeader) {
+    // Use a stable hash of the raw header as the rate-limit key.
+    // This bounds retries per unique payload without trusting its contents.
+    const encoder = new TextEncoder();
+    const hashBuffer = await crypto.subtle.digest(
+      "SHA-256",
+      encoder.encode(paymentSigHeader)
+    );
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const rateLimitKey = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 32);
+
+    try {
+      const rateCheck = await checkSenderRateLimit(kv, rateLimitKey);
+      if (rateCheck.limited) {
+        logger.warn("Sender rate limited", {
+          rateLimitKey,
+          retryAfterSeconds: rateCheck.retryAfterSeconds,
+        });
+        return NextResponse.json(
+          {
+            error: "Too many requests. You are sending messages too quickly.",
+            retryAfter: rateCheck.retryAfterSeconds,
+            resetAt: rateCheck.resetAt,
+            hint: "Please wait before sending another message.",
+          },
+          {
+            status: 429,
+            headers: { "Retry-After": String(rateCheck.retryAfterSeconds) },
+          }
+        );
+      }
+    } catch (err) {
+      // KV error during rate limit check — fail open so valid payments aren't blocked
+      logger.warn("Sender rate limit check failed (KV error) — allowing request", {
+        rateLimitKey,
+        error: String(err),
+      });
+    }
   }
 
   // Reject ambiguous requests with both payment methods

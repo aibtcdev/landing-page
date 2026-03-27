@@ -71,6 +71,20 @@ export const OUTBOX_RATE_LIMIT_VALIDATION_MAX = 5;
 /** TTL for validation-failure rate limit window (5 minutes). */
 export const OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS = 300;
 
+// --- Inbox sender rate limit constants ---
+
+/**
+ * KV key prefix for per-sender inbox POST rate limiting.
+ * Full key: ratelimit:inbox-sender:{senderStxAddress}
+ */
+export const INBOX_SENDER_RATE_LIMIT_PREFIX = "ratelimit:inbox-sender:";
+
+/** Normal rate limit window (seconds): 1 request per 10 seconds. */
+export const INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS = 10;
+
+/** Stricter rate limit window after payment failure (seconds): 1 request per 60 seconds. */
+export const INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS = 60;
+
 /** KV key prefixes for inbox system data. */
 export const KV_PREFIXES = {
   MESSAGE: "inbox:message:",       // inbox:message:{messageId} -> InboxMessage
@@ -106,6 +120,25 @@ export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 60;
  * Matches RELAY_CIRCUIT_BREAKER_TTL_SECONDS.
  */
 export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 60;
+
+// --- Payment failure cache constants ---
+
+/**
+ * KV key prefix for per-sender payment failure cache.
+ * Full key: ratelimit:payment-failure:{senderStxAddress}
+ */
+export const PAYMENT_FAILURE_CACHE_PREFIX = "ratelimit:payment-failure:";
+
+/** TTL for cached payment failure entries (5 minutes). */
+export const PAYMENT_FAILURE_CACHE_TTL_SECONDS = 300;
+
+/**
+ * Relay error codes that are cached per sender.
+ * Only add codes where the sender's state won't change without explicit action
+ * (e.g., depositing sBTC). Do NOT cache transient errors like NONCE_CONFLICT,
+ * RELAY_ERROR, or INVALID_SIGNATURE — those may resolve on retry.
+ */
+export const CACHEABLE_PAYMENT_FAILURE_CODES = new Set(["INSUFFICIENT_FUNDS"]);
 
 // --- RPC service binding polling constants ---
 

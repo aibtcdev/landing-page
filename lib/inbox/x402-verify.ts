@@ -34,7 +34,10 @@ import {
   RELAY_CIRCUIT_BREAKER_THRESHOLD,
   RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
+  PAYMENT_FAILURE_CACHE_TTL_SECONDS,
+  CACHEABLE_PAYMENT_FAILURE_CODES,
 } from "./constants";
+import { getCachedPaymentFailure, cachePaymentFailure } from "./payment-cache";
 import type { RelayPaymentStatus } from "./types";
 import {
   checkCircuitBreaker,
@@ -312,6 +315,26 @@ export async function verifyInboxPayment(
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
 
+  // Helper: cache a payment failure before returning the result.
+  // Consolidates the cache-write logic that was previously scattered across
+  // 5 separate error paths (RPC, HTTP sponsored retry, HTTP sponsored direct,
+  // HTTP structured failure, non-sponsored exception).
+  let resolvedSenderStxAddress: string | undefined;
+  async function returnWithCacheCheck(
+    result: InboxPaymentVerification
+  ): Promise<InboxPaymentVerification> {
+    if (
+      kv &&
+      resolvedSenderStxAddress &&
+      !result.success &&
+      result.errorCode &&
+      CACHEABLE_PAYMENT_FAILURE_CODES.has(result.errorCode)
+    ) {
+      await cachePaymentFailure(kv, resolvedSenderStxAddress, result.errorCode);
+    }
+    return result;
+  }
+
   // Check circuit breaker before attempting any relay call.
   // When open, return 503-equivalent immediately to shed load.
   if (kv) {
@@ -383,6 +406,46 @@ export async function verifyInboxPayment(
   }
   const isSponsored = tx.auth.authType === AuthType.Sponsored;
 
+  // Extract sender STX address from the origin's spending condition
+  // (works for both standard and sponsored auth types).
+  const sc = tx.auth.spendingCondition;
+  const senderVersion = addressHashModeToVersion(sc.hashMode, network);
+  const senderStxAddress = addressToString({
+    type: StacksWireType.Address,
+    version: senderVersion,
+    hash160: sc.signer,
+  });
+  resolvedSenderStxAddress = senderStxAddress;
+
+  // Check per-sender payment failure cache before hitting the relay.
+  // When a sender's wallet had insufficient funds recently, skip the relay and
+  // return the cached error immediately with Retry-After guidance.
+  if (kv) {
+    const cached = await getCachedPaymentFailure(kv, senderStxAddress);
+    if (cached) {
+      log.warn("Payment failure cache hit — skipping relay", {
+        senderStxAddress,
+        errorCode: cached.errorCode,
+        cachedAt: cached.cachedAt,
+      });
+      // Compute remaining TTL so Retry-After reflects actual cache window left
+      const elapsedSeconds = Math.floor(
+        (Date.now() - new Date(cached.cachedAt).getTime()) / 1000
+      );
+      const remainingSeconds = Math.max(
+        1,
+        PAYMENT_FAILURE_CACHE_TTL_SECONDS - elapsedSeconds
+      );
+      return {
+        success: false,
+        error:
+          "Payment rejected: insufficient sBTC balance (cached). Please add sBTC to your wallet before retrying.",
+        errorCode: cached.errorCode,
+        retryAfterSeconds: remainingSeconds,
+      };
+    }
+  }
+
   // Route all transactions through the relay (sponsored and non-sponsored)
   let settleResult: SettlementResponseV2;
   // Relay-specific fields populated only for sponsored transactions.
@@ -406,7 +469,7 @@ export async function verifyInboxPayment(
       try {
         const rpcResult = await submitViaRPC(relayRPC, txHex, settle, log);
 
-        // RPC failure: record circuit breaker for RELAY_ERROR codes, then return
+        // RPC failure: record circuit breaker for RELAY_ERROR codes, cache for INSUFFICIENT_FUNDS, then return
         if (!rpcResult.success) {
           if (kv && rpcResult.errorCode === "RELAY_ERROR") {
             await recordRelayFailure(
@@ -416,14 +479,13 @@ export async function verifyInboxPayment(
               RELAY_CIRCUIT_BREAKER_TTL_SECONDS
             );
           }
-          return rpcResult;
+          return returnWithCacheCheck(rpcResult);
         }
 
         // RPC success: translate result into settleResult for the shared success path.
-        // checkPayment() doesn't return sender address — derive from the tx origin.
-        const sc = tx.auth.spendingCondition;
-        const senderVersion = addressHashModeToVersion(sc.hashMode, network);
-        const senderAddress = addressToString({ type: StacksWireType.Address, version: senderVersion, hash160: sc.signer });
+        // checkPayment() doesn't return sender address — senderStxAddress was already
+        // derived from the tx origin above (before the cache check).
+        const senderAddress = senderStxAddress;
         settleResult = {
           success: true,
           transaction: rpcResult.paymentTxid || "",
@@ -504,7 +566,8 @@ export async function verifyInboxPayment(
             const finalErrorBody = didRetry
               ? await relayResponse.text()
               : errorBody;
-            return buildRelayErrorResult(finalErrorBody, relayResponse.status, log);
+            const errorResult = buildRelayErrorResult(finalErrorBody, relayResponse.status, log);
+            return returnWithCacheCheck(errorResult);
           }
         } else if (!relayResponse.ok) {
           const errorText = await relayResponse.text();
@@ -517,7 +580,8 @@ export async function verifyInboxPayment(
               RELAY_CIRCUIT_BREAKER_TTL_SECONDS
             );
           }
-          return buildRelayErrorResult(errorText, relayResponse.status, log);
+          const errorResult = buildRelayErrorResult(errorText, relayResponse.status, log);
+          return returnWithCacheCheck(errorResult);
         }
 
         // Map relay response to SettlementResponseV2 format.
@@ -545,14 +609,14 @@ export async function verifyInboxPayment(
             mappedCode,
             error: relayData.error,
           });
-          return {
+          return returnWithCacheCheck({
             success: false,
             error: relayData.error || "Relay settlement failed",
             errorCode: mappedCode,
             relayCode: relayData.code,
             ...((relayData.details || relayData.error) && { relayDetail: relayData.details || relayData.error }),
             ...(relayData.retryAfter != null && { retryAfterSeconds: relayData.retryAfter }),
-          };
+          });
         }
 
         // Treat "pending" as success — the tx was broadcast even if settlement hasn't confirmed.
@@ -587,7 +651,8 @@ export async function verifyInboxPayment(
       });
       log.debug("Relay settle result", { settleResult });
     } catch (error) {
-      return handleRelayException("Non-sponsored relay", error, log, kv);
+      const result = await handleRelayException("Non-sponsored relay", error, log, kv);
+      return returnWithCacheCheck(result);
     }
   }
 

@@ -111,6 +111,18 @@ export interface SentMessageIndex {
 }
 
 /**
+ * Cached payment failure record stored at `ratelimit:payment-failure:{senderStxAddress}`.
+ *
+ * Written when the relay returns a cacheable error (e.g. INSUFFICIENT_FUNDS).
+ * KV TTL controls expiry — no explicit deletion needed.
+ */
+export interface PaymentFailureCache {
+  senderStxAddress: string;
+  errorCode: string;
+  cachedAt: string;
+}
+
+/**
  * Summary of interactions with a partner agent.
  *
  * Used in the "Worked With" interaction graph on agent profiles.
