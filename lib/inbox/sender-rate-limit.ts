@@ -70,9 +70,9 @@ export function extractSenderStxAddress(
  * Returns a result compatible with the checkFixedWindowRateLimit shape, plus
  * a hadPriorFailure flag indicating which tier was applied.
  *
- * Fails open: if KV throws (transient error), the error propagates to the
- * caller. Rate limit checks use the same fail-open convention as the
- * circuit breaker — the caller should catch and allow the request through.
+ * Throws on KV errors — callers must catch and fail open (allow the request).
+ * This matches the convention in the route handler where the call is wrapped
+ * in try/catch with a logger.warn fallback.
  */
 export async function checkSenderRateLimit(
   kv: KVNamespace,

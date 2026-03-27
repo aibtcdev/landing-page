@@ -134,7 +134,9 @@ export const PAYMENT_FAILURE_CACHE_TTL_SECONDS = 300;
 
 /**
  * Relay error codes that are cached per sender.
- * INSUFFICIENT_FUNDS: sender has no sBTC; balance won't change without explicit wallet action.
+ * Only add codes where the sender's state won't change without explicit action
+ * (e.g., depositing sBTC). Do NOT cache transient errors like NONCE_CONFLICT,
+ * RELAY_ERROR, or INVALID_SIGNATURE — those may resolve on retry.
  */
 export const CACHEABLE_PAYMENT_FAILURE_CODES = new Set(["INSUFFICIENT_FUNDS"]);
 

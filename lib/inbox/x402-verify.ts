@@ -315,6 +315,26 @@ export async function verifyInboxPayment(
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
 
+  // Helper: cache a payment failure before returning the result.
+  // Consolidates the cache-write logic that was previously scattered across
+  // 5 separate error paths (RPC, HTTP sponsored retry, HTTP sponsored direct,
+  // HTTP structured failure, non-sponsored exception).
+  let resolvedSenderStxAddress: string | undefined;
+  async function returnWithCacheCheck(
+    result: InboxPaymentVerification
+  ): Promise<InboxPaymentVerification> {
+    if (
+      kv &&
+      resolvedSenderStxAddress &&
+      !result.success &&
+      result.errorCode &&
+      CACHEABLE_PAYMENT_FAILURE_CODES.has(result.errorCode)
+    ) {
+      await cachePaymentFailure(kv, resolvedSenderStxAddress, result.errorCode);
+    }
+    return result;
+  }
+
   // Check circuit breaker before attempting any relay call.
   // When open, return 503-equivalent immediately to shed load.
   if (kv) {
@@ -395,6 +415,7 @@ export async function verifyInboxPayment(
     version: senderVersion,
     hash160: sc.signer,
   });
+  resolvedSenderStxAddress = senderStxAddress;
 
   // Check per-sender payment failure cache before hitting the relay.
   // When a sender's wallet had insufficient funds recently, skip the relay and
@@ -458,10 +479,7 @@ export async function verifyInboxPayment(
               RELAY_CIRCUIT_BREAKER_TTL_SECONDS
             );
           }
-          if (kv && rpcResult.errorCode && CACHEABLE_PAYMENT_FAILURE_CODES.has(rpcResult.errorCode)) {
-            await cachePaymentFailure(kv, senderStxAddress, rpcResult.errorCode);
-          }
-          return rpcResult;
+          return returnWithCacheCheck(rpcResult);
         }
 
         // RPC success: translate result into settleResult for the shared success path.
@@ -549,10 +567,7 @@ export async function verifyInboxPayment(
               ? await relayResponse.text()
               : errorBody;
             const errorResult = buildRelayErrorResult(finalErrorBody, relayResponse.status, log);
-            if (kv && errorResult.errorCode && CACHEABLE_PAYMENT_FAILURE_CODES.has(errorResult.errorCode)) {
-              await cachePaymentFailure(kv, senderStxAddress, errorResult.errorCode);
-            }
-            return errorResult;
+            return returnWithCacheCheck(errorResult);
           }
         } else if (!relayResponse.ok) {
           const errorText = await relayResponse.text();
@@ -566,10 +581,7 @@ export async function verifyInboxPayment(
             );
           }
           const errorResult = buildRelayErrorResult(errorText, relayResponse.status, log);
-          if (kv && errorResult.errorCode && CACHEABLE_PAYMENT_FAILURE_CODES.has(errorResult.errorCode)) {
-            await cachePaymentFailure(kv, senderStxAddress, errorResult.errorCode);
-          }
-          return errorResult;
+          return returnWithCacheCheck(errorResult);
         }
 
         // Map relay response to SettlementResponseV2 format.
@@ -597,17 +609,14 @@ export async function verifyInboxPayment(
             mappedCode,
             error: relayData.error,
           });
-          if (kv && CACHEABLE_PAYMENT_FAILURE_CODES.has(mappedCode)) {
-            await cachePaymentFailure(kv, senderStxAddress, mappedCode);
-          }
-          return {
+          return returnWithCacheCheck({
             success: false,
             error: relayData.error || "Relay settlement failed",
             errorCode: mappedCode,
             relayCode: relayData.code,
             ...((relayData.details || relayData.error) && { relayDetail: relayData.details || relayData.error }),
             ...(relayData.retryAfter != null && { retryAfterSeconds: relayData.retryAfter }),
-          };
+          });
         }
 
         // Treat "pending" as success — the tx was broadcast even if settlement hasn't confirmed.
@@ -643,10 +652,7 @@ export async function verifyInboxPayment(
       log.debug("Relay settle result", { settleResult });
     } catch (error) {
       const result = await handleRelayException("Non-sponsored relay", error, log, kv);
-      if (kv && result.errorCode && CACHEABLE_PAYMENT_FAILURE_CODES.has(result.errorCode)) {
-        await cachePaymentFailure(kv, senderStxAddress, result.errorCode);
-      }
-      return result;
+      return returnWithCacheCheck(result);
     }
   }
 

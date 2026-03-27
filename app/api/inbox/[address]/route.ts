@@ -20,9 +20,6 @@ import {
   buildSenderAuthMessage,
   DEFAULT_RELAY_URL,
   checkSenderRateLimit,
-  extractSenderStxAddress,
-  INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS,
-  INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { hasAchievement, grantAchievement } from "@/lib/achievements";
@@ -680,9 +677,14 @@ export async function POST(
   // IMPORTANT: The payment-signature payload is client-controlled and unverified at this
   // point. Keying on a sender STX address extracted from it would let an attacker spoof
   // arbitrary senders and rate-limit victims. Instead, we key on a hash of the raw
-  // payment-signature header — each unique payload gets its own rate-limit bucket. After
-  // payment verification succeeds downstream, the verified sender address is used for the
-  // payment failure cache (which feeds back into the stricter failure-tier window here).
+  // payment-signature header — each unique payload gets its own rate-limit bucket.
+  //
+  // We intentionally do NOT extract the sender address or check the failure-tier here.
+  // That would require deserializing the unverified transaction, duplicating work that
+  // verifyInboxPayment() does with proper error handling. Instead, the normal 10s window
+  // applies uniformly. The payment failure cache inside verifyInboxPayment() provides
+  // the real protection: cached INSUFFICIENT_FUNDS responses skip the relay entirely,
+  // so even at 1 req/10s a broke agent never floods the relay after the first failure.
   if (paymentSigHeader) {
     // Use a stable hash of the raw header as the rate-limit key.
     // This bounds retries per unique payload without trusting its contents.
@@ -697,42 +699,19 @@ export async function POST(
       .join("")
       .slice(0, 32);
 
-    // Still check if the claimed sender has a cached payment failure for tier selection.
-    // This is best-effort — if the sender is spoofed, the normal (lenient) tier applies,
-    // which is acceptable since each unique payload is independently limited.
-    let senderTxHex = "";
     try {
-      const parsed = JSON.parse(atob(paymentSigHeader)) as PaymentPayloadV2;
-      senderTxHex = parsed.payload?.transaction ?? "";
-    } catch { /* ignore decode/parse errors — sender unknown, use normal tier */ }
-
-    const senderStxAddress = extractSenderStxAddress(senderTxHex, network);
-
-    try {
-      const rateCheck = await checkSenderRateLimit(
-        kv,
-        rateLimitKey,
-        senderStxAddress
-      );
+      const rateCheck = await checkSenderRateLimit(kv, rateLimitKey);
       if (rateCheck.limited) {
-        const window = rateCheck.hadPriorFailure
-          ? INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS
-          : INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS;
         logger.warn("Sender rate limited", {
           rateLimitKey,
-          senderStxAddress: senderStxAddress ?? "unknown",
           retryAfterSeconds: rateCheck.retryAfterSeconds,
-          hadPriorFailure: rateCheck.hadPriorFailure,
         });
         return NextResponse.json(
           {
             error: "Too many requests. You are sending messages too quickly.",
             retryAfter: rateCheck.retryAfterSeconds,
             resetAt: rateCheck.resetAt,
-            window,
-            hint: rateCheck.hadPriorFailure
-              ? "Your wallet had insufficient sBTC on a recent attempt. Please add sBTC and wait before retrying."
-              : "Please wait before sending another message.",
+            hint: "Please wait before sending another message.",
           },
           {
             status: 429,
