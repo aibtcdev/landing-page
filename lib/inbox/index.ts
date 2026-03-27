@@ -37,6 +37,9 @@ export {
   PAYMENT_FAILURE_CACHE_TTL_SECONDS,
   PAYMENT_FAILURE_RETRY_AFTER_SECONDS,
   CACHEABLE_PAYMENT_FAILURE_CODES,
+  INBOX_SENDER_RATE_LIMIT_PREFIX,
+  INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS,
+  INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS,
   buildMarkReadMessage,
   buildReplyMessage,
   buildSenderAuthMessage,
@@ -44,6 +47,9 @@ export {
 
 // Payment Failure Cache
 export { getCachedPaymentFailure, cachePaymentFailure } from "./payment-cache";
+
+// Sender Rate Limiting
+export { extractSenderStxAddress, checkSenderRateLimit } from "./sender-rate-limit";
 
 // RPC Types and Helpers
 export type {

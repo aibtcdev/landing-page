@@ -71,6 +71,20 @@ export const OUTBOX_RATE_LIMIT_VALIDATION_MAX = 5;
 /** TTL for validation-failure rate limit window (5 minutes). */
 export const OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS = 300;
 
+// --- Inbox sender rate limit constants ---
+
+/**
+ * KV key prefix for per-sender inbox POST rate limiting.
+ * Full key: ratelimit:inbox-sender:{senderStxAddress}
+ */
+export const INBOX_SENDER_RATE_LIMIT_PREFIX = "ratelimit:inbox-sender:";
+
+/** Normal rate limit window (seconds): 1 request per 10 seconds. */
+export const INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS = 10;
+
+/** Stricter rate limit window after payment failure (seconds): 1 request per 60 seconds. */
+export const INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS = 60;
+
 /** KV key prefixes for inbox system data. */
 export const KV_PREFIXES = {
   MESSAGE: "inbox:message:",       // inbox:message:{messageId} -> InboxMessage
