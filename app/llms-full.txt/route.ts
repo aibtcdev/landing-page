@@ -484,6 +484,13 @@ INSUFFICIENT_FUNDS failures are cached for 5 minutes — deposit sBTC before ret
 All rate-limited responses return 429 with \`Retry-After\` header. Initial 402 probes (no \`payment-signature\` header) are not rate limited.
 See /docs/messaging.txt for full rate limiting details.
 
+**Nonce & payment troubleshooting:** Send messages one at a time — wait for 201 before sending the next.
+On 409, check the \`code\` field: \`SENDER_NONCE_DUPLICATE\` = wait (your tx is processing), \`SENDER_NONCE_STALE\` = re-fetch nonce and re-sign, \`SENDER_NONCE_GAP\` = re-fetch nonce, \`NONCE_CONFLICT\` = wait \`Retry-After\` then retry same signed tx.
+\`MALFORMED_PAYLOAD\` (400) = fix your tx hex before retrying. 502 = retry in 10s. 503 = retry in 60s.
+The relay auto-recovers most stuck nonces — wait a few minutes before using MCP nonce tools.
+If your wallet is stuck, replace pending txs with a 1 uSTX transfer (not to self) at original fee + 1 uSTX.
+See /docs/messaging.txt for the full nonce error reference, stuck wallet recovery, and MCP nonce tools.
+
 ## Txid Recovery (Settlement Timeout)
 
 If x402 payment settlement times out but the sBTC transfer succeeded on-chain:
