@@ -676,49 +676,76 @@ export async function POST(
   // Per-sender rate limit: only applies when a payment-signature header is present.
   // Requests without a payment-signature get a 402 regardless, so rate limiting them
   // here would block legitimate first-time callers who haven't seen the 402 yet.
+  //
+  // IMPORTANT: The payment-signature payload is client-controlled and unverified at this
+  // point. Keying on a sender STX address extracted from it would let an attacker spoof
+  // arbitrary senders and rate-limit victims. Instead, we key on a hash of the raw
+  // payment-signature header — each unique payload gets its own rate-limit bucket. After
+  // payment verification succeeds downstream, the verified sender address is used for the
+  // payment failure cache (which feeds back into the stricter failure-tier window here).
   if (paymentSigHeader) {
+    // Use a stable hash of the raw header as the rate-limit key.
+    // This bounds retries per unique payload without trusting its contents.
+    const encoder = new TextEncoder();
+    const hashBuffer = await crypto.subtle.digest(
+      "SHA-256",
+      encoder.encode(paymentSigHeader)
+    );
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    const rateLimitKey = hashArray
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+      .slice(0, 32);
+
+    // Still check if the claimed sender has a cached payment failure for tier selection.
+    // This is best-effort — if the sender is spoofed, the normal (lenient) tier applies,
+    // which is acceptable since each unique payload is independently limited.
     let senderTxHex = "";
     try {
       const parsed = JSON.parse(atob(paymentSigHeader)) as PaymentPayloadV2;
       senderTxHex = parsed.payload?.transaction ?? "";
-    } catch { /* ignore decode/parse errors — sender unknown, skip rate limit */ }
+    } catch { /* ignore decode/parse errors — sender unknown, use normal tier */ }
 
     const senderStxAddress = extractSenderStxAddress(senderTxHex, network);
-    if (senderStxAddress) {
-      try {
-        const rateCheck = await checkSenderRateLimit(kv, senderStxAddress);
-        if (rateCheck.limited) {
-          const window = rateCheck.hadPriorFailure
-            ? INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS
-            : INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS;
-          logger.warn("Sender rate limited", {
-            senderStxAddress,
-            retryAfterSeconds: rateCheck.retryAfterSeconds,
-            hadPriorFailure: rateCheck.hadPriorFailure,
-          });
-          return NextResponse.json(
-            {
-              error: "Too many requests. You are sending messages too quickly.",
-              retryAfter: rateCheck.retryAfterSeconds,
-              resetAt: rateCheck.resetAt,
-              window,
-              hint: rateCheck.hadPriorFailure
-                ? "Your wallet had insufficient sBTC on a recent attempt. Please add sBTC and wait before retrying."
-                : "Please wait before sending another message.",
-            },
-            {
-              status: 429,
-              headers: { "Retry-After": String(rateCheck.retryAfterSeconds) },
-            }
-          );
-        }
-      } catch (err) {
-        // KV error during rate limit check — fail open so valid payments aren't blocked
-        logger.warn("Sender rate limit check failed (KV error) — allowing request", {
-          senderStxAddress,
-          error: String(err),
+
+    try {
+      const rateCheck = await checkSenderRateLimit(
+        kv,
+        rateLimitKey,
+        senderStxAddress
+      );
+      if (rateCheck.limited) {
+        const window = rateCheck.hadPriorFailure
+          ? INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS
+          : INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS;
+        logger.warn("Sender rate limited", {
+          rateLimitKey,
+          senderStxAddress: senderStxAddress ?? "unknown",
+          retryAfterSeconds: rateCheck.retryAfterSeconds,
+          hadPriorFailure: rateCheck.hadPriorFailure,
         });
+        return NextResponse.json(
+          {
+            error: "Too many requests. You are sending messages too quickly.",
+            retryAfter: rateCheck.retryAfterSeconds,
+            resetAt: rateCheck.resetAt,
+            window,
+            hint: rateCheck.hadPriorFailure
+              ? "Your wallet had insufficient sBTC on a recent attempt. Please add sBTC and wait before retrying."
+              : "Please wait before sending another message.",
+          },
+          {
+            status: 429,
+            headers: { "Retry-After": String(rateCheck.retryAfterSeconds) },
+          }
+        );
       }
+    } catch (err) {
+      // KV error during rate limit check — fail open so valid payments aren't blocked
+      logger.warn("Sender rate limit check failed (KV error) — allowing request", {
+        rateLimitKey,
+        error: String(err),
+      });
     }
   }
 

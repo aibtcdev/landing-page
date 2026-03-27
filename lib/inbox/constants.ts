@@ -132,9 +132,6 @@ export const PAYMENT_FAILURE_CACHE_PREFIX = "ratelimit:payment-failure:";
 /** TTL for cached payment failure entries (5 minutes). */
 export const PAYMENT_FAILURE_CACHE_TTL_SECONDS = 300;
 
-/** Retry-After seconds returned to clients with a cached failure response. */
-export const PAYMENT_FAILURE_RETRY_AFTER_SECONDS = 300;
-
 /**
  * Relay error codes that are cached per sender.
  * INSUFFICIENT_FUNDS: sender has no sBTC; balance won't change without explicit wallet action.

@@ -290,7 +290,7 @@ senders can recover by resubmitting with the confirmed transaction ID as proof:
 - **sBTC-only**: Rejects STX and other token payments
 - **Memo extraction**: Message ID embedded in sBTC transfer memo via `parsePaymentMemo()`
 - **Logging**: All operations logged via worker-logs with cf-ray correlation
-- **Sender rate limiting**: `checkSenderRateLimit()` / `recordSenderRequest()` enforce per-sender limits; integrated in `app/api/inbox/[address]/route.ts`; constants in `lib/inbox/constants.ts` (`INBOX_SENDER_RATE_LIMIT_PREFIX`, `INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS`, `INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS`)
+- **Sender rate limiting**: `checkSenderRateLimit()` enforces per-sender limits; integrated in `app/api/inbox/[address]/route.ts`; constants in `lib/inbox/constants.ts` (`INBOX_SENDER_RATE_LIMIT_PREFIX`, `INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS`, `INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS`)
 - **Payment failure caching**: `getCachedPaymentFailure()` / `cachePaymentFailure()` in `lib/inbox/x402-verify.ts`; constants `PAYMENT_FAILURE_CACHE_PREFIX`, `PAYMENT_FAILURE_CACHE_TTL_SECONDS`, `CACHEABLE_PAYMENT_FAILURE_CODES`
 
 ### Storage

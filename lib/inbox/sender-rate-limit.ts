@@ -60,11 +60,15 @@ export function extractSenderStxAddress(
 /**
  * Check the per-sender inbox POST rate limit.
  *
+ * @param kv - KV namespace
+ * @param rateLimitKey - Key to use for the rate limit bucket (e.g., hash of payment header).
+ *   This MUST NOT be derived from unverified sender data to prevent spoofed DoS.
+ * @param senderStxAddress - Optional sender STX address for failure-tier lookup.
+ *   Used only to check the payment failure cache (which is written after verification).
+ *   If null/undefined, the normal (lenient) tier is used.
+ *
  * Returns a result compatible with the checkFixedWindowRateLimit shape, plus
  * a hadPriorFailure flag indicating which tier was applied.
- *
- * When the sender has a cached payment failure the stricter 60-second window
- * is used; otherwise the normal 10-second window applies.
  *
  * Fails open: if KV throws (transient error), the error propagates to the
  * caller. Rate limit checks use the same fail-open convention as the
@@ -72,21 +76,25 @@ export function extractSenderStxAddress(
  */
 export async function checkSenderRateLimit(
   kv: KVNamespace,
-  senderStxAddress: string
+  rateLimitKey: string,
+  senderStxAddress?: string | null
 ): Promise<{
   limited: boolean;
   retryAfterSeconds: number;
   resetAt: string;
   hadPriorFailure: boolean;
 }> {
-  // Determine which tier applies
-  const cachedFailure = await getCachedPaymentFailure(kv, senderStxAddress);
-  const hadPriorFailure = cachedFailure !== null;
+  // Determine which tier applies — only check failure cache if we have a sender address
+  let hadPriorFailure = false;
+  if (senderStxAddress) {
+    const cachedFailure = await getCachedPaymentFailure(kv, senderStxAddress);
+    hadPriorFailure = cachedFailure !== null;
+  }
   const ttlSeconds = hadPriorFailure
     ? INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS
     : INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS;
 
-  const key = `${INBOX_SENDER_RATE_LIMIT_PREFIX}${senderStxAddress}`;
+  const key = `${INBOX_SENDER_RATE_LIMIT_PREFIX}${rateLimitKey}`;
   const result = await checkFixedWindowRateLimit(kv, key, 1, ttlSeconds);
 
   return {

@@ -34,7 +34,7 @@ import {
   RELAY_CIRCUIT_BREAKER_THRESHOLD,
   RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
-  PAYMENT_FAILURE_RETRY_AFTER_SECONDS,
+  PAYMENT_FAILURE_CACHE_TTL_SECONDS,
   CACHEABLE_PAYMENT_FAILURE_CODES,
 } from "./constants";
 import { getCachedPaymentFailure, cachePaymentFailure } from "./payment-cache";
@@ -407,12 +407,20 @@ export async function verifyInboxPayment(
         errorCode: cached.errorCode,
         cachedAt: cached.cachedAt,
       });
+      // Compute remaining TTL so Retry-After reflects actual cache window left
+      const elapsedSeconds = Math.floor(
+        (Date.now() - new Date(cached.cachedAt).getTime()) / 1000
+      );
+      const remainingSeconds = Math.max(
+        1,
+        PAYMENT_FAILURE_CACHE_TTL_SECONDS - elapsedSeconds
+      );
       return {
         success: false,
         error:
           "Payment rejected: insufficient sBTC balance (cached). Please add sBTC to your wallet before retrying.",
-        errorCode: "INSUFFICIENT_FUNDS",
-        retryAfterSeconds: PAYMENT_FAILURE_RETRY_AFTER_SECONDS,
+        errorCode: cached.errorCode,
+        retryAfterSeconds: remainingSeconds,
       };
     }
   }

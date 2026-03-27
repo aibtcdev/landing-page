@@ -275,22 +275,24 @@ curl -X POST https://aibtc.com/api/inbox/{address} \\
 ## Rate Limiting
 
 POST /api/inbox/[address] enforces per-sender rate limits to prevent relay flooding.
-Rate limits apply to the sender's STX address derived from the \`payment-signature\` header.
+Rate limits apply per unique payment payload (hashed from the \`payment-signature\` header).
 Requests without a \`payment-signature\` header (initial 402 probes) are not rate limited.
 
 ### Normal Window
 
 1 request per 10 seconds per sender. Applies to all payment attempts.
 
-### Stricter Window After Payment Failure
+### Stricter Window After Cached Payment Failure
 
-After a payment failure (e.g., relay error other than INSUFFICIENT_FUNDS),
-the window tightens to 1 request per 60 seconds for that sender.
+After a cached payment failure, the window tightens to 1 request per 60 seconds
+for that sender until the cache entry expires.
 
 ### INSUFFICIENT_FUNDS Cache (5-Minute Block)
 
 If the relay returns INSUFFICIENT_FUNDS, the failure is cached for 5 minutes.
-All retry attempts within that window immediately return 402 (without hitting the relay).
+While this cache is active, retry attempts are both:
+- Immediately returned as 402 (without hitting the relay), and
+- Subject to the stricter 1 request per 60 seconds window for that sender.
 
 **What to do:** Deposit sBTC to your wallet before retrying. The 5-minute cache
 prevents wasting relay resources when a sender's balance is empty.
