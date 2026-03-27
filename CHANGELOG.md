@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.0](https://github.com/aibtcdev/landing-page/compare/v1.35.1...v1.36.0) (2026-03-27)
+
+
+### Features
+
+* **inbox:** cache payment failures and rate limit per sender ([#524](https://github.com/aibtcdev/landing-page/issues/524)) ([a151afa](https://github.com/aibtcdev/landing-page/commit/a151afa6a2b36455023317c289bf9645c0673de5))
+
 ## [1.35.1](https://github.com/aibtcdev/landing-page/compare/v1.35.0...v1.35.1) (2026-03-26)
 
 
