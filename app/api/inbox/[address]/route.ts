@@ -19,6 +19,10 @@ import {
   buildInboxPaymentRequirements,
   buildSenderAuthMessage,
   DEFAULT_RELAY_URL,
+  checkSenderRateLimit,
+  extractSenderStxAddress,
+  INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS,
+  INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { hasAchievement, grantAchievement } from "@/lib/achievements";
@@ -667,6 +671,55 @@ export async function POST(
         [X402_HEADERS.PAYMENT_REQUIRED]: paymentRequiredHeader,
       },
     });
+  }
+
+  // Per-sender rate limit: only applies when a payment-signature header is present.
+  // Requests without a payment-signature get a 402 regardless, so rate limiting them
+  // here would block legitimate first-time callers who haven't seen the 402 yet.
+  if (paymentSigHeader) {
+    let senderTxHex = "";
+    try {
+      const parsed = JSON.parse(atob(paymentSigHeader)) as PaymentPayloadV2;
+      senderTxHex = parsed.payload?.transaction ?? "";
+    } catch { /* ignore decode/parse errors — sender unknown, skip rate limit */ }
+
+    const senderStxAddress = extractSenderStxAddress(senderTxHex, network);
+    if (senderStxAddress) {
+      try {
+        const rateCheck = await checkSenderRateLimit(kv, senderStxAddress);
+        if (rateCheck.limited) {
+          const window = rateCheck.hadPriorFailure
+            ? INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS
+            : INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS;
+          logger.warn("Sender rate limited", {
+            senderStxAddress,
+            retryAfterSeconds: rateCheck.retryAfterSeconds,
+            hadPriorFailure: rateCheck.hadPriorFailure,
+          });
+          return NextResponse.json(
+            {
+              error: "Too many requests. You are sending messages too quickly.",
+              retryAfter: rateCheck.retryAfterSeconds,
+              resetAt: rateCheck.resetAt,
+              window,
+              hint: rateCheck.hadPriorFailure
+                ? "Your wallet had insufficient sBTC on a recent attempt. Please add sBTC and wait before retrying."
+                : "Please wait before sending another message.",
+            },
+            {
+              status: 429,
+              headers: { "Retry-After": String(rateCheck.retryAfterSeconds) },
+            }
+          );
+        }
+      } catch (err) {
+        // KV error during rate limit check — fail open so valid payments aren't blocked
+        logger.warn("Sender rate limit check failed (KV error) — allowing request", {
+          senderStxAddress,
+          error: String(err),
+        });
+      }
+    }
   }
 
   // Reject ambiguous requests with both payment methods
