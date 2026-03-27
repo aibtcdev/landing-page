@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.1](https://github.com/aibtcdev/landing-page/compare/v1.36.0...v1.36.1) (2026-03-27)
+
+
+### Bug Fixes
+
+* **deps:** bump picomatch to 4.0.4 to patch CVE-2026-33671 ReDoS ([#512](https://github.com/aibtcdev/landing-page/issues/512)) ([479c6de](https://github.com/aibtcdev/landing-page/commit/479c6de3c2578195c4e173ea66157a63f0a79f4a))
+
 ## [1.36.0](https://github.com/aibtcdev/landing-page/compare/v1.35.1...v1.36.0) (2026-03-27)
 
 
