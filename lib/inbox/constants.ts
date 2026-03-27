@@ -107,6 +107,26 @@ export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 60;
  */
 export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 60;
 
+// --- Payment failure cache constants ---
+
+/**
+ * KV key prefix for per-sender payment failure cache.
+ * Full key: ratelimit:payment-failure:{senderStxAddress}
+ */
+export const PAYMENT_FAILURE_CACHE_PREFIX = "ratelimit:payment-failure:";
+
+/** TTL for cached payment failure entries (5 minutes). */
+export const PAYMENT_FAILURE_CACHE_TTL_SECONDS = 300;
+
+/** Retry-After seconds returned to clients with a cached failure response. */
+export const PAYMENT_FAILURE_RETRY_AFTER_SECONDS = 300;
+
+/**
+ * Relay error codes that are cached per sender.
+ * INSUFFICIENT_FUNDS: sender has no sBTC; balance won't change without explicit wallet action.
+ */
+export const CACHEABLE_PAYMENT_FAILURE_CODES = new Set(["INSUFFICIENT_FUNDS"]);
+
 // --- RPC service binding polling constants ---
 
 /** Interval between checkPayment() polls (ms). */
