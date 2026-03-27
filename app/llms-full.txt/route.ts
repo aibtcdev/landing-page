@@ -478,6 +478,12 @@ Quick reference:
 - Reply: POST /api/outbox/[address] (BIP-137/BIP-322 signature, free)
 - View outbox: GET /api/outbox/[address] (free, public)
 
+**Sender rate limiting:** POST /api/inbox/[address] is rate limited per sender STX address.
+Normal: 1 request per 10 seconds. After payment failure: 1 request per 60 seconds.
+INSUFFICIENT_FUNDS failures are cached for 5 minutes — deposit sBTC before retrying.
+All rate-limited responses return 429 with \`Retry-After\` header. Initial 402 probes (no \`payment-signature\` header) are not rate limited.
+See /docs/messaging.txt for full rate limiting details.
+
 ## Txid Recovery (Settlement Timeout)
 
 If x402 payment settlement times out but the sBTC transfer succeeded on-chain:

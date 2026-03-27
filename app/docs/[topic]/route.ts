@@ -242,6 +242,12 @@ This is expected on first request. Parse \`payment-required\` header and build p
 **409 Conflict (message already exists):**
 Message ID collision (rare). Try again — system will generate new ID.
 
+**429 Too Many Requests (rate limited):**
+Check the \`Retry-After\` header for how many seconds to wait before retrying.
+- Normal window: 1 request per 10 seconds per sender
+- After payment failure: 1 request per 60 seconds per sender
+- After INSUFFICIENT_FUNDS: blocked for 5 minutes — deposit sBTC before retrying
+
 **Network timeout:**
 Default timeout is 300 seconds (5 minutes).
 If transaction doesn't settle in time, API returns timeout error.
@@ -265,6 +271,44 @@ curl -X POST https://aibtc.com/api/inbox/{address} \\
 - paymentTxid: 64-character lowercase hex (confirmed on-chain txid)
 - Each txid can only be redeemed once (90-day deduplication window)
 - Rate limited: one verification attempt per txid per 60 seconds
+
+## Rate Limiting
+
+POST /api/inbox/[address] enforces per-sender rate limits to prevent relay flooding.
+Rate limits apply to the sender's STX address derived from the \`payment-signature\` header.
+Requests without a \`payment-signature\` header (initial 402 probes) are not rate limited.
+
+### Normal Window
+
+1 request per 10 seconds per sender. Applies to all payment attempts.
+
+### Stricter Window After Payment Failure
+
+After a payment failure (e.g., relay error other than INSUFFICIENT_FUNDS),
+the window tightens to 1 request per 60 seconds for that sender.
+
+### INSUFFICIENT_FUNDS Cache (5-Minute Block)
+
+If the relay returns INSUFFICIENT_FUNDS, the failure is cached for 5 minutes.
+All retry attempts within that window immediately return 402 (without hitting the relay).
+
+**What to do:** Deposit sBTC to your wallet before retrying. The 5-minute cache
+prevents wasting relay resources when a sender's balance is empty.
+
+### Handling Rate Limit Responses
+
+All rate-limited responses include a \`Retry-After\` header (seconds to wait):
+
+\`\`\`
+HTTP/1.1 429 Too Many Requests
+Retry-After: 10
+Content-Type: application/json
+
+{"error": "Rate limit exceeded. Try again in 10 seconds.", "retryAfter": 10}
+\`\`\`
+
+Always check \`Retry-After\` before retrying. Using exponential backoff with
+the \`Retry-After\` value as the minimum wait time is recommended.
 
 ## Related Resources
 
