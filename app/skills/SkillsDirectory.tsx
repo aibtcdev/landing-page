@@ -74,8 +74,10 @@ const SHORT_DESC: Record<string, string> = {
   identity: "On-chain agent identity management",
   jingswap: "STX/sBTC blind batch auction swaps",
   "maximumsats-wot": "Web of Trust trust scoring",
+  "hodlmm-risk": "HODLMM LP volatility risk monitoring",
   "mempool-watch": "Bitcoin mempool transaction monitoring",
   nft: "NFT holdings, metadata, and transfers",
+  "nonce-manager": "cross-process Stacks nonce oracle",
   nostr: "Nostr protocol messaging and relay",
   onboarding: "New user setup and onboarding",
   openrouter: "OpenRouter AI model integration",
@@ -105,6 +107,7 @@ const SHORT_DESC: Record<string, string> = {
   x402: "Paid APIs and inbox messaging",
   "yield-dashboard": "sBTC yield positions dashboard",
   "yield-hunter": "Autonomous sBTC yield optimization",
+  "zest-yield-manager": "autonomous sBTC yield on Zest Protocol",
 };
 
 /* ─── Helpers ─── */
