@@ -386,7 +386,10 @@ export async function POST(request: NextRequest) {
           const hiroHeaders: Record<string, string> = {};
           if (env.HIRO_API_KEY) hiroHeaders["X-Hiro-API-Key"] = env.HIRO_API_KEY;
 
-          const resp = await fetch(url, { headers: hiroHeaders });
+          const resp = await fetch(url, {
+            headers: hiroHeaders,
+            signal: AbortSignal.timeout(8000),
+          });
 
           if (resp.ok) {
             const data = await resp.json() as { results?: Array<{ value: { repr: string } }> };
@@ -414,92 +417,79 @@ export async function POST(request: NextRequest) {
     // Must be initialized before ALL achievement checks, not just the later ones.
     let achievementGranted = false;
 
-    // Proactively check sender achievement (lightweight, best-effort)
-    try {
-      const rateLimit = await checkRateLimit(kv, btcAddress, "sender");
-      if (rateLimit.allowed) {
+    // Run external-API achievement checks in parallel (best-effort, independent).
+    // Each check involves KV reads + an external HTTP call; running them sequentially
+    // could chain up to 40s+ of network latency and blow past the CF Workers timeout.
+    const externalAchievementResults = await Promise.allSettled([
+      // sender: check mempool.space for outgoing BTC tx
+      (async () => {
+        const rateLimit = await checkRateLimit(kv, btcAddress, "sender");
+        if (!rateLimit.allowed) return false;
         const hasSender = await hasAchievement(kv, btcAddress, "sender");
-        if (!hasSender) {
-          const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv);
-          if (hasOutgoingTx) {
-            await grantAchievement(kv, btcAddress, "sender");
-            achievementGranted = true;
-          }
+        if (hasSender) return false;
+        const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv);
+        if (hasOutgoingTx) {
+          await grantAchievement(kv, btcAddress, "sender");
         }
         await setRateLimit(kv, btcAddress, "sender");
-      }
-    } catch (error) {
-      // Best-effort: log and continue if achievement check fails
-      console.error("Failed to check sender achievement during heartbeat:", error);
-    }
-
-    // Proactively check stacker achievement (best-effort)
-    try {
-      const rateLimit = await checkRateLimit(kv, btcAddress, "stacker");
-      if (rateLimit.allowed && agent.stxAddress) {
+        return hasOutgoingTx;
+      })(),
+      // stacker: check Hiro for stacked STX
+      (async () => {
+        if (!agent.stxAddress) return false;
+        const rateLimit = await checkRateLimit(kv, btcAddress, "stacker");
+        if (!rateLimit.allowed) return false;
         const hasStacker = await hasAchievement(kv, btcAddress, "stacker");
-        if (!hasStacker) {
-          const isStacking = await verifyStackerAchievement(
-            agent.stxAddress,
-            kv,
-            env.HIRO_API_KEY
-          );
-          if (isStacking) {
-            await grantAchievement(kv, btcAddress, "stacker");
-            achievementGranted = true;
-          }
-          await setRateLimit(kv, btcAddress, "stacker");
+        if (hasStacker) return false;
+        const isStacking = await verifyStackerAchievement(agent.stxAddress, kv, env.HIRO_API_KEY);
+        if (isStacking) {
+          await grantAchievement(kv, btcAddress, "stacker");
         }
-      }
-    } catch (error) {
-      console.error("Failed to check stacker achievement during heartbeat:", error);
-    }
-
-    // Proactively check sbtc-holder achievement (best-effort)
-    try {
-      const rateLimit = await checkRateLimit(kv, btcAddress, "sbtc-holder");
-      if (rateLimit.allowed && agent.stxAddress) {
+        await setRateLimit(kv, btcAddress, "stacker");
+        return isStacking;
+      })(),
+      // sbtc-holder: check sBTC balance via read-only contract call
+      (async () => {
+        if (!agent.stxAddress) return false;
+        const rateLimit = await checkRateLimit(kv, btcAddress, "sbtc-holder");
+        if (!rateLimit.allowed) return false;
         const hasSbtcHolder = await hasAchievement(kv, btcAddress, "sbtc-holder");
-        if (!hasSbtcHolder) {
-          const holdsSbtc = await verifySbtcHolderAchievement(
-            agent.stxAddress,
-            kv,
-            env.HIRO_API_KEY
-          );
-          if (holdsSbtc) {
-            await grantAchievement(kv, btcAddress, "sbtc-holder");
-            achievementGranted = true;
-          }
-          await setRateLimit(kv, btcAddress, "sbtc-holder");
+        if (hasSbtcHolder) return false;
+        const holdsSbtc = await verifySbtcHolderAchievement(agent.stxAddress, kv, env.HIRO_API_KEY);
+        if (holdsSbtc) {
+          await grantAchievement(kv, btcAddress, "sbtc-holder");
         }
-      }
-    } catch (error) {
-      console.error("Failed to check sbtc-holder achievement during heartbeat:", error);
-    }
-
-    // Proactively check connector achievement (best-effort)
-    try {
-      const rateLimit = await checkRateLimit(kv, btcAddress, "connector");
-      if (rateLimit.allowed && agent.stxAddress) {
+        await setRateLimit(kv, btcAddress, "sbtc-holder");
+        return holdsSbtc;
+      })(),
+      // connector: check for qualifying sBTC transfer with memo
+      (async () => {
+        if (!agent.stxAddress) return false;
+        const rateLimit = await checkRateLimit(kv, btcAddress, "connector");
+        if (!rateLimit.allowed) return false;
         const hasConnector = await hasAchievement(kv, btcAddress, "connector");
-        if (!hasConnector) {
-          const connectorResult = await verifyConnectorAchievement(
-            agent.stxAddress,
-            kv,
-            env.HIRO_API_KEY
-          );
-          if (connectorResult) {
-            await grantAchievement(kv, btcAddress, "connector", {
-              txid: connectorResult.txid,
-              recipientAddress: connectorResult.recipientAddress,
-            });
-            achievementGranted = true;
-          }
-          await setRateLimit(kv, btcAddress, "connector");
+        if (hasConnector) return false;
+        const connectorResult = await verifyConnectorAchievement(agent.stxAddress, kv, env.HIRO_API_KEY);
+        if (connectorResult) {
+          await grantAchievement(kv, btcAddress, "connector", {
+            txid: connectorResult.txid,
+            recipientAddress: connectorResult.recipientAddress,
+          });
         }
+        await setRateLimit(kv, btcAddress, "connector");
+        return !!connectorResult;
+      })(),
+    ]);
+
+    // Log failures from parallel checks (best-effort — don't fail the heartbeat)
+    const achievementNames = ["sender", "stacker", "sbtc-holder", "connector"];
+    for (let i = 0; i < externalAchievementResults.length; i++) {
+      const result = externalAchievementResults[i];
+      if (result.status === "rejected") {
+        console.error(`Failed to check ${achievementNames[i]} achievement during heartbeat:`, result.reason);
+      } else if (result.value) {
+        achievementGranted = true;
       }
-    } catch (error) {
-      console.error("Failed to check connector achievement during heartbeat:", error);
     }
 
     // Grant identified achievement if agent has an on-chain identity (best-effort)
