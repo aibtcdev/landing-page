@@ -1304,6 +1304,7 @@ export async function POST(
         authenticated,
         ...(senderBtcAddress && { senderBtcAddress }),
         ...(paymentResult.paymentStatus && { paymentStatus: paymentResult.paymentStatus }),
+        ...(paymentResult.paymentId && { paymentId: paymentResult.paymentId }),
       },
     },
     {
