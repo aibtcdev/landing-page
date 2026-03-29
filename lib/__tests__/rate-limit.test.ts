@@ -202,7 +202,7 @@ describe("checkFixedWindowRateLimit", () => {
     expect(storedWindowStart).toBe(String(windowStart));
   });
 
-  it("sets correct remaining TTL on KV writes for existing windows", async () => {
+  it("clamps mid-window KV writes to minimum 60s TTL", async () => {
     const windowStart = Date.now() - 20 * 1000; // started 20s ago
     mockKV.store.set("test-key", `1:${windowStart}`);
 

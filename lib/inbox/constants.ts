@@ -75,7 +75,7 @@ export const OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS = 300;
 
 /**
  * KV key prefix for per-sender inbox POST rate limiting.
- * Full key: ratelimit:inbox-sender:{senderStxAddress}
+ * Full key: ratelimit:inbox-sender:{rateLimitKey} (hash of payment header)
  */
 export const INBOX_SENDER_RATE_LIMIT_PREFIX = "ratelimit:inbox-sender:";
 
