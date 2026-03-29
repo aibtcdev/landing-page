@@ -1143,8 +1143,14 @@ export async function POST(
       );
     }
 
-    // SETTLEMENT_TIMEOUT — relay gave up polling but tx was broadcast; use txid recovery.
+    // SETTLEMENT_TIMEOUT — safety net: should not occur on the RPC path after the relay-rpc fix
+    // (poll exhaustion after relay accepted now returns pending success). May still occur on the
+    // HTTP fallback path. Log as unexpected if seen frequently.
     if (errorCode === "SETTLEMENT_TIMEOUT") {
+      logger.warn("SETTLEMENT_TIMEOUT reached — unexpected on RPC path, check relay-rpc.ts", {
+        errorCode,
+        ...relayDiag,
+      });
       return NextResponse.json(
         {
           error: "Payment broadcast but settlement confirmation timed out.",
