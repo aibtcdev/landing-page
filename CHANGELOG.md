@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.2](https://github.com/aibtcdev/landing-page/compare/v1.36.1...v1.36.2) (2026-03-29)
+
+
+### Bug Fixes
+
+* **inbox:** return pending status instead of SETTLEMENT_TIMEOUT error ([#538](https://github.com/aibtcdev/landing-page/issues/538)) ([0b4c779](https://github.com/aibtcdev/landing-page/commit/0b4c77910962b3458311aaad59ea37d709389330))
+
 ## [1.36.1](https://github.com/aibtcdev/landing-page/compare/v1.36.0...v1.36.1) (2026-03-27)
 
 
