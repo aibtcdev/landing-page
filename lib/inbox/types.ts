@@ -19,7 +19,8 @@ export interface InboxMessage {
   toBtcAddress: string;
   toStxAddress: string;
   content: string;
-  paymentTxid: string;
+  /** On-chain transaction ID. Absent when paymentStatus is "pending" (poll exhausted before confirmation). */
+  paymentTxid?: string;
   paymentSatoshis: number;
   sentAt: string;
   readAt?: string | null;

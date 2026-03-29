@@ -1234,7 +1234,7 @@ export async function POST(
     toBtcAddress,
     toStxAddress,
     content,
-    paymentTxid: paymentResult.paymentTxid || paymentTxid || "",
+    paymentTxid: paymentResult.paymentTxid || paymentTxid || undefined,
     paymentSatoshis: paymentSatoshis ?? INBOX_PRICE_SATS,
     sentAt: now,
     authenticated,
@@ -1283,14 +1283,19 @@ export async function POST(
   // Invalidate cached agent list (inbox message count changed)
   await invalidateAgentListCache(kv);
 
-  // Build payment-response header (base64-encoded per x402 v2 spec)
-  const paymentResponseData = {
-    success: true,
-    payer: fromAddress,
-    transaction: message.paymentTxid,
-    network: networkCAIP2,
-  };
-  const paymentResponseHeader = btoa(JSON.stringify(paymentResponseData));
+  // Build payment-response header only when we have an actual transaction.
+  // Pending payments (poll exhausted before confirmation) have no txid yet —
+  // omit the header to avoid emitting an empty `transaction` field.
+  const responseHeaders: Record<string, string> = {};
+  if (message.paymentTxid) {
+    const paymentResponseData = {
+      success: true,
+      payer: fromAddress,
+      transaction: message.paymentTxid,
+      network: networkCAIP2,
+    };
+    responseHeaders[X402_HEADERS.PAYMENT_RESPONSE] = btoa(JSON.stringify(paymentResponseData));
+  }
 
   return NextResponse.json(
     {
@@ -1309,9 +1314,7 @@ export async function POST(
     },
     {
       status: 201,
-      headers: {
-        [X402_HEADERS.PAYMENT_RESPONSE]: paymentResponseHeader,
-      },
+      headers: responseHeaders,
     }
   );
 

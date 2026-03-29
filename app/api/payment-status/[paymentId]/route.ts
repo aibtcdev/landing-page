@@ -35,35 +35,38 @@ export async function GET(
 
   // Self-document when called with no meaningful paymentId
   if (!paymentId || paymentId === "help") {
-    return NextResponse.json({
-      endpoint: "GET /api/payment-status/[paymentId]",
-      description:
-        "Check the settlement status of a pending x402 inbox payment. " +
-        "Use this after receiving paymentStatus: 'pending' + paymentId in a " +
-        "POST /api/inbox/[address] response.",
-      params: {
-        paymentId: "string — The paymentId returned in the inbox payment response",
+    return NextResponse.json(
+      {
+        endpoint: "GET /api/payment-status/[paymentId]",
+        description:
+          "Check the settlement status of a pending x402 inbox payment. " +
+          "Use this after receiving paymentStatus: 'pending' + paymentId in a " +
+          "POST /api/inbox/[address] response.",
+        params: {
+          paymentId: "string — The paymentId returned in the inbox payment response",
+        },
+        usage: "GET /api/payment-status/{paymentId}",
+        example: "GET /api/payment-status/pay_abc123def456",
+        pollingAdvice: "Poll every 10–30 seconds until status is 'confirmed', 'failed', 'replaced', or 'not_found'",
+        terminalStatuses: {
+          confirmed: "sBTC transfer settled on-chain — message fully delivered",
+          failed: "Payment failed — inbox message may not be stored",
+          replaced: "Transaction was replaced — treat as failed",
+          not_found: "paymentId expired or unknown to the relay",
+        },
+        pendingStatuses: {
+          queued: "Accepted by relay, awaiting broadcast",
+          submitted: "Submitted to mempool",
+          broadcasting: "Being broadcast to the network",
+          mempool: "In the mempool, awaiting confirmation",
+        },
+        relatedEndpoints: {
+          sendMessage: "POST /api/inbox/[address]",
+          txidRecovery: "POST /api/inbox/[address] with paymentTxid field",
+        },
       },
-      usage: "GET /api/payment-status/{paymentId}",
-      example: "GET /api/payment-status/pay_abc123def456",
-      pollingAdvice: "Poll every 10–30 seconds until status is 'confirmed', 'failed', 'replaced', or 'not_found'",
-      terminalStatuses: {
-        confirmed: "sBTC transfer settled on-chain — message fully delivered",
-        failed: "Payment failed — inbox message may not be stored",
-        replaced: "Transaction was replaced — treat as failed",
-        not_found: "paymentId expired or unknown to the relay",
-      },
-      pendingStatuses: {
-        queued: "Accepted by relay, awaiting broadcast",
-        submitted: "Submitted to mempool",
-        broadcasting: "Being broadcast to the network",
-        mempool: "In the mempool, awaiting confirmation",
-      },
-      relatedEndpoints: {
-        sendMessage: "POST /api/inbox/[address]",
-        txidRecovery: "POST /api/inbox/[address] with paymentTxid field",
-      },
-    });
+      { status: 400 }
+    );
   }
 
   if (!paymentId.startsWith("pay_")) {
@@ -100,12 +103,11 @@ export async function GET(
       checkStatusUrl: `/api/payment-status/${paymentId}`,
     });
   } catch (err) {
-    const message = err instanceof Error ? err.message : String(err);
+    console.error("Error checking payment status from relay:", err, { paymentId });
     return NextResponse.json(
       {
         error: "Failed to check payment status from relay",
         code: "RELAY_ERROR",
-        detail: message,
       },
       { status: 500 }
     );

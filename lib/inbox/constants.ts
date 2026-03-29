@@ -151,7 +151,8 @@ export const RPC_POLL_INTERVAL_MS = 2_000;
  */
 export const RPC_POLL_MAX_ATTEMPTS = 2;
 /**
- * Total RPC timeout budget (ms). Must fit within Workers 30s CPU limit.
- * 2 attempts x 2s interval + ~2s overhead = 6s, safely under the 30s limit.
+ * Total RPC wall-time latency budget (ms).
+ * 2 attempts x 2s interval + ~2s overhead = 6s.
+ * Kept low so agents get a fast response; pending payments settle asynchronously.
  */
 export const RPC_TOTAL_TIMEOUT_MS = 6_000;

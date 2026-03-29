@@ -727,9 +727,8 @@ export function GET() {
               in: "path",
               required: true,
               description:
-                "The paymentId returned in a pending inbox payment response. " +
-                "Use 'help' to get self-documenting usage instructions.",
-              schema: { type: "string" },
+                "The paymentId returned in a pending inbox payment response (pay_ prefix required).",
+              schema: { type: "string", pattern: "^pay_" },
             },
           ],
           responses: {
@@ -767,6 +766,14 @@ export function GET() {
                     },
                     required: ["paymentId", "status"],
                   },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid paymentId (missing pay_ prefix or help request)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
                 },
               },
             },
