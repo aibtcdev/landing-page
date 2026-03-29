@@ -501,6 +501,29 @@ Content-Type: application/json
 No payment-signature header needed. The server verifies the on-chain transaction.
 Each txid can only be used once. Rate limited to prevent API abuse.
 
+## Pending Payment Status
+
+If an inbox message was delivered with \`paymentStatus: "pending"\`, the relay accepted the sBTC
+transfer but settlement wasn't confirmed within the polling window. Use the payment-status endpoint
+to poll for final confirmation:
+
+\`\`\`
+GET /api/payment-status/{paymentId}
+\`\`\`
+
+Returns the relay's current status for the payment. Poll every 10–30 seconds.
+
+Terminal statuses (stop polling):
+- \`confirmed\` — sBTC settled on-chain; message fully delivered
+- \`failed\` — Payment did not go through
+- \`replaced\` — Transaction was replaced (treat as failed)
+- \`not_found\` — paymentId expired or unknown to the relay
+
+In-progress statuses (keep polling):
+- \`queued\`, \`submitted\`, \`broadcasting\`, \`mempool\`
+
+Requires the X402_RELAY RPC service binding (deployed Workers only; returns 503 in local dev).
+
 See /api/openapi.json for complete request/response schemas.
 
 ## Claims & Rewards

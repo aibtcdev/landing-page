@@ -451,6 +451,7 @@ export async function verifyInboxPayment(
   // Relay-specific fields populated only for sponsored transactions.
   let relayPaymentStatus: RelayPaymentStatus | undefined;
   let relayReceiptId: string | undefined;
+  let relayPaymentId: string | undefined;
 
   if (isSponsored) {
     log.debug("Routing sponsored transaction to relay", {
@@ -488,11 +489,12 @@ export async function verifyInboxPayment(
         const senderAddress = senderStxAddress;
         settleResult = {
           success: true,
-          transaction: rpcResult.paymentTxid || "",
+          transaction: rpcResult.paymentTxid ?? "",
           payer: senderAddress,
           network: networkCAIP2,
         };
         relayPaymentStatus = rpcResult.paymentStatus;
+        relayPaymentId = rpcResult.paymentId;
       } catch (error) {
         return handleRelayException("RPC relay", error, log, kv);
       }
@@ -702,6 +704,7 @@ export async function verifyInboxPayment(
     settleResult,
     ...(relayPaymentStatus && { paymentStatus: relayPaymentStatus }),
     ...(relayReceiptId && { receiptId: relayReceiptId }),
+    ...(relayPaymentId && { paymentId: relayPaymentId }),
   };
 }
 

@@ -238,23 +238,30 @@ export async function submitViaRPC(
   }
 
   // Exhausted all poll attempts or hit total deadline.
-  // If the last known status was "mempool", the tx was broadcast and is awaiting confirmation.
-  // Treat this as pending success — mirrors the HTTP path's "settlement.status === pending" handling.
-  // Only treat as pending success when a txid is present; otherwise fall back to SETTLEMENT_TIMEOUT.
-  if (lastCheckResult?.status === "mempool" && lastCheckResult.txid) {
-    log.info("RPC: poll exhausted but tx is in mempool — treating as pending success", {
+  // The relay accepted the payment (accepted: true above), so it will process it.
+  // If the last known status is still in-progress (or we never got a check response),
+  // return pending success — the relay has it and will eventually settle.
+  const lastStatus = lastCheckResult?.status;
+  if (!lastStatus || PENDING_STATUSES.has(lastStatus)) {
+    log.info("RPC: poll exhausted after relay accepted — treating as pending success", {
       paymentId,
-      txid: lastCheckResult.txid,
+      lastStatus: lastStatus ?? "none",
+      ...(lastCheckResult?.txid && { txid: lastCheckResult.txid }),
     });
     return {
       success: true,
-      paymentTxid: lastCheckResult.txid,
       paymentStatus: "pending",
       paymentId,
+      ...(lastCheckResult?.txid && { paymentTxid: lastCheckResult.txid }),
     };
   }
 
-  log.warn("RPC: poll exhausted", { paymentId, attempts: RPC_POLL_MAX_ATTEMPTS });
+  // Safety net: unexpected status at poll exhaustion (should not normally occur).
+  log.warn("RPC: poll exhausted with unexpected status", {
+    paymentId,
+    lastStatus,
+    attempts: RPC_POLL_MAX_ATTEMPTS,
+  });
   return {
     success: false,
     error: "RPC poll timed out waiting for settlement. Recover via paymentTxid.",

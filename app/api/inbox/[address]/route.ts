@@ -1143,8 +1143,14 @@ export async function POST(
       );
     }
 
-    // SETTLEMENT_TIMEOUT — relay gave up polling but tx was broadcast; use txid recovery.
+    // SETTLEMENT_TIMEOUT — safety net: should not occur on the RPC path after the relay-rpc fix
+    // (poll exhaustion after relay accepted now returns pending success). May still occur on the
+    // HTTP fallback path. Log as unexpected if seen frequently.
     if (errorCode === "SETTLEMENT_TIMEOUT") {
+      logger.warn("SETTLEMENT_TIMEOUT reached — unexpected on RPC path, check relay-rpc.ts", {
+        errorCode,
+        ...relayDiag,
+      });
       return NextResponse.json(
         {
           error: "Payment broadcast but settlement confirmation timed out.",
@@ -1228,7 +1234,7 @@ export async function POST(
     toBtcAddress,
     toStxAddress,
     content,
-    paymentTxid: paymentResult.paymentTxid || paymentTxid || "",
+    paymentTxid: paymentResult.paymentTxid || paymentTxid || undefined,
     paymentSatoshis: paymentSatoshis ?? INBOX_PRICE_SATS,
     sentAt: now,
     authenticated,
@@ -1277,14 +1283,19 @@ export async function POST(
   // Invalidate cached agent list (inbox message count changed)
   await invalidateAgentListCache(kv);
 
-  // Build payment-response header (base64-encoded per x402 v2 spec)
-  const paymentResponseData = {
-    success: true,
-    payer: fromAddress,
-    transaction: message.paymentTxid,
-    network: networkCAIP2,
-  };
-  const paymentResponseHeader = btoa(JSON.stringify(paymentResponseData));
+  // Build payment-response header only when we have an actual transaction.
+  // Pending payments (poll exhausted before confirmation) have no txid yet —
+  // omit the header to avoid emitting an empty `transaction` field.
+  const responseHeaders: Record<string, string> = {};
+  if (message.paymentTxid) {
+    const paymentResponseData = {
+      success: true,
+      payer: fromAddress,
+      transaction: message.paymentTxid,
+      network: networkCAIP2,
+    };
+    responseHeaders[X402_HEADERS.PAYMENT_RESPONSE] = btoa(JSON.stringify(paymentResponseData));
+  }
 
   return NextResponse.json(
     {
@@ -1298,13 +1309,12 @@ export async function POST(
         authenticated,
         ...(senderBtcAddress && { senderBtcAddress }),
         ...(paymentResult.paymentStatus && { paymentStatus: paymentResult.paymentStatus }),
+        ...(paymentResult.paymentId && { paymentId: paymentResult.paymentId }),
       },
     },
     {
       status: 201,
-      headers: {
-        [X402_HEADERS.PAYMENT_RESPONSE]: paymentResponseHeader,
-      },
+      headers: responseHeaders,
     }
   );
 

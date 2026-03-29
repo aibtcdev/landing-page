@@ -711,6 +711,91 @@ export function GET() {
           },
         },
       },
+      "/api/payment-status/{paymentId}": {
+        get: {
+          operationId: "checkPaymentStatus",
+          summary: "Check x402 payment settlement status",
+          description:
+            "Proxy to the relay RPC service binding's checkPayment() method. " +
+            "Use this endpoint after receiving paymentStatus: 'pending' + paymentId " +
+            "in a POST /api/inbox/[address] response. Poll every 10–30 seconds until " +
+            "status is 'confirmed', 'failed', 'replaced', or 'not_found'. " +
+            "Requires the X402_RELAY RPC service binding (deployed Workers only).",
+          parameters: [
+            {
+              name: "paymentId",
+              in: "path",
+              required: true,
+              description:
+                "The paymentId returned in a pending inbox payment response (pay_ prefix required).",
+              schema: { type: "string", pattern: "^pay_" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Payment status from the relay",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      paymentId: { type: "string", description: "The payment identifier" },
+                      status: {
+                        type: "string",
+                        description:
+                          "Settlement status: queued | submitted | broadcasting | mempool | confirmed | failed | replaced | not_found",
+                        enum: [
+                          "queued",
+                          "submitted",
+                          "broadcasting",
+                          "mempool",
+                          "confirmed",
+                          "failed",
+                          "replaced",
+                          "not_found",
+                        ],
+                      },
+                      txid: { type: "string", description: "On-chain transaction ID (if available)" },
+                      blockHeight: { type: "integer", description: "Block height of confirmation (if confirmed)" },
+                      confirmedAt: { type: "string", format: "date-time", description: "Confirmation timestamp" },
+                      explorerUrl: { type: "string", description: "Block explorer URL for the transaction" },
+                      error: { type: "string", description: "Error message (if failed)" },
+                      errorCode: { type: "string", description: "Relay error code (if failed)" },
+                      retryable: { type: "boolean", description: "Whether the failure is retryable" },
+                      checkStatusUrl: { type: "string", description: "URL to poll for status updates" },
+                    },
+                    required: ["paymentId", "status"],
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid paymentId (missing pay_ prefix or help request)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "503": {
+              description: "RPC service binding not available in this deployment",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "500": {
+              description: "Relay RPC call failed",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/health": {
         get: {
           operationId: "healthCheck",
