@@ -79,7 +79,7 @@ export const OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS = 300;
  */
 export const INBOX_SENDER_RATE_LIMIT_PREFIX = "ratelimit:inbox-sender:";
 
-/** Normal rate limit window (seconds): 1 request per 60 seconds. */
+/** Normal rate limit window (seconds): 1 request per 60 seconds. (60s = Cloudflare KV minimum expirationTtl) */
 export const INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS = 60;
 
 /** Stricter rate limit window after payment failure (seconds): 1 request per 60 seconds. */

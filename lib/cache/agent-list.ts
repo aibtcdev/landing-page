@@ -16,6 +16,7 @@ const CACHE_TTL_SECONDS = 120; // 2 minutes
 
 // Sentinel key written during rebuild to prevent thundering herd.
 // Short TTL ensures it doesn't block reads if a rebuild crashes.
+// (60s = Cloudflare KV minimum expirationTtl)
 const BUILDING_KEY = "cache:agent-list:building";
 const BUILDING_TTL_SECONDS = 60;
 
