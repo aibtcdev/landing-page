@@ -138,6 +138,7 @@ During registration (POST /api/register), after both signatures are verified, th
 | `/api/inbox/[address]` | GET, POST | List inbox messages (GET), send paid message via x402 (POST, 100 sats sBTC) |
 | `/api/inbox/[address]/[messageId]` | GET, PATCH | Get single message with reply (GET), mark as read (PATCH, signature required) |
 | `/api/outbox/[address]` | GET, POST | List sent replies (GET), reply to inbox message (POST, signature required) |
+| `/api/payment-status/[paymentId]` | GET | Check x402 payment settlement status; poll after receiving `paymentStatus: "pending"` |
 
 ### Discovery & Documentation
 | Route | Purpose |
