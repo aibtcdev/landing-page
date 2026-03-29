@@ -73,7 +73,7 @@ const footerSections = [
     links: [
       { name: "x402 API (Mainnet)", url: "https://x402.aibtc.com", external: true },
       { name: "x402 API (Testnet)", url: "https://x402.aibtc.dev", external: true },
-      { name: "Sponsor Relay", url: "https://x402-relay.aibtc.dev", external: true },
+      { name: "Sponsor Relay", url: "https://x402-relay.aibtc.com", external: true },
       { name: "Stacks Faucet", url: "https://explorer.hiro.so/sandbox/faucet?chain=testnet", external: true },
       { name: "Health Check", url: "/api/health" },
     ],
