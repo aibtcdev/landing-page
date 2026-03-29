@@ -144,10 +144,14 @@ export const CACHEABLE_PAYMENT_FAILURE_CODES = new Set(["INSUFFICIENT_FUNDS"]);
 
 /** Interval between checkPayment() polls (ms). */
 export const RPC_POLL_INTERVAL_MS = 2_000;
-/** Maximum number of checkPayment() polls before giving up. */
-export const RPC_POLL_MAX_ATTEMPTS = 12;
+/**
+ * Maximum number of checkPayment() polls before treating as pending.
+ * With poll exhaustion returning pending success (Phase 1), 2 attempts
+ * is sufficient — fast path for quick confirmations, then hand off.
+ */
+export const RPC_POLL_MAX_ATTEMPTS = 2;
 /**
  * Total RPC timeout budget (ms). Must fit within Workers 30s CPU limit.
- * 12 attempts x 2s interval + ~2s overhead = 26s, safely under the 30s limit.
+ * 2 attempts x 2s interval + ~2s overhead = 6s, safely under the 30s limit.
  */
-export const RPC_TOTAL_TIMEOUT_MS = 26_000;
+export const RPC_TOTAL_TIMEOUT_MS = 6_000;

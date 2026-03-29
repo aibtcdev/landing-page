@@ -423,7 +423,9 @@ describe("submitViaRPC", () => {
   });
 
   describe("poll exhaustion", () => {
-    it("returns SETTLEMENT_TIMEOUT when all poll attempts return queued", async () => {
+    it("returns pending success when all poll attempts return queued", async () => {
+      // queued is a PENDING_STATUS — poll exhaustion with pending status returns
+      // { success: true, paymentStatus: "pending" } since Phase 1.
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
@@ -440,14 +442,14 @@ describe("submitViaRPC", () => {
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
-      expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
-      expect(result.error).toContain("paymentTxid");
+      expect(result.success).toBe(true);
+      expect(result.paymentStatus).toBe("pending");
       expect(result.paymentId).toBe("pay-exhaust-001");
-      expect(rpc.checkPayment).toHaveBeenCalledTimes(12);
+      expect(rpc.checkPayment).toHaveBeenCalledTimes(2);
     });
 
-    it("returns SETTLEMENT_TIMEOUT when all poll attempts return broadcasting", async () => {
+    it("returns pending success when all poll attempts return broadcasting", async () => {
+      // broadcasting is a PENDING_STATUS — poll exhaustion returns pending success.
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
@@ -464,9 +466,9 @@ describe("submitViaRPC", () => {
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
-      expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
-      expect(rpc.checkPayment).toHaveBeenCalledTimes(12);
+      expect(result.success).toBe(true);
+      expect(result.paymentStatus).toBe("pending");
+      expect(rpc.checkPayment).toHaveBeenCalledTimes(2);
     });
 
     it("treats mempool exhaustion as pending success (tx was broadcast)", async () => {
@@ -495,7 +497,9 @@ describe("submitViaRPC", () => {
       expect(result.paymentId).toBe("pay-exhaust-txid");
     });
 
-    it("falls back to SETTLEMENT_TIMEOUT when mempool status has no txid", async () => {
+    it("returns pending success when mempool status has no txid", async () => {
+      // mempool is a PENDING_STATUS — poll exhaustion returns pending success.
+      // paymentTxid is omitted when the relay has no txid yet.
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
@@ -505,7 +509,7 @@ describe("submitViaRPC", () => {
         checkPayment: vi.fn().mockResolvedValue({
           paymentId: "pay-no-txid",
           status: "mempool",
-          // no txid — can't treat as pending success
+          // no txid yet
         }),
       };
 
@@ -513,14 +517,16 @@ describe("submitViaRPC", () => {
       await vi.runAllTimersAsync();
       const result = await resultPromise;
 
-      expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("SETTLEMENT_TIMEOUT");
+      expect(result.success).toBe(true);
+      expect(result.paymentStatus).toBe("pending");
       expect(result.paymentId).toBe("pay-no-txid");
+      expect(result.paymentTxid).toBeUndefined();
     });
   });
 
   describe("multi-poll — confirmed after several attempts", () => {
-    it("succeeds after polling through queued, broadcasting, and mempool states", async () => {
+    it("confirms on second poll (within 2-poll budget)", async () => {
+      // With 2 max polls, confirm on attempt 2 — fast path succeeds.
       let callCount = 0;
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
@@ -531,8 +537,6 @@ describe("submitViaRPC", () => {
         checkPayment: vi.fn().mockImplementation(async () => {
           callCount++;
           if (callCount === 1) return { paymentId: "pay-multi-001", status: "queued" };
-          if (callCount === 2) return { paymentId: "pay-multi-001", status: "broadcasting" };
-          if (callCount === 3) return { paymentId: "pay-multi-001", status: "mempool", txid: "multi-poll-txid" };
           return {
             paymentId: "pay-multi-001",
             status: "confirmed",
@@ -548,7 +552,7 @@ describe("submitViaRPC", () => {
 
       expect(result.success).toBe(true);
       expect(result.paymentTxid).toBe("multi-poll-txid");
-      expect(rpc.checkPayment).toHaveBeenCalledTimes(4);
+      expect(rpc.checkPayment).toHaveBeenCalledTimes(2);
     });
   });
 
@@ -637,7 +641,8 @@ describe("submitViaRPC", () => {
       );
     });
 
-    it("logs warn on poll exhaustion", async () => {
+    it("logs info on poll exhaustion with pending success", async () => {
+      // Since Phase 1, poll exhaustion with pending status logs info (not warn) and succeeds.
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
@@ -654,8 +659,8 @@ describe("submitViaRPC", () => {
       await vi.runAllTimersAsync();
       await resultPromise;
 
-      expect(mockLogger.warn).toHaveBeenCalledWith(
-        "RPC: poll exhausted",
+      expect(mockLogger.info).toHaveBeenCalledWith(
+        "RPC: poll exhausted after relay accepted — treating as pending success",
         expect.objectContaining({ paymentId: "pay-log-exhaust" })
       );
     });
