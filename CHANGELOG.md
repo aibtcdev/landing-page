@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.36.3](https://github.com/aibtcdev/landing-page/compare/v1.36.2...v1.36.3) (2026-03-29)
+
+
+### Bug Fixes
+
+* **inbox:** enforce Cloudflare KV minimum 60s expirationTtl ([#540](https://github.com/aibtcdev/landing-page/issues/540)) ([9ab2188](https://github.com/aibtcdev/landing-page/commit/9ab2188bcca520e45ba5d017c4cf97e127a2b0d2))
+
 ## [1.36.2](https://github.com/aibtcdev/landing-page/compare/v1.36.1...v1.36.2) (2026-03-29)
 
 
