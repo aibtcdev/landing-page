@@ -49,6 +49,9 @@ export async function checkFixedWindowRateLimit(
   if (count >= max) return { limited: true, retryAfterSeconds: remainingSeconds, resetAt };
 
   const value = `${count + 1}:${windowStart}`;
-  await kv.put(key, value, { expirationTtl: isNewWindow ? ttlSeconds : remainingSeconds });
+  // Cloudflare KV requires expirationTtl >= 60. Clamp to 60 so mid-window
+  // writes don't fail. The embedded windowStart handles logical expiry on read.
+  const kvTtl = Math.max(60, isNewWindow ? ttlSeconds : remainingSeconds);
+  await kv.put(key, value, { expirationTtl: kvTtl });
   return { limited: false, retryAfterSeconds: remainingSeconds, resetAt };
 }

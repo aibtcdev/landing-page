@@ -75,12 +75,12 @@ export const OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS = 300;
 
 /**
  * KV key prefix for per-sender inbox POST rate limiting.
- * Full key: ratelimit:inbox-sender:{senderStxAddress}
+ * Full key: ratelimit:inbox-sender:{rateLimitKey} (hash of payment header)
  */
 export const INBOX_SENDER_RATE_LIMIT_PREFIX = "ratelimit:inbox-sender:";
 
-/** Normal rate limit window (seconds): 1 request per 10 seconds. */
-export const INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS = 10;
+/** Normal rate limit window (seconds): 1 request per 60 seconds. (60s = Cloudflare KV minimum expirationTtl) */
+export const INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS = 60;
 
 /** Stricter rate limit window after payment failure (seconds): 1 request per 60 seconds. */
 export const INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS = 60;
