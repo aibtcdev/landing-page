@@ -17,7 +17,7 @@ const CACHE_TTL_SECONDS = 120; // 2 minutes
 // Sentinel key written during rebuild to prevent thundering herd.
 // Short TTL ensures it doesn't block reads if a rebuild crashes.
 const BUILDING_KEY = "cache:agent-list:building";
-const BUILDING_TTL_SECONDS = 30;
+const BUILDING_TTL_SECONDS = 60;
 
 /**
  * Get the cached agent list from KV, rebuilding if stale or missing.

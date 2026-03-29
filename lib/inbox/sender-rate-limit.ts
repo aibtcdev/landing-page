@@ -2,7 +2,7 @@
  * Per-sender rate limiting for the inbox POST endpoint.
  *
  * Two-tier rate limits:
- * - Normal: 1 request per 10 seconds (prevents trivial flooding)
+ * - Normal: 1 request per 60 seconds (prevents trivial flooding)
  * - Failure: 1 request per 60 seconds (applied when sender has a cached payment failure)
  *
  * The failure tier is checked via the Phase 1 payment failure cache, so senders

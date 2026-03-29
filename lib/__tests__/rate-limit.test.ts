@@ -208,7 +208,7 @@ describe("checkFixedWindowRateLimit", () => {
 
     await checkFixedWindowRateLimit(mockKV.kv, "test-key", 10, 60);
 
-    // TTL should be ~40 seconds remaining
-    expect(mockKV.puts[0].opts).toEqual({ expirationTtl: 40 });
+    // Remaining is 40s, but KV minimum TTL is 60 — clamped to 60
+    expect(mockKV.puts[0].opts).toEqual({ expirationTtl: 60 });
   });
 });
