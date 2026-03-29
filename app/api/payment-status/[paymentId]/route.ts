@@ -66,6 +66,17 @@ export async function GET(
     });
   }
 
+  if (!paymentId.startsWith("pay_")) {
+    return NextResponse.json(
+      {
+        error:
+          "Invalid paymentId — expected a relay payment identifier (pay_ prefix)",
+        code: "INVALID_PAYMENT_ID",
+      },
+      { status: 400 }
+    );
+  }
+
   const { env } = await getCloudflareContext();
   const rpc = env.X402_RELAY as RelayRPC | undefined;
 
