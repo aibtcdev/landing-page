@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { RelayRPC } from "@/lib/inbox/relay-rpc";
+import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 
 /**
  * GET /api/payment-status/[paymentId] — Check x402 payment settlement status.
@@ -28,7 +29,7 @@ import type { RelayRPC } from "@/lib/inbox/relay-rpc";
  * Cloudflare Workers, not local dev). Returns 503 if binding is absent.
  */
 export async function GET(
-  _req: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ paymentId: string }> }
 ) {
   const { paymentId } = await params;
@@ -80,17 +81,19 @@ export async function GET(
     );
   }
 
-  const { env } = await getCloudflareContext();
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
+    : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
   const rpc = env.X402_RELAY as RelayRPC | undefined;
 
   if (!rpc) {
+    logger.warn("Payment status RPC binding unavailable", { paymentId });
     return NextResponse.json(
       {
-        error:
-          "Payment status check requires the X402_RELAY RPC service binding, " +
-          "which is not available in this deployment (local dev or HTTP-only path).",
+        error: "Payment status checks are unavailable in this environment",
         code: "RPC_NOT_AVAILABLE",
-        hint: "This endpoint is only functional in the deployed Cloudflare Workers environment.",
       },
       { status: 503 }
     );
@@ -103,10 +106,24 @@ export async function GET(
       checkStatusUrl: `/api/payment-status/${paymentId}`,
     });
   } catch (err) {
-    console.error("Error checking payment status from relay:", err, { paymentId });
+    const errorContext =
+      err instanceof Error
+        ? {
+            errorName: err.name,
+            errorMessage: err.message,
+            errorStack: err.stack,
+          }
+        : {
+            errorValue: err,
+          };
+
+    logger.error("Payment status check failed", {
+      paymentId,
+      ...errorContext,
+    });
     return NextResponse.json(
       {
-        error: "Failed to check payment status from relay",
+        error: "Failed to check payment status",
         code: "RELAY_ERROR",
       },
       { status: 500 }

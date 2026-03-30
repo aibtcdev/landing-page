@@ -17,16 +17,8 @@ import {
   validateCheckInBody,
   type HeartbeatOrientation,
 } from "@/lib/heartbeat";
-import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "@/lib/identity/constants";
 import {
-  verifySenderAchievement,
-  verifySbtcHolderAchievement,
-  verifyStackerAchievement,
-  verifyConnectorAchievement,
-  checkRateLimit,
-  setRateLimit,
-  hasAchievement,
-  grantAchievement,
+  grantAchievementsBatch,
 } from "@/lib/achievements";
 
 /**
@@ -124,6 +116,72 @@ function parseUnreadCount(inboxIndexData: string | null): number {
     return inboxIndex.unreadCount || 0;
   } catch {
     return 0;
+  }
+}
+
+async function grantLocalHeartbeatAchievements(
+  kv: KVNamespace,
+  btcAddress: string,
+  checkInRecord: Awaited<ReturnType<typeof updateCheckInRecord>>
+): Promise<boolean> {
+  const localGrants: Array<{
+    achievementId:
+      | "active"
+      | "dedicated"
+      | "devoted"
+      | "tireless"
+      | "streak-7d"
+      | "streak-30d";
+    eligible: boolean;
+    metadata: Record<string, unknown>;
+  }> = [
+    {
+      achievementId: "active",
+      eligible: checkInRecord.checkInCount >= 10,
+      metadata: { checkInCount: checkInRecord.checkInCount },
+    },
+    {
+      achievementId: "dedicated",
+      eligible: checkInRecord.checkInCount >= 100,
+      metadata: { checkInCount: checkInRecord.checkInCount },
+    },
+    {
+      achievementId: "devoted",
+      eligible: checkInRecord.checkInCount >= 1000,
+      metadata: { checkInCount: checkInRecord.checkInCount },
+    },
+    {
+      achievementId: "tireless",
+      eligible: checkInRecord.checkInCount >= 5000,
+      metadata: { checkInCount: checkInRecord.checkInCount },
+    },
+    {
+      achievementId: "streak-7d",
+      eligible: (checkInRecord.currentStreak ?? 0) >= 7,
+      metadata: { currentStreak: checkInRecord.currentStreak },
+    },
+    {
+      achievementId: "streak-30d",
+      eligible: (checkInRecord.currentStreak ?? 0) >= 30,
+      metadata: { currentStreak: checkInRecord.currentStreak },
+    },
+  ];
+
+  try {
+    const granted = await grantAchievementsBatch(
+      kv,
+      btcAddress,
+      localGrants
+        .filter((grant) => grant.eligible)
+        .map(({ achievementId, metadata }) => ({ achievementId, metadata }))
+    );
+    return granted.length > 0;
+  } catch (error) {
+    console.error("Failed to grant local heartbeat achievements", {
+      btcAddress,
+      error,
+    });
+    return false;
   }
 }
 
@@ -366,239 +424,19 @@ export async function POST(request: NextRequest) {
     // Update check-in record (pass existing to avoid redundant KV read)
     const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp, existingCheckIn);
 
-    // Detect on-chain identity using direct Hiro fetch with KV sentinel rate-limiting.
-    // Same approach as /api/identity/[address]: KV sentinel key prevents re-checking
-    // negative results within 5 minutes, regardless of JSON serialization of null vs undefined.
-    let identityAgentId = agent.erc8004AgentId;
-    let identityCheckPerformed = false;
+    // Heartbeat stays on the cheap local path. External identity and on-chain
+    // achievement verification now happen out of band rather than per check-in.
+    const achievementGranted = await grantLocalHeartbeatAchievements(
+      kv,
+      btcAddress,
+      checkInRecord
+    );
 
-    if (identityAgentId == null) {
-      // Check KV sentinel before hitting Hiro (5-minute rate limit on negative results)
-      const identitySentinelKey = `identity-check:${agent.stxAddress}`;
-      const recentlyChecked = await kv.get(identitySentinelKey);
-
-      if (!recentlyChecked) {
-        try {
-          const [contractAddress, contractName] = IDENTITY_REGISTRY_CONTRACT.split(".");
-          const assetId = `${contractAddress}.${contractName}::agent-identity`;
-          const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
-
-          const hiroHeaders: Record<string, string> = {};
-          if (env.HIRO_API_KEY) hiroHeaders["X-Hiro-API-Key"] = env.HIRO_API_KEY;
-
-          const resp = await fetch(url, { headers: hiroHeaders });
-
-          if (resp.ok) {
-            const data = await resp.json() as { results?: Array<{ value: { repr: string } }> };
-            const repr = data.results?.[0]?.value?.repr;
-            const tokenMatch = repr?.match(/^u(\d+)$/);
-            identityAgentId = tokenMatch ? Number(tokenMatch[1]) : null;
-            identityCheckPerformed = true;
-
-            // Set sentinel for negative results to avoid hammering Hiro (5-min TTL)
-            if (identityAgentId == null) {
-              await kv.put(identitySentinelKey, "1", { expirationTtl: 300 });
-            }
-          } else {
-            // On Hiro error, log but don't set sentinel so we retry on next heartbeat
-            console.warn(`Identity check Hiro error ${resp.status} for ${agent.stxAddress}`);
-          }
-        } catch (error) {
-          // Don't fail check-in on identity detection errors
-          console.error("Identity detection failed during heartbeat:", error);
-        }
-      }
-    }
-
-    // Track whether any achievement was newly granted (affects cache invalidation).
-    // Must be initialized before ALL achievement checks, not just the later ones.
-    let achievementGranted = false;
-
-    // Proactively check sender achievement (lightweight, best-effort)
-    try {
-      const rateLimit = await checkRateLimit(kv, btcAddress, "sender");
-      if (rateLimit.allowed) {
-        const hasSender = await hasAchievement(kv, btcAddress, "sender");
-        if (!hasSender) {
-          const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv);
-          if (hasOutgoingTx) {
-            await grantAchievement(kv, btcAddress, "sender");
-            achievementGranted = true;
-          }
-        }
-        await setRateLimit(kv, btcAddress, "sender");
-      }
-    } catch (error) {
-      // Best-effort: log and continue if achievement check fails
-      console.error("Failed to check sender achievement during heartbeat:", error);
-    }
-
-    // Proactively check stacker achievement (best-effort)
-    try {
-      const rateLimit = await checkRateLimit(kv, btcAddress, "stacker");
-      if (rateLimit.allowed && agent.stxAddress) {
-        const hasStacker = await hasAchievement(kv, btcAddress, "stacker");
-        if (!hasStacker) {
-          const isStacking = await verifyStackerAchievement(
-            agent.stxAddress,
-            kv,
-            env.HIRO_API_KEY
-          );
-          if (isStacking) {
-            await grantAchievement(kv, btcAddress, "stacker");
-            achievementGranted = true;
-          }
-          await setRateLimit(kv, btcAddress, "stacker");
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check stacker achievement during heartbeat:", error);
-    }
-
-    // Proactively check sbtc-holder achievement (best-effort)
-    try {
-      const rateLimit = await checkRateLimit(kv, btcAddress, "sbtc-holder");
-      if (rateLimit.allowed && agent.stxAddress) {
-        const hasSbtcHolder = await hasAchievement(kv, btcAddress, "sbtc-holder");
-        if (!hasSbtcHolder) {
-          const holdsSbtc = await verifySbtcHolderAchievement(
-            agent.stxAddress,
-            kv,
-            env.HIRO_API_KEY
-          );
-          if (holdsSbtc) {
-            await grantAchievement(kv, btcAddress, "sbtc-holder");
-            achievementGranted = true;
-          }
-          await setRateLimit(kv, btcAddress, "sbtc-holder");
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check sbtc-holder achievement during heartbeat:", error);
-    }
-
-    // Proactively check connector achievement (best-effort)
-    try {
-      const rateLimit = await checkRateLimit(kv, btcAddress, "connector");
-      if (rateLimit.allowed && agent.stxAddress) {
-        const hasConnector = await hasAchievement(kv, btcAddress, "connector");
-        if (!hasConnector) {
-          const connectorResult = await verifyConnectorAchievement(
-            agent.stxAddress,
-            kv,
-            env.HIRO_API_KEY
-          );
-          if (connectorResult) {
-            await grantAchievement(kv, btcAddress, "connector", {
-              txid: connectorResult.txid,
-              recipientAddress: connectorResult.recipientAddress,
-            });
-            achievementGranted = true;
-          }
-          await setRateLimit(kv, btcAddress, "connector");
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check connector achievement during heartbeat:", error);
-    }
-
-    // Grant identified achievement if agent has an on-chain identity (best-effort)
-    try {
-      if (identityAgentId != null) {
-        const hasIdentified = await hasAchievement(kv, btcAddress, "identified");
-        if (!hasIdentified) {
-          await grantAchievement(kv, btcAddress, "identified", { agentId: identityAgentId });
-          achievementGranted = true;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check identified achievement during heartbeat:", error);
-    }
-
-    // Grant active achievement if agent has 10+ check-ins (best-effort)
-    try {
-      if (checkInRecord.checkInCount >= 10) {
-        const hasActive = await hasAchievement(kv, btcAddress, "active");
-        if (!hasActive) {
-          await grantAchievement(kv, btcAddress, "active", { checkInCount: checkInRecord.checkInCount });
-          achievementGranted = true;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check active achievement during heartbeat:", error);
-    }
-
-    // Grant dedicated achievement if agent has 100+ check-ins (best-effort)
-    try {
-      if (checkInRecord.checkInCount >= 100) {
-        const hasDedicated = await hasAchievement(kv, btcAddress, "dedicated");
-        if (!hasDedicated) {
-          await grantAchievement(kv, btcAddress, "dedicated", { checkInCount: checkInRecord.checkInCount });
-          achievementGranted = true;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check dedicated achievement during heartbeat:", error);
-    }
-
-    // Grant devoted achievement if agent has 1000+ check-ins (best-effort)
-    try {
-      if (checkInRecord.checkInCount >= 1000) {
-        const hasDevoted = await hasAchievement(kv, btcAddress, "devoted");
-        if (!hasDevoted) {
-          await grantAchievement(kv, btcAddress, "devoted", { checkInCount: checkInRecord.checkInCount });
-          achievementGranted = true;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check devoted achievement during heartbeat:", error);
-    }
-
-    // Grant tireless achievement if agent has 5000+ check-ins (best-effort)
-    try {
-      if (checkInRecord.checkInCount >= 5000) {
-        const hasTireless = await hasAchievement(kv, btcAddress, "tireless");
-        if (!hasTireless) {
-          await grantAchievement(kv, btcAddress, "tireless", { checkInCount: checkInRecord.checkInCount });
-          achievementGranted = true;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check tireless achievement during heartbeat:", error);
-    }
-
-    // Grant streak-7d achievement if agent has 7+ consecutive days (best-effort)
-    try {
-      if ((checkInRecord.currentStreak ?? 0) >= 7) {
-        const hasStreak7d = await hasAchievement(kv, btcAddress, "streak-7d");
-        if (!hasStreak7d) {
-          await grantAchievement(kv, btcAddress, "streak-7d", { currentStreak: checkInRecord.currentStreak });
-          achievementGranted = true;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check streak-7d achievement during heartbeat:", error);
-    }
-
-    // Grant streak-30d achievement if agent has 30+ consecutive days (best-effort)
-    try {
-      if ((checkInRecord.currentStreak ?? 0) >= 30) {
-        const hasStreak30d = await hasAchievement(kv, btcAddress, "streak-30d");
-        if (!hasStreak30d) {
-          await grantAchievement(kv, btcAddress, "streak-30d", { currentStreak: checkInRecord.currentStreak });
-          achievementGranted = true;
-        }
-      }
-    } catch (error) {
-      console.error("Failed to check streak-30d achievement during heartbeat:", error);
-    }
-
-    // Update agent record with lastActiveAt, checkInCount, and identity data
+    // Update agent record with lastActiveAt and check-in progress only.
     const updatedAgent = {
       ...agent,
       lastActiveAt: timestamp,
       checkInCount: checkInRecord.checkInCount,
-      erc8004AgentId: identityAgentId,
     };
 
     // Write updates to both btc: and stx: keys, fetch inbox in parallel
@@ -608,12 +446,11 @@ export async function POST(request: NextRequest) {
       kv.get(`inbox:agent:${btcAddress}`),
     ]);
 
-    // Only invalidate cached agent list when listing-relevant fields changed
-    // (identity detection or achievement grants). Pure timestamp/count updates
+    // Only invalidate cached agent list when listing-relevant fields changed.
+    // Pure timestamp/count updates
     // are tolerated as stale for up to 2 min TTL — avoids negating the cache
     // on high-frequency heartbeats.
-    const identityChanged = identityAgentId !== agent.erc8004AgentId;
-    if (identityChanged || achievementGranted) {
+    if (achievementGranted) {
       await invalidateAgentListCache(kv);
     }
 

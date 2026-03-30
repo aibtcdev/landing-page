@@ -25,6 +25,7 @@ export {
   getAgentAchievementIds,
   hasAchievement,
   grantAchievement,
+  grantAchievementsBatch,
 } from "./kv";
 
 // Verification

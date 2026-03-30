@@ -144,8 +144,23 @@ export function createLogger(
   ) => {
     ctx.waitUntil(
       rpcCall.catch((err) => {
-        console.error(`[logger] Failed to send ${level} log: ${err}`);
-        console.error(`[logger] Original message: ${message}`, context);
+        const errorContext =
+          err instanceof Error
+            ? {
+                errorName: err.name,
+                errorMessage: err.message,
+                errorStack: err.stack,
+              }
+            : {
+                errorValue: err,
+              };
+
+        console.error("[logger] Failed to send log", {
+          level,
+          message,
+          ...context,
+          ...errorContext,
+        });
       })
     );
   };
