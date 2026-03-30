@@ -1025,11 +1025,22 @@ export async function POST(
   );
 
   if (!paymentResult.success) {
-    logger.error("Payment verification failed", {
-      error: paymentResult.error,
-      errorCode: paymentResult.errorCode,
-      retryAfterSeconds: paymentResult.retryAfterSeconds,
-    });
+    const isExpectedNonceFailure =
+      paymentResult.errorCode === "SENDER_NONCE_DUPLICATE" ||
+      paymentResult.errorCode === "SENDER_NONCE_STALE" ||
+      paymentResult.errorCode === "SENDER_NONCE_GAP";
+    if (isExpectedNonceFailure) {
+      logger.warn("Payment rejected: sender nonce state (expected)", {
+        errorCode: paymentResult.errorCode,
+        retryAfterSeconds: paymentResult.retryAfterSeconds,
+      });
+    } else {
+      logger.error("Payment verification failed", {
+        error: paymentResult.error,
+        errorCode: paymentResult.errorCode,
+        retryAfterSeconds: paymentResult.retryAfterSeconds,
+      });
+    }
 
     const errorCode = paymentResult.errorCode;
     const retryAfterSeconds = paymentResult.retryAfterSeconds ?? 5;
