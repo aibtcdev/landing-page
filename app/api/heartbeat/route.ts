@@ -18,8 +18,7 @@ import {
   type HeartbeatOrientation,
 } from "@/lib/heartbeat";
 import {
-  hasAchievement,
-  grantAchievement,
+  grantAchievementsBatch,
 } from "@/lib/achievements";
 
 /**
@@ -125,8 +124,6 @@ async function grantLocalHeartbeatAchievements(
   btcAddress: string,
   checkInRecord: Awaited<ReturnType<typeof updateCheckInRecord>>
 ): Promise<boolean> {
-  let achievementGranted = false;
-
   const localGrants: Array<{
     achievementId:
       | "active"
@@ -170,21 +167,19 @@ async function grantLocalHeartbeatAchievements(
     },
   ];
 
-  for (const grant of localGrants) {
-    if (!grant.eligible) continue;
-
-    try {
-      const alreadyGranted = await hasAchievement(kv, btcAddress, grant.achievementId);
-      if (alreadyGranted) continue;
-
-      await grantAchievement(kv, btcAddress, grant.achievementId, grant.metadata);
-      achievementGranted = true;
-    } catch (error) {
-      console.error(`Failed to grant ${grant.achievementId} during heartbeat:`, error);
-    }
+  try {
+    const granted = await grantAchievementsBatch(
+      kv,
+      btcAddress,
+      localGrants
+        .filter((grant) => grant.eligible)
+        .map(({ achievementId, metadata }) => ({ achievementId, metadata }))
+    );
+    return granted.length > 0;
+  } catch (error) {
+    console.error(`Failed to grant local heartbeat achievements for ${btcAddress}:`, error);
+    return false;
   }
-
-  return achievementGranted;
 }
 
 export async function GET(request: NextRequest) {

@@ -166,6 +166,79 @@ export async function grantAchievement(
 }
 
 /**
+ * Grant multiple achievements with a single index read/write.
+ *
+ * This avoids repeated KV round-trips for callers that already know which
+ * local achievements became eligible at once, such as heartbeat streak/count grants.
+ */
+export async function grantAchievementsBatch(
+  kv: KVNamespace,
+  btcAddress: string,
+  grants: Array<{
+    achievementId: string;
+    metadata?: Record<string, unknown>;
+  }>
+): Promise<AchievementRecord[]> {
+  if (grants.length === 0) {
+    return [];
+  }
+
+  const existing = await getAgentIndex(kv, btcAddress);
+  const existingIds = new Set(existing?.achievementIds ?? []);
+  const pendingGrants = grants.filter((grant) => !existingIds.has(grant.achievementId));
+  if (pendingGrants.length === 0) {
+    return [];
+  }
+
+  const unlockedAt = new Date().toISOString();
+  const writeResults = await Promise.allSettled(
+    pendingGrants.map(async (grant) => {
+      const record: AchievementRecord = {
+        achievementId: grant.achievementId,
+        btcAddress,
+        unlockedAt,
+        metadata: grant.metadata,
+      };
+
+      await kv.put(
+        buildAchievementKey(btcAddress, grant.achievementId),
+        JSON.stringify(record)
+      );
+
+      return record;
+    })
+  );
+
+  const grantedRecords: AchievementRecord[] = [];
+  for (const result of writeResults) {
+    if (result.status === "fulfilled") {
+      grantedRecords.push(result.value);
+    }
+  }
+
+  if (grantedRecords.length === 0) {
+    return [];
+  }
+
+  const mergedIds = existing?.achievementIds ? [...existing.achievementIds] : [];
+  for (const record of grantedRecords) {
+    if (!existingIds.has(record.achievementId)) {
+      existingIds.add(record.achievementId);
+      mergedIds.push(record.achievementId);
+    }
+  }
+
+  const index: AchievementAgentIndex = {
+    btcAddress,
+    achievementIds: mergedIds,
+    lastUpdated: unlockedAt,
+  };
+  await kv.put(buildIndexKey(btcAddress), JSON.stringify(index));
+
+  return grantedRecords;
+}
+
+/**
  * Get the agent achievement index.
  *
  * @param kv - Cloudflare KV namespace
