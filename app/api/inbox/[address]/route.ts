@@ -1286,7 +1286,7 @@ export async function POST(
 
   // Store pending payment for background reconciliation (#537)
   if (paymentResult.paymentStatus === "pending" && paymentResult.paymentId) {
-    storePendingPayment(kv, paymentResult.paymentId, messageId, toBtcAddress);
+    await storePendingPayment(kv, paymentResult.paymentId, messageId, toBtcAddress);
   }
 
   // Build payment-response header only when we have an actual transaction.

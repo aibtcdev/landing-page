@@ -531,8 +531,9 @@ export async function storePendingPayment(
       JSON.stringify(record),
       { expirationTtl: PENDING_PAYMENT_TTL_SECONDS }
     );
-  } catch {
+  } catch (err) {
     // KV write failure is non-fatal — reconciliation degrades gracefully
+    console.warn("[storePendingPayment] KV write failed:", err);
   }
 }
 
@@ -545,7 +546,7 @@ export async function clearPendingPayment(
 ): Promise<void> {
   try {
     await kv.delete(`${PENDING_PAYMENT_PREFIX}${paymentId}`);
-  } catch {
-    // Non-fatal
+  } catch (err) {
+    console.warn("[clearPendingPayment] KV write failed:", err);
   }
 }
