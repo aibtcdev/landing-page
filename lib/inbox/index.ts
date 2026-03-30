@@ -89,7 +89,7 @@ export {
 } from "./x402-config";
 
 // KV Helpers
-export type { ListInboxOptions, ListInboxResult, ListSentResult } from "./kv-helpers";
+export type { ListInboxOptions, ListInboxResult, ListSentResult, PendingPaymentRecord } from "./kv-helpers";
 export {
   getMessage,
   storeMessage,
@@ -103,4 +103,6 @@ export {
   listInboxMessages,
   listSentMessages,
   decrementUnreadCount,
+  storePendingPayment,
+  clearPendingPayment,
 } from "./kv-helpers";

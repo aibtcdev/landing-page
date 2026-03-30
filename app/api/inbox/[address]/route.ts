@@ -13,6 +13,7 @@ import {
   updateSentIndex,
   listInboxMessages,
   listSentMessages,
+  storePendingPayment,
   INBOX_PRICE_SATS,
   REDEEMED_TXID_TTL_SECONDS,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
@@ -1282,6 +1283,11 @@ export async function POST(
 
   // Invalidate cached agent list (inbox message count changed)
   await invalidateAgentListCache(kv);
+
+  // Store pending payment for background reconciliation (#537)
+  if (paymentResult.paymentStatus === "pending" && paymentResult.paymentId) {
+    storePendingPayment(kv, paymentResult.paymentId, messageId, toBtcAddress);
+  }
 
   // Build payment-response header only when we have an actual transaction.
   // Pending payments (poll exhausted before confirmation) have no txid yet —
