@@ -37,7 +37,7 @@ describe("normalizeSponsorStatusResult", () => {
     expect(normalizeSponsorStatusResult(baseStatus)).toEqual(baseStatus);
   });
 
-  it("rejects widened local fields from legacy Hiro-shaped payloads", () => {
+  it("accepts canonical fields while ignoring legacy widened fields", () => {
     expect(
       normalizeSponsorStatusResult({
         ...baseStatus,

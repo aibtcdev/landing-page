@@ -95,7 +95,7 @@ function formatPercent(value: number): string {
 }
 
 async function fetchAll(): Promise<StatusData> {
-  const response = await fetch("/api/status/summary", { cache: "no-store" });
+  const response = await fetch("/api/status/summary");
   if (!response.ok) {
     throw new Error(`Status refresh failed with ${response.status}`);
   }

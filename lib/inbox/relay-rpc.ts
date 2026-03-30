@@ -82,7 +82,7 @@ export interface RelayCheckResult {
 export interface RelayRPC {
   submitPayment(txHex: string, settle?: RelaySettleOptions): Promise<RelaySubmitResult>;
   checkPayment(paymentId: string): Promise<RelayCheckResult>;
-  getSponsorStatus(): Promise<SponsorStatusResult>;
+  getSponsorStatus?(): Promise<SponsorStatusResult>;
 }
 
 /** Maps raw RPC relay error codes to typed InboxPaymentErrorCode values. */

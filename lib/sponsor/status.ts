@@ -1,8 +1,7 @@
-import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { RelayRPC } from "@/lib/inbox/relay-rpc";
 import type { SponsorStatusResult, SponsorStatusReason } from "./types";
 
-type RelaySponsorStatusBinding = {
+export type RelaySponsorStatusBinding = {
   getSponsorStatus?: RelayRPC["getSponsorStatus"];
 };
 
@@ -74,6 +73,8 @@ export function normalizeSponsorStatusResult(value: unknown): SponsorStatusResul
   }
 
   if (
+    // The relay contract currently defines Hiro as the sole reconciliation source.
+    // Keep this strict so contract drift fails closed instead of being silently accepted.
     reconciliation.source !== "hiro" ||
     (reconciliation.lastSuccessfulAt !== null &&
       typeof reconciliation.lastSuccessfulAt !== "string") ||
@@ -136,9 +137,4 @@ export async function getRelaySponsorStatusFromBinding(
   } catch {
     return null;
   }
-}
-
-export async function getRelaySponsorStatus(): Promise<SponsorStatusResult | null> {
-  const { env } = await getCloudflareContext({ async: true });
-  return getRelaySponsorStatusFromBinding(env.X402_RELAY as RelaySponsorStatusBinding | undefined);
 }

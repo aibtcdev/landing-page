@@ -1,6 +1,8 @@
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { getRelaySponsorStatusFromBinding } from "@/lib/sponsor/status";
-import type { RelayRPC } from "@/lib/inbox/relay-rpc";
+import {
+  getRelaySponsorStatusFromBinding,
+  type RelaySponsorStatusBinding,
+} from "@/lib/sponsor/status";
 import { STATUS_REVALIDATE_SECONDS } from "./constants";
 import type { MainnetHealth, StatusData, TestnetHealth } from "./types";
 
@@ -28,13 +30,22 @@ async function fetchTestnetHealth(): Promise<TestnetHealth | null> {
   }
 }
 
-export async function getStatusData(): Promise<StatusData> {
-  const { env } = await getCloudflareContext({ async: true });
+async function getRelaySponsorStatusWithGracefulContext(): Promise<StatusData["sponsorStatus"]> {
+  try {
+    const { env } = await getCloudflareContext({ async: true });
+    return getRelaySponsorStatusFromBinding(
+      env.X402_RELAY as RelaySponsorStatusBinding | undefined
+    );
+  } catch {
+    return null;
+  }
+}
 
+export async function getStatusData(): Promise<StatusData> {
   const [mainnet, testnet, sponsorStatus] = await Promise.all([
     fetchMainnetHealth(),
     fetchTestnetHealth(),
-    getRelaySponsorStatusFromBinding(env.X402_RELAY as RelayRPC | undefined),
+    getRelaySponsorStatusWithGracefulContext(),
   ]);
 
   return {
