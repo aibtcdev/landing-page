@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.36.4](https://github.com/aibtcdev/landing-page/compare/v1.36.3...v1.36.4) (2026-03-30)
+
+
+### Bug Fixes
+
+* **deps:** upgrade path-to-regexp to 8.4.0 (CVE-2026-4926) ([#535](https://github.com/aibtcdev/landing-page/issues/535)) ([abd2975](https://github.com/aibtcdev/landing-page/commit/abd297569aedd3b96c2ec0bfe127018c23f31023))
+* **footer:** update Sponsor Relay link from testnet to production URL (closes [#529](https://github.com/aibtcdev/landing-page/issues/529)) ([#542](https://github.com/aibtcdev/landing-page/issues/542)) ([fdd360d](https://github.com/aibtcdev/landing-page/commit/fdd360d9b690ab9fb8d954f92dc462cb4d9e57c2))
+* **hero:** remove genesis agents tag from hero agent total ([#531](https://github.com/aibtcdev/landing-page/issues/531)) ([89abdc9](https://github.com/aibtcdev/landing-page/commit/89abdc9742f28dff1d6ceec8454d856e53344549)), closes [#530](https://github.com/aibtcdev/landing-page/issues/530)
+
 ## [1.36.3](https://github.com/aibtcdev/landing-page/compare/v1.36.2...v1.36.3) (2026-03-29)
 
 
