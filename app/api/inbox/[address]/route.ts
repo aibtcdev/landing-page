@@ -26,6 +26,14 @@ import { hasAchievement, grantAchievement } from "@/lib/achievements";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 
+/** Maps nonce-related error codes to structured action strings for agents and operators. */
+const NONCE_ACTION_MAP: Record<string, string> = {
+  SENDER_NONCE_STALE: "refetch_nonce_and_resign",
+  SENDER_NONCE_DUPLICATE: "wait_for_queued_tx",
+  SENDER_NONCE_GAP: "increment_nonce_and_resign",
+  NONCE_CONFLICT: "retry_same_payment",
+};
+
 /** Static lookup for SENDER_NONCE_* error responses (RPC path). */
 const SENDER_NONCE_ERRORS: Record<string, { error: string; retryAfter: number; nextSteps: string }> = {
   SENDER_NONCE_STALE: {
@@ -1051,6 +1059,15 @@ export async function POST(
 
     // NONCE_CONFLICT — retryable; same tx hex is idempotent within 5 min.
     if (errorCode === "NONCE_CONFLICT") {
+      const nonceAction = NONCE_ACTION_MAP[errorCode];
+      logger.info("inbox_payment_rejected", {
+        errorCode,
+        relayCode: paymentResult.relayCode,
+        retryAfter: retryAfterSeconds,
+        nonceAction,
+        recipientBtcAddress: agent.btcAddress,
+        requestId: rayId,
+      });
       return NextResponse.json(
         {
           error: `Nonce conflict: another transaction from your wallet is pending. Retry after ${retryAfterSeconds}s.`,
@@ -1059,6 +1076,16 @@ export async function POST(
           retryAfter: retryAfterSeconds,
           nextSteps: "Retry the payment — the relay had a transient nonce collision",
           ...relayDiag,
+          action: nonceAction,
+          ...(paymentResult.payerStxAddress && {
+            sender: { stxAddress: paymentResult.payerStxAddress },
+          }),
+          diagnostics: {
+            ...(paymentResult.relayCode && { relayCode: paymentResult.relayCode }),
+            ...(paymentResult.paymentId && { paymentId: paymentResult.paymentId }),
+            requestId: rayId,
+          },
+          docs: "https://github.com/aibtcdev/x402-sponsor-relay/tree/main/docs",
         },
         {
           status: 409,
@@ -1181,6 +1208,15 @@ export async function POST(
     // SENDER_NONCE_* — RPC path nonce rejections. All return HTTP 409 with retry guidance.
     const nonceError = errorCode ? SENDER_NONCE_ERRORS[errorCode] : undefined;
     if (nonceError) {
+      const nonceAction = errorCode ? NONCE_ACTION_MAP[errorCode] : undefined;
+      logger.info("inbox_payment_rejected", {
+        errorCode,
+        relayCode: paymentResult.relayCode,
+        retryAfter: nonceError.retryAfter,
+        nonceAction,
+        recipientBtcAddress: agent.btcAddress,
+        requestId: rayId,
+      });
       return NextResponse.json(
         {
           error: nonceError.error,
@@ -1189,6 +1225,16 @@ export async function POST(
           retryAfter: nonceError.retryAfter,
           nextSteps: nonceError.nextSteps,
           ...relayDiag,
+          action: nonceAction,
+          ...(paymentResult.payerStxAddress && {
+            sender: { stxAddress: paymentResult.payerStxAddress },
+          }),
+          diagnostics: {
+            ...(paymentResult.relayCode && { relayCode: paymentResult.relayCode }),
+            ...(paymentResult.paymentId && { paymentId: paymentResult.paymentId }),
+            requestId: rayId,
+          },
+          docs: "https://github.com/aibtcdev/x402-sponsor-relay/tree/main/docs",
         },
         {
           status: 409,
