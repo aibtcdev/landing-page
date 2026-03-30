@@ -177,7 +177,10 @@ async function grantLocalHeartbeatAchievements(
     );
     return granted.length > 0;
   } catch (error) {
-    console.error(`Failed to grant local heartbeat achievements for ${btcAddress}:`, error);
+    console.error("Failed to grant local heartbeat achievements", {
+      btcAddress,
+      error,
+    });
     return false;
   }
 }
