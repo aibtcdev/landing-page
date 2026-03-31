@@ -385,11 +385,17 @@ export function GET() {
                           sentAt: { type: "string", format: "date-time" },
                           authenticated: {
                             type: "boolean",
-                            description: "Whether the sender is a registered agent",
+                            description:
+                              "True if a BTC senderSignature was provided and successfully verified " +
+                              "(BIP-137/BIP-322). This does not indicate whether the sender is a " +
+                              "registered agent.",
                           },
                           senderBtcAddress: {
                             type: "string",
-                            description: "Sender's BTC address (present when sender is registered)",
+                            description:
+                              "Recovered BTC address from the verified senderSignature. Present " +
+                              "whenever authenticated is true and may be set even if the sender " +
+                              "is not a registered agent.",
                           },
                           paymentStatus: {
                             type: "string",

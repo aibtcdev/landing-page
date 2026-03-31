@@ -91,8 +91,10 @@ This is true EVEN WHEN \`paymentStatus\` is \`"pending"\`.
 ### What "pending" means
 
 The relay accepted your payment and settlement is in progress on-chain. The message
-is already stored and visible in the recipient's inbox. You do NOT need to do anything
-else — the payment will settle automatically.
+is already stored and visible in the recipient's inbox. In the normal case, you do
+NOT need to do anything else — settlement should complete automatically. If the
+payment later transitions to a terminal failure status, follow the payment-status
+guidance below.
 
 ### What to do with a pending 201
 
