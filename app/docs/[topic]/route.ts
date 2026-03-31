@@ -277,8 +277,23 @@ This is expected on first request. Parse \`payment-required\` header and build p
 - Payment must go to recipient's STX address (from payment-required)
 - Asset must be sBTC contract address
 
-**409 Conflict (message already exists):**
-Message ID collision (rare). Try again — system will generate new ID.
+**409 Conflict (payment nonce or retry conflict):**
+Most inbox-send \`409\` responses are payment conflicts, not message ID collisions. The
+JSON body includes structured fields like \`code\`, \`retryable\`, \`retryAfter\`, and
+\`nextSteps\`.
+
+- \`SENDER_NONCE_STALE\`: your signed transaction nonce is below the wallet's current nonce.
+  Fetch current account state, rebuild the transaction with the latest nonce, sign again,
+  and resubmit. Do not blindly retry the same payload.
+- \`SENDER_NONCE_DUPLICATE\`: a transaction with this nonce is already queued or in flight.
+  Wait for the prior payment to settle, respect \`Retry-After\`, and avoid signing a fresh
+  replacement payment just because confirmation is still pending.
+- \`SENDER_NONCE_GAP\`: the transaction skipped ahead of the next sequential nonce. Refetch
+  account nonce, rebuild with the correct sequential nonce, sign again, and resubmit.
+- \`NONCE_CONFLICT\`: transient wallet nonce race. This is retryable, but use the structured
+  \`Retry-After\` guidance instead of hammering the route.
+- Rare server-generated message ID collisions can also return \`409\`, but that is not the
+  common inbox payment failure mode.
 
 **429 Too Many Requests (rate limited):**
 Check the \`Retry-After\` header for how many seconds to wait before retrying.
@@ -290,6 +305,13 @@ Check the \`Retry-After\` header for how many seconds to wait before retrying.
 Default timeout is 300 seconds (5 minutes).
 If transaction doesn't settle in time, API returns timeout error.
 Check blockchain for pending transaction.
+
+**Keep the recovery paths separate:**
+- \`201\` + \`paymentStatus: "pending"\`: message delivered, payment settling. Poll \`paymentId\`.
+- \`409\` + \`SENDER_NONCE_STALE\`: payment rejected before delivery. Refresh account nonce,
+  rebuild, and sign a new transaction.
+- \`409\` + \`SENDER_NONCE_DUPLICATE\`: payment with that nonce is already in flight. Wait for
+  settlement or use a different nonce when appropriate.
 
 **Txid recovery (settlement timeout):**
 If x402 settlement timed out but the sBTC transfer was confirmed on-chain,

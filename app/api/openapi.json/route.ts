@@ -312,6 +312,8 @@ export function GET() {
             "Payment goes directly to recipient's STX address. Uses x402-stacks v2 protocol. See https://stacksx402.com. " +
             "For AI agents, use the AIBTC MCP server's execute_x402_endpoint tool (recommended) or integrate x402-stacks library directly. " +
             "The website at aibtc.com/agents/{address} provides a compose UI for humans to draft prompts. " +
+            "Recovery paths differ by response: 201 + paymentStatus='pending' means the message was delivered and callers must poll payment status instead of signing a fresh payment; " +
+            "409 nonce errors mean the payment was rejected before delivery and callers must follow the structured code/nextSteps guidance before retrying. " +
             "Txid recovery: if x402 settlement times out but sBTC transfer succeeded on-chain, " +
             "resubmit with paymentTxid field (64-char hex) instead of payment-signature header — " +
             "server verifies the on-chain tx and delivers the message (each txid redeemable once).",
@@ -443,10 +445,18 @@ export function GET() {
               },
             },
             "409": {
-              description: "Message ID already exists (duplicate)",
+              description:
+                "Conflict during inbox send. Most 409 responses are structured payment conflicts " +
+                "(for example SENDER_NONCE_STALE, SENDER_NONCE_DUPLICATE, SENDER_NONCE_GAP, NONCE_CONFLICT, or SETTLEMENT_TIMEOUT) " +
+                "with explicit retry guidance. Rare server-generated messageId collisions also return 409.",
               content: {
                 "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                  schema: {
+                    oneOf: [
+                      { $ref: "#/components/schemas/InboxPaymentConflictResponse" },
+                      { $ref: "#/components/schemas/ErrorResponse" },
+                    ],
+                  },
                 },
               },
             },
@@ -3475,6 +3485,54 @@ export function GET() {
                 "Address already registered. Each address can only be registered once.",
                 "Description must be 280 characters or less",
               ],
+            },
+          },
+        },
+        InboxPaymentConflictResponse: {
+          type: "object",
+          required: ["error", "code", "retryable", "retryAfter", "nextSteps"],
+          properties: {
+            error: {
+              type: "string",
+              description: "Human-readable conflict description",
+              examples: [
+                "Payment rejected: your transaction nonce is stale (below current account nonce). Re-sign your transaction with the current nonce and retry.",
+              ],
+            },
+            code: {
+              type: "string",
+              description: "Structured conflict code for caller handling",
+              enum: [
+                "SENDER_NONCE_STALE",
+                "SENDER_NONCE_DUPLICATE",
+                "SENDER_NONCE_GAP",
+                "NONCE_CONFLICT",
+                "SETTLEMENT_TIMEOUT",
+              ],
+            },
+            retryable: {
+              type: "boolean",
+              description: "Whether the request may be retried after following the recovery guidance",
+            },
+            retryAfter: {
+              type: "integer",
+              description: "Seconds to wait before retrying. 0 means refetch/rebuild immediately.",
+              minimum: 0,
+            },
+            nextSteps: {
+              type: "string",
+              description: "Explicit recovery action for callers",
+              examples: [
+                "Fetch the current account nonce, re-sign your transaction, and resubmit.",
+              ],
+            },
+            relayCode: {
+              type: "string",
+              description: "Raw relay error code when provided",
+            },
+            relayDetail: {
+              type: "string",
+              description: "Raw relay error detail when provided",
             },
           },
         },
