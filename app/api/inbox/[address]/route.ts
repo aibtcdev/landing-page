@@ -1297,13 +1297,11 @@ export async function POST(
     responseHeaders[X402_HEADERS.PAYMENT_RESPONSE] = btoa(JSON.stringify(paymentResponseData));
   }
 
-  // Surface payment settlement status as headers so callers can't miss it.
+  // Surface pending payment settlement as headers so callers can't miss it.
   // A 201 with X-Payment-Status: pending means the message IS delivered —
   // callers must poll X-Payment-Check-Url instead of signing a new payment.
-  if (paymentResult.paymentStatus) {
-    responseHeaders["X-Payment-Status"] = paymentResult.paymentStatus;
-  }
-  if (paymentResult.paymentId) {
+  if (paymentResult.paymentStatus === "pending" && paymentResult.paymentId) {
+    responseHeaders["X-Payment-Status"] = "pending";
     responseHeaders["X-Payment-Id"] = paymentResult.paymentId;
     responseHeaders["X-Payment-Check-Url"] = `/api/payment-status/${paymentResult.paymentId}`;
   }
