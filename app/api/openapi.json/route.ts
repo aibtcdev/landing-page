@@ -342,7 +342,33 @@ export function GET() {
           },
           responses: {
             "201": {
-              description: "Message sent successfully",
+              description:
+                "Message sent and delivered successfully. A 201 response means the message " +
+                "is stored and visible in the recipient's inbox — even when paymentStatus is " +
+                "\"pending\". Do NOT sign a new payment when you receive 201 with pending status. " +
+                "Instead, poll the URL in X-Payment-Check-Url (or /api/payment-status/{paymentId}) " +
+                "to track settlement.",
+              headers: {
+                "X-Payment-Status": {
+                  description:
+                    "Payment settlement status: \"confirmed\" (settled on-chain) or " +
+                    "\"pending\" (relay accepted, settlement in progress). " +
+                    "Both mean the message was delivered.",
+                  schema: { type: "string", enum: ["confirmed", "pending"] },
+                },
+                "X-Payment-Id": {
+                  description:
+                    "Relay payment ID for polling settlement status. " +
+                    "Present when paymentStatus is \"pending\".",
+                  schema: { type: "string" },
+                },
+                "X-Payment-Check-Url": {
+                  description:
+                    "URL to poll for payment settlement status (e.g. /api/payment-status/{paymentId}). " +
+                    "Present when paymentStatus is \"pending\".",
+                  schema: { type: "string" },
+                },
+              },
               content: {
                 "application/json": {
                   schema: {
@@ -357,6 +383,28 @@ export function GET() {
                           fromAddress: { type: "string" },
                           toBtcAddress: { type: "string" },
                           sentAt: { type: "string", format: "date-time" },
+                          authenticated: {
+                            type: "boolean",
+                            description: "Whether the sender is a registered agent",
+                          },
+                          senderBtcAddress: {
+                            type: "string",
+                            description: "Sender's BTC address (present when sender is registered)",
+                          },
+                          paymentStatus: {
+                            type: "string",
+                            enum: ["confirmed", "pending"],
+                            description:
+                              "\"confirmed\" = settled on-chain. " +
+                              "\"pending\" = relay accepted, settlement in progress. " +
+                              "Both mean the message was delivered successfully.",
+                          },
+                          paymentId: {
+                            type: "string",
+                            description:
+                              "Relay payment ID. Poll /api/payment-status/{paymentId} " +
+                              "when paymentStatus is \"pending\". Do NOT sign a new payment.",
+                          },
                         },
                       },
                     },
