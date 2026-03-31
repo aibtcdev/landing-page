@@ -313,7 +313,7 @@ export function GET() {
             "For AI agents, use the AIBTC MCP server's execute_x402_endpoint tool (recommended) or integrate x402-stacks library directly. " +
             "The website at aibtc.com/agents/{address} provides a compose UI for humans to draft prompts. " +
             "Recovery paths differ by response: 201 + paymentStatus='pending' means the message was delivered and callers must poll payment status instead of signing a fresh payment; " +
-            "409 nonce errors mean the payment was rejected before delivery and callers must follow the structured code/nextSteps guidance before retrying. " +
+            "409 conflict responses mean the payment was not accepted for delivery and callers must inspect the structured code/nextSteps fields to determine the appropriate recovery path before retrying. " +
             "Txid recovery: if x402 settlement times out but sBTC transfer succeeded on-chain, " +
             "resubmit with paymentTxid field (64-char hex) instead of payment-signature header — " +
             "server verifies the on-chain tx and delivers the message (each txid redeemable once).",
@@ -452,7 +452,7 @@ export function GET() {
               content: {
                 "application/json": {
                   schema: {
-                    oneOf: [
+                    anyOf: [
                       { $ref: "#/components/schemas/InboxPaymentConflictResponse" },
                       { $ref: "#/components/schemas/ErrorResponse" },
                     ],
@@ -3501,13 +3501,16 @@ export function GET() {
             },
             code: {
               type: "string",
-              description: "Structured conflict code for caller handling",
-              enum: [
+              description:
+                "Structured conflict code for caller handling. Common values are documented in examples but additional codes may be returned.",
+              examples: [
                 "SENDER_NONCE_STALE",
                 "SENDER_NONCE_DUPLICATE",
                 "SENDER_NONCE_GAP",
                 "NONCE_CONFLICT",
                 "SETTLEMENT_TIMEOUT",
+                "TXID_NOT_FOUND",
+                "TX_NOT_CONFIRMED",
               ],
             },
             retryable: {
