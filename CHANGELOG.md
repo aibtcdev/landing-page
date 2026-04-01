@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.37.0](https://github.com/aibtcdev/landing-page/compare/v1.36.4...v1.37.0) (2026-04-01)
+
+
+### Features
+
+* **inbox:** add structured nonce diagnostics to 409 responses (closes [#549](https://github.com/aibtcdev/landing-page/issues/549)) ([#550](https://github.com/aibtcdev/landing-page/issues/550)) ([0689dac](https://github.com/aibtcdev/landing-page/commit/0689dacd440c6ed3b737c27a821d48fe829257af))
+
+
+### Bug Fixes
+
+* **inbox:** clarify pending-payment success to reduce SENDER_NONCE_DUPLICATE resend loops ([#553](https://github.com/aibtcdev/landing-page/issues/553)) ([e9ec120](https://github.com/aibtcdev/landing-page/commit/e9ec1202f35820a165e2037e492365986b1fcda8))
+* **inbox:** downgrade SENDER_NONCE_* from error to warn logging (closes [#546](https://github.com/aibtcdev/landing-page/issues/546)) ([#547](https://github.com/aibtcdev/landing-page/issues/547)) ([8c723e2](https://github.com/aibtcdev/landing-page/commit/8c723e2ed94687798ce8ddd1e906c9b5c1655038))
+
 ## [1.36.4](https://github.com/aibtcdev/landing-page/compare/v1.36.3...v1.36.4) (2026-03-30)
 
 
