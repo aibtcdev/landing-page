@@ -366,17 +366,12 @@ export async function POST(request: NextRequest) {
     // Delete challenge (single-use)
     await deleteChallenge(kv, address);
 
-    // Execute action (inject challenge string, optional GitHub token, and STX verifier
-    // so handlers can verify challenge content and authenticate external requests)
+    // Execute action (inject challenge string and optional GitHub token so handlers can verify
+    // challenge content in external resources and authenticate GitHub API requests)
     const githubToken = env.GITHUB_TOKEN;
     const actionResult = await executeAction(
       action,
-      {
-        ...params,
-        challenge,
-        ...(githubToken ? { githubToken } : {}),
-        _verifyStacksSignature: verifyStacksSignature,
-      },
+      { ...params, challenge, ...(githubToken ? { githubToken } : {}) },
       agent,
       kv
     );
