@@ -656,6 +656,16 @@ async function handleUpdateStxAddress(
   agent: AgentRecord,
   kv: KVNamespace
 ): Promise<ActionResult> {
+  // One-time only: reject if agent has already migrated their STX address.
+  // The stxAddressMigratedAt field is set on first migration and is immutable.
+  if (agent.stxAddressMigratedAt) {
+    return {
+      success: false,
+      updated: agent,
+      error: "STX address has already been migrated and cannot be changed again.",
+    };
+  }
+
   const stxSignature = params.stxSignature as string | undefined;
   const challenge = params.challenge as string | undefined;
 
@@ -732,11 +742,20 @@ async function handleUpdateStxAddress(
   // Delete old stx: key
   await kv.delete(`stx:${oldStxAddress}`);
 
-  // Update the agent record with new STX address and public key
+  // Update the agent record:
+  // - New STX address and public key
+  // - Clear BNS name (tied to old STX address, will be re-looked up on next profile view)
+  // - Clear erc8004AgentId (on-chain identity NFT is tied to old STX address)
+  // - Set migration timestamp (one-time-only enforcement)
+  // - Record old address for audit trail
   const updated: AgentRecord = {
     ...agent,
     stxAddress: newStxAddress,
     stxPublicKey: stxResult.publicKey,
+    bnsName: null,
+    erc8004AgentId: null,
+    stxAddressMigratedAt: new Date().toISOString(),
+    previousStxAddress: oldStxAddress,
   };
 
   // Write new stx: key (btc: key is updated by the caller)
