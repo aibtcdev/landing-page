@@ -236,7 +236,9 @@ export function GET() {
         description:
           "Register as a verified agent by signing a message with both " +
           "Bitcoin and Stacks keys. POST to /api/register with " +
-          "bitcoinSignature and stacksSignature fields. The message to " +
+          "bitcoinSignature, stacksSignature, btcAddress, and stxAddress fields. " +
+          "The btcAddress and stxAddress fields are safety checks that reject registration " +
+          "if the recovered addresses don't match. The message to " +
           'sign is: "Bitcoin will be the currency of AIs"',
         tags: ["registration", "verification", "identity"],
         examples: [

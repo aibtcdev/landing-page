@@ -126,9 +126,13 @@ export async function GET() {
           requestBody: {
             bitcoinSignature: "SIGNATURE_FROM_STEP_5",
             stacksSignature: "SIGNATURE_FROM_STEP_6",
+            btcAddress: "YOUR_BTC_ADDRESS_FROM_GET_WALLET_INFO",
+            stxAddress: "YOUR_STX_ADDRESS_FROM_GET_WALLET_INFO",
             description: "Optional agent description (max 280 chars)",
           },
-          description: "Submit both signatures to register in the AIBTC agent directory.",
+          description:
+            "Submit both signatures to register. Include btcAddress and stxAddress from " +
+            "get_wallet_info as safety checks to prevent address mismatches.",
           required: true,
         },
       ],
@@ -165,6 +169,20 @@ export async function GET() {
         },
       },
       optional: {
+        btcAddress: {
+          type: "string",
+          description:
+            "Your Bitcoin address. Safety check — registration fails if the address recovered " +
+            "from your signature doesn't match. Also required for BIP-322 signature verification. " +
+            "Use get_wallet_info from the AIBTC MCP server to get your address.",
+        },
+        stxAddress: {
+          type: "string",
+          description:
+            "Your Stacks address. Safety check — registration fails if the address recovered " +
+            "from your signature doesn't match. Prevents registering with a wrong address " +
+            "due to signing format mismatches. Use get_wallet_info from the AIBTC MCP server to get your address.",
+        },
         description: {
           type: "string",
           description: "Agent description, max 280 characters.",
@@ -434,6 +452,7 @@ export async function POST(request: NextRequest) {
       taprootAddress?: string;
       taprootSignature?: string;
       btcAddress?: string;
+      stxAddress?: string;
       nostrPublicKey?: string;
       capabilities?: unknown;
     };
@@ -444,6 +463,7 @@ export async function POST(request: NextRequest) {
       taprootAddress,
       taprootSignature,
       btcAddress: btcAddressHint,
+      stxAddress: stxAddressHint,
       nostrPublicKey,
       capabilities,
     } = body;
@@ -624,6 +644,22 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Safety check: if the agent provided their expected BTC address, verify it
+    // matches what we recovered from the signature.
+    if (btcAddressHint) {
+      const trimmedHint = btcAddressHint.trim();
+      if (trimmedHint && btcResult.address !== trimmedHint) {
+        return registrationError(
+          `BTC address mismatch. Your signature recovered ${btcResult.address}, but you expected ${trimmedHint}. ` +
+            "This usually means your signing implementation is not compatible. " +
+            "Use the AIBTC MCP server (npx @aibtc/mcp-server) for correct wallet creation and signing.",
+          "BTC_ADDRESS_MISMATCH",
+          "Install the AIBTC MCP server with 'npx @aibtc/mcp-server@latest --install' and use its btc_sign_message tool to sign the registration message.",
+          400
+        );
+      }
+    }
+
     if (!stxResult.valid) {
       return registrationError(
         "Stacks signature verification failed",
@@ -631,6 +667,23 @@ export async function POST(request: NextRequest) {
         STX_SIG_HINT,
         400
       );
+    }
+
+    // Safety check: if the agent provided their expected STX address, verify it
+    // matches what we recovered from the signature. This catches malformed signatures
+    // from custom implementations that would derive a wrong, uncontrolled address.
+    if (stxAddressHint) {
+      const trimmedHint = stxAddressHint.trim();
+      if (trimmedHint && stxResult.address !== trimmedHint) {
+        return registrationError(
+          `STX address mismatch. Your signature recovered ${stxResult.address}, but you expected ${trimmedHint}. ` +
+            "This usually means your signing implementation is not compatible with @stacks/transactions. " +
+            "Use the AIBTC MCP server (npx @aibtc/mcp-server) for correct wallet creation and signing.",
+          "STX_ADDRESS_MISMATCH",
+          "Install the AIBTC MCP server with 'npx @aibtc/mcp-server@latest --install' and use its stacks_sign_message tool to sign the registration message.",
+          400
+        );
+      }
     }
 
     // Get Cloudflare context for KV and logging
