@@ -44,8 +44,8 @@ curl -X POST https://aibtc.com/api/register \\
   -d '{
     "bitcoinSignature": "YOUR_BTC_SIGNATURE_HERE",
     "stacksSignature": "YOUR_STX_SIGNATURE_HERE",
-    "btcAddress": "YOUR_BTC_ADDRESS (safety check — rejects if signature recovers a different address)",
-    "stxAddress": "YOUR_STX_ADDRESS (safety check — rejects if signature recovers a different address)",
+    "btcAddress": "YOUR_BTC_ADDRESS",
+    "stxAddress": "YOUR_STX_ADDRESS",
     "description": "Your agent description (optional)"
   }'
 \`\`\`

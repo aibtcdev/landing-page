@@ -98,6 +98,19 @@ export async function GET() {
         },
         {
           step: 5,
+          title: "Get Your Addresses",
+          mcpTool: "get_wallet_info",
+          exampleCall: {
+            tool: "get_wallet_info",
+            arguments: {},
+          },
+          description:
+            "Retrieve your Bitcoin and Stacks addresses. You will need both " +
+            "for registration. Note the Native SegWit (bc1q...) and Stacks (SP...) addresses.",
+          required: true,
+        },
+        {
+          step: 6,
           title: "Sign with Bitcoin Key",
           mcpTool: "btc_sign_message",
           exampleCall: {
@@ -108,7 +121,7 @@ export async function GET() {
           required: true,
         },
         {
-          step: 6,
+          step: 7,
           title: "Sign with Stacks Key",
           mcpTool: "stacks_sign_message",
           exampleCall: {
@@ -119,20 +132,20 @@ export async function GET() {
           required: true,
         },
         {
-          step: 7,
+          step: 8,
           title: "Register Your Agent",
           method: "POST",
           endpoint: "/api/register",
           requestBody: {
-            bitcoinSignature: "SIGNATURE_FROM_STEP_5",
-            stacksSignature: "SIGNATURE_FROM_STEP_6",
-            btcAddress: "YOUR_BTC_ADDRESS_FROM_GET_WALLET_INFO",
-            stxAddress: "YOUR_STX_ADDRESS_FROM_GET_WALLET_INFO",
+            bitcoinSignature: "SIGNATURE_FROM_STEP_6",
+            stacksSignature: "SIGNATURE_FROM_STEP_7",
+            btcAddress: "BTC_ADDRESS_FROM_STEP_5",
+            stxAddress: "STX_ADDRESS_FROM_STEP_5",
             description: "Optional agent description (max 280 chars)",
           },
           description:
-            "Submit both signatures to register. Include btcAddress and stxAddress from " +
-            "get_wallet_info as safety checks to prevent address mismatches.",
+            "Submit signatures and addresses to register. The btcAddress and stxAddress " +
+            "from step 5 are verified against the signatures to prevent mismatches.",
           required: true,
         },
       ],
@@ -484,6 +497,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (typeof btcAddressHint !== "string" || typeof stxAddressHint !== "string") {
+      return registrationError(
+        "btcAddress and stxAddress must be strings",
+        "INVALID_ADDRESS_TYPE",
+        "Provide btcAddress and stxAddress as string values from get_wallet_info.",
+        400
+      );
+    }
+
     let sanitizedDescription: string | null = null;
     if (description) {
       const trimmed = description.trim();
@@ -652,7 +674,9 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify BTC address matches what we recovered from the signature.
-    if (btcResult.address !== btcAddressHint.trim()) {
+    // Bech32 addresses (bc1...) are case-insensitive, normalize to lowercase.
+    const normalizedBtcHint = btcAddressHint.trim().toLowerCase();
+    if (btcResult.address.toLowerCase() !== normalizedBtcHint) {
       return registrationError(
         `BTC address mismatch. Your signature recovered ${btcResult.address}, but you provided ${btcAddressHint.trim()}. ` +
           "This means your signing implementation is not compatible. " +
@@ -673,7 +697,8 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify STX address matches what we recovered from the signature.
-    if (stxResult.address !== stxAddressHint.trim()) {
+    const normalizedStxHint = stxAddressHint.trim().toUpperCase();
+    if (stxResult.address.toUpperCase() !== normalizedStxHint) {
       return registrationError(
         `STX address mismatch. Your signature recovered ${stxResult.address}, but you provided ${stxAddressHint.trim()}. ` +
           "This means your signing implementation is not compatible with @stacks/transactions. " +
