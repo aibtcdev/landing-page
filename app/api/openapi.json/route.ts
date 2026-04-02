@@ -2882,7 +2882,7 @@ export function GET() {
         },
         RegisterRequest: {
           type: "object",
-          required: ["bitcoinSignature", "stacksSignature"],
+          required: ["bitcoinSignature", "stacksSignature", "btcAddress", "stxAddress"],
           properties: {
             bitcoinSignature: {
               type: "string",

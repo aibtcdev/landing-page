@@ -167,22 +167,20 @@ export async function GET() {
             arguments: { message: "Bitcoin will be the currency of AIs" },
           },
         },
-      },
-      optional: {
         btcAddress: {
           type: "string",
           description:
-            "Your Bitcoin address. Safety check — registration fails if the address recovered " +
-            "from your signature doesn't match. Also required for BIP-322 signature verification. " +
-            "Use get_wallet_info from the AIBTC MCP server to get your address.",
+            "Your Bitcoin address. Registration fails if the address recovered " +
+            "from your signature doesn't match. Use get_wallet_info from the AIBTC MCP server to get your address.",
         },
         stxAddress: {
           type: "string",
           description:
-            "Your Stacks address. Safety check — registration fails if the address recovered " +
-            "from your signature doesn't match. Prevents registering with a wrong address " +
-            "due to signing format mismatches. Use get_wallet_info from the AIBTC MCP server to get your address.",
+            "Your Stacks address. Registration fails if the address recovered " +
+            "from your signature doesn't match. Use get_wallet_info from the AIBTC MCP server to get your address.",
         },
+      },
+      optional: {
         description: {
           type: "string",
           description: "Agent description, max 280 characters.",
@@ -477,6 +475,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    if (!btcAddressHint || !stxAddressHint) {
+      return registrationError(
+        "Both btcAddress and stxAddress are required",
+        "MISSING_ADDRESSES",
+        "Provide both btcAddress and stxAddress in the request body. Use get_wallet_info from the AIBTC MCP server to get your addresses.",
+        400
+      );
+    }
+
     let sanitizedDescription: string | null = null;
     if (description) {
       const trimmed = description.trim();
@@ -644,20 +651,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Safety check: if the agent provided their expected BTC address, verify it
-    // matches what we recovered from the signature.
-    if (btcAddressHint) {
-      const trimmedHint = btcAddressHint.trim();
-      if (trimmedHint && btcResult.address !== trimmedHint) {
-        return registrationError(
-          `BTC address mismatch. Your signature recovered ${btcResult.address}, but you expected ${trimmedHint}. ` +
-            "This usually means your signing implementation is not compatible. " +
-            "Use the AIBTC MCP server (npx @aibtc/mcp-server) for correct wallet creation and signing.",
-          "BTC_ADDRESS_MISMATCH",
-          "Install the AIBTC MCP server with 'npx @aibtc/mcp-server@latest --install' and use its btc_sign_message tool to sign the registration message.",
-          400
-        );
-      }
+    // Verify BTC address matches what we recovered from the signature.
+    if (btcResult.address !== btcAddressHint.trim()) {
+      return registrationError(
+        `BTC address mismatch. Your signature recovered ${btcResult.address}, but you provided ${btcAddressHint.trim()}. ` +
+          "This means your signing implementation is not compatible. " +
+          "Use the AIBTC MCP server (npx @aibtc/mcp-server) for correct wallet creation and signing.",
+        "BTC_ADDRESS_MISMATCH",
+        "Install the AIBTC MCP server with 'npx @aibtc/mcp-server@latest --install' and use its btc_sign_message tool to sign the registration message.",
+        400
+      );
     }
 
     if (!stxResult.valid) {
@@ -669,21 +672,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Safety check: if the agent provided their expected STX address, verify it
-    // matches what we recovered from the signature. This catches malformed signatures
-    // from custom implementations that would derive a wrong, uncontrolled address.
-    if (stxAddressHint) {
-      const trimmedHint = stxAddressHint.trim();
-      if (trimmedHint && stxResult.address !== trimmedHint) {
-        return registrationError(
-          `STX address mismatch. Your signature recovered ${stxResult.address}, but you expected ${trimmedHint}. ` +
-            "This usually means your signing implementation is not compatible with @stacks/transactions. " +
-            "Use the AIBTC MCP server (npx @aibtc/mcp-server) for correct wallet creation and signing.",
-          "STX_ADDRESS_MISMATCH",
-          "Install the AIBTC MCP server with 'npx @aibtc/mcp-server@latest --install' and use its stacks_sign_message tool to sign the registration message.",
-          400
-        );
-      }
+    // Verify STX address matches what we recovered from the signature.
+    if (stxResult.address !== stxAddressHint.trim()) {
+      return registrationError(
+        `STX address mismatch. Your signature recovered ${stxResult.address}, but you provided ${stxAddressHint.trim()}. ` +
+          "This means your signing implementation is not compatible with @stacks/transactions. " +
+          "Use the AIBTC MCP server (npx @aibtc/mcp-server) for correct wallet creation and signing.",
+        "STX_ADDRESS_MISMATCH",
+        "Install the AIBTC MCP server with 'npx @aibtc/mcp-server@latest --install' and use its stacks_sign_message tool to sign the registration message.",
+        400
+      );
     }
 
     // Get Cloudflare context for KV and logging
