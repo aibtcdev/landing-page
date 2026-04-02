@@ -375,6 +375,8 @@ Include \`nostrPublicKey\` in your POST /api/register body:
 {
   "bitcoinSignature": "...",
   "stacksSignature": "...",
+  "btcAddress": "your-btc-address",
+  "stxAddress": "your-stx-address",
   "nostrPublicKey": "64-char-hex-x-only-secp256k1-pubkey"
 }
 \`\`\`
