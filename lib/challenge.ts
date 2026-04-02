@@ -640,6 +640,112 @@ async function handleLinkGitHub(
 }
 
 /**
+ * Action handler: update-stx-address
+ *
+ * Allows agents to migrate their registered Stacks address when the original
+ * registration used a malformed signature that derived the wrong address.
+ *
+ * Requires a fresh Stacks RSV signature of the challenge message to prove
+ * ownership of the new address. The BTC signature is already verified upstream.
+ *
+ * KV migration: deletes old `stx:{oldAddress}` key, creates new `stx:{newAddress}`,
+ * and updates the `btc:{btcAddress}` record.
+ */
+async function handleUpdateStxAddress(
+  params: Record<string, unknown>,
+  agent: AgentRecord,
+  kv: KVNamespace
+): Promise<ActionResult> {
+  const stxSignature = params.stxSignature as string | undefined;
+  const challenge = params.challenge as string | undefined;
+
+  if (!stxSignature) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Missing required parameter: stxSignature (RSV hex signature of the challenge message using your Stacks key)",
+    };
+  }
+
+  if (!challenge) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Challenge string missing from request context.",
+    };
+  }
+
+  // Verify the STX signature using the injected verifier
+  const verifyStx = params._verifyStacksSignature as
+    | ((sig: string, msg: string) => { valid: boolean; address: string; publicKey: string })
+    | undefined;
+
+  if (!verifyStx) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Internal error: Stacks signature verifier not available.",
+    };
+  }
+
+  let stxResult: { valid: boolean; address: string; publicKey: string };
+  try {
+    stxResult = verifyStx(stxSignature, challenge);
+  } catch (e) {
+    return {
+      success: false,
+      updated: agent,
+      error: `Invalid Stacks signature: ${(e as Error).message}`,
+    };
+  }
+
+  if (!stxResult.valid) {
+    return {
+      success: false,
+      updated: agent,
+      error: "Stacks signature verification failed. Sign the challenge message with your Stacks key using stacks_sign_message.",
+    };
+  }
+
+  const newStxAddress = stxResult.address;
+  const oldStxAddress = agent.stxAddress;
+
+  // No-op if address is unchanged
+  if (newStxAddress === oldStxAddress) {
+    return {
+      success: false,
+      updated: agent,
+      error: "New Stacks address is the same as the current one. No update needed.",
+    };
+  }
+
+  // Check if the new STX address is already taken by another agent
+  const existingRecord = await kv.get(`stx:${newStxAddress}`);
+  if (existingRecord) {
+    return {
+      success: false,
+      updated: agent,
+      error: `Stacks address ${newStxAddress} is already registered to another agent.`,
+    };
+  }
+
+  // Delete old stx: key
+  await kv.delete(`stx:${oldStxAddress}`);
+
+  // Update the agent record with new STX address and public key
+  const updated: AgentRecord = {
+    ...agent,
+    stxAddress: newStxAddress,
+    stxPublicKey: stxResult.publicKey,
+  };
+
+  // Write new stx: key (btc: key is updated by the caller)
+  await kv.put(`stx:${newStxAddress}`, JSON.stringify(updated));
+
+  return { success: true, updated };
+}
+
+/**
  * Action handler: update-pubkey
  *
  * Allows BIP-322 agents (bc1q/bc1p) to submit their compressed public key.
@@ -755,6 +861,7 @@ const ACTION_HANDLERS: Record<string, ActionHandler> = {
   "update-taproot": handleUpdateTaproot,
   "update-nostr-pubkey": handleUpdateNostrPubkey,
   "update-pubkey": handleUpdatePubkey,
+  "update-stx-address": handleUpdateStxAddress,
   "link-github": handleLinkGitHub,
 };
 
@@ -843,6 +950,21 @@ export function getAvailableActions(): Array<{
           required: true,
           description:
             "Compressed secp256k1 public key: 66 lowercase hex chars with 02 or 03 prefix (33 bytes). Use get_wallet_info or wallet_status from the AIBTC MCP server to retrieve your public key.",
+        },
+      },
+    },
+    {
+      name: "update-stx-address",
+      description:
+        "Migrate your registered Stacks address. Use this if your original registration derived the wrong STX address due to a signing format mismatch. " +
+        "Requires a fresh Stacks RSV signature of the challenge message to prove ownership of the new address. " +
+        "Your BTC address must remain unchanged.",
+      params: {
+        stxSignature: {
+          type: "string",
+          required: true,
+          description:
+            "RSV hex signature of the challenge message, signed with your Stacks key. Use stacks_sign_message from the AIBTC MCP server.",
         },
       },
     },
