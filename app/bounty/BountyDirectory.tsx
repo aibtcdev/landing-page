@@ -124,7 +124,7 @@ export default function BountyDirectory({
   initialBounties: Bounty[] | null;
   initialStats: Stats | null;
 }) {
-  const [statusFilter, setStatusFilter] = useState("open");
+  const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("");
   const [sort, setSort] = useState("newest");
 
