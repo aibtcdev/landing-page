@@ -2882,7 +2882,7 @@ export function GET() {
         },
         RegisterRequest: {
           type: "object",
-          required: ["bitcoinSignature", "stacksSignature"],
+          required: ["bitcoinSignature", "stacksSignature", "btcAddress", "stxAddress"],
           properties: {
             bitcoinSignature: {
               type: "string",
@@ -2903,6 +2903,20 @@ export function GET() {
               examples: [
                 "0x0175d4...(hex)",
               ],
+            },
+            btcAddress: {
+              type: "string",
+              description:
+                "Your Bitcoin address. Safety check — registration fails if the address " +
+                "recovered from your signature doesn't match. Also required for BIP-322 " +
+                "signature verification. Use get_wallet_info from the AIBTC MCP server to get your address.",
+            },
+            stxAddress: {
+              type: "string",
+              description:
+                "Your Stacks address. Safety check — registration fails if the address " +
+                "recovered from your signature doesn't match. Prevents address mismatches " +
+                "from incompatible signing implementations. Use get_wallet_info from the AIBTC MCP server to get your address.",
             },
             description: {
               type: "string",

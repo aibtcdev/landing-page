@@ -98,6 +98,19 @@ export async function GET() {
         },
         {
           step: 5,
+          title: "Get Your Addresses",
+          mcpTool: "get_wallet_info",
+          exampleCall: {
+            tool: "get_wallet_info",
+            arguments: {},
+          },
+          description:
+            "Retrieve your Bitcoin and Stacks addresses. You will need both " +
+            "for registration. Note the Native SegWit (bc1q...) and Stacks (SP...) addresses.",
+          required: true,
+        },
+        {
+          step: 6,
           title: "Sign with Bitcoin Key",
           mcpTool: "btc_sign_message",
           exampleCall: {
@@ -108,7 +121,7 @@ export async function GET() {
           required: true,
         },
         {
-          step: 6,
+          step: 7,
           title: "Sign with Stacks Key",
           mcpTool: "stacks_sign_message",
           exampleCall: {
@@ -119,16 +132,20 @@ export async function GET() {
           required: true,
         },
         {
-          step: 7,
+          step: 8,
           title: "Register Your Agent",
           method: "POST",
           endpoint: "/api/register",
           requestBody: {
-            bitcoinSignature: "SIGNATURE_FROM_STEP_5",
-            stacksSignature: "SIGNATURE_FROM_STEP_6",
+            bitcoinSignature: "SIGNATURE_FROM_STEP_6",
+            stacksSignature: "SIGNATURE_FROM_STEP_7",
+            btcAddress: "BTC_ADDRESS_FROM_STEP_5",
+            stxAddress: "STX_ADDRESS_FROM_STEP_5",
             description: "Optional agent description (max 280 chars)",
           },
-          description: "Submit both signatures to register in the AIBTC agent directory.",
+          description:
+            "Submit signatures and addresses to register. The btcAddress and stxAddress " +
+            "from step 5 are verified against the signatures to prevent mismatches.",
           required: true,
         },
       ],
@@ -162,6 +179,18 @@ export async function GET() {
             tool: "stacks_sign_message",
             arguments: { message: "Bitcoin will be the currency of AIs" },
           },
+        },
+        btcAddress: {
+          type: "string",
+          description:
+            "Your Bitcoin address. Registration fails if the address recovered " +
+            "from your signature doesn't match. Use get_wallet_info from the AIBTC MCP server to get your address.",
+        },
+        stxAddress: {
+          type: "string",
+          description:
+            "Your Stacks address. Registration fails if the address recovered " +
+            "from your signature doesn't match. Use get_wallet_info from the AIBTC MCP server to get your address.",
         },
       },
       optional: {
@@ -434,6 +463,7 @@ export async function POST(request: NextRequest) {
       taprootAddress?: string;
       taprootSignature?: string;
       btcAddress?: string;
+      stxAddress?: string;
       nostrPublicKey?: string;
       capabilities?: unknown;
     };
@@ -444,6 +474,7 @@ export async function POST(request: NextRequest) {
       taprootAddress,
       taprootSignature,
       btcAddress: btcAddressHint,
+      stxAddress: stxAddressHint,
       nostrPublicKey,
       capabilities,
     } = body;
@@ -453,6 +484,24 @@ export async function POST(request: NextRequest) {
         "Both bitcoinSignature and stacksSignature are required",
         "MISSING_SIGNATURES",
         "Provide both bitcoinSignature and stacksSignature in the request body. Use the AIBTC MCP server tools btc_sign_message and stacks_sign_message to generate them.",
+        400
+      );
+    }
+
+    if (!btcAddressHint || !stxAddressHint) {
+      return registrationError(
+        "Both btcAddress and stxAddress are required",
+        "MISSING_ADDRESSES",
+        "Provide both btcAddress and stxAddress in the request body. Use get_wallet_info from the AIBTC MCP server to get your addresses.",
+        400
+      );
+    }
+
+    if (typeof btcAddressHint !== "string" || typeof stxAddressHint !== "string") {
+      return registrationError(
+        "btcAddress and stxAddress must be strings",
+        "INVALID_ADDRESS_TYPE",
+        "Provide btcAddress and stxAddress as string values from get_wallet_info.",
         400
       );
     }
@@ -624,11 +673,38 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Verify BTC address matches what we recovered from the signature.
+    // Bech32 addresses (bc1...) are case-insensitive, normalize to lowercase.
+    const normalizedBtcHint = btcAddressHint.trim().toLowerCase();
+    if (btcResult.address.toLowerCase() !== normalizedBtcHint) {
+      return registrationError(
+        `BTC address mismatch. Your signature recovered ${btcResult.address}, but you provided ${btcAddressHint.trim()}. ` +
+          "This means your signing implementation is not compatible. " +
+          "Use the AIBTC MCP server (npx @aibtc/mcp-server) for correct wallet creation and signing.",
+        "BTC_ADDRESS_MISMATCH",
+        "Install the AIBTC MCP server with 'npx @aibtc/mcp-server@latest --install' and use its btc_sign_message tool to sign the registration message.",
+        400
+      );
+    }
+
     if (!stxResult.valid) {
       return registrationError(
         "Stacks signature verification failed",
         "INVALID_STX_SIGNATURE",
         STX_SIG_HINT,
+        400
+      );
+    }
+
+    // Verify STX address matches what we recovered from the signature.
+    const normalizedStxHint = stxAddressHint.trim().toUpperCase();
+    if (stxResult.address.toUpperCase() !== normalizedStxHint) {
+      return registrationError(
+        `STX address mismatch. Your signature recovered ${stxResult.address}, but you provided ${stxAddressHint.trim()}. ` +
+          "This means your signing implementation is not compatible with @stacks/transactions. " +
+          "Use the AIBTC MCP server (npx @aibtc/mcp-server) for correct wallet creation and signing.",
+        "STX_ADDRESS_MISMATCH",
+        "Install the AIBTC MCP server with 'npx @aibtc/mcp-server@latest --install' and use its stacks_sign_message tool to sign the registration message.",
         400
       );
     }
