@@ -23,10 +23,6 @@ export interface AgentRecord {
   referredBy?: string;
   /** GitHub username linked via gist challenge. */
   githubUsername?: string | null;
-  /** ISO timestamp of STX address migration (one-time only, prevents repeat migrations). */
-  stxAddressMigratedAt?: string;
-  /** Previous STX address before migration (audit trail). */
-  previousStxAddress?: string;
 }
 
 /**
