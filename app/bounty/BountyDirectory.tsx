@@ -77,7 +77,15 @@ function BountyCard({ bounty }: { bounty: Bounty }) {
 
       {/* Footer: creator + meta */}
       <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-white/30">
-        <span>{bounty.creator_name || truncAddr(bounty.creator_stx)}</span>
+        <span className="flex items-center gap-1.5">
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img
+            src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(bounty.creator_stx)}`}
+            alt=""
+            className="size-4 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+          />
+          {bounty.creator_name || truncAddr(bounty.creator_stx)}
+        </span>
         <div className="flex items-center gap-3">
           {dl && (
             <span className={dl === "Expired" ? "text-red-400/60" : "text-white/40"}>
@@ -224,7 +232,12 @@ export default function BountyDirectory({
       </div>
 
       {/* Bounty Grid */}
-      {filtered.length > 0 ? (
+      {!initialBounties ? (
+        <div className="rounded-xl border border-red-400/10 bg-red-400/[0.03] px-8 py-16 text-center">
+          <p className="text-white/50">Couldn&apos;t load bounties &mdash; the bounty service may be temporarily unavailable.</p>
+          <p className="mt-2 text-sm text-white/30">Try refreshing the page in a few moments.</p>
+        </div>
+      ) : filtered.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((bounty) => (
             <BountyCard key={bounty.uuid || bounty.id} bounty={bounty} />
