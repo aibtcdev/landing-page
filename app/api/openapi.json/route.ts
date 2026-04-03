@@ -425,7 +425,7 @@ export function GET() {
                 },
                 "X-Payment-Check-Url": {
                   description:
-                    "URL to poll for payment settlement status (e.g. /api/payment-status/{paymentId}).",
+                    "Canonical payment-status URL from the relay when present; otherwise the local /api/payment-status/{paymentId} fallback.",
                   schema: { type: "string" },
                 },
               },
@@ -459,7 +459,8 @@ export function GET() {
                       },
                       checkStatusUrl: {
                         type: "string",
-                        description: "URL to poll for payment settlement and final delivery status.",
+                        description:
+                          "Canonical payment-status URL. Relay-provided URL is preferred when present; otherwise this route returns its local fallback.",
                       },
                     },
                     required: ["success", "message", "inbox", "checkStatusUrl"],
@@ -855,7 +856,7 @@ export function GET() {
                       status: {
                         type: "string",
                         description:
-                          "Settlement status: queued | broadcasting | mempool | confirmed | failed | replaced | not_found",
+                          "Settlement status: queued | broadcasting | mempool | confirmed | failed | replaced",
                         enum: [
                           "queued",
                           "broadcasting",
@@ -863,7 +864,6 @@ export function GET() {
                           "confirmed",
                           "failed",
                           "replaced",
-                          "not_found",
                         ],
                       },
                       txid: { type: "string", description: "On-chain transaction ID (if available)" },

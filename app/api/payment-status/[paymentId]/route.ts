@@ -1,5 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import {
+  paymentStateDefaultDeliveryByState,
+  TerminalFailureStateSchema,
+} from "@aibtc/tx-schemas/core";
 import { PaymentStatusHttpResponseSchema } from "@aibtc/tx-schemas/http";
 import type { RelayRPC } from "@/lib/inbox/relay-rpc";
 import {
@@ -55,7 +59,12 @@ function getPaymentStatusHttpCode(status: string): number {
 
 async function reconcileStagedInboxPayment(
   kv: KVNamespace,
-  result: { paymentId: string; status: string; txid?: string; terminalReason?: string },
+  result: {
+    paymentId: string;
+    status: string;
+    txid?: string;
+    terminalReason?: string;
+  },
   logger: Logger,
   route: string,
   repoVersion: string
@@ -63,7 +72,11 @@ async function reconcileStagedInboxPayment(
   const staged = await getStagedInboxPayment(kv, result.paymentId);
   if (!staged) return;
 
-  if (result.status === "confirmed") {
+  if (
+    paymentStateDefaultDeliveryByState[
+      result.status as keyof typeof paymentStateDefaultDeliveryByState
+    ]
+  ) {
     const finalized = await finalizeStagedInboxPayment(kv, result.paymentId, {
       paymentStatus: "confirmed",
       paymentTxid: result.txid ?? staged.message.paymentTxid,
@@ -112,7 +125,7 @@ async function reconcileStagedInboxPayment(
     return;
   }
 
-  if (["failed", "replaced", "not_found"].includes(result.status)) {
+  if (TerminalFailureStateSchema.safeParse(result.status).success) {
     await deleteStagedInboxPayment(kv, result.paymentId);
     logPaymentEvent(logger, "info", "payment.delivery_discarded", repoVersion, {
       route,
@@ -136,7 +149,9 @@ async function reconcileStagedInboxPayment(
  * Use this endpoint after receiving `paymentStatus: "pending"` + `paymentId`
  * in a POST /api/inbox/[address] response. Pending means the message is staged
  * locally and not yet delivered. Poll every 10–30 seconds until the status is
- * "confirmed" or a terminal failure state.
+ * "confirmed" or a terminal failure state. When the relay includes a
+ * `checkStatusUrl`, that canonical hint is returned unchanged; otherwise this
+ * route falls back to its local poll URL.
  *
  * Terminal statuses:
  * - "confirmed"  — sBTC transfer settled on-chain; staged inbox delivery finalizes
@@ -173,6 +188,8 @@ export async function GET(
         usage: "GET /api/payment-status/{paymentId}",
         example: "GET /api/payment-status/pay_abc123def456",
         pollingAdvice: "Poll every 10–30 seconds until status is 'confirmed', 'failed', 'replaced', or 'not_found'",
+        checkStatusUrlSemantics:
+          "Relay-provided checkStatusUrl is preferred when present; otherwise this route returns its local polling URL.",
         terminalStatuses: {
           confirmed: "sBTC transfer settled on-chain — staged inbox delivery finalizes",
           failed: "Payment failed — staged inbox delivery is discarded",

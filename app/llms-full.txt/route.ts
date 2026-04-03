@@ -512,12 +512,13 @@ GET /api/payment-status/{paymentId}
 \`\`\`
 
 Returns the relay's current status for the payment. Poll every 10–30 seconds.
+Use the returned \`checkStatusUrl\` when present; relay-provided canonical hints take precedence over the local fallback route.
 
 Terminal statuses (stop polling):
 - \`confirmed\` — sBTC settled on-chain; staged message is now delivered
 - \`failed\` — Payment did not go through
 - \`replaced\` — Transaction was replaced (treat as failed)
-- \`not_found\` — paymentId expired or unknown to the relay (HTTP 404 with canonical body)
+- \`not_found\` — paymentId expired or unknown to the relay (HTTP 404 with canonical body, stable \`paymentId\`, and canonical \`terminalReason\` when present)
 
 In-progress statuses (keep polling):
 - \`queued\`, \`broadcasting\`, \`mempool\`

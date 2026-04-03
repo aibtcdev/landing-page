@@ -104,12 +104,12 @@ status, the staged inbox record is discarded.
 1. **Check the response headers:**
    - \`X-Payment-Status: pending\` — settlement in progress
    - \`X-Payment-Id: pay_...\` — your payment tracking ID
-   - \`X-Payment-Check-Url: /api/payment-status/{paymentId}\` — poll this URL
+   - \`X-Payment-Check-Url\` — canonical poll URL from the relay when present, otherwise \`/api/payment-status/{paymentId}\`
 
 2. **Poll for settlement** (optional):
    \`GET /api/payment-status/{paymentId}\` returns the current settlement status.
    Terminal statuses: \`confirmed\`, \`failed\`, \`replaced\`, \`not_found\`.
-   A \`not_found\` result is returned as HTTP \`404\` with the same canonical JSON body.
+   A \`not_found\` result is returned as HTTP \`404\` with the same canonical JSON body, including the stable \`paymentId\` and canonical \`terminalReason\` when present.
    In-progress statuses: \`queued\`, \`broadcasting\`, \`mempool\`.
 
 3. **Do NOT sign a new payment.** Signing and submitting a fresh payment after

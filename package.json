@@ -18,7 +18,7 @@
     "postinstall": "patch-package"
   },
   "dependencies": {
-    "@aibtc/tx-schemas": "^0.2.2",
+    "@aibtc/tx-schemas": "^0.3.0",
     "@noble/curves": "^2.0.1",
     "@noble/hashes": "^2.0.1",
     "@opennextjs/cloudflare": "^1.17.1",

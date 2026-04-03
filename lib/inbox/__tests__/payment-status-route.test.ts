@@ -44,6 +44,26 @@ describe("payment-status route", () => {
     mocks.invalidateAgentListCache.mockResolvedValue(undefined);
   });
 
+  async function stagePendingPayment(kv: KVNamespace, paymentId: string, messageId: string) {
+    const sentAt = new Date().toISOString();
+
+    await storeStagedInboxPayment(kv, {
+      paymentId,
+      createdAt: sentAt,
+      message: {
+        messageId,
+        fromAddress: "SP123",
+        toBtcAddress: "bc1recipient",
+        toStxAddress: "SP456",
+        content: "hello",
+        paymentSatoshis: 100,
+        sentAt,
+        paymentStatus: "pending",
+        paymentId,
+      },
+    });
+  }
+
   it("normalizes submitted to queued in caller-facing payloads", async () => {
     const kv = createMockKV();
     mocks.getCloudflareContext.mockResolvedValue({
@@ -120,6 +140,39 @@ describe("payment-status route", () => {
         paymentId: "pay_hint_case",
         status: "queued",
         checkStatusUrl: "https://relay.example/check/pay_hint_case",
+      })
+    );
+  });
+
+  it("prefers relay-provided checkStatusUrl for canonical not_found responses", async () => {
+    const kv = createMockKV();
+    mocks.getCloudflareContext.mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: kv,
+        X402_RELAY: {
+          checkPayment: vi.fn().mockResolvedValue({
+            paymentId: "pay_not_found_hint_case",
+            status: "not_found",
+            terminalReason: "unknown_payment_identity",
+            checkStatusUrl: "https://relay.example/check/pay_not_found_hint_case",
+          }),
+        },
+      },
+      ctx: {},
+    });
+
+    const response = await GET(
+      new NextRequest("https://aibtc.com/api/payment-status/pay_not_found_hint_case"),
+      { params: Promise.resolve({ paymentId: "pay_not_found_hint_case" }) }
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        paymentId: "pay_not_found_hint_case",
+        status: "not_found",
+        terminalReason: "unknown_payment_identity",
+        checkStatusUrl: "https://relay.example/check/pay_not_found_hint_case",
       })
     );
   });
@@ -284,25 +337,64 @@ describe("payment-status route", () => {
     );
   });
 
-  it("returns 404 with the canonical body and discards staged records on not_found", async () => {
+  it("returns HTTP 404 on canonical not_found", async () => {
     const kv = createMockKV();
-    const sentAt = new Date().toISOString();
-
-    await storeStagedInboxPayment(kv, {
-      paymentId: "pay_not_found_case",
-      createdAt: sentAt,
-      message: {
-        messageId: "msg_not_found_case",
-        fromAddress: "SP123",
-        toBtcAddress: "bc1recipient",
-        toStxAddress: "SP456",
-        content: "hello",
-        paymentSatoshis: 100,
-        sentAt,
-        paymentStatus: "pending",
-        paymentId: "pay_not_found_case",
+    mocks.getCloudflareContext.mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: kv,
+        X402_RELAY: {
+          checkPayment: vi.fn().mockResolvedValue({
+            paymentId: "pay_not_found_status_case",
+            status: "not_found",
+            terminalReason: "expired",
+          }),
+        },
       },
+      ctx: {},
     });
+
+    const response = await GET(
+      new NextRequest("https://aibtc.com/api/payment-status/pay_not_found_status_case"),
+      { params: Promise.resolve({ paymentId: "pay_not_found_status_case" }) }
+    );
+
+    expect(response.status).toBe(404);
+  });
+
+  it("returns canonical body fields on not_found", async () => {
+    const kv = createMockKV();
+    mocks.getCloudflareContext.mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: kv,
+        X402_RELAY: {
+          checkPayment: vi.fn().mockResolvedValue({
+            paymentId: "pay_not_found_body_case",
+            status: "not_found",
+            terminalReason: "expired",
+          }),
+        },
+      },
+      ctx: {},
+    });
+
+    const response = await GET(
+      new NextRequest("https://aibtc.com/api/payment-status/pay_not_found_body_case"),
+      { params: Promise.resolve({ paymentId: "pay_not_found_body_case" }) }
+    );
+
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        paymentId: "pay_not_found_body_case",
+        status: "not_found",
+        terminalReason: "expired",
+        checkStatusUrl: "/api/payment-status/pay_not_found_body_case",
+      })
+    );
+  });
+
+  it("discards staged inbox records on not_found", async () => {
+    const kv = createMockKV();
+    await stagePendingPayment(kv, "pay_not_found_case", "msg_not_found_case");
 
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
@@ -325,14 +417,6 @@ describe("payment-status route", () => {
     );
 
     expect(response.status).toBe(404);
-    await expect(response.json()).resolves.toEqual(
-      expect.objectContaining({
-        paymentId: "pay_not_found_case",
-        status: "not_found",
-        terminalReason: "expired",
-        checkStatusUrl: "/api/payment-status/pay_not_found_case",
-      })
-    );
     expect(await getStagedInboxPayment(kv, "pay_not_found_case")).toBeNull();
     expect(await getMessage(kv, "msg_not_found_case")).toBeNull();
     expect(mocks.logger.info).toHaveBeenCalledWith(
