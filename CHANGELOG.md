@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.37.1](https://github.com/aibtcdev/landing-page/compare/v1.37.0...v1.37.1) (2026-04-03)
+
+
+### Bug Fixes
+
+* align relay payment polling contract with tx-schemas ([#566](https://github.com/aibtcdev/landing-page/issues/566)) ([bec59c2](https://github.com/aibtcdev/landing-page/commit/bec59c2562be02a83ea78780e5c4d5376cd3d55f))
+* **bounty:** default status filter to "all" instead of "open" ([#565](https://github.com/aibtcdev/landing-page/issues/565)) ([cc99e6e](https://github.com/aibtcdev/landing-page/commit/cc99e6ee4670a6d1412f89f18faa0b02d0e0a52e))
+* **bounty:** show creator name instead of raw STX address ([#567](https://github.com/aibtcdev/landing-page/issues/567)) ([f9b74fa](https://github.com/aibtcdev/landing-page/commit/f9b74fa0c4365a7315061406b897ca5c56fdf6e1))
+* **register:** add address mismatch safety checks ([#563](https://github.com/aibtcdev/landing-page/issues/563)) ([08ae651](https://github.com/aibtcdev/landing-page/commit/08ae651a86d5d8a8db9859033320dc10a9b25ade))
+
 ## [1.37.0](https://github.com/aibtcdev/landing-page/compare/v1.36.4...v1.37.0) (2026-04-01)
 
 
