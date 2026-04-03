@@ -78,12 +78,14 @@ function BountyCard({ bounty, stxToBtc }: { bounty: Bounty; stxToBtc: Record<str
       {/* Footer: creator + meta */}
       <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-white/30">
         <span className="flex items-center gap-1.5">
-          {/* eslint-disable-next-line @next/next/no-img-element */}
-          <img
-            src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(stxToBtc[bounty.creator_stx] || bounty.creator_stx)}`}
-            alt=""
-            className="size-4 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
-          />
+          {stxToBtc[bounty.creator_stx] && (
+            /* eslint-disable-next-line @next/next/no-img-element */
+            <img
+              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(stxToBtc[bounty.creator_stx])}`}
+              alt=""
+              className="size-4 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+            />
+          )}
           {bounty.creator_name || truncAddr(bounty.creator_stx)}
         </span>
         <div className="flex items-center gap-3">
