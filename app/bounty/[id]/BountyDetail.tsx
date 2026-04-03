@@ -109,7 +109,7 @@ function BackLink() {
 
 /* ─── Main Component ─── */
 
-export default function BountyDetail({ data }: { data: BountyData | null }) {
+export default function BountyDetail({ data, stxToBtc }: { data: BountyData | null; stxToBtc: Record<string, string> }) {
   if (!data || !data.bounty) {
     return (
       <div className="space-y-4">
@@ -155,7 +155,7 @@ export default function BountyDetail({ data }: { data: BountyData | null }) {
             Creator:
             {/* eslint-disable-next-line @next/next/no-img-element */}
             <img
-              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(bounty.creator_stx)}`}
+              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(stxToBtc[bounty.creator_stx] || bounty.creator_stx)}`}
               alt=""
               className="size-4 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
             />
