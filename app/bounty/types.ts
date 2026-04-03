@@ -32,9 +32,11 @@ export interface Claim {
   bounty_id: number;
   claimer_btc: string;
   claimer_stx: string | null;
+  claimer_name: string | null;
   message: string | null;
   status: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Submission {
