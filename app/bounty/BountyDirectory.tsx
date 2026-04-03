@@ -26,7 +26,7 @@ function StatCard({ label, value }: { label: string; value: string | number }) {
 
 /* ─── Bounty Card ─── */
 
-function BountyCard({ bounty }: { bounty: Bounty }) {
+function BountyCard({ bounty, stxToBtc }: { bounty: Bounty; stxToBtc: Record<string, string> }) {
   const tags = bounty.tags ? bounty.tags.split(",").map((t) => t.trim()).filter(Boolean) : [];
   const dl = deadlineLabel(bounty.deadline);
 
@@ -80,7 +80,7 @@ function BountyCard({ bounty }: { bounty: Bounty }) {
         <span className="flex items-center gap-1.5">
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img
-            src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(bounty.creator_stx)}`}
+            src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(stxToBtc[bounty.creator_stx] || bounty.creator_stx)}`}
             alt=""
             className="size-4 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
           />
@@ -128,9 +128,11 @@ const FILTER_CONTROL_CLASS =
 export default function BountyDirectory({
   initialBounties,
   initialStats,
+  stxToBtc,
 }: {
   initialBounties: Bounty[] | null;
   initialStats: Stats | null;
+  stxToBtc: Record<string, string>;
 }) {
   const [statusFilter, setStatusFilter] = useState("all");
   const [tagFilter, setTagFilter] = useState("");
@@ -240,7 +242,7 @@ export default function BountyDirectory({
       ) : filtered.length > 0 ? (
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           {filtered.map((bounty) => (
-            <BountyCard key={bounty.uuid || bounty.id} bounty={bounty} />
+            <BountyCard key={bounty.uuid || bounty.id} bounty={bounty} stxToBtc={stxToBtc} />
           ))}
         </div>
       ) : (
