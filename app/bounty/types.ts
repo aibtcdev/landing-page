@@ -4,6 +4,7 @@ export interface Bounty {
   id: number;
   uuid: string;
   creator_stx: string;
+  creator_name: string | null;
   title: string;
   description: string;
   amount_sats: number;
@@ -31,9 +32,11 @@ export interface Claim {
   bounty_id: number;
   claimer_btc: string;
   claimer_stx: string | null;
+  claimer_name: string | null;
   message: string | null;
   status: string;
   created_at: string;
+  updated_at: string;
 }
 
 export interface Submission {
