@@ -44,9 +44,37 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
   };
 }
 
+async function resolveStxToBtc(stxAddresses: string[]): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  await Promise.all(
+    stxAddresses.map(async (stx) => {
+      try {
+        const res = await fetch(`https://aibtc.com/api/agents/${stx}`, {
+          next: { revalidate: 60 },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { found?: boolean; agent?: { btcAddress?: string } };
+        if (data.found && data.agent?.btcAddress) {
+          map[stx] = data.agent.btcAddress;
+        }
+      } catch {
+        // skip unresolvable addresses
+      }
+    })
+  );
+  return map;
+}
+
 export default async function BountyDetailPage({ params }: PageProps) {
   const { id } = await params;
   const data = await fetchBountyDetail(id);
+
+  // Collect all STX addresses from bounty creator and claims
+  const stxAddresses: string[] = [];
+  if (data?.bounty) stxAddresses.push(data.bounty.creator_stx);
+  const stxToBtc = stxAddresses.length > 0
+    ? await resolveStxToBtc(stxAddresses)
+    : {};
 
   return (
     <div className="relative min-h-screen text-white">
@@ -56,7 +84,7 @@ export default async function BountyDetailPage({ params }: PageProps) {
         <Navbar />
 
         <main className="mx-auto max-w-[1200px] px-12 pt-32 pb-24 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-16">
-          <BountyDetail data={data} />
+          <BountyDetail data={data} stxToBtc={stxToBtc} />
         </main>
 
         <Footer />
