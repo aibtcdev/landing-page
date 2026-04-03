@@ -77,7 +77,7 @@ function BountyCard({ bounty }: { bounty: Bounty }) {
 
       {/* Footer: creator + meta */}
       <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-white/30">
-        <span>{truncAddr(bounty.creator_stx)}</span>
+        <span>{bounty.creator_name || truncAddr(bounty.creator_stx)}</span>
         <div className="flex items-center gap-3">
           {dl && (
             <span className={dl === "Expired" ? "text-red-400/60" : "text-white/40"}>

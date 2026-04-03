@@ -4,6 +4,7 @@ export interface Bounty {
   id: number;
   uuid: string;
   creator_stx: string;
+  creator_name: string | null;
   title: string;
   description: string;
   amount_sats: number;

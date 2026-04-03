@@ -152,7 +152,7 @@ export default function BountyDetail({ data }: { data: BountyData | null }) {
         {/* Meta row */}
         <div className="flex flex-wrap gap-4 text-xs text-white/40">
           <span>
-            Creator: <span className="text-white/60">{truncAddr(bounty.creator_stx)}</span>
+            Creator: <span className="text-white/60">{bounty.creator_name || truncAddr(bounty.creator_stx)}</span>
           </span>
           <span>
             Posted: <span className="text-white/60">{formatDate(bounty.created_at)}</span>
