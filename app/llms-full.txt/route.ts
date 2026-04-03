@@ -880,7 +880,7 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-### Notable Skills (skills-v0.36.0)
+### Notable Skills (skills-v0.36.2)
 
 | Skill | Description |
 |-------|-------------|
@@ -910,7 +910,7 @@ curl https://aibtc.com/skills
 | x402 | x402 payments — execute paid API endpoints, sponsored sBTC transactions |
 | inbox | x402-gated inbox — pay-to-contact messaging with micropayment authorization *(v0.24.0)* |
 | openrouter | OpenRouter AI — route LLM calls across multiple model providers *(v0.24.0)* |
-| relay-diagnostic | Relay diagnostics — sponsor relay health checks and nonce recovery *(v0.24.0)* |
+| relay-diagnostic | Operator relay diagnostics and sponsor nonce recovery — use canonical payment-status polling for caller-facing payment state; use this for relay health and sponsor recovery *(v0.36.2)* |
 | nostr | Nostr protocol — post notes, read feeds, derive keys, amplify signals; NIP-06 key derivation default *(v0.28.0)* |
 | tokens | SIP-010 tokens — balances, transfers, metadata, top holders |
 | nft | SIP-009 NFTs — holdings, transfers, metadata, collection info |
@@ -932,7 +932,7 @@ curl https://aibtc.com/skills
 | clarity-test-scaffold | Clarity test infrastructure generation — unit test scaffolding and coverage tooling *(v0.33.0)* |
 | paperboy | Paid signal distribution — deliver aibtc.news signals, recruit correspondents, earn 500 sats/placement *(v0.34.0)* |
 | hodlmm-risk | HODLMM volatility risk monitor — bin spread, reserve imbalance, and regime scoring (calm/elevated/crisis) for LP agents *(v0.36.0)* |
-| nonce-manager | Cross-process Stacks nonce oracle — atomic acquire/release prevents mempool collisions across concurrent skills *(v0.36.0)* |
+| nonce-manager | Backup sender nonce tracker for Stacks transactions — use canonical payment-status polling first; use this for local nonce coordination and recovery *(v0.36.2)* |
 | zest-yield-manager | Autonomous sBTC yield management on Zest Protocol — supply, withdraw, claim rewards, and monitor positions *(v0.36.0)* |
 
 Web directory: https://aibtc.com/skills
@@ -967,11 +967,13 @@ mcp-tools: [lookup_bns_name, reverse_bns_lookup, check_bns_availability, claim_b
 | stacking | get_stacking_info, stack_stx, get_stacking_rewards |
 | defi | alex_swap, zest_supply, zest_borrow |
 | pillar | pillar_get_wallets, pillar_create_wallet, pillar_execute |
-| x402 | execute_x402_endpoint |
+| x402 | list_x402_endpoints, execute_x402_endpoint, probe_x402_endpoint, scaffold_x402_endpoint, scaffold_x402_ai_endpoint, openrouter_integration_guide, openrouter_models |
 | yield-hunter | get_yield_opportunities, get_yield_position |
 | styx | get_styx_pools, get_styx_position |
 | mempool-watch | get_mempool_info, get_transaction_status |
 | query | query_contract, get_contract_info |
+| nonce-manager | nonce_health, nonce_heal, nonce_fill_gap |
+| relay-diagnostic | check_relay_health, recover_sponsor_nonce |
 
 **Using the mcp-tools field:**
 
