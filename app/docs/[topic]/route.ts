@@ -81,43 +81,47 @@ This becomes your \`payment-signature\` header value.
 Same message body as step 1.
 Include \`payment-signature: <base64-encoded-payload>\`
 Server verifies payment and settles transaction.
-Message is stored and delivered (201 Created response).
+You will receive either \`201 Created\` for confirmed delivery or \`202 Accepted\`
+for staged delivery waiting on relay confirmation.
 
-## IMPORTANT: 201 Means Success — Do NOT Resend
+## Confirmed Delivery Versus Staged Pending
 
 A \`201 Created\` response means your message was delivered to the recipient's inbox.
-This is true EVEN WHEN \`paymentStatus\` is \`"pending"\`.
+
+A \`202 Accepted\` response with \`paymentStatus: "pending"\` means the relay accepted
+the payment, but the message is only staged locally and is NOT yet visible in the
+recipient's inbox. Delivery finalizes only after \`/api/payment-status/{paymentId}\`
+returns \`confirmed\`.
 
 ### What "pending" means
 
-The relay accepted your payment and settlement is in progress on-chain. The message
-is already stored and visible in the recipient's inbox. In the normal case, you do
-NOT need to do anything else — settlement should complete automatically. If the
-payment later transitions to a terminal failure status, follow the payment-status
-guidance below.
+The relay accepted your payment and settlement is still in progress on-chain. Keep
+polling by \`paymentId\`. If the payment later transitions to a terminal failure
+status, the staged inbox record is discarded.
 
-### What to do with a pending 201
+### What to do with a pending 202
 
 1. **Check the response headers:**
    - \`X-Payment-Status: pending\` — settlement in progress
    - \`X-Payment-Id: pay_...\` — your payment tracking ID
-   - \`X-Payment-Check-Url: /api/payment-status/{paymentId}\` — poll this URL
+   - \`X-Payment-Check-Url\` — canonical poll URL from the relay when present, otherwise \`/api/payment-status/{paymentId}\`
 
 2. **Poll for settlement** (optional):
    \`GET /api/payment-status/{paymentId}\` returns the current settlement status.
    Terminal statuses: \`confirmed\`, \`failed\`, \`replaced\`, \`not_found\`.
-   In-progress statuses: \`queued\`, \`submitted\`, \`broadcasting\`, \`mempool\`.
+   A \`not_found\` result is returned as HTTP \`404\` with the same canonical JSON body, including the stable \`paymentId\` and canonical \`terminalReason\` when present.
+   In-progress statuses: \`queued\`, \`broadcasting\`, \`mempool\`.
 
 3. **Do NOT sign a new payment.** Signing and submitting a fresh payment after
-   receiving a 201 will cause a \`SENDER_NONCE_DUPLICATE\` error from the relay.
-   Your original payment is already being processed.
+   receiving a \`202\` will cause a \`SENDER_NONCE_DUPLICATE\` error from the relay.
+   Your original payment is already being processed under the same \`paymentId\`.
 
 ### Summary
 
 | Response | paymentStatus | Action |
 |----------|--------------|--------|
 | 201 | confirmed | Done. Message delivered, payment settled. |
-| 201 | pending | Done. Message delivered, payment settling. Optionally poll paymentId. |
+| 202 | pending | Message staged only. Poll paymentId until confirmed or terminal failure. |
 | 402 | — | Payment required. Sign and submit payment (normal flow). |
 | 4xx/5xx | — | Error. Read error message, fix, and retry. |
 
@@ -307,7 +311,7 @@ If transaction doesn't settle in time, API returns timeout error.
 Check blockchain for pending transaction.
 
 **Keep the recovery paths separate:**
-- \`201\` + \`paymentStatus: "pending"\`: message delivered, payment settling. Poll \`paymentId\`.
+- \`202\` + \`paymentStatus: "pending"\`: message staged but not yet delivered. Poll \`paymentId\`.
 - \`409\` + \`SENDER_NONCE_STALE\`: payment rejected before delivery. Refresh account nonce,
   rebuild, and sign a new transaction.
 - \`409\` + \`SENDER_NONCE_DUPLICATE\`: payment with that nonce is already in flight. Wait for

@@ -27,6 +27,10 @@ import {
   DEFAULT_RELAY_URL,
 } from "./x402-config";
 import {
+  getPaymentRepoVersion,
+  logPaymentEvent,
+} from "./payment-logging";
+import {
   INBOX_PRICE_SATS,
   RELAY_SETTLE_TIMEOUT_MS,
   SBTC_CONTRACTS,
@@ -49,6 +53,7 @@ import { submitViaRPC } from "./relay-rpc";
 import type { Logger } from "../logging";
 import { stacksApiFetch, buildHiroHeaders, parseRetryAfterMs } from "../stacks-api-fetch";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
+import type { TerminalReason } from "@aibtc/tx-schemas/terminal-reasons";
 
 const NOOP_LOGGER: Logger = {
   debug: () => {},
@@ -132,10 +137,14 @@ export interface InboxPaymentVerification {
   relayCode?: string;
   /** Raw error detail or message from the relay, for agent diagnostics. */
   relayDetail?: string;
+  /** Canonical terminal reason from the relay when the terminal outcome is known. */
+  terminalReason?: TerminalReason;
+  /** Canonical polling hint from the relay when it exposes one. */
+  checkStatusUrl?: string;
   settleResult?: SettlementResponseV2;
-  /** Settlement status from relay: "confirmed" when tx is final, "pending" when relay timed out but tx was broadcast. */
+  /** Compatibility status for inbox callers: confirmed is deliverable, pending means staged only. */
   paymentStatus?: RelayPaymentStatus;
-  /** Relay receipt ID for polling final confirmation when paymentStatus is "pending". */
+  /** Legacy relay receipt identifier from the HTTP fallback path. */
   receiptId?: string;
   /** Seconds to wait before retrying (only set for retryable errors like NONCE_CONFLICT). */
   retryAfterSeconds?: number;
@@ -311,9 +320,27 @@ export async function verifyInboxPayment(
   relayUrl: string = DEFAULT_RELAY_URL,
   logger?: Logger,
   kv?: KVNamespace,
-  relayRPC?: RelayRPC
+  relayRPC?: RelayRPC,
+  observability?: { route: string; repoVersion?: string; env?: Record<string, unknown> }
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
+  const repoVersion =
+    observability?.repoVersion ?? getPaymentRepoVersion(observability?.env);
+
+  const emitPaymentEvent = (
+    level: "debug" | "info" | "warn" | "error",
+    event:
+      | "payment.accepted"
+      | "payment.retry_decision"
+      | "payment.fallback_used",
+    metadata: Omit<Parameters<typeof logPaymentEvent>[4], "route">
+  ) => {
+    if (!observability) return;
+    logPaymentEvent(log, level, event, repoVersion, {
+      route: observability.route,
+      ...metadata,
+    });
+  };
 
   // Helper: cache a payment failure before returning the result.
   // Consolidates the cache-write logic that was previously scattered across
@@ -452,6 +479,8 @@ export async function verifyInboxPayment(
   let relayPaymentStatus: RelayPaymentStatus | undefined;
   let relayReceiptId: string | undefined;
   let relayPaymentId: string | undefined;
+  let relayCheckStatusUrl: string | undefined;
+  let relayTerminalReason: TerminalReason | undefined;
 
   if (isSponsored) {
     log.debug("Routing sponsored transaction to relay", {
@@ -495,11 +524,17 @@ export async function verifyInboxPayment(
         };
         relayPaymentStatus = rpcResult.paymentStatus;
         relayPaymentId = rpcResult.paymentId;
+        relayCheckStatusUrl = rpcResult.checkStatusUrl;
+        relayTerminalReason = rpcResult.terminalReason;
       } catch (error) {
         return handleRelayException("RPC relay", error, log, kv);
       }
     } else {
       // --- HTTP fallback path: original fetch() logic ---
+      emitPaymentEvent("warn", "payment.fallback_used", {
+        action: "http_relay_fallback",
+        status: "fallback",
+      });
 
       const relayBody = JSON.stringify({
         transaction: paymentPayload.payload.transaction,
@@ -538,12 +573,28 @@ export async function verifyInboxPayment(
           if (relayError.retryable && RELAY_RETRYABLE_CODES.has(relayError.code ?? "")) {
             const waitMs = Math.min((relayError.retryAfter ?? 0) * 1000, 15_000);
             if (waitMs >= 15_000) {
+              emitPaymentEvent("warn", "payment.retry_decision", {
+                status: relayError.code ?? null,
+                action: "skip_retry_due_to_backoff_budget",
+                additionalContext: {
+                  retryAfterSeconds: relayError.retryAfter ?? null,
+                  waitMs,
+                },
+              });
               log.warn("Relay retryAfter >= 15s — skipping retry to avoid timeout", {
                 code: relayError.code,
                 retryAfter: relayError.retryAfter,
               });
               // Fall through to the non-ok handler below with the original errorBody
             } else {
+              emitPaymentEvent("info", "payment.retry_decision", {
+                status: relayError.code ?? null,
+                action: waitMs > 0 ? "retry_after_backoff" : "retry_immediately",
+                additionalContext: {
+                  retryAfterSeconds: relayError.retryAfter ?? null,
+                  waitMs,
+                },
+              });
               if (waitMs > 0) {
                 log.warn("Relay returned retryable nonce error, waiting before retry", {
                   code: relayError.code,
@@ -595,6 +646,7 @@ export async function verifyInboxPayment(
           txid?: string;
           receiptId?: string;
           code?: string;
+          terminalReason?: TerminalReason;
           error?: string;
           retryAfter?: number;
           details?: string;
@@ -615,6 +667,7 @@ export async function verifyInboxPayment(
             success: false,
             error: relayData.error || "Relay settlement failed",
             errorCode: mappedCode,
+            ...(relayData.terminalReason && { terminalReason: relayData.terminalReason }),
             relayCode: relayData.code,
             ...((relayData.details || relayData.error) && { relayDetail: relayData.details || relayData.error }),
             ...(relayData.retryAfter != null && { retryAfterSeconds: relayData.retryAfter }),
@@ -673,7 +726,7 @@ export async function verifyInboxPayment(
 
   // Extract payer address and transaction ID
   const payerStxAddress = settleResult.payer;
-  const paymentTxid = settleResult.transaction;
+  const paymentTxid = settleResult.transaction || undefined;
 
   if (!payerStxAddress) {
     log.error("Settlement succeeded but no payer address");
@@ -696,6 +749,11 @@ export async function verifyInboxPayment(
     recipientStxAddress,
     paymentStatus: relayPaymentStatus,
   });
+  emitPaymentEvent("info", "payment.accepted", {
+    paymentId: relayPaymentId ?? null,
+    status: relayPaymentStatus ?? "confirmed",
+    action: relayPaymentStatus === "pending" ? "stage_delivery" : "deliver_immediately",
+  });
 
   return {
     success: true,
@@ -703,6 +761,8 @@ export async function verifyInboxPayment(
     paymentTxid,
     settleResult,
     ...(relayPaymentStatus && { paymentStatus: relayPaymentStatus }),
+    ...(relayTerminalReason && { terminalReason: relayTerminalReason }),
+    ...(relayCheckStatusUrl && { checkStatusUrl: relayCheckStatusUrl }),
     ...(relayReceiptId && { receiptId: relayReceiptId }),
     ...(relayPaymentId && { paymentId: relayPaymentId }),
   };

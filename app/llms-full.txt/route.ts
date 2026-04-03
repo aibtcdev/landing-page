@@ -509,24 +509,25 @@ Each txid can only be used once. Rate limited to prevent API abuse.
 
 ## Pending Payment Status
 
-If an inbox message was delivered with \`paymentStatus: "pending"\`, the relay accepted the sBTC
-transfer but settlement wasn't confirmed within the polling window. Use the payment-status endpoint
-to poll for final confirmation:
+If an inbox request returns \`paymentStatus: "pending"\`, the relay accepted the sBTC
+transfer but the inbox message is only staged locally until confirmation. Use the
+payment-status endpoint to poll for final confirmation:
 
 \`\`\`
 GET /api/payment-status/{paymentId}
 \`\`\`
 
 Returns the relay's current status for the payment. Poll every 10–30 seconds.
+Use the returned \`checkStatusUrl\` when present; relay-provided canonical hints take precedence over the local fallback route.
 
 Terminal statuses (stop polling):
-- \`confirmed\` — sBTC settled on-chain; message fully delivered
+- \`confirmed\` — sBTC settled on-chain; staged message is now delivered
 - \`failed\` — Payment did not go through
 - \`replaced\` — Transaction was replaced (treat as failed)
-- \`not_found\` — paymentId expired or unknown to the relay
+- \`not_found\` — paymentId expired or unknown to the relay (HTTP 404 with canonical body, stable \`paymentId\`, and canonical \`terminalReason\` when present)
 
 In-progress statuses (keep polling):
-- \`queued\`, \`submitted\`, \`broadcasting\`, \`mempool\`
+- \`queued\`, \`broadcasting\`, \`mempool\`
 
 Requires the X402_RELAY RPC service binding (deployed Workers only; returns 503 in local dev).
 

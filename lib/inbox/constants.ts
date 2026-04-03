@@ -91,7 +91,11 @@ export const KV_PREFIXES = {
   REPLY: "inbox:reply:",           // inbox:reply:{messageId} -> OutboxReply
   AGENT_INDEX: "inbox:agent:",     // inbox:agent:{btcAddress} -> InboxAgentIndex
   SENT_INDEX: "inbox:sent:",       // inbox:sent:{btcAddress} -> SentMessageIndex
+  STAGED_PAYMENT: "inbox:staged-payment:", // inbox:staged-payment:{paymentId} -> StagedInboxMessage
 } as const;
+
+/** TTL for staged inbox payment records (24 hours). */
+export const STAGED_PAYMENT_TTL_SECONDS = 24 * 60 * 60;
 
 // --- Circuit breaker constants ---
 

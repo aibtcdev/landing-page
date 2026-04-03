@@ -12,6 +12,7 @@ export type {
   InboxAgentIndex,
   SentMessageIndex,
   RelayPaymentStatus,
+  StagedInboxMessage,
   PaymentFailureCache,
 } from "./types";
 
@@ -35,6 +36,7 @@ export {
   RPC_TOTAL_TIMEOUT_MS,
   PAYMENT_FAILURE_CACHE_PREFIX,
   PAYMENT_FAILURE_CACHE_TTL_SECONDS,
+  STAGED_PAYMENT_TTL_SECONDS,
   CACHEABLE_PAYMENT_FAILURE_CODES,
   INBOX_SENDER_RATE_LIMIT_PREFIX,
   INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS,
@@ -100,6 +102,10 @@ export {
   updateAgentInbox,
   getSentIndex,
   updateSentIndex,
+  getStagedInboxPayment,
+  storeStagedInboxPayment,
+  deleteStagedInboxPayment,
+  finalizeStagedInboxPayment,
   listInboxMessages,
   listSentMessages,
   decrementUnreadCount,

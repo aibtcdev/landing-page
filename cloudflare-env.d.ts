@@ -6,6 +6,8 @@ interface CloudflareEnv {
   UNISAT_API_KEY?: string; // Unisat API key for Ordinals indexer requests (set via wrangler secret)
   GITHUB_TOKEN?: string; // GitHub personal access token for authenticated API requests (raises rate limit from 60 to 5000 req/hr)
   LOGS?: unknown; // Worker-logs RPC service binding (type guarded via isLogsRPC)
+  DEPLOY_SHA?: string; // Optional deploy/build SHA for structured observability
+  CF_PAGES_COMMIT_SHA?: string; // Pages-provided commit SHA when available
   X402_NETWORK?: "mainnet" | "testnet"; // Stacks network for x402 verification
   X402_RELAY_URL?: string; // x402 relay URL for all payment settlement (default: https://x402-relay.aibtc.com)
   X402_RELAY?: import("./lib/inbox/relay-rpc").RelayRPC; // x402 sponsor relay RPC service binding (undefined in local dev)

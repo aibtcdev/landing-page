@@ -9,6 +9,7 @@ import {
   verifyInboxPayment,
   verifyTxidPayment,
   storeMessage,
+  storeStagedInboxPayment,
   updateAgentInbox,
   updateSentIndex,
   listInboxMessages,
@@ -25,6 +26,10 @@ import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { hasAchievement, grantAchievement } from "@/lib/achievements";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
+import {
+  getPaymentRepoVersion,
+  logPaymentEvent,
+} from "@/lib/inbox/payment-logging";
 
 /** Maps nonce-related error codes to structured action strings for agents and operators. */
 const NONCE_ACTION_MAP: Record<string, string> = {
@@ -440,7 +445,7 @@ export async function GET(
         flow: [
           "POST without payment-signature header → 402 Payment Required",
           "Complete x402 sBTC payment to recipient's STX address",
-          "POST with payment-signature header (base64 PaymentPayloadV2) → message delivered",
+          "POST with payment-signature header (base64 PaymentPayloadV2) → 201 confirmed delivery or 202 staged pending confirmation",
         ],
         documentation: "https://aibtc.com/llms-full.txt",
       },
@@ -500,6 +505,7 @@ export async function POST(
   const logger = isLogsRPC(env.LOGS)
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
+  const repoVersion = getPaymentRepoVersion(env);
 
   // Extract network config once (used by both 402 response and payment verification)
   const network = (env.X402_NETWORK as "mainnet" | "testnet") || "mainnet";
@@ -571,6 +577,18 @@ export async function POST(
   const paymentSigHeader =
     request.headers.get(X402_HEADERS.PAYMENT_SIGNATURE) ||
     request.headers.get("X-Payment-Signature"); // backwards compat
+  const compatHeaderUsed =
+    !request.headers.get(X402_HEADERS.PAYMENT_SIGNATURE) &&
+    !!request.headers.get("X-Payment-Signature");
+
+  if (compatHeaderUsed) {
+    logPaymentEvent(logger, "warn", "payment.fallback_used", repoVersion, {
+      route: request.nextUrl.pathname,
+      status: "compat",
+      action: "legacy_x_payment_signature_header",
+      compatShimUsed: true,
+    });
+  }
 
   // Auto-populate recipient addresses from the resolved agent when the body omits them.
   // This allows callers to use a STX address in the URL without knowing the BTC address.
@@ -665,9 +683,14 @@ export async function POST(
 
   if (!paymentSigHeader && !paymentTxid) {
     // No payment signature and no txid — return 402 with payment requirements
-    logger.info("Returning 402 Payment Required", {
-      recipientStx: agent.stxAddress,
-      minAmount: INBOX_PRICE_SATS,
+    logPaymentEvent(logger, "info", "payment.required", repoVersion, {
+      route: request.nextUrl.pathname,
+      status: "requires_payment",
+      action: "return_payment_requirements",
+      additionalContext: {
+        recipientStx: agent.stxAddress,
+        minAmount: INBOX_PRICE_SATS,
+      },
     });
 
     return NextResponse.json(paymentRequiredBody, {
@@ -1004,6 +1027,12 @@ export async function POST(
   } catch {
     try {
       paymentPayload = JSON.parse(paymentSigHeader) as PaymentPayloadV2;
+      logPaymentEvent(logger, "warn", "payment.fallback_used", repoVersion, {
+        route: request.nextUrl.pathname,
+        status: "compat",
+        action: "plain_json_payment_signature_header",
+        compatShimUsed: true,
+      });
     } catch {
       logger.error("Invalid payment signature format");
       return NextResponse.json(
@@ -1029,7 +1058,8 @@ export async function POST(
     relayUrl,
     logger,
     kv,
-    env.X402_RELAY
+    env.X402_RELAY,
+    { route: request.nextUrl.pathname, repoVersion, env: env as unknown as Record<string, unknown> }
   );
 
   if (!paymentResult.success) {
@@ -1060,13 +1090,18 @@ export async function POST(
     // NONCE_CONFLICT — retryable; same tx hex is idempotent within 5 min.
     if (errorCode === "NONCE_CONFLICT") {
       const nonceAction = NONCE_ACTION_MAP[errorCode];
-      logger.info("inbox_payment_rejected", {
-        errorCode,
-        relayCode: paymentResult.relayCode,
-        retryAfter: retryAfterSeconds,
-        nonceAction,
-        recipientBtcAddress: agent.btcAddress,
-        requestId: rayId,
+      logPaymentEvent(logger, "info", "payment.retry_decision", repoVersion, {
+        route: request.nextUrl.pathname,
+        paymentId: paymentResult.paymentId ?? null,
+        status: errorCode,
+        action: nonceAction,
+        terminalReason: paymentResult.terminalReason ?? null,
+        additionalContext: {
+          relayCode: paymentResult.relayCode ?? null,
+          retryAfter: retryAfterSeconds,
+          recipientBtcAddress: agent.btcAddress,
+          requestId: rayId,
+        },
       });
       return NextResponse.json(
         {
@@ -1209,13 +1244,18 @@ export async function POST(
     const nonceError = errorCode ? SENDER_NONCE_ERRORS[errorCode] : undefined;
     if (nonceError) {
       const nonceAction = errorCode ? NONCE_ACTION_MAP[errorCode] : undefined;
-      logger.info("inbox_payment_rejected", {
-        errorCode,
-        relayCode: paymentResult.relayCode,
-        retryAfter: nonceError.retryAfter,
-        nonceAction,
-        recipientBtcAddress: agent.btcAddress,
-        requestId: rayId,
+      logPaymentEvent(logger, "info", "payment.retry_decision", repoVersion, {
+        route: request.nextUrl.pathname,
+        paymentId: paymentResult.paymentId ?? null,
+        status: errorCode,
+        action: nonceAction,
+        terminalReason: paymentResult.terminalReason ?? null,
+        additionalContext: {
+          relayCode: paymentResult.relayCode ?? null,
+          retryAfter: nonceError.retryAfter,
+          recipientBtcAddress: agent.btcAddress,
+          requestId: rayId,
+        },
       });
       return NextResponse.json(
         {
@@ -1298,9 +1338,83 @@ export async function POST(
     ...(senderBtcAddress && { senderBtcAddress }),
     ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
     ...(replyTo && { replyTo }),
-    ...(paymentResult.paymentStatus && { paymentStatus: paymentResult.paymentStatus }),
+    paymentStatus: paymentResult.paymentStatus ?? "confirmed",
+    ...(paymentResult.paymentId && { paymentId: paymentResult.paymentId }),
     ...(paymentResult.receiptId && { receiptId: paymentResult.receiptId }),
   };
+
+  const responseHeaders: Record<string, string> = {};
+
+  if (paymentResult.paymentStatus === "pending") {
+    if (!paymentResult.paymentId) {
+      logPaymentEvent(logger, "warn", "payment.fallback_used", repoVersion, {
+        route: request.nextUrl.pathname,
+        paymentId: null,
+        status: "pending",
+        action: "deliver_immediately_without_payment_id",
+        additionalContext: {
+          messageId,
+          fromAddress,
+          toBtcAddress,
+          receiptId: paymentResult.receiptId ?? null,
+        },
+      });
+      logger.warn("Pending payment result missing paymentId; preserving fallback immediate delivery", {
+        messageId,
+        fromAddress,
+        toBtcAddress,
+      });
+    } else {
+      const checkStatusUrl =
+        paymentResult.checkStatusUrl ?? `/api/payment-status/${paymentResult.paymentId}`;
+
+      await storeStagedInboxPayment(kv, {
+        paymentId: paymentResult.paymentId,
+        createdAt: now,
+        ...(senderAgent?.btcAddress && { senderSentIndexBtcAddress: senderAgent.btcAddress }),
+        message,
+      });
+
+      responseHeaders["X-Payment-Status"] = "pending";
+      responseHeaders["X-Payment-Id"] = paymentResult.paymentId;
+      responseHeaders["X-Payment-Check-Url"] = checkStatusUrl;
+
+      logPaymentEvent(logger, "info", "payment.delivery_staged", repoVersion, {
+        route: request.nextUrl.pathname,
+        paymentId: paymentResult.paymentId,
+        status: "pending",
+        action: "stage_delivery",
+        checkStatusUrl,
+        additionalContext: {
+          messageId,
+          fromAddress,
+          toBtcAddress,
+          senderBtcAddress: senderAgent?.btcAddress ?? null,
+        },
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Payment accepted. Inbox delivery is staged until the relay reports confirmed.",
+          inbox: {
+            fromAddress,
+            toBtcAddress,
+            sentAt: now,
+            authenticated,
+            ...(senderBtcAddress && { senderBtcAddress }),
+            paymentStatus: "pending",
+            paymentId: paymentResult.paymentId,
+          },
+          checkStatusUrl,
+        },
+        {
+          status: 202,
+          headers: responseHeaders,
+        }
+      );
+    }
+  }
 
   await Promise.all([
     storeMessage(kv, message),
@@ -1310,7 +1424,6 @@ export async function POST(
       : []),
   ]);
 
-  // Grant "Receiver" achievement on first inbox message received (best-effort)
   try {
     const hasReceiverX402 = await hasAchievement(kv, toBtcAddress, "receiver");
     if (!hasReceiverX402) {
@@ -1324,26 +1437,35 @@ export async function POST(
     console.error("Failed to check receiver achievement during inbox store:", error);
   }
 
-  // Grant x402-earner achievement to recipient on first x402 payment received (idempotent)
   await grantAchievement(kv, toBtcAddress, "x402-earner", { messageId, paymentTxid: message.paymentTxid }).catch((err) =>
     logger.warn("grantAchievement failed (non-fatal)", { err, toBtcAddress })
   );
 
-  logger.info("Message stored", {
-    messageId,
-    fromAddress,
-    toBtcAddress,
-    senderBtcAddress: senderAgent?.btcAddress ?? null,
-    paymentTxid: message.paymentTxid,
+  const deliveredPaymentStatus = message.paymentStatus ?? "confirmed";
+  const deliveredCheckStatusUrl = paymentResult.paymentId
+    ? paymentResult.checkStatusUrl ?? `/api/payment-status/${paymentResult.paymentId}`
+    : undefined;
+
+  logPaymentEvent(logger, "info", "payment.delivery_confirmed", repoVersion, {
+    route: request.nextUrl.pathname,
+    paymentId: paymentResult.paymentId ?? null,
+    status: deliveredPaymentStatus,
+    action:
+      deliveredPaymentStatus === "pending"
+        ? "deliver_immediately_pending_fallback"
+        : "deliver_immediately",
+    checkStatusUrl: deliveredCheckStatusUrl,
+    additionalContext: {
+      messageId,
+      fromAddress,
+      toBtcAddress,
+      senderBtcAddress: senderAgent?.btcAddress ?? null,
+      paymentTxid: message.paymentTxid ?? null,
+    },
   });
 
-  // Invalidate cached agent list (inbox message count changed)
   await invalidateAgentListCache(kv);
 
-  // Build payment-response header only when we have an actual transaction.
-  // Pending payments (poll exhausted before confirmation) have no txid yet —
-  // omit the header to avoid emitting an empty `transaction` field.
-  const responseHeaders: Record<string, string> = {};
   if (message.paymentTxid) {
     const paymentResponseData = {
       success: true,
@@ -1353,14 +1475,11 @@ export async function POST(
     };
     responseHeaders[X402_HEADERS.PAYMENT_RESPONSE] = btoa(JSON.stringify(paymentResponseData));
   }
-
-  // Surface pending payment settlement as headers so callers can't miss it.
-  // A 201 with X-Payment-Status: pending means the message IS delivered —
-  // callers must poll X-Payment-Check-Url instead of signing a new payment.
-  if (paymentResult.paymentStatus === "pending" && paymentResult.paymentId) {
-    responseHeaders["X-Payment-Status"] = "pending";
+  responseHeaders["X-Payment-Status"] = deliveredPaymentStatus;
+  if (paymentResult.paymentId) {
     responseHeaders["X-Payment-Id"] = paymentResult.paymentId;
-    responseHeaders["X-Payment-Check-Url"] = `/api/payment-status/${paymentResult.paymentId}`;
+    responseHeaders["X-Payment-Check-Url"] =
+      deliveredCheckStatusUrl ?? `/api/payment-status/${paymentResult.paymentId}`;
   }
 
   return NextResponse.json(
@@ -1374,8 +1493,9 @@ export async function POST(
         sentAt: now,
         authenticated,
         ...(senderBtcAddress && { senderBtcAddress }),
-        ...(paymentResult.paymentStatus && { paymentStatus: paymentResult.paymentStatus }),
+        paymentStatus: deliveredPaymentStatus,
         ...(paymentResult.paymentId && { paymentId: paymentResult.paymentId }),
+        ...(paymentResult.receiptId && { receiptId: paymentResult.receiptId }),
       },
     },
     {
