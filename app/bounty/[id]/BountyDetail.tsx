@@ -150,9 +150,16 @@ export default function BountyDetail({ data }: { data: BountyData | null }) {
         <Timeline status={bounty.status} />
 
         {/* Meta row */}
-        <div className="flex flex-wrap gap-4 text-xs text-white/40">
-          <span>
-            Creator: <span className="text-white/60">{bounty.creator_name || truncAddr(bounty.creator_stx)}</span>
+        <div className="flex flex-wrap items-center gap-4 text-xs text-white/40">
+          <span className="inline-flex items-center gap-1.5">
+            Creator:
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img
+              src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(bounty.creator_stx)}`}
+              alt=""
+              className="size-4 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+            />
+            <span className="text-white/60">{bounty.creator_name || truncAddr(bounty.creator_stx)}</span>
           </span>
           <span>
             Posted: <span className="text-white/60">{formatDate(bounty.created_at)}</span>
@@ -197,10 +204,16 @@ export default function BountyDetail({ data }: { data: BountyData | null }) {
                 className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4 space-y-2"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-sm text-white/60">
-                    {truncAddr(claim.claimer_btc)}
-                    {claim.claimer_stx && (
-                      <span className="text-white/30 ml-2">({truncAddr(claim.claimer_stx)})</span>
+                  <span className="inline-flex items-center gap-1.5 text-sm text-white/60">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(claim.claimer_btc)}`}
+                      alt=""
+                      className="size-5 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
+                    />
+                    {claim.claimer_name || truncAddr(claim.claimer_btc)}
+                    {claim.claimer_stx && !claim.claimer_name && (
+                      <span className="text-white/30">({truncAddr(claim.claimer_stx)})</span>
                     )}
                   </span>
                   <span
