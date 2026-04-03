@@ -265,12 +265,13 @@ describe("level progression flow", () => {
     const mockAgent: AgentRecord = {
       btcAddress: "bc1qtest",
       stxAddress: "SP1234567890",
-      registeredAt: "2026-02-10T00:00:00.000Z",
-      name: "Test Agent",
+      stxPublicKey: "0x0234567890",
+      btcPublicKey: "0x0234567890",
+      verifiedAt: "2026-02-10T00:00:00.000Z",
+      displayName: "Test Agent",
       bnsName: null,
       description: null,
       owner: null,
-      lastActiveAt: null,
       checkInCount: 0,
     };
 

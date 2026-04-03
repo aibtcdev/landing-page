@@ -10,6 +10,7 @@
  */
 
 import type { AgentRecord, ClaimStatus } from "./types";
+export type { ClaimStatus } from "./types";
 
 export interface LevelDefinition {
   level: number;

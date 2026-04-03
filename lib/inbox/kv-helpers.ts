@@ -5,12 +5,13 @@
  * and agent inbox indices. Follows the pattern from lib/achievements/kv.ts.
  */
 
-import { KV_PREFIXES } from "./constants";
+import { KV_PREFIXES, STAGED_PAYMENT_TTL_SECONDS } from "./constants";
 import type {
   InboxMessage,
   OutboxReply,
   InboxAgentIndex,
   SentMessageIndex,
+  StagedInboxMessage,
 } from "./types";
 
 /**
@@ -51,6 +52,10 @@ function buildAgentIndexKey(btcAddress: string): string {
  */
 function buildSentIndexKey(btcAddress: string): string {
   return `${KV_PREFIXES.SENT_INDEX}${btcAddress}`;
+}
+
+function buildStagedPaymentKey(paymentId: string): string {
+  return `${KV_PREFIXES.STAGED_PAYMENT}${paymentId}`;
 }
 
 /**
@@ -318,6 +323,70 @@ export async function updateSentIndex(
   }
 
   await kv.put(key, JSON.stringify(index));
+}
+
+export async function getStagedInboxPayment(
+  kv: KVNamespace,
+  paymentId: string
+): Promise<StagedInboxMessage | null> {
+  const data = await kv.get(buildStagedPaymentKey(paymentId));
+  if (!data) return null;
+
+  try {
+    return JSON.parse(data) as StagedInboxMessage;
+  } catch (e) {
+    console.error(`Failed to parse staged inbox payment ${paymentId}:`, e);
+    return null;
+  }
+}
+
+export async function storeStagedInboxPayment(
+  kv: KVNamespace,
+  staged: StagedInboxMessage
+): Promise<void> {
+  await kv.put(buildStagedPaymentKey(staged.paymentId), JSON.stringify(staged), {
+    expirationTtl: STAGED_PAYMENT_TTL_SECONDS,
+  });
+}
+
+export async function deleteStagedInboxPayment(
+  kv: KVNamespace,
+  paymentId: string
+): Promise<void> {
+  await kv.delete(buildStagedPaymentKey(paymentId));
+}
+
+export async function finalizeStagedInboxPayment(
+  kv: KVNamespace,
+  paymentId: string,
+  updates: Partial<InboxMessage> = {}
+): Promise<InboxMessage | null> {
+  const staged = await getStagedInboxPayment(kv, paymentId);
+  if (!staged) return null;
+
+  const existingMessage = await getMessage(kv, staged.message.messageId);
+  if (existingMessage) {
+    await deleteStagedInboxPayment(kv, paymentId);
+    return existingMessage;
+  }
+
+  const finalizedMessage: InboxMessage = {
+    ...staged.message,
+    ...updates,
+    paymentStatus: "confirmed",
+    paymentId,
+  };
+
+  await Promise.all([
+    storeMessage(kv, finalizedMessage),
+    updateAgentInbox(kv, finalizedMessage.toBtcAddress, finalizedMessage.messageId, finalizedMessage.sentAt),
+    ...(staged.senderSentIndexBtcAddress
+      ? [updateSentIndex(kv, staged.senderSentIndexBtcAddress, finalizedMessage.messageId, finalizedMessage.sentAt)]
+      : []),
+  ]);
+
+  await deleteStagedInboxPayment(kv, paymentId);
+  return finalizedMessage;
 }
 
 /**

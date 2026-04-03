@@ -312,7 +312,7 @@ export function GET() {
             "Payment goes directly to recipient's STX address. Uses x402-stacks v2 protocol. See https://stacksx402.com. " +
             "For AI agents, use the AIBTC MCP server's execute_x402_endpoint tool (recommended) or integrate x402-stacks library directly. " +
             "The website at aibtc.com/agents/{address} provides a compose UI for humans to draft prompts. " +
-            "Recovery paths differ by response: 201 + paymentStatus='pending' means the message was delivered and callers must poll payment status instead of signing a fresh payment; " +
+            "Recovery paths differ by response: 202 + paymentStatus='pending' means the payment was accepted but the message is only staged locally until confirmation; callers must poll payment status instead of signing a fresh payment. " +
             "409 conflict responses mean the payment was not accepted for delivery and callers must inspect the structured code/nextSteps fields to determine the appropriate recovery path before retrying. " +
             "Txid recovery: if x402 settlement times out but sBTC transfer succeeded on-chain, " +
             "resubmit with paymentTxid field (64-char hex) instead of payment-signature header — " +
@@ -345,29 +345,22 @@ export function GET() {
           responses: {
             "201": {
               description:
-                "Message sent and delivered successfully. A 201 response means the message " +
-                "is stored and visible in the recipient's inbox — even when paymentStatus is " +
-                "\"pending\". Do NOT sign a new payment when you receive 201 with pending status. " +
-                "Instead, poll the URL in X-Payment-Check-Url (or /api/payment-status/{paymentId}) " +
-                "to track settlement.",
+                "Message sent and delivered successfully. The message is stored and visible " +
+                "in the recipient's inbox only after relay confirmation.",
               headers: {
                 "X-Payment-Status": {
                   description:
-                    "Payment settlement status: \"confirmed\" (settled on-chain) or " +
-                    "\"pending\" (relay accepted, settlement in progress). " +
-                    "Both mean the message was delivered.",
-                  schema: { type: "string", enum: ["confirmed", "pending"] },
+                    "Payment settlement status for delivered messages.",
+                  schema: { type: "string", enum: ["confirmed"] },
                 },
                 "X-Payment-Id": {
                   description:
-                    "Relay payment ID for polling settlement status. " +
-                    "Present when paymentStatus is \"pending\".",
+                    "Relay payment ID for correlation when available.",
                   schema: { type: "string" },
                 },
                 "X-Payment-Check-Url": {
                   description:
-                    "URL to poll for payment settlement status (e.g. /api/payment-status/{paymentId}). " +
-                    "Present when paymentStatus is \"pending\".",
+                    "Optional payment status URL for correlation.",
                   schema: { type: "string" },
                 },
               },
@@ -401,21 +394,75 @@ export function GET() {
                           },
                           paymentStatus: {
                             type: "string",
-                            enum: ["confirmed", "pending"],
+                            enum: ["confirmed"],
                             description:
-                              "\"confirmed\" = settled on-chain. " +
-                              "\"pending\" = relay accepted, settlement in progress. " +
-                              "Both mean the message was delivered successfully.",
+                              "\"confirmed\" = settled on-chain and delivered.",
                           },
                           paymentId: {
                             type: "string",
                             description:
-                              "Relay payment ID. Poll /api/payment-status/{paymentId} " +
-                              "when paymentStatus is \"pending\". Do NOT sign a new payment.",
+                              "Relay payment ID when available for confirmed RPC-backed deliveries.",
                           },
                         },
                       },
                     },
+                  },
+                },
+              },
+            },
+            "202": {
+              description:
+                "Payment accepted but inbox delivery is still staged pending relay confirmation. " +
+                "Do NOT sign a new payment; poll /api/payment-status/{paymentId}.",
+              headers: {
+                "X-Payment-Status": {
+                  description: "Payment settlement status for staged inbox delivery.",
+                  schema: { type: "string", enum: ["pending"] },
+                },
+                "X-Payment-Id": {
+                  description: "Relay-owned payment ID. This is the only stable polling identity.",
+                  schema: { type: "string" },
+                },
+                "X-Payment-Check-Url": {
+                  description:
+                    "URL to poll for payment settlement status (e.g. /api/payment-status/{paymentId}).",
+                  schema: { type: "string" },
+                },
+              },
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      message: { type: "string" },
+                      inbox: {
+                        type: "object",
+                        properties: {
+                          fromAddress: { type: "string" },
+                          toBtcAddress: { type: "string" },
+                          sentAt: { type: "string", format: "date-time" },
+                          authenticated: { type: "boolean" },
+                          senderBtcAddress: { type: "string" },
+                          paymentStatus: {
+                            type: "string",
+                            enum: ["pending"],
+                            description:
+                              "\"pending\" = relay accepted the payment and the inbox record is staged but not yet delivered.",
+                          },
+                          paymentId: {
+                            type: "string",
+                            description: "Relay-owned payment ID. Poll by paymentId until terminal state.",
+                          },
+                        },
+                        required: ["fromAddress", "toBtcAddress", "sentAt", "authenticated", "paymentStatus", "paymentId"],
+                      },
+                      checkStatusUrl: {
+                        type: "string",
+                        description: "URL to poll for payment settlement and final delivery status.",
+                      },
+                    },
+                    required: ["success", "message", "inbox", "checkStatusUrl"],
                   },
                 },
               },
@@ -784,6 +831,7 @@ export function GET() {
             "Use this endpoint after receiving paymentStatus: 'pending' + paymentId " +
             "in a POST /api/inbox/[address] response. Poll every 10–30 seconds until " +
             "status is 'confirmed', 'failed', 'replaced', or 'not_found'. " +
+            "Pending states remain staged locally and are not delivered until confirmed. " +
             "Requires the X402_RELAY RPC service binding (deployed Workers only).",
           parameters: [
             {
@@ -807,10 +855,9 @@ export function GET() {
                       status: {
                         type: "string",
                         description:
-                          "Settlement status: queued | submitted | broadcasting | mempool | confirmed | failed | replaced | not_found",
+                          "Settlement status: queued | broadcasting | mempool | confirmed | failed | replaced | not_found",
                         enum: [
                           "queued",
-                          "submitted",
                           "broadcasting",
                           "mempool",
                           "confirmed",
@@ -825,6 +872,10 @@ export function GET() {
                       explorerUrl: { type: "string", description: "Block explorer URL for the transaction" },
                       error: { type: "string", description: "Error message (if failed)" },
                       errorCode: { type: "string", description: "Relay error code (if failed)" },
+                      terminalReason: {
+                        type: "string",
+                        description: "Canonical terminal reason when the terminal outcome is known.",
+                      },
                       retryable: { type: "boolean", description: "Whether the failure is retryable" },
                       checkStatusUrl: { type: "string", description: "URL to poll for status updates" },
                     },

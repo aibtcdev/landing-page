@@ -19,7 +19,7 @@ export interface InboxMessage {
   toBtcAddress: string;
   toStxAddress: string;
   content: string;
-  /** On-chain transaction ID. Absent when paymentStatus is "pending" (poll exhausted before confirmation). */
+  /** On-chain transaction ID. Absent while a relay-accepted payment is still staged pending confirmation. */
   paymentTxid?: string;
   paymentSatoshis: number;
   sentAt: string;
@@ -53,10 +53,12 @@ export interface InboxMessage {
   /**
    * Payment settlement status from the x402 relay.
    * "confirmed" = relay confirmed the transaction on-chain.
-   * "pending" = relay timed out but the transaction was broadcast (will eventually confirm).
+   * "pending" = relay accepted the payment and the message is still staged locally.
    * Absent for messages delivered via txid recovery path.
    */
   paymentStatus?: RelayPaymentStatus;
+  /** Relay-owned payment identity for staged or confirmed RPC-backed deliveries. */
+  paymentId?: string;
   /**
    * Relay receipt ID for polling final confirmation when paymentStatus is "pending".
    * Can be used with the relay's /verify/:receiptId endpoint.
@@ -67,9 +69,19 @@ export interface InboxMessage {
 /**
  * Settlement status reported by the x402 relay.
  * - "confirmed": relay confirmed the transaction on-chain.
- * - "pending": relay timed out but the transaction was broadcast (will eventually confirm).
+ * - "pending": relay accepted the payment but the app has not delivered it yet.
  */
 export type RelayPaymentStatus = "confirmed" | "pending";
+
+/**
+ * Provisional inbox record staged locally until the relay reaches `confirmed`.
+ */
+export interface StagedInboxMessage {
+  paymentId: string;
+  message: InboxMessage;
+  senderSentIndexBtcAddress?: string;
+  createdAt: string;
+}
 
 /**
  * An outbox reply record stored at `inbox:reply:{messageId}`.

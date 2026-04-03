@@ -63,19 +63,12 @@ describe("getRelaySponsorStatusFromBinding", () => {
   });
 
   it("returns null when the binding does not expose sponsor status yet", async () => {
-    await expect(
-      getRelaySponsorStatusFromBinding({
-        submitPayment: async () => ({ accepted: true }),
-        checkPayment: async () => ({ paymentId: "p", status: "queued" }),
-      })
-    ).resolves.toBeNull();
+    await expect(getRelaySponsorStatusFromBinding({})).resolves.toBeNull();
   });
 
   it("returns normalized sponsor status from the relay binding", async () => {
     await expect(
       getRelaySponsorStatusFromBinding({
-        submitPayment: async () => ({ accepted: true }),
-        checkPayment: async () => ({ paymentId: "p", status: "queued" }),
         getSponsorStatus: async () => baseStatus,
       })
     ).resolves.toEqual(baseStatus);

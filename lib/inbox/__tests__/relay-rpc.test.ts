@@ -210,13 +210,13 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-args-check",
+          paymentId: "pay_args_check",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-args-check",
+          paymentId: "pay_args_check",
           status: "confirmed",
-          txid: "args-txid",
+          txid: "a".repeat(64),
         }),
       };
 
@@ -233,13 +233,13 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-001",
+          paymentId: "pay_001",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-001",
+          paymentId: "pay_001",
           status: "confirmed",
-          txid: "abc123txid",
+          txid: "a".repeat(64),
           blockHeight: 12345,
         }),
       };
@@ -249,23 +249,23 @@ describe("submitViaRPC", () => {
       const result = await resultPromise;
 
       expect(result.success).toBe(true);
-      expect(result.paymentTxid).toBe("abc123txid");
+      expect(result.paymentTxid).toBe("a".repeat(64));
       expect(result.paymentStatus).toBe("confirmed");
-      expect(result.paymentId).toBe("pay-001");
-      expect(rpc.checkPayment).toHaveBeenCalledWith("pay-001");
+      expect(result.paymentId).toBe("pay_001");
+      expect(rpc.checkPayment).toHaveBeenCalledWith("pay_001");
     });
 
     it("includes paymentId in success result", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-002",
+          paymentId: "pay_002",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-002",
+          paymentId: "pay_002",
           status: "confirmed",
-          txid: "txid002",
+          txid: "b".repeat(64),
         }),
       };
 
@@ -274,14 +274,38 @@ describe("submitViaRPC", () => {
       const result = await resultPromise;
 
       expect(result.success).toBe(true);
-      expect(result.paymentId).toBe("pay-002");
+      expect(result.paymentId).toBe("pay_002");
+    });
+
+    it("prefers checkPayment checkStatusUrl over submitPayment hint", async () => {
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay_hint_preferred",
+          status: "queued",
+          checkStatusUrl: "https://relay.example/pay/pay_hint_preferred",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay_hint_preferred",
+          status: "confirmed",
+          txid: "1".repeat(64),
+          checkStatusUrl: "https://relay.example/check/pay_hint_preferred",
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.success).toBe(true);
+      expect(result.checkStatusUrl).toBe("https://relay.example/check/pay_hint_preferred");
     });
 
     it("handles nonce gap warning (accepted=true with warning)", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-gap",
+          paymentId: "pay_gap",
           status: "queued_with_warning",
           warning: {
             code: "SENDER_NONCE_GAP",
@@ -292,9 +316,9 @@ describe("submitViaRPC", () => {
           },
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-gap",
+          paymentId: "pay_gap",
           status: "confirmed",
-          txid: "gap-txid",
+          txid: "c".repeat(64),
         }),
       };
 
@@ -304,7 +328,7 @@ describe("submitViaRPC", () => {
 
       // Nonce gap is accepted — should proceed to polling and succeed
       expect(result.success).toBe(true);
-      expect(result.paymentTxid).toBe("gap-txid");
+      expect(result.paymentTxid).toBe("c".repeat(64));
     });
   });
 
@@ -313,11 +337,11 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-fail-001",
+          paymentId: "pay_fail_001",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-fail-001",
+          paymentId: "pay_fail_001",
           status: "failed",
           errorCode: "BROADCAST_FAILED",
           error: "tx rejected by mempool",
@@ -338,11 +362,11 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-fail-002",
+          paymentId: "pay_fail_002",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-fail-002",
+          paymentId: "pay_fail_002",
           status: "failed",
           error: "internal relay error",
         }),
@@ -360,11 +384,11 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-fail-003",
+          paymentId: "pay_fail_003",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-fail-003",
+          paymentId: "pay_fail_003",
           status: "failed",
         }),
       };
@@ -381,11 +405,11 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-replaced",
+          paymentId: "pay_replaced",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-replaced",
+          paymentId: "pay_replaced",
           status: "replaced",
           error: "sponsor replaced transaction",
         }),
@@ -403,13 +427,13 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-notfound",
+          paymentId: "pay_notfound",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-notfound",
+          paymentId: "pay_notfound",
           status: "not_found",
-          error: "Payment pay-notfound not found or expired",
+          error: "Payment pay_notfound not found or expired",
         }),
       };
 
@@ -429,11 +453,11 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-exhaust-001",
+          paymentId: "pay_exhaust_001",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-exhaust-001",
+          paymentId: "pay_exhaust_001",
           status: "queued",
         }),
       };
@@ -444,8 +468,31 @@ describe("submitViaRPC", () => {
 
       expect(result.success).toBe(true);
       expect(result.paymentStatus).toBe("pending");
-      expect(result.paymentId).toBe("pay-exhaust-001");
+      expect(result.paymentId).toBe("pay_exhaust_001");
       expect(rpc.checkPayment).toHaveBeenCalledTimes(2);
+    });
+
+    it("falls back to submitPayment checkStatusUrl when polling result omits it", async () => {
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay_submit_hint_only",
+          status: "queued",
+          checkStatusUrl: "https://relay.example/pay/pay_submit_hint_only",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay_submit_hint_only",
+          status: "queued",
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.success).toBe(true);
+      expect(result.paymentStatus).toBe("pending");
+      expect(result.checkStatusUrl).toBe("https://relay.example/pay/pay_submit_hint_only");
     });
 
     it("returns pending success when all poll attempts return broadcasting", async () => {
@@ -453,11 +500,11 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-exhaust-002",
+          paymentId: "pay_exhaust_002",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-exhaust-002",
+          paymentId: "pay_exhaust_002",
           status: "broadcasting",
         }),
       };
@@ -477,13 +524,13 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-exhaust-txid",
+          paymentId: "pay_exhaust_txid",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-exhaust-txid",
+          paymentId: "pay_exhaust_txid",
           status: "mempool",
-          txid: "broadcast-but-not-confirmed",
+          txid: "d".repeat(64),
         }),
       };
 
@@ -492,9 +539,9 @@ describe("submitViaRPC", () => {
       const result = await resultPromise;
 
       expect(result.success).toBe(true);
-      expect(result.paymentTxid).toBe("broadcast-but-not-confirmed");
+      expect(result.paymentTxid).toBe("d".repeat(64));
       expect(result.paymentStatus).toBe("pending");
-      expect(result.paymentId).toBe("pay-exhaust-txid");
+      expect(result.paymentId).toBe("pay_exhaust_txid");
     });
 
     it("returns pending success when mempool status has no txid", async () => {
@@ -503,11 +550,11 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-no-txid",
+          paymentId: "pay_no_txid",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-no-txid",
+          paymentId: "pay_no_txid",
           status: "mempool",
           // no txid yet
         }),
@@ -519,7 +566,7 @@ describe("submitViaRPC", () => {
 
       expect(result.success).toBe(true);
       expect(result.paymentStatus).toBe("pending");
-      expect(result.paymentId).toBe("pay-no-txid");
+      expect(result.paymentId).toBe("pay_no_txid");
       expect(result.paymentTxid).toBeUndefined();
     });
   });
@@ -531,16 +578,16 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-multi-001",
+          paymentId: "pay_multi_001",
           status: "queued",
         }),
         checkPayment: vi.fn().mockImplementation(async () => {
           callCount++;
-          if (callCount === 1) return { paymentId: "pay-multi-001", status: "queued" };
+          if (callCount === 1) return { paymentId: "pay_multi_001", status: "queued" };
           return {
-            paymentId: "pay-multi-001",
+            paymentId: "pay_multi_001",
             status: "confirmed",
-            txid: "multi-poll-txid",
+            txid: "e".repeat(64),
             blockHeight: 99999,
           };
         }),
@@ -551,7 +598,7 @@ describe("submitViaRPC", () => {
       const result = await resultPromise;
 
       expect(result.success).toBe(true);
-      expect(result.paymentTxid).toBe("multi-poll-txid");
+      expect(result.paymentTxid).toBe("e".repeat(64));
       expect(rpc.checkPayment).toHaveBeenCalledTimes(2);
     });
   });
@@ -574,7 +621,7 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-throw-001",
+          paymentId: "pay_throw_001",
           status: "queued",
         }),
         checkPayment: vi.fn().mockRejectedValue(new Error("RPC stream closed")),
@@ -593,13 +640,13 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-log-001",
+          paymentId: "pay_log_001",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-log-001",
+          paymentId: "pay_log_001",
           status: "confirmed",
-          txid: "log-txid",
+          txid: "f".repeat(64),
         }),
       };
 
@@ -613,11 +660,11 @@ describe("submitViaRPC", () => {
       );
       expect(mockLogger.debug).toHaveBeenCalledWith(
         "RPC: payment queued",
-        expect.objectContaining({ paymentId: "pay-log-001" })
+        expect.objectContaining({ paymentId: "pay_log_001" })
       );
       expect(mockLogger.debug).toHaveBeenCalledWith(
         "RPC: checkPayment",
-        expect.objectContaining({ attempt: 0, paymentId: "pay-log-001", status: "confirmed" })
+        expect.objectContaining({ attempt: 0, paymentId: "pay_log_001", status: "confirmed" })
       );
     });
 
@@ -646,11 +693,11 @@ describe("submitViaRPC", () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
-          paymentId: "pay-log-exhaust",
+          paymentId: "pay_log_exhaust",
           status: "queued",
         }),
         checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay-log-exhaust",
+          paymentId: "pay_log_exhaust",
           status: "queued",
         }),
       };
@@ -661,7 +708,7 @@ describe("submitViaRPC", () => {
 
       expect(mockLogger.info).toHaveBeenCalledWith(
         "RPC: poll exhausted after relay accepted — treating as pending success",
-        expect.objectContaining({ paymentId: "pay-log-exhaust" })
+        expect.objectContaining({ paymentId: "pay_log_exhaust" })
       );
     });
   });

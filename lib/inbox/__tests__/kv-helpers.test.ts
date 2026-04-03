@@ -1,13 +1,18 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import {
+  deleteStagedInboxPayment,
   decrementUnreadCount,
+  finalizeStagedInboxPayment,
   getAgentInbox,
   updateAgentInbox,
+  getStagedInboxPayment,
   storeMessage,
+  storeStagedInboxPayment,
   getMessage,
+  getSentIndex,
 } from "../kv-helpers";
 import type { InboxAgentIndex, InboxMessage } from "../types";
-import { createMockKV } from "./kv-mock";
+import { createMockKV, createMockKVWithOptions } from "./kv-mock";
 
 describe("decrementUnreadCount", () => {
   let kv: KVNamespace;
@@ -162,5 +167,111 @@ describe("reply flow integration test", () => {
     // Assert: unreadCount is now 0
     inbox = await getAgentInbox(kv, recipientBtc);
     expect(inbox?.unreadCount).toBe(0);
+  });
+});
+
+describe("staged inbox payment helpers", () => {
+  it("stores staged inbox payments keyed by paymentId with a TTL", async () => {
+    const { kv, putCalls } = createMockKVWithOptions();
+    const staged = {
+      paymentId: "pay_stage_ttl",
+      createdAt: new Date().toISOString(),
+      message: {
+        messageId: "msg_stage_ttl",
+        fromAddress: "SP123",
+        toBtcAddress: "bc1recipient",
+        toStxAddress: "SP456",
+        content: "hello",
+        paymentSatoshis: 100,
+        sentAt: new Date().toISOString(),
+        paymentStatus: "pending" as const,
+        paymentId: "pay_stage_ttl",
+      },
+    };
+
+    await storeStagedInboxPayment(kv, staged);
+
+    expect(await getStagedInboxPayment(kv, "pay_stage_ttl")).toEqual(staged);
+    expect(putCalls).toContainEqual(
+      expect.objectContaining({
+        key: "inbox:staged-payment:pay_stage_ttl",
+        options: expect.objectContaining({ expirationTtl: 86400 }),
+      })
+    );
+  });
+
+  it("finalizes a staged inbox payment exactly once on confirmed", async () => {
+    const kv = createMockKV();
+    const now = new Date().toISOString();
+    const stagedMessage: InboxMessage = {
+      messageId: "msg_stage_confirmed",
+      fromAddress: "SP123",
+      toBtcAddress: "bc1recipient",
+      toStxAddress: "SP456",
+      content: "hello",
+      paymentSatoshis: 100,
+      sentAt: now,
+      paymentStatus: "pending",
+      paymentId: "pay_stage_confirmed",
+    };
+
+    await storeStagedInboxPayment(kv, {
+      paymentId: "pay_stage_confirmed",
+      createdAt: now,
+      senderSentIndexBtcAddress: "bc1sender",
+      message: stagedMessage,
+    });
+
+    const finalized = await finalizeStagedInboxPayment(kv, "pay_stage_confirmed", {
+      paymentStatus: "confirmed",
+      paymentTxid: "a".repeat(64),
+    });
+
+    expect(finalized?.paymentStatus).toBe("confirmed");
+    expect(finalized?.paymentTxid).toBe("a".repeat(64));
+    expect(await getStagedInboxPayment(kv, "pay_stage_confirmed")).toBeNull();
+    expect(await getMessage(kv, "msg_stage_confirmed")).toEqual(
+      expect.objectContaining({
+        messageId: "msg_stage_confirmed",
+        paymentStatus: "confirmed",
+        paymentTxid: "a".repeat(64),
+      })
+    );
+    expect(await getAgentInbox(kv, "bc1recipient")).toEqual(
+      expect.objectContaining({ messageIds: ["msg_stage_confirmed"], unreadCount: 1 })
+    );
+    expect(await getSentIndex(kv, "bc1sender")).toEqual(
+      expect.objectContaining({ messageIds: ["msg_stage_confirmed"] })
+    );
+
+    const secondFinalize = await finalizeStagedInboxPayment(kv, "pay_stage_confirmed", {
+      paymentStatus: "confirmed",
+    });
+    expect(secondFinalize).toBeNull();
+    expect((await getAgentInbox(kv, "bc1recipient"))?.messageIds).toEqual(["msg_stage_confirmed"]);
+  });
+
+  it("discards staged inbox payments on terminal non-success", async () => {
+    const kv = createMockKV();
+    await storeStagedInboxPayment(kv, {
+      paymentId: "pay_stage_discard",
+      createdAt: new Date().toISOString(),
+      message: {
+        messageId: "msg_stage_discard",
+        fromAddress: "SP123",
+        toBtcAddress: "bc1recipient",
+        toStxAddress: "SP456",
+        content: "hello",
+        paymentSatoshis: 100,
+        sentAt: new Date().toISOString(),
+        paymentStatus: "pending",
+        paymentId: "pay_stage_discard",
+      },
+    });
+
+    await deleteStagedInboxPayment(kv, "pay_stage_discard");
+
+    expect(await getStagedInboxPayment(kv, "pay_stage_discard")).toBeNull();
+    expect(await getMessage(kv, "msg_stage_discard")).toBeNull();
   });
 });
