@@ -5,7 +5,7 @@
  * and agent inbox indices. Follows the pattern from lib/achievements/kv.ts.
  */
 
-import { KV_PREFIXES } from "./constants";
+import { KV_PREFIXES, PENDING_PAYMENT_PREFIX, PENDING_PAYMENT_TTL_SECONDS } from "./constants";
 import type {
   InboxMessage,
   OutboxReply,
@@ -499,4 +499,54 @@ export async function listSentMessages(
   }
 
   return { index, messages, replies };
+}
+
+export interface PendingPaymentRecord {
+  paymentId: string;
+  messageId: string;
+  toBtcAddress: string;
+  acceptedAt: string;
+}
+
+/**
+ * Store a pending payment record for background reconciliation.
+ * Called when the relay accepts a payment but settlement hasn't confirmed yet.
+ * Expires after 24h (matching relay KV TTL — anything pending that long is stale).
+ */
+export async function storePendingPayment(
+  kv: KVNamespace,
+  paymentId: string,
+  messageId: string,
+  toBtcAddress: string
+): Promise<void> {
+  try {
+    const record: PendingPaymentRecord = {
+      paymentId,
+      messageId,
+      toBtcAddress,
+      acceptedAt: new Date().toISOString(),
+    };
+    await kv.put(
+      `${PENDING_PAYMENT_PREFIX}${paymentId}`,
+      JSON.stringify(record),
+      { expirationTtl: PENDING_PAYMENT_TTL_SECONDS }
+    );
+  } catch (err) {
+    // KV write failure is non-fatal — reconciliation degrades gracefully
+    console.warn("[storePendingPayment] KV write failed:", err);
+  }
+}
+
+/**
+ * Remove a pending payment record after it has been reconciled (confirmed or failed).
+ */
+export async function clearPendingPayment(
+  kv: KVNamespace,
+  paymentId: string
+): Promise<void> {
+  try {
+    await kv.delete(`${PENDING_PAYMENT_PREFIX}${paymentId}`);
+  } catch (err) {
+    console.warn("[clearPendingPayment] KV write failed:", err);
+  }
 }

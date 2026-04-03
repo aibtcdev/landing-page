@@ -140,6 +140,11 @@ export const PAYMENT_FAILURE_CACHE_TTL_SECONDS = 300;
  */
 export const CACHEABLE_PAYMENT_FAILURE_CODES = new Set(["INSUFFICIENT_FUNDS"]);
 
+/** KV prefix for pending payment reconciliation records. */
+export const PENDING_PAYMENT_PREFIX = "inbox:pending:";
+/** TTL for pending payment records — matches relay's 24h KV TTL. */
+export const PENDING_PAYMENT_TTL_SECONDS = 86400;
+
 // --- RPC service binding polling constants ---
 
 /** Interval between checkPayment() polls (ms). */
