@@ -251,6 +251,54 @@ describe("staged inbox payment helpers", () => {
     expect((await getAgentInbox(kv, "bc1recipient"))?.messageIds).toEqual(["msg_stage_confirmed"]);
   });
 
+  it("repairs inbox and sent indexes when the message already exists before staged cleanup", async () => {
+    const kv = createMockKV();
+    const now = new Date().toISOString();
+    const stagedMessage: InboxMessage = {
+      messageId: "msg_stage_repair",
+      fromAddress: "SP123",
+      toBtcAddress: "bc1recipient",
+      toStxAddress: "SP456",
+      content: "hello",
+      paymentSatoshis: 100,
+      sentAt: now,
+      paymentStatus: "pending",
+      paymentId: "pay_stage_repair",
+    };
+
+    await storeStagedInboxPayment(kv, {
+      paymentId: "pay_stage_repair",
+      createdAt: now,
+      senderSentIndexBtcAddress: "bc1sender",
+      message: stagedMessage,
+    });
+    await storeMessage(kv, {
+      ...stagedMessage,
+      paymentStatus: "confirmed",
+      paymentTxid: "b".repeat(64),
+    });
+
+    const finalized = await finalizeStagedInboxPayment(kv, "pay_stage_repair", {
+      paymentStatus: "confirmed",
+      paymentTxid: "b".repeat(64),
+    });
+
+    expect(finalized).toEqual(
+      expect.objectContaining({
+        messageId: "msg_stage_repair",
+        paymentStatus: "confirmed",
+        paymentTxid: "b".repeat(64),
+      })
+    );
+    expect(await getStagedInboxPayment(kv, "pay_stage_repair")).toBeNull();
+    expect(await getAgentInbox(kv, "bc1recipient")).toEqual(
+      expect.objectContaining({ messageIds: ["msg_stage_repair"], unreadCount: 1 })
+    );
+    expect(await getSentIndex(kv, "bc1sender")).toEqual(
+      expect.objectContaining({ messageIds: ["msg_stage_repair"] })
+    );
+  });
+
   it("discards staged inbox payments on terminal non-success", async () => {
     const kv = createMockKV();
     await storeStagedInboxPayment(kv, {

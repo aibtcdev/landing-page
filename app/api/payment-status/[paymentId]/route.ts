@@ -70,7 +70,22 @@ async function reconcileStagedInboxPayment(
   repoVersion: string
 ): Promise<void> {
   const staged = await getStagedInboxPayment(kv, result.paymentId);
-  if (!staged) return;
+  if (!staged) {
+    if (
+      paymentStateDefaultDeliveryByState[
+        result.status as keyof typeof paymentStateDefaultDeliveryByState
+      ]
+    ) {
+      logPaymentEvent(logger, "warn", "payment.poll", repoVersion, {
+        route,
+        paymentId: result.paymentId,
+        status: result.status,
+        terminalReason: result.terminalReason ?? null,
+        action: "confirmed_without_staged_record",
+      });
+    }
+    return;
+  }
 
   if (
     paymentStateDefaultDeliveryByState[
@@ -226,7 +241,7 @@ export async function GET(
   const logger = isLogsRPC(env.LOGS)
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
-  const repoVersion = getPaymentRepoVersion(env as unknown as Record<string, unknown>);
+  const repoVersion = getPaymentRepoVersion(env);
   const rpc = env.X402_RELAY as RelayRPC | undefined;
 
   if (!rpc) {

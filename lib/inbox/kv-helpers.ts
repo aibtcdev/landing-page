@@ -366,10 +366,25 @@ export async function finalizeStagedInboxPayment(
 
   const existingMessage = await getMessage(kv, staged.message.messageId);
   if (existingMessage) {
+    // KV doesn't give us cross-key transactions here. If a prior finalize stored the
+    // message but crashed before repairing indexes, rebuild them idempotently now.
+    await Promise.all([
+      updateAgentInbox(
+        kv,
+        existingMessage.toBtcAddress,
+        existingMessage.messageId,
+        existingMessage.sentAt
+      ),
+      ...(staged.senderSentIndexBtcAddress
+        ? [updateSentIndex(kv, staged.senderSentIndexBtcAddress, existingMessage.messageId, existingMessage.sentAt)]
+        : []),
+    ]);
     await deleteStagedInboxPayment(kv, paymentId);
     return existingMessage;
   }
 
+  // This remains best-effort under concurrent polls because Workers KV cannot atomically
+  // read/write the staged record, message body, and both indexes in one transaction.
   const finalizedMessage: InboxMessage = {
     ...staged.message,
     ...updates,

@@ -726,7 +726,7 @@ export async function verifyInboxPayment(
 
   // Extract payer address and transaction ID
   const payerStxAddress = settleResult.payer;
-  const paymentTxid = settleResult.transaction;
+  const paymentTxid = settleResult.transaction || undefined;
 
   if (!payerStxAddress) {
     log.error("Settlement succeeded but no payer address");

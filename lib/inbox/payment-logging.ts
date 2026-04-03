@@ -24,7 +24,12 @@ export interface PaymentLogMetadata {
   additionalContext?: Record<string, unknown>;
 }
 
-export function getPaymentRepoVersion(env?: Record<string, unknown>): string {
+export interface PaymentRepoVersionEnv {
+  DEPLOY_SHA?: string;
+  CF_PAGES_COMMIT_SHA?: string;
+}
+
+export function getPaymentRepoVersion(env?: PaymentRepoVersionEnv): string {
   const deploySha =
     typeof env?.DEPLOY_SHA === "string" && env.DEPLOY_SHA.length > 0
       ? env.DEPLOY_SHA

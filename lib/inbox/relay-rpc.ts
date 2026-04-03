@@ -36,8 +36,8 @@ export type RelayCheckResult = z.infer<typeof RpcCheckPaymentResultSchema>;
  * Must match the actual relay WorkerEntrypoint method signatures.
  */
 export interface RelayRPC {
-  submitPayment(txHex: string, settle?: RelaySettleOptions): Promise<unknown>;
-  checkPayment(paymentId: string): Promise<unknown>;
+  submitPayment(txHex: string, settle?: RelaySettleOptions): Promise<RelaySubmitResult>;
+  checkPayment(paymentId: string): Promise<RelayCheckResult>;
   getSponsorStatus?(): Promise<SponsorStatusResult>;
 }
 
@@ -143,6 +143,7 @@ export async function submitViaRPC(
   log: Logger
 ): Promise<InboxPaymentVerification> {
   const deadline = Date.now() + RPC_TOTAL_TIMEOUT_MS;
+  let submitCheckStatusUrl: string | undefined;
 
   // Step 1: Submit the payment to the relay queue
   log.debug("RPC: submitting payment", { transaction: txHex.slice(0, 16) + "..." });
@@ -178,6 +179,7 @@ export async function submitViaRPC(
     status: submitResult.status,
     ...(submitResult.warning && { warning: submitResult.warning.code }),
   });
+  submitCheckStatusUrl = submitResult.checkStatusUrl;
 
   // Step 2: Poll for settlement result (bounded by both attempt count and total deadline)
   let lastCheckResult: RelayCheckResult | undefined;
@@ -196,22 +198,25 @@ export async function submitViaRPC(
     log.debug("RPC: checkPayment", { attempt, paymentId, status: checkResult.status });
 
     if (checkResult.status === "confirmed") {
+      const checkStatusUrl = selectCanonicalCheckStatusUrl(
+        checkResult.checkStatusUrl,
+        submitCheckStatusUrl
+      );
       return {
         success: true,
         paymentTxid: checkResult.txid || "",
         paymentStatus: "confirmed",
         paymentId,
-        ...(selectCanonicalCheckStatusUrl(checkResult.checkStatusUrl, submitResult.checkStatusUrl) && {
-          checkStatusUrl: selectCanonicalCheckStatusUrl(
-            checkResult.checkStatusUrl,
-            submitResult.checkStatusUrl
-          ),
-        }),
+        ...(checkStatusUrl && { checkStatusUrl }),
         ...(checkResult.terminalReason && { terminalReason: checkResult.terminalReason }),
       };
     }
 
     if (checkResult.status === "failed" || checkResult.status === "replaced") {
+      const checkStatusUrl = selectCanonicalCheckStatusUrl(
+        checkResult.checkStatusUrl,
+        submitCheckStatusUrl
+      );
       const errorCode = mapTerminalOutcome(checkResult);
       log.warn("RPC: payment failed", {
         paymentId,
@@ -225,12 +230,7 @@ export async function submitViaRPC(
         error: checkResult.error || `Payment ${checkResult.status}`,
         errorCode,
         paymentId,
-        ...(selectCanonicalCheckStatusUrl(checkResult.checkStatusUrl, submitResult.checkStatusUrl) && {
-          checkStatusUrl: selectCanonicalCheckStatusUrl(
-            checkResult.checkStatusUrl,
-            submitResult.checkStatusUrl
-          ),
-        }),
+        ...(checkStatusUrl && { checkStatusUrl }),
         ...(checkResult.terminalReason && { terminalReason: checkResult.terminalReason }),
         ...(checkResult.txid && { paymentTxid: checkResult.txid }),
         ...(checkResult.errorCode != null && { relayCode: checkResult.errorCode }),
@@ -239,18 +239,17 @@ export async function submitViaRPC(
     }
 
     if (checkResult.status === "not_found") {
+      const checkStatusUrl = selectCanonicalCheckStatusUrl(
+        checkResult.checkStatusUrl,
+        submitCheckStatusUrl
+      );
       log.warn("RPC: payment not found", { paymentId });
       return {
         success: false,
         error: "Payment not found in relay — it may have expired.",
         errorCode: "RELAY_ERROR",
         paymentId,
-        ...(selectCanonicalCheckStatusUrl(checkResult.checkStatusUrl, submitResult.checkStatusUrl) && {
-          checkStatusUrl: selectCanonicalCheckStatusUrl(
-            checkResult.checkStatusUrl,
-            submitResult.checkStatusUrl
-          ),
-        }),
+        ...(checkStatusUrl && { checkStatusUrl }),
         ...(checkResult.terminalReason && { terminalReason: checkResult.terminalReason }),
       };
     }
@@ -267,6 +266,10 @@ export async function submitViaRPC(
   // return pending success — the relay has it and will eventually settle.
   const lastStatus = lastCheckResult?.status;
   if (!lastStatus || PENDING_STATUSES.has(lastStatus)) {
+    const checkStatusUrl = selectCanonicalCheckStatusUrl(
+      lastCheckResult?.checkStatusUrl,
+      submitCheckStatusUrl
+    );
     log.info("RPC: poll exhausted after relay accepted — treating as pending success", {
       paymentId,
       lastStatus: lastStatus ?? "none",
@@ -276,12 +279,7 @@ export async function submitViaRPC(
       success: true,
       paymentStatus: "pending",
       paymentId,
-      ...(selectCanonicalCheckStatusUrl(lastCheckResult?.checkStatusUrl, submitResult.checkStatusUrl) && {
-        checkStatusUrl: selectCanonicalCheckStatusUrl(
-          lastCheckResult?.checkStatusUrl,
-          submitResult.checkStatusUrl
-        ),
-      }),
+      ...(checkStatusUrl && { checkStatusUrl }),
       ...(lastCheckResult?.txid && { paymentTxid: lastCheckResult.txid }),
     };
   }
@@ -292,17 +290,16 @@ export async function submitViaRPC(
     lastStatus,
     attempts: RPC_POLL_MAX_ATTEMPTS,
   });
+  const checkStatusUrl = selectCanonicalCheckStatusUrl(
+    lastCheckResult?.checkStatusUrl,
+    submitCheckStatusUrl
+  );
   return {
     success: false,
     error: "RPC poll timed out waiting for settlement. Recover via paymentTxid.",
     errorCode: "SETTLEMENT_TIMEOUT",
     paymentId,
-    ...(selectCanonicalCheckStatusUrl(lastCheckResult?.checkStatusUrl, submitResult.checkStatusUrl) && {
-      checkStatusUrl: selectCanonicalCheckStatusUrl(
-        lastCheckResult?.checkStatusUrl,
-        submitResult.checkStatusUrl
-      ),
-    }),
+    ...(checkStatusUrl && { checkStatusUrl }),
     ...(lastCheckResult?.txid && { paymentTxid: lastCheckResult.txid }),
   };
 }

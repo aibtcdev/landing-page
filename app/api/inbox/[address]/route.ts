@@ -505,7 +505,7 @@ export async function POST(
   const logger = isLogsRPC(env.LOGS)
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
-  const repoVersion = getPaymentRepoVersion(env as unknown as Record<string, unknown>);
+  const repoVersion = getPaymentRepoVersion(env);
 
   // Extract network config once (used by both 402 response and payment verification)
   const network = (env.X402_NETWORK as "mainnet" | "testnet") || "mainnet";
@@ -1338,7 +1338,7 @@ export async function POST(
     ...(senderBtcAddress && { senderBtcAddress }),
     ...(senderSignatureInput && { senderSignature: senderSignatureInput }),
     ...(replyTo && { replyTo }),
-    ...(paymentResult.paymentStatus && { paymentStatus: paymentResult.paymentStatus }),
+    paymentStatus: paymentResult.paymentStatus ?? "confirmed",
     ...(paymentResult.paymentId && { paymentId: paymentResult.paymentId }),
     ...(paymentResult.receiptId && { receiptId: paymentResult.receiptId }),
   };
@@ -1347,68 +1347,73 @@ export async function POST(
 
   if (paymentResult.paymentStatus === "pending") {
     if (!paymentResult.paymentId) {
-      logger.error("Pending payment result missing paymentId", {
+      logPaymentEvent(logger, "warn", "payment.fallback_used", repoVersion, {
+        route: request.nextUrl.pathname,
+        paymentId: null,
+        status: "pending",
+        action: "deliver_immediately_without_payment_id",
+        additionalContext: {
+          messageId,
+          fromAddress,
+          toBtcAddress,
+          receiptId: paymentResult.receiptId ?? null,
+        },
+      });
+      logger.warn("Pending payment result missing paymentId; preserving fallback immediate delivery", {
         messageId,
         fromAddress,
         toBtcAddress,
       });
-      return NextResponse.json(
-        {
-          error: "Relay accepted the payment but did not return a paymentId for polling",
-          code: "RELAY_ERROR",
-        },
-        { status: 502 }
-      );
-    }
+    } else {
+      const checkStatusUrl =
+        paymentResult.checkStatusUrl ?? `/api/payment-status/${paymentResult.paymentId}`;
 
-    const checkStatusUrl =
-      paymentResult.checkStatusUrl ?? `/api/payment-status/${paymentResult.paymentId}`;
+      await storeStagedInboxPayment(kv, {
+        paymentId: paymentResult.paymentId,
+        createdAt: now,
+        ...(senderAgent?.btcAddress && { senderSentIndexBtcAddress: senderAgent.btcAddress }),
+        message,
+      });
 
-    await storeStagedInboxPayment(kv, {
-      paymentId: paymentResult.paymentId,
-      createdAt: now,
-      ...(senderAgent?.btcAddress && { senderSentIndexBtcAddress: senderAgent.btcAddress }),
-      message,
-    });
+      responseHeaders["X-Payment-Status"] = "pending";
+      responseHeaders["X-Payment-Id"] = paymentResult.paymentId;
+      responseHeaders["X-Payment-Check-Url"] = checkStatusUrl;
 
-    responseHeaders["X-Payment-Status"] = "pending";
-    responseHeaders["X-Payment-Id"] = paymentResult.paymentId;
-    responseHeaders["X-Payment-Check-Url"] = checkStatusUrl;
-
-    logPaymentEvent(logger, "info", "payment.delivery_staged", repoVersion, {
-      route: request.nextUrl.pathname,
-      paymentId: paymentResult.paymentId,
-      status: "pending",
-      action: "stage_delivery",
-      checkStatusUrl,
-      additionalContext: {
-        messageId,
-        fromAddress,
-        toBtcAddress,
-        senderBtcAddress: senderAgent?.btcAddress ?? null,
-      },
-    });
-
-    return NextResponse.json(
-      {
-        success: true,
-        message: "Payment accepted. Inbox delivery is staged until the relay reports confirmed.",
-        inbox: {
+      logPaymentEvent(logger, "info", "payment.delivery_staged", repoVersion, {
+        route: request.nextUrl.pathname,
+        paymentId: paymentResult.paymentId,
+        status: "pending",
+        action: "stage_delivery",
+        checkStatusUrl,
+        additionalContext: {
+          messageId,
           fromAddress,
           toBtcAddress,
-          sentAt: now,
-          authenticated,
-          ...(senderBtcAddress && { senderBtcAddress }),
-          paymentStatus: "pending",
-          paymentId: paymentResult.paymentId,
+          senderBtcAddress: senderAgent?.btcAddress ?? null,
         },
-        checkStatusUrl,
-      },
-      {
-        status: 202,
-        headers: responseHeaders,
-      }
-    );
+      });
+
+      return NextResponse.json(
+        {
+          success: true,
+          message: "Payment accepted. Inbox delivery is staged until the relay reports confirmed.",
+          inbox: {
+            fromAddress,
+            toBtcAddress,
+            sentAt: now,
+            authenticated,
+            ...(senderBtcAddress && { senderBtcAddress }),
+            paymentStatus: "pending",
+            paymentId: paymentResult.paymentId,
+          },
+          checkStatusUrl,
+        },
+        {
+          status: 202,
+          headers: responseHeaders,
+        }
+      );
+    }
   }
 
   await Promise.all([
@@ -1436,11 +1441,20 @@ export async function POST(
     logger.warn("grantAchievement failed (non-fatal)", { err, toBtcAddress })
   );
 
+  const deliveredPaymentStatus = message.paymentStatus ?? "confirmed";
+  const deliveredCheckStatusUrl = paymentResult.paymentId
+    ? paymentResult.checkStatusUrl ?? `/api/payment-status/${paymentResult.paymentId}`
+    : undefined;
+
   logPaymentEvent(logger, "info", "payment.delivery_confirmed", repoVersion, {
     route: request.nextUrl.pathname,
     paymentId: paymentResult.paymentId ?? null,
-    status: "confirmed",
-    action: "deliver_immediately",
+    status: deliveredPaymentStatus,
+    action:
+      deliveredPaymentStatus === "pending"
+        ? "deliver_immediately_pending_fallback"
+        : "deliver_immediately",
+    checkStatusUrl: deliveredCheckStatusUrl,
     additionalContext: {
       messageId,
       fromAddress,
@@ -1461,6 +1475,12 @@ export async function POST(
     };
     responseHeaders[X402_HEADERS.PAYMENT_RESPONSE] = btoa(JSON.stringify(paymentResponseData));
   }
+  responseHeaders["X-Payment-Status"] = deliveredPaymentStatus;
+  if (paymentResult.paymentId) {
+    responseHeaders["X-Payment-Id"] = paymentResult.paymentId;
+    responseHeaders["X-Payment-Check-Url"] =
+      deliveredCheckStatusUrl ?? `/api/payment-status/${paymentResult.paymentId}`;
+  }
 
   return NextResponse.json(
     {
@@ -1473,8 +1493,9 @@ export async function POST(
         sentAt: now,
         authenticated,
         ...(senderBtcAddress && { senderBtcAddress }),
-        paymentStatus: "confirmed",
+        paymentStatus: deliveredPaymentStatus,
         ...(paymentResult.paymentId && { paymentId: paymentResult.paymentId }),
+        ...(paymentResult.receiptId && { receiptId: paymentResult.receiptId }),
       },
     },
     {
