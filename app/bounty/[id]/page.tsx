@@ -1,10 +1,12 @@
 import { cache } from "react";
 import type { Metadata } from "next";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import BountyDetail from "./BountyDetail";
 import type { BountyData } from "../types";
+import type { AgentRecord } from "@/lib/types";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -46,22 +48,24 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
 
 async function resolveStxToBtc(stxAddresses: string[]): Promise<Record<string, string>> {
   const map: Record<string, string> = {};
-  await Promise.all(
-    stxAddresses.map(async (stx) => {
-      try {
-        const res = await fetch(`https://aibtc.com/api/agents/${stx}`, {
-          next: { revalidate: 60 },
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { found?: boolean; agent?: { btcAddress?: string } };
-        if (data.found && data.agent?.btcAddress) {
-          map[stx] = data.agent.btcAddress;
+  try {
+    const { env } = await getCloudflareContext();
+    const kv = env.VERIFIED_AGENTS as KVNamespace;
+    await Promise.all(
+      stxAddresses.map(async (stx) => {
+        try {
+          const agent = await kv.get<AgentRecord>(`stx:${stx}`, "json");
+          if (agent?.btcAddress) {
+            map[stx] = agent.btcAddress;
+          }
+        } catch {
+          // skip unresolvable addresses
         }
-      } catch {
-        // skip unresolvable addresses
-      }
-    })
-  );
+      })
+    );
+  } catch {
+    // KV unavailable — fall back to STX addresses
+  }
   return map;
 }
 
@@ -69,7 +73,6 @@ export default async function BountyDetailPage({ params }: PageProps) {
   const { id } = await params;
   const data = await fetchBountyDetail(id);
 
-  // Collect all STX addresses from bounty creator and claims
   const stxAddresses: string[] = [];
   if (data?.bounty) stxAddresses.push(data.bounty.creator_stx);
   const stxToBtc = stxAddresses.length > 0
