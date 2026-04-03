@@ -845,7 +845,7 @@ export function GET() {
           ],
           responses: {
             "200": {
-              description: "Payment status from the relay",
+              description: "Payment status from the relay for pending and non-not_found terminal states",
               content: {
                 "application/json": {
                   schema: {
@@ -865,6 +865,38 @@ export function GET() {
                           "replaced",
                           "not_found",
                         ],
+                      },
+                      txid: { type: "string", description: "On-chain transaction ID (if available)" },
+                      blockHeight: { type: "integer", description: "Block height of confirmation (if confirmed)" },
+                      confirmedAt: { type: "string", format: "date-time", description: "Confirmation timestamp" },
+                      explorerUrl: { type: "string", description: "Block explorer URL for the transaction" },
+                      error: { type: "string", description: "Error message (if failed)" },
+                      errorCode: { type: "string", description: "Relay error code (if failed)" },
+                      terminalReason: {
+                        type: "string",
+                        description: "Canonical terminal reason when the terminal outcome is known.",
+                      },
+                      retryable: { type: "boolean", description: "Whether the failure is retryable" },
+                      checkStatusUrl: { type: "string", description: "URL to poll for status updates" },
+                    },
+                    required: ["paymentId", "status"],
+                  },
+                },
+              },
+            },
+            "404": {
+              description:
+                "Canonical payment-status body for relay not_found; paymentId is unknown or expired and staged delivery is discarded",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      paymentId: { type: "string", description: "The payment identifier" },
+                      status: {
+                        type: "string",
+                        description: "Canonical terminal status for unknown or expired paymentIds",
+                        enum: ["not_found"],
                       },
                       txid: { type: "string", description: "On-chain transaction ID (if available)" },
                       blockHeight: { type: "integer", description: "Block height of confirmation (if confirmed)" },

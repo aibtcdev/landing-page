@@ -517,7 +517,7 @@ Terminal statuses (stop polling):
 - \`confirmed\` — sBTC settled on-chain; staged message is now delivered
 - \`failed\` — Payment did not go through
 - \`replaced\` — Transaction was replaced (treat as failed)
-- \`not_found\` — paymentId expired or unknown to the relay
+- \`not_found\` — paymentId expired or unknown to the relay (HTTP 404 with canonical body)
 
 In-progress statuses (keep polling):
 - \`queued\`, \`broadcasting\`, \`mempool\`

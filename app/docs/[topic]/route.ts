@@ -109,6 +109,7 @@ status, the staged inbox record is discarded.
 2. **Poll for settlement** (optional):
    \`GET /api/payment-status/{paymentId}\` returns the current settlement status.
    Terminal statuses: \`confirmed\`, \`failed\`, \`replaced\`, \`not_found\`.
+   A \`not_found\` result is returned as HTTP \`404\` with the same canonical JSON body.
    In-progress statuses: \`queued\`, \`broadcasting\`, \`mempool\`.
 
 3. **Do NOT sign a new payment.** Signing and submitting a fresh payment after

@@ -45,6 +45,14 @@ function resolveCheckStatusUrl(raw: Record<string, unknown>, fallback: string): 
   ) as string;
 }
 
+function getPaymentStatusHttpCode(status: string): number {
+  if (status === "not_found") {
+    return 404;
+  }
+
+  return 200;
+}
+
 async function reconcileStagedInboxPayment(
   kv: KVNamespace,
   result: { paymentId: string; status: string; txid?: string; terminalReason?: string },
@@ -134,7 +142,7 @@ async function reconcileStagedInboxPayment(
  * - "confirmed"  — sBTC transfer settled on-chain; staged inbox delivery finalizes
  * - "failed"     — Payment failed; staged inbox delivery is discarded
  * - "replaced"   — Transaction was replaced; staged inbox delivery is discarded
- * - "not_found"  — paymentId expired or unknown to the relay; staged inbox delivery is discarded
+ * - "not_found"  — paymentId expired or unknown to the relay; returns HTTP 404 and staged inbox delivery is discarded
  *
  * In-progress statuses (keep polling):
  * - "queued"        — Accepted by relay, awaiting broadcast
@@ -266,7 +274,7 @@ export async function GET(
       repoVersion
     );
 
-    return NextResponse.json(result);
+    return NextResponse.json(result, { status: getPaymentStatusHttpCode(result.status) });
   } catch (err) {
     const errorContext =
       err instanceof Error
