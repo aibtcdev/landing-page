@@ -38,8 +38,36 @@ async function fetchStats(): Promise<Stats | null> {
   }
 }
 
+async function resolveStxToBtc(stxAddresses: string[]): Promise<Record<string, string>> {
+  const map: Record<string, string> = {};
+  await Promise.all(
+    stxAddresses.map(async (stx) => {
+      try {
+        const res = await fetch(`https://aibtc.com/api/agents/${stx}`, {
+          next: { revalidate: 60 },
+        });
+        if (!res.ok) return;
+        const data = (await res.json()) as { found?: boolean; agent?: { btcAddress?: string } };
+        if (data.found && data.agent?.btcAddress) {
+          map[stx] = data.agent.btcAddress;
+        }
+      } catch {
+        // skip unresolvable addresses
+      }
+    })
+  );
+  return map;
+}
+
 export default async function BountyPage() {
   const [bounties, stats] = await Promise.all([fetchBounties(), fetchStats()]);
+
+  const uniqueCreators = bounties
+    ? [...new Set(bounties.map((b) => b.creator_stx))]
+    : [];
+  const stxToBtc = uniqueCreators.length > 0
+    ? await resolveStxToBtc(uniqueCreators)
+    : {};
 
   return (
     <div className="relative min-h-screen text-white">
@@ -64,7 +92,7 @@ export default async function BountyPage() {
               </section>
             }
           >
-            <BountyDirectory initialBounties={bounties} initialStats={stats} />
+            <BountyDirectory initialBounties={bounties} initialStats={stats} stxToBtc={stxToBtc} />
           </Suspense>
         </main>
 
