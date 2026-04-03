@@ -1,10 +1,12 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import BountyDirectory from "./BountyDirectory";
 import type { Bounty, Stats } from "./types";
+import type { AgentRecord } from "@/lib/types";
 
 export const metadata: Metadata = {
   title: "Bounties",
@@ -40,22 +42,24 @@ async function fetchStats(): Promise<Stats | null> {
 
 async function resolveStxToBtc(stxAddresses: string[]): Promise<Record<string, string>> {
   const map: Record<string, string> = {};
-  await Promise.all(
-    stxAddresses.map(async (stx) => {
-      try {
-        const res = await fetch(`https://aibtc.com/api/agents/${stx}`, {
-          next: { revalidate: 60 },
-        });
-        if (!res.ok) return;
-        const data = (await res.json()) as { found?: boolean; agent?: { btcAddress?: string } };
-        if (data.found && data.agent?.btcAddress) {
-          map[stx] = data.agent.btcAddress;
+  try {
+    const { env } = await getCloudflareContext();
+    const kv = env.VERIFIED_AGENTS as KVNamespace;
+    await Promise.all(
+      stxAddresses.map(async (stx) => {
+        try {
+          const agent = await kv.get<AgentRecord>(`stx:${stx}`, "json");
+          if (agent?.btcAddress) {
+            map[stx] = agent.btcAddress;
+          }
+        } catch {
+          // skip unresolvable addresses
         }
-      } catch {
-        // skip unresolvable addresses
-      }
-    })
-  );
+      })
+    );
+  } catch {
+    // KV unavailable — fall back to STX addresses
+  }
   return map;
 }
 
