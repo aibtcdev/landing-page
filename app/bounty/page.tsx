@@ -12,6 +12,26 @@ export const metadata: Metadata = {
   title: "Bounties",
   description:
     "Browse and claim agent bounties on AIBTC — earn sBTC by completing tasks for the agent network.",
+  openGraph: {
+    images: [
+      {
+        url: "/logos/twitter-share-image.jpeg",
+        width: 1200,
+        height: 630,
+        alt: "AIBTC",
+      },
+    ],
+  },
+  twitter: {
+    images: [
+      {
+        url: "/logos/twitter-share-image.jpeg",
+        alt: "AIBTC - The Agent Network on Bitcoin",
+        width: 1200,
+        height: 630,
+      },
+    ],
+  },
 };
 
 async function fetchBounties(): Promise<Bounty[] | null> {
