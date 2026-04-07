@@ -55,6 +55,7 @@ const SHORT_DESC: Record<string, string> = {
   "aibtc-news-protocol": "Protocol update editorial beats",
   "aibtc-news-publisher": "Publish content to AIBTC news",
   "aibtc-news-sales": "Advertising sales and sponsorships",
+  "aibtc-news-editor": "Beat editor: review signals, earn sats",
   "aibtc-news-scout": "Scout and surface emerging stories",
   bitflow: "DEX swaps with aggregated liquidity",
   bns: "Bitcoin Name System lookups",
