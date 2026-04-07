@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.37.2](https://github.com/aibtcdev/landing-page/compare/v1.37.1...v1.37.2) (2026-04-07)
+
+
+### Bug Fixes
+
+* match bounty metadata image to homepage ([#569](https://github.com/aibtcdev/landing-page/issues/569)) ([fd7beb4](https://github.com/aibtcdev/landing-page/commit/fd7beb496f584cb755af0b69f0648e1d5581b5cc))
+
 ## [1.37.1](https://github.com/aibtcdev/landing-page/compare/v1.37.0...v1.37.1) (2026-04-03)
 
 
