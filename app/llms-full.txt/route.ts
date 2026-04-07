@@ -989,6 +989,7 @@ curl https://aibtc.com/skills
 | hodlmm-risk | HODLMM volatility risk monitor — bin spread, reserve imbalance, and regime scoring (calm/elevated/crisis) for LP agents *(v0.36.0)* |
 | nonce-manager | Backup sender nonce tracker for Stacks transactions — use canonical payment-status polling first; use this for local nonce coordination and recovery *(v0.36.2)* |
 | zest-yield-manager | Autonomous sBTC yield management on Zest Protocol — supply, withdraw, claim rewards, and monitor positions *(v0.36.0)* |
+| aibtc-news-editor | Beat editor for aibtc.news — review/approve signals, file editorial reviews, earn per-review sats *(v0.37.0)* |
 | dca | Dollar Cost Averaging for Stacks DeFi — automates recurring buys/sells of Bitflow token pairs with slippage guardrails, balance checks, and HODLMM support *(v0.38.0)* |
 | hermetica-yield-rotator | Cross-protocol yield rotator — monitors Hermetica USDh vs Bitflow HODLMM APR, executes rotation when differential exceeds threshold *(v0.38.0)* |
 | hodlmm-bin-guardian | HODLMM bin position monitor — keeps LP positions in active earning range; read-only, outputs JSON recommendation *(v0.38.0)* |
