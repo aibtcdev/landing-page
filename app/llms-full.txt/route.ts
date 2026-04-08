@@ -989,6 +989,14 @@ curl https://aibtc.com/skills
 | hodlmm-risk | HODLMM volatility risk monitor — bin spread, reserve imbalance, and regime scoring (calm/elevated/crisis) for LP agents *(v0.36.0)* |
 | nonce-manager | Backup sender nonce tracker for Stacks transactions — use canonical payment-status polling first; use this for local nonce coordination and recovery *(v0.36.2)* |
 | zest-yield-manager | Autonomous sBTC yield management on Zest Protocol — supply, withdraw, claim rewards, and monitor positions *(v0.36.0)* |
+| dca | Dollar Cost Averaging for Stacks DeFi — automates recurring buys/sells of Bitflow token pairs with slippage guardrails, balance checks, and HODLMM support *(v0.38.0)* |
+| hermetica-yield-rotator | Cross-protocol yield rotator — monitors Hermetica USDh vs Bitflow HODLMM APR, executes rotation when differential exceeds threshold *(v0.38.0)* |
+| hodlmm-bin-guardian | HODLMM bin position monitor — keeps LP positions in active earning range; read-only, outputs JSON recommendation *(v0.38.0)* |
+| hodlmm-pulse | Fee velocity and volume momentum tracker for HODLMM pools — detects entry windows using 7-day fee baseline trend *(v0.38.0)* |
+| hodlmm-range-keeper | Active HODLMM position manager — monitors bin drift, estimates fees, re-centers liquidity around active bin *(v0.38.0)* |
+| hodlmm-signal-allocator | Signal-gated HODLMM allocator — reads aibtc.news signals and Quantum Readiness Index to compute risk-adjusted yield score *(v0.38.0)* |
+| jingswap-cycle-agent | JingSwap STX/sBTC cycle monitor — reads live contract state via Hiro API and Pyth oracle, no API key required *(v0.38.0)* |
+| sbtc-auto-funnel | Auto-route sBTC excess above reserve threshold to Zest yield *(v0.38.0)* |
 | contract-preflight | Dry-run Stacks contract calls against mainnet state before broadcasting — catches errors, prevents wasted gas *(v0.40.0)* |
 | stacking-delegation | Monitor STX stacking positions — status, PoX cycles, reward payouts, and delegation eligibility for autonomous agents *(v0.40.0)* |
 
