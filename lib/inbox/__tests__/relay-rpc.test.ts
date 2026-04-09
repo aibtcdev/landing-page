@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mapRPCErrorCode, submitViaRPC } from "../relay-rpc";
+import { __testUtils, mapRPCErrorCode, submitViaRPC } from "../relay-rpc";
 import type { RelayRPC, RelaySettleOptions } from "../relay-rpc";
 import type { Logger } from "@/lib/logging";
 
@@ -764,6 +764,27 @@ describe("submitViaRPC", () => {
         "RPC: poll exhausted after relay accepted — treating as pending success",
         expect.objectContaining({ paymentId: "pay_log_exhaust" })
       );
+    });
+  });
+});
+
+describe("relay-rpc parser compatibility", () => {
+  it("drops unknown relay errorCode values while preserving canonical not_found fields", () => {
+    const parsed = __testUtils.parseCheckPaymentResult({
+      paymentId: "pay_parse_not_found",
+      status: "not_found",
+      terminalReason: "unknown_payment_identity",
+      errorCode: "UNKNOWN_PAYMENT_IDENTITY",
+      error: "Payment pay_parse_not_found not found or expired",
+      checkStatusUrl: "https://relay.example/check/pay_parse_not_found",
+    });
+
+    expect(parsed).toEqual({
+      paymentId: "pay_parse_not_found",
+      status: "not_found",
+      terminalReason: "unknown_payment_identity",
+      error: "Payment pay_parse_not_found not found or expired",
+      checkStatusUrl: "https://relay.example/check/pay_parse_not_found",
     });
   });
 });

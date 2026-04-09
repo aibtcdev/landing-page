@@ -482,6 +482,54 @@ describe("payment-status route", () => {
     );
   });
 
+  it("discards staged inbox records on canonical unknown_payment_identity not_found", async () => {
+    const kv = createMockKV();
+    await stagePendingPayment(kv, "pay_not_found_terminal_case", "msg_not_found_terminal_case");
+
+    mocks.getCloudflareContext.mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: kv,
+        X402_RELAY: {
+          checkPayment: vi.fn().mockResolvedValue({
+            paymentId: "pay_not_found_terminal_case",
+            status: "not_found",
+            terminalReason: "unknown_payment_identity",
+            error: "Payment pay_not_found_terminal_case not found or expired",
+            checkStatusUrl: "https://relay.example/check/pay_not_found_terminal_case",
+          }),
+        },
+      },
+      ctx: {},
+    });
+
+    const response = await GET(
+      new NextRequest("https://aibtc.com/api/payment-status/pay_not_found_terminal_case"),
+      { params: Promise.resolve({ paymentId: "pay_not_found_terminal_case" }) }
+    );
+
+    expect(response.status).toBe(404);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        paymentId: "pay_not_found_terminal_case",
+        status: "not_found",
+        terminalReason: "unknown_payment_identity",
+        checkStatusUrl: "https://relay.example/check/pay_not_found_terminal_case",
+      })
+    );
+    expect(await getStagedInboxPayment(kv, "pay_not_found_terminal_case")).toBeNull();
+    expect(await getMessage(kv, "msg_not_found_terminal_case")).toBeNull();
+    expect(mocks.logger.info).toHaveBeenCalledWith(
+      "payment.delivery_discarded",
+      expect.objectContaining({
+        route: "/api/payment-status/pay_not_found_terminal_case",
+        paymentId: "pay_not_found_terminal_case",
+        status: "not_found",
+        terminalReason: "unknown_payment_identity",
+        action: "discard_staged_delivery",
+      })
+    );
+  });
+
   it("logs malformed relay poll payloads before schema parse failure", async () => {
     const kv = createMockKV();
     mocks.getCloudflareContext.mockResolvedValue({

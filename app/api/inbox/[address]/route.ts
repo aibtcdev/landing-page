@@ -60,6 +60,8 @@ const SENDER_NONCE_ERRORS: Record<string, { error: string; retryAfter: number; n
 
 function buildMissingCanonicalIdentityBody(paymentResult: {
   checkStatusUrl?: string;
+  relayCode?: string;
+  relayDetail?: string;
 }) {
   return {
     error:
@@ -69,6 +71,8 @@ function buildMissingCanonicalIdentityBody(paymentResult: {
     nextSteps:
       "Do not assume delivery or invent a synthetic paymentId. Inspect relay or chain truth before deciding whether to retry.",
     ...(paymentResult.checkStatusUrl && { checkStatusUrl: paymentResult.checkStatusUrl }),
+    ...(paymentResult.relayCode && { relayCode: paymentResult.relayCode }),
+    ...(paymentResult.relayDetail && { relayDetail: paymentResult.relayDetail }),
   };
 }
 
@@ -1205,10 +1209,7 @@ export async function POST(
     }
 
     if (errorCode === "MISSING_CANONICAL_IDENTITY") {
-      return NextResponse.json({
-        ...buildMissingCanonicalIdentityBody(paymentResult),
-        ...relayDiag,
-      }, { status: 502 });
+      return NextResponse.json(buildMissingCanonicalIdentityBody(paymentResult), { status: 502 });
     }
 
     // RELAY_ERROR — relay 5xx, unexpected failure, or circuit breaker open.

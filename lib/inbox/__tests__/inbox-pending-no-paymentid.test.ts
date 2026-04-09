@@ -148,6 +148,8 @@ describe("inbox POST canonical staged-payment semantics", () => {
       success: true,
       payerStxAddress: SENDER_STX,
       paymentTxid: "a".repeat(64),
+      relayCode: "RELAY_CONTRACT_VIOLATION",
+      relayDetail: "accepted pending payment missing paymentId",
       settleResult: {
         success: true,
         transaction: "a".repeat(64),
@@ -224,10 +226,14 @@ describe("inbox POST canonical staged-payment semantics", () => {
       code: string;
       error: string;
       nextSteps: string;
+      relayCode?: string;
+      relayDetail?: string;
     };
     expect(body.code).toBe("MISSING_CANONICAL_IDENTITY");
     expect(body.error).toContain("did not return a canonical payment identity");
     expect(body.nextSteps).toContain("Do not assume delivery");
+    expect(body.relayCode).toBe("RELAY_CONTRACT_VIOLATION");
+    expect(body.relayDetail).toBe("accepted pending payment missing paymentId");
   });
 
   it("response headers omit X-Payment-Id", async () => {

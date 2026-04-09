@@ -147,6 +147,10 @@ function parseCheckPaymentResult(raw: unknown): RelayCheckResult {
   return RpcCheckPaymentResultSchema.parse(collapsed);
 }
 
+export const __testUtils = {
+  parseCheckPaymentResult,
+};
+
 function mapTerminalOutcome(
   checkResult: RelayCheckResult
 ): InboxPaymentErrorCode {
@@ -286,7 +290,7 @@ export async function submitViaRPC(
         error:
           checkResult.error ||
           "Relay no longer recognizes this payment identity. Do not treat the message as delivered.",
-        errorCode: mapTerminalOutcome(checkResult),
+        errorCode: "PAYMENT_NOT_FOUND",
         paymentId,
         ...(checkStatusUrl && { checkStatusUrl }),
         ...(checkResult.terminalReason && { terminalReason: checkResult.terminalReason }),
