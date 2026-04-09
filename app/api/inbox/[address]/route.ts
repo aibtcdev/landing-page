@@ -58,6 +58,20 @@ const SENDER_NONCE_ERRORS: Record<string, { error: string; retryAfter: number; n
   },
 };
 
+function buildMissingCanonicalIdentityBody(paymentResult: {
+  checkStatusUrl?: string;
+}) {
+  return {
+    error:
+      "Relay accepted the payment but did not return a canonical payment identity. Inbox delivery was not staged.",
+    code: "MISSING_CANONICAL_IDENTITY" as const,
+    retryable: false,
+    nextSteps:
+      "Do not assume delivery or invent a synthetic paymentId. Inspect relay or chain truth before deciding whether to retry.",
+    ...(paymentResult.checkStatusUrl && { checkStatusUrl: paymentResult.checkStatusUrl }),
+  };
+}
+
 /**
  * Verify optional Bitcoin sender signature over message content.
  * Supports both BIP-137 (address recovered from signature) and BIP-322
@@ -1173,6 +1187,30 @@ export async function POST(
       );
     }
 
+    if (errorCode === "PAYMENT_NOT_FOUND") {
+      return NextResponse.json(
+        {
+          error:
+            "The relay no longer recognizes this payment identity. Inbox delivery was not completed.",
+          code: errorCode,
+          retryable: false,
+          nextSteps:
+            "Do not assume delivery. Stop polling the old payment identity and restart the higher-level payment flow deliberately.",
+          ...(paymentResult.terminalReason && { terminalReason: paymentResult.terminalReason }),
+          ...(paymentResult.checkStatusUrl && { checkStatusUrl: paymentResult.checkStatusUrl }),
+          ...relayDiag,
+        },
+        { status: 409 }
+      );
+    }
+
+    if (errorCode === "MISSING_CANONICAL_IDENTITY") {
+      return NextResponse.json({
+        ...buildMissingCanonicalIdentityBody(paymentResult),
+        ...relayDiag,
+      }, { status: 502 });
+    }
+
     // RELAY_ERROR — relay 5xx, unexpected failure, or circuit breaker open.
     // Use the retryAfterSeconds from the verification result (circuit breaker returns 300s,
     // ordinary relay errors default to 10s).
@@ -1347,23 +1385,25 @@ export async function POST(
 
   if (paymentResult.paymentStatus === "pending") {
     if (!paymentResult.paymentId) {
-      logPaymentEvent(logger, "warn", "payment.fallback_used", repoVersion, {
+      logPaymentEvent(logger, "error", "payment.fallback_used", repoVersion, {
         route: request.nextUrl.pathname,
         paymentId: null,
         status: "pending",
-        action: "deliver_immediately_without_payment_id",
+        action: "reject_pending_without_canonical_identity",
         additionalContext: {
           messageId,
           fromAddress,
           toBtcAddress,
           receiptId: paymentResult.receiptId ?? null,
+          checkStatusUrl: paymentResult.checkStatusUrl ?? null,
         },
       });
-      logger.warn("Pending payment result missing paymentId; preserving fallback immediate delivery", {
+      logger.error("Pending payment result missing canonical paymentId; refusing delivery", {
         messageId,
         fromAddress,
         toBtcAddress,
       });
+      return NextResponse.json(buildMissingCanonicalIdentityBody(paymentResult), { status: 502 });
     } else {
       const checkStatusUrl =
         paymentResult.checkStatusUrl ?? `/api/payment-status/${paymentResult.paymentId}`;

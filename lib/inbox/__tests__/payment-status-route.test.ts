@@ -337,6 +337,57 @@ describe("payment-status route", () => {
     );
   });
 
+  it("surfaces sender nonce gap terminal metadata from relay polling", async () => {
+    const kv = createMockKV();
+    await stagePendingPayment(kv, "pay_sender_gap_case", "msg_sender_gap_case");
+
+    mocks.getCloudflareContext.mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: kv,
+        X402_RELAY: {
+          checkPayment: vi.fn().mockResolvedValue({
+            paymentId: "pay_sender_gap_case",
+            status: "failed",
+            terminalReason: "sender_nonce_gap",
+            errorCode: "SENDER_NONCE_GAP",
+            error: "sender nonce gap detected",
+            checkStatusUrl: "https://relay.example/check/pay_sender_gap_case",
+          }),
+        },
+      },
+      ctx: {},
+    });
+
+    const response = await GET(
+      new NextRequest("https://aibtc.com/api/payment-status/pay_sender_gap_case"),
+      { params: Promise.resolve({ paymentId: "pay_sender_gap_case" }) }
+    );
+
+    expect(response.status).toBe(200);
+    await expect(response.json()).resolves.toEqual(
+      expect.objectContaining({
+        paymentId: "pay_sender_gap_case",
+        status: "failed",
+        terminalReason: "sender_nonce_gap",
+        errorCode: "SENDER_NONCE_GAP",
+        error: "sender nonce gap detected",
+        checkStatusUrl: "https://relay.example/check/pay_sender_gap_case",
+      })
+    );
+    expect(await getStagedInboxPayment(kv, "pay_sender_gap_case")).toBeNull();
+    expect(await getMessage(kv, "msg_sender_gap_case")).toBeNull();
+    expect(mocks.logger.info).toHaveBeenCalledWith(
+      "payment.delivery_discarded",
+      expect.objectContaining({
+        route: "/api/payment-status/pay_sender_gap_case",
+        paymentId: "pay_sender_gap_case",
+        status: "failed",
+        terminalReason: "sender_nonce_gap",
+        action: "discard_staged_delivery",
+      })
+    );
+  });
+
   it("returns HTTP 404 on canonical not_found", async () => {
     const kv = createMockKV();
     mocks.getCloudflareContext.mockResolvedValue({

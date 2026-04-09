@@ -101,6 +101,8 @@ export type InboxPaymentErrorCode =
   | "SETTLEMENT_TIMEOUT"
   | "INSUFFICIENT_FUNDS"
   | "PAYMENT_REJECTED"
+  | "PAYMENT_NOT_FOUND"
+  | "MISSING_CANONICAL_IDENTITY"
   | "RELAY_ERROR"
   | "INVALID_TRANSACTION_FORMAT"
   | "SENDER_NONCE_STALE"
@@ -748,11 +750,14 @@ export async function verifyInboxPayment(
     paymentTxid,
     recipientStxAddress,
     paymentStatus: relayPaymentStatus,
+    paymentLifecycle:
+      relayPaymentStatus === "pending" ? "accepted_and_staged" : "accepted_and_confirmed",
   });
   emitPaymentEvent("info", "payment.accepted", {
     paymentId: relayPaymentId ?? null,
     status: relayPaymentStatus ?? "confirmed",
-    action: relayPaymentStatus === "pending" ? "stage_delivery" : "deliver_immediately",
+    action:
+      relayPaymentStatus === "pending" ? "accept_payment_for_staging" : "accept_payment_for_delivery",
   });
 
   return {
