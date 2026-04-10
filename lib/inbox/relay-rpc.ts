@@ -159,7 +159,6 @@ function parseCheckPaymentResponse(raw: unknown): ParsedCheckPaymentResult {
     result: RpcCheckPaymentResultSchema.parse(collapsed),
   };
 }
-
 export const __testUtils = {
   parseCheckPaymentResult,
 };

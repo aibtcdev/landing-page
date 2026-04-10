@@ -788,7 +788,6 @@ describe("relay-rpc parser compatibility", () => {
       checkStatusUrl: "https://relay.example/check/pay_parse_not_found",
     });
   });
-
   it("preserves raw unknown relay errorCode for diagnostics", async () => {
     vi.useFakeTimers();
 
