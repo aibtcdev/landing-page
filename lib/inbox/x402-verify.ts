@@ -507,7 +507,9 @@ export async function verifyInboxPayment(
       try {
         const rpcResult = await submitViaRPC(relayRPC, txHex, settle, log);
 
-        // RPC failure: record circuit breaker for RELAY_ERROR codes, cache for INSUFFICIENT_FUNDS, then return
+        // RPC failure: record circuit breaker for error codes counted by
+        // shouldCountRelayFailureForBreaker(), cache for INSUFFICIENT_FUNDS,
+        // then return.
         if (!rpcResult.success) {
           if (kv && shouldCountRelayFailureForBreaker(rpcResult.errorCode)) {
             await recordRelayFailure(

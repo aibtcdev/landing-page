@@ -31,6 +31,10 @@ export type RelaySettleOptions = z.infer<typeof RpcSettleOptionsSchema>;
 export type RelaySenderNonceInfo = z.infer<typeof RpcSenderNonceInfoSchema>;
 export type RelaySubmitResult = z.infer<typeof RpcSubmitPaymentResultSchema>;
 export type RelayCheckResult = z.infer<typeof RpcCheckPaymentResultSchema>;
+type ParsedCheckPaymentResult = {
+  result: RelayCheckResult;
+  rawErrorCode?: string;
+};
 
 /**
  * Typed interface for the X402_RELAY service binding RPC methods.
@@ -133,6 +137,10 @@ function parseSubmitPaymentResult(raw: unknown): RelaySubmitResult {
 }
 
 function parseCheckPaymentResult(raw: unknown): RelayCheckResult {
+  return parseCheckPaymentResponse(raw).result;
+}
+
+function parseCheckPaymentResponse(raw: unknown): ParsedCheckPaymentResult {
   const collapsed = collapseSubmittedStatus(raw);
   if (
     collapsed &&
@@ -140,11 +148,16 @@ function parseCheckPaymentResult(raw: unknown): RelayCheckResult {
     "errorCode" in collapsed &&
     !RpcErrorCodeSchema.safeParse((collapsed as { errorCode?: unknown }).errorCode).success
   ) {
-    const { errorCode: _ignored, ...rest } = collapsed as Record<string, unknown>;
-    return RpcCheckPaymentResultSchema.parse(rest);
+    const { errorCode, ...rest } = collapsed as Record<string, unknown>;
+    return {
+      result: RpcCheckPaymentResultSchema.parse(rest),
+      ...(typeof errorCode === "string" && { rawErrorCode: errorCode }),
+    };
   }
 
-  return RpcCheckPaymentResultSchema.parse(collapsed);
+  return {
+    result: RpcCheckPaymentResultSchema.parse(collapsed),
+  };
 }
 
 export const __testUtils = {
@@ -229,7 +242,10 @@ export async function submitViaRPC(
       await new Promise<void>((resolve) => setTimeout(resolve, RPC_POLL_INTERVAL_MS));
     }
 
-    const checkResult = parseCheckPaymentResult(await rpc.checkPayment(paymentId));
+    const { result: checkResult, rawErrorCode } = parseCheckPaymentResponse(
+      await rpc.checkPayment(paymentId)
+    );
+    const relayCode = checkResult.errorCode ?? rawErrorCode;
     lastCheckResult = checkResult;
     log.debug("RPC: checkPayment", { attempt, paymentId, status: checkResult.status });
 
@@ -258,7 +274,7 @@ export async function submitViaRPC(
         paymentId,
         status: checkResult.status,
         terminalReason: checkResult.terminalReason,
-        errorCode: checkResult.errorCode,
+        errorCode: relayCode,
         error: checkResult.error,
       });
       return {
@@ -269,7 +285,7 @@ export async function submitViaRPC(
         ...(checkStatusUrl && { checkStatusUrl }),
         ...(checkResult.terminalReason && { terminalReason: checkResult.terminalReason }),
         ...(checkResult.txid && { paymentTxid: checkResult.txid }),
-        ...(checkResult.errorCode != null && { relayCode: checkResult.errorCode }),
+        ...(relayCode != null && { relayCode }),
         ...(checkResult.error && { relayDetail: checkResult.error }),
       };
     }
@@ -282,7 +298,7 @@ export async function submitViaRPC(
       log.warn("RPC: payment not found", {
         paymentId,
         terminalReason: checkResult.terminalReason,
-        errorCode: checkResult.errorCode,
+        errorCode: relayCode,
         error: checkResult.error,
       });
       return {
@@ -294,7 +310,7 @@ export async function submitViaRPC(
         paymentId,
         ...(checkStatusUrl && { checkStatusUrl }),
         ...(checkResult.terminalReason && { terminalReason: checkResult.terminalReason }),
-        ...(checkResult.errorCode != null && { relayCode: checkResult.errorCode }),
+        ...(relayCode != null && { relayCode }),
         ...(checkResult.error && { relayDetail: checkResult.error }),
       };
     }
