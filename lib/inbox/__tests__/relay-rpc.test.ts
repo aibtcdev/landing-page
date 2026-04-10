@@ -466,6 +466,7 @@ describe("submitViaRPC", () => {
       expect(result.errorCode).toBe("PAYMENT_NOT_FOUND");
       expect(result.terminalReason).toBe("unknown_payment_identity");
       expect(result.checkStatusUrl).toBe("https://relay.example/check/pay_notfound");
+      expect(result.relayCode).toBe("UNKNOWN_PAYMENT_IDENTITY");
       expect(result.relayDetail).toBe("Payment pay_notfound not found or expired");
     });
 
@@ -786,5 +787,33 @@ describe("relay-rpc parser compatibility", () => {
       error: "Payment pay_parse_not_found not found or expired",
       checkStatusUrl: "https://relay.example/check/pay_parse_not_found",
     });
+  });
+  it("preserves raw unknown relay errorCode for diagnostics", async () => {
+    vi.useFakeTimers();
+
+    const rpc: RelayRPC = {
+      submitPayment: vi.fn().mockResolvedValue({
+        accepted: true,
+        paymentId: "pay_unknown_code",
+        status: "queued",
+      }),
+      checkPayment: vi.fn().mockResolvedValue({
+        paymentId: "pay_unknown_code",
+        status: "failed",
+        errorCode: "FUTURE_RELAY_CODE",
+        error: "future relay diagnostic",
+      }),
+    };
+
+    const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+    await vi.runAllTimersAsync();
+    const result = await resultPromise;
+
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe("RELAY_ERROR");
+    expect(result.relayCode).toBe("FUTURE_RELAY_CODE");
+    expect(result.relayDetail).toBe("future relay diagnostic");
+
+    vi.useRealTimers();
   });
 });

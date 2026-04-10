@@ -195,7 +195,7 @@ describe("staged inbox payment helpers", () => {
     expect(putCalls).toContainEqual(
       expect.objectContaining({
         key: "inbox:staged-payment:pay_stage_ttl",
-        options: expect.objectContaining({ expirationTtl: 86400 }),
+        options: expect.objectContaining({ expirationTtl: 604800 }),
       })
     );
   });
