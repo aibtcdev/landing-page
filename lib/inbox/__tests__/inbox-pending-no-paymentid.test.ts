@@ -1,12 +1,9 @@
 /**
- * Focused test for the pending-without-paymentId compat fallback in the inbox POST route.
+ * Focused tests for inbox POST canonical-identity handling around staged payments.
  *
- * When the relay accepts payment but returns paymentStatus: "pending" without a paymentId,
- * the route falls back to immediate 201 delivery instead of 202 staged. This test verifies:
- * - Response is 201 (not 202)
- * - No paymentId in response body
- * - No storeStagedInboxPayment call
- * - Warning logged about the compat fallback
+ * Phase 3 contract:
+ * - pending without relay-owned paymentId must fail closed
+ * - pending with relay-owned paymentId stays staged and must not claim delivery
  */
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
@@ -101,7 +98,7 @@ const RECIPIENT_STX = "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
 const SENDER_STX = "SP1SENDER0000000000000000000000000000TEST";
 const NETWORK = "mainnet";
 
-describe("inbox POST: pending-without-paymentId compat fallback", () => {
+describe("inbox POST canonical staged-payment semantics", () => {
   let kv: KVNamespace;
 
   beforeEach(() => {
@@ -146,11 +143,13 @@ describe("inbox POST: pending-without-paymentId compat fallback", () => {
       description: "test",
     });
 
-    // Relay returns pending WITHOUT paymentId — the compat fallback
+    // Relay returns pending WITHOUT paymentId — this must now fail closed.
     mocks.verifyInboxPayment.mockResolvedValue({
       success: true,
       payerStxAddress: SENDER_STX,
       paymentTxid: "a".repeat(64),
+      relayCode: "RELAY_CONTRACT_VIOLATION",
+      relayDetail: "accepted pending payment missing paymentId",
       settleResult: {
         success: true,
         transaction: "a".repeat(64),
@@ -158,7 +157,7 @@ describe("inbox POST: pending-without-paymentId compat fallback", () => {
         network: networkToCAIP2(NETWORK),
       },
       paymentStatus: "pending",
-      // NOTE: no paymentId — this is the compat case
+      // NOTE: no paymentId — canonical identity is missing
     });
 
     mocks.checkSenderRateLimit.mockResolvedValue(null);
@@ -193,12 +192,12 @@ describe("inbox POST: pending-without-paymentId compat fallback", () => {
     });
   }
 
-  it("returns 201 (not 202) when relay reports pending without paymentId", async () => {
+  it("returns 502 when relay reports pending without paymentId", async () => {
     const response = await POST(buildRequest(), {
       params: Promise.resolve({ address: RECIPIENT_BTC }),
     });
 
-    expect(response.status).toBe(201);
+    expect(response.status).toBe(502);
   });
 
   it("does not create a staged payment record", async () => {
@@ -209,28 +208,32 @@ describe("inbox POST: pending-without-paymentId compat fallback", () => {
     expect(mocks.storeStagedInboxPayment).not.toHaveBeenCalled();
   });
 
-  it("stores the message for immediate delivery", async () => {
+  it("does not store the message for delivery when canonical identity is missing", async () => {
     await POST(buildRequest(), {
       params: Promise.resolve({ address: RECIPIENT_BTC }),
     });
 
-    expect(mocks.storeMessage).toHaveBeenCalledTimes(1);
-    expect(mocks.updateAgentInbox).toHaveBeenCalledTimes(1);
+    expect(mocks.storeMessage).not.toHaveBeenCalled();
+    expect(mocks.updateAgentInbox).not.toHaveBeenCalled();
   });
 
-  it("response body omits paymentId", async () => {
+  it("returns a fail-closed error body when canonical identity is missing", async () => {
     const response = await POST(buildRequest(), {
       params: Promise.resolve({ address: RECIPIENT_BTC }),
     });
 
     const body = (await response.json()) as {
-      success: boolean;
-      inbox: { paymentId?: string; paymentStatus?: string };
+      code: string;
+      error: string;
+      nextSteps: string;
+      relayCode?: string;
+      relayDetail?: string;
     };
-    expect(body.success).toBe(true);
-    expect(body.inbox).toBeDefined();
-    expect(body.inbox.paymentId).toBeUndefined();
-    expect(body.inbox.paymentStatus).toBe("pending");
+    expect(body.code).toBe("MISSING_CANONICAL_IDENTITY");
+    expect(body.error).toContain("did not return a canonical payment identity");
+    expect(body.nextSteps).toContain("Do not assume delivery");
+    expect(body.relayCode).toBe("RELAY_CONTRACT_VIOLATION");
+    expect(body.relayDetail).toBe("accepted pending payment missing paymentId");
   });
 
   it("response headers omit X-Payment-Id", async () => {
@@ -242,21 +245,58 @@ describe("inbox POST: pending-without-paymentId compat fallback", () => {
     expect(response.headers.get("X-Payment-Check-Url")).toBeNull();
   });
 
-  it("logs the compat fallback warning", async () => {
+  it("logs the fail-closed missing-identity event", async () => {
     await POST(buildRequest(), {
       params: Promise.resolve({ address: RECIPIENT_BTC }),
     });
 
     expect(mocks.logPaymentEvent).toHaveBeenCalledWith(
       mocks.logger,
-      "warn",
+      "error",
       "payment.fallback_used",
       expect.any(String),
       expect.objectContaining({
         paymentId: null,
         status: "pending",
-        action: "deliver_immediately_without_payment_id",
+        action: "reject_pending_without_canonical_identity",
       })
     );
+  });
+
+  it("returns 202 staged wording and avoids delivery language when canonical paymentId is present", async () => {
+    mocks.verifyInboxPayment.mockResolvedValueOnce({
+      success: true,
+      payerStxAddress: SENDER_STX,
+      paymentTxid: "a".repeat(64),
+      settleResult: {
+        success: true,
+        transaction: "a".repeat(64),
+        payer: SENDER_STX,
+        network: networkToCAIP2(NETWORK),
+      },
+      paymentStatus: "pending",
+      paymentId: "pay_staged_case",
+      checkStatusUrl: "https://relay.example/check/pay_staged_case",
+    });
+
+    const response = await POST(buildRequest(), {
+      params: Promise.resolve({ address: RECIPIENT_BTC }),
+    });
+    const body = (await response.json()) as {
+      message: string;
+      inbox: { paymentStatus: string; paymentId?: string };
+      checkStatusUrl?: string;
+    };
+
+    expect(response.status).toBe(202);
+    expect(body.message).toBe(
+      "Payment accepted. Inbox delivery is staged until the relay reports confirmed."
+    );
+    expect(body.message).not.toContain("Message sent successfully");
+    expect(body.inbox.paymentStatus).toBe("pending");
+    expect(body.inbox.paymentId).toBe("pay_staged_case");
+    expect(body.checkStatusUrl).toBe("https://relay.example/check/pay_staged_case");
+    expect(mocks.storeStagedInboxPayment).toHaveBeenCalledTimes(1);
+    expect(mocks.storeMessage).not.toHaveBeenCalled();
   });
 });

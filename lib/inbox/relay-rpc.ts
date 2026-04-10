@@ -6,6 +6,7 @@
  */
 
 import {
+  RpcErrorCodeSchema,
   RpcCheckPaymentResultSchema,
   RpcSenderNonceInfoSchema,
   RpcSettleOptionsSchema,
@@ -93,9 +94,28 @@ const TERMINAL_REASON_ERROR_CODE_MAP: Partial<Record<TerminalReason, InboxPaymen
   broadcast_failure: "BROADCAST_FAILED",
   chain_abort: "SETTLEMENT_FAILED",
   internal_error: "RELAY_ERROR",
+  expired: "PAYMENT_NOT_FOUND",
+  unknown_payment_identity: "PAYMENT_NOT_FOUND",
 };
 
 function parseSubmitPaymentResult(raw: unknown): RelaySubmitResult {
+  if (
+    raw &&
+    typeof raw === "object" &&
+    "accepted" in raw &&
+    (raw as { accepted?: unknown }).accepted === true &&
+    typeof (raw as { paymentId?: unknown }).paymentId !== "string"
+  ) {
+    const rawRecord = raw as Record<string, unknown>;
+    return {
+      accepted: true,
+      status: "queued",
+      ...(typeof rawRecord.checkStatusUrl === "string" && {
+        checkStatusUrl: rawRecord.checkStatusUrl,
+      }),
+    } as RelaySubmitResult;
+  }
+
   if (
     raw &&
     typeof raw === "object" &&
@@ -113,8 +133,23 @@ function parseSubmitPaymentResult(raw: unknown): RelaySubmitResult {
 }
 
 function parseCheckPaymentResult(raw: unknown): RelayCheckResult {
-  return RpcCheckPaymentResultSchema.parse(collapseSubmittedStatus(raw));
+  const collapsed = collapseSubmittedStatus(raw);
+  if (
+    collapsed &&
+    typeof collapsed === "object" &&
+    "errorCode" in collapsed &&
+    !RpcErrorCodeSchema.safeParse((collapsed as { errorCode?: unknown }).errorCode).success
+  ) {
+    const { errorCode: _ignored, ...rest } = collapsed as Record<string, unknown>;
+    return RpcCheckPaymentResultSchema.parse(rest);
+  }
+
+  return RpcCheckPaymentResultSchema.parse(collapsed);
 }
+
+export const __testUtils = {
+  parseCheckPaymentResult,
+};
 
 function mapTerminalOutcome(
   checkResult: RelayCheckResult
@@ -170,8 +205,9 @@ export async function submitViaRPC(
     log.warn("RPC: submitPayment accepted but missing paymentId");
     return {
       success: false,
-      error: "Relay accepted payment but did not return a paymentId",
-      errorCode: "RELAY_ERROR",
+      error: "Relay accepted payment but did not return a canonical payment identity",
+      errorCode: "MISSING_CANONICAL_IDENTITY",
+      ...(submitResult.checkStatusUrl && { checkStatusUrl: submitResult.checkStatusUrl }),
     };
   }
   log.debug("RPC: payment queued", {
@@ -243,14 +279,23 @@ export async function submitViaRPC(
         checkResult.checkStatusUrl,
         submitCheckStatusUrl
       );
-      log.warn("RPC: payment not found", { paymentId });
+      log.warn("RPC: payment not found", {
+        paymentId,
+        terminalReason: checkResult.terminalReason,
+        errorCode: checkResult.errorCode,
+        error: checkResult.error,
+      });
       return {
         success: false,
-        error: "Payment not found in relay — it may have expired.",
-        errorCode: "RELAY_ERROR",
+        error:
+          checkResult.error ||
+          "Relay no longer recognizes this payment identity. Do not treat the message as delivered.",
+        errorCode: "PAYMENT_NOT_FOUND",
         paymentId,
         ...(checkStatusUrl && { checkStatusUrl }),
         ...(checkResult.terminalReason && { terminalReason: checkResult.terminalReason }),
+        ...(checkResult.errorCode != null && { relayCode: checkResult.errorCode }),
+        ...(checkResult.error && { relayDetail: checkResult.error }),
       };
     }
 

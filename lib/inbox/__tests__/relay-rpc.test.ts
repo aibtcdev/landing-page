@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { mapRPCErrorCode, submitViaRPC } from "../relay-rpc";
+import { __testUtils, mapRPCErrorCode, submitViaRPC } from "../relay-rpc";
 import type { RelayRPC, RelaySettleOptions } from "../relay-rpc";
 import type { Logger } from "@/lib/logging";
 
@@ -226,6 +226,24 @@ describe("submitViaRPC", () => {
 
       expect(rpc.submitPayment).toHaveBeenCalledWith(baseTxHex, baseSettle);
     });
+
+    it("fails closed when submitPayment accepts but omits canonical paymentId", async () => {
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          status: "queued",
+          checkStatusUrl: "https://relay.example/check/missing-id",
+        }),
+        checkPayment: vi.fn(),
+      };
+
+      const result = await submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("MISSING_CANONICAL_IDENTITY");
+      expect(result.checkStatusUrl).toBe("https://relay.example/check/missing-id");
+      expect(rpc.checkPayment).not.toHaveBeenCalled();
+    });
   });
 
   describe("successful settlement paths", () => {
@@ -433,6 +451,9 @@ describe("submitViaRPC", () => {
         checkPayment: vi.fn().mockResolvedValue({
           paymentId: "pay_notfound",
           status: "not_found",
+          terminalReason: "unknown_payment_identity",
+          checkStatusUrl: "https://relay.example/check/pay_notfound",
+          errorCode: "UNKNOWN_PAYMENT_IDENTITY",
           error: "Payment pay_notfound not found or expired",
         }),
       };
@@ -442,7 +463,40 @@ describe("submitViaRPC", () => {
       const result = await resultPromise;
 
       expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("RELAY_ERROR");
+      expect(result.errorCode).toBe("PAYMENT_NOT_FOUND");
+      expect(result.terminalReason).toBe("unknown_payment_identity");
+      expect(result.checkStatusUrl).toBe("https://relay.example/check/pay_notfound");
+      expect(result.relayDetail).toBe("Payment pay_notfound not found or expired");
+    });
+
+    it("surfaces sender nonce gap terminal metadata from relay polling", async () => {
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay_gap_terminal",
+          status: "queued",
+          checkStatusUrl: "https://relay.example/pay/pay_gap_terminal",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay_gap_terminal",
+          status: "failed",
+          terminalReason: "sender_nonce_gap",
+          errorCode: "SENDER_NONCE_GAP",
+          error: "sender nonce gap detected",
+          checkStatusUrl: "https://relay.example/check/pay_gap_terminal",
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("SENDER_NONCE_GAP");
+      expect(result.terminalReason).toBe("sender_nonce_gap");
+      expect(result.checkStatusUrl).toBe("https://relay.example/check/pay_gap_terminal");
+      expect(result.relayCode).toBe("SENDER_NONCE_GAP");
+      expect(result.relayDetail).toBe("sender nonce gap detected");
     });
   });
 
@@ -710,6 +764,27 @@ describe("submitViaRPC", () => {
         "RPC: poll exhausted after relay accepted — treating as pending success",
         expect.objectContaining({ paymentId: "pay_log_exhaust" })
       );
+    });
+  });
+});
+
+describe("relay-rpc parser compatibility", () => {
+  it("drops unknown relay errorCode values while preserving canonical not_found fields", () => {
+    const parsed = __testUtils.parseCheckPaymentResult({
+      paymentId: "pay_parse_not_found",
+      status: "not_found",
+      terminalReason: "unknown_payment_identity",
+      errorCode: "UNKNOWN_PAYMENT_IDENTITY",
+      error: "Payment pay_parse_not_found not found or expired",
+      checkStatusUrl: "https://relay.example/check/pay_parse_not_found",
+    });
+
+    expect(parsed).toEqual({
+      paymentId: "pay_parse_not_found",
+      status: "not_found",
+      terminalReason: "unknown_payment_identity",
+      error: "Payment pay_parse_not_found not found or expired",
+      checkStatusUrl: "https://relay.example/check/pay_parse_not_found",
     });
   });
 });

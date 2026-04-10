@@ -88,6 +88,8 @@ interface StacksTxData {
  * - SETTLEMENT_TIMEOUT: relay gave up polling but tx was broadcast; recover via paymentTxid.
  * - INSUFFICIENT_FUNDS: sBTC balance too low.
  * - PAYMENT_REJECTED: relay or verifier rejected the payment (bad payload, wrong recipient, etc.).
+ * - PAYMENT_NOT_FOUND: relay reported the old canonical payment identity is gone.
+ * - MISSING_CANONICAL_IDENTITY: relay accepted the payment but failed to return a canonical public identity.
  * - RELAY_ERROR: relay 5xx or unexpected failure.
  * - INVALID_TRANSACTION_FORMAT: payload contains invalid data (e.g. raw hex instead of serialized Stacks tx).
  * - SENDER_NONCE_STALE: RPC path — submitted nonce is below the current account nonce (pre-enqueue rejection).
@@ -101,6 +103,8 @@ export type InboxPaymentErrorCode =
   | "SETTLEMENT_TIMEOUT"
   | "INSUFFICIENT_FUNDS"
   | "PAYMENT_REJECTED"
+  | "PAYMENT_NOT_FOUND"
+  | "MISSING_CANONICAL_IDENTITY"
   | "RELAY_ERROR"
   | "INVALID_TRANSACTION_FORMAT"
   | "SENDER_NONCE_STALE"
@@ -250,6 +254,10 @@ const RELAY_RETRYABLE_CODES = new Set([
   "CLIENT_BAD_NONCE",
   "TOO_MUCH_CHAINING",
 ]);
+
+function shouldCountRelayFailureForBreaker(errorCode: InboxPaymentErrorCode | TxidPaymentErrorCode | (string & {}) | undefined): boolean {
+  return errorCode === "RELAY_ERROR" || errorCode === "MISSING_CANONICAL_IDENTITY";
+}
 
 /** Parse a relay error response body into a structured object. */
 function parseRelayErrorBody(
@@ -501,7 +509,7 @@ export async function verifyInboxPayment(
 
         // RPC failure: record circuit breaker for RELAY_ERROR codes, cache for INSUFFICIENT_FUNDS, then return
         if (!rpcResult.success) {
-          if (kv && rpcResult.errorCode === "RELAY_ERROR") {
+          if (kv && shouldCountRelayFailureForBreaker(rpcResult.errorCode)) {
             await recordRelayFailure(
               kv,
               RELAY_CIRCUIT_BREAKER_KEY,
@@ -748,11 +756,15 @@ export async function verifyInboxPayment(
     paymentTxid,
     recipientStxAddress,
     paymentStatus: relayPaymentStatus,
+    // Observability-only: accepted settlement state, not a caller-facing field.
+    paymentLifecycle:
+      relayPaymentStatus === "pending" ? "accepted_and_staged" : "accepted_and_confirmed",
   });
   emitPaymentEvent("info", "payment.accepted", {
     paymentId: relayPaymentId ?? null,
     status: relayPaymentStatus ?? "confirmed",
-    action: relayPaymentStatus === "pending" ? "stage_delivery" : "deliver_immediately",
+    action:
+      relayPaymentStatus === "pending" ? "accept_payment_for_staging" : "accept_payment_for_delivery",
   });
 
   return {
