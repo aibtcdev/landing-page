@@ -25,12 +25,14 @@ const mocks = vi.hoisted(() => ({
   buildInboxPaymentRequirements: vi.fn(),
   buildSenderAuthMessage: vi.fn(),
   checkSenderRateLimit: vi.fn(),
+  enqueueInboxReconciliation: vi.fn(),
   verifyBitcoinSignature: vi.fn(),
   hasAchievement: vi.fn(),
   grantAchievement: vi.fn(),
   invalidateAgentListCache: vi.fn(),
   getPaymentRepoVersion: vi.fn(),
   logPaymentEvent: vi.fn(),
+  queueSend: vi.fn(),
   logger: {
     debug: vi.fn(),
     info: vi.fn(),
@@ -60,6 +62,7 @@ vi.mock("@/lib/inbox", () => ({
   buildInboxPaymentRequirements: mocks.buildInboxPaymentRequirements,
   buildSenderAuthMessage: mocks.buildSenderAuthMessage,
   checkSenderRateLimit: mocks.checkSenderRateLimit,
+  enqueueInboxReconciliation: mocks.enqueueInboxReconciliation,
   INBOX_PRICE_SATS: 100,
   REDEEMED_TXID_TTL_SECONDS: 7776000,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS: 120,
@@ -112,6 +115,9 @@ describe("inbox POST canonical staged-payment semantics", () => {
         VERIFIED_AGENTS: kv,
         X402_NETWORK: NETWORK,
         X402_RELAY_URL: "https://x402-relay.aibtc.com",
+        INBOX_RECONCILIATION_QUEUE: {
+          send: mocks.queueSend,
+        },
       },
       ctx: {},
     });
@@ -167,6 +173,8 @@ describe("inbox POST canonical staged-payment semantics", () => {
     mocks.grantAchievement.mockResolvedValue(undefined);
     mocks.invalidateAgentListCache.mockResolvedValue(undefined);
     mocks.getPaymentRepoVersion.mockReturnValue("0.3.0");
+    mocks.queueSend.mockResolvedValue(undefined);
+    mocks.enqueueInboxReconciliation.mockResolvedValue(true);
   });
 
   function buildRequest(): NextRequest {
@@ -297,6 +305,23 @@ describe("inbox POST canonical staged-payment semantics", () => {
     expect(body.inbox.paymentId).toBe("pay_staged_case");
     expect(body.checkStatusUrl).toBe("https://relay.example/check/pay_staged_case");
     expect(mocks.storeStagedInboxPayment).toHaveBeenCalledTimes(1);
+    expect(mocks.enqueueInboxReconciliation).toHaveBeenCalledWith(
+      expect.objectContaining({
+        send: mocks.queueSend,
+      }),
+      expect.objectContaining({
+        paymentId: "pay_staged_case",
+        attempt: 0,
+        source: "inbox_post",
+      }),
+      mocks.logger,
+      expect.any(String),
+      expect.any(String),
+      expect.objectContaining({
+        messageId: expect.any(String),
+        workerStage: "http_inbox_post",
+      })
+    );
     expect(mocks.storeMessage).not.toHaveBeenCalled();
   });
 });

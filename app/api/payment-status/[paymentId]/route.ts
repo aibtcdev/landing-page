@@ -1,159 +1,14 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import {
-  paymentStateDefaultDeliveryByState,
-  TerminalFailureStateSchema,
-} from "@aibtc/tx-schemas/core";
-import { PaymentStatusHttpResponseSchema } from "@aibtc/tx-schemas/http";
 import type { RelayRPC } from "@/lib/inbox/relay-rpc";
-import {
-  deleteStagedInboxPayment,
-  finalizeStagedInboxPayment,
-  getStagedInboxPayment,
-} from "@/lib/inbox";
-import { invalidateAgentListCache } from "@/lib/cache";
-import { hasAchievement, grantAchievement } from "@/lib/achievements";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
-import type { Logger } from "@/lib/logging";
 import {
   getPaymentRepoVersion,
-  logPaymentEvent,
-  summarizeRelayPollPayload,
 } from "@/lib/inbox/payment-logging";
 import {
-  collapseSubmittedStatus,
-  selectCanonicalCheckStatusUrl,
-} from "@/lib/inbox/payment-contract";
-
-function normalizePublicPaymentStatus(
-  raw: unknown,
-  logger: Logger,
-  route: string,
-  repoVersion: string
-): unknown {
-  return collapseSubmittedStatus(raw, ({ paymentId }) => {
-    logPaymentEvent(logger, "warn", "payment.fallback_used", repoVersion, {
-      route,
-      paymentId,
-      status: "submitted",
-      action: "collapse_submitted_to_queued",
-      compatShimUsed: true,
-    });
-  });
-}
-
-function resolveCheckStatusUrl(raw: Record<string, unknown>, fallback: string): string {
-  return selectCanonicalCheckStatusUrl(
-    typeof raw.checkStatusUrl === "string" ? raw.checkStatusUrl : undefined,
-    fallback
-  ) as string;
-}
-
-function getPaymentStatusHttpCode(status: string): number {
-  if (status === "not_found") {
-    return 404;
-  }
-
-  return 200;
-}
-
-async function reconcileStagedInboxPayment(
-  kv: KVNamespace,
-  result: {
-    paymentId: string;
-    status: string;
-    txid?: string;
-    terminalReason?: string;
-  },
-  logger: Logger,
-  route: string,
-  repoVersion: string
-): Promise<void> {
-  const staged = await getStagedInboxPayment(kv, result.paymentId);
-  if (!staged) {
-    if (
-      paymentStateDefaultDeliveryByState[
-        result.status as keyof typeof paymentStateDefaultDeliveryByState
-      ]
-    ) {
-      logPaymentEvent(logger, "warn", "payment.poll", repoVersion, {
-        route,
-        paymentId: result.paymentId,
-        status: result.status,
-        terminalReason: result.terminalReason ?? null,
-        action: "confirmed_without_staged_record",
-      });
-    }
-    return;
-  }
-
-  if (
-    paymentStateDefaultDeliveryByState[
-      result.status as keyof typeof paymentStateDefaultDeliveryByState
-    ]
-  ) {
-    const finalized = await finalizeStagedInboxPayment(kv, result.paymentId, {
-      paymentStatus: "confirmed",
-      paymentTxid: result.txid ?? staged.message.paymentTxid,
-      paymentId: result.paymentId,
-    });
-
-    if (!finalized) return;
-
-    await invalidateAgentListCache(kv);
-
-    try {
-      const hasReceiver = await hasAchievement(kv, finalized.toBtcAddress, "receiver");
-      if (!hasReceiver) {
-        await grantAchievement(kv, finalized.toBtcAddress, "receiver", {
-          messageId: finalized.messageId,
-        });
-      }
-    } catch (error) {
-      logger.warn("Failed to grant receiver achievement after payment confirmation", {
-        paymentId: result.paymentId,
-        error: String(error),
-      });
-    }
-
-    await grantAchievement(kv, finalized.toBtcAddress, "x402-earner", {
-      messageId: finalized.messageId,
-      paymentTxid: finalized.paymentTxid,
-    }).catch((error) =>
-      logger.warn("Failed to grant x402-earner achievement after payment confirmation", {
-        paymentId: result.paymentId,
-        error: String(error),
-      })
-    );
-
-    logPaymentEvent(logger, "info", "payment.delivery_confirmed", repoVersion, {
-      route,
-      paymentId: result.paymentId,
-      status: result.status,
-      terminalReason: result.terminalReason ?? null,
-      action: "finalize_staged_delivery",
-      additionalContext: {
-        messageId: finalized.messageId,
-        paymentTxid: finalized.paymentTxid,
-      },
-    });
-    return;
-  }
-
-  if (TerminalFailureStateSchema.safeParse(result.status).success) {
-    await deleteStagedInboxPayment(kv, result.paymentId);
-    logPaymentEvent(logger, "info", "payment.delivery_discarded", repoVersion, {
-      route,
-      paymentId: result.paymentId,
-      status: result.status,
-      terminalReason: result.terminalReason ?? null,
-      action: "discard_staged_delivery",
-      additionalContext: {
-        messageId: staged.message.messageId,
-      },
-    });
-  }
-}
+  getPaymentStatusHttpCode,
+  reconcileStagedInboxPayment,
+} from "@/lib/inbox/reconcile-staged-payment";
 
 /**
  * GET /api/payment-status/[paymentId] — Check x402 payment settlement status.
@@ -257,55 +112,16 @@ export async function GET(
 
   try {
     const kv = env.VERIFIED_AGENTS as KVNamespace;
-    const rawResult = await rpc.checkPayment(paymentId);
-    const rawSummary = summarizeRelayPollPayload(rawResult);
-    const hasMalformedPollData =
-      !rawResult ||
-      typeof rawResult !== "object" ||
-      typeof (rawResult as { status?: unknown }).status !== "string" ||
-      typeof (rawResult as { paymentId?: unknown }).paymentId !== "string";
-
-    if (hasMalformedPollData) {
-      logPaymentEvent(logger, "warn", "payment.poll", repoVersion, {
-        route: request.nextUrl.pathname,
-        paymentId,
-        status: "malformed",
-        action: "relay_poll_payload_missing_fields",
-        additionalContext: rawSummary,
-      });
-    }
-
-    const normalizedResult = normalizePublicPaymentStatus(
-      rawResult,
-      logger,
-      request.nextUrl.pathname,
-      repoVersion
-    ) as Record<string, unknown>;
-    const fallbackCheckStatusUrl = `/api/payment-status/${paymentId}`;
-    const result = PaymentStatusHttpResponseSchema.parse({
-      ...normalizedResult,
-      checkStatusUrl: resolveCheckStatusUrl(normalizedResult, fallbackCheckStatusUrl),
-    });
-
-    logPaymentEvent(logger, "info", "payment.poll", repoVersion, {
-      route: request.nextUrl.pathname,
-      paymentId: result.paymentId,
-      status: result.status,
-      terminalReason: result.terminalReason ?? null,
-      action: ["failed", "replaced", "not_found", "confirmed"].includes(result.status)
-        ? "terminal_poll_result"
-        : "continue_polling",
-      checkStatusUrl: result.checkStatusUrl,
-    });
-
-    await reconcileStagedInboxPayment(
+    const { result } = await reconcileStagedInboxPayment({
       kv,
-      result,
+      rpc,
+      paymentId,
       logger,
-      request.nextUrl.pathname,
-      repoVersion
-    );
-
+      route: request.nextUrl.pathname,
+      repoVersion,
+      workerStage: "http_payment_status_get",
+      trigger: "payment_status_get",
+    });
     return NextResponse.json(result, { status: getPaymentStatusHttpCode(result.status) });
   } catch (err) {
     const errorContext =
