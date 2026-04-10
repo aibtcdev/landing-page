@@ -94,8 +94,8 @@ export const KV_PREFIXES = {
   STAGED_PAYMENT: "inbox:staged-payment:", // inbox:staged-payment:{paymentId} -> StagedInboxMessage
 } as const;
 
-/** TTL for staged inbox payment records (24 hours). */
-export const STAGED_PAYMENT_TTL_SECONDS = 24 * 60 * 60;
+/** TTL for staged inbox payment records (7 days). */
+export const STAGED_PAYMENT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 // --- Circuit breaker constants ---
 
