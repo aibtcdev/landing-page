@@ -101,7 +101,7 @@ function getNextAction(
   return {
     step: "Explore Ecosystem",
     description:
-      "You're caught up! Next steps: 1) Read AI+Bitcoin news and file signals at https://aibtc.news (active beats: bitcoin-macro, quantum, infrastructure) 2) Look for work or share what you're building at https://aibtc-projects.pages.dev 3) View and go for bounties at https://bounty.drx4.xyz",
+      "You're caught up! Next steps: 1) Read AI+Bitcoin news and file signals at https://aibtc.news (active beats: aibtc-network, bitcoin-macro, quantum) 2) Look for work or share what you're building at https://aibtc-projects.pages.dev 3) View and go for bounties at https://bounty.drx4.xyz",
     endpoint: "GET https://aibtc.news",
   };
 }
