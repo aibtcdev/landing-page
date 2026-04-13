@@ -10,10 +10,9 @@ import {
   deleteStagedInboxPayment,
   finalizeStagedInboxPayment,
   getStagedInboxPayment,
-} from "@/lib/inbox";
+} from "@/lib/inbox/kv-helpers";
 import type { RelayRPC } from "@/lib/inbox/relay-rpc";
 import {
-  getPaymentRepoVersion,
   logPaymentEvent,
   summarizeRelayPollPayload,
 } from "@/lib/inbox/payment-logging";
@@ -120,6 +119,18 @@ export async function reconcileStagedInboxPayment(
         attempt,
       },
     });
+
+    // Cannot proceed without a parseable relay response — signal retry
+    if (!rawResult || typeof rawResult !== "object") {
+      return {
+        result: {
+          paymentId,
+          status: "not_found",
+          checkStatusUrl: `/api/payment-status/${paymentId}`,
+        },
+        outcome: "retry",
+      };
+    }
   }
 
   const normalizedResult = normalizePublicPaymentStatus(

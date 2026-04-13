@@ -218,7 +218,11 @@ describe("inbox reconciliation queue", () => {
         VERIFIED_AGENTS: kv,
         X402_RELAY: {
           submitPayment: vi.fn(),
-          checkPayment: vi.fn(),
+          checkPayment: vi.fn().mockResolvedValue({
+            paymentId: "pay_missing_staged",
+            status: "queued",
+            checkStatusUrl: "https://relay.example/check/pay_missing_staged",
+          }),
         },
         INBOX_RECONCILIATION_QUEUE: {
           send: queueSend,
@@ -229,16 +233,10 @@ describe("inbox reconciliation queue", () => {
       "test-version"
     );
 
+    // reconcileStagedInboxPayment returns "noop" when no staged record exists
     expect(ack).toHaveBeenCalledTimes(1);
     expect(retry).not.toHaveBeenCalled();
     expect(queueSend).not.toHaveBeenCalled();
-    expect(mocks.logger.info).toHaveBeenCalledWith(
-      "payment.queue",
-      expect.objectContaining({
-        paymentId: "pay_missing_staged",
-        action: "ack_missing_staged_record",
-      })
-    );
   });
 
   it("retries the current queue message when the requeue binding is unavailable", async () => {

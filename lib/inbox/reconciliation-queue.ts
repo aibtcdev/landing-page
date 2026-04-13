@@ -1,7 +1,6 @@
 import { STAGED_PAYMENT_TTL_SECONDS } from "@/lib/inbox/constants";
 import type { RelayRPC } from "@/lib/inbox/relay-rpc";
 import type { Logger } from "@/lib/logging";
-import { getStagedInboxPayment } from "@/lib/inbox";
 import { logPaymentEvent } from "@/lib/inbox/payment-logging";
 import {
   reconcileStagedInboxPayment,
@@ -42,7 +41,10 @@ function getRetryDelaySeconds(attempt: number): number {
 }
 
 function getStagedAgeSeconds(stagedAt: string): number {
-  return Math.max(0, Math.floor((Date.now() - new Date(stagedAt).getTime()) / 1000));
+  const time = new Date(stagedAt).getTime();
+  // Treat unparseable dates as expired to prevent infinite retries
+  if (!Number.isFinite(time)) return STAGED_PAYMENT_TTL_SECONDS;
+  return Math.max(0, Math.floor((Date.now() - time) / 1000));
 }
 
 export async function enqueueInboxReconciliation(
@@ -164,35 +166,6 @@ export async function processInboxReconciliationQueue(
         trigger,
       },
     });
-
-    const staged = await getStagedInboxPayment(env.VERIFIED_AGENTS, body.paymentId);
-    if (!staged) {
-      logPaymentEvent(logger, "info", "payment.queue", repoVersion, {
-        route: INBOX_RECONCILIATION_QUEUE_ROUTE,
-        paymentId: body.paymentId,
-        action: "ack_missing_staged_record",
-        additionalContext: {
-          queueMessageId: message.id,
-          attempt: body.attempt,
-          stagedAgeSeconds,
-          worker_stage: "queue_consumer",
-          trigger,
-        },
-      });
-      logPaymentEvent(logger, "info", "payment.retry_decision", repoVersion, {
-        route: INBOX_RECONCILIATION_QUEUE_ROUTE,
-        paymentId: body.paymentId,
-        action: "skip_requeue_missing_staged_record",
-        additionalContext: {
-          attempt: body.attempt,
-          stagedAgeSeconds,
-          worker_stage: "queue_consumer",
-          trigger,
-        },
-      });
-      message.ack();
-      continue;
-    }
 
     const reconciliation = await reconcileStagedInboxPayment({
       kv: env.VERIFIED_AGENTS,
