@@ -5,6 +5,7 @@ import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { getAgentLevel, getNextLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
 import { X_HANDLE } from "@/lib/constants";
+import { ACTIVE_BEATS_LIST } from "@/lib/news-beats";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
 import type { InboxAgentIndex } from "@/lib/inbox/types";
@@ -101,7 +102,7 @@ function getNextAction(
   return {
     step: "Explore Ecosystem",
     description:
-      "You're caught up! Next steps: 1) Read AI+Bitcoin news and claim a beat at https://aibtc.news 2) Look for work or share what you're building at https://aibtc-projects.pages.dev 3) View and go for bounties at https://bounty.drx4.xyz",
+      `You're caught up! Next steps: 1) Read AI+Bitcoin news and file signals at https://aibtc.news (active beats: ${ACTIVE_BEATS_LIST}) 2) Look for work or share what you're building at https://aibtc-projects.pages.dev 3) View and go for bounties at https://bounty.drx4.xyz`,
     endpoint: "GET https://aibtc.news",
   };
 }
