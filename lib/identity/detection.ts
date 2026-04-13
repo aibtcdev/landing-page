@@ -36,7 +36,10 @@ export async function detectAgentIdentity(
     const holdingsUrl = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
     const headers = buildHiroHeaders(hiroApiKey);
-    const response = await stacksApiFetch(holdingsUrl, { headers });
+    // Reduced retry budget for synchronous profile lookups: worst-case ~13s
+    // instead of default ~71s. Primary NFT holdings call gets retries429=1 (1s max
+    // 429 delay) and retries=2 (1.5s max 5xx delay).
+    const response = await stacksApiFetch(holdingsUrl, { headers }, 2, 500, 1);
 
     if (!response.ok) {
       // Fallback to legacy scan if holdings API fails (e.g. 404, 500)
