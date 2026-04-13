@@ -74,14 +74,15 @@ export async function enrichAgentProfile(
   hiroApiKey?: string,
   logPrefix?: string
 ): Promise<EnrichmentResult> {
-  const enrichmentTimeout = new Promise<null>((resolve) =>
-    setTimeout(() => {
+  let timeoutId: ReturnType<typeof setTimeout> | undefined;
+  const enrichmentTimeout = new Promise<null>((resolve) => {
+    timeoutId = setTimeout(() => {
       console.warn(
         `[${logPrefix ?? agent.btcAddress}] Enrichment timed out after ${ENRICHMENT_TIMEOUT_MS}ms — returning partial response`
       );
       resolve(null);
-    }, ENRICHMENT_TIMEOUT_MS)
-  );
+    }, ENRICHMENT_TIMEOUT_MS);
+  });
 
   // Fetch claim, achievements, check-in, identity+reputation, inbox, and sent index in parallel.
   // Identity and reputation are combined into a single slot so reputation starts immediately
@@ -94,7 +95,7 @@ export async function enrichAgentProfile(
       fetchIdentityAndReputation(agent, hiroApiKey, kv),
       getAgentInbox(kv, agent.btcAddress),
       getSentIndex(kv, agent.btcAddress),
-    ]),
+    ]).finally(() => clearTimeout(timeoutId)),
     enrichmentTimeout,
   ]);
 
@@ -169,7 +170,9 @@ async function fetchIdentityAndReputation(
   hiroApiKey: string | undefined,
   kv: KVNamespace
 ): Promise<{ identity: AgentIdentity | null; reputation: ReputationSummary | null }> {
-  // Use cached agent-id if available; agent-id 0 is valid (falsy) so use != null
+  // Use cached agent-id if available; agent-id 0 is valid (falsy) so use != null.
+  // When using the cached shortcut, uri is "" because fetching it would require
+  // an additional on-chain call — the agentId is sufficient for reputation lookups.
   const identityResult: AgentIdentity | null =
     agent.erc8004AgentId != null
       ? { agentId: agent.erc8004AgentId, owner: agent.stxAddress, uri: "" }

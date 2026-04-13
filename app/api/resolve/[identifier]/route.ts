@@ -415,6 +415,8 @@ export async function GET(
         identifierType,
         identity: identitySection,
         trust: enrichment.trust,
+        // Intentional subset: resolve returns fewer activity fields than /api/agents/[address]
+        // (omits hasCheckedIn and sentCount to keep the lightweight resolution contract stable)
         activity: {
           lastActiveAt: enrichment.activity.lastActiveAt,
           checkInCount: enrichment.activity.checkInCount,

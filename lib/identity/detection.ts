@@ -66,8 +66,9 @@ export async function detectAgentIdentity(
     const nft = data.results[0];
     const tokenIdMatch = nft.value.repr.match(/^u(\d+)$/);
     if (!tokenIdMatch) {
+      // Parse/format failure does not prove the address has no identity NFT,
+      // so do not negative-cache this result.
       console.warn("Could not parse NFT token ID from repr:", nft.value.repr);
-      await setCachedIdentityNegative(stxAddress, kv);
       return null;
     }
     const agentId = Number(tokenIdMatch[1]);
@@ -143,8 +144,11 @@ async function detectAgentIdentityLegacy(
       return identity;
     }
     if (batchCount >= MAX_LEGACY_BATCHES) {
-      console.warn(`[identity] legacy scan cap hit (${MAX_LEGACY_BATCHES} batches) for ${stxAddress}, caching negative`);
-      await setCachedIdentityNegative(stxAddress, kv);
+      // Scan is intentionally incomplete — don't negative-cache since the identity
+      // may exist beyond the batches we checked.
+      console.warn(
+        `[identity] legacy scan cap hit (${MAX_LEGACY_BATCHES} batches) for ${stxAddress}, returning incomplete result without negative cache`
+      );
       return null;
     }
   }
