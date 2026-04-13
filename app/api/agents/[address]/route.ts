@@ -1,13 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord, ClaimStatus } from "@/lib/types";
-import { getAgentLevel } from "@/lib/levels";
+import type { AgentRecord } from "@/lib/types";
+import { getAchievementDefinition } from "@/lib/achievements";
 import { lookupBnsName } from "@/lib/bns";
-import { getAgentAchievements, getAchievementDefinition } from "@/lib/achievements";
-import { getCheckInRecord } from "@/lib/heartbeat";
-import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
-import { getAgentInbox, getSentIndex } from "@/lib/inbox/kv-helpers";
-import { getCAIP19AgentId } from "@/lib/caip19";
+import { enrichAgentProfile } from "@/lib/agent-enrichment";
 
 /**
  * Determine the address type and KV prefix from the format.
@@ -268,80 +264,19 @@ export async function GET(
       }).catch(() => {});
     }
 
-    // Look up claim, achievements, check-in, identity, inbox, and sent index in parallel
-    const [claimData, achievements, checkInRecord, identity, inboxIndex, sentIndex] = await Promise.all([
-      kv.get(`claim:${agent.btcAddress}`),
-      getAgentAchievements(kv, agent.btcAddress),
-      getCheckInRecord(kv, agent.btcAddress),
-      // Use cached identity if available, otherwise detect
-      // Note: use != null (not truthiness) because agent-id 0 is valid but falsy
-      agent.erc8004AgentId != null
-        ? Promise.resolve({ agentId: agent.erc8004AgentId, stxAddress: agent.stxAddress })
-        : detectAgentIdentity(agent.stxAddress, hiroApiKey, kv),
-      getAgentInbox(kv, agent.btcAddress),
-      getSentIndex(kv, agent.btcAddress),
-    ]);
+    const enrichment = await enrichAgentProfile(
+      agent,
+      kv,
+      hiroApiKey,
+      `agents/${agent.btcAddress}`
+    );
 
-    let claim: ClaimStatus | null = null;
-    if (claimData) {
-      try {
-        claim = JSON.parse(claimData) as ClaimStatus;
-      } catch (e) {
-        console.error(`Failed to parse claim for ${agent.btcAddress}:`, e);
-      }
-    }
-
-    // Fetch reputation summary if identity exists (non-critical, don't fail the whole response)
-    let reputation = null;
-    if (identity) {
-      try {
-        reputation = await getReputationSummary(identity.agentId, hiroApiKey, kv);
-      } catch (e) {
-        console.error(`Failed to fetch reputation for agent ${agent.btcAddress}:`, e);
-        // Reputation is optional metadata — continue without it
-      }
-    }
-
-    const levelInfo = getAgentLevel(agent, claim);
-    const checkIn = checkInRecord
+    const checkIn = enrichment.checkIn
       ? {
-          lastCheckInAt: checkInRecord.lastCheckInAt,
-          checkInCount: checkInRecord.checkInCount,
+          lastCheckInAt: enrichment.checkIn.lastCheckInAt,
+          checkInCount: enrichment.checkIn.checkInCount,
         }
       : null;
-
-    // Compute trust metrics
-    const trust = {
-      level: levelInfo.level,
-      levelName: levelInfo.levelName,
-      onChainIdentity: !!identity,
-      reputationScore: reputation?.summaryValue ?? null,
-      reputationCount: reputation?.count ?? 0,
-    };
-
-    // Compute activity metrics
-    const activity = {
-      lastActiveAt: agent.lastActiveAt ?? null,
-      checkInCount: (checkInRecord?.checkInCount ?? agent.checkInCount) ?? 0,
-      hasCheckedIn: !!checkInRecord,
-      hasInboxMessages: !!inboxIndex,
-      unreadInboxCount: inboxIndex?.unreadCount ?? 0,
-      sentCount: sentIndex?.messageIds.length ?? 0,
-    };
-
-    // Compute capabilities (derived from level and registration state)
-    const capabilities: string[] = [];
-    if (levelInfo.level >= 1) {
-      capabilities.push("heartbeat");
-    }
-    // Inbox/x402 capability based on having an STX address (not inbox history)
-    if (agent.stxAddress) {
-      capabilities.push("inbox");
-      capabilities.push("x402");
-    }
-    if (identity) {
-      capabilities.push("reputation");
-    }
 
     return NextResponse.json(
       {
@@ -361,11 +296,11 @@ export async function GET(
           btcPublicKey: agent.btcPublicKey,
           lastActiveAt: agent.lastActiveAt,
           checkInCount: agent.checkInCount,
-          erc8004AgentId: identity?.agentId ?? agent.erc8004AgentId ?? null,
-          caip19: getCAIP19AgentId(identity?.agentId ?? agent.erc8004AgentId ?? null),
+          erc8004AgentId: enrichment.resolvedAgentId,
+          caip19: enrichment.caip19,
         },
-        ...levelInfo,
-        achievements: achievements.map((record) => {
+        ...enrichment.levelInfo,
+        achievements: enrichment.achievements.map((record) => {
           const def = getAchievementDefinition(record.achievementId);
           return {
             id: record.achievementId,
@@ -377,9 +312,9 @@ export async function GET(
           };
         }),
         checkIn,
-        trust,
-        activity,
-        capabilities,
+        trust: enrichment.trust,
+        activity: enrichment.activity,
+        capabilities: enrichment.capabilities,
       },
       {
         headers: {
