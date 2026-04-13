@@ -1,7 +1,7 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "landing-page",
-  "main": ".open-next/worker.js",
+  "main": "worker.ts",
   "compatibility_date": "2026-01-08",
   "compatibility_flags": ["nodejs_compat"],
   "workers_dev": true,
@@ -33,5 +33,20 @@
       "service": "x402-sponsor-relay-production",
       "entrypoint": "RelayRPC"
     }
-  ]
+  ],
+  "queues": {
+    "producers": [
+      {
+        "binding": "INBOX_RECONCILIATION_QUEUE",
+        "queue": "landing-page-inbox-reconciliation"
+      }
+    ],
+    "consumers": [
+      {
+        "queue": "landing-page-inbox-reconciliation",
+        "max_batch_size": 1,
+        "max_retries": 5
+      }
+    ]
+  }
 }

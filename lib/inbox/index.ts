@@ -110,3 +110,14 @@ export {
   listSentMessages,
   decrementUnreadCount,
 } from "./kv-helpers";
+
+export type { InboxReconciliationQueueMessage } from "./reconciliation-queue";
+export {
+  INBOX_RECONCILIATION_QUEUE_ROUTE,
+  enqueueInboxReconciliation,
+  processInboxReconciliationQueue,
+} from "./reconciliation-queue";
+export {
+  getPaymentStatusHttpCode,
+  reconcileStagedInboxPayment,
+} from "./reconcile-staged-payment";

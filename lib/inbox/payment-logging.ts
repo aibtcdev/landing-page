@@ -5,6 +5,7 @@ export type PaymentEventName =
   | "payment.required"
   | "payment.accepted"
   | "payment.poll"
+  | "payment.queue"
   | "payment.delivery_staged"
   | "payment.delivery_confirmed"
   | "payment.delivery_discarded"

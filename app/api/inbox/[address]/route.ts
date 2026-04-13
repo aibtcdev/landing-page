@@ -21,6 +21,7 @@ import {
   buildSenderAuthMessage,
   DEFAULT_RELAY_URL,
   checkSenderRateLimit,
+  enqueueInboxReconciliation,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { hasAchievement, grantAchievement } from "@/lib/achievements";
@@ -1416,6 +1417,23 @@ export async function POST(
         message,
       });
 
+      await enqueueInboxReconciliation(
+        env.INBOX_RECONCILIATION_QUEUE,
+        {
+          paymentId: paymentResult.paymentId,
+          stagedAt: now,
+          attempt: 0,
+          source: "inbox_post",
+        },
+        logger,
+        repoVersion,
+        request.nextUrl.pathname,
+        {
+          messageId,
+          workerStage: "http_inbox_post",
+        }
+      );
+
       responseHeaders["X-Payment-Status"] = "pending";
       responseHeaders["X-Payment-Id"] = paymentResult.paymentId;
       responseHeaders["X-Payment-Check-Url"] = checkStatusUrl;
@@ -1431,6 +1449,8 @@ export async function POST(
           fromAddress,
           toBtcAddress,
           senderBtcAddress: senderAgent?.btcAddress ?? null,
+          worker_stage: "http_inbox_post",
+          trigger: "inbox_post",
         },
       });
 
