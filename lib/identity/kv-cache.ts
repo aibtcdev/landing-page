@@ -13,6 +13,7 @@ import type { AgentIdentity } from "./types";
 const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours
 const BNS_NEGATIVE_CACHE_TTL = 60 * 60; // 1 hour for addresses with no BNS name
 const IDENTITY_CACHE_TTL = 6 * 60 * 60; // 6 hours
+const IDENTITY_NEGATIVE_CACHE_TTL = 5 * 60; // 5 minutes for addresses with no identity
 const REPUTATION_CACHE_TTL = 5 * 60; // 5 minutes
 const TX_CACHE_TTL = 5 * 60; // 5 minutes
 
@@ -60,6 +61,9 @@ export function setCachedBnsName(
   return kvPut(kv, `cache:bns:${address}`, name, BNS_CACHE_TTL);
 }
 
+/** Result from a cache lookup: distinguishes miss ({hit:false}) from cached null ({hit:true,value:null}). */
+export type CacheResult<T> = { hit: true; value: T | null } | { hit: false };
+
 /** Sentinel value for negative BNS cache (address has no name). */
 export const BNS_NONE_SENTINEL = "__NONE__";
 
@@ -70,17 +74,21 @@ export function setCachedBnsNegative(
   return kvPut(kv, `cache:bns:${address}`, BNS_NONE_SENTINEL, BNS_NEGATIVE_CACHE_TTL);
 }
 
+/** Sentinel value for negative identity cache (address has no on-chain identity). */
+export const IDENTITY_NONE_SENTINEL = "__NONE__";
+
 export async function getCachedIdentity(
   address: string,
   kv?: KVNamespace
-): Promise<AgentIdentity | null> {
+): Promise<CacheResult<AgentIdentity>> {
   const raw = await kvGet(kv, `cache:identity:${address}`);
-  if (!raw) return null;
+  if (raw === null) return { hit: false };
+  if (raw === IDENTITY_NONE_SENTINEL) return { hit: true, value: null };
   try {
-    return JSON.parse(raw) as AgentIdentity;
+    return { hit: true, value: JSON.parse(raw) as AgentIdentity };
   } catch (e) {
     console.error(`Failed to parse cached identity for ${address}:`, e);
-    return null;
+    return { hit: false };
   }
 }
 
@@ -92,8 +100,12 @@ export function setCachedIdentity(
   return kvPut(kv, `cache:identity:${address}`, JSON.stringify(identity), IDENTITY_CACHE_TTL);
 }
 
-/** Result from reputation cache: distinguishes miss from cached null. */
-export type CacheResult<T> = { hit: true; value: T | null } | { hit: false };
+export function setCachedIdentityNegative(
+  address: string,
+  kv?: KVNamespace
+): Promise<void> {
+  return kvPut(kv, `cache:identity:${address}`, IDENTITY_NONE_SENTINEL, IDENTITY_NEGATIVE_CACHE_TTL);
+}
 
 export async function getCachedReputation<T>(
   key: string,
