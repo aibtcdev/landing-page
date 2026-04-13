@@ -42,6 +42,61 @@ export function detect429(response: Response): {
   return { isRateLimited };
 }
 
+/** Rate limit warning threshold — warn when remaining drops below this value. */
+const RATE_LIMIT_WARN_THRESHOLD = 50;
+
+/** Parsed Hiro API rate limit headers from a response. */
+export interface RateLimitInfo {
+  /** Remaining requests in the current window (ratelimit-remaining). */
+  remaining: number | null;
+  /** Total request budget for the current window (ratelimit-limit). */
+  limit: number | null;
+  /** Seconds until the current window resets (ratelimit-reset). */
+  reset: number | null;
+  /** Remaining per-minute request budget (x-ratelimit-remaining-stacks-minute). */
+  remainingMinute: number | null;
+  /** API cost units consumed by this request (x-ratelimit-cost-stacks). */
+  costStacks: number | null;
+}
+
+/**
+ * Extract Hiro API rate limit headers from a response.
+ *
+ * Reads ratelimit-remaining, ratelimit-limit, ratelimit-reset,
+ * x-ratelimit-remaining-stacks-minute, and x-ratelimit-cost-stacks.
+ *
+ * Emits a warn-level log when the remaining budget drops below
+ * RATE_LIMIT_WARN_THRESHOLD (50) to alert operators before key exhaustion.
+ *
+ * @param response - The Response object from a Hiro API fetch
+ * @returns Parsed rate limit fields (null for any header that is absent or unparseable)
+ */
+export function extractRateLimitInfo(response: Response): RateLimitInfo {
+  const tag = "[stacksApiFetch]";
+
+  function parseIntHeader(name: string): number | null {
+    const val = response.headers.get(name);
+    if (!val) return null;
+    const n = parseInt(val, 10);
+    return isNaN(n) ? null : n;
+  }
+
+  const remaining = parseIntHeader("ratelimit-remaining");
+  const limit = parseIntHeader("ratelimit-limit");
+  const reset = parseIntHeader("ratelimit-reset");
+  const remainingMinute = parseIntHeader("x-ratelimit-remaining-stacks-minute");
+  const costStacks = parseIntHeader("x-ratelimit-cost-stacks");
+
+  if (remaining !== null && remaining < RATE_LIMIT_WARN_THRESHOLD) {
+    console.warn(
+      `${tag} Hiro API key approaching rate limit: ${remaining}/${limit ?? "?"} remaining` +
+        (reset !== null ? ` (resets in ${reset}s)` : "")
+    );
+  }
+
+  return { remaining, limit, reset, remainingMinute, costStacks };
+}
+
 /** Per-attempt fetch timeout in milliseconds. */
 const PER_ATTEMPT_TIMEOUT_MS = 8_000;
 
@@ -130,18 +185,27 @@ export async function stacksApiFetch(
     try {
       const response = await fetch(url, attemptOptions);
 
+      // Extract rate limit info on every response for observability (warns when low)
+      const rl = extractRateLimitInfo(response);
+
       if (!isRetryableStatus(response.status)) {
         return response;
       }
 
       const is429 = response.status === 429;
 
+      // Build a compact rate limit suffix for retry log messages
+      const rlSuffix =
+        rl.remaining !== null
+          ? ` [rl: ${rl.remaining}/${rl.limit ?? "?"} remaining]`
+          : "";
+
       if (is429) {
         attempts429++;
         if (attempts429 >= retries429) {
           // Exhausted 429 retry budget — return final response to caller
           console.warn(
-            `${tag} 429 retry budget exhausted (${retries429} attempts) for ${url}`
+            `${tag} 429 retry budget exhausted (${retries429} attempts) for ${url}${rlSuffix}`
           );
           return response;
         }
@@ -152,7 +216,7 @@ export async function stacksApiFetch(
           RATE_LIMIT_BASE_DELAY_MS * Math.pow(2, attempts429 - 1);
         const delayMs = Math.min(retryAfterMs, MAX_RETRY_AFTER_MS);
         console.warn(
-          `${tag} 429 on ${url}, attempt ${attempts429}/${retries429}, retrying in ${delayMs}ms`
+          `${tag} 429 on ${url}, attempt ${attempts429}/${retries429}, retrying in ${delayMs}ms${rlSuffix}`
         );
         await sleep(delayMs);
       } else {
@@ -160,14 +224,14 @@ export async function stacksApiFetch(
         attempts5xx++;
         if (attempts5xx >= retries) {
           console.warn(
-            `${tag} 5xx retry budget exhausted (${retries} attempts) for ${url} (status: ${response.status})`
+            `${tag} 5xx retry budget exhausted (${retries} attempts) for ${url} (status: ${response.status})${rlSuffix}`
           );
           return response;
         }
 
         const delayMs = baseDelayMs * Math.pow(2, attempts5xx - 1);
         console.warn(
-          `${tag} ${response.status} on ${url}, attempt ${attempts5xx}/${retries}, retrying in ${delayMs}ms`
+          `${tag} ${response.status} on ${url}, attempt ${attempts5xx}/${retries}, retrying in ${delayMs}ms${rlSuffix}`
         );
         await sleep(delayMs);
       }
