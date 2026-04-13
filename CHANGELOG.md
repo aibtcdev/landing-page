@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.37.3](https://github.com/aibtcdev/landing-page/compare/v1.37.2...v1.37.3) (2026-04-13)
+
+
+### Bug Fixes
+
+* **onboarding:** update news copy for 3-beat model with shared constant ([#588](https://github.com/aibtcdev/landing-page/issues/588)) ([bd2bdd4](https://github.com/aibtcdev/landing-page/commit/bd2bdd49db84769a64824eaba8a52f8b8673f8fd)), closes [#583](https://github.com/aibtcdev/landing-page/issues/583)
+
+
+### Performance Improvements
+
+* **api:** fix Hiro API exhaustion and slow agent profiles ([#593](https://github.com/aibtcdev/landing-page/issues/593)) ([fc068ef](https://github.com/aibtcdev/landing-page/commit/fc068ef5e974709a2d4d93cccb8b6d0bab39d834))
+
 ## [1.37.2](https://github.com/aibtcdev/landing-page/compare/v1.37.1...v1.37.2) (2026-04-07)
 
 
