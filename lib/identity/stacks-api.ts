@@ -44,14 +44,22 @@ export async function callReadOnly(
   const headers = buildHiroHeaders(hiroApiKey);
   headers["Content-Type"] = "application/json";
 
-  const response = await stacksApiFetch(url, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      sender: contractAddress,
-      arguments: hexArgs,
-    }),
-  });
+  // Reduced retry budget for synchronous profile lookups: worst-case ~20s
+  // instead of default ~71s. retries=2 (5xx), baseDelayMs=500, retries429=2.
+  const response = await stacksApiFetch(
+    url,
+    {
+      method: "POST",
+      headers,
+      body: JSON.stringify({
+        sender: contractAddress,
+        arguments: hexArgs,
+      }),
+    },
+    2,
+    500,
+    2
+  );
 
   // Log cf-ray for observability if the final response is still a 429 after retries
   detect429(response);

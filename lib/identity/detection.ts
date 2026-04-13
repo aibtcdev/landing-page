@@ -7,7 +7,7 @@ import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "./constants";
 import { callReadOnly, parseClarityValue, buildHiroHeaders } from "./stacks-api";
 import { stacksApiFetch } from "../stacks-api-fetch";
 import type { AgentIdentity } from "./types";
-import { getCachedIdentity, setCachedIdentity } from "./kv-cache";
+import { getCachedIdentity, setCachedIdentity, setCachedIdentityNegative } from "./kv-cache";
 
 /**
  * Detect if an agent has registered an on-chain identity.
@@ -24,9 +24,9 @@ export async function detectAgentIdentity(
   hiroApiKey?: string,
   kv?: KVNamespace
 ): Promise<AgentIdentity | null> {
-  // Check KV cache first
+  // Check KV cache first (distinguishes miss from cached negative result)
   const cached = await getCachedIdentity(stxAddress, kv);
-  if (cached) return cached;
+  if (cached.hit) return cached.value;
 
   try {
     // Query NFT holdings for this address filtered to the identity registry contract.
@@ -36,7 +36,10 @@ export async function detectAgentIdentity(
     const holdingsUrl = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
     const headers = buildHiroHeaders(hiroApiKey);
-    const response = await stacksApiFetch(holdingsUrl, { headers });
+    // Reduced retry budget for synchronous profile lookups: worst-case ~13s
+    // instead of default ~71s. Primary NFT holdings call gets retries429=1 (1s max
+    // 429 delay) and retries=2 (1.5s max 5xx delay).
+    const response = await stacksApiFetch(holdingsUrl, { headers }, 2, 500, 1);
 
     if (!response.ok) {
       // Fallback to legacy scan if holdings API fails (e.g. 404, 500)
@@ -54,7 +57,8 @@ export async function detectAgentIdentity(
     };
 
     if (!data.results || data.results.length === 0) {
-      // No identity NFT found for this address
+      // No identity NFT found for this address — cache negative to skip future Hiro API calls
+      await setCachedIdentityNegative(stxAddress, kv);
       return null;
     }
 
@@ -62,6 +66,8 @@ export async function detectAgentIdentity(
     const nft = data.results[0];
     const tokenIdMatch = nft.value.repr.match(/^u(\d+)$/);
     if (!tokenIdMatch) {
+      // Parse/format failure does not prove the address has no identity NFT,
+      // so do not negative-cache this result.
       console.warn("Could not parse NFT token ID from repr:", nft.value.repr);
       return null;
     }
@@ -93,12 +99,17 @@ export async function detectAgentIdentity(
 
 /**
  * Legacy O(N) scan — used only as fallback if the holdings API is unavailable.
+ * Capped at MAX_LEGACY_BATCHES to prevent unbounded Hiro API consumption.
  */
 async function detectAgentIdentityLegacy(
   stxAddress: string,
   hiroApiKey?: string,
   kv?: KVNamespace
 ): Promise<AgentIdentity | null> {
+  console.warn(`[identity] falling back to legacy O(N) scan for ${stxAddress}`);
+
+  const MAX_LEGACY_BATCHES = 3;
+
   const lastIdResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-last-token-id", [], hiroApiKey);
   const lastIdRaw = parseClarityValue(lastIdResult);
   const lastId = lastIdRaw !== null ? Number(lastIdRaw) : null;
@@ -106,7 +117,9 @@ async function detectAgentIdentityLegacy(
   if (lastId === null || lastId < 0) return null;
 
   const BATCH_SIZE = 5;
+  let batchCount = 0;
   for (let i = lastId; i >= 0; i -= BATCH_SIZE) {
+    batchCount++;
     const batchStart = Math.max(0, i - BATCH_SIZE + 1);
     const batch = Array.from(
       { length: i - batchStart + 1 },
@@ -130,8 +143,18 @@ async function detectAgentIdentityLegacy(
       await setCachedIdentity(stxAddress, identity, kv);
       return identity;
     }
+    if (batchCount >= MAX_LEGACY_BATCHES) {
+      // Scan is intentionally incomplete — don't negative-cache since the identity
+      // may exist beyond the batches we checked.
+      console.warn(
+        `[identity] legacy scan cap hit (${MAX_LEGACY_BATCHES} batches) for ${stxAddress}, returning incomplete result without negative cache`
+      );
+      return null;
+    }
   }
 
+  // Exhausted all NFTs without finding a match — cache negative result
+  await setCachedIdentityNegative(stxAddress, kv);
   return null;
 }
 
