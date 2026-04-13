@@ -392,21 +392,68 @@ export async function GET(
     // Enrich agent data (parallel fetches — same pattern as /api/agents/[address])
     // -----------------------------------------------------------------------
 
-    const [claimData, achievements, checkInRecord, identity, inboxIndex] =
-      await Promise.all([
+    // Enrichment timeout: if Hiro API hangs, return agent record with null enrichment fields
+    const ENRICHMENT_TIMEOUT_MS = 10_000;
+    const enrichmentTimeout = new Promise<null>((resolve) =>
+      setTimeout(() => {
+        console.warn(
+          `[resolve/${agent.btcAddress}] Enrichment timed out after ${ENRICHMENT_TIMEOUT_MS}ms — returning partial response`
+        );
+        resolve(null);
+      }, ENRICHMENT_TIMEOUT_MS)
+    );
+
+    // Look up claim, achievements, check-in, identity+reputation, and inbox in parallel.
+    // Identity and reputation are combined into a single slot so reputation starts immediately
+    // after identity resolves, without blocking the other parallel fetches.
+    const enrichmentResult = await Promise.race([
+      Promise.all([
         kv.get(`claim:${agent.btcAddress}`),
         getAgentAchievements(kv, agent.btcAddress),
         getCheckInRecord(kv, agent.btcAddress),
-        // Use cached identity if available; erc8004AgentId 0 is valid (falsy but != null)
-        agent.erc8004AgentId != null
-          ? Promise.resolve({
-              agentId: agent.erc8004AgentId,
-              owner: agent.stxAddress,
-              uri: "",
-            })
-          : detectAgentIdentity(agent.stxAddress, hiroApiKey, kv),
+        // Combined identity + reputation slot
+        (async () => {
+          // Use cached identity if available; agent-id 0 is valid (falsy) so use != null
+          const identityResult =
+            agent.erc8004AgentId != null
+              ? {
+                  agentId: agent.erc8004AgentId,
+                  owner: agent.stxAddress,
+                  uri: "",
+                }
+              : await detectAgentIdentity(agent.stxAddress, hiroApiKey, kv);
+          if (!identityResult) return { identity: null, reputation: null };
+          let rep = null;
+          try {
+            rep = await getReputationSummary(
+              identityResult.agentId,
+              hiroApiKey,
+              kv
+            );
+          } catch (e) {
+            console.error(
+              `Failed to fetch reputation for agent ${agent.btcAddress}:`,
+              e
+            );
+          }
+          return { identity: identityResult, reputation: rep };
+        })(),
         getAgentInbox(kv, agent.btcAddress),
-      ]);
+      ]),
+      enrichmentTimeout,
+    ]);
+
+    // Destructure enrichment result; fall back to empty values on timeout
+    const [
+      claimData,
+      achievements,
+      checkInRecord,
+      identityAndReputation,
+      inboxIndex,
+    ] = enrichmentResult ?? [null, [], null, { identity: null, reputation: null }, null];
+
+    const identity = identityAndReputation?.identity ?? null;
+    const reputation = identityAndReputation?.reputation ?? null;
 
     let claim: ClaimStatus | null = null;
     if (claimData) {
@@ -414,21 +461,6 @@ export async function GET(
         claim = JSON.parse(claimData) as ClaimStatus;
       } catch (e) {
         console.error(`Failed to parse claim for ${agent.btcAddress}:`, e);
-      }
-    }
-
-    // Fetch reputation if on-chain identity exists (non-critical)
-    let reputation = null;
-    if (identity) {
-      try {
-        reputation = await getReputationSummary(
-          identity.agentId,
-          hiroApiKey,
-          kv
-        );
-      } catch (e) {
-        console.error(`Failed to fetch reputation for agent ${agent.btcAddress}:`, e);
-        // Reputation is optional — continue without it
       }
     }
 
