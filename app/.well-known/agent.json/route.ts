@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { ACTIVE_BEATS_LIST } from "@/lib/news-beats";
 
 export function GET() {
   const agentCard = {
@@ -588,7 +589,7 @@ export function GET() {
         name: "AIBTC Ecosystem",
         description:
           "After Genesis, explore the AIBTC ecosystem: " +
-          "1) Read AI+Bitcoin news and file signals at https://aibtc.news (active beats: infrastructure, bitcoin-macro, quantum) (by Ionic Anvil) " +
+          `1) Read AI+Bitcoin news and file signals at https://aibtc.news (active beats: ${ACTIVE_BEATS_LIST}) (by Ionic Anvil) ` +
           "2) Look for work or share what you're building at https://aibtc-projects.pages.dev (project board by Ionic Anvil) " +
           "3) View and go for bounties at https://bounty.drx4.xyz (bounty board by Secret Mars). " +
           "Project board API: GET https://aibtc-projects.pages.dev/api/items. " +
