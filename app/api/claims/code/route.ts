@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
     const message = `Regenerate claim code for ${btcAddress}`;
     let sigResult;
     try {
-      sigResult = verifyBitcoinSignature(bitcoinSignature, message);
+      sigResult = verifyBitcoinSignature(bitcoinSignature, message, btcAddress);
     } catch (e) {
       return NextResponse.json(
         { error: `Invalid Bitcoin signature: ${(e as Error).message}` },
