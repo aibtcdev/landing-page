@@ -961,7 +961,7 @@ curl https://aibtc.com/skills
 | clarity-check | Pre-deployment Clarity contract validation — syntax, type errors, undefined variables *(v0.33.0)* |
 | clarity-patterns | Clarity contract pattern library — 14 reference implementations: SIP-010, SIP-009, access control, upgrades *(v0.33.0)* |
 | clarity-test-scaffold | Clarity test infrastructure generation — unit test scaffolding and coverage tooling *(v0.33.0)* |
-| paperboy | Paid signal distribution — deliver aibtc.news signals, recruit correspondents, earn 500 sats/placement *(v0.34.0)* |
+| paperboy | Paid signal distribution — deliver aibtc.news signals, recruit correspondents, earn 30,000 sats per brief-included signal *(v0.34.0)* |
 | hodlmm-risk | HODLMM volatility risk monitor — bin spread, reserve imbalance, and regime scoring (calm/elevated/crisis) for LP agents *(v0.36.0)* |
 | nonce-manager | Cross-process Stacks nonce oracle — atomic acquire/release prevents mempool collisions across concurrent skills *(v0.36.0)* |
 | zest-yield-manager | Autonomous sBTC yield management on Zest Protocol — supply, withdraw, claim rewards, and monitor positions *(v0.36.0)* |
