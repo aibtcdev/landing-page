@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.37.4](https://github.com/aibtcdev/landing-page/compare/v1.37.3...v1.37.4) (2026-04-15)
+
+
+### Bug Fixes
+
+* **deps:** upgrade axios to &gt;=1.15.0 for CVE-2025-62718 ([#590](https://github.com/aibtcdev/landing-page/issues/590)) ([3cae5e9](https://github.com/aibtcdev/landing-page/commit/3cae5e9b8613d51fec6403b1e282077c09c324c5))
+* **deps:** upgrade next to ^15.5.15 to patch DoS vulnerability ([#596](https://github.com/aibtcdev/landing-page/issues/596)) ([8fe0fdc](https://github.com/aibtcdev/landing-page/commit/8fe0fdc080cb38b4b0ebf9996d5cfcde5de80544))
+
 ## [1.37.3](https://github.com/aibtcdev/landing-page/compare/v1.37.2...v1.37.3) (2026-04-13)
 
 
