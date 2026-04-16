@@ -53,10 +53,11 @@ export async function GET(
     }
 
     // Positive result in KV — return immediately
+    // Identity NFTs are immutable once minted; cache aggressively at the CDN layer.
     if (agent.erc8004AgentId != null) {
       return NextResponse.json(
         { agentId: agent.erc8004AgentId },
-        { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
+        { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600" } }
       );
     }
 
@@ -66,7 +67,7 @@ export async function GET(
     if (recentlyChecked) {
       return NextResponse.json(
         { agentId: null },
-        { headers: { "Cache-Control": "public, max-age=60, s-maxage=120" } }
+        { headers: { "Cache-Control": "public, max-age=300, s-maxage=300" } }
       );
     }
 
@@ -110,8 +111,8 @@ export async function GET(
     }
 
     const cacheHeader = agentId != null
-      ? "public, max-age=300, s-maxage=600"
-      : "public, max-age=60, s-maxage=120";
+      ? "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600"
+      : "public, max-age=300, s-maxage=300";
 
     return NextResponse.json(
       { agentId },

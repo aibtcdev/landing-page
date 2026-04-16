@@ -8,8 +8,6 @@ interface IdentityBadgeProps {
   stxAddress: string;
 }
 
-const CONTRACT = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
-
 export default function IdentityBadge({
   agentId: initialAgentId,
   stxAddress,
@@ -20,15 +18,13 @@ export default function IdentityBadge({
   useEffect(() => {
     if (initialAgentId !== undefined) return;
 
-    const assetId = `${CONTRACT}::agent-identity`;
-    const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
-
-    fetch(url)
-      .then((r) => r.json())
-      .then((data: any) => {
-        const repr = data.results?.[0]?.value?.repr;
-        const match = repr?.match(/^u(\d+)$/);
-        if (match) setAgentId(Number(match[1]));
+    fetch(`/api/identity/${encodeURIComponent(stxAddress)}`)
+      .then((r) => {
+        if (!r.ok) return null;
+        return r.json() as Promise<{ agentId: number | null }>;
+      })
+      .then((data) => {
+        if (data?.agentId != null) setAgentId(data.agentId);
       })
       .catch(() => {})
       .finally(() => setLoading(false));
