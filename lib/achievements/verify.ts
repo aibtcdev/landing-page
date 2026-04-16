@@ -8,6 +8,8 @@
 import {
   getCachedTransaction,
   setCachedTransaction,
+  getCachedStacking,
+  setCachedStacking,
 } from "@/lib/identity/kv-cache";
 import {
   buildHiroHeaders,
@@ -187,8 +189,7 @@ export async function verifyStackerAchievement(
   hiroApiKey?: string
 ): Promise<boolean> {
   try {
-    const cacheKey = `stacking:${stxAddress}`;
-    let stackingData = await getCachedTransaction(cacheKey, kv);
+    let stackingData = await getCachedStacking(stxAddress, kv);
 
     if (!stackingData) {
       const stackingUrl = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/stacking`;
@@ -209,7 +210,7 @@ export async function verifyStackerAchievement(
       }
 
       stackingData = (await stackingResp.json()) as { locked: string };
-      await setCachedTransaction(cacheKey, stackingData, kv);
+      await setCachedStacking(stxAddress, stackingData, kv);
     }
 
     const locked = (stackingData as { locked: string }).locked ?? "0";
