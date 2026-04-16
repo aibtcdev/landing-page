@@ -14,6 +14,8 @@ import {
   callReadOnly,
   parseClarityValue,
 } from "@/lib/identity/stacks-api";
+import { stacksApiFetch } from "@/lib/stacks-api-fetch";
+import { STACKS_API_BASE } from "@/lib/identity/constants";
 import { standardPrincipalCV } from "@stacks/transactions";
 
 /** Rate limit window for achievement verification (5 minutes) */
@@ -189,10 +191,9 @@ export async function verifyStackerAchievement(
     let stackingData = await getCachedTransaction(cacheKey, kv);
 
     if (!stackingData) {
-      const stackingUrl = `https://api.hiro.so/extended/v1/address/${stxAddress}/stacking`;
-      const stackingResp = await fetch(stackingUrl, {
+      const stackingUrl = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/stacking`;
+      const stackingResp = await stacksApiFetch(stackingUrl, {
         headers: buildHiroHeaders(hiroApiKey),
-        signal: AbortSignal.timeout(10000),
       });
 
       if (stackingResp.status === 404) {
@@ -262,10 +263,9 @@ export async function verifyConnectorAchievement(
     let txs = await getCachedTransaction(cacheKey, kv);
 
     if (!txs) {
-      const txsUrl = `https://api.hiro.so/extended/v1/address/${stxAddress}/transactions?limit=50`;
-      const resp = await fetch(txsUrl, {
+      const txsUrl = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/transactions?limit=50`;
+      const resp = await stacksApiFetch(txsUrl, {
         headers: buildHiroHeaders(hiroApiKey),
-        signal: AbortSignal.timeout(10000),
       });
 
       if (!resp.ok) {
