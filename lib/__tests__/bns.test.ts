@@ -5,6 +5,11 @@ import { lookupBnsName } from "../bns";
 const mockFetch = vi.fn();
 global.fetch = mockFetch as any;
 
+/** Minimal headers mock that satisfies stacksApiFetch's extractRateLimitInfo. */
+function mockHeaders(): Headers {
+  return { get: () => null } as unknown as Headers;
+}
+
 /**
  * Build a mock Hiro API response for BNS-V2 get-primary.
  * Constructs the actual Clarity hex that @stacks/transactions can deserialize.
@@ -32,6 +37,8 @@ function mockV2Response(name: string, namespace: string) {
 
   return {
     ok: true,
+    status: 200,
+    headers: mockHeaders(),
     json: async () => ({ okay: true, result }),
   };
 }
@@ -40,6 +47,8 @@ function mockV2None() {
   // (ok none) = 0x07 09
   return {
     ok: true,
+    status: 200,
+    headers: mockHeaders(),
     json: async () => ({ okay: true, result: "0x0709" }),
   };
 }
@@ -69,7 +78,7 @@ describe("lookupBnsName", () => {
       await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
 
       expect(mockFetch).toHaveBeenCalledWith(
-        "https://api.hiro.so/v2/contracts/call-read/SP2QEZ06AGJ3RKJPBV14SY1V5BBFNAW33D96YPGZF/BNS-V2/get-primary",
+        "https://api.mainnet.hiro.so/v2/contracts/call-read/SP2QEZ06AGJ3RKJPBV14SY1V5BBFNAW33D96YPGZF/BNS-V2/get-primary",
         expect.objectContaining({
           method: "POST",
           headers: { "Content-Type": "application/json" },
@@ -99,7 +108,7 @@ describe("lookupBnsName", () => {
     });
 
     it("returns null when API response is not ok", async () => {
-      mockFetch.mockResolvedValue({ ok: false, status: 404 });
+      mockFetch.mockResolvedValue({ ok: false, status: 404, headers: mockHeaders() });
 
       const result = await lookupBnsName(
         "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
@@ -108,7 +117,8 @@ describe("lookupBnsName", () => {
     });
 
     it("returns null when API response is 500", async () => {
-      mockFetch.mockResolvedValue({ ok: false, status: 500 });
+      // 500 is retried by stacksApiFetch (up to 3 attempts) — all return 500 here
+      mockFetch.mockResolvedValue({ ok: false, status: 500, headers: mockHeaders() });
 
       const result = await lookupBnsName(
         "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
@@ -119,6 +129,8 @@ describe("lookupBnsName", () => {
     it("returns null when okay is false", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
+        status: 200,
+        headers: mockHeaders(),
         json: async () => ({ okay: false, result: "some error" }),
       });
 
@@ -151,6 +163,8 @@ describe("lookupBnsName", () => {
     it("does not throw on JSON parse failure", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
+        status: 200,
+        headers: mockHeaders(),
         json: async () => {
           throw new Error("Invalid JSON");
         },
@@ -164,6 +178,8 @@ describe("lookupBnsName", () => {
     it("does not throw on invalid Clarity value", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
+        status: 200,
+        headers: mockHeaders(),
         json: async () => ({ okay: true, result: "0xdeadbeef" }),
       });
 
