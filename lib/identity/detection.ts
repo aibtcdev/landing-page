@@ -108,7 +108,10 @@ async function detectAgentIdentityLegacy(
 ): Promise<AgentIdentity | null> {
   console.warn(`[identity] falling back to legacy O(N) scan for ${stxAddress}`);
 
-  const MAX_LEGACY_BATCHES = 3;
+  // Cap at 1 batch (5 get-owner calls) to bound worst-case Hiro API consumption.
+  // If the target agent's identity NFT was minted outside the most recent 5 IDs,
+  // we return null without caching so the next request will try again.
+  const MAX_LEGACY_BATCHES = 1;
 
   const lastIdResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-last-token-id", [], hiroApiKey);
   const lastIdRaw = parseClarityValue(lastIdResult);
@@ -147,7 +150,7 @@ async function detectAgentIdentityLegacy(
       // Scan is intentionally incomplete — don't negative-cache since the identity
       // may exist beyond the batches we checked.
       console.warn(
-        `[identity] legacy scan cap hit (${MAX_LEGACY_BATCHES} batches) for ${stxAddress}, returning incomplete result without negative cache`
+        `[identity] legacy scan cap hit (${MAX_LEGACY_BATCHES} batch × ${BATCH_SIZE} IDs) for ${stxAddress}, returning null without negative cache`
       );
       return null;
     }
