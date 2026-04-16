@@ -2,9 +2,12 @@
  * KV-backed caching for stable data (BNS names, agent identities, reputation)
  *
  * Provides persistent caching across worker instances with appropriate TTLs:
- * - BNS names: 24 hours (very stable, rarely change)
- * - Agent identities: 6 hours (semi-stable, can change if re-registered)
- * - Reputation data: 5 minutes (changes with new feedback)
+ * - BNS names: 24 hours positive / 1 hour negative (very stable, rarely change)
+ * - Agent identities: 24 hours (immutable once minted on-chain)
+ * - Identity negative cache: 5 minutes (re-check frequently for newly registered agents)
+ * - Stacking status: 4 hours (changes only at PoX cycle boundaries ~2 weeks)
+ * - Reputation data: 1 hour (changes slowly with new feedback)
+ * - Address transactions: 30 minutes (grows over time but not hot path)
  */
 
 import type { AgentIdentity } from "./types";
@@ -12,10 +15,11 @@ import type { AgentIdentity } from "./types";
 // Cache TTLs in seconds
 const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours
 const BNS_NEGATIVE_CACHE_TTL = 60 * 60; // 1 hour for addresses with no BNS name
-const IDENTITY_CACHE_TTL = 6 * 60 * 60; // 6 hours
+const IDENTITY_CACHE_TTL = 24 * 60 * 60; // 24 hours (immutable NFT — raised from 6h)
 const IDENTITY_NEGATIVE_CACHE_TTL = 5 * 60; // 5 minutes for addresses with no identity
-const REPUTATION_CACHE_TTL = 5 * 60; // 5 minutes
-const TX_CACHE_TTL = 5 * 60; // 5 minutes
+const STACKING_CACHE_TTL = 4 * 60 * 60; // 4 hours (PoX cycle is ~2 weeks)
+const REPUTATION_CACHE_TTL = 60 * 60; // 1 hour (raised from 5 minutes)
+const TX_CACHE_TTL = 30 * 60; // 30 minutes (raised from 5 minutes)
 
 /** Safely read a string value from KV, returning null on miss or error. */
 async function kvGet(
@@ -83,9 +87,16 @@ export async function getCachedIdentity(
   kv?: KVNamespace
 ): Promise<CacheResult<AgentIdentity>> {
   const raw = await kvGet(kv, `cache:identity:${address}`);
-  if (raw === null) return { hit: false };
-  if (raw === NONE_SENTINEL) return { hit: true, value: null };
+  if (raw === null) {
+    console.log(JSON.stringify({ event: "cache_miss", keyFamily: "identity", key: address }));
+    return { hit: false };
+  }
+  if (raw === NONE_SENTINEL) {
+    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "identity", key: address, negative: true }));
+    return { hit: true, value: null };
+  }
   try {
+    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "identity", key: address }));
     return { hit: true, value: JSON.parse(raw) as AgentIdentity };
   } catch (e) {
     console.error(`Failed to parse cached identity for ${address}:`, e);
@@ -113,8 +124,12 @@ export async function getCachedReputation<T>(
   kv?: KVNamespace
 ): Promise<CacheResult<T>> {
   const raw = await kvGet(kv, `cache:reputation:${key}`);
-  if (raw === null) return { hit: false };
+  if (raw === null) {
+    console.log(JSON.stringify({ event: "cache_miss", keyFamily: "reputation", key }));
+    return { hit: false };
+  }
   try {
+    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "reputation", key }));
     return { hit: true, value: JSON.parse(raw) as T | null };
   } catch (e) {
     console.error(`Failed to parse cached reputation for key ${key}:`, e);
@@ -135,8 +150,12 @@ export async function getCachedTransaction(
   kv?: KVNamespace
 ): Promise<any | null> {
   const raw = await kvGet(kv, `cache:tx:${txid}`);
-  if (!raw) return null;
+  if (!raw) {
+    console.log(JSON.stringify({ event: "cache_miss", keyFamily: "tx", key: txid }));
+    return null;
+  }
   try {
+    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "tx", key: txid }));
     return JSON.parse(raw);
   } catch (e) {
     console.error(`Failed to parse cached transaction ${txid}:`, e);
@@ -150,4 +169,30 @@ export function setCachedTransaction(
   kv?: KVNamespace
 ): Promise<void> {
   return kvPut(kv, `cache:tx:${txid}`, JSON.stringify(data), TX_CACHE_TTL);
+}
+
+export async function getCachedStacking(
+  stxAddress: string,
+  kv?: KVNamespace
+): Promise<any | null> {
+  const raw = await kvGet(kv, `cache:stacking:${stxAddress}`);
+  if (!raw) {
+    console.log(JSON.stringify({ event: "cache_miss", keyFamily: "stacking", key: stxAddress }));
+    return null;
+  }
+  try {
+    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "stacking", key: stxAddress }));
+    return JSON.parse(raw);
+  } catch (e) {
+    console.error(`Failed to parse cached stacking data for ${stxAddress}:`, e);
+    return null;
+  }
+}
+
+export function setCachedStacking(
+  stxAddress: string,
+  data: any,
+  kv?: KVNamespace
+): Promise<void> {
+  return kvPut(kv, `cache:stacking:${stxAddress}`, JSON.stringify(data), STACKING_CACHE_TTL);
 }
