@@ -17,3 +17,9 @@ export const WAD_DECIMALS = 18;
  * Used by heartbeat and identity endpoints to prevent excessive on-chain queries
  */
 export const IDENTITY_CHECK_TTL_MS = 60 * 60 * 1000;
+
+/**
+ * Cache TTL for identity checks in seconds (1 hour)
+ * Used for KV expirationTtl (KV takes seconds, not milliseconds)
+ */
+export const IDENTITY_CHECK_TTL_SECONDS = 60 * 60;

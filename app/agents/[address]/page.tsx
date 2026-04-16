@@ -10,6 +10,8 @@ import { lookupBnsName } from "@/lib/bns";
 import { X_HANDLE } from "@/lib/constants";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
+import { getCachedIdentity, setCachedIdentity, setCachedIdentityNegative } from "@/lib/identity/kv-cache";
+import type { AgentIdentity } from "@/lib/identity/types";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -82,22 +84,29 @@ async function resolveAgent(
 
 /**
  * Detect and cache the on-chain ERC-8004 identity for an agent.
- * Reuses the same TTL-based caching logic as /api/identity/[address].
+ *
+ * Uses the typed identity KV cache (cache:identity: prefix) for both positive
+ * and negative results. Positive results are cached for 24h (immutable NFT).
+ * Negative results are cached for 5min so newly registered agents are detected.
  */
 async function resolveIdentity(
   kv: KVNamespace,
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
-  // Positive result — skip Hiro
+  // Positive result already on the agent record — skip cache + Hiro
   if (agent.erc8004AgentId != null) return agent;
 
-  // For null/undefined, rate-limit Hiro calls (5 min TTL key)
-  const rateLimitKey = `identity-check:${agent.stxAddress}`;
-  const recentlyChecked = await kv.get(rateLimitKey);
-  if (recentlyChecked) return agent;
+  // Check typed identity cache (covers both positive and negative sentinels)
+  const cached = await getCachedIdentity(agent.stxAddress, kv);
+  if (cached.hit) {
+    if (cached.value) {
+      agent.erc8004AgentId = cached.value.agentId;
+    }
+    return agent;
+  }
 
-  // Fetch from Hiro
+  // Cache miss — fetch from Hiro through the keyed wrapper
   try {
     const [contractAddress, contractName] = IDENTITY_REGISTRY_CONTRACT.split(".");
     const assetId = `${contractAddress}.${contractName}::agent-identity`;
@@ -116,20 +125,22 @@ async function resolveIdentity(
     const match = repr?.match(/^u(\d+)$/);
     const newAgentId = match ? Number(match[1]) : null;
 
-    if (newAgentId !== agent.erc8004AgentId) {
+    if (newAgentId != null) {
+      // Found identity — update agent record and write positive cache
       agent.erc8004AgentId = newAgentId;
       const updated = JSON.stringify(agent);
+      const identity: AgentIdentity = { agentId: newAgentId, owner: agent.stxAddress, uri: "" };
       await Promise.all([
         kv.put(`stx:${agent.stxAddress}`, updated),
         kv.put(`btc:${agent.btcAddress}`, updated),
+        setCachedIdentity(agent.stxAddress, identity, kv),
       ]);
-    }
-    // Rate-limit negative results (5 min TTL)
-    if (newAgentId == null) {
-      await kv.put(rateLimitKey, "1", { expirationTtl: 300 });
+    } else {
+      // No identity found — write negative sentinel (5 min TTL)
+      await setCachedIdentityNegative(agent.stxAddress, kv);
     }
   } catch {
-    /* best-effort */
+    /* best-effort — transient Hiro errors should not break profile rendering */
   }
 
   return agent;
