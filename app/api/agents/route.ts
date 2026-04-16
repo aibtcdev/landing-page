@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { LEVELS } from "@/lib/levels";
-import { lookupBnsName } from "@/lib/bns";
 import { getCachedAgentList } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
@@ -109,41 +108,6 @@ export async function GET(request: NextRequest) {
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     const { agents: cachedAgents } = await getCachedAgentList(kv);
-
-    // Lazy BNS refresh: for agents without bnsName but with stxAddress,
-    // attempt BNS lookup and persist if found. Capped to avoid excessive
-    // external API calls, and fire-and-forget so it doesn't block the response.
-    // Note: BNS updates write to source KV records but don't invalidate the
-    // agent list cache — updated names appear after natural TTL expiry (~2 min).
-    // This is intentional: BNS changes are rare and not time-critical.
-    const hiroApiKey = env.HIRO_API_KEY;
-    const MAX_BNS_REFRESH_PER_REQUEST = 10;
-    const agentsNeedingBns = cachedAgents.filter(
-      (agent) => !agent.bnsName && agent.stxAddress
-    );
-    if (agentsNeedingBns.length > 0) {
-      const batch = agentsNeedingBns.slice(0, MAX_BNS_REFRESH_PER_REQUEST);
-      void Promise.allSettled(
-        batch.map(async (agent) => {
-          const bnsName = await lookupBnsName(agent.stxAddress, hiroApiKey, kv);
-          if (bnsName) {
-            // Update the source records in KV (cache will pick up on next rebuild)
-            const agentRecord = await kv.get(`stx:${agent.stxAddress}`);
-            if (agentRecord) {
-              try {
-                const parsed = JSON.parse(agentRecord);
-                parsed.bnsName = bnsName;
-                const updated = JSON.stringify(parsed);
-                await Promise.all([
-                  kv.put(`stx:${agent.stxAddress}`, updated),
-                  kv.put(`btc:${agent.btcAddress}`, updated),
-                ]);
-              } catch { /* ignore parse errors */ }
-            }
-          }
-        })
-      );
-    }
 
     // Sort by most recently verified
     const sorted = [...cachedAgents].sort(
