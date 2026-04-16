@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin/auth";
 import type { AgentRecord } from "@/lib/types";
 import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "@/lib/identity/constants";
+import { stacksApiFetch } from "@/lib/stacks-api-fetch";
 
 /**
  * GET /api/admin/backfill-identity
@@ -92,7 +93,7 @@ export async function GET(request: NextRequest) {
 
         try {
           const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
-          const resp = await fetch(url, { headers: hiroHeaders });
+          const resp = await stacksApiFetch(url, { headers: hiroHeaders });
 
           if (!resp.ok) {
             console.warn(`[backfill-identity] Hiro error ${resp.status} for ${agent.stxAddress}`);

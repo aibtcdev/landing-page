@@ -21,6 +21,8 @@ import {
   setCachedTransaction,
 } from "@/lib/identity/kv-cache";
 import { buildHiroHeaders, detect429 } from "@/lib/identity/stacks-api";
+import { stacksApiFetch } from "@/lib/stacks-api-fetch";
+import { STACKS_API_BASE } from "@/lib/identity/constants";
 
 const RATE_LIMIT_MS = ACHIEVEMENT_VERIFY_RATE_LIMIT_MS;
 
@@ -132,8 +134,7 @@ export function GET() {
       },
       externalAPIs: {
         mempoolSpace: "https://mempool.space/api/address/{btcAddress}/txs",
-        stacksAPI:
-          "https://api.hiro.so/extended/v1/tx/{txid}",
+        stacksAPI: "Stacks Extended API /extended/v1/tx/{txid} (proxied through server)",
       },
       documentation: {
         achievements: "https://aibtc.com/api/achievements",
@@ -400,27 +401,9 @@ export async function POST(request: NextRequest) {
 
           if (!tx) {
             // Fetch transaction from Stacks API with API key
-            const txUrl = `https://api.hiro.so/extended/v1/tx/${txid}`;
+            const txUrl = `${STACKS_API_BASE}/extended/v1/tx/${txid}`;
             const headers = buildHiroHeaders(hiroApiKey);
-            const txResp = await fetch(txUrl, {
-              headers,
-              signal: AbortSignal.timeout(10000),
-            });
-
-            // Check for rate limiting
-            const rateLimitCheck = detect429(txResp);
-            if (rateLimitCheck.isRateLimited) {
-              return NextResponse.json(
-                {
-                  error: `Stacks API rate limited. Try again later.`,
-                  retryAfter: 60,
-                },
-                {
-                  status: 503,
-                  headers: { "Retry-After": "60" },
-                }
-              );
-            }
+            const txResp = await stacksApiFetch(txUrl, { headers });
 
             if (!txResp.ok) {
               return NextResponse.json(

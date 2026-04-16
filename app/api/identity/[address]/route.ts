@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
+import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
+import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
 
 /**
  * GET /api/identity/:address — Detect on-chain ERC-8004 identity for an agent.
@@ -72,14 +74,13 @@ export async function GET(
     }
 
     // Fetch from Hiro
-    const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
-    const assetId = `${contract}::agent-identity`;
-    const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
+    const [contractAddress, contractName] = IDENTITY_REGISTRY_CONTRACT.split(".");
+    const assetId = `${contractAddress}.${contractName}::agent-identity`;
+    const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
-    const headers: Record<string, string> = {};
-    if (env.HIRO_API_KEY) headers["X-Hiro-API-Key"] = env.HIRO_API_KEY;
-
-    const resp = await fetch(url, { headers });
+    const resp = await stacksApiFetch(url, {
+      headers: buildHiroHeaders(env.HIRO_API_KEY as string | undefined),
+    });
     if (!resp.ok) {
       return NextResponse.json(
         { error: `Hiro API error: ${resp.status}` },

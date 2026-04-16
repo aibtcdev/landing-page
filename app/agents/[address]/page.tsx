@@ -8,6 +8,8 @@ import { getAgentLevel, computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { lookupBnsName } from "@/lib/bns";
 import { X_HANDLE } from "@/lib/constants";
+import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
+import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -97,14 +99,13 @@ async function resolveIdentity(
 
   // Fetch from Hiro
   try {
-    const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
-    const assetId = `${contract}::agent-identity`;
-    const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
+    const [contractAddress, contractName] = IDENTITY_REGISTRY_CONTRACT.split(".");
+    const assetId = `${contractAddress}.${contractName}::agent-identity`;
+    const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
-    const headers: Record<string, string> = {};
-    if (hiroApiKey) headers["X-Hiro-API-Key"] = hiroApiKey;
-
-    const resp = await fetch(url, { headers });
+    const resp = await stacksApiFetch(url, {
+      headers: buildHiroHeaders(hiroApiKey),
+    });
     if (!resp.ok) return agent;
 
     const data = await resp.json() as {
