@@ -54,9 +54,9 @@ import type { Logger } from "../logging";
 import { stacksApiFetch, buildHiroHeaders, parseRetryAfterMs } from "../stacks-api-fetch";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 import { STACKS_API_BASE } from "../identity/constants";
+import type { TerminalReason } from "@aibtc/tx-schemas/terminal-reasons";
 
 const STACKS_API_TESTNET_BASE = "https://api.testnet.hiro.so";
-import type { TerminalReason } from "@aibtc/tx-schemas/terminal-reasons";
 
 const NOOP_LOGGER: Logger = {
   debug: () => {},
