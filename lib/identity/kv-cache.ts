@@ -21,6 +21,15 @@ const STACKING_CACHE_TTL = 4 * 60 * 60; // 4 hours (PoX cycle is ~2 weeks)
 const REPUTATION_CACHE_TTL = 60 * 60; // 1 hour (raised from 5 minutes)
 const TX_CACHE_TTL = 30 * 60; // 30 minutes (raised from 5 minutes)
 
+/** Result from a cache lookup: distinguishes miss ({hit:false}) from cached null ({hit:true,value:null}). */
+export type CacheResult<T> = { hit: true; value: T | null } | { hit: false };
+
+/** Sentinel value for negative cache entries (address has no BNS name or on-chain identity). */
+export const NONE_SENTINEL = "__NONE__";
+
+/** @deprecated Use NONE_SENTINEL instead. */
+export const BNS_NONE_SENTINEL = NONE_SENTINEL;
+
 /** Safely read a string value from KV, returning null on miss or error. */
 async function kvGet(
   kv: KVNamespace | undefined,
@@ -50,6 +59,79 @@ async function kvPut(
   }
 }
 
+/**
+ * Emit a structured cache-hit/miss telemetry event. Centralized so all cache
+ * readers log with a consistent shape (keyFamily + key, plus an optional
+ * `negative: true` flag for negative-cache hits).
+ */
+function logCacheEvent(
+  event: "cache_hit" | "cache_miss",
+  keyFamily: string,
+  key: string,
+  negative = false
+): void {
+  const payload: Record<string, unknown> = { event, keyFamily, key };
+  if (negative) payload.negative = true;
+  console.log(JSON.stringify(payload));
+}
+
+/**
+ * Read and JSON-parse a cached value, emitting telemetry on hit/miss.
+ * Returns the parsed value, or null on miss / parse failure. Used by caches
+ * that don't need to distinguish "missing" from "cached null" (e.g. the
+ * transaction and stacking caches).
+ */
+async function readJsonCache<T>(
+  kv: KVNamespace | undefined,
+  prefix: string,
+  keyFamily: string,
+  key: string
+): Promise<T | null> {
+  const raw = await kvGet(kv, `${prefix}${key}`);
+  if (!raw) {
+    logCacheEvent("cache_miss", keyFamily, key);
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(raw) as T;
+    logCacheEvent("cache_hit", keyFamily, key);
+    return parsed;
+  } catch (e) {
+    console.error(`Failed to parse cached ${keyFamily} for ${key}:`, e);
+    return null;
+  }
+}
+
+/**
+ * Read a cache entry that uses NONE_SENTINEL to distinguish negative hits
+ * from misses. Returns a CacheResult so callers can tell apart "never cached"
+ * from "cached as null".
+ */
+async function readSentinelCache<T>(
+  kv: KVNamespace | undefined,
+  prefix: string,
+  keyFamily: string,
+  key: string
+): Promise<CacheResult<T>> {
+  const raw = await kvGet(kv, `${prefix}${key}`);
+  if (raw === null) {
+    logCacheEvent("cache_miss", keyFamily, key);
+    return { hit: false };
+  }
+  if (raw === NONE_SENTINEL) {
+    logCacheEvent("cache_hit", keyFamily, key, true);
+    return { hit: true, value: null };
+  }
+  try {
+    const parsed = JSON.parse(raw) as T;
+    logCacheEvent("cache_hit", keyFamily, key);
+    return { hit: true, value: parsed };
+  } catch (e) {
+    console.error(`Failed to parse cached ${keyFamily} for ${key}:`, e);
+    return { hit: false };
+  }
+}
+
 export function getCachedBnsName(
   address: string,
   kv?: KVNamespace
@@ -65,16 +147,6 @@ export function setCachedBnsName(
   return kvPut(kv, `cache:bns:${address}`, name, BNS_CACHE_TTL);
 }
 
-/** Result from a cache lookup: distinguishes miss ({hit:false}) from cached null ({hit:true,value:null}). */
-export type CacheResult<T> = { hit: true; value: T | null } | { hit: false };
-
-/** Sentinel value for negative cache entries (address has no BNS name or on-chain identity). */
-export const NONE_SENTINEL = "__NONE__";
-
-/** @deprecated Use NONE_SENTINEL instead. */
-export const BNS_NONE_SENTINEL = NONE_SENTINEL;
-
-
 export function setCachedBnsNegative(
   address: string,
   kv?: KVNamespace
@@ -82,26 +154,11 @@ export function setCachedBnsNegative(
   return kvPut(kv, `cache:bns:${address}`, NONE_SENTINEL, BNS_NEGATIVE_CACHE_TTL);
 }
 
-export async function getCachedIdentity(
+export function getCachedIdentity(
   address: string,
   kv?: KVNamespace
 ): Promise<CacheResult<AgentIdentity>> {
-  const raw = await kvGet(kv, `cache:identity:${address}`);
-  if (raw === null) {
-    console.log(JSON.stringify({ event: "cache_miss", keyFamily: "identity", key: address }));
-    return { hit: false };
-  }
-  if (raw === NONE_SENTINEL) {
-    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "identity", key: address, negative: true }));
-    return { hit: true, value: null };
-  }
-  try {
-    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "identity", key: address }));
-    return { hit: true, value: JSON.parse(raw) as AgentIdentity };
-  } catch (e) {
-    console.error(`Failed to parse cached identity for ${address}:`, e);
-    return { hit: false };
-  }
+  return readSentinelCache<AgentIdentity>(kv, "cache:identity:", "identity", address);
 }
 
 export function setCachedIdentity(
@@ -119,22 +176,11 @@ export function setCachedIdentityNegative(
   return kvPut(kv, `cache:identity:${address}`, NONE_SENTINEL, IDENTITY_NEGATIVE_CACHE_TTL);
 }
 
-export async function getCachedReputation<T>(
+export function getCachedReputation<T>(
   key: string,
   kv?: KVNamespace
 ): Promise<CacheResult<T>> {
-  const raw = await kvGet(kv, `cache:reputation:${key}`);
-  if (raw === null) {
-    console.log(JSON.stringify({ event: "cache_miss", keyFamily: "reputation", key }));
-    return { hit: false };
-  }
-  try {
-    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "reputation", key }));
-    return { hit: true, value: JSON.parse(raw) as T | null };
-  } catch (e) {
-    console.error(`Failed to parse cached reputation for key ${key}:`, e);
-    return { hit: false };
-  }
+  return readSentinelCache<T>(kv, "cache:reputation:", "reputation", key);
 }
 
 export function setCachedReputation(
@@ -145,22 +191,11 @@ export function setCachedReputation(
   return kvPut(kv, `cache:reputation:${key}`, JSON.stringify(data), REPUTATION_CACHE_TTL);
 }
 
-export async function getCachedTransaction(
+export function getCachedTransaction(
   txid: string,
   kv?: KVNamespace
 ): Promise<any | null> {
-  const raw = await kvGet(kv, `cache:tx:${txid}`);
-  if (!raw) {
-    console.log(JSON.stringify({ event: "cache_miss", keyFamily: "tx", key: txid }));
-    return null;
-  }
-  try {
-    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "tx", key: txid }));
-    return JSON.parse(raw);
-  } catch (e) {
-    console.error(`Failed to parse cached transaction ${txid}:`, e);
-    return null;
-  }
+  return readJsonCache<any>(kv, "cache:tx:", "tx", txid);
 }
 
 export function setCachedTransaction(
@@ -171,22 +206,11 @@ export function setCachedTransaction(
   return kvPut(kv, `cache:tx:${txid}`, JSON.stringify(data), TX_CACHE_TTL);
 }
 
-export async function getCachedStacking(
+export function getCachedStacking(
   stxAddress: string,
   kv?: KVNamespace
 ): Promise<any | null> {
-  const raw = await kvGet(kv, `cache:stacking:${stxAddress}`);
-  if (!raw) {
-    console.log(JSON.stringify({ event: "cache_miss", keyFamily: "stacking", key: stxAddress }));
-    return null;
-  }
-  try {
-    console.log(JSON.stringify({ event: "cache_hit", keyFamily: "stacking", key: stxAddress }));
-    return JSON.parse(raw);
-  } catch (e) {
-    console.error(`Failed to parse cached stacking data for ${stxAddress}:`, e);
-    return null;
-  }
+  return readJsonCache<any>(kv, "cache:stacking:", "stacking", stxAddress);
 }
 
 export function setCachedStacking(
