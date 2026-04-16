@@ -1,3 +1,31 @@
 {
-  "extends": "next/core-web-vitals"
+  "extends": "next/core-web-vitals",
+  "rules": {
+    "no-restricted-syntax": [
+      "error",
+      {
+        "selector": "Literal[value=/api\\.hiro\\.so/]",
+        "message": "Direct Hiro API URL not allowed. Use stacksApiFetch() from lib/stacks-api-fetch.ts with STACKS_API_BASE from lib/identity/constants.ts."
+      },
+      {
+        "selector": "TemplateLiteral > TemplateElement[value.raw=/api\\.hiro\\.so/]",
+        "message": "Direct Hiro API URL not allowed. Use stacksApiFetch() from lib/stacks-api-fetch.ts with STACKS_API_BASE from lib/identity/constants.ts."
+      }
+    ]
+  },
+  "overrides": [
+    {
+      "files": [
+        "lib/stacks-api-fetch.ts",
+        "lib/identity/constants.ts",
+        "lib/**/__tests__/**/*.ts",
+        "lib/**/__tests__/**/*.tsx",
+        "**/*.test.ts",
+        "**/*.test.tsx"
+      ],
+      "rules": {
+        "no-restricted-syntax": "off"
+      }
+    }
+  ]
 }
