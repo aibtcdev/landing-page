@@ -16,3 +16,12 @@ jobs:
       - uses: googleapis/release-please-action@v4
         with:
           release-type: node
+          changelog-types: |
+            [
+              {"type":"feat","section":"Features"},
+              {"type":"fix","section":"Bug Fixes"},
+              {"type":"perf","section":"Performance Improvements"},
+              {"type":"revert","section":"Reverts"},
+              {"type":"docs","section":"Documentation"},
+              {"type":"refactor","section":"Code Refactoring"}
+            ]
