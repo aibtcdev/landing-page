@@ -39,7 +39,7 @@ export async function GET(request: NextRequest) {
                 type: "string",
                 required: true,
                 description:
-                  'BIP-137 signature of: "Regenerate claim code for {btcAddress}"',
+                  'BIP-137 or BIP-322 signature of: "Regenerate claim code for {btcAddress}"',
               },
             },
           },
@@ -120,7 +120,7 @@ export async function POST(request: NextRequest) {
     const message = `Regenerate claim code for ${btcAddress}`;
     let sigResult;
     try {
-      sigResult = verifyBitcoinSignature(bitcoinSignature, message);
+      sigResult = verifyBitcoinSignature(bitcoinSignature, message, btcAddress);
     } catch (e) {
       return NextResponse.json(
         { error: `Invalid Bitcoin signature: ${(e as Error).message}` },
@@ -135,8 +135,11 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify the signature came from the registered key
-    if (sigResult.publicKey !== agent.btcPublicKey) {
+    // Verify the signature came from the registered key.
+    // BIP-322 verifiers return publicKey: "" — address ownership is already
+    // proven via witness reconstruction, so skip the key-binding check for
+    // that path. BIP-137 recovers the pubkey from the signature, so enforce.
+    if (sigResult.publicKey && sigResult.publicKey !== agent.btcPublicKey) {
       return NextResponse.json(
         { error: "Signature does not match the registered Bitcoin key" },
         { status: 403 }
