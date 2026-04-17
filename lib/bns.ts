@@ -109,9 +109,19 @@ export async function lookupBnsNameWithOutcome(
     const cv = deserializeCV(data.result);
     const json = cvToJSON(cv);
 
-    // Response structure: (ok (some {name: buff, namespace: buff})) or (ok none)
+    // BNS-V2 `get-primary` response shape, per contract source:
+    //   (ok { name: (buff 48), namespace: (buff 20) }) — address has a primary name
+    //   (err u131) ERR-NO-PRIMARY-NAME                — address has no primary name
+    // The `(ok none)` branch below is defense-in-depth in case the contract
+    // signature ever changes to `(response (optional {...}) uint)`.
     if (!json.success) {
-      logger?.warn("bns.lookup_malformed_response", { stxAddress });
+      const errCode = json.value?.value;
+      if (errCode === "131") {
+        // Authoritative "no primary name" — cache as confirmed-negative (7d).
+        await setCachedBnsNegative(stxAddress, kv, logger);
+        return { state: "confirmed-negative", name: null };
+      }
+      logger?.warn("bns.lookup_malformed_response", { stxAddress, errCode });
       await setCachedBnsLookupFailed(stxAddress, kv, logger);
       return { state: "lookup-failed", name: null };
     }
