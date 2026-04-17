@@ -76,9 +76,9 @@ export async function POST(
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    logger = isLogsRPC(env.LOGS)
-      ? createLogger(env.LOGS, ctx, baseCtx)
-      : logger;
+    if (isLogsRPC(env.LOGS)) {
+      logger = createLogger(env.LOGS, ctx, baseCtx);
+    }
 
     const agent = await lookupAgent(kv, address);
     if (!agent) {
