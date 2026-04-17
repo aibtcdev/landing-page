@@ -44,12 +44,44 @@ function mockV2Response(name: string, namespace: string) {
 }
 
 function mockV2None() {
-  // (ok none) = 0x07 09
+  // Defense-in-depth path: (ok none) = 0x07 09. BNS-V2 doesn't actually
+  // return this today (see mockV2ErrNoPrimary) but the parser keeps the
+  // branch in case the contract signature ever changes.
   return {
     ok: true,
     status: 200,
     headers: mockHeaders(),
     json: async () => ({ okay: true, result: "0x0709" }),
+  };
+}
+
+function mockV2ErrNoPrimary() {
+  // Real BNS-V2 response for an address with no primary name:
+  // (err u131) ERR-NO-PRIMARY-NAME = 0x08 01 00...00 83
+  return {
+    ok: true,
+    status: 200,
+    headers: mockHeaders(),
+    json: async () => ({
+      okay: true,
+      result: "0x080100000000000000000000000000000083",
+    }),
+  };
+}
+
+function mockV2ErrOther(code: number) {
+  // Any other (err uN) — treated as a genuine malformed/unexpected response.
+  // `code` is encoded as a Clarity u128 (16 bytes / 32 hex chars), so any
+  // value in [0, 2^128 - 1] is representable. JS `number` safely covers up
+  // to 2^53 - 1, which is far more than any plausible contract error code;
+  // u131 (ERR-NO-PRIMARY-NAME) is the only code we currently special-case,
+  // so callers pass small example codes like 101 here.
+  const hex = code.toString(16).padStart(32, "0");
+  return {
+    ok: true,
+    status: 200,
+    headers: mockHeaders(),
+    json: async () => ({ okay: true, result: "0x0801" + hex }),
   };
 }
 
@@ -98,7 +130,16 @@ describe("lookupBnsName", () => {
   });
 
   describe("fallback to null cases", () => {
-    it("returns null when V2 returns none (no primary name)", async () => {
+    it("returns null when V2 returns err u131 (no primary name)", async () => {
+      mockFetch.mockResolvedValue(mockV2ErrNoPrimary());
+
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
+      expect(result).toBeNull();
+    });
+
+    it("returns null when V2 returns (ok none) [defense-in-depth]", async () => {
       mockFetch.mockResolvedValue(mockV2None());
 
       const result = await lookupBnsName(
@@ -292,7 +333,24 @@ describe("lookupBnsName", () => {
       expect(mockFetch).not.toHaveBeenCalled();
     });
 
-    it("writes 7d confirmed-negative cache when V2 returns none", async () => {
+    it("writes 7d confirmed-negative cache when V2 returns err u131", async () => {
+      const kv = createMockKv();
+      mockFetch.mockResolvedValue(mockV2ErrNoPrimary());
+
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        undefined,
+        kv as unknown as KVNamespace
+      );
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
+      // 7d (604800s) TTL — confirmed "no primary name" per the three-state model.
+      // ERR-NO-PRIMARY-NAME is the real BNS-V2 response for nameless addresses.
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(7 * 24 * 60 * 60);
+    });
+
+    it("writes 7d confirmed-negative cache when V2 returns (ok none) [defense-in-depth]", async () => {
       const kv = createMockKv();
       mockFetch.mockResolvedValue(mockV2None());
 
@@ -303,10 +361,25 @@ describe("lookupBnsName", () => {
       );
       expect(result).toBeNull();
       const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
-      // 7d (604800s) TTL — confirmed "no name" per the three-state model.
-      // Busted on write paths (registration) and via the refresh endpoint.
       expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
       expect(kv._store.get(cacheKey)?.ttl).toBe(7 * 24 * 60 * 60);
+    });
+
+    it("writes 60s lookup-failed cache on unexpected err code (not u131)", async () => {
+      const kv = createMockKv();
+      // ERR-UNWRAP (u101) or any other non-u131 error is treated as a
+      // genuine malformed response — short-TTL defer rather than 7d pin.
+      mockFetch.mockResolvedValue(mockV2ErrOther(101));
+
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        undefined,
+        kv as unknown as KVNamespace
+      );
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
     });
   });
 
@@ -336,7 +409,15 @@ describe("lookupBnsName", () => {
       expect(outcome).toEqual({ state: "positive", name: "alice.btc" });
     });
 
-    it("returns confirmed-negative outcome on (ok none)", async () => {
+    it("returns confirmed-negative outcome on err u131 (no primary name)", async () => {
+      mockFetch.mockResolvedValue(mockV2ErrNoPrimary());
+      const outcome = await lookupBnsNameWithOutcome(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
+      expect(outcome).toEqual({ state: "confirmed-negative", name: null });
+    });
+
+    it("returns confirmed-negative outcome on (ok none) [defense-in-depth]", async () => {
       mockFetch.mockResolvedValue(mockV2None());
       const outcome = await lookupBnsNameWithOutcome(
         "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
