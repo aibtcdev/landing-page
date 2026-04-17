@@ -26,6 +26,32 @@
       "rules": {
         "no-restricted-syntax": "off"
       }
+    },
+    {
+      "files": ["lib/**/*.ts", "lib/**/*.tsx"],
+      "rules": {
+        "no-console": "error"
+      }
+    },
+    {
+      "files": [
+        "lib/logging.ts",
+        "lib/**/__tests__/**/*.ts",
+        "lib/**/__tests__/**/*.tsx",
+        "**/*.test.ts",
+        "**/*.test.tsx",
+        "lib/admin/auth.ts",
+        "lib/agent-lookup.ts",
+        "lib/bitcoin-verify.ts",
+        "lib/challenge.ts",
+        "lib/achievements/kv.ts",
+        "lib/heartbeat/kv-helpers.ts",
+        "lib/inbox/kv-helpers.ts",
+        "lib/vouch/kv-helpers.ts"
+      ],
+      "rules": {
+        "no-console": "off"
+      }
     }
   ]
 }

@@ -10,7 +10,12 @@ import { lookupBnsName } from "@/lib/bns";
 import { X_HANDLE } from "@/lib/constants";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
-import { getCachedIdentity, setCachedIdentity, setCachedIdentityNegative } from "@/lib/identity/kv-cache";
+import {
+  getCachedIdentity,
+  setCachedIdentity,
+  setCachedIdentityNegative,
+  setCachedIdentityLookupFailed,
+} from "@/lib/identity/kv-cache";
 import type { AgentIdentity } from "@/lib/identity/types";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
@@ -118,11 +123,14 @@ async function resolveIdentity(
     const resp = await stacksApiFetch(
       url,
       { headers: buildHiroHeaders(hiroApiKey) },
-      2,
-      500,
-      1
+      { retries: 2, retries429: 1 }
     );
-    if (!resp.ok) return agent;
+    if (!resp.ok) {
+      // Transient upstream error — short-TTL lookup-failed cache so concurrent
+      // profile views don't all re-hit Hiro.
+      await setCachedIdentityLookupFailed(agent.stxAddress, kv);
+      return agent;
+    }
 
     const data = await resp.json() as {
       results?: Array<{ value: { repr: string } }>;
@@ -143,11 +151,13 @@ async function resolveIdentity(
         setCachedIdentity(agent.stxAddress, identity, kv),
       ]);
     } else {
-      // No identity found — write negative sentinel (5 min TTL)
+      // Confirmed no identity NFT for this address — 7d cache (bust on mint via refresh endpoint).
       await setCachedIdentityNegative(agent.stxAddress, kv);
     }
   } catch {
-    /* best-effort — transient Hiro errors should not break profile rendering */
+    // Best-effort — transient Hiro errors should not break profile rendering.
+    // Short-TTL lookup-failed cache so the hammer doesn't recur on every view.
+    await setCachedIdentityLookupFailed(agent.stxAddress, kv);
   }
 
   return agent;

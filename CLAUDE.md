@@ -337,10 +337,25 @@ Integration with ERC-8004 on-chain identity and reputation registries. Agents se
 - **Detection**: Platform queries on-chain state to find agent's NFT and agent-id
 - **Profile display**: Identity badge + reputation summary on agent profiles
 - **Guide page**: `/identity` provides step-by-step registration instructions
+- **Manual refresh**: `POST /api/identity/:address/refresh` busts cached BNS + identity state and re-runs both lookups. Wired to the profile-page "Not showing up correctly? Refresh" link for users who register BNS names or mint identity NFTs off-platform.
+
+### Cache Model for BNS + Identity Lookups
+
+Three-state cache in `lib/identity/kv-cache.ts`:
+
+| State | TTL | Helper |
+|-------|-----|--------|
+| Confirmed positive (Hiro returned a name/NFT) | 24h | `setCachedBnsName` / `setCachedIdentity` |
+| Confirmed negative (Hiro authoritatively said none) | 7d | `setCachedBnsNegative` / `setCachedIdentityNegative` |
+| Lookup failed (429/5xx/timeout/parse error) | 60s | `setCachedBnsLookupFailed` / `setCachedIdentityLookupFailed` |
+
+The 7d confirmed-negative TTL is safe because state transitions require an on-chain tx. Cache-bust hooks on write paths (backfill-identity, identity/[address] GET persist) keep the cache in sync when we discover new state; the refresh endpoint covers the off-platform case where a user registers a name or mints an NFT without us ever seeing it.
 
 **Related files:**
 - `lib/identity/` — Types, constants, detection, reputation fetching
-- `app/components/IdentityBadge.tsx` — On-chain identity status display
+- `lib/identity/kv-cache.ts` — Three-state cache + `invalidateBnsCache` / `invalidateIdentityCache`
+- `app/api/identity/[address]/refresh/route.ts` — Manual refresh endpoint (POST)
+- `app/components/IdentityBadge.tsx` — On-chain identity status display + refresh button
 - `app/components/ReputationSummary.tsx` — Reputation summary widget
 - `app/components/ReputationFeedbackList.tsx` — Paginated feedback list
 - `app/identity/page.tsx` — Identity & reputation guide

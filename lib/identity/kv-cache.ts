@@ -1,10 +1,18 @@
 /**
  * KV-backed caching for stable data (BNS names, agent identities, reputation)
  *
- * Provides persistent caching across worker instances with appropriate TTLs:
- * - BNS names: 24 hours positive / 1 hour negative (very stable, rarely change)
- * - Agent identities: 24 hours (immutable once minted on-chain)
- * - Identity negative cache: 5 minutes (re-check frequently for newly registered agents)
+ * Three-state cache model for BNS/identity lookups:
+ *   1. **Confirmed positive** — Hiro returned a name/identity. Cached 24h.
+ *   2. **Confirmed negative** — Hiro authoritatively said "no name" / "no
+ *      identity NFT". State change requires an on-chain tx, so cached 7d.
+ *      Invalidated explicitly via {@link invalidateBnsCache} /
+ *      {@link invalidateIdentityCache} on write paths (registration, identity
+ *      NFT mint detection) and via the manual refresh endpoint.
+ *   3. **Lookup failed** — transient Hiro error (429/5xx/timeout/parse). We
+ *      don't know whether there's a name/identity. Cached 60s to stop a
+ *      request hammer without pinning the state for long.
+ *
+ * Other caches:
  * - Stacking status: 4 hours (changes only at PoX cycle boundaries ~2 weeks)
  * - Reputation data: 1 hour (changes slowly with new feedback)
  * - Address transactions: 30 minutes (grows over time but not hot path)
@@ -19,10 +27,30 @@ import type { AgentIdentity } from "./types";
 import type { Logger } from "../logging";
 
 // Cache TTLs in seconds
-const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours
-const BNS_NEGATIVE_CACHE_TTL = 60 * 60; // 1 hour for addresses with no BNS name
-const IDENTITY_CACHE_TTL = 24 * 60 * 60; // 24 hours (immutable NFT — raised from 6h)
-const IDENTITY_NEGATIVE_CACHE_TTL = 5 * 60; // 5 minutes for addresses with no identity
+const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours (confirmed positive)
+/**
+ * "Confirmed no name" — Hiro returned `(ok none)`. A state change requires
+ * an on-chain BNS registration tx; we bust this cache on registration/update
+ * write paths and via the explicit refresh endpoint.
+ */
+const BNS_CONFIRMED_NEGATIVE_CACHE_TTL = 7 * 24 * 60 * 60; // 7 days
+/**
+ * "Lookup failed" — Hiro 429/5xx, malformed response, timeout. Short TTL so
+ * a transient upstream blip doesn't pin an address as name-less; long enough
+ * to stop a concurrent-request hammer.
+ */
+const BNS_LOOKUP_FAILED_CACHE_TTL = 60; // 60 seconds
+const IDENTITY_CACHE_TTL = 24 * 60 * 60; // 24 hours (immutable NFT once minted)
+/**
+ * "Confirmed no identity" — Hiro NFT holdings API authoritatively returned
+ * no matching NFT. State change requires an on-chain mint; we bust on write
+ * paths and via the refresh endpoint.
+ */
+const IDENTITY_CONFIRMED_NEGATIVE_CACHE_TTL = 7 * 24 * 60 * 60; // 7 days
+/**
+ * "Lookup failed" for identity detection — same semantics as BNS failure TTL.
+ */
+const IDENTITY_LOOKUP_FAILED_CACHE_TTL = 60; // 60 seconds
 const STACKING_CACHE_TTL = 4 * 60 * 60; // 4 hours (PoX cycle is ~2 weeks)
 const REPUTATION_CACHE_TTL = 60 * 60; // 1 hour (raised from 5 minutes)
 const TX_CACHE_TTL = 30 * 60; // 30 minutes (raised from 5 minutes)
@@ -53,6 +81,25 @@ async function kvGet(
       error: String(error),
     });
     return null;
+  }
+}
+
+/** Safely delete a KV entry, logging errors. */
+async function kvDelete(
+  kv: KVNamespace | undefined,
+  key: string,
+  keyFamily: string,
+  logger?: Logger
+): Promise<void> {
+  if (!kv) return;
+  try {
+    await kv.delete(key);
+  } catch (error) {
+    logger?.error("cache.kv_delete_error", {
+      keyFamily,
+      key,
+      error: String(error),
+    });
   }
 }
 
@@ -187,6 +234,12 @@ export function setCachedBnsName(
   return kvPut(kv, `cache:bns:${address}`, name, BNS_CACHE_TTL, "bns", logger);
 }
 
+/**
+ * Cache a "confirmed no BNS name" response (Hiro returned `(ok none)`).
+ * Uses the long {@link BNS_CONFIRMED_NEGATIVE_CACHE_TTL} (7d) because state
+ * change requires an on-chain registration. Bust via
+ * {@link invalidateBnsCache} on write paths and via the refresh endpoint.
+ */
 export function setCachedBnsNegative(
   address: string,
   kv?: KVNamespace,
@@ -196,10 +249,48 @@ export function setCachedBnsNegative(
     kv,
     `cache:bns:${address}`,
     NONE_SENTINEL,
-    BNS_NEGATIVE_CACHE_TTL,
+    BNS_CONFIRMED_NEGATIVE_CACHE_TTL,
     "bns",
     logger
   );
+}
+
+/**
+ * Cache a BNS lookup failure (Hiro error, malformed response, timeout) for
+ * a short TTL ({@link BNS_LOOKUP_FAILED_CACHE_TTL} = 60s). Use this on paths
+ * that couldn't determine whether the address has a name — distinct from
+ * {@link setCachedBnsNegative} which records "confirmed no name" for 7d.
+ *
+ * Reuses the `NONE_SENTINEL` value so subsequent reads via
+ * {@link getCachedBnsName} treat the entry as "no name" until the short TTL
+ * expires and a fresh lookup is attempted.
+ */
+export function setCachedBnsLookupFailed(
+  address: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<void> {
+  return kvPut(
+    kv,
+    `cache:bns:${address}`,
+    NONE_SENTINEL,
+    BNS_LOOKUP_FAILED_CACHE_TTL,
+    "bns",
+    logger
+  );
+}
+
+/**
+ * Delete the cached BNS entry for an address (both positive and negative).
+ * Use on write paths (registration completed, manual refresh) so the next
+ * lookup re-hits Hiro instead of serving a stale 7d confirmed-negative.
+ */
+export function invalidateBnsCache(
+  address: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<void> {
+  return kvDelete(kv, `cache:bns:${address}`, "bns", logger);
 }
 
 export function getCachedIdentity(
@@ -232,6 +323,13 @@ export function setCachedIdentity(
   );
 }
 
+/**
+ * Cache a "confirmed no identity NFT" response (Hiro NFT holdings API
+ * authoritatively returned no match for the address). Uses the long
+ * {@link IDENTITY_CONFIRMED_NEGATIVE_CACHE_TTL} (7d) because state change
+ * requires an on-chain NFT mint. Bust via {@link invalidateIdentityCache}
+ * on write paths and via the refresh endpoint.
+ */
 export function setCachedIdentityNegative(
   address: string,
   kv?: KVNamespace,
@@ -241,10 +339,46 @@ export function setCachedIdentityNegative(
     kv,
     `cache:identity:${address}`,
     NONE_SENTINEL,
-    IDENTITY_NEGATIVE_CACHE_TTL,
+    IDENTITY_CONFIRMED_NEGATIVE_CACHE_TTL,
     "identity",
     logger
   );
+}
+
+/**
+ * Cache an identity lookup failure (Hiro error, malformed response, timeout)
+ * for a short TTL ({@link IDENTITY_LOOKUP_FAILED_CACHE_TTL} = 60s). Use this
+ * on paths that couldn't determine whether the address has an identity NFT —
+ * distinct from {@link setCachedIdentityNegative} which records "confirmed
+ * no identity" for 7d.
+ */
+export function setCachedIdentityLookupFailed(
+  address: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<void> {
+  return kvPut(
+    kv,
+    `cache:identity:${address}`,
+    NONE_SENTINEL,
+    IDENTITY_LOOKUP_FAILED_CACHE_TTL,
+    "identity",
+    logger
+  );
+}
+
+/**
+ * Delete the cached identity entry for an address (both positive and
+ * negative). Use on write paths (identity detected and persisted, manual
+ * refresh) so the next lookup re-hits Hiro instead of serving a stale 7d
+ * confirmed-negative.
+ */
+export function invalidateIdentityCache(
+  address: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<void> {
+  return kvDelete(kv, `cache:identity:${address}`, "identity", logger);
 }
 
 export function getCachedReputation<T>(

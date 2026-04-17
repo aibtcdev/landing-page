@@ -189,6 +189,124 @@ describe("lookupBnsName", () => {
     });
   });
 
+  describe("failure negative caching", () => {
+    /** Build an in-memory KV mock that records put() calls. */
+    function createMockKv() {
+      const store = new Map<string, { value: string; ttl?: number }>();
+      return {
+        get: vi.fn(async (key: string) => store.get(key)?.value ?? null),
+        put: vi.fn(
+          async (
+            key: string,
+            value: string,
+            options?: { expirationTtl?: number }
+          ) => {
+            store.set(key, { value, ttl: options?.expirationTtl });
+          }
+        ),
+        _store: store,
+      };
+    }
+
+    it("writes short-TTL negative cache on upstream !res.ok", async () => {
+      const kv = createMockKv();
+      // 500 is retried up to retries=2, so return 500 every time
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        headers: mockHeaders(),
+      });
+
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        undefined,
+        kv as unknown as KVNamespace
+      );
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
+    });
+
+    it("writes short-TTL negative cache on !data.okay", async () => {
+      const kv = createMockKv();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: mockHeaders(),
+        json: async () => ({ okay: false, result: "some error" }),
+      });
+
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        undefined,
+        kv as unknown as KVNamespace
+      );
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
+    });
+
+    it("writes short-TTL negative cache on network error", async () => {
+      const kv = createMockKv();
+      mockFetch.mockRejectedValue(new Error("Network error"));
+
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        undefined,
+        kv as unknown as KVNamespace
+      );
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
+    });
+
+    it("does not re-hit Hiro after negative cache is warmed", async () => {
+      const kv = createMockKv();
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        headers: mockHeaders(),
+      });
+
+      await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        undefined,
+        kv as unknown as KVNamespace
+      );
+      const fetchCountAfterFirst = mockFetch.mock.calls.length;
+      mockFetch.mockClear();
+
+      // Second call — negative cache should suppress the Hiro request entirely
+      await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        undefined,
+        kv as unknown as KVNamespace
+      );
+      expect(fetchCountAfterFirst).toBeGreaterThan(0);
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("writes 7d confirmed-negative cache when V2 returns none", async () => {
+      const kv = createMockKv();
+      mockFetch.mockResolvedValue(mockV2None());
+
+      const result = await lookupBnsName(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        undefined,
+        kv as unknown as KVNamespace
+      );
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
+      // 7d (604800s) TTL — confirmed "no name" per the three-state model.
+      // Busted on write paths (registration) and via the refresh endpoint.
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(7 * 24 * 60 * 60);
+    });
+  });
+
   describe("edge cases", () => {
     it("makes only one API call per invocation", async () => {
       mockFetch.mockResolvedValue(mockV2Response("test", "btc"));

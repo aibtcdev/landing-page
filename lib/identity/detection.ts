@@ -7,7 +7,12 @@ import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "./constants";
 import { callReadOnly, parseClarityValue, buildHiroHeaders } from "./stacks-api";
 import { stacksApiFetch } from "../stacks-api-fetch";
 import type { AgentIdentity } from "./types";
-import { getCachedIdentity, setCachedIdentity, setCachedIdentityNegative } from "./kv-cache";
+import {
+  getCachedIdentity,
+  setCachedIdentity,
+  setCachedIdentityNegative,
+  setCachedIdentityLookupFailed,
+} from "./kv-cache";
 import type { Logger } from "../logging";
 
 /**
@@ -42,7 +47,11 @@ export async function detectAgentIdentity(
     // Reduced retry budget for synchronous profile lookups: worst-case ~13s
     // instead of default ~71s. Primary NFT holdings call gets retries429=1 (1s max
     // 429 delay) and retries=2 (1.5s max 5xx delay).
-    const response = await stacksApiFetch(holdingsUrl, { headers }, 2, 500, 1);
+    const response = await stacksApiFetch(holdingsUrl, { headers }, {
+      retries: 2,
+      retries429: 1,
+      logger,
+    });
 
     if (!response.ok) {
       // Fallback to legacy scan if holdings API fails (e.g. 404, 500)
@@ -86,9 +95,10 @@ export async function detectAgentIdentity(
         IDENTITY_REGISTRY_CONTRACT,
         "get-token-uri",
         [uintCV(agentId)],
-        hiroApiKey
+        hiroApiKey,
+        logger
       );
-      uri = parseClarityValue(uriResult) || "";
+      uri = parseClarityValue(uriResult, logger) || "";
     } catch (error) {
       logger?.warn("identity.fetch_token_uri_failed", {
         agentId,
@@ -101,10 +111,13 @@ export async function detectAgentIdentity(
     await setCachedIdentity(stxAddress, identity, kv, logger);
     return identity;
   } catch (error) {
+    // Network timeout / abort / JSON parse failure. Short-TTL negative-cache
+    // so the retry storm doesn't keep hammering Hiro for the same address.
     logger?.error("identity.detect_error", {
       stxAddress,
       error: String(error),
     });
+    await setCachedIdentityLookupFailed(stxAddress, kv, logger);
     return null;
   }
 }
@@ -126,8 +139,8 @@ async function detectAgentIdentityLegacy(
   // we return null without caching so the next request will try again.
   const MAX_LEGACY_BATCHES = 1;
 
-  const lastIdResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-last-token-id", [], hiroApiKey);
-  const lastIdRaw = parseClarityValue(lastIdResult);
+  const lastIdResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-last-token-id", [], hiroApiKey, logger);
+  const lastIdRaw = parseClarityValue(lastIdResult, logger);
   const lastId = lastIdRaw !== null ? Number(lastIdRaw) : null;
 
   if (lastId === null || lastId < 0) return null;
@@ -145,16 +158,16 @@ async function detectAgentIdentityLegacy(
       batch.map(async (id) => {
         const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [
           uintCV(id),
-        ], hiroApiKey);
-        return { id, owner: parseClarityValue(ownerResult) };
+        ], hiroApiKey, logger);
+        return { id, owner: parseClarityValue(ownerResult, logger) };
       })
     );
     const match = results.find((r) => r.owner === stxAddress);
     if (match) {
       const uriResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-token-uri", [
         uintCV(match.id),
-      ], hiroApiKey);
-      const uri = parseClarityValue(uriResult);
+      ], hiroApiKey, logger);
+      const uri = parseClarityValue(uriResult, logger);
       const identity: AgentIdentity = { agentId: match.id, owner: match.owner!, uri: uri || "" };
       await setCachedIdentity(stxAddress, identity, kv, logger);
       return identity;
@@ -185,8 +198,8 @@ export async function hasIdentity(
   logger?: Logger
 ): Promise<boolean> {
   try {
-    const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [uintCV(agentId)], hiroApiKey);
-    const owner = parseClarityValue(ownerResult);
+    const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [uintCV(agentId)], hiroApiKey, logger);
+    const owner = parseClarityValue(ownerResult, logger);
     return owner !== null;
   } catch (error) {
     logger?.error("identity.has_identity_error", {

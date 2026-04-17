@@ -845,10 +845,14 @@ export async function verifyTxidPayment(
 
     // 3. Fetch from API
     try {
-      const response = await stacksApiFetch(`${apiBase}/extended/v1/tx/${fullTxid}`, {
-        method: "GET",
-        headers: buildHiroHeaders(hiroApiKey),
-      });
+      const response = await stacksApiFetch(
+        `${apiBase}/extended/v1/tx/${fullTxid}`,
+        {
+          method: "GET",
+          headers: buildHiroHeaders(hiroApiKey),
+        },
+        { logger: log }
+      );
       if (!response.ok) {
         if (response.status === 404) {
           // Cache the negative result to prevent repeated lookups.

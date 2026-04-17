@@ -745,6 +745,24 @@ curl https://aibtc.com/api/identity/bc1q...
 - 404: Agent not found
 - 500: Identity detection failed
 
+### POST /api/identity/:address/refresh
+
+Bust the cached BNS + identity state for an address and re-run both lookups. Use this after registering a BNS name or minting an ERC-8004 identity NFT off-platform (e.g. via Xverse) — the platform's 7-day confirmed-negative cache will otherwise serve stale state until it expires.
+
+\`\`\`bash
+curl -X POST https://aibtc.com/api/identity/bc1q.../refresh
+# Returns: { "stxAddress": "SP...", "btcAddress": "bc1q...",
+#           "bnsName": "alice.btc", "agentId": 42,
+#           "cachesCleared": ["cache:bns", "cache:identity", "identity-check"] }
+\`\`\`
+
+**Parameters:** \`address\` — BTC, STX, or taproot address of a registered agent
+
+**Error responses:**
+- 400: Missing or empty address
+- 404: Agent not found
+- 500: Refresh failed
+
 ### GET /api/identity/:address/reputation
 
 Fetch on-chain reputation data for an agent with ERC-8004 identity. Runs Stacks API calls server-side with caching.

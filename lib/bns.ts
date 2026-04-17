@@ -5,7 +5,13 @@ import {
   cvToJSON,
 } from "@stacks/transactions";
 import { hexToBytes, bytesToUtf8 } from "@stacks/common";
-import { getCachedBnsName, setCachedBnsName, setCachedBnsNegative, BNS_NONE_SENTINEL } from "./identity/kv-cache";
+import {
+  getCachedBnsName,
+  setCachedBnsName,
+  setCachedBnsNegative,
+  setCachedBnsLookupFailed,
+  BNS_NONE_SENTINEL,
+} from "./identity/kv-cache";
 import { buildHiroHeaders } from "./identity/stacks-api";
 import { stacksApiFetch } from "./stacks-api-fetch";
 import { STACKS_API_BASE } from "./identity/constants";
@@ -56,21 +62,40 @@ export async function lookupBnsName(
           arguments: [`0x${serialized}`],
         }),
       },
-      2,
-      500,
-      1
+      { retries: 2, retries429: 1, logger }
     );
 
-    if (!res.ok) return null;
+    if (!res.ok) {
+      // Transient Hiro failure (429 / 5xx / exhausted retries). Short-TTL
+      // negative-cache so concurrent requests for the same address don't
+      // re-hit Hiro on every miss.
+      logger?.warn("bns.lookup_upstream_error", {
+        stxAddress,
+        status: res.status,
+      });
+      await setCachedBnsLookupFailed(stxAddress, kv, logger);
+      return null;
+    }
 
     const data = (await res.json()) as { okay: boolean; result: string };
-    if (!data.okay) return null;
+    if (!data.okay) {
+      // Contract-reported error. Treat as transient (short-TTL) rather than
+      // "confirmed no name" — the contract may have thrown for reasons
+      // unrelated to the address having a name.
+      logger?.warn("bns.lookup_contract_error", { stxAddress });
+      await setCachedBnsLookupFailed(stxAddress, kv, logger);
+      return null;
+    }
 
     const cv = deserializeCV(data.result);
     const json = cvToJSON(cv);
 
     // Response structure: (ok (some {name: buff, namespace: buff})) or (ok none)
-    if (!json.success) return null;
+    if (!json.success) {
+      logger?.warn("bns.lookup_malformed_response", { stxAddress });
+      await setCachedBnsLookupFailed(stxAddress, kv, logger);
+      return null;
+    }
 
     // Unwrap: response -> optional -> tuple
     const optional = json.value?.value;
@@ -92,7 +117,10 @@ export async function lookupBnsName(
     await setCachedBnsName(stxAddress, fullName, kv, logger);
     return fullName;
   } catch (e) {
+    // Network timeout / abort / parse error. Short-TTL negative-cache so the
+    // retry storm doesn't keep hammering Hiro for the same address.
     logger?.error("bns.lookup_failed", { stxAddress, error: String(e) });
+    await setCachedBnsLookupFailed(stxAddress, kv, logger);
     return null;
   }
 }

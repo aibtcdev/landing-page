@@ -15,6 +15,7 @@ import {
 } from "@stacks/transactions";
 import { STACKS_API_BASE } from "./constants";
 import { stacksApiFetch, buildHiroHeaders, detect429 } from "../stacks-api-fetch";
+import type { Logger } from "../logging";
 
 // Re-export from shared location for backwards compatibility
 export { buildHiroHeaders, detect429 };
@@ -26,6 +27,7 @@ export { buildHiroHeaders, detect429 };
  * @param functionName - The read-only function to call
  * @param args - ClarityValue objects (will be serialized to hex for the API)
  * @param hiroApiKey - Optional Hiro API key for authenticated requests
+ * @param logger - Optional Logger for Hiro rate-limit + retry telemetry
  * @returns Parsed JSON representation of the Clarity return value from the Stacks API.
  * @throws Error if the Stacks API request fails (non-2xx HTTP response).
  */
@@ -33,7 +35,8 @@ export async function callReadOnly(
   contract: string,
   functionName: string,
   args: ClarityValue[],
-  hiroApiKey?: string
+  hiroApiKey?: string,
+  logger?: Logger
 ): Promise<any> {
   const [contractAddress, contractName] = contract.split(".");
   const url = `${STACKS_API_BASE}/v2/contracts/call-read/${contractAddress}/${contractName}/${functionName}`;
@@ -56,13 +59,11 @@ export async function callReadOnly(
         arguments: hexArgs,
       }),
     },
-    2,
-    500,
-    2
+    { retries: 2, retries429: 2, logger }
   );
 
   // Log cf-ray for observability if the final response is still a 429 after retries
-  detect429(response);
+  detect429(response, logger);
 
   if (!response.ok) {
     throw new Error(
@@ -81,7 +82,7 @@ export async function callReadOnly(
  * hex-encoded Clarity value. We deserialize it and convert to a
  * JSON-friendly representation using cvToJSON from @stacks/transactions.
  */
-export function parseClarityValue(apiResponse: any): any {
+export function parseClarityValue(apiResponse: any, logger?: Logger): any {
   if (!apiResponse || apiResponse.okay !== true) {
     return null;
   }
@@ -91,7 +92,7 @@ export function parseClarityValue(apiResponse: any): any {
     const json = cvToJSON(cv);
     return unwrapCvJson(json);
   } catch (e) {
-    console.error("Failed to parse Clarity value from API response:", e);
+    logger?.error("stacksApi.parse_clarity_value_failed", { error: String(e) });
     return null;
   }
 }
