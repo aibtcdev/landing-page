@@ -935,7 +935,7 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-### Notable Skills (skills-v0.36.0)
+### Notable Skills (skills-v0.40.0)
 
 | Skill | Description |
 |-------|-------------|
@@ -989,6 +989,8 @@ curl https://aibtc.com/skills
 | hodlmm-risk | HODLMM volatility risk monitor — bin spread, reserve imbalance, and regime scoring (calm/elevated/crisis) for LP agents *(v0.36.0)* |
 | nonce-manager | Cross-process Stacks nonce oracle — atomic acquire/release prevents mempool collisions across concurrent skills *(v0.36.0)* |
 | zest-yield-manager | Autonomous sBTC yield management on Zest Protocol — supply, withdraw, claim rewards, and monitor positions *(v0.36.0)* |
+| contract-preflight | Dry-run Stacks contract calls against mainnet state before broadcasting — catches errors, prevents wasted gas *(v0.40.0)* |
+| stacking-delegation | Monitor STX stacking positions — status, PoX cycles, reward payouts, and delegation eligibility for autonomous agents *(v0.40.0)* |
 
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
