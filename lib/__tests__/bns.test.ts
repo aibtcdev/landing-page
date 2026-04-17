@@ -71,6 +71,11 @@ function mockV2ErrNoPrimary() {
 
 function mockV2ErrOther(code: number) {
   // Any other (err uN) — treated as a genuine malformed/unexpected response.
+  // `code` is encoded as a Clarity u128 (16 bytes / 32 hex chars), so any
+  // value in [0, 2^128 - 1] is representable. JS `number` safely covers up
+  // to 2^53 - 1, which is far more than any plausible contract error code;
+  // u131 (ERR-NO-PRIMARY-NAME) is the only code we currently special-case,
+  // so callers pass small example codes like 101 here.
   const hex = code.toString(16).padStart(32, "0");
   return {
     ok: true,

@@ -22,6 +22,11 @@ import type { Logger } from "./logging";
 const BNS_V2_CONTRACT = "SP2QEZ06AGJ3RKJPBV14SY1V5BBFNAW33D96YPGZF";
 const BNS_V2_NAME = "BNS-V2";
 
+// BNS-V2 error code returned by `get-primary` when the address has no
+// primary name. Treated as an authoritative "no name" signal and cached
+// with the confirmed-negative (7d) TTL.
+const BNS_ERR_NO_PRIMARY_NAME = "131";
+
 /**
  * Tri-state BNS lookup outcome.
  *
@@ -110,13 +115,13 @@ export async function lookupBnsNameWithOutcome(
     const json = cvToJSON(cv);
 
     // BNS-V2 `get-primary` response shape, per contract source:
-    //   (ok { name: (buff 48), namespace: (buff 20) }) — address has a primary name
-    //   (err u131) ERR-NO-PRIMARY-NAME                — address has no primary name
+    //   (ok (some { name: (buff 48), namespace: (buff 20) })) — address has a primary name
+    //   (err u131) ERR-NO-PRIMARY-NAME                        — address has no primary name
     // The `(ok none)` branch below is defense-in-depth in case the contract
-    // signature ever changes to `(response (optional {...}) uint)`.
+    // ever emits an empty optional for "no primary name" instead of the err.
     if (!json.success) {
       const errCode = json.value?.value;
-      if (errCode === "131") {
+      if (errCode === BNS_ERR_NO_PRIMARY_NAME) {
         // Authoritative "no primary name" — cache as confirmed-negative (7d).
         await setCachedBnsNegative(stxAddress, kv, logger);
         return { state: "confirmed-negative", name: null };
