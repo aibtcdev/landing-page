@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { lookupBnsName } from "../bns";
+import { lookupBnsName, lookupBnsNameWithOutcome } from "../bns";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -228,7 +228,7 @@ describe("lookupBnsName", () => {
       expect(kv._store.get(cacheKey)?.ttl).toBe(60);
     });
 
-    it("writes short-TTL negative cache on !data.okay", async () => {
+    it("writes 5-min contract-error cache on !data.okay", async () => {
       const kv = createMockKv();
       mockFetch.mockResolvedValue({
         ok: true,
@@ -245,7 +245,10 @@ describe("lookupBnsName", () => {
       expect(result).toBeNull();
       const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
       expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
-      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
+      // Contract-reported errors use the 5-min TTL (BNS_CONTRACT_ERROR_CACHE_TTL),
+      // distinct from the 60s transient-upstream TTL — contract errors on valid
+      // input are effectively deterministic, so re-hitting Hiro every 60s is waste.
+      expect(kv._store.get(cacheKey)?.ttl).toBe(5 * 60);
     });
 
     it("writes short-TTL negative cache on network error", async () => {
@@ -304,6 +307,80 @@ describe("lookupBnsName", () => {
       // Busted on write paths (registration) and via the refresh endpoint.
       expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
       expect(kv._store.get(cacheKey)?.ttl).toBe(7 * 24 * 60 * 60);
+    });
+  });
+
+  describe("tri-state outcome (lookupBnsNameWithOutcome)", () => {
+    function createMockKv() {
+      const store = new Map<string, { value: string; ttl?: number }>();
+      return {
+        get: vi.fn(async (key: string) => store.get(key)?.value ?? null),
+        put: vi.fn(
+          async (
+            key: string,
+            value: string,
+            options?: { expirationTtl?: number }
+          ) => {
+            store.set(key, { value, ttl: options?.expirationTtl });
+          }
+        ),
+        _store: store,
+      };
+    }
+
+    it("returns positive outcome on successful lookup", async () => {
+      mockFetch.mockResolvedValue(mockV2Response("alice", "btc"));
+      const outcome = await lookupBnsNameWithOutcome(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
+      expect(outcome).toEqual({ state: "positive", name: "alice.btc" });
+    });
+
+    it("returns confirmed-negative outcome on (ok none)", async () => {
+      mockFetch.mockResolvedValue(mockV2None());
+      const outcome = await lookupBnsNameWithOutcome(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
+      expect(outcome).toEqual({ state: "confirmed-negative", name: null });
+    });
+
+    it("returns lookup-failed outcome on upstream error", async () => {
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        headers: mockHeaders(),
+      });
+      const outcome = await lookupBnsNameWithOutcome(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
+      expect(outcome).toEqual({ state: "lookup-failed", name: null });
+    });
+
+    it("returns lookup-failed outcome on !data.okay (contract error)", async () => {
+      const kv = createMockKv();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: mockHeaders(),
+        json: async () => ({ okay: false, result: "err" }),
+      });
+      const outcome = await lookupBnsNameWithOutcome(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
+        undefined,
+        kv as unknown as KVNamespace
+      );
+      expect(outcome).toEqual({ state: "lookup-failed", name: null });
+      // Contract-error TTL should be the 5-min variant, not 60s.
+      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
+      expect(kv._store.get(cacheKey)?.ttl).toBe(5 * 60);
+    });
+
+    it("returns lookup-failed outcome on network error", async () => {
+      mockFetch.mockRejectedValue(new Error("Network error"));
+      const outcome = await lookupBnsNameWithOutcome(
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
+      );
+      expect(outcome).toEqual({ state: "lookup-failed", name: null });
     });
   });
 

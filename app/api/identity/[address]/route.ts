@@ -4,6 +4,7 @@ import { lookupAgent } from "@/lib/agent-lookup";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
 import {
+  getCachedIdentity,
   setCachedIdentity,
   setCachedIdentityNegative,
   setCachedIdentityLookupFailed,
@@ -76,6 +77,25 @@ export async function GET(
       return NextResponse.json(
         { agentId: agent.erc8004AgentId },
         { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600" } }
+      );
+    }
+
+    // Consult the typed identity cache before hitting Hiro. This covers both
+    // confirmed-negative (7d TTL) and lookup-failed (60s TTL) hits, so the
+    // concurrent-badge-render hammer is suppressed — not just by this route's
+    // own 5-min `identity-check:` sentinel but by failures recorded from
+    // other entry points (SSR, backfill, refresh endpoint).
+    const typedCached = await getCachedIdentity(agent.stxAddress, kv);
+    if (typedCached.hit) {
+      if (typedCached.value) {
+        return NextResponse.json(
+          { agentId: typedCached.value.agentId },
+          { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600" } }
+        );
+      }
+      return NextResponse.json(
+        { agentId: null },
+        { headers: { "Cache-Control": "public, max-age=300, s-maxage=300" } }
       );
     }
 

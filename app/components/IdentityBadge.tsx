@@ -121,7 +121,7 @@ export default function IdentityBadge({
           type="button"
           onClick={handleRefresh}
           disabled={refreshing || loading}
-          className="text-[11px] text-white/40 hover:text-white/70 transition-colors underline underline-offset-2 decoration-white/20 hover:decoration-white/50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer"
+          className="text-[11px] text-white/40 hover:text-white/70 transition-colors underline underline-offset-2 decoration-white/20 hover:decoration-white/50 disabled:opacity-50 disabled:cursor-not-allowed cursor-pointer focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-white/40 rounded-sm"
         >
           {refreshing ? "Refreshing…" : "Not showing up correctly? Refresh"}
         </button>

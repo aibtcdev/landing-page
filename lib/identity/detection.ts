@@ -16,25 +16,46 @@ import {
 import type { Logger } from "../logging";
 
 /**
- * Detect if an agent has registered an on-chain identity.
+ * Tri-state identity lookup outcome.
  *
- * Uses the Hiro NFT holdings API to find identity NFTs owned by the
- * address in a single request, instead of scanning all token IDs.
+ * - `"positive"` — Hiro returned a matching NFT; `identity` is populated.
+ * - `"confirmed-negative"` — Hiro authoritatively returned no match.
+ * - `"lookup-failed"` — transient upstream error (429/5xx/timeout/parse) or
+ *   incomplete legacy scan. We don't know whether the address owns one.
  *
- * @param stxAddress - Stacks address to check
- * @param hiroApiKey - Optional Hiro API key for authenticated requests
- * @param kv - Optional KV namespace for persistent caching
- * @param logger - Optional Logger for cache telemetry and error logging
+ * Callers that mirror lookup results into persistent storage (e.g. the
+ * refresh endpoint) should skip the write on `"lookup-failed"` — overwriting
+ * a verified `erc8004AgentId` with `null` during a Hiro incident would
+ * corrupt the AgentRecord.
  */
-export async function detectAgentIdentity(
+export type IdentityLookupOutcome =
+  | { state: "positive"; identity: AgentIdentity }
+  | { state: "confirmed-negative"; identity: null }
+  | { state: "lookup-failed"; identity: null };
+
+/**
+ * Detect identity NFT ownership and return the tri-state outcome.
+ *
+ * Use {@link detectAgentIdentity} for callers that only need
+ * `AgentIdentity | null`.
+ */
+export async function detectAgentIdentityWithOutcome(
   stxAddress: string,
   hiroApiKey?: string,
   kv?: KVNamespace,
   logger?: Logger
-): Promise<AgentIdentity | null> {
+): Promise<IdentityLookupOutcome> {
   // Check KV cache first (distinguishes miss from cached negative result)
   const cached = await getCachedIdentity(stxAddress, kv, logger);
-  if (cached.hit) return cached.value;
+  if (cached.hit) {
+    if (cached.value) {
+      return { state: "positive", identity: cached.value };
+    }
+    // Cached NONE_SENTINEL. As with BNS, we can't distinguish
+    // confirmed-negative from lookup-failed from the cached value alone —
+    // callers that care should bust the cache first (see refresh endpoint).
+    return { state: "confirmed-negative", identity: null };
+  }
 
   try {
     // Query NFT holdings for this address filtered to the identity registry contract.
@@ -59,7 +80,12 @@ export async function detectAgentIdentity(
         stxAddress,
         status: response.status,
       });
-      return await detectAgentIdentityLegacy(stxAddress, hiroApiKey, kv, logger);
+      return await detectAgentIdentityLegacyWithOutcome(
+        stxAddress,
+        hiroApiKey,
+        kv,
+        logger
+      );
     }
 
     const data = await response.json() as {
@@ -74,7 +100,7 @@ export async function detectAgentIdentity(
     if (!data.results || data.results.length === 0) {
       // No identity NFT found for this address — cache negative to skip future Hiro API calls
       await setCachedIdentityNegative(stxAddress, kv, logger);
-      return null;
+      return { state: "confirmed-negative", identity: null };
     }
 
     // Extract the token ID from the value repr (format: "u42" for uint 42)
@@ -82,9 +108,10 @@ export async function detectAgentIdentity(
     const tokenIdMatch = nft.value.repr.match(/^u(\d+)$/);
     if (!tokenIdMatch) {
       // Parse/format failure does not prove the address has no identity NFT,
-      // so do not negative-cache this result.
+      // so do not negative-cache this result. Classify as lookup-failed so
+      // refresh-style callers don't clobber the stored agentId.
       logger?.warn("identity.parse_token_id_failed", { repr: nft.value.repr });
-      return null;
+      return { state: "lookup-failed", identity: null };
     }
     const agentId = Number(tokenIdMatch[1]);
 
@@ -107,9 +134,8 @@ export async function detectAgentIdentity(
     }
 
     const identity: AgentIdentity = { agentId, owner: stxAddress, uri };
-    // Cache the result
     await setCachedIdentity(stxAddress, identity, kv, logger);
-    return identity;
+    return { state: "positive", identity };
   } catch (error) {
     // Network timeout / abort / JSON parse failure. Short-TTL negative-cache
     // so the retry storm doesn't keep hammering Hiro for the same address.
@@ -118,32 +144,62 @@ export async function detectAgentIdentity(
       error: String(error),
     });
     await setCachedIdentityLookupFailed(stxAddress, kv, logger);
-    return null;
+    return { state: "lookup-failed", identity: null };
   }
+}
+
+/**
+ * Detect if an agent has registered an on-chain identity.
+ *
+ * Returns the identity or null (both confirmed-negative and lookup-failed
+ * collapse to null). Use {@link detectAgentIdentityWithOutcome} when you
+ * need to distinguish those two cases.
+ *
+ * @param stxAddress - Stacks address to check
+ * @param hiroApiKey - Optional Hiro API key for authenticated requests
+ * @param kv - Optional KV namespace for persistent caching
+ * @param logger - Optional Logger for cache telemetry and error logging
+ */
+export async function detectAgentIdentity(
+  stxAddress: string,
+  hiroApiKey?: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<AgentIdentity | null> {
+  const outcome = await detectAgentIdentityWithOutcome(
+    stxAddress,
+    hiroApiKey,
+    kv,
+    logger
+  );
+  return outcome.identity;
 }
 
 /**
  * Legacy O(N) scan — used only as fallback if the holdings API is unavailable.
  * Capped at MAX_LEGACY_BATCHES to prevent unbounded Hiro API consumption.
  */
-async function detectAgentIdentityLegacy(
+async function detectAgentIdentityLegacyWithOutcome(
   stxAddress: string,
   hiroApiKey?: string,
   kv?: KVNamespace,
   logger?: Logger
-): Promise<AgentIdentity | null> {
+): Promise<IdentityLookupOutcome> {
   logger?.warn("identity.legacy_scan_fallback", { stxAddress });
 
   // Cap at 1 batch (5 get-owner calls) to bound worst-case Hiro API consumption.
   // If the target agent's identity NFT was minted outside the most recent 5 IDs,
-  // we return null without caching so the next request will try again.
+  // we return lookup-failed without caching so the next request will try again.
   const MAX_LEGACY_BATCHES = 1;
 
   const lastIdResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-last-token-id", [], hiroApiKey, logger);
   const lastIdRaw = parseClarityValue(lastIdResult, logger);
   const lastId = lastIdRaw !== null ? Number(lastIdRaw) : null;
 
-  if (lastId === null || lastId < 0) return null;
+  if (lastId === null || lastId < 0) {
+    // Couldn't determine last token id — lookup is inconclusive.
+    return { state: "lookup-failed", identity: null };
+  }
 
   const BATCH_SIZE = 5;
   let batchCount = 0;
@@ -170,23 +226,23 @@ async function detectAgentIdentityLegacy(
       const uri = parseClarityValue(uriResult, logger);
       const identity: AgentIdentity = { agentId: match.id, owner: match.owner!, uri: uri || "" };
       await setCachedIdentity(stxAddress, identity, kv, logger);
-      return identity;
+      return { state: "positive", identity };
     }
     if (batchCount >= MAX_LEGACY_BATCHES) {
       // Scan is intentionally incomplete — don't negative-cache since the identity
-      // may exist beyond the batches we checked.
+      // may exist beyond the batches we checked. Classify as lookup-failed.
       logger?.warn("identity.legacy_scan_cap_hit", {
         stxAddress,
         batches: MAX_LEGACY_BATCHES,
         batchSize: BATCH_SIZE,
       });
-      return null;
+      return { state: "lookup-failed", identity: null };
     }
   }
 
-  // Exhausted all NFTs without finding a match — cache negative result
+  // Exhausted all NFTs without finding a match — cache confirmed-negative.
   await setCachedIdentityNegative(stxAddress, kv, logger);
-  return null;
+  return { state: "confirmed-negative", identity: null };
 }
 
 /**

@@ -2696,12 +2696,24 @@ export function GET() {
                       btcAddress: { type: "string" },
                       bnsName: {
                         oneOf: [{ type: "string" }, { type: "null" }],
-                        description: "BNS name after re-lookup, or null",
+                        description:
+                          "BNS name after re-lookup, or null. On `bnsOutcome=lookup-failed` the previously stored value is preserved (not clobbered with null).",
                       },
                       agentId: {
                         oneOf: [{ type: "integer" }, { type: "null" }],
                         description:
-                          "ERC-8004 agent ID after re-lookup, or null",
+                          "ERC-8004 agent ID after re-lookup, or null. Same preservation rule as bnsName on `idOutcome=lookup-failed`.",
+                      },
+                      bnsOutcome: {
+                        type: "string",
+                        enum: ["positive", "confirmed-negative", "lookup-failed"],
+                        description:
+                          "Tri-state outcome for the BNS lookup. `lookup-failed` = transient Hiro error; retry later.",
+                      },
+                      idOutcome: {
+                        type: "string",
+                        enum: ["positive", "confirmed-negative", "lookup-failed"],
+                        description: "Tri-state outcome for the identity lookup.",
                       },
                       cachesCleared: {
                         type: "array",
@@ -2714,6 +2726,8 @@ export function GET() {
                       "btcAddress",
                       "bnsName",
                       "agentId",
+                      "bnsOutcome",
+                      "idOutcome",
                       "cachesCleared",
                     ],
                   },
@@ -2730,6 +2744,21 @@ export function GET() {
             },
             "404": {
               description: "Agent not found",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description:
+                "Rate limited — one refresh per address per 60 seconds",
+              headers: {
+                "Retry-After": {
+                  description: "Seconds until a retry is allowed",
+                  schema: { type: "integer" },
+                },
+              },
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/ErrorResponse" },

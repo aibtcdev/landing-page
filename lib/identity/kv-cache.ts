@@ -40,6 +40,17 @@ const BNS_CONFIRMED_NEGATIVE_CACHE_TTL = 7 * 24 * 60 * 60; // 7 days
  * to stop a concurrent-request hammer.
  */
 const BNS_LOOKUP_FAILED_CACHE_TTL = 60; // 60 seconds
+/**
+ * "Contract-reported error" — Hiro returned `{okay: false}` from BNS V2
+ * `get-primary`. On a well-formed principal against a healthy contract this
+ * branch is practically unreachable; when it does fire it's usually a
+ * deterministic input issue (malformed address stored in our DB) rather than
+ * a transient upstream blip. 5 min avoids re-hitting Hiro every 60s for each
+ * affected address while still short enough to recover from any genuine
+ * one-off contract hiccup. Tracked follow-up: if sustained, investigate the
+ * underlying principal.
+ */
+const BNS_CONTRACT_ERROR_CACHE_TTL = 5 * 60; // 5 minutes
 const IDENTITY_CACHE_TTL = 24 * 60 * 60; // 24 hours (immutable NFT once minted)
 /**
  * "Confirmed no identity" — Hiro NFT holdings API authoritatively returned
@@ -57,6 +68,24 @@ const TX_CACHE_TTL = 30 * 60; // 30 minutes (raised from 5 minutes)
 
 /** Result from a cache lookup: distinguishes miss ({hit:false}) from cached null ({hit:true,value:null}). */
 export type CacheResult<T> = { hit: true; value: T | null } | { hit: false };
+
+/**
+ * Tri-state outcome for authoritative BNS / identity lookups.
+ *
+ * Callers that mirror lookup results into the AgentRecord (e.g. the refresh
+ * endpoint) need to distinguish "confirmed absent" from "we don't know".
+ * The plain `lookupBnsName` / `detectAgentIdentity` helpers return
+ * `string | null` / `AgentIdentity | null`, which collapses confirmed-negative
+ * and lookup-failed into the same `null` — ambiguity that will clobber a
+ * verified field with null during a Hiro incident.
+ *
+ * The matching `WithOutcome` helpers (see `lib/bns.ts`, `lib/identity/detection.ts`)
+ * return this discriminant so callers can skip the write on `"lookup-failed"`.
+ */
+export type LookupOutcomeState =
+  | "positive"
+  | "confirmed-negative"
+  | "lookup-failed";
 
 /** Sentinel value for negative cache entries (address has no BNS name or on-chain identity). */
 export const NONE_SENTINEL = "__NONE__";
@@ -275,6 +304,28 @@ export function setCachedBnsLookupFailed(
     `cache:bns:${address}`,
     NONE_SENTINEL,
     BNS_LOOKUP_FAILED_CACHE_TTL,
+    "bns",
+    logger
+  );
+}
+
+/**
+ * Cache a BNS contract-reported error (Hiro returned `{okay: false}`) for a
+ * medium TTL ({@link BNS_CONTRACT_ERROR_CACHE_TTL} = 5min). Distinct from
+ * {@link setCachedBnsLookupFailed} (60s, transient upstream) because
+ * contract-level errors are typically deterministic — re-hitting Hiro every
+ * 60s is pure waste.
+ */
+export function setCachedBnsContractError(
+  address: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<void> {
+  return kvPut(
+    kv,
+    `cache:bns:${address}`,
+    NONE_SENTINEL,
+    BNS_CONTRACT_ERROR_CACHE_TTL,
     "bns",
     logger
   );

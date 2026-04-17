@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
-import { lookupBnsName } from "@/lib/bns";
-import { detectAgentIdentity } from "@/lib/identity/detection";
+import { lookupBnsNameWithOutcome } from "@/lib/bns";
+import { detectAgentIdentityWithOutcome } from "@/lib/identity/detection";
 import {
   invalidateBnsCache,
   invalidateIdentityCache,
@@ -12,6 +12,18 @@ import {
   createConsoleLogger,
   isLogsRPC,
 } from "@/lib/logging";
+
+/**
+ * Per-address rate-limit for manual refresh. Each refresh call:
+ *   - deletes two `cache:*` entries (bypassing the 7d confirmed-negative TTL),
+ *   - deletes the `identity-check:*` rate-limit sentinel,
+ *   - issues two fresh Hiro API calls (BNS + identity).
+ *
+ * Without this guard an unauthenticated caller could amplify upstream traffic
+ * by spamming POSTs. 60s is short enough to not block a user correcting a
+ * genuine state-change, long enough to neutralise abuse.
+ */
+const REFRESH_RATE_LIMIT_SECONDS = 60;
 
 /**
  * POST /api/identity/:address/refresh — Bust cached BNS + identity state.
@@ -31,6 +43,9 @@ import {
  *
  * Accepts any registered agent address (BTC / STX / taproot) — resolves to
  * the same AgentRecord and invalidates against its `stxAddress`.
+ *
+ * Rate-limited to one refresh per address per {@link REFRESH_RATE_LIMIT_SECONDS}
+ * seconds. Repeat calls within that window return 429 with `Retry-After`.
  *
  * Response:
  *   {
@@ -73,35 +88,78 @@ export async function POST(
 
     const stxAddress = agent.stxAddress;
 
-    // 1. Bust caches. `identity-check:{stx}` is the rate-limit sentinel used
-    //    by /api/identity/:address GET — clearing it so the next lookup isn't
-    //    suppressed.
-    await Promise.all([
+    // Rate limit: one manual refresh per address per REFRESH_RATE_LIMIT_SECONDS.
+    // Enforced BEFORE any cache invalidation or Hiro call so repeat POSTs
+    // don't keep busting the 7d confirmed-negative cache or amplifying traffic.
+    const refreshGateKey = `refresh-gate:${stxAddress}`;
+    const recentRefresh = await kv.get(refreshGateKey);
+    if (recentRefresh) {
+      return NextResponse.json(
+        {
+          error: `Refresh rate limit — try again in ${REFRESH_RATE_LIMIT_SECONDS} seconds`,
+          stxAddress,
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": String(REFRESH_RATE_LIMIT_SECONDS) },
+        }
+      );
+    }
+    await kv.put(refreshGateKey, "1", {
+      expirationTtl: REFRESH_RATE_LIMIT_SECONDS,
+    });
+
+    // Invalidate caches. The `identity-check:{stx}` sentinel is deleted via
+    // best-effort try/catch — a KV hiccup on that key shouldn't fail the
+    // whole refresh (the typed cache invalidations are the load-bearing bust).
+    const invalidations: Promise<void>[] = [
       invalidateBnsCache(stxAddress, kv, logger),
       invalidateIdentityCache(stxAddress, kv, logger),
-      kv.delete(`identity-check:${stxAddress}`),
-    ]);
+      (async () => {
+        try {
+          await kv.delete(`identity-check:${stxAddress}`);
+        } catch (err) {
+          logger.warn("identity.refresh_identity_check_delete_failed", {
+            stxAddress,
+            error: String(err),
+          });
+        }
+      })(),
+    ];
+    await Promise.all(invalidations);
 
     logger.info("identity.refresh_requested", { stxAddress });
 
-    // 2. Re-run both lookups against fresh Hiro state.
-    const [bnsName, identity] = await Promise.all([
-      lookupBnsName(stxAddress, env.HIRO_API_KEY, kv, logger),
-      detectAgentIdentity(stxAddress, env.HIRO_API_KEY, kv, logger),
+    // Re-run both lookups against fresh Hiro state using the tri-state
+    // outcome helpers. We need the state so we can skip the AgentRecord
+    // write when the lookup was inconclusive (transient upstream error) —
+    // otherwise a Hiro incident during refresh would clobber a previously
+    // verified bnsName or erc8004AgentId with null.
+    const [bnsOutcome, idOutcome] = await Promise.all([
+      lookupBnsNameWithOutcome(stxAddress, env.HIRO_API_KEY, kv, logger),
+      detectAgentIdentityWithOutcome(stxAddress, env.HIRO_API_KEY, kv, logger),
     ]);
 
-    // 3. If either result differs from the stored agent record, persist the
-    //    update on both btc: and stx: keys so consumers that read the record
-    //    directly see the change immediately.
-    const bnsChanged = (agent.bnsName || null) !== (bnsName || null);
-    const idChanged =
-      (agent.erc8004AgentId ?? null) !== (identity?.agentId ?? null);
+    // Compute proposed next values. `"lookup-failed"` outcomes preserve the
+    // stored value; authoritative outcomes (positive or confirmed-negative)
+    // take effect.
+    const nextBnsName =
+      bnsOutcome.state === "lookup-failed"
+        ? agent.bnsName ?? null
+        : bnsOutcome.name;
+    const nextAgentId =
+      idOutcome.state === "lookup-failed"
+        ? agent.erc8004AgentId ?? null
+        : idOutcome.identity?.agentId ?? null;
+
+    const bnsChanged = (agent.bnsName ?? null) !== nextBnsName;
+    const idChanged = (agent.erc8004AgentId ?? null) !== nextAgentId;
 
     if (bnsChanged || idChanged) {
       const updatedRecord = {
         ...agent,
-        bnsName: bnsName ?? null,
-        erc8004AgentId: identity?.agentId ?? null,
+        bnsName: nextBnsName,
+        erc8004AgentId: nextAgentId,
       };
       const serialized = JSON.stringify(updatedRecord);
       await Promise.all([
@@ -112,14 +170,27 @@ export async function POST(
         stxAddress,
         bnsChanged,
         idChanged,
+        bnsOutcome: bnsOutcome.state,
+        idOutcome: idOutcome.state,
+      });
+    } else if (
+      bnsOutcome.state === "lookup-failed" ||
+      idOutcome.state === "lookup-failed"
+    ) {
+      logger.warn("identity.refresh_inconclusive", {
+        stxAddress,
+        bnsOutcome: bnsOutcome.state,
+        idOutcome: idOutcome.state,
       });
     }
 
     return NextResponse.json({
       stxAddress,
       btcAddress: agent.btcAddress,
-      bnsName: bnsName ?? null,
-      agentId: identity?.agentId ?? null,
+      bnsName: nextBnsName,
+      agentId: nextAgentId,
+      bnsOutcome: bnsOutcome.state,
+      idOutcome: idOutcome.state,
       cachesCleared: ["cache:bns", "cache:identity", "identity-check"],
     });
   } catch (e) {
@@ -146,6 +217,9 @@ export async function GET(
         "confirmed-negative cache will otherwise serve stale state until it " +
         "expires.",
       method: "POST",
+      rateLimit:
+        `One refresh per address per ${REFRESH_RATE_LIMIT_SECONDS} seconds. ` +
+        "Repeat calls return 429 with a Retry-After header.",
       parameters: {
         address:
           "BTC, STX, or taproot address of a registered agent (same formats " +
@@ -156,6 +230,10 @@ export async function GET(
         btcAddress: "string — the agent's BTC address",
         bnsName: "string | null — fresh BNS name after re-lookup",
         agentId: "number | null — fresh ERC-8004 agent ID after re-lookup",
+        bnsOutcome:
+          "\"positive\" | \"confirmed-negative\" | \"lookup-failed\" — whether the BNS lookup produced an authoritative result. On lookup-failed the stored bnsName is preserved rather than clobbered.",
+        idOutcome:
+          "\"positive\" | \"confirmed-negative\" | \"lookup-failed\" — same for identity.",
         cachesCleared:
           "string[] — cache key families that were invalidated",
       },
