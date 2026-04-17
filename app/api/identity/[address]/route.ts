@@ -78,9 +78,15 @@ export async function GET(
     const assetId = `${contractAddress}.${contractName}::agent-identity`;
     const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
-    const resp = await stacksApiFetch(url, {
-      headers: buildHiroHeaders(env.HIRO_API_KEY as string | undefined),
-    });
+    // Browser-facing endpoint — reduced retry budget so sustained Hiro 429s
+    // cannot block the identity badge render for tens of seconds.
+    const resp = await stacksApiFetch(
+      url,
+      { headers: buildHiroHeaders(env.HIRO_API_KEY) },
+      2,
+      500,
+      1
+    );
     if (!resp.ok) {
       return NextResponse.json(
         { error: `Hiro API error: ${resp.status}` },

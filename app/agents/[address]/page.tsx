@@ -112,9 +112,16 @@ async function resolveIdentity(
     const assetId = `${contractAddress}.${contractName}::agent-identity`;
     const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
-    const resp = await stacksApiFetch(url, {
-      headers: buildHiroHeaders(hiroApiKey),
-    });
+    // SSR profile path — reduced retry budget so a throttled Hiro cannot
+    // block page rendering for tens of seconds. Falls back to the uncached
+    // agent record on failure.
+    const resp = await stacksApiFetch(
+      url,
+      { headers: buildHiroHeaders(hiroApiKey) },
+      2,
+      500,
+      1
+    );
     if (!resp.ok) return agent;
 
     const data = await resp.json() as {

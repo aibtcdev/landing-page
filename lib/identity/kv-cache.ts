@@ -97,7 +97,10 @@ async function readJsonCache<T>(
     logCacheEvent("cache_hit", keyFamily, key);
     return parsed;
   } catch (e) {
-    console.error(`Failed to parse cached ${keyFamily} for ${key}:`, e);
+    // key is user-supplied (address/txid) — keep it out of the format string
+    // and pass it as a separate argument so it cannot be interpreted as a
+    // printf-style specifier (ref: CodeQL format-string advisory).
+    console.error("Failed to parse cached entry", { keyFamily, key }, e);
     return null;
   }
 }
@@ -127,7 +130,7 @@ async function readSentinelCache<T>(
     logCacheEvent("cache_hit", keyFamily, key);
     return { hit: true, value: parsed };
   } catch (e) {
-    console.error(`Failed to parse cached ${keyFamily} for ${key}:`, e);
+    console.error("Failed to parse cached entry", { keyFamily, key }, e);
     return { hit: false };
   }
 }
@@ -206,16 +209,21 @@ export function setCachedTransaction(
   return kvPut(kv, `cache:tx:${txid}`, JSON.stringify(data), TX_CACHE_TTL);
 }
 
+/** Minimal shape of a Hiro stacking response used by the stacker achievement. */
+export interface StackingCacheEntry {
+  locked: string;
+}
+
 export function getCachedStacking(
   stxAddress: string,
   kv?: KVNamespace
-): Promise<any | null> {
-  return readJsonCache<any>(kv, "cache:stacking:", "stacking", stxAddress);
+): Promise<StackingCacheEntry | null> {
+  return readJsonCache<StackingCacheEntry>(kv, "cache:stacking:", "stacking", stxAddress);
 }
 
 export function setCachedStacking(
   stxAddress: string,
-  data: any,
+  data: StackingCacheEntry,
   kv?: KVNamespace
 ): Promise<void> {
   return kvPut(kv, `cache:stacking:${stxAddress}`, JSON.stringify(data), STACKING_CACHE_TTL);

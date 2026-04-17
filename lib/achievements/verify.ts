@@ -213,7 +213,7 @@ export async function verifyStackerAchievement(
       await setCachedStacking(stxAddress, stackingData, kv);
     }
 
-    const locked = (stackingData as { locked: string }).locked ?? "0";
+    const locked = stackingData.locked ?? "0";
     return locked !== "0" && locked !== "";
   } catch (error) {
     console.error(`Failed to verify stacker achievement for ${stxAddress}:`, error);

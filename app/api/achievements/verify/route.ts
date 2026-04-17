@@ -21,7 +21,7 @@ import {
   setCachedTransaction,
 } from "@/lib/identity/kv-cache";
 import { buildHiroHeaders, detect429 } from "@/lib/identity/stacks-api";
-import { stacksApiFetch } from "@/lib/stacks-api-fetch";
+import { stacksApiFetch, parseRetryAfterMs } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE } from "@/lib/identity/constants";
 
 const RATE_LIMIT_MS = ACHIEVEMENT_VERIFY_RATE_LIMIT_MS;
@@ -406,11 +406,31 @@ export async function POST(request: NextRequest) {
             const txResp = await stacksApiFetch(txUrl, { headers });
 
             if (!txResp.ok) {
+              // If the wrapper exhausted its 429 retry budget and still saw a rate
+              // limit from Hiro, surface that as 503 + Retry-After so callers can
+              // back off rather than treating it as a permanent client error.
+              if (txResp.status === 429) {
+                const retryAfterMs = parseRetryAfterMs(txResp);
+                const retryAfterSeconds = retryAfterMs != null
+                  ? Math.ceil(retryAfterMs / 1000)
+                  : 60;
+                return NextResponse.json(
+                  {
+                    error: `Upstream rate limit while fetching transaction ${txid}. Retry later.`,
+                  },
+                  {
+                    status: 503,
+                    headers: { "Retry-After": String(retryAfterSeconds) },
+                  }
+                );
+              }
+              const upstreamStatus =
+                txResp.status >= 500 && txResp.status < 600 ? 502 : 400;
               return NextResponse.json(
                 {
                   error: `Failed to fetch transaction ${txid}: ${txResp.status} ${txResp.statusText}`,
                 },
-                { status: 400 }
+                { status: upstreamStatus }
               );
             }
 

@@ -4,12 +4,12 @@
     "no-restricted-syntax": [
       "error",
       {
-        "selector": "Literal[value=/api\\.hiro\\.so/]",
-        "message": "Direct Hiro API URL not allowed. Use stacksApiFetch() from lib/stacks-api-fetch.ts with STACKS_API_BASE from lib/identity/constants.ts."
+        "selector": "Literal[value=/api(?:\\.mainnet|\\.testnet)?\\.hiro\\.so/]",
+        "message": "Direct Hiro API URL not allowed. Use stacksApiFetch() from lib/stacks-api-fetch.ts with STACKS_API_BASE / STACKS_API_TESTNET_BASE from lib/identity/constants.ts."
       },
       {
-        "selector": "TemplateLiteral > TemplateElement[value.raw=/api\\.hiro\\.so/]",
-        "message": "Direct Hiro API URL not allowed. Use stacksApiFetch() from lib/stacks-api-fetch.ts with STACKS_API_BASE from lib/identity/constants.ts."
+        "selector": "TemplateLiteral > TemplateElement[value.raw=/api(?:\\.mainnet|\\.testnet)?\\.hiro\\.so/]",
+        "message": "Direct Hiro API URL not allowed. Use stacksApiFetch() from lib/stacks-api-fetch.ts with STACKS_API_BASE / STACKS_API_TESTNET_BASE from lib/identity/constants.ts."
       }
     ]
   },

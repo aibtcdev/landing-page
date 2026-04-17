@@ -41,6 +41,8 @@ export async function lookupBnsName(
     const headers = buildHiroHeaders(hiroApiKey);
     headers["Content-Type"] = "application/json";
 
+    // BNS lookup runs on request paths (register, verify, SSR). Use a reduced
+    // retry budget so a degraded Hiro cannot block requests for tens of seconds.
     const res = await stacksApiFetch(
       `${STACKS_API_BASE}/v2/contracts/call-read/${BNS_V2_CONTRACT}/${BNS_V2_NAME}/get-primary`,
       {
@@ -50,7 +52,10 @@ export async function lookupBnsName(
           sender: stxAddress,
           arguments: [`0x${serialized}`],
         }),
-      }
+      },
+      2,
+      500,
+      1
     );
 
     if (!res.ok) return null;
