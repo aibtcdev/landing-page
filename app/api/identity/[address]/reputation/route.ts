@@ -88,17 +88,21 @@ export async function GET(
     );
   }
 
-  const { env, ctx } = await getCloudflareContext();
-  const kv = env.VERIFIED_AGENTS as KVNamespace;
-  const hiroApiKey = env.HIRO_API_KEY;
-
   const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
   const baseCtx = { rayId, path: request.nextUrl.pathname };
-  const logger = isLogsRPC(env.LOGS)
-    ? createLogger(env.LOGS, ctx, baseCtx)
-    : createConsoleLogger(baseCtx);
+  // Start with a console-backed logger so errors during Cloudflare context
+  // resolution still emit structured output; upgrade to the RPC logger once
+  // the LOGS binding is available.
+  let logger: Logger = createConsoleLogger(baseCtx);
 
   try {
+    const { env, ctx } = await getCloudflareContext();
+    const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const hiroApiKey = env.HIRO_API_KEY;
+    if (isLogsRPC(env.LOGS)) {
+      logger = createLogger(env.LOGS, ctx, baseCtx);
+    }
+
     const agent = await lookupAgent(kv, address, logger);
 
     if (!agent) {
