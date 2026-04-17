@@ -7,11 +7,11 @@ import {
 import { hexToBytes, bytesToUtf8 } from "@stacks/common";
 import { getCachedBnsName, setCachedBnsName, setCachedBnsNegative, BNS_NONE_SENTINEL } from "./identity/kv-cache";
 import { buildHiroHeaders } from "./identity/stacks-api";
+import { stacksApiFetch } from "./stacks-api-fetch";
+import { STACKS_API_BASE } from "./identity/constants";
 
 const BNS_V2_CONTRACT = "SP2QEZ06AGJ3RKJPBV14SY1V5BBFNAW33D96YPGZF";
 const BNS_V2_NAME = "BNS-V2";
-const HIRO_API = "https://api.hiro.so";
-const BNS_TIMEOUT_MS = 5000;
 
 /**
  * Look up the BNS name for a Stacks address using BNS-V2.
@@ -41,8 +41,10 @@ export async function lookupBnsName(
     const headers = buildHiroHeaders(hiroApiKey);
     headers["Content-Type"] = "application/json";
 
-    const res = await fetch(
-      `${HIRO_API}/v2/contracts/call-read/${BNS_V2_CONTRACT}/${BNS_V2_NAME}/get-primary`,
+    // BNS lookup runs on request paths (register, verify, SSR). Use a reduced
+    // retry budget so a degraded Hiro cannot block requests for tens of seconds.
+    const res = await stacksApiFetch(
+      `${STACKS_API_BASE}/v2/contracts/call-read/${BNS_V2_CONTRACT}/${BNS_V2_NAME}/get-primary`,
       {
         method: "POST",
         headers,
@@ -50,8 +52,10 @@ export async function lookupBnsName(
           sender: stxAddress,
           arguments: [`0x${serialized}`],
         }),
-        signal: AbortSignal.timeout(BNS_TIMEOUT_MS),
-      }
+      },
+      2,
+      500,
+      1
     );
 
     if (!res.ok) return null;

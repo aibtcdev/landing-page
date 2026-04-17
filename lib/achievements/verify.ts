@@ -8,12 +8,16 @@
 import {
   getCachedTransaction,
   setCachedTransaction,
+  getCachedStacking,
+  setCachedStacking,
 } from "@/lib/identity/kv-cache";
 import {
   buildHiroHeaders,
   callReadOnly,
   parseClarityValue,
 } from "@/lib/identity/stacks-api";
+import { stacksApiFetch } from "@/lib/stacks-api-fetch";
+import { STACKS_API_BASE } from "@/lib/identity/constants";
 import { standardPrincipalCV } from "@stacks/transactions";
 
 /** Rate limit window for achievement verification (5 minutes) */
@@ -185,14 +189,12 @@ export async function verifyStackerAchievement(
   hiroApiKey?: string
 ): Promise<boolean> {
   try {
-    const cacheKey = `stacking:${stxAddress}`;
-    let stackingData = await getCachedTransaction(cacheKey, kv);
+    let stackingData = await getCachedStacking(stxAddress, kv);
 
     if (!stackingData) {
-      const stackingUrl = `https://api.hiro.so/extended/v1/address/${stxAddress}/stacking`;
-      const stackingResp = await fetch(stackingUrl, {
+      const stackingUrl = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/stacking`;
+      const stackingResp = await stacksApiFetch(stackingUrl, {
         headers: buildHiroHeaders(hiroApiKey),
-        signal: AbortSignal.timeout(10000),
       });
 
       if (stackingResp.status === 404) {
@@ -208,10 +210,10 @@ export async function verifyStackerAchievement(
       }
 
       stackingData = (await stackingResp.json()) as { locked: string };
-      await setCachedTransaction(cacheKey, stackingData, kv);
+      await setCachedStacking(stxAddress, stackingData, kv);
     }
 
-    const locked = (stackingData as { locked: string }).locked ?? "0";
+    const locked = stackingData.locked ?? "0";
     return locked !== "0" && locked !== "";
   } catch (error) {
     console.error(`Failed to verify stacker achievement for ${stxAddress}:`, error);
@@ -262,10 +264,9 @@ export async function verifyConnectorAchievement(
     let txs = await getCachedTransaction(cacheKey, kv);
 
     if (!txs) {
-      const txsUrl = `https://api.hiro.so/extended/v1/address/${stxAddress}/transactions?limit=50`;
-      const resp = await fetch(txsUrl, {
+      const txsUrl = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/transactions?limit=50`;
+      const resp = await stacksApiFetch(txsUrl, {
         headers: buildHiroHeaders(hiroApiKey),
-        signal: AbortSignal.timeout(10000),
       });
 
       if (!resp.ok) {

@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
+import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
+import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
 
 /**
  * GET /api/identity/:address — Detect on-chain ERC-8004 identity for an agent.
@@ -53,10 +55,11 @@ export async function GET(
     }
 
     // Positive result in KV — return immediately
+    // Identity NFTs are immutable once minted; cache aggressively at the CDN layer.
     if (agent.erc8004AgentId != null) {
       return NextResponse.json(
         { agentId: agent.erc8004AgentId },
-        { headers: { "Cache-Control": "public, max-age=300, s-maxage=600" } }
+        { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600" } }
       );
     }
 
@@ -66,19 +69,24 @@ export async function GET(
     if (recentlyChecked) {
       return NextResponse.json(
         { agentId: null },
-        { headers: { "Cache-Control": "public, max-age=60, s-maxage=120" } }
+        { headers: { "Cache-Control": "public, max-age=300, s-maxage=300" } }
       );
     }
 
     // Fetch from Hiro
-    const contract = "SP1NMR7MY0TJ1QA7WQBZ6504KC79PZNTRQH4YGFJD.identity-registry-v2";
-    const assetId = `${contract}::agent-identity`;
-    const url = `https://api.mainnet.hiro.so/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
+    const [contractAddress, contractName] = IDENTITY_REGISTRY_CONTRACT.split(".");
+    const assetId = `${contractAddress}.${contractName}::agent-identity`;
+    const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
-    const headers: Record<string, string> = {};
-    if (env.HIRO_API_KEY) headers["X-Hiro-API-Key"] = env.HIRO_API_KEY;
-
-    const resp = await fetch(url, { headers });
+    // Browser-facing endpoint — reduced retry budget so sustained Hiro 429s
+    // cannot block the identity badge render for tens of seconds.
+    const resp = await stacksApiFetch(
+      url,
+      { headers: buildHiroHeaders(env.HIRO_API_KEY) },
+      2,
+      500,
+      1
+    );
     if (!resp.ok) {
       return NextResponse.json(
         { error: `Hiro API error: ${resp.status}` },
@@ -110,8 +118,8 @@ export async function GET(
     }
 
     const cacheHeader = agentId != null
-      ? "public, max-age=300, s-maxage=600"
-      : "public, max-age=60, s-maxage=120";
+      ? "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600"
+      : "public, max-age=300, s-maxage=300";
 
     return NextResponse.json(
       { agentId },

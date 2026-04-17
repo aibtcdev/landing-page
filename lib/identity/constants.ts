@@ -10,6 +10,8 @@ export const REPUTATION_REGISTRY_CONTRACT =
 
 export const STACKS_API_BASE = "https://api.mainnet.hiro.so";
 
+export const STACKS_API_TESTNET_BASE = "https://api.testnet.hiro.so";
+
 export const WAD_DECIMALS = 18;
 
 /**

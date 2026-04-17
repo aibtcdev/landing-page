@@ -3,6 +3,13 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin/auth";
 import type { AgentRecord } from "@/lib/types";
 import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "@/lib/identity/constants";
+import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
+
+/** Sleep helper for rate-spacing sequential Hiro API calls. */
+const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
+
+/** Minimum delay between Hiro API calls to stay within rate limits (200ms = 5 calls/sec). */
+const BACKFILL_INTER_CALL_DELAY_MS = 200;
 
 /**
  * GET /api/admin/backfill-identity
@@ -38,8 +45,7 @@ export async function GET(request: NextRequest) {
     const [contractAddress, contractName] = IDENTITY_REGISTRY_CONTRACT.split(".");
     const assetId = `${contractAddress}.${contractName}::agent-identity`;
 
-    const hiroHeaders: Record<string, string> = {};
-    if (hiroApiKey) hiroHeaders["X-Hiro-API-Key"] = hiroApiKey;
+    const hiroHeaders = buildHiroHeaders(hiroApiKey);
 
     let processed = 0;
     let updated = 0;
@@ -92,11 +98,13 @@ export async function GET(request: NextRequest) {
 
         try {
           const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
-          const resp = await fetch(url, { headers: hiroHeaders });
+          const resp = await stacksApiFetch(url, { headers: hiroHeaders });
 
           if (!resp.ok) {
             console.warn(`[backfill-identity] Hiro error ${resp.status} for ${agent.stxAddress}`);
             errors++;
+            // Still rate-space on error to avoid hammering a degraded endpoint
+            await sleep(BACKFILL_INTER_CALL_DELAY_MS);
             continue;
           }
 
@@ -126,7 +134,13 @@ export async function GET(request: NextRequest) {
         } catch (error) {
           console.error(`[backfill-identity] Error for ${agent.stxAddress}:`, error);
           errors++;
+          // Still rate-space on unexpected errors
+          await sleep(BACKFILL_INTER_CALL_DELAY_MS);
+          continue;
         }
+
+        // Rate-space: wait between Hiro calls to stay within budget
+        await sleep(BACKFILL_INTER_CALL_DELAY_MS);
       }
 
       listComplete = listResult.list_complete;
