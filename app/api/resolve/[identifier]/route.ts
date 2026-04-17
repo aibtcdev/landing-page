@@ -24,6 +24,11 @@ import {
   IDENTITY_REGISTRY_CONTRACT,
 } from "@/lib/identity";
 import { enrichAgentProfile } from "@/lib/agent-enrichment";
+import {
+  createLogger,
+  createConsoleLogger,
+  isLogsRPC,
+} from "@/lib/logging";
 
 // ---------------------------------------------------------------------------
 // Identifier type detection
@@ -220,7 +225,7 @@ function buildUsageResponse() {
 // ---------------------------------------------------------------------------
 
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ identifier: string }> }
 ) {
   try {
@@ -233,9 +238,15 @@ export async function GET(
 
     const identifierType = detectIdentifierType(identifier);
 
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const hiroApiKey = env.HIRO_API_KEY;
+
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const baseCtx = { rayId, path: request.nextUrl.pathname };
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, baseCtx)
+      : createConsoleLogger(baseCtx);
 
     // -----------------------------------------------------------------------
     // Resolve identifier to AgentRecord
@@ -391,7 +402,8 @@ export async function GET(
       agent,
       kv,
       hiroApiKey,
-      `resolve/${agent.btcAddress}`
+      `resolve/${agent.btcAddress}`,
+      logger
     );
 
     // -----------------------------------------------------------------------

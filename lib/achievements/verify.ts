@@ -19,6 +19,7 @@ import {
 import { stacksApiFetch } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE } from "@/lib/identity/constants";
 import { standardPrincipalCV } from "@stacks/transactions";
+import type { Logger } from "@/lib/logging";
 
 /** Rate limit window for achievement verification (5 minutes) */
 export const ACHIEVEMENT_VERIFY_RATE_LIMIT_MS = 5 * 60 * 1000;
@@ -80,11 +81,12 @@ export async function setRateLimit(
  */
 export async function verifySenderAchievement(
   btcAddress: string,
-  kv: KVNamespace
+  kv: KVNamespace,
+  logger?: Logger
 ): Promise<boolean> {
   try {
     const cacheKey = `mempool-addr:${btcAddress}`;
-    let txs = await getCachedTransaction(cacheKey, kv);
+    let txs = await getCachedTransaction(cacheKey, kv, logger);
 
     if (!txs) {
       const mempoolUrl = `https://mempool.space/api/address/${btcAddress}/txs`;
@@ -93,9 +95,10 @@ export async function verifySenderAchievement(
       });
 
       if (!mempoolResp.ok) {
-        console.error(
-          `Failed to fetch mempool data for ${btcAddress}: ${mempoolResp.status}`
-        );
+        logger?.error("achievement.sender.mempool_fetch_failed", {
+          btcAddress,
+          status: mempoolResp.status,
+        });
         return false;
       }
 
@@ -104,7 +107,7 @@ export async function verifySenderAchievement(
       }>;
 
       // Cache the result
-      await setCachedTransaction(cacheKey, txs, kv);
+      await setCachedTransaction(cacheKey, txs, kv, logger);
     }
 
     // Check if any transaction has this address as an input
@@ -116,7 +119,10 @@ export async function verifySenderAchievement(
 
     return hasOutgoingTx;
   } catch (error) {
-    console.error(`Failed to verify sender achievement for ${btcAddress}:`, error);
+    logger?.error("achievement.sender.verify_error", {
+      btcAddress,
+      error: String(error),
+    });
     return false;
   }
 }
@@ -138,11 +144,12 @@ const SBTC_CONTRACT = "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token";
 export async function verifySbtcHolderAchievement(
   stxAddress: string,
   kv: KVNamespace,
-  hiroApiKey?: string
+  hiroApiKey?: string,
+  logger?: Logger
 ): Promise<boolean> {
   try {
     const cacheKey = `sbtc-balance:${stxAddress}`;
-    let balanceData = await getCachedTransaction(cacheKey, kv);
+    let balanceData = await getCachedTransaction(cacheKey, kv, logger);
 
     if (!balanceData) {
       const response = await callReadOnly(
@@ -158,16 +165,16 @@ export async function verifySbtcHolderAchievement(
         return false;
       }
       balanceData = { balance: parsed };
-      await setCachedTransaction(cacheKey, balanceData, kv);
+      await setCachedTransaction(cacheKey, balanceData, kv, logger);
     }
 
     const balance = (balanceData as { balance: string }).balance ?? "0";
     return balance !== "0" && balance !== "";
   } catch (error) {
-    console.error(
-      `Failed to verify sbtc-holder achievement for ${stxAddress}:`,
-      error
-    );
+    logger?.error("achievement.sbtc_holder.verify_error", {
+      stxAddress,
+      error: String(error),
+    });
     return false;
   }
 }
@@ -186,10 +193,11 @@ export async function verifySbtcHolderAchievement(
 export async function verifyStackerAchievement(
   stxAddress: string,
   kv: KVNamespace,
-  hiroApiKey?: string
+  hiroApiKey?: string,
+  logger?: Logger
 ): Promise<boolean> {
   try {
-    let stackingData = await getCachedStacking(stxAddress, kv);
+    let stackingData = await getCachedStacking(stxAddress, kv, logger);
 
     if (!stackingData) {
       const stackingUrl = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/stacking`;
@@ -203,20 +211,24 @@ export async function verifyStackerAchievement(
       }
 
       if (!stackingResp.ok) {
-        console.error(
-          `Failed to fetch stacking data for ${stxAddress}: ${stackingResp.status}`
-        );
+        logger?.error("achievement.stacker.fetch_failed", {
+          stxAddress,
+          status: stackingResp.status,
+        });
         return false;
       }
 
       stackingData = (await stackingResp.json()) as { locked: string };
-      await setCachedStacking(stxAddress, stackingData, kv);
+      await setCachedStacking(stxAddress, stackingData, kv, logger);
     }
 
     const locked = stackingData.locked ?? "0";
     return locked !== "0" && locked !== "";
   } catch (error) {
-    console.error(`Failed to verify stacker achievement for ${stxAddress}:`, error);
+    logger?.error("achievement.stacker.verify_error", {
+      stxAddress,
+      error: String(error),
+    });
     return false;
   }
 }
@@ -257,11 +269,12 @@ const SBTC_CONTRACT_ID =
 export async function verifyConnectorAchievement(
   stxAddress: string,
   kv: KVNamespace,
-  hiroApiKey?: string
+  hiroApiKey?: string,
+  logger?: Logger
 ): Promise<{ txid: string; recipientAddress: string } | null> {
   try {
     const cacheKey = `stx-txs:${stxAddress}`;
-    let txs = await getCachedTransaction(cacheKey, kv);
+    let txs = await getCachedTransaction(cacheKey, kv, logger);
 
     if (!txs) {
       const txsUrl = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/transactions?limit=50`;
@@ -270,9 +283,10 @@ export async function verifyConnectorAchievement(
       });
 
       if (!resp.ok) {
-        console.error(
-          `Failed to fetch transactions for ${stxAddress}: ${resp.status}`
-        );
+        logger?.error("achievement.connector.fetch_failed", {
+          stxAddress,
+          status: resp.status,
+        });
         return null;
       }
 
@@ -290,7 +304,7 @@ export async function verifyConnectorAchievement(
         }>;
       };
       txs = data.results;
-      await setCachedTransaction(cacheKey, txs, kv);
+      await setCachedTransaction(cacheKey, txs, kv, logger);
     }
 
     // Find a qualifying sBTC transfer
@@ -337,10 +351,10 @@ export async function verifyConnectorAchievement(
 
     return null;
   } catch (error) {
-    console.error(
-      `Failed to verify connector achievement for ${stxAddress}:`,
-      error
-    );
+    logger?.error("achievement.connector.verify_error", {
+      stxAddress,
+      error: String(error),
+    });
     return null;
   }
 }
@@ -351,16 +365,17 @@ export async function verifyInscriberAchievement(
   inscriptionId: string,
   btcAddress: string,
   kv: KVNamespace,
-  unisatApiKey?: string
+  unisatApiKey?: string,
+  logger?: Logger
 ): Promise<boolean> {
   try {
     if (!INSCRIPTION_ID_RE.test(inscriptionId)) {
-      console.error(`Invalid inscriptionId format: ${inscriptionId}`);
+      logger?.error("achievement.inscriber.invalid_id", { inscriptionId });
       return false;
     }
 
     const cacheKey = `unisat-inscription:${inscriptionId}`;
-    let inscriptionData = await getCachedTransaction(cacheKey, kv);
+    let inscriptionData = await getCachedTransaction(cacheKey, kv, logger);
 
     if (!inscriptionData) {
       const url = `https://open-api.unisat.io/v1/indexer/inscription/info/${inscriptionId}`;
@@ -377,9 +392,10 @@ export async function verifyInscriberAchievement(
       });
 
       if (!resp.ok) {
-        console.error(
-          `Failed to fetch inscription ${inscriptionId} from Unisat: ${resp.status}`
-        );
+        logger?.error("achievement.inscriber.fetch_failed", {
+          inscriptionId,
+          status: resp.status,
+        });
         return false;
       }
 
@@ -387,7 +403,7 @@ export async function verifyInscriberAchievement(
         code: number;
         data?: { address?: string };
       };
-      await setCachedTransaction(cacheKey, inscriptionData, kv);
+      await setCachedTransaction(cacheKey, inscriptionData, kv, logger);
     }
 
     if (inscriptionData.code !== 0 || !inscriptionData.data?.address) {
@@ -396,7 +412,10 @@ export async function verifyInscriberAchievement(
 
     return inscriptionData.data.address === btcAddress;
   } catch (error) {
-    console.error(`Failed to verify inscriber achievement for ${inscriptionId}:`, error);
+    logger?.error("achievement.inscriber.verify_error", {
+      inscriptionId,
+      error: String(error),
+    });
     return false;
   }
 }

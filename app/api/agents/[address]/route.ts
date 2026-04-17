@@ -4,6 +4,11 @@ import type { AgentRecord } from "@/lib/types";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { lookupBnsName } from "@/lib/bns";
 import { enrichAgentProfile } from "@/lib/agent-enrichment";
+import {
+  createLogger,
+  createConsoleLogger,
+  isLogsRPC,
+} from "@/lib/logging";
 
 /**
  * Determine the address type and KV prefix from the format.
@@ -189,9 +194,15 @@ export async function GET(
       );
     }
 
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const hiroApiKey = env.HIRO_API_KEY;
+
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const baseCtx = { rayId, path: request.nextUrl.pathname };
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, baseCtx)
+      : createConsoleLogger(baseCtx);
 
     // Look up agent by address type
     let agent: AgentRecord | null = null;
@@ -252,14 +263,20 @@ export async function GET(
     // Lazy BNS refresh: if bnsName is missing, try to look it up.
     // Fire-and-forget so it doesn't block the response.
     if (!agent.bnsName && agent.stxAddress) {
-      void lookupBnsName(agent.stxAddress, hiroApiKey, kv).then((bnsName) => {
+      void lookupBnsName(agent.stxAddress, hiroApiKey, kv, logger).then((bnsName) => {
         if (bnsName) {
           agent.bnsName = bnsName;
           const updated = JSON.stringify(agent);
           Promise.all([
             kv.put(`stx:${agent.stxAddress}`, updated),
             kv.put(`btc:${agent.btcAddress}`, updated),
-          ]).catch((err) => console.error("Failed to update agent cache:", err));
+          ]).catch((err) =>
+            logger.error("agents.update_agent_cache_failed", {
+              btcAddress: agent.btcAddress,
+              stxAddress: agent.stxAddress,
+              error: String(err),
+            })
+          );
         }
       }).catch(() => {});
     }
@@ -268,7 +285,8 @@ export async function GET(
       agent,
       kv,
       hiroApiKey,
-      `agents/${agent.btcAddress}`
+      `agents/${agent.btcAddress}`,
+      logger
     );
 
     const checkIn = enrichment.checkIn

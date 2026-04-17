@@ -9,6 +9,7 @@ import { getCachedBnsName, setCachedBnsName, setCachedBnsNegative, BNS_NONE_SENT
 import { buildHiroHeaders } from "./identity/stacks-api";
 import { stacksApiFetch } from "./stacks-api-fetch";
 import { STACKS_API_BASE } from "./identity/constants";
+import type { Logger } from "./logging";
 
 const BNS_V2_CONTRACT = "SP2QEZ06AGJ3RKJPBV14SY1V5BBFNAW33D96YPGZF";
 const BNS_V2_NAME = "BNS-V2";
@@ -24,13 +25,15 @@ const BNS_V2_NAME = "BNS-V2";
  * @param stxAddress - Stacks address to lookup
  * @param hiroApiKey - Optional Hiro API key for authenticated requests
  * @param kv - Optional KV namespace for persistent caching
+ * @param logger - Optional Logger for cache telemetry and error logging
  */
 export async function lookupBnsName(
   stxAddress: string,
   hiroApiKey?: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<string | null> {
-  const cached = await getCachedBnsName(stxAddress, kv);
+  const cached = await getCachedBnsName(stxAddress, kv, logger);
   if (cached === BNS_NONE_SENTINEL) return null;
   if (cached) return cached;
 
@@ -72,13 +75,13 @@ export async function lookupBnsName(
     // Unwrap: response -> optional -> tuple
     const optional = json.value?.value;
     if (!optional) {
-      await setCachedBnsNegative(stxAddress, kv);
+      await setCachedBnsNegative(stxAddress, kv, logger);
       return null;
     }
 
     const tuple = optional.value;
     if (!tuple?.name?.value || !tuple?.namespace?.value) {
-      await setCachedBnsNegative(stxAddress, kv);
+      await setCachedBnsNegative(stxAddress, kv, logger);
       return null;
     }
 
@@ -86,10 +89,10 @@ export async function lookupBnsName(
     const namespace = bytesToUtf8(hexToBytes(tuple.namespace.value));
     const fullName = `${name}.${namespace}`;
 
-    await setCachedBnsName(stxAddress, fullName, kv);
+    await setCachedBnsName(stxAddress, fullName, kv, logger);
     return fullName;
   } catch (e) {
-    console.error(`BNS lookup failed for ${stxAddress}:`, e);
+    logger?.error("bns.lookup_failed", { stxAddress, error: String(e) });
     return null;
   }
 }

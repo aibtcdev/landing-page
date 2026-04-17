@@ -4,6 +4,11 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { getAgentLevel } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
 import { getCAIP19AgentId } from "@/lib/caip19";
+import {
+  createLogger,
+  createConsoleLogger,
+  isLogsRPC,
+} from "@/lib/logging";
 
 /**
  * Determine the address type from the format.
@@ -41,7 +46,7 @@ function getKvPrefix(addressType: "stx" | "bc1q" | "bc1p"): "stx" | "btc" {
  * - If KV error: returns 500
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
   try {
@@ -67,9 +72,15 @@ export async function GET(
       );
     }
 
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const hiroApiKey = env.HIRO_API_KEY;
+
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const baseCtx = { rayId, path: request.nextUrl.pathname };
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, baseCtx)
+      : createConsoleLogger(baseCtx);
 
     // Use KV prefix for lookup (bc1q and bc1p both stored under "btc:" for compatibility)
     const kvPrefix = getKvPrefix(addressType);
@@ -101,7 +112,7 @@ export async function GET(
     // Run BNS lookup and claim fetch in parallel (both independent)
     const [bnsName, claimData] = await Promise.all([
       !agent.bnsName && agent.stxAddress
-        ? lookupBnsName(agent.stxAddress, hiroApiKey, kv)
+        ? lookupBnsName(agent.stxAddress, hiroApiKey, kv, logger)
         : Promise.resolve(null),
       kv.get(`claim:${agent.btcAddress}`),
     ]);

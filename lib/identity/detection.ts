@@ -8,6 +8,7 @@ import { callReadOnly, parseClarityValue, buildHiroHeaders } from "./stacks-api"
 import { stacksApiFetch } from "../stacks-api-fetch";
 import type { AgentIdentity } from "./types";
 import { getCachedIdentity, setCachedIdentity, setCachedIdentityNegative } from "./kv-cache";
+import type { Logger } from "../logging";
 
 /**
  * Detect if an agent has registered an on-chain identity.
@@ -18,14 +19,16 @@ import { getCachedIdentity, setCachedIdentity, setCachedIdentityNegative } from 
  * @param stxAddress - Stacks address to check
  * @param hiroApiKey - Optional Hiro API key for authenticated requests
  * @param kv - Optional KV namespace for persistent caching
+ * @param logger - Optional Logger for cache telemetry and error logging
  */
 export async function detectAgentIdentity(
   stxAddress: string,
   hiroApiKey?: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<AgentIdentity | null> {
   // Check KV cache first (distinguishes miss from cached negative result)
-  const cached = await getCachedIdentity(stxAddress, kv);
+  const cached = await getCachedIdentity(stxAddress, kv, logger);
   if (cached.hit) return cached.value;
 
   try {
@@ -43,8 +46,11 @@ export async function detectAgentIdentity(
 
     if (!response.ok) {
       // Fallback to legacy scan if holdings API fails (e.g. 404, 500)
-      console.warn(`NFT holdings API returned ${response.status}, falling back to legacy scan`);
-      return await detectAgentIdentityLegacy(stxAddress, hiroApiKey, kv);
+      logger?.warn("identity.holdings_api_failed_falling_back", {
+        stxAddress,
+        status: response.status,
+      });
+      return await detectAgentIdentityLegacy(stxAddress, hiroApiKey, kv, logger);
     }
 
     const data = await response.json() as {
@@ -58,7 +64,7 @@ export async function detectAgentIdentity(
 
     if (!data.results || data.results.length === 0) {
       // No identity NFT found for this address — cache negative to skip future Hiro API calls
-      await setCachedIdentityNegative(stxAddress, kv);
+      await setCachedIdentityNegative(stxAddress, kv, logger);
       return null;
     }
 
@@ -68,7 +74,7 @@ export async function detectAgentIdentity(
     if (!tokenIdMatch) {
       // Parse/format failure does not prove the address has no identity NFT,
       // so do not negative-cache this result.
-      console.warn("Could not parse NFT token ID from repr:", nft.value.repr);
+      logger?.warn("identity.parse_token_id_failed", { repr: nft.value.repr });
       return null;
     }
     const agentId = Number(tokenIdMatch[1]);
@@ -84,15 +90,21 @@ export async function detectAgentIdentity(
       );
       uri = parseClarityValue(uriResult) || "";
     } catch (error) {
-      console.warn("Failed to fetch token URI for agent", agentId, error);
+      logger?.warn("identity.fetch_token_uri_failed", {
+        agentId,
+        error: String(error),
+      });
     }
 
     const identity: AgentIdentity = { agentId, owner: stxAddress, uri };
     // Cache the result
-    await setCachedIdentity(stxAddress, identity, kv);
+    await setCachedIdentity(stxAddress, identity, kv, logger);
     return identity;
   } catch (error) {
-    console.error("Error detecting agent identity:", error);
+    logger?.error("identity.detect_error", {
+      stxAddress,
+      error: String(error),
+    });
     return null;
   }
 }
@@ -104,9 +116,10 @@ export async function detectAgentIdentity(
 async function detectAgentIdentityLegacy(
   stxAddress: string,
   hiroApiKey?: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<AgentIdentity | null> {
-  console.warn(`[identity] falling back to legacy O(N) scan for ${stxAddress}`);
+  logger?.warn("identity.legacy_scan_fallback", { stxAddress });
 
   // Cap at 1 batch (5 get-owner calls) to bound worst-case Hiro API consumption.
   // If the target agent's identity NFT was minted outside the most recent 5 IDs,
@@ -143,34 +156,43 @@ async function detectAgentIdentityLegacy(
       ], hiroApiKey);
       const uri = parseClarityValue(uriResult);
       const identity: AgentIdentity = { agentId: match.id, owner: match.owner!, uri: uri || "" };
-      await setCachedIdentity(stxAddress, identity, kv);
+      await setCachedIdentity(stxAddress, identity, kv, logger);
       return identity;
     }
     if (batchCount >= MAX_LEGACY_BATCHES) {
       // Scan is intentionally incomplete — don't negative-cache since the identity
       // may exist beyond the batches we checked.
-      console.warn(
-        `[identity] legacy scan cap hit (${MAX_LEGACY_BATCHES} batch × ${BATCH_SIZE} IDs) for ${stxAddress}, returning null without negative cache`
-      );
+      logger?.warn("identity.legacy_scan_cap_hit", {
+        stxAddress,
+        batches: MAX_LEGACY_BATCHES,
+        batchSize: BATCH_SIZE,
+      });
       return null;
     }
   }
 
   // Exhausted all NFTs without finding a match — cache negative result
-  await setCachedIdentityNegative(stxAddress, kv);
+  await setCachedIdentityNegative(stxAddress, kv, logger);
   return null;
 }
 
 /**
  * Check if an agent ID exists (has been minted)
  */
-export async function hasIdentity(agentId: number, hiroApiKey?: string): Promise<boolean> {
+export async function hasIdentity(
+  agentId: number,
+  hiroApiKey?: string,
+  logger?: Logger
+): Promise<boolean> {
   try {
     const ownerResult = await callReadOnly(IDENTITY_REGISTRY_CONTRACT, "get-owner", [uintCV(agentId)], hiroApiKey);
     const owner = parseClarityValue(ownerResult);
     return owner !== null;
   } catch (error) {
-    console.error("Error checking identity existence:", error);
+    logger?.error("identity.has_identity_error", {
+      agentId,
+      error: String(error),
+    });
     return false;
   }
 }
