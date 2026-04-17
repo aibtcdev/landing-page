@@ -23,6 +23,11 @@ import {
 import { buildHiroHeaders, detect429 } from "@/lib/identity/stacks-api";
 import { stacksApiFetch, parseRetryAfterMs } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE } from "@/lib/identity/constants";
+import {
+  createLogger,
+  createConsoleLogger,
+  isLogsRPC,
+} from "@/lib/logging";
 
 const RATE_LIMIT_MS = ACHIEVEMENT_VERIFY_RATE_LIMIT_MS;
 
@@ -190,10 +195,16 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const hiroApiKey = env.HIRO_API_KEY as string | undefined;
     const unisatApiKey = env.UNISAT_API_KEY as string | undefined;
+
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const baseCtx = { rayId, path: request.nextUrl.pathname };
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, baseCtx)
+      : createConsoleLogger(baseCtx);
 
     // Look up agent
     const agentData = await kv.get(`btc:${btcAddress}`);
@@ -287,7 +298,7 @@ export async function POST(request: NextRequest) {
 
       if (!hasSender) {
         try {
-          const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv);
+          const hasOutgoingTx = await verifySenderAchievement(btcAddress, kv, logger);
 
           if (hasOutgoingTx) {
             const record = await grantAchievement(kv, btcAddress, "sender");
@@ -299,7 +310,10 @@ export async function POST(request: NextRequest) {
             });
           }
         } catch (e) {
-          console.error("Failed to check sender achievement:", e);
+          logger.error("achievement.sender.check_failed", {
+            btcAddress,
+            error: String(e),
+          });
         }
       } else {
         alreadyHad.push("sender");
@@ -318,7 +332,8 @@ export async function POST(request: NextRequest) {
           const isStacking = await verifyStackerAchievement(
             agent.stxAddress,
             kv,
-            hiroApiKey
+            hiroApiKey,
+            logger
           );
 
           if (isStacking) {
@@ -331,7 +346,10 @@ export async function POST(request: NextRequest) {
             });
           }
         } catch (e) {
-          console.error("Failed to check stacker achievement:", e);
+          logger.error("achievement.stacker.check_failed", {
+            btcAddress,
+            error: String(e),
+          });
         }
       } else {
         alreadyHad.push("stacker");
@@ -350,7 +368,8 @@ export async function POST(request: NextRequest) {
           const holdsSbtc = await verifySbtcHolderAchievement(
             agent.stxAddress,
             kv,
-            hiroApiKey
+            hiroApiKey,
+            logger
           );
 
           if (holdsSbtc) {
@@ -363,7 +382,10 @@ export async function POST(request: NextRequest) {
             });
           }
         } catch (e) {
-          console.error("Failed to check sbtc-holder achievement:", e);
+          logger.error("achievement.sbtc_holder.check_failed", {
+            btcAddress,
+            error: String(e),
+          });
         }
       } else {
         alreadyHad.push("sbtc-holder");
@@ -397,7 +419,7 @@ export async function POST(request: NextRequest) {
           };
 
           // Check cache first
-          let tx: StacksTransaction | null = await getCachedTransaction(txid, kv);
+          let tx: StacksTransaction | null = await getCachedTransaction(txid, kv, logger);
 
           if (!tx) {
             // Fetch transaction from Stacks API with API key
@@ -437,7 +459,7 @@ export async function POST(request: NextRequest) {
             tx = (await txResp.json()) as StacksTransaction;
 
             // Cache the transaction
-            await setCachedTransaction(txid, tx, kv);
+            await setCachedTransaction(txid, tx, kv, logger);
           }
 
           // Ensure we have a transaction
@@ -570,7 +592,11 @@ export async function POST(request: NextRequest) {
             unlockedAt: record.unlockedAt,
           });
         } catch (e) {
-          console.error("Failed to check connector achievement:", e);
+          logger.error("achievement.connector.check_failed", {
+            btcAddress,
+            txid,
+            error: String(e),
+          });
           return NextResponse.json(
             {
               error: `Connector verification failed: ${(e as Error).message}`,
@@ -596,7 +622,8 @@ export async function POST(request: NextRequest) {
             inscriptionId,
             btcAddress,
             kv,
-            unisatApiKey
+            unisatApiKey,
+            logger
           );
 
           if (isOwner) {
@@ -611,7 +638,11 @@ export async function POST(request: NextRequest) {
             });
           }
         } catch (e) {
-          console.error("Failed to check inscriber achievement:", e);
+          logger.error("achievement.inscriber.check_failed", {
+            btcAddress,
+            inscriptionId,
+            error: String(e),
+          });
         }
       } else {
         alreadyHad.push("inscriber");

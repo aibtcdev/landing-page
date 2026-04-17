@@ -7,6 +7,7 @@ import { REPUTATION_REGISTRY_CONTRACT } from "./constants";
 import { callReadOnly, parseClarityValue } from "./stacks-api";
 import { getCachedReputation, setCachedReputation } from "./kv-cache";
 import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback } from "./types";
+import type { Logger } from "../logging";
 
 /**
  * WAD divisor: 10^18 as a BigInt.
@@ -30,10 +31,11 @@ function wadToNumber(wadStr: string): number {
 export async function getReputationSummary(
   agentId: number,
   hiroApiKey?: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<ReputationSummary | null> {
   const cacheKey = `summary:${agentId}`;
-  const cached = await getCachedReputation<ReputationSummary>(cacheKey, kv);
+  const cached = await getCachedReputation<ReputationSummary>(cacheKey, kv, logger);
   if (cached.hit) return cached.value;
 
   try {
@@ -41,7 +43,7 @@ export async function getReputationSummary(
     const summary = parseClarityValue(result);
 
     if (!summary || Number(summary.count) === 0) {
-      await setCachedReputation(cacheKey, null, kv);
+      await setCachedReputation(cacheKey, null, kv, logger);
       return null;
     }
 
@@ -54,10 +56,13 @@ export async function getReputationSummary(
       summaryValueDecimals: Number(summary["summary-value-decimals"]),
     };
 
-    await setCachedReputation(cacheKey, reputationSummary, kv);
+    await setCachedReputation(cacheKey, reputationSummary, kv, logger);
     return reputationSummary;
   } catch (error) {
-    console.error("Error fetching reputation summary:", error);
+    logger?.error("reputation.summary_fetch_error", {
+      agentId,
+      error: String(error),
+    });
     throw error;
   }
 }
@@ -69,10 +74,11 @@ export async function getReputationFeedback(
   agentId: number,
   cursor?: number,
   hiroApiKey?: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<ReputationFeedbackResponse> {
   const cacheKey = `feedback:${agentId}:${cursor || 0}`;
-  const cached = await getCachedReputation<ReputationFeedbackResponse>(cacheKey, kv);
+  const cached = await getCachedReputation<ReputationFeedbackResponse>(cacheKey, kv, logger);
   if (cached.hit) return cached.value ?? { items: [], cursor: null };
 
   try {
@@ -90,7 +96,7 @@ export async function getReputationFeedback(
 
     if (!response || !response.items) {
       const empty: ReputationFeedbackResponse = { items: [], cursor: null };
-      await setCachedReputation(cacheKey, empty, kv);
+      await setCachedReputation(cacheKey, empty, kv, logger);
       return empty;
     }
 
@@ -110,10 +116,14 @@ export async function getReputationFeedback(
       cursor: response.cursor !== null ? Number(response.cursor) : null,
     };
 
-    await setCachedReputation(cacheKey, feedbackResponse, kv);
+    await setCachedReputation(cacheKey, feedbackResponse, kv, logger);
     return feedbackResponse;
   } catch (error) {
-    console.error("Error fetching reputation feedback:", error);
+    logger?.error("reputation.feedback_fetch_error", {
+      agentId,
+      cursor: cursor ?? null,
+      error: String(error),
+    });
     throw error;
   }
 }

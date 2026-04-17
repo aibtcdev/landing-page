@@ -8,9 +8,15 @@
  * - Stacking status: 4 hours (changes only at PoX cycle boundaries ~2 weeks)
  * - Reputation data: 1 hour (changes slowly with new feedback)
  * - Address transactions: 30 minutes (grows over time but not hot path)
+ *
+ * All public functions accept an optional {@link Logger}. When provided, cache
+ * hit/miss telemetry and KV/parse errors are emitted through that logger (and
+ * on to worker-logs). When omitted, the helpers are silent — we do NOT fall
+ * back to `console.*`, which would bypass worker-logs.
  */
 
 import type { AgentIdentity } from "./types";
+import type { Logger } from "../logging";
 
 // Cache TTLs in seconds
 const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours
@@ -33,13 +39,19 @@ export const BNS_NONE_SENTINEL = NONE_SENTINEL;
 /** Safely read a string value from KV, returning null on miss or error. */
 async function kvGet(
   kv: KVNamespace | undefined,
-  key: string
+  key: string,
+  keyFamily: string,
+  logger?: Logger
 ): Promise<string | null> {
   if (!kv) return null;
   try {
     return await kv.get(key);
   } catch (error) {
-    console.error(`KV read error for ${key}:`, error);
+    logger?.error("cache.kv_read_error", {
+      keyFamily,
+      key,
+      error: String(error),
+    });
     return null;
   }
 }
@@ -49,30 +61,38 @@ async function kvPut(
   kv: KVNamespace | undefined,
   key: string,
   value: string,
-  ttl: number
+  ttl: number,
+  keyFamily: string,
+  logger?: Logger
 ): Promise<void> {
   if (!kv) return;
   try {
     await kv.put(key, value, { expirationTtl: ttl });
   } catch (error) {
-    console.error(`KV write error for ${key}:`, error);
+    logger?.error("cache.kv_write_error", {
+      keyFamily,
+      key,
+      error: String(error),
+    });
   }
 }
 
 /**
- * Emit a structured cache-hit/miss telemetry event. Centralized so all cache
- * readers log with a consistent shape (keyFamily + key, plus an optional
- * `negative: true` flag for negative-cache hits).
+ * Emit a structured cache-hit/miss telemetry event via the logger.
+ * No-op when logger is undefined (callers that don't thread a logger
+ * simply skip telemetry rather than falling back to console).
  */
 function logCacheEvent(
-  event: "cache_hit" | "cache_miss",
+  logger: Logger | undefined,
+  event: "cache.hit" | "cache.miss",
   keyFamily: string,
   key: string,
   negative = false
 ): void {
-  const payload: Record<string, unknown> = { event, keyFamily, key };
+  if (!logger) return;
+  const payload: Record<string, unknown> = { keyFamily, key };
   if (negative) payload.negative = true;
-  console.log(JSON.stringify(payload));
+  logger.info(event, payload);
 }
 
 /**
@@ -85,22 +105,24 @@ async function readJsonCache<T>(
   kv: KVNamespace | undefined,
   prefix: string,
   keyFamily: string,
-  key: string
+  key: string,
+  logger?: Logger
 ): Promise<T | null> {
-  const raw = await kvGet(kv, `${prefix}${key}`);
+  const raw = await kvGet(kv, `${prefix}${key}`, keyFamily, logger);
   if (!raw) {
-    logCacheEvent("cache_miss", keyFamily, key);
+    logCacheEvent(logger, "cache.miss", keyFamily, key);
     return null;
   }
   try {
     const parsed = JSON.parse(raw) as T;
-    logCacheEvent("cache_hit", keyFamily, key);
+    logCacheEvent(logger, "cache.hit", keyFamily, key);
     return parsed;
-  } catch (e) {
-    // key is user-supplied (address/txid) — keep it out of the format string
-    // and pass it as a separate argument so it cannot be interpreted as a
-    // printf-style specifier (ref: CodeQL format-string advisory).
-    console.error("Failed to parse cached entry", { keyFamily, key }, e);
+  } catch (error) {
+    logger?.error("cache.parse_error", {
+      keyFamily,
+      key,
+      error: String(error),
+    });
     return null;
   }
 }
@@ -114,99 +136,169 @@ async function readSentinelCache<T>(
   kv: KVNamespace | undefined,
   prefix: string,
   keyFamily: string,
-  key: string
+  key: string,
+  logger?: Logger
 ): Promise<CacheResult<T>> {
-  const raw = await kvGet(kv, `${prefix}${key}`);
+  const raw = await kvGet(kv, `${prefix}${key}`, keyFamily, logger);
   if (raw === null) {
-    logCacheEvent("cache_miss", keyFamily, key);
+    logCacheEvent(logger, "cache.miss", keyFamily, key);
     return { hit: false };
   }
   if (raw === NONE_SENTINEL) {
-    logCacheEvent("cache_hit", keyFamily, key, true);
+    logCacheEvent(logger, "cache.hit", keyFamily, key, true);
     return { hit: true, value: null };
   }
   try {
     const parsed = JSON.parse(raw) as T;
-    logCacheEvent("cache_hit", keyFamily, key);
+    logCacheEvent(logger, "cache.hit", keyFamily, key);
     return { hit: true, value: parsed };
-  } catch (e) {
-    console.error("Failed to parse cached entry", { keyFamily, key }, e);
+  } catch (error) {
+    logger?.error("cache.parse_error", {
+      keyFamily,
+      key,
+      error: String(error),
+    });
     return { hit: false };
   }
 }
 
-export function getCachedBnsName(
+export async function getCachedBnsName(
   address: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<string | null> {
-  return kvGet(kv, `cache:bns:${address}`);
+  // BNS uses a raw string (name) rather than JSON, so we call kvGet directly
+  // and emit telemetry here for parity with the other caches.
+  const raw = await kvGet(kv, `cache:bns:${address}`, "bns", logger);
+  if (raw === null) {
+    logCacheEvent(logger, "cache.miss", "bns", address);
+    return null;
+  }
+  logCacheEvent(logger, "cache.hit", "bns", address, raw === NONE_SENTINEL);
+  return raw;
 }
 
 export function setCachedBnsName(
   address: string,
   name: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<void> {
-  return kvPut(kv, `cache:bns:${address}`, name, BNS_CACHE_TTL);
+  return kvPut(kv, `cache:bns:${address}`, name, BNS_CACHE_TTL, "bns", logger);
 }
 
 export function setCachedBnsNegative(
   address: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<void> {
-  return kvPut(kv, `cache:bns:${address}`, NONE_SENTINEL, BNS_NEGATIVE_CACHE_TTL);
+  return kvPut(
+    kv,
+    `cache:bns:${address}`,
+    NONE_SENTINEL,
+    BNS_NEGATIVE_CACHE_TTL,
+    "bns",
+    logger
+  );
 }
 
 export function getCachedIdentity(
   address: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<CacheResult<AgentIdentity>> {
-  return readSentinelCache<AgentIdentity>(kv, "cache:identity:", "identity", address);
+  return readSentinelCache<AgentIdentity>(
+    kv,
+    "cache:identity:",
+    "identity",
+    address,
+    logger
+  );
 }
 
 export function setCachedIdentity(
   address: string,
   identity: AgentIdentity,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<void> {
-  return kvPut(kv, `cache:identity:${address}`, JSON.stringify(identity), IDENTITY_CACHE_TTL);
+  return kvPut(
+    kv,
+    `cache:identity:${address}`,
+    JSON.stringify(identity),
+    IDENTITY_CACHE_TTL,
+    "identity",
+    logger
+  );
 }
 
 export function setCachedIdentityNegative(
   address: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<void> {
-  return kvPut(kv, `cache:identity:${address}`, NONE_SENTINEL, IDENTITY_NEGATIVE_CACHE_TTL);
+  return kvPut(
+    kv,
+    `cache:identity:${address}`,
+    NONE_SENTINEL,
+    IDENTITY_NEGATIVE_CACHE_TTL,
+    "identity",
+    logger
+  );
 }
 
 export function getCachedReputation<T>(
   key: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<CacheResult<T>> {
-  return readSentinelCache<T>(kv, "cache:reputation:", "reputation", key);
+  return readSentinelCache<T>(
+    kv,
+    "cache:reputation:",
+    "reputation",
+    key,
+    logger
+  );
 }
 
 export function setCachedReputation(
   key: string,
   data: unknown,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<void> {
-  return kvPut(kv, `cache:reputation:${key}`, JSON.stringify(data), REPUTATION_CACHE_TTL);
+  return kvPut(
+    kv,
+    `cache:reputation:${key}`,
+    JSON.stringify(data),
+    REPUTATION_CACHE_TTL,
+    "reputation",
+    logger
+  );
 }
 
 export function getCachedTransaction(
   txid: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<any | null> {
-  return readJsonCache<any>(kv, "cache:tx:", "tx", txid);
+  return readJsonCache<any>(kv, "cache:tx:", "tx", txid, logger);
 }
 
 export function setCachedTransaction(
   txid: string,
   data: any,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<void> {
-  return kvPut(kv, `cache:tx:${txid}`, JSON.stringify(data), TX_CACHE_TTL);
+  return kvPut(
+    kv,
+    `cache:tx:${txid}`,
+    JSON.stringify(data),
+    TX_CACHE_TTL,
+    "tx",
+    logger
+  );
 }
 
 /** Minimal shape of a Hiro stacking response used by the stacker achievement. */
@@ -216,15 +308,30 @@ export interface StackingCacheEntry {
 
 export function getCachedStacking(
   stxAddress: string,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<StackingCacheEntry | null> {
-  return readJsonCache<StackingCacheEntry>(kv, "cache:stacking:", "stacking", stxAddress);
+  return readJsonCache<StackingCacheEntry>(
+    kv,
+    "cache:stacking:",
+    "stacking",
+    stxAddress,
+    logger
+  );
 }
 
 export function setCachedStacking(
   stxAddress: string,
   data: StackingCacheEntry,
-  kv?: KVNamespace
+  kv?: KVNamespace,
+  logger?: Logger
 ): Promise<void> {
-  return kvPut(kv, `cache:stacking:${stxAddress}`, JSON.stringify(data), STACKING_CACHE_TTL);
+  return kvPut(
+    kv,
+    `cache:stacking:${stxAddress}`,
+    JSON.stringify(data),
+    STACKING_CACHE_TTL,
+    "stacking",
+    logger
+  );
 }

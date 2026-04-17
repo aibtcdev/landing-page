@@ -817,7 +817,7 @@ export async function verifyTxidPayment(
   let txData: StacksTxData;
 
   // 1. Confirmed transactions are immutable -- check positive cache first
-  const cachedTx = await getCachedTransaction(normalizedTxid, kv) as StacksTxData | null;
+  const cachedTx = await getCachedTransaction(normalizedTxid, kv, log) as StacksTxData | null;
   if (cachedTx) {
     log.info("Txid verification: cache hit", { txid: fullTxid });
     txData = cachedTx;
@@ -922,8 +922,11 @@ export async function verifyTxidPayment(
 
   // Fire-and-forget cache write for confirmed transactions
   if (!cachedTx) {
-    setCachedTransaction(normalizedTxid, txData, kv).catch((err) => {
-      console.warn("[verifyTxidPayment] KV cache write failed:", String(err));
+    setCachedTransaction(normalizedTxid, txData, kv, log).catch((err) => {
+      log.warn("verifyTxidPayment.kv_cache_write_failed", {
+        error: String(err),
+        txid: fullTxid,
+      });
     });
   }
 

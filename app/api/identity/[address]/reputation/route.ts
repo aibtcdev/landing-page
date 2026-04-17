@@ -5,6 +5,12 @@ import {
   getReputationSummary,
   getReputationFeedback,
 } from "@/lib/identity/reputation";
+import {
+  createLogger,
+  createConsoleLogger,
+  isLogsRPC,
+  type Logger,
+} from "@/lib/logging";
 
 /**
  * Look up an agent by BTC or STX address.
@@ -12,7 +18,8 @@ import {
  */
 async function lookupAgent(
   kv: KVNamespace,
-  address: string
+  address: string,
+  logger: Logger
 ): Promise<AgentRecord | null> {
   const [btcData, stxData] = await Promise.all([
     kv.get(`btc:${address}`),
@@ -25,7 +32,10 @@ async function lookupAgent(
   try {
     return JSON.parse(data) as AgentRecord;
   } catch (e) {
-    console.error(`Failed to parse agent record for address ${address}:`, e);
+    logger.error("reputation.parse_agent_failed", {
+      address,
+      error: String(e),
+    });
     return null;
   }
 }
@@ -78,12 +88,18 @@ export async function GET(
     );
   }
 
-  try {
-    const { env } = await getCloudflareContext();
-    const kv = env.VERIFIED_AGENTS as KVNamespace;
-    const hiroApiKey = env.HIRO_API_KEY;
+  const { env, ctx } = await getCloudflareContext();
+  const kv = env.VERIFIED_AGENTS as KVNamespace;
+  const hiroApiKey = env.HIRO_API_KEY;
 
-    const agent = await lookupAgent(kv, address);
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const baseCtx = { rayId, path: request.nextUrl.pathname };
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, baseCtx)
+    : createConsoleLogger(baseCtx);
+
+  try {
+    const agent = await lookupAgent(kv, address, logger);
 
     if (!agent) {
       return NextResponse.json(
@@ -105,7 +121,7 @@ export async function GET(
     const agentId = agent.erc8004AgentId;
 
     if (type === "summary") {
-      const summary = await getReputationSummary(agentId, hiroApiKey, kv);
+      const summary = await getReputationSummary(agentId, hiroApiKey, kv, logger);
       return NextResponse.json(
         { summary },
         {
@@ -129,14 +145,14 @@ export async function GET(
       }
       cursor = parsedCursor;
     }
-    const feedback = await getReputationFeedback(agentId, cursor, hiroApiKey, kv);
+    const feedback = await getReputationFeedback(agentId, cursor, hiroApiKey, kv, logger);
 
     // Resolve client STX addresses to agent display names
     const clientAddresses = [...new Set(feedback.items.map((item) => item.client))];
     const clientAgents = new Map<string, AgentRecord>();
     await Promise.all(
       clientAddresses.map(async (addr) => {
-        const clientAgent = await lookupAgent(kv, addr);
+        const clientAgent = await lookupAgent(kv, addr, logger);
         if (clientAgent) clientAgents.set(addr, clientAgent);
       })
     );
@@ -159,7 +175,7 @@ export async function GET(
       }
     );
   } catch (e) {
-    console.error("Reputation fetch error:", e);
+    logger.error("reputation.fetch_error", { address, error: String(e) });
     return NextResponse.json(
       { error: `Reputation fetch failed: ${(e as Error).message}` },
       { status: 500 }

@@ -17,6 +17,7 @@ import { getCheckInRecord, type CheckInRecord } from "@/lib/heartbeat";
 import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
 import { getAgentInbox, getSentIndex } from "@/lib/inbox/kv-helpers";
 import { getCAIP19AgentId } from "@/lib/caip19";
+import type { Logger } from "@/lib/logging";
 
 /** Timeout for all enrichment fetches (identity, reputation, achievements, inbox). */
 const ENRICHMENT_TIMEOUT_MS = 10_000;
@@ -72,14 +73,16 @@ export async function enrichAgentProfile(
   agent: AgentRecord,
   kv: KVNamespace,
   hiroApiKey?: string,
-  logPrefix?: string
+  logPrefix?: string,
+  logger?: Logger
 ): Promise<EnrichmentResult> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const enrichmentTimeout = new Promise<null>((resolve) => {
     timeoutId = setTimeout(() => {
-      console.warn(
-        `[${logPrefix ?? agent.btcAddress}] Enrichment timed out after ${ENRICHMENT_TIMEOUT_MS}ms — returning partial response`
-      );
+      logger?.warn("enrichment.timed_out", {
+        context: logPrefix ?? agent.btcAddress,
+        timeoutMs: ENRICHMENT_TIMEOUT_MS,
+      });
       resolve(null);
     }, ENRICHMENT_TIMEOUT_MS);
   });
@@ -92,7 +95,7 @@ export async function enrichAgentProfile(
       kv.get(`claim:${agent.btcAddress}`),
       getAgentAchievements(kv, agent.btcAddress),
       getCheckInRecord(kv, agent.btcAddress),
-      fetchIdentityAndReputation(agent, hiroApiKey, kv),
+      fetchIdentityAndReputation(agent, hiroApiKey, kv, logger),
       getAgentInbox(kv, agent.btcAddress),
       getSentIndex(kv, agent.btcAddress),
     ]).finally(() => clearTimeout(timeoutId)),
@@ -119,7 +122,7 @@ export async function enrichAgentProfile(
   const identity = identityAndReputation?.identity ?? null;
   const reputation = identityAndReputation?.reputation ?? null;
 
-  const claim = parseClaim(claimData, agent.btcAddress);
+  const claim = parseClaim(claimData, agent.btcAddress, logger);
   const levelInfo = getAgentLevel(agent, claim);
   const resolvedAgentId = identity?.agentId ?? agent.erc8004AgentId ?? null;
 
@@ -168,7 +171,8 @@ export async function enrichAgentProfile(
 async function fetchIdentityAndReputation(
   agent: AgentRecord,
   hiroApiKey: string | undefined,
-  kv: KVNamespace
+  kv: KVNamespace,
+  logger?: Logger
 ): Promise<{ identity: AgentIdentity | null; reputation: ReputationSummary | null }> {
   // Use cached agent-id if available; agent-id 0 is valid (falsy) so use != null.
   // When using the cached shortcut, uri is "" because fetching it would require
@@ -176,18 +180,18 @@ async function fetchIdentityAndReputation(
   const identityResult: AgentIdentity | null =
     agent.erc8004AgentId != null
       ? { agentId: agent.erc8004AgentId, owner: agent.stxAddress, uri: "" }
-      : await detectAgentIdentity(agent.stxAddress, hiroApiKey, kv);
+      : await detectAgentIdentity(agent.stxAddress, hiroApiKey, kv, logger);
 
   if (!identityResult) return { identity: null, reputation: null };
 
   let reputation: ReputationSummary | null = null;
   try {
-    reputation = await getReputationSummary(identityResult.agentId, hiroApiKey, kv);
+    reputation = await getReputationSummary(identityResult.agentId, hiroApiKey, kv, logger);
   } catch (e) {
-    console.error(
-      `Failed to fetch reputation for agent ${agent.btcAddress}:`,
-      e
-    );
+    logger?.error("enrichment.reputation_fetch_failed", {
+      btcAddress: agent.btcAddress,
+      error: String(e),
+    });
   }
   return { identity: identityResult, reputation };
 }
@@ -195,13 +199,17 @@ async function fetchIdentityAndReputation(
 /** Parse a raw KV claim string into a ClaimStatus, or null on miss/error. */
 function parseClaim(
   claimData: string | null,
-  btcAddress: string
+  btcAddress: string,
+  logger?: Logger
 ): ClaimStatus | null {
   if (!claimData) return null;
   try {
     return JSON.parse(claimData) as ClaimStatus;
   } catch (e) {
-    console.error(`Failed to parse claim for ${btcAddress}:`, e);
+    logger?.error("enrichment.parse_claim_failed", {
+      btcAddress,
+      error: String(e),
+    });
     return null;
   }
 }
