@@ -12,6 +12,7 @@ import {
   createConsoleLogger,
   isLogsRPC,
 } from "@/lib/logging";
+import type { Logger } from "@/lib/logging";
 
 /**
  * Per-address rate-limit for manual refresh. Each refresh call:
@@ -60,6 +61,9 @@ export async function POST(
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const baseCtx = { rayId, path: request.nextUrl.pathname };
+  let logger: Logger = createConsoleLogger(baseCtx);
 
   if (!address || address.trim().length === 0) {
     return NextResponse.json(
@@ -72,11 +76,9 @@ export async function POST(
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
-    const baseCtx = { rayId, path: request.nextUrl.pathname };
-    const logger = isLogsRPC(env.LOGS)
+    logger = isLogsRPC(env.LOGS)
       ? createLogger(env.LOGS, ctx, baseCtx)
-      : createConsoleLogger(baseCtx);
+      : logger;
 
     const agent = await lookupAgent(kv, address);
     if (!agent) {
@@ -194,8 +196,12 @@ export async function POST(
       cachesCleared: ["cache:bns", "cache:identity", "identity-check"],
     });
   } catch (e) {
+    logger.error("identity.refresh_error", {
+      address,
+      error: String(e),
+    });
     return NextResponse.json(
-      { error: `Identity refresh failed: ${(e as Error).message}` },
+      { error: "Identity refresh failed" },
       { status: 500 }
     );
   }
