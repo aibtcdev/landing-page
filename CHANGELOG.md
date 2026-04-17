@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.39.0](https://github.com/aibtcdev/landing-page/compare/v1.38.0...v1.39.0) (2026-04-17)
+
+
+### Features
+
+* **skills:** add contract-preflight + stacking-delegation for skills-v0.40.0 ([#605](https://github.com/aibtcdev/landing-page/issues/605)) ([f3c0208](https://github.com/aibtcdev/landing-page/commit/f3c0208aee7e9a82cafc30fc4b02ff61bd0af1d1))
+
+
+### Bug Fixes
+
+* **bns:** map (err u131) ERR-NO-PRIMARY-NAME to confirmed-negative cache ([#612](https://github.com/aibtcdev/landing-page/issues/612)) ([6afc8c1](https://github.com/aibtcdev/landing-page/commit/6afc8c138ec10949f4ef8b486238bd6663552a1e))
+* **ci:** release-please config-file + manifest to surface docs ([#616](https://github.com/aibtcdev/landing-page/issues/616)) ([a944645](https://github.com/aibtcdev/landing-page/commit/a9446450da584ff0c577631302fea638fc51b9ce))
+* **ci:** use plain v* tag format in release-please ([#618](https://github.com/aibtcdev/landing-page/issues/618)) ([9624693](https://github.com/aibtcdev/landing-page/commit/9624693219b08b62caf1a25f9fe470fbc89c4b72))
+* **skills:** aibtc-news-editor SHORT_DESC + v0.37.0/v0.38.0 directory sync ([#577](https://github.com/aibtcdev/landing-page/issues/577)) ([16005e9](https://github.com/aibtcdev/landing-page/commit/16005e935c609e258137929f805c093db3c9f988))
+
+
+### Documentation
+
+* **llms:** add 8 new BFF skills from skills-v0.38.0 + mcp-tools refresh ([#578](https://github.com/aibtcdev/landing-page/issues/578)) ([6354bb9](https://github.com/aibtcdev/landing-page/commit/6354bb9831eef636615293e7e0666568a036fc20))
+
 ## [1.38.0](https://github.com/aibtcdev/landing-page/compare/v1.37.4...v1.38.0) (2026-04-17)
 
 
