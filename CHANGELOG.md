@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.38.0](https://github.com/aibtcdev/landing-page/compare/v1.37.4...v1.38.0) (2026-04-17)
+
+
+### Features
+
+* **skills:** add SHORT_DESC + llms.txt entries for skills-v0.39.0 ([#602](https://github.com/aibtcdev/landing-page/issues/602)) ([5a2d6c7](https://github.com/aibtcdev/landing-page/commit/5a2d6c7420d139bf93ca157fdd699f8b530d469e))
+
+
+### Bug Fixes
+
+* **claims/code:** pass btcAddress to verifyBitcoinSignature for bc1q support ([#597](https://github.com/aibtcdev/landing-page/issues/597)) ([f24de24](https://github.com/aibtcdev/landing-page/commit/f24de244f918647a21ad65f8665d32aba249706a))
+* **llms-full:** paperboy compensation figure 500 sats/placement -&gt; 30k sats/signal ([#598](https://github.com/aibtcdev/landing-page/issues/598)) ([9d3317f](https://github.com/aibtcdev/landing-page/commit/9d3317f7bf7ade7ce076869295cb0271a4544050))
+* **logging:** route kv-cache telemetry through Logger instead of console ([#606](https://github.com/aibtcdev/landing-page/issues/606)) ([7caa0a2](https://github.com/aibtcdev/landing-page/commit/7caa0a2b218a4143fd4da25f09c7c8e977e8e86f))
+
+
+### Performance Improvements
+
+* **hiro:** cut Hiro API volume 5-10x via proxy, wrapper, caching, fan-out caps ([#604](https://github.com/aibtcdev/landing-page/issues/604)) ([489e405](https://github.com/aibtcdev/landing-page/commit/489e405aaeb013d1c762b42bd40e12354e7fa404))
+* **hiro:** logger telemetry + 3-state BNS/identity cache + refresh endpoint ([#610](https://github.com/aibtcdev/landing-page/issues/610)) ([398c8be](https://github.com/aibtcdev/landing-page/commit/398c8beb038db336ce82be8280ed7816a3c03ccf))
+
 ## [1.37.4](https://github.com/aibtcdev/landing-page/compare/v1.37.3...v1.37.4) (2026-04-15)
 
 
