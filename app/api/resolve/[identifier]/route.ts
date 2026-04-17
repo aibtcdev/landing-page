@@ -28,6 +28,7 @@ import {
   createLogger,
   createConsoleLogger,
   isLogsRPC,
+  type Logger,
 } from "@/lib/logging";
 
 // ---------------------------------------------------------------------------
@@ -85,19 +86,24 @@ function detectIdentifierType(identifier: string): IdentifierType {
  */
 async function resolveAgentIdToStxAddress(
   agentId: number,
-  hiroApiKey?: string
+  hiroApiKey?: string,
+  logger?: Logger
 ): Promise<string | null> {
   try {
     const result = await callReadOnly(
       IDENTITY_REGISTRY_CONTRACT,
       "get-owner",
       [uintCV(agentId)],
-      hiroApiKey
+      hiroApiKey,
+      logger
     );
-    const owner = parseClarityValue(result);
+    const owner = parseClarityValue(result, logger);
     return typeof owner === "string" ? owner : null;
   } catch (e) {
-    console.error(`Failed to resolve agent-id ${agentId} on-chain:`, e);
+    logger?.error("resolve.agent_id_onchain_failed", {
+      agentId,
+      error: String(e),
+    });
     return null;
   }
 }
@@ -269,7 +275,7 @@ export async function GET(
       }
 
       // Resolve agent-id to STX address via on-chain call
-      const stxAddress = await resolveAgentIdToStxAddress(agentId, hiroApiKey);
+      const stxAddress = await resolveAgentIdToStxAddress(agentId, hiroApiKey, logger);
       if (!stxAddress) {
         return NextResponse.json(
           {

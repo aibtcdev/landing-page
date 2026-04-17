@@ -39,8 +39,8 @@ export async function getReputationSummary(
   if (cached.hit) return cached.value;
 
   try {
-    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [uintCV(agentId)], hiroApiKey);
-    const summary = parseClarityValue(result);
+    const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [uintCV(agentId)], hiroApiKey, logger);
+    const summary = parseClarityValue(result, logger);
 
     if (!summary || Number(summary.count) === 0) {
       await setCachedReputation(cacheKey, null, kv, logger);
@@ -90,9 +90,9 @@ export async function getReputationFeedback(
       noneCV(), // opt-tag2
       falseCV(), // include-revoked
       cursorArg,
-    ], hiroApiKey);
+    ], hiroApiKey, logger);
 
-    const response = parseClarityValue(result);
+    const response = parseClarityValue(result, logger);
 
     if (!response || !response.items) {
       const empty: ReputationFeedbackResponse = { items: [], cursor: null };

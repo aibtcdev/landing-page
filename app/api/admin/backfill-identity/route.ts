@@ -4,6 +4,12 @@ import { requireAdmin } from "@/lib/admin/auth";
 import type { AgentRecord } from "@/lib/types";
 import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "@/lib/identity/constants";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
+import { setCachedIdentity, setCachedIdentityNegative } from "@/lib/identity/kv-cache";
+import {
+  createLogger,
+  createConsoleLogger,
+  isLogsRPC,
+} from "@/lib/logging";
 
 /** Sleep helper for rate-spacing sequential Hiro API calls. */
 const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
@@ -33,9 +39,15 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
 
   try {
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const hiroApiKey = env.HIRO_API_KEY as string | undefined;
+
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const baseCtx = { rayId, path: request.nextUrl.pathname };
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, baseCtx)
+      : createConsoleLogger(baseCtx);
 
     const { searchParams } = new URL(request.url);
     const limitParam = parseInt(searchParams.get("limit") ?? "50", 10);
@@ -98,10 +110,17 @@ export async function GET(request: NextRequest) {
 
         try {
           const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
-          const resp = await stacksApiFetch(url, { headers: hiroHeaders });
+          const resp = await stacksApiFetch(
+            url,
+            { headers: hiroHeaders },
+            { logger }
+          );
 
           if (!resp.ok) {
-            console.warn(`[backfill-identity] Hiro error ${resp.status} for ${agent.stxAddress}`);
+            logger.warn("backfill.hiro_error", {
+              stxAddress: agent.stxAddress,
+              status: resp.status,
+            });
             errors++;
             // Still rate-space on error to avoid hammering a degraded endpoint
             await sleep(BACKFILL_INTER_CALL_DELAY_MS);
@@ -115,24 +134,41 @@ export async function GET(request: NextRequest) {
 
           if (!dryRun) {
             if (agentId != null) {
-              // Positive result — update both KV keys
+              // Positive result — update both KV keys AND the three-state
+              // identity cache so downstream SSR/profile paths see the fresh
+              // state instead of any stale confirmed-negative (7d TTL).
               const updatedRecord = JSON.stringify({ ...agent, erc8004AgentId: agentId });
               await Promise.all([
                 kv.put(`btc:${agent.btcAddress}`, updatedRecord),
                 kv.put(`stx:${agent.stxAddress}`, updatedRecord),
+                setCachedIdentity(
+                  agent.stxAddress,
+                  { agentId, owner: agent.stxAddress, uri: "" },
+                  kv,
+                  logger
+                ),
               ]);
               updated++;
               updatedAgents.push(`${agent.btcAddress} → agentId ${agentId}`);
             } else {
-              // Negative result — set sentinel to prevent re-checking (5-min TTL)
-              await kv.put(sentinelKey, "1", { expirationTtl: 300 });
+              // Negative result — set rate-limit sentinel to avoid re-checking
+              // from this admin route (5-min TTL) AND record confirmed-negative
+              // in the three-state identity cache (7d TTL) so other paths also
+              // skip the Hiro round-trip.
+              await Promise.all([
+                kv.put(sentinelKey, "1", { expirationTtl: 300 }),
+                setCachedIdentityNegative(agent.stxAddress, kv, logger),
+              ]);
             }
           } else if (agentId != null) {
             updated++;
             updatedAgents.push(`${agent.btcAddress} → agentId ${agentId} (dry run)`);
           }
         } catch (error) {
-          console.error(`[backfill-identity] Error for ${agent.stxAddress}:`, error);
+          logger.error("backfill.error", {
+            stxAddress: agent.stxAddress,
+            error: String(error),
+          });
           errors++;
           // Still rate-space on unexpected errors
           await sleep(BACKFILL_INTER_CALL_DELAY_MS);

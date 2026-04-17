@@ -3,6 +3,17 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
+import {
+  getCachedIdentity,
+  setCachedIdentity,
+  setCachedIdentityNegative,
+  setCachedIdentityLookupFailed,
+} from "@/lib/identity/kv-cache";
+import {
+  createLogger,
+  createConsoleLogger,
+  isLogsRPC,
+} from "@/lib/logging";
 
 /**
  * GET /api/identity/:address — Detect on-chain ERC-8004 identity for an agent.
@@ -15,7 +26,7 @@ import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/cons
  * Returns: { agentId: number | null }
  */
 export async function GET(
-  _request: NextRequest,
+  request: NextRequest,
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
@@ -42,8 +53,14 @@ export async function GET(
   }
 
   try {
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const baseCtx = { rayId, path: request.nextUrl.pathname };
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, baseCtx)
+      : createConsoleLogger(baseCtx);
 
     const agent = await lookupAgent(kv, address);
 
@@ -60,6 +77,25 @@ export async function GET(
       return NextResponse.json(
         { agentId: agent.erc8004AgentId },
         { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600" } }
+      );
+    }
+
+    // Consult the typed identity cache before hitting Hiro. This covers both
+    // confirmed-negative (7d TTL) and lookup-failed (60s TTL) hits, so the
+    // concurrent-badge-render hammer is suppressed — not just by this route's
+    // own 5-min `identity-check:` sentinel but by failures recorded from
+    // other entry points (SSR, backfill, refresh endpoint).
+    const typedCached = await getCachedIdentity(agent.stxAddress, kv);
+    if (typedCached.hit) {
+      if (typedCached.value) {
+        return NextResponse.json(
+          { agentId: typedCached.value.agentId },
+          { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600" } }
+        );
+      }
+      return NextResponse.json(
+        { agentId: null },
+        { headers: { "Cache-Control": "public, max-age=300, s-maxage=300" } }
       );
     }
 
@@ -83,11 +119,12 @@ export async function GET(
     const resp = await stacksApiFetch(
       url,
       { headers: buildHiroHeaders(env.HIRO_API_KEY) },
-      2,
-      500,
-      1
+      { retries: 2, retries429: 1, logger }
     );
     if (!resp.ok) {
+      // Short-TTL lookup-failed cache so concurrent badge renders don't each
+      // re-hit Hiro while the upstream is degraded.
+      await setCachedIdentityLookupFailed(agent.stxAddress, kv, logger);
       return NextResponse.json(
         { error: `Hiro API error: ${resp.status}` },
         { status: 502 }
@@ -102,7 +139,9 @@ export async function GET(
     const match = repr?.match(/^u(\d+)$/);
     const agentId = match ? Number(match[1]) : null;
 
-    // Persist to KV if changed
+    // Persist to KV if changed, and keep the three-state identity cache in
+    // sync so other paths (SSR, backfill, refresh endpoint) don't serve a
+    // stale value.
     if (agentId !== agent.erc8004AgentId) {
       agent.erc8004AgentId = agentId;
       const updated = JSON.stringify(agent);
@@ -112,9 +151,21 @@ export async function GET(
       ]);
     }
 
-    // If still null, set rate limit so we don't hammer Hiro (5 min TTL)
-    if (agentId == null) {
-      await kv.put(rateLimitKey, "1", { expirationTtl: 300 });
+    if (agentId != null) {
+      await setCachedIdentity(
+        agent.stxAddress,
+        { agentId, owner: agent.stxAddress, uri: "" },
+        kv,
+        logger
+      );
+    } else {
+      // Confirmed no identity NFT for this address — 7d cache per three-state
+      // model. Also set the short rate-limit sentinel to avoid re-hitting
+      // Hiro from this endpoint specifically.
+      await Promise.all([
+        kv.put(rateLimitKey, "1", { expirationTtl: 300 }),
+        setCachedIdentityNegative(agent.stxAddress, kv, logger),
+      ]);
     }
 
     const cacheHeader = agentId != null

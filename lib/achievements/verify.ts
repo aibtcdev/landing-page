@@ -156,10 +156,11 @@ export async function verifySbtcHolderAchievement(
         SBTC_CONTRACT,
         "get-balance",
         [standardPrincipalCV(stxAddress)],
-        hiroApiKey
+        hiroApiKey,
+        logger
       );
 
-      const parsed = parseClarityValue(response);
+      const parsed = parseClarityValue(response, logger);
       if (parsed === null) {
         // Transient API failure — don't cache a false "0", allow retry next time
         return false;
@@ -201,9 +202,11 @@ export async function verifyStackerAchievement(
 
     if (!stackingData) {
       const stackingUrl = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/stacking`;
-      const stackingResp = await stacksApiFetch(stackingUrl, {
-        headers: buildHiroHeaders(hiroApiKey),
-      });
+      const stackingResp = await stacksApiFetch(
+        stackingUrl,
+        { headers: buildHiroHeaders(hiroApiKey) },
+        { logger }
+      );
 
       if (stackingResp.status === 404) {
         // 404 means no stacking data — not stacking
@@ -278,9 +281,11 @@ export async function verifyConnectorAchievement(
 
     if (!txs) {
       const txsUrl = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/transactions?limit=50`;
-      const resp = await stacksApiFetch(txsUrl, {
-        headers: buildHiroHeaders(hiroApiKey),
-      });
+      const resp = await stacksApiFetch(
+        txsUrl,
+        { headers: buildHiroHeaders(hiroApiKey) },
+        { logger }
+      );
 
       if (!resp.ok) {
         logger?.error("achievement.connector.fetch_failed", {

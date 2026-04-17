@@ -425,7 +425,11 @@ export async function POST(request: NextRequest) {
             // Fetch transaction from Stacks API with API key
             const txUrl = `${STACKS_API_BASE}/extended/v1/tx/${txid}`;
             const headers = buildHiroHeaders(hiroApiKey);
-            const txResp = await stacksApiFetch(txUrl, { headers });
+            const txResp = await stacksApiFetch(
+              txUrl,
+              { headers },
+              { logger }
+            );
 
             if (!txResp.ok) {
               // If the wrapper exhausted its 429 retry budget and still saw a rate
