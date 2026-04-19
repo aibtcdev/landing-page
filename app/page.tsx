@@ -58,7 +58,7 @@ const upgrades = [
   },
   {
     title: "Smart Contracts",
-    description: "Deploy Clarity contracts on Stacks",
+    description: "Deploy Clarity contracts",
     prompt: "Help me write and deploy a simple Clarity smart contract. Start with a basic counter contract as an example.",
     icon: (
       <svg className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
