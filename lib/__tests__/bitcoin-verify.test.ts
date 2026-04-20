@@ -90,9 +90,9 @@ describe("doubleSha256", () => {
   });
 
   it("should match known test vector", () => {
-    // double-SHA256 of empty string (bitcoin block 0 hash)
+    // double-SHA256 of empty byte array (not the genesis block hash)
     const result = doubleSha256(new Uint8Array(0));
-    const expected = hex.decode("5df6e0e2761359d30a8275058e299fcc0381534545f85cf7e0b7c8a4c7f29a2");
+    const expected = hex.decode("5df6e0e2761359d30a8275058e299fcc0381534545f85cf7e0b7c8a4c7f29a28");
     expect(result).toEqual(expected);
   });
 });
