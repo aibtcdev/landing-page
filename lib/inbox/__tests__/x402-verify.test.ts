@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { verifyInboxPayment, isRelayTimeout } from "../x402-verify";
 import type { PaymentPayloadV2 } from "x402-stacks";
-import { networkToCAIP2 } from "x402-stacks";
+import { networkToCAIP2, X402_ERROR_CODES } from "x402-stacks";
 import { getSBTCAsset } from "../x402-config";
 
 describe("verifyInboxPayment", () => {
@@ -105,6 +105,33 @@ describe("verifyInboxPayment", () => {
 
       expect(result.success).toBe(false);
       expect(result.error).toBe("Inbox messages require sBTC payment");
+    });
+  });
+
+  describe("accepted: undefined regression (#629)", () => {
+    it("returns INVALID_PAYLOAD (not TypeError) when accepted field is absent", async () => {
+      // Regression test for issue #629: pollers and some clients omit `accepted` entirely.
+      // Before the fix, paymentPayload.accepted.asset threw:
+      //   TypeError: Cannot read properties of undefined (reading 'asset')
+      // After the fix, optional chaining returns undefined and the check rejects cleanly.
+      const payload = {
+        payload: { transaction: "0030aabbccdd" },
+        // `accepted` deliberately absent
+        resource: { url: `https://aibtc.com/api/inbox/test`, network: networkCAIP2 },
+      } as unknown as PaymentPayloadV2;
+
+      // Must not throw — must return a structured error result
+      const result = await verifyInboxPayment(
+        payload,
+        recipientStxAddress,
+        network,
+        "https://fake-relay.test"
+      );
+
+      expect(result.success).toBe(false);
+      // The sBTC-asset guard fires first (accepted?.asset is undefined !== expectedAsset)
+      expect(result.error).toBe("Inbox messages require sBTC payment");
+      expect(result.errorCode).toBe(X402_ERROR_CODES.INVALID_PAYLOAD);
     });
   });
 });
