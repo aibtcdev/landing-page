@@ -63,7 +63,14 @@ export async function getCachedAgentList(
   kv: KVNamespace,
   waitUntil?: WaitUntil
 ): Promise<CachedAgentList> {
-  const cached = parseSnapshot(await kv.get(CACHE_KEY));
+  const raw = await kv.get(CACHE_KEY);
+  const cached = parseSnapshot(raw);
+
+  // Corrupted entry — delete it so we don't keep hitting the parse failure
+  // for the full 600s hard TTL.
+  if (raw && !cached) {
+    await kv.delete(CACHE_KEY).catch(() => {});
+  }
 
   if (cached) {
     if (isFresh(cached)) return cached;
