@@ -2,7 +2,11 @@
  * KV-backed cache for the enriched agent list.
  *
  * Replaces O(N) KV scans on every page load with a single KV read.
- * The snapshot is rebuilt on cache miss and stored with a 2-minute TTL.
+ * Uses a stale-while-revalidate pattern: cached data is kept for 10 minutes
+ * (hard TTL) but considered fresh for only 2 minutes. Stale hits trigger a
+ * background rebuild without blocking the response, so readers never see an
+ * empty list just because another request happens to be rebuilding.
+ *
  * Mutation endpoints call invalidateAgentListCache() to force a rebuild.
  */
 
@@ -12,45 +16,81 @@ import { getAchievementCount } from "@/lib/achievements";
 import type { CachedAgent, CachedAgentList } from "./types";
 
 const CACHE_KEY = "cache:agent-list";
-const CACHE_TTL_SECONDS = 120; // 2 minutes
+// Hard TTL — snapshot persists in KV well beyond its freshness window so we
+// can always serve stale data while a rebuild happens in the background.
+const CACHE_TTL_SECONDS = 600; // 10 minutes
+// Freshness window — within this age from `cachedAt`, no rebuild is needed.
+const FRESH_WINDOW_SECONDS = 120; // 2 minutes
 
 // Sentinel key written during rebuild to prevent thundering herd.
-// Short TTL ensures it doesn't block reads if a rebuild crashes.
-// (60s = Cloudflare KV minimum expirationTtl)
 const BUILDING_KEY = "cache:agent-list:building";
 const BUILDING_TTL_SECONDS = 60;
 
+// When there's no cache at all AND another request is already rebuilding,
+// poll briefly for the rebuild to finish instead of returning an empty list.
+const COLD_MISS_POLL_MS = 1500;
+const COLD_MISS_POLL_INTERVAL_MS = 150;
+
+type WaitUntil = (promise: Promise<unknown>) => void;
+
+function isFresh(snapshot: CachedAgentList): boolean {
+  const cachedAt = Date.parse(snapshot.cachedAt);
+  if (Number.isNaN(cachedAt)) return false;
+  return Date.now() - cachedAt < FRESH_WINDOW_SECONDS * 1000;
+}
+
+function parseSnapshot(raw: string | null): CachedAgentList | null {
+  if (!raw) return null;
+  try {
+    return JSON.parse(raw) as CachedAgentList;
+  } catch {
+    return null;
+  }
+}
+
 /**
- * Get the cached agent list from KV, rebuilding if stale or missing.
- * Uses a sentinel key to prevent multiple concurrent rebuilds (thundering herd).
+ * Get the cached agent list from KV.
+ *
+ * - Fresh hit: return immediately.
+ * - Stale hit: return the stale snapshot and kick off a background rebuild.
+ *   If `waitUntil` is provided, the rebuild runs after the response is sent;
+ *   otherwise it runs fire-and-forget (best-effort on Workers).
+ * - Cold miss: if another request is already rebuilding, poll briefly so we
+ *   can serve the fresh result instead of an empty list. Otherwise rebuild
+ *   synchronously.
  */
 export async function getCachedAgentList(
-  kv: KVNamespace
+  kv: KVNamespace,
+  waitUntil?: WaitUntil
 ): Promise<CachedAgentList> {
-  // Try cache first
-  const cached = await kv.get(CACHE_KEY);
+  const raw = await kv.get(CACHE_KEY);
+  const cached = parseSnapshot(raw);
+
+  // Corrupted entry — delete it so we don't keep hitting the parse failure
+  // for the full 600s hard TTL.
+  if (raw && !cached) {
+    await kv.delete(CACHE_KEY).catch(() => {});
+  }
+
   if (cached) {
-    try {
-      return JSON.parse(cached) as CachedAgentList;
-    } catch {
-      // Corrupted cache — delete before rebuilding to prevent repeated parse failures
-      await kv.delete(CACHE_KEY).catch(() => {});
-    }
+    if (isFresh(cached)) return cached;
+
+    // Stale — trigger a background rebuild but return what we have.
+    const rebuild = maybeTriggerBackgroundRebuild(kv);
+    if (waitUntil) waitUntil(rebuild);
+    return cached;
   }
 
-  // Cache miss — check if another request is already rebuilding
-  const building = await kv.get(BUILDING_KEY);
-  if (building) {
-    // Another request is rebuilding. Return empty fallback rather than
-    // piling on with another full O(N) rebuild.
-    return {
-      agents: [],
-      stats: { total: 0, genesisCount: 0, messageCount: 0 },
-      cachedAt: new Date().toISOString(),
-    };
+  // Cold miss. If someone else is rebuilding, wait for them rather than
+  // either returning empty or piling on a duplicate O(N) rebuild.
+  if (await kv.get(BUILDING_KEY)) {
+    const waited = await pollForCache(kv);
+    if (waited) return waited;
+    // Rebuild didn't finish in time — fall through and rebuild ourselves
+    // rather than show the user an empty page.
   }
 
-  // Claim the rebuild with a sentinel (best-effort)
+  // Claim the rebuild with a sentinel (best-effort).
   try {
     await kv.put(BUILDING_KEY, "1", { expirationTtl: BUILDING_TTL_SECONDS });
   } catch {
@@ -60,7 +100,37 @@ export async function getCachedAgentList(
   try {
     return await rebuildAgentListCache(kv);
   } finally {
-    // Clear sentinel after rebuild (success or failure)
+    await kv.delete(BUILDING_KEY).catch(() => {});
+  }
+}
+
+async function pollForCache(
+  kv: KVNamespace
+): Promise<CachedAgentList | null> {
+  const deadline = Date.now() + COLD_MISS_POLL_MS;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, COLD_MISS_POLL_INTERVAL_MS));
+    const snapshot = parseSnapshot(await kv.get(CACHE_KEY));
+    if (snapshot) return snapshot;
+  }
+  return null;
+}
+
+async function maybeTriggerBackgroundRebuild(
+  kv: KVNamespace
+): Promise<void> {
+  // Only one background rebuild at a time.
+  if (await kv.get(BUILDING_KEY)) return;
+  try {
+    await kv.put(BUILDING_KEY, "1", { expirationTtl: BUILDING_TTL_SECONDS });
+  } catch {
+    return;
+  }
+  try {
+    await rebuildAgentListCache(kv);
+  } catch {
+    // Swallow — the stale snapshot is already being served.
+  } finally {
     await kv.delete(BUILDING_KEY).catch(() => {});
   }
 }

@@ -91,9 +91,11 @@ interface LeaderboardAgent {
  */
 async function fetchHomeData() {
   try {
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
-    const { agents, stats } = await getCachedAgentList(kv);
+    const { agents, stats } = await getCachedAgentList(kv, (p) =>
+      ctx.waitUntil(p)
+    );
 
     // Sort: level desc, then check-ins desc, then recent first
     const sorted = [...agents].sort((a, b) => {
