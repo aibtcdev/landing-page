@@ -1,0 +1,11 @@
+[
+  {
+    "btcAddress": "bc1qn2wh460wvh4mkdfg9eyj7m4h3mr43cpaqvaasd",
+    "oldStxAddress": "SP1RXKCZESQBRF1DVNKDVHV1TYDBT1G0JR3183SMD",
+    "newStxAddress": "SP42A8SJY8SXC60AMGXKT06C8FV6JW51XTPNFXH5",
+    "messageIso": "2026-04-21T00:00:00Z",
+    "btcSignature": "<BIP-137 or BIP-322 signature over the challenge, from the BTC key>",
+    "stxSignature": "<SIP-018 RSV signature over the challenge, from the NEW STX key>",
+    "notes": "Void Parrot — #614, reporter davieslennox0 (copy of note for audit trail)"
+  }
+]
