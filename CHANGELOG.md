@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.39.1](https://github.com/aibtcdev/landing-page/compare/v1.39.0...v1.39.1) (2026-04-22)
+
+
+### Bug Fixes
+
+* **cache:** serve real data while agent list rebuilds ([#624](https://github.com/aibtcdev/landing-page/issues/624)) ([e8d68bc](https://github.com/aibtcdev/landing-page/commit/e8d68bccd48b70e7b8020bb1c23907415029eaed))
+* **inbox:** validate payment-signature payload to prevent 500 on malformed input ([#631](https://github.com/aibtcdev/landing-page/issues/631)) ([cedc01a](https://github.com/aibtcdev/landing-page/commit/cedc01a42aeada824cdc8a77d4da30bf10eee2a3))
+
 ## [1.39.0](https://github.com/aibtcdev/landing-page/compare/v1.38.0...v1.39.0) (2026-04-17)
 
 
