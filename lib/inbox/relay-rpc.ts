@@ -58,16 +58,22 @@ const RPC_ERROR_CODE_MAP: Record<string, InboxPaymentErrorCode> = {
   // Broadcast failures
   BROADCAST_FAILED: "BROADCAST_FAILED",
   TX_BROADCAST_ERROR: "BROADCAST_FAILED",
+  BROADCAST_RATE_LIMITED: "BROADCAST_FAILED",
   // Settlement
   SETTLEMENT_FAILED: "SETTLEMENT_FAILED",
   // Insufficient funds
   INSUFFICIENT_FUNDS: "INSUFFICIENT_FUNDS",
   BALANCE_ERROR: "INSUFFICIENT_FUNDS",
+  SPONSOR_EXHAUSTED: "INSUFFICIENT_FUNDS",
   // Nonce conflicts (retryable)
   NONCE_CONFLICT: "NONCE_CONFLICT",
   CLIENT_NONCE_CONFLICT: "NONCE_CONFLICT",
   CLIENT_BAD_NONCE: "NONCE_CONFLICT",
   TOO_MUCH_CHAINING: "NONCE_CONFLICT",
+  ORIGIN_CHAINING_LIMIT: "NONCE_CONFLICT",
+  NONCE_OCCUPIED: "NONCE_CONFLICT",
+  // Payment identity expired/gone
+  SENDER_HAND_EXPIRED: "PAYMENT_NOT_FOUND",
   // Internal
   INTERNAL_ERROR: "RELAY_ERROR",
 };
@@ -88,18 +94,30 @@ export function mapRPCErrorCode(
 const PENDING_STATUSES = new Set(["queued", "broadcasting", "mempool"]);
 
 const TERMINAL_REASON_ERROR_CODE_MAP: Partial<Record<TerminalReason, InboxPaymentErrorCode>> = {
+  // Validation failures (sender must fix and resubmit)
   invalid_transaction: "PAYMENT_REJECTED",
   not_sponsored: "PAYMENT_REJECTED",
+  // Sender nonce rejections
   sender_nonce_stale: "SENDER_NONCE_STALE",
   sender_nonce_gap: "SENDER_NONCE_GAP",
   sender_nonce_duplicate: "SENDER_NONCE_DUPLICATE",
+  // Sender chaining limit (retryable after drain — same InboxPaymentErrorCode as nonce conflict)
+  origin_chaining_limit: "NONCE_CONFLICT",
+  // Relay-internal failures
   queue_unavailable: "RELAY_ERROR",
   sponsor_failure: "RELAY_ERROR",
-  broadcast_failure: "BROADCAST_FAILED",
-  chain_abort: "SETTLEMENT_FAILED",
+  sponsor_nonce_conflict: "RELAY_ERROR",
   internal_error: "RELAY_ERROR",
+  // Sponsor wallet exhausted — no relay funds; treat as insufficient funds from client perspective
+  sponsor_exhausted: "INSUFFICIENT_FUNDS",
+  // Broadcast / settlement failures
+  broadcast_failure: "BROADCAST_FAILED",
+  broadcast_rate_limited: "BROADCAST_FAILED",
+  chain_abort: "SETTLEMENT_FAILED",
+  // Identity / expiry
   expired: "PAYMENT_NOT_FOUND",
   unknown_payment_identity: "PAYMENT_NOT_FOUND",
+  sender_hand_expired: "PAYMENT_NOT_FOUND",
 };
 
 function parseSubmitPaymentResult(raw: unknown): RelaySubmitResult {
