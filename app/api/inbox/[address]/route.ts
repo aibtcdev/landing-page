@@ -27,6 +27,7 @@ import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { hasAchievement, grantAchievement } from "@/lib/achievements";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
+import { HttpPaymentPayloadSchema } from "@aibtc/tx-schemas/http";
 import {
   getPaymentRepoVersion,
   logPaymentEvent,
@@ -1038,20 +1039,18 @@ export async function POST(
     return NextResponse.json({ error: "Missing payment signature" }, { status: 400 });
   }
 
-  // Parse payment signature (base64-encoded JSON per x402 v2, with plain JSON fallback)
-  let paymentPayload: PaymentPayloadV2;
+  // Parse and validate payment signature (base64-encoded JSON per x402 v2, with plain JSON fallback)
+  // Uses HttpPaymentPayloadSchema.safeParse to catch structurally invalid payloads before
+  // downstream code touches optional fields like `accepted.asset` (prevents #629 TypeError).
+  let decodedPaymentJson: unknown;
+  let usedFallback = false;
   try {
     const decoded = atob(paymentSigHeader);
-    paymentPayload = JSON.parse(decoded) as PaymentPayloadV2;
+    decodedPaymentJson = JSON.parse(decoded);
   } catch {
     try {
-      paymentPayload = JSON.parse(paymentSigHeader) as PaymentPayloadV2;
-      logPaymentEvent(logger, "warn", "payment.fallback_used", repoVersion, {
-        route: request.nextUrl.pathname,
-        status: "compat",
-        action: "plain_json_payment_signature_header",
-        compatShimUsed: true,
-      });
+      decodedPaymentJson = JSON.parse(paymentSigHeader);
+      usedFallback = true;
     } catch {
       logger.error("Invalid payment signature format");
       return NextResponse.json(
@@ -1064,14 +1063,44 @@ export async function POST(
     }
   }
 
+  const parsedPaymentPayload = HttpPaymentPayloadSchema.safeParse(decodedPaymentJson);
+  if (!parsedPaymentPayload.success) {
+    logger.warn("Invalid payment-signature payload structure", {
+      issues: parsedPaymentPayload.error.issues,
+    });
+    return NextResponse.json(
+      {
+        error: "invalid_payment_payload",
+        issues: parsedPaymentPayload.error.issues,
+      },
+      { status: 400 }
+    );
+  }
+  // Keep the inferred schema type locally so `accepted` remains optional at every
+  // access site in this handler — TS will reject `paymentPayload.accepted.asset`
+  // without optional chaining, which is exactly the #629 regression this PR fixes.
+  const paymentPayload = parsedPaymentPayload.data;
+
+  if (usedFallback) {
+    logPaymentEvent(logger, "warn", "payment.fallback_used", repoVersion, {
+      route: request.nextUrl.pathname,
+      status: "compat",
+      action: "plain_json_payment_signature_header",
+      compatShimUsed: true,
+    });
+  }
+
   // Verify x402 payment
   logger.info("Verifying x402 payment", {
     network,
     recipientStx: agent.stxAddress,
   });
 
+  // HttpPaymentPayloadSchema is a validated subset of PaymentPayloadV2 (the x402-stacks
+  // vendor type, which incorrectly declares `accepted` required). Bridge at this single
+  // boundary rather than leaking the vendor type back up through the handler.
   const paymentResult = await verifyInboxPayment(
-    paymentPayload,
+    paymentPayload as unknown as PaymentPayloadV2,
     agent.stxAddress,
     network,
     relayUrl,

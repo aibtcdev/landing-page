@@ -178,11 +178,22 @@ describe("inbox POST canonical staged-payment semantics", () => {
   });
 
   function buildRequest(): NextRequest {
-    // Build a valid x402 payment-signature header (base64-encoded JSON)
+    // Build a valid x402 payment-signature header (base64-encoded JSON).
+    // `accepted` is optional overall, but if it is provided it must include the
+    // schema-required fields (scheme, network, amount, asset, payTo). This test
+    // includes `accepted` so HttpPaymentPayloadSchema.safeParse succeeds before
+    // reaching the mocked verifyInboxPayment; since verifyInboxPayment is mocked,
+    // the specific asset value is irrelevant here.
     const paymentPayload = {
       payload: { transaction: "a".repeat(64) },
-      accepted: { asset: `eip155:1/slip44:5757::${RECIPIENT_STX}.sbtc-token::sbtc` },
-      resource: { url: `https://aibtc.com/api/inbox/${RECIPIENT_BTC}`, network: networkToCAIP2(NETWORK) },
+      accepted: {
+        scheme: "exact",
+        network: networkToCAIP2(NETWORK),
+        amount: "100",
+        asset: `SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE.sbtc-token::sbtc-token`,
+        payTo: RECIPIENT_STX,
+      },
+      resource: { url: `https://aibtc.com/api/inbox/${RECIPIENT_BTC}` },
     };
     const paymentSigHeader = btoa(JSON.stringify(paymentPayload));
 
