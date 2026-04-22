@@ -2,6 +2,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 import { __testUtils, mapRPCErrorCode, submitViaRPC } from "../relay-rpc";
 import type { RelayRPC, RelaySettleOptions } from "../relay-rpc";
 import type { Logger } from "@/lib/logging";
+import { TerminalReasonSchema } from "@aibtc/tx-schemas/terminal-reasons";
+import { RpcErrorCodeSchema } from "@aibtc/tx-schemas/rpc";
 
 const mockLogger: Logger = {
   debug: vi.fn(),
@@ -765,6 +767,148 @@ describe("submitViaRPC", () => {
         "RPC: poll exhausted after relay accepted — treating as pending success",
         expect.objectContaining({ paymentId: "pay_log_exhaust" })
       );
+    });
+  });
+});
+
+describe("tx-schemas 1.0.0 schema compatibility", () => {
+  describe("new TerminalReason variants parse correctly", () => {
+    const newFailedReasons = [
+      "sponsor_exhausted",
+      "sponsor_nonce_conflict",
+      "origin_chaining_limit",
+      "broadcast_rate_limited",
+      "sender_hand_expired",
+    ] as const;
+
+    for (const reason of newFailedReasons) {
+      it(`parses new failed terminal reason: ${reason}`, () => {
+        expect(TerminalReasonSchema.parse(reason)).toBe(reason);
+      });
+    }
+  });
+
+  describe("new RpcErrorCode variants parse correctly", () => {
+    const newRpcCodes = [
+      "SPONSOR_EXHAUSTED",
+      "ORIGIN_CHAINING_LIMIT",
+      "BROADCAST_RATE_LIMITED",
+      "SENDER_HAND_EXPIRED",
+      "NONCE_OCCUPIED",
+    ] as const;
+
+    for (const code of newRpcCodes) {
+      it(`parses new RPC error code: ${code}`, () => {
+        expect(RpcErrorCodeSchema.parse(code)).toBe(code);
+      });
+    }
+  });
+
+  describe("new TerminalReason variants map to correct InboxPaymentErrorCode", () => {
+    it("maps sponsor_exhausted checkPayment to INSUFFICIENT_FUNDS", async () => {
+      vi.useFakeTimers();
+
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay_sponsor_exhausted",
+          status: "queued",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay_sponsor_exhausted",
+          status: "failed",
+          terminalReason: "sponsor_exhausted",
+          error: "sponsor wallet has no available capacity",
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("INSUFFICIENT_FUNDS");
+      expect(result.terminalReason).toBe("sponsor_exhausted");
+
+      vi.useRealTimers();
+    });
+
+    it("maps origin_chaining_limit checkPayment to NONCE_CONFLICT", async () => {
+      vi.useFakeTimers();
+
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay_chaining_limit",
+          status: "queued",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay_chaining_limit",
+          status: "failed",
+          terminalReason: "origin_chaining_limit",
+          error: "sender exceeded chaining limit",
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("NONCE_CONFLICT");
+      expect(result.terminalReason).toBe("origin_chaining_limit");
+
+      vi.useRealTimers();
+    });
+
+    it("maps sender_hand_expired checkPayment to PAYMENT_NOT_FOUND", async () => {
+      vi.useFakeTimers();
+
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay_hand_expired",
+          status: "queued",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay_hand_expired",
+          status: "failed",
+          terminalReason: "sender_hand_expired",
+          error: "sender hand TTL expired before dispatch",
+        }),
+      };
+
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+      await vi.runAllTimersAsync();
+      const result = await resultPromise;
+
+      expect(result.success).toBe(false);
+      expect(result.errorCode).toBe("PAYMENT_NOT_FOUND");
+      expect(result.terminalReason).toBe("sender_hand_expired");
+
+      vi.useRealTimers();
+    });
+  });
+
+  describe("new RpcErrorCode variants map to correct InboxPaymentErrorCode", () => {
+    it("maps SPONSOR_EXHAUSTED to INSUFFICIENT_FUNDS", () => {
+      expect(mapRPCErrorCode("SPONSOR_EXHAUSTED")).toBe("INSUFFICIENT_FUNDS");
+    });
+
+    it("maps ORIGIN_CHAINING_LIMIT to NONCE_CONFLICT", () => {
+      expect(mapRPCErrorCode("ORIGIN_CHAINING_LIMIT")).toBe("NONCE_CONFLICT");
+    });
+
+    it("maps BROADCAST_RATE_LIMITED to BROADCAST_FAILED", () => {
+      expect(mapRPCErrorCode("BROADCAST_RATE_LIMITED")).toBe("BROADCAST_FAILED");
+    });
+
+    it("maps SENDER_HAND_EXPIRED to PAYMENT_NOT_FOUND", () => {
+      expect(mapRPCErrorCode("SENDER_HAND_EXPIRED")).toBe("PAYMENT_NOT_FOUND");
+    });
+
+    it("maps NONCE_OCCUPIED to NONCE_CONFLICT", () => {
+      expect(mapRPCErrorCode("NONCE_OCCUPIED")).toBe("NONCE_CONFLICT");
     });
   });
 });
