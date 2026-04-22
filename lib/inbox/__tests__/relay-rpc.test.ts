@@ -805,89 +805,72 @@ describe("tx-schemas 1.0.0 schema compatibility", () => {
   });
 
   describe("new TerminalReason variants map to correct InboxPaymentErrorCode", () => {
-    it("maps sponsor_exhausted checkPayment to INSUFFICIENT_FUNDS", async () => {
-      vi.useFakeTimers();
-
-      const rpc: RelayRPC = {
-        submitPayment: vi.fn().mockResolvedValue({
-          accepted: true,
-          paymentId: "pay_sponsor_exhausted",
-          status: "queued",
-        }),
-        checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay_sponsor_exhausted",
-          status: "failed",
-          terminalReason: "sponsor_exhausted",
-          error: "sponsor wallet has no available capacity",
-        }),
-      };
-
-      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
-      await vi.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("INSUFFICIENT_FUNDS");
-      expect(result.terminalReason).toBe("sponsor_exhausted");
-
+    // Safety net: if an assertion throws mid-test, restore real timers so fake
+    // timers don't leak into unrelated tests further down the file.
+    afterEach(() => {
       vi.useRealTimers();
     });
 
-    it("maps origin_chaining_limit checkPayment to NONCE_CONFLICT", async () => {
-      vi.useFakeTimers();
+    const newReasonMappings = [
+      {
+        reason: "sponsor_exhausted",
+        expectedErrorCode: "INSUFFICIENT_FUNDS",
+        paymentId: "pay_sponsor_exhausted",
+        error: "sponsor wallet has no available capacity",
+      },
+      {
+        reason: "sponsor_nonce_conflict",
+        expectedErrorCode: "RELAY_ERROR",
+        paymentId: "pay_sponsor_nonce_conflict",
+        error: "sponsor nonce conflicted with an in-flight tx",
+      },
+      {
+        reason: "origin_chaining_limit",
+        expectedErrorCode: "NONCE_CONFLICT",
+        paymentId: "pay_chaining_limit",
+        error: "sender exceeded chaining limit",
+      },
+      {
+        reason: "broadcast_rate_limited",
+        expectedErrorCode: "BROADCAST_FAILED",
+        paymentId: "pay_broadcast_rate_limited",
+        error: "broadcast rate limit exceeded",
+      },
+      {
+        reason: "sender_hand_expired",
+        expectedErrorCode: "PAYMENT_NOT_FOUND",
+        paymentId: "pay_hand_expired",
+        error: "sender hand TTL expired before dispatch",
+      },
+    ] as const;
 
-      const rpc: RelayRPC = {
-        submitPayment: vi.fn().mockResolvedValue({
-          accepted: true,
-          paymentId: "pay_chaining_limit",
-          status: "queued",
-        }),
-        checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay_chaining_limit",
-          status: "failed",
-          terminalReason: "origin_chaining_limit",
-          error: "sender exceeded chaining limit",
-        }),
-      };
+    for (const { reason, expectedErrorCode, paymentId, error } of newReasonMappings) {
+      it(`maps ${reason} checkPayment to ${expectedErrorCode}`, async () => {
+        vi.useFakeTimers();
 
-      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
-      await vi.runAllTimersAsync();
-      const result = await resultPromise;
+        const rpc: RelayRPC = {
+          submitPayment: vi.fn().mockResolvedValue({
+            accepted: true,
+            paymentId,
+            status: "queued",
+          }),
+          checkPayment: vi.fn().mockResolvedValue({
+            paymentId,
+            status: "failed",
+            terminalReason: reason,
+            error,
+          }),
+        };
 
-      expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("NONCE_CONFLICT");
-      expect(result.terminalReason).toBe("origin_chaining_limit");
+        const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
+        await vi.runAllTimersAsync();
+        const result = await resultPromise;
 
-      vi.useRealTimers();
-    });
-
-    it("maps sender_hand_expired checkPayment to PAYMENT_NOT_FOUND", async () => {
-      vi.useFakeTimers();
-
-      const rpc: RelayRPC = {
-        submitPayment: vi.fn().mockResolvedValue({
-          accepted: true,
-          paymentId: "pay_hand_expired",
-          status: "queued",
-        }),
-        checkPayment: vi.fn().mockResolvedValue({
-          paymentId: "pay_hand_expired",
-          status: "failed",
-          terminalReason: "sender_hand_expired",
-          error: "sender hand TTL expired before dispatch",
-        }),
-      };
-
-      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
-      await vi.runAllTimersAsync();
-      const result = await resultPromise;
-
-      expect(result.success).toBe(false);
-      expect(result.errorCode).toBe("PAYMENT_NOT_FOUND");
-      expect(result.terminalReason).toBe("sender_hand_expired");
-
-      vi.useRealTimers();
-    });
+        expect(result.success).toBe(false);
+        expect(result.errorCode).toBe(expectedErrorCode);
+        expect(result.terminalReason).toBe(reason);
+      });
+    }
   });
 
   describe("new RpcErrorCode variants map to correct InboxPaymentErrorCode", () => {
