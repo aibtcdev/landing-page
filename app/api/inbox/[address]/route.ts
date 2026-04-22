@@ -1042,7 +1042,6 @@ export async function POST(
   // Parse and validate payment signature (base64-encoded JSON per x402 v2, with plain JSON fallback)
   // Uses HttpPaymentPayloadSchema.safeParse to catch structurally invalid payloads before
   // downstream code touches optional fields like `accepted.asset` (prevents #629 TypeError).
-  let paymentPayload: PaymentPayloadV2;
   let decodedPaymentJson: unknown;
   let usedFallback = false;
   try {
@@ -1077,7 +1076,10 @@ export async function POST(
       { status: 400 }
     );
   }
-  paymentPayload = parsedPaymentPayload.data as PaymentPayloadV2;
+  // Keep the inferred schema type locally so `accepted` remains optional at every
+  // access site in this handler — TS will reject `paymentPayload.accepted.asset`
+  // without optional chaining, which is exactly the #629 regression this PR fixes.
+  const paymentPayload = parsedPaymentPayload.data;
 
   if (usedFallback) {
     logPaymentEvent(logger, "warn", "payment.fallback_used", repoVersion, {
@@ -1094,8 +1096,11 @@ export async function POST(
     recipientStx: agent.stxAddress,
   });
 
+  // HttpPaymentPayloadSchema is a validated subset of PaymentPayloadV2 (the x402-stacks
+  // vendor type, which incorrectly declares `accepted` required). Bridge at this single
+  // boundary rather than leaking the vendor type back up through the handler.
   const paymentResult = await verifyInboxPayment(
-    paymentPayload,
+    paymentPayload as unknown as PaymentPayloadV2,
     agent.stxAddress,
     network,
     relayUrl,

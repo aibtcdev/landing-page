@@ -179,9 +179,11 @@ describe("inbox POST canonical staged-payment semantics", () => {
 
   function buildRequest(): NextRequest {
     // Build a valid x402 payment-signature header (base64-encoded JSON).
-    // accepted must include all required fields (scheme, network, amount, asset, payTo)
-    // so that HttpPaymentPayloadSchema.safeParse succeeds in the route before reaching
-    // the mocked verifyInboxPayment. verifyInboxPayment is mocked so asset value is irrelevant.
+    // `accepted` is optional overall, but if it is provided it must include the
+    // schema-required fields (scheme, network, amount, asset, payTo). This test
+    // includes `accepted` so HttpPaymentPayloadSchema.safeParse succeeds before
+    // reaching the mocked verifyInboxPayment; since verifyInboxPayment is mocked,
+    // the specific asset value is irrelevant here.
     const paymentPayload = {
       payload: { transaction: "a".repeat(64) },
       accepted: {

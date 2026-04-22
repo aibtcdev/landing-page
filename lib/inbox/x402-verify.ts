@@ -408,8 +408,8 @@ export async function verifyInboxPayment(
   });
 
   // Check if payment is in sBTC (v2: check accepted.asset and payload.transaction)
-  // accepted is optional in the x402 v2 wire format; use optional chaining to avoid
-  // TypeError when the field is absent (defense-in-depth; route validates first).
+  // `accepted` is optional in the x402 v2 wire format; use optional chaining to avoid
+  // TypeError when the field is absent and defensively handle that case here.
   if (
     !paymentPayload.payload?.transaction ||
     paymentPayload.accepted?.asset !== expectedAsset
