@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.0](https://github.com/aibtcdev/landing-page/compare/v1.39.1...v1.40.0) (2026-04-23)
+
+
+### Features
+
+* **inbox:** derive paymentIdentifier from (sender,nonce,recipient) for V2 RPC idempotency (closes [#635](https://github.com/aibtcdev/landing-page/issues/635)) ([#636](https://github.com/aibtcdev/landing-page/issues/636)) ([27f3e4d](https://github.com/aibtcdev/landing-page/commit/27f3e4d4f21edceff7f484e84d8f11c124c9169b))
+
 ## [1.39.1](https://github.com/aibtcdev/landing-page/compare/v1.39.0...v1.39.1) (2026-04-22)
 
 
