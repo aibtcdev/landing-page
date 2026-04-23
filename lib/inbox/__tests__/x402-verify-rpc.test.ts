@@ -27,6 +27,7 @@ vi.mock("@stacks/transactions", () => ({
       spendingCondition: {
         hashMode: 0,
         signer: "00".repeat(20),
+        nonce: BigInt(42),
       },
     },
   })),

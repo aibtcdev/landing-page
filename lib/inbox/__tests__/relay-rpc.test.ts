@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { __testUtils, mapRPCErrorCode, submitViaRPC } from "../relay-rpc";
+import { __testUtils, derivePaymentIdentifier, mapRPCErrorCode, submitViaRPC } from "../relay-rpc";
 import type { RelayRPC, RelaySettleOptions } from "../relay-rpc";
 import type { Logger } from "@/lib/logging";
 import { TerminalReasonSchema } from "@aibtc/tx-schemas/terminal-reasons";
@@ -208,7 +208,7 @@ describe("submitViaRPC", () => {
       expect(result.error).toBe("Payment submission rejected by relay");
     });
 
-    it("passes txHex and settle as separate args to submitPayment", async () => {
+    it("passes txHex, settle, and optional paymentIdentifier as separate args to submitPayment", async () => {
       const rpc: RelayRPC = {
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
@@ -222,11 +222,34 @@ describe("submitViaRPC", () => {
         }),
       };
 
+      // Without paymentIdentifier — third arg is undefined
       const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger);
       await vi.runAllTimersAsync();
       await resultPromise;
 
-      expect(rpc.submitPayment).toHaveBeenCalledWith(baseTxHex, baseSettle);
+      expect(rpc.submitPayment).toHaveBeenCalledWith(baseTxHex, baseSettle, undefined);
+    });
+
+    it("passes paymentIdentifier through to submitPayment when provided", async () => {
+      const rpc: RelayRPC = {
+        submitPayment: vi.fn().mockResolvedValue({
+          accepted: true,
+          paymentId: "pay_id_passthrough",
+          status: "queued",
+        }),
+        checkPayment: vi.fn().mockResolvedValue({
+          paymentId: "pay_id_passthrough",
+          status: "confirmed",
+          txid: "a".repeat(64),
+        }),
+      };
+
+      const identifier = "pay_abc123def456789012345678";
+      const resultPromise = submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger, identifier);
+      await vi.runAllTimersAsync();
+      await resultPromise;
+
+      expect(rpc.submitPayment).toHaveBeenCalledWith(baseTxHex, baseSettle, identifier);
     });
 
     it("fails closed when submitPayment accepts but omits canonical paymentId", async () => {
@@ -940,6 +963,78 @@ describe("relay-rpc parser compatibility", () => {
     expect(result.errorCode).toBe("RELAY_ERROR");
     expect(result.relayCode).toBe("FUTURE_RELAY_CODE");
     expect(result.relayDetail).toBe("future relay diagnostic");
+
+    vi.useRealTimers();
+  });
+});
+
+describe("derivePaymentIdentifier", () => {
+  it("produces a stable identifier for the same (sender, nonce, recipient) tuple", async () => {
+    const id1 = await derivePaymentIdentifier("SP2SENDER", "42", "SP2RECIPIENT");
+    const id2 = await derivePaymentIdentifier("SP2SENDER", "42", "SP2RECIPIENT");
+    expect(id1).toBe(id2);
+  });
+
+  it("produces different identifiers for different (sender, nonce, recipient) tuples", async () => {
+    const id1 = await derivePaymentIdentifier("SP2SENDER", "42", "SP2RECIPIENT");
+    const id2 = await derivePaymentIdentifier("SP2SENDER", "43", "SP2RECIPIENT");
+    expect(id1).not.toBe(id2);
+  });
+
+  it("produces different identifiers when sender differs", async () => {
+    const id1 = await derivePaymentIdentifier("SP2SENDER_A", "42", "SP2RECIPIENT");
+    const id2 = await derivePaymentIdentifier("SP2SENDER_B", "42", "SP2RECIPIENT");
+    expect(id1).not.toBe(id2);
+  });
+
+  it("produces different identifiers when recipient differs", async () => {
+    const id1 = await derivePaymentIdentifier("SP2SENDER", "42", "SP2RECIPIENT_A");
+    const id2 = await derivePaymentIdentifier("SP2SENDER", "42", "SP2RECIPIENT_B");
+    expect(id1).not.toBe(id2);
+  });
+
+  it("matches PaymentIdentifierSchema shape: pay_ prefix + 28 hex chars", async () => {
+    const id = await derivePaymentIdentifier("SP2SENDER", "42", "SP2RECIPIENT");
+    expect(id).toMatch(/^pay_[a-f0-9]{28}$/);
+  });
+
+  it("satisfies PaymentIdentifierSchema length constraint (16-128 chars)", async () => {
+    const id = await derivePaymentIdentifier("SP2SENDER", "42", "SP2RECIPIENT");
+    expect(id.length).toBeGreaterThanOrEqual(16);
+    expect(id.length).toBeLessThanOrEqual(128);
+    // total length: pay_(4) + 28 hex = 32 chars
+    expect(id.length).toBe(32);
+  });
+});
+
+describe("PAYMENT_IDENTIFIER_CONFLICT mapping", () => {
+  it("maps PAYMENT_IDENTIFIER_CONFLICT to PAYMENT_REJECTED", () => {
+    expect(mapRPCErrorCode("PAYMENT_IDENTIFIER_CONFLICT")).toBe("PAYMENT_REJECTED");
+  });
+
+  it("parses PAYMENT_IDENTIFIER_CONFLICT as a valid RpcErrorCode in tx-schemas 1.1.0", () => {
+    expect(RpcErrorCodeSchema.parse("PAYMENT_IDENTIFIER_CONFLICT")).toBe("PAYMENT_IDENTIFIER_CONFLICT");
+  });
+
+  it("returns PAYMENT_REJECTED when submitViaRPC receives PAYMENT_IDENTIFIER_CONFLICT rejection", async () => {
+    vi.useFakeTimers();
+
+    const rpc: RelayRPC = {
+      submitPayment: vi.fn().mockResolvedValue({
+        accepted: false,
+        code: "PAYMENT_IDENTIFIER_CONFLICT",
+        error: "paymentIdentifier already used with a different transaction payload",
+        retryable: false,
+      }),
+      checkPayment: vi.fn(),
+    };
+
+    const result = await submitViaRPC(rpc, baseTxHex, baseSettle, mockLogger, "pay_conflictid000000000000000");
+
+    expect(result.success).toBe(false);
+    expect(result.errorCode).toBe("PAYMENT_REJECTED");
+    expect(result.relayCode).toBe("PAYMENT_IDENTIFIER_CONFLICT");
+    expect(rpc.checkPayment).not.toHaveBeenCalled();
 
     vi.useRealTimers();
   });

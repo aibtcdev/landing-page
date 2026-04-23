@@ -41,7 +41,7 @@ type ParsedCheckPaymentResult = {
  * Must match the actual relay WorkerEntrypoint method signatures.
  */
 export interface RelayRPC {
-  submitPayment(txHex: string, settle?: RelaySettleOptions): Promise<RelaySubmitResult>;
+  submitPayment(txHex: string, settle?: RelaySettleOptions, paymentIdentifier?: string): Promise<RelaySubmitResult>;
   checkPayment(paymentId: string): Promise<RelayCheckResult>;
   getSponsorStatus?(): Promise<SponsorStatusResult>;
 }
@@ -55,6 +55,8 @@ const RPC_ERROR_CODE_MAP: Record<string, InboxPaymentErrorCode> = {
   // Validation errors
   INVALID_TRANSACTION: "PAYMENT_REJECTED",
   NOT_SPONSORED: "PAYMENT_REJECTED",
+  // Idempotency: same identifier reused with a different payload (client misconfiguration)
+  PAYMENT_IDENTIFIER_CONFLICT: "PAYMENT_REJECTED",
   // Broadcast failures
   BROADCAST_FAILED: "BROADCAST_FAILED",
   TX_BROADCAST_ERROR: "BROADCAST_FAILED",
@@ -181,6 +183,31 @@ export const __testUtils = {
   parseCheckPaymentResult,
 };
 
+/**
+ * Derive a deterministic payment identifier from the transaction origin triple.
+ *
+ * The identifier is stable across retries of the exact same payment (same sender,
+ * nonce, and recipient), enabling the relay to detect duplicate submissions and
+ * return the cached result instead of re-processing.
+ *
+ * Shape: `pay_<28 hex chars>` (32 chars total) — satisfies PaymentIdentifierSchema
+ * constraint `[a-zA-Z0-9_-]{16,128}` because hex chars are alphanumeric and `_`
+ * is explicitly allowed.
+ */
+export async function derivePaymentIdentifier(
+  senderAddress: string,
+  nonce: string,
+  recipientAddress: string
+): Promise<string> {
+  const idInput = `${senderAddress}|${nonce}|${recipientAddress}`;
+  const encoder = new TextEncoder();
+  const hashBuffer = await crypto.subtle.digest("SHA-256", encoder.encode(idInput));
+  const hashHex = [...new Uint8Array(hashBuffer)]
+    .map((b) => b.toString(16).padStart(2, "0"))
+    .join("");
+  return `pay_${hashHex.slice(0, 28)}`;
+}
+
 function mapTerminalOutcome(
   checkResult: RelayCheckResult
 ): InboxPaymentErrorCode {
@@ -194,9 +221,14 @@ function mapTerminalOutcome(
 /**
  * Submit a sponsored payment via RPC service binding and poll for settlement.
  *
- * Calls submitPayment(txHex, settle) to enqueue the transaction, then polls
- * checkPayment() at RPC_POLL_INTERVAL_MS intervals up to RPC_POLL_MAX_ATTEMPTS
+ * Calls submitPayment(txHex, settle, paymentIdentifier) to enqueue the transaction,
+ * then polls checkPayment() at RPC_POLL_INTERVAL_MS intervals up to RPC_POLL_MAX_ATTEMPTS
  * times or RPC_TOTAL_TIMEOUT_MS total.
+ *
+ * When paymentIdentifier is provided, the relay uses it for idempotency: a cache hit
+ * with the same identifier and same payload returns the cached result; a cache hit
+ * with the same identifier but a different payload returns PAYMENT_IDENTIFIER_CONFLICT
+ * (mapped to PAYMENT_REJECTED).
  *
  * Throws on RPC call exceptions — the caller is responsible for catching
  * those and recording circuit breaker failures.
@@ -205,14 +237,15 @@ export async function submitViaRPC(
   rpc: RelayRPC,
   txHex: string,
   settle: RelaySettleOptions | undefined,
-  log: Logger
+  log: Logger,
+  paymentIdentifier?: string
 ): Promise<InboxPaymentVerification> {
   const deadline = Date.now() + RPC_TOTAL_TIMEOUT_MS;
   let submitCheckStatusUrl: string | undefined;
 
   // Step 1: Submit the payment to the relay queue
-  log.debug("RPC: submitting payment", { transaction: txHex.slice(0, 16) + "..." });
-  const submitResult = parseSubmitPaymentResult(await rpc.submitPayment(txHex, settle));
+  log.debug("RPC: submitting payment", { transaction: txHex.slice(0, 16) + "...", paymentIdentifier });
+  const submitResult = parseSubmitPaymentResult(await rpc.submitPayment(txHex, settle, paymentIdentifier));
 
   if (!submitResult.accepted) {
     const errorCode = mapRPCErrorCode(submitResult.code);
