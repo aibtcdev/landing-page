@@ -49,7 +49,7 @@ import {
   resetCircuitBreaker,
 } from "./circuit-breaker";
 import type { RelayRPC } from "./relay-rpc";
-import { submitViaRPC } from "./relay-rpc";
+import { submitViaRPC, derivePaymentIdentifier } from "./relay-rpc";
 import type { Logger } from "../logging";
 import { stacksApiFetch, buildHiroHeaders, parseRetryAfterMs } from "../stacks-api-fetch";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
@@ -444,7 +444,7 @@ export async function verifyInboxPayment(
   }
   const isSponsored = tx.auth.authType === AuthType.Sponsored;
 
-  // Extract sender STX address from the origin's spending condition
+  // Extract sender STX address and nonce from the origin's spending condition
   // (works for both standard and sponsored auth types).
   const sc = tx.auth.spendingCondition;
   const senderVersion = addressHashModeToVersion(sc.hashMode, network);
@@ -454,6 +454,7 @@ export async function verifyInboxPayment(
     hash160: sc.signer,
   });
   resolvedSenderStxAddress = senderStxAddress;
+  const senderNonce = sc.nonce.toString();
 
   // Check per-sender payment failure cache before hitting the relay.
   // When a sender's wallet had insufficient funds recently, skip the relay and
@@ -508,7 +509,12 @@ export async function verifyInboxPayment(
       };
 
       try {
-        const rpcResult = await submitViaRPC(relayRPC, txHex, settle, log);
+        const paymentIdentifier = await derivePaymentIdentifier(
+          senderStxAddress,
+          senderNonce,
+          recipientStxAddress
+        );
+        const rpcResult = await submitViaRPC(relayRPC, txHex, settle, log, paymentIdentifier);
 
         // RPC failure: record circuit breaker for error codes counted by
         // shouldCountRelayFailureForBreaker(), cache for INSUFFICIENT_FUNDS,
