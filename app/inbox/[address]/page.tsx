@@ -314,13 +314,15 @@ export default function InboxPage() {
               `min-h-0` on this grid child + on its inner flex children is
               critical — without it, CSS grid cells default to min-height: auto
               and the inner `flex-1 overflow-y-auto` can grow unbounded and
-              never trigger a scroll. */}
+              never trigger a scroll.
+              Height comes from CSS in the <style> block below (100% on
+              desktop, fixed-vh on mobile) — NOT inline style, so the mobile
+              media query can override it. */}
           <div
             className={`mail-list flex min-h-0 flex-col ${mobileShow === "list" ? "" : "mobile-hide"}`}
             style={{
               borderRight: "1px solid var(--line-2)",
               background: "rgba(0,0,0,0.18)",
-              height: "100%",
             }}
           >
             {/* Search */}
@@ -510,7 +512,6 @@ export default function InboxPage() {
           {/* Thread pane */}
           <div
             className={`mail-thread flex min-h-0 min-w-0 flex-col ${mobileShow === "thread" ? "" : "mobile-hide"}`}
-            style={{ height: "100%" }}
           >
             {selected ? (
               <ThreadView
@@ -564,10 +565,18 @@ export default function InboxPage() {
       <ToastRoot />
 
       <style>{`
+        /* Desktop: each pane fills its grid cell — combined with min-h-0
+           on the elements, this lets the inner flex-1 overflow-y-auto
+           regions scroll. */
+        .mail-shell > div { height: 100%; }
+
         @media (max-width: 860px) {
           .mail-shell { grid-template-columns: 1fr !important; height: auto !important; min-height: auto !important; }
           .mail-shell .mobile-hide { display: none !important; }
-          .mail-shell > div { height: calc(100vh - 220px); }
+          /* Mobile: only one pane is visible at a time. Pin its height to
+             the viewport minus the page chrome so the inner list/thread
+             scrolls independently of the page. */
+          .mail-shell > div { height: calc(100vh - 175px) !important; }
         }
       `}</style>
     </>
