@@ -26,15 +26,19 @@ interface GraphNode {
 
 export default function NetworkGraph({
   compact = false,
+  size = "default",
   agentCount,
   agents,
 }: {
   compact?: boolean;
+  /** Bumps SVG canvas + node radii for the homepage hero placement. */
+  size?: "default" | "large";
   agentCount?: number;
   agents?: NetworkGraphAgent[];
 }) {
-  const W = 1040;
-  const H = compact ? 320 : 480;
+  // "large" mode is used on the homepage hero — wider canvas, bigger nodes.
+  const W = size === "large" ? 1280 : 1040;
+  const H = compact ? 320 : size === "large" ? 600 : 480;
 
   // Real agent faces if provided; otherwise stylized fallback names.
   // Inner ring takes the first 8 (highest-ranked), outer ring the next 14.
@@ -50,8 +54,15 @@ export default function NetworkGraph({
     ];
     const ring1 = 8;
     const ring2 = 14;
-    const r1 = compact ? 100 : 140;
-    const r2 = compact ? 150 : 220;
+    // Ring radii + node radii scale with the canvas size so faces stay
+    // legible on the larger homepage canvas.
+    const r1 = compact ? 100 : size === "large" ? 180 : 140;
+    const r2 = compact ? 150 : size === "large" ? 280 : 220;
+    const ring1Radius = size === "large" ? 18 : 14;
+    const ring2Radius = size === "large" ? 13 : 10;
+    const coreRadius = size === "large" ? 28 : 22;
+    list[0].r = coreRadius;
+
     for (let i = 0; i < ring1; i++) {
       const a = (i / ring1) * Math.PI * 2 - Math.PI / 2;
       const real = realAgents[i];
@@ -59,7 +70,7 @@ export default function NetworkGraph({
         id: list.length,
         x: cx + Math.cos(a) * r1,
         y: cy + Math.sin(a) * r1,
-        r: 14,
+        r: ring1Radius,
         name: real?.displayName || real?.btcAddress?.slice(0, 8) || FALLBACK_NAMES[i],
         btcAddress: real?.btcAddress,
       });
@@ -71,13 +82,13 @@ export default function NetworkGraph({
         id: list.length,
         x: cx + Math.cos(a) * r2 * (0.9 + (i % 3) * 0.08),
         y: cy + Math.sin(a) * r2 * (0.9 + (i % 2) * 0.1),
-        r: 10,
+        r: ring2Radius,
         name: real?.displayName || real?.btcAddress?.slice(0, 8) || FALLBACK_NAMES[(i + 8) % FALLBACK_NAMES.length],
         btcAddress: real?.btcAddress,
       });
     }
     return list;
-  }, [W, H, compact, realAgents]);
+  }, [W, H, compact, size, realAgents]);
 
   const edges = useMemo(() => {
     const list: Array<[number, number]> = [];
@@ -353,8 +364,9 @@ export default function NetworkGraph({
         ))}
       </svg>
 
+      {/* Legend overlay — hidden on small screens to avoid overlapping nodes */}
       <div
-        className="absolute bottom-4 left-4 flex items-center gap-4 text-[11px]"
+        className="absolute bottom-4 left-4 flex items-center gap-4 text-[11px] max-md:hidden"
         style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
       >
         <div className="flex items-center gap-1.5">
@@ -375,7 +387,7 @@ export default function NetworkGraph({
       </div>
 
       <div
-        className="absolute right-4 top-4 text-[11px]"
+        className="absolute right-3 top-3 text-[10px] sm:right-4 sm:top-4 sm:text-[11px]"
         style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
       >
         <span className="status-dot align-middle mr-1.5" />
