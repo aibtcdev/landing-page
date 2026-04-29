@@ -1,10 +1,10 @@
 import Navbar from "../../components/Navbar";
-import AnimatedBackground from "../../components/AnimatedBackground";
+import { BgLayers } from "../../components/redesign";
 
 export default function AgentProfileLoading() {
   return (
     <>
-      <AnimatedBackground />
+      <BgLayers />
       <Navbar />
       <div className="min-h-[90vh] px-4 pt-28 pb-12 sm:px-5">
         <div className="mx-auto max-w-[720px]">
