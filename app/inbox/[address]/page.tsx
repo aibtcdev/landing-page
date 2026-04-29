@@ -6,7 +6,7 @@ import Link from "next/link";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import SendMessageModal from "../../components/SendMessageModal";
-import { BgLayers, ToastRoot, Eyebrow } from "../../components/redesign";
+import { BgLayers, ToastRoot } from "../../components/redesign";
 import { generateName } from "@/lib/name-generator";
 import { updateMeta, formatRelativeTime } from "@/lib/utils";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
@@ -245,50 +245,69 @@ export default function InboxPage() {
       <BgLayers />
       <Navbar />
 
-      <div className="mx-auto max-w-[1240px] px-8 pt-28 pb-10 max-md:px-5 max-md:pt-24">
-        {/* Page head — owner identity + global counts + compose CTA */}
-        <div className="mb-5 flex flex-wrap items-end justify-between gap-4">
-          <div className="flex items-center gap-3 min-w-0">
-            <FaceAvatar btcAddress={agent.btcAddress} alt={displayName} size={42} />
-            <div className="min-w-0">
-              <Eyebrow live>Paid inbox · {displayName}</Eyebrow>
-              <h1
-                className="font-wide mt-1 text-[clamp(22px,2.6vw,30px)]"
-                style={{ fontWeight: 500, letterSpacing: "-0.02em", lineHeight: 1.1 }}
-              >
-                Messages
-              </h1>
-              <p className="mt-1 text-[12.5px]" style={{ color: "var(--text-dim)" }}>
-                {totalCount} total ·{" "}
-                <span style={{ color: unreadCount > 0 ? "var(--orange)" : "var(--text-faint)" }}>
-                  {unreadCount} unread
-                </span>{" "}
-                · Every message costs{" "}
-                <span style={{ color: "var(--orange)" }}>100 sats</span> via x402
-              </p>
-            </div>
+      <div className="mx-auto max-w-[1240px] px-8 pt-24 pb-10 max-md:px-5 max-md:pt-20">
+        {/* Page head — single compact row.
+            Earlier the avatar + eyebrow + h1 + meta line stacked into ~100px
+            of header eating into the mail-shell. Now everything sits on one
+            line so the actual messages get more vertical space. */}
+        <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
+          <div className="flex min-w-0 items-center gap-2.5">
+            <FaceAvatar btcAddress={agent.btcAddress} alt={displayName} size={28} />
+            <Link
+              href={`/agents/${encodeURIComponent(agent.btcAddress)}`}
+              className="truncate text-[14px] font-medium transition-colors hover:text-white/80"
+              style={{ fontFamily: "var(--mono)" }}
+            >
+              {displayName}
+            </Link>
+            <span className="status-dot" />
+            <span
+              className="hidden text-[12px] sm:inline-flex sm:items-center sm:gap-2"
+              style={{ color: "var(--text-dim)", fontFamily: "var(--mono)" }}
+            >
+              <span>{totalCount} total</span>
+              <span style={{ color: "var(--text-faint)" }}>·</span>
+              <span style={{ color: unreadCount > 0 ? "var(--orange)" : "var(--text-faint)" }}>
+                {unreadCount} unread
+              </span>
+              <span style={{ color: "var(--text-faint)" }}>·</span>
+              <span style={{ color: "var(--text-faint)" }}>100 sats / msg via x402</span>
+            </span>
           </div>
           <button
             type="button"
             onClick={() => setSendModalOpen(true)}
-            className="btn-rd btn-rd-primary shrink-0"
+            className="btn-rd btn-rd-primary btn-rd-sm shrink-0"
           >
-            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
               <path strokeLinecap="round" d="M12 4v16m8-8H4" />
             </svg>
             New message
           </button>
         </div>
 
-        {/* 3-pane mail shell */}
+        {/* Mobile-only meta row (the desktop one above is hidden on small screens) */}
+        <div
+          className="mb-3 text-[11px] sm:hidden"
+          style={{ color: "var(--text-dim)", fontFamily: "var(--mono)" }}
+        >
+          {totalCount} total ·{" "}
+          <span style={{ color: unreadCount > 0 ? "var(--orange)" : "var(--text-faint)" }}>
+            {unreadCount} unread
+          </span>
+          {" · "}
+          <span style={{ color: "var(--text-faint)" }}>100 sats / msg</span>
+        </div>
+
+        {/* 3-pane mail shell — taller now that the page head is one row */}
         <div
           className="mail-shell grid overflow-hidden rounded-2xl border"
           style={{
             gridTemplateColumns: "320px 1fr",
             borderColor: "var(--line)",
             background: "rgba(255,255,255,0.015)",
-            height: "calc(100vh - 240px)",
-            minHeight: 560,
+            height: "calc(100vh - 175px)",
+            minHeight: 600,
           }}
         >
           {/* List pane.
