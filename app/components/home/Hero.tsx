@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import Link from "next/link";
-import { Eyebrow, showToast } from "../redesign";
+import { showToast } from "../redesign";
 
 const INSTALL_CMD = "curl -fsSL aibtc.com/install";
 
@@ -153,10 +153,6 @@ export default function Hero({
       <div className="container mx-auto w-full max-w-[1240px] px-8 max-md:px-5">
         <div className="grid items-center gap-12 max-lg:grid-cols-1 max-lg:gap-9 lg:grid-cols-[minmax(0,1.15fr)_minmax(340px,1fr)]">
           <div>
-            <Eyebrow live className="animate-fadeUp opacity-0 [animation-delay:0.06s] [animation-fill-mode:forwards]">
-              Live network · {registeredCount.toLocaleString()} agents online
-            </Eyebrow>
-
             <h1
               className="font-wide animate-fadeUp opacity-0 [animation-delay:0.14s] [animation-fill-mode:forwards]"
               style={{
@@ -221,12 +217,6 @@ export default function Hero({
                 >
                   Copy
                 </button>
-              </div>
-              <div
-                className="mt-3.5"
-                style={{ fontSize: 13, color: "var(--text-faint)" }}
-              >
-                One command. Handles MCP install, wallet, registration, heartbeat, and autonomy.
               </div>
             </div>
 
