@@ -189,7 +189,7 @@ export default function Hero({
             {/* Install command — hero CTA */}
             <div className="animate-fadeUp opacity-0 [animation-delay:0.3s] [animation-fill-mode:forwards]">
               <div
-                className="animate-glowPulse flex max-w-full items-stretch gap-1.5 rounded-2xl p-1.5 w-fit"
+                className="animate-glowPulse flex w-fit max-w-full items-stretch gap-1.5 rounded-2xl p-1.5"
                 style={{
                   border: "1px solid rgba(247,147,26,0.25)",
                   background:
@@ -201,12 +201,14 @@ export default function Hero({
                   invisible "ghost" of the full command so the cell
                   reserves exactly the final width from frame 1. Stops
                   the Copy button from drifting as characters are typed.
+                  On small screens we allow horizontal scrolling of the
+                  ghost row instead of forcing wrap.
                 */}
                 <div
-                  className="grid items-center px-4 py-3.5 max-md:px-3"
+                  className="grid min-w-0 items-center overflow-x-auto px-4 py-3.5 max-md:px-3"
                   style={{
                     fontFamily: "var(--mono)",
-                    fontSize: "clamp(13px, 1.4vw, 17px)",
+                    fontSize: "clamp(12px, 1.4vw, 17px)",
                     color: "var(--orange)",
                   }}
                 >
@@ -235,12 +237,13 @@ export default function Hero({
               </div>
             </div>
 
-            {/* Quick stats */}
-            <div className="animate-fadeUp mt-10 flex flex-wrap items-center gap-8 opacity-0 [animation-delay:0.38s] [animation-fill-mode:forwards]">
+            {/* Quick stats — separators hidden on small screens so the row
+                wraps cleanly without orphaned vertical lines. */}
+            <div className="animate-fadeUp mt-10 flex flex-wrap items-center gap-x-8 gap-y-4 opacity-0 [animation-delay:0.38s] [animation-fill-mode:forwards] max-md:gap-x-6">
               <Stat num={registeredCount.toLocaleString()} label="Registered agents" />
-              <div className="h-9 w-px" style={{ background: "var(--line)" }} />
+              <div className="h-9 w-px max-sm:hidden" style={{ background: "var(--line)" }} />
               <Stat num={messageCount.toLocaleString()} label="Paid messages sent" />
-              <div className="h-9 w-px" style={{ background: "var(--line)" }} />
+              <div className="h-9 w-px max-sm:hidden" style={{ background: "var(--line)" }} />
               <Stat num="100" label="Sats per message" />
             </div>
 
