@@ -129,24 +129,20 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [enteringUid, setEnteringUid] = useState<number | null>(null);
 
-  // Compute initial queue for both state initializers
-  const initialQueueRef = useRef<ActivityEvent[] | null>(null);
-  if (initialQueueRef.current === null) {
-    const chrono = [...events].reverse(); // oldest → newest
-    initialQueueRef.current = chrono.slice(visibleCount);
-  }
+  // Compute initial queue once. Recompute on every render is fine (cheap)
+  // and avoids the strict-mode double-init pitfall where `useState`
+  // initializers run twice — leaving a "consumed" ref state that crashes.
+  const initialChrono = [...events].reverse(); // oldest → newest
+  const initialQueue = initialChrono.slice(visibleCount);
 
   // Track how many messages/sats/registrations are still in the queue (for counting up)
-  const [queuedStats, setQueuedStats] = useState(() => countQueuedStats(initialQueueRef.current!));
+  const [queuedStats, setQueuedStats] = useState(() => countQueuedStats(initialQueue));
 
   // Initialize: fill visible rows from the oldest events, queue the rest
   const [items, setItems] = useState(() => {
-    const chrono = [...events].reverse(); // oldest → newest
-    const initial = chrono.slice(0, visibleCount);
-    queueRef.current = initialQueueRef.current!;
-    initialQueueRef.current = null; // free reference
+    queueRef.current = initialQueue.slice();
     knownKeysRef.current = new Set(events.map(makeEventKey));
-
+    const initial = initialChrono.slice(0, visibleCount);
     // Display newest-on-top within the initial batch
     return initial.reverse().map((event) => ({
       uid: uidRef.current++,
@@ -184,11 +180,11 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   // Start/restart the drip interval when there are queued items
   const ensureInterval = useCallback(() => {
     if (intervalRef.current) return;
-    if (queueRef.current.length === 0) return;
+    if (!queueRef.current || queueRef.current.length === 0) return;
 
     intervalRef.current = setInterval(() => {
-      if (queueRef.current.length === 0) {
-        clearInterval(intervalRef.current!);
+      if (!queueRef.current || queueRef.current.length === 0) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
         return;
       }
@@ -209,6 +205,7 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
 
   // When SWR revalidates with new events, queue any we haven't seen
   useEffect(() => {
+    if (!queueRef.current) queueRef.current = [];
     let addedMessages = 0;
     let addedSats = 0;
     let addedRegistrations = 0;
@@ -235,6 +232,13 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
     if (addedMessages > 0 || addedRegistrations > 0 || queueRef.current.length > 0) ensureInterval();
   }, [events, ensureInterval]);
 
+  // Also kick the interval on initial mount (the items state initializer
+  // populated queueRef but no [events] change has fired yet on first render).
+  useEffect(() => {
+    ensureInterval();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Clear entering animation after transition
   useEffect(() => {
     if (enteringUid !== null) {
@@ -248,8 +252,8 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const displaySats = stats.totalSatsTransacted - queuedStats.sats;
 
   return (
-    <Link href="/activity" className="block space-y-2 group/feed">
-    <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] overflow-hidden transition-colors duration-200 group-hover/feed:border-white/[0.12]">
+    <div className="space-y-2">
+    <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] overflow-hidden transition-colors duration-200 hover:border-white/[0.12]">
       {/* Header */}
       <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3 max-md:px-4">
         <div className="flex items-center gap-2.5">
@@ -262,14 +266,22 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
           </span>
         </div>
 
-        {/* Type legend — dots only, no labels (compact homepage widget) */}
-        <div className="flex items-center gap-2">
-          {(["message", "achievement", "registration"] as const).map((type) => {
-            const config = EVENT_CONFIG[type];
-            return (
-              <div key={type} className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />
-            );
-          })}
+        <div className="flex items-center gap-3">
+          {/* Type legend — dots only, no labels (compact homepage widget) */}
+          <div className="flex items-center gap-2">
+            {(["message", "achievement", "registration"] as const).map((type) => {
+              const config = EVENT_CONFIG[type];
+              return (
+                <div key={type} className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />
+              );
+            })}
+          </div>
+          <Link
+            href="/activity"
+            className="text-[11px] font-medium text-[#F7931A]/70 transition-colors hover:text-[#F7931A]"
+          >
+            View all →
+          </Link>
         </div>
       </div>
 
@@ -306,6 +318,6 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
           </span>
         </div>
       )}
-    </Link>
+    </div>
   );
 }
