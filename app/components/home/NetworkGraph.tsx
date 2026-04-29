@@ -1,26 +1,17 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useId, useMemo, useState } from "react";
 
-const AGENT_NAMES = [
-  "rhea-001",
-  "atlas-77",
-  "nova-9",
-  "orion-42",
-  "vega-11",
-  "lyra-3",
-  "kepler-5",
-  "helios-22",
-  "onyx-8",
-  "lumen-14",
-  "sable-6",
-  "echo-2",
-  "flint-19",
-  "cipher-4",
-  "drift-10",
-  "halcyon",
-  "mirex-33",
-  "quill-7",
+/** Featured agent (real BTC address + display name) for face rendering. */
+export interface NetworkGraphAgent {
+  btcAddress: string;
+  displayName?: string | null;
+}
+
+const FALLBACK_NAMES = [
+  "rhea-001", "atlas-77", "nova-9", "orion-42", "vega-11", "lyra-3",
+  "kepler-5", "helios-22", "onyx-8", "lumen-14", "sable-6", "echo-2",
+  "flint-19", "cipher-4", "drift-10", "halcyon", "mirex-33", "quill-7",
 ];
 
 interface GraphNode {
@@ -29,18 +20,25 @@ interface GraphNode {
   y: number;
   r: number;
   name: string;
+  btcAddress?: string;
   core?: boolean;
 }
 
 export default function NetworkGraph({
   compact = false,
   agentCount,
+  agents,
 }: {
   compact?: boolean;
   agentCount?: number;
+  agents?: NetworkGraphAgent[];
 }) {
   const W = 1040;
   const H = compact ? 320 : 480;
+
+  // Real agent faces if provided; otherwise stylized fallback names.
+  // Inner ring takes the first 8 (highest-ranked), outer ring the next 14.
+  const realAgents = agents ?? [];
 
   const nodes: GraphNode[] = useMemo(() => {
     const cx = W / 2;
@@ -54,26 +52,30 @@ export default function NetworkGraph({
     const r2 = compact ? 150 : 220;
     for (let i = 0; i < ring1; i++) {
       const a = (i / ring1) * Math.PI * 2 - Math.PI / 2;
+      const real = realAgents[i];
       list.push({
         id: list.length,
         x: cx + Math.cos(a) * r1,
         y: cy + Math.sin(a) * r1,
-        r: 10,
-        name: AGENT_NAMES[i],
+        r: 14,
+        name: real?.displayName || real?.btcAddress?.slice(0, 8) || FALLBACK_NAMES[i],
+        btcAddress: real?.btcAddress,
       });
     }
     for (let i = 0; i < ring2; i++) {
       const a = (i / ring2) * Math.PI * 2 - Math.PI / 4;
+      const real = realAgents[ring1 + i];
       list.push({
         id: list.length,
         x: cx + Math.cos(a) * r2 * (0.9 + (i % 3) * 0.08),
         y: cy + Math.sin(a) * r2 * (0.9 + (i % 2) * 0.1),
-        r: 7,
-        name: AGENT_NAMES[(i + 8) % AGENT_NAMES.length],
+        r: 10,
+        name: real?.displayName || real?.btcAddress?.slice(0, 8) || FALLBACK_NAMES[(i + 8) % FALLBACK_NAMES.length],
+        btcAddress: real?.btcAddress,
       });
     }
     return list;
-  }, [W, H, compact]);
+  }, [W, H, compact, realAgents]);
 
   const edges = useMemo(() => {
     const list: Array<[number, number]> = [];
@@ -87,6 +89,8 @@ export default function NetworkGraph({
     return list;
   }, []);
 
+  // Stable per-instance id so multiple graphs on a page don't share clipPaths
+  const graphId = useId();
   const [activeEdge, setActiveEdge] = useState<number | null>(null);
   const [hoveredNode, setHoveredNode] = useState<number | null>(null);
   const [messages, setMessages] = useState<
@@ -184,6 +188,7 @@ export default function NetworkGraph({
               </g>
             );
           }
+          const clipId = `${graphId}-clip-${n.id}`;
           return (
             <g
               key={n.id}
@@ -198,15 +203,43 @@ export default function NetworkGraph({
                 fill={isHover ? "rgba(247,147,26,0.2)" : "rgba(255,255,255,0.03)"}
                 style={{ transition: "all 180ms" }}
               />
-              <circle
-                cx={n.x}
-                cy={n.y}
-                r={n.r}
-                fill={isHover ? "var(--orange)" : "rgba(40,40,40,1)"}
-                stroke={isHover ? "var(--orange)" : "rgba(255,255,255,0.15)"}
-                strokeWidth="1"
-                style={{ transition: "all 180ms" }}
-              />
+              {n.btcAddress ? (
+                <>
+                  <defs>
+                    <clipPath id={clipId}>
+                      <circle cx={n.x} cy={n.y} r={n.r} />
+                    </clipPath>
+                  </defs>
+                  <image
+                    href={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(n.btcAddress)}`}
+                    x={n.x - n.r}
+                    y={n.y - n.r}
+                    width={n.r * 2}
+                    height={n.r * 2}
+                    clipPath={`url(#${clipId})`}
+                    preserveAspectRatio="xMidYMid slice"
+                  />
+                  <circle
+                    cx={n.x}
+                    cy={n.y}
+                    r={n.r}
+                    fill="none"
+                    stroke={isHover ? "var(--orange)" : "rgba(255,255,255,0.18)"}
+                    strokeWidth={isHover ? 1.5 : 1}
+                    style={{ transition: "stroke 180ms, stroke-width 180ms" }}
+                  />
+                </>
+              ) : (
+                <circle
+                  cx={n.x}
+                  cy={n.y}
+                  r={n.r}
+                  fill={isHover ? "var(--orange)" : "rgba(40,40,40,1)"}
+                  stroke={isHover ? "var(--orange)" : "rgba(255,255,255,0.15)"}
+                  strokeWidth="1"
+                  style={{ transition: "all 180ms" }}
+                />
+              )}
               {isHover && (
                 <g>
                   <rect
