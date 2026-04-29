@@ -135,6 +135,26 @@ export default function NetworkGraph({
         role="img"
         aria-label="Agent network graph"
       >
+        <defs>
+          {/*
+            Bright-in-the-middle gradient applied to active edges so the
+            "flow" looks like a packet glowing as it crosses the wire.
+          */}
+          <linearGradient id={`${graphId}-edge-active`} x1="0" x2="1">
+            <stop offset="0%" stopColor="rgba(247,147,26,0)" />
+            <stop offset="50%" stopColor="rgba(247,147,26,0.95)" />
+            <stop offset="100%" stopColor="rgba(247,147,26,0)" />
+          </linearGradient>
+          {/* Soft glow filter for the traveling packet dot */}
+          <filter id={`${graphId}-packet-glow`} x="-50%" y="-50%" width="200%" height="200%">
+            <feGaussianBlur stdDeviation="2" result="blur" />
+            <feMerge>
+              <feMergeNode in="blur" />
+              <feMergeNode in="SourceGraphic" />
+            </feMerge>
+          </filter>
+        </defs>
+
         {[80, 160, 240, 320].map((r) => (
           <circle
             key={r}
@@ -151,18 +171,57 @@ export default function NetworkGraph({
           const a = nodes[e[0]];
           const b = nodes[e[1]];
           const active = activeEdge === i;
+          const edgeId = `${graphId}-edge-${i}`;
           return (
-            <line
-              key={i}
-              x1={a.x}
-              y1={a.y}
-              x2={b.x}
-              y2={b.y}
-              stroke={active ? "var(--orange)" : "rgba(255,255,255,0.07)"}
-              strokeWidth={active ? 1.6 : 0.8}
-              style={{ transition: "stroke 200ms, stroke-width 200ms" }}
-              strokeDasharray={active ? "4 3" : undefined}
-            />
+            <g key={i}>
+              <line
+                id={edgeId}
+                x1={a.x}
+                y1={a.y}
+                x2={b.x}
+                y2={b.y}
+                stroke={active ? `url(#${graphId}-edge-active)` : "rgba(255,255,255,0.07)"}
+                strokeWidth={active ? 1.8 : 0.8}
+                style={{ transition: "stroke-width 200ms" }}
+                strokeDasharray={active ? "6 4" : undefined}
+              >
+                {active && (
+                  <animate
+                    attributeName="stroke-dashoffset"
+                    from="0"
+                    to="-30"
+                    dur="0.9s"
+                    repeatCount="indefinite"
+                  />
+                )}
+              </line>
+              {/*
+                "Packet" dot that travels from sender → recipient when an
+                edge is active. animateMotion follows a synthesized path
+                between the two endpoints; the circle fades in and out so
+                it doesn't pop.
+              */}
+              {active && (
+                <circle
+                  r="3"
+                  fill="var(--orange)"
+                  filter={`url(#${graphId}-packet-glow)`}
+                >
+                  <animateMotion
+                    dur="1.2s"
+                    repeatCount="1"
+                    path={`M ${a.x} ${a.y} L ${b.x} ${b.y}`}
+                  />
+                  <animate
+                    attributeName="opacity"
+                    values="0; 1; 1; 0"
+                    keyTimes="0; 0.15; 0.85; 1"
+                    dur="1.2s"
+                    repeatCount="1"
+                  />
+                </circle>
+              )}
+            </g>
           );
         })}
 
