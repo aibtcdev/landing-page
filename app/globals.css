@@ -38,7 +38,7 @@
   --color-purple: #A855F7;
   --color-purple-glow: rgba(168, 85, 247, 0.4);
 
-  --font-mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --font-mono: 'Roc Grotesk', system-ui, sans-serif;
   --font-wide: "Roc Grotesk Wide", "Roc Grotesk", system-ui, sans-serif;
 }
 
@@ -57,7 +57,7 @@
   --orange-soft: rgba(247, 147, 26, 0.08);
   --blue: #7DA2FF;
   --purple: #A855F7;
-  --mono: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  --mono: 'Roc Grotesk', system-ui, sans-serif;
   --pad-section: 96px;
   --pad-card: 20px;
   --gap-stack: 24px;
