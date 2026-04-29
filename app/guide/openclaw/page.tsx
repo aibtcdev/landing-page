@@ -198,7 +198,7 @@ export default function OpenClawGuide() {
       <Navbar />
 
       {/* Main Content */}
-      <main className="relative min-h-screen px-12 pb-24 pt-32 max-lg:px-8 max-md:px-6 max-md:pt-28">
+      <main className="relative min-h-screen px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24">
         <div className="mx-auto max-w-[900px]">
           {/* Page Header */}
           <div className="mb-12">
