@@ -86,7 +86,7 @@ export default async function BountyDetailPage({ params }: PageProps) {
       <div className="relative z-10">
         <Navbar />
 
-        <main className="mx-auto max-w-[1200px] px-12 pt-32 pb-24 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-16">
+        <main className="mx-auto max-w-[1240px] px-8 pt-28 pb-20 max-md:px-5 max-md:pt-24 max-md:pb-12">
           <BountyDetail data={data} stxToBtc={stxToBtc} />
         </main>
 
