@@ -2,6 +2,19 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 
+/** Tracks whether the viewport is mobile-width (≤768px). */
+function useIsMobile(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const mq = window.matchMedia("(max-width: 768px)");
+    setIsMobile(mq.matches);
+    const onChange = (e: MediaQueryListEvent) => setIsMobile(e.matches);
+    mq.addEventListener("change", onChange);
+    return () => mq.removeEventListener("change", onChange);
+  }, []);
+  return isMobile;
+}
+
 /** Featured agent (real BTC address + display name) for face rendering. */
 export interface NetworkGraphAgent {
   btcAddress: string;
@@ -36,9 +49,21 @@ export default function NetworkGraph({
   agentCount?: number;
   agents?: NetworkGraphAgent[];
 }) {
+  // Mobile gets a portrait-oriented viewBox so the graph isn't a thin
+  // strip when the SVG scales down to phone width.
+  const isMobile = useIsMobile();
+
   // "large" mode is used on the homepage hero — wider canvas, bigger nodes.
-  const W = size === "large" ? 1280 : 1040;
-  const H = compact ? 320 : size === "large" ? 600 : 480;
+  // On mobile we override to a more square / portrait viewBox so the SVG
+  // renders much taller for the same available width.
+  const W = isMobile ? 720 : size === "large" ? 1280 : 1040;
+  const H = isMobile
+    ? 800
+    : compact
+      ? 320
+      : size === "large"
+        ? 600
+        : 480;
 
   // Real agent faces if provided; otherwise stylized fallback names.
   // Inner ring takes the first 8 (highest-ranked), outer ring the next 14.
@@ -55,12 +80,25 @@ export default function NetworkGraph({
     const ring1 = 8;
     const ring2 = 14;
     // Ring radii + node radii scale with the canvas size so faces stay
-    // legible on the larger homepage canvas.
-    const r1 = compact ? 100 : size === "large" ? 180 : 140;
-    const r2 = compact ? 150 : size === "large" ? 280 : 220;
-    const ring1Radius = size === "large" ? 18 : 14;
-    const ring2Radius = size === "large" ? 13 : 10;
-    const coreRadius = size === "large" ? 28 : 22;
+    // legible on the larger homepage canvas. Mobile values are tighter
+    // because the portrait viewBox has less horizontal headroom.
+    const r1 = isMobile
+      ? 160
+      : compact
+        ? 100
+        : size === "large"
+          ? 180
+          : 140;
+    const r2 = isMobile
+      ? 280
+      : compact
+        ? 150
+        : size === "large"
+          ? 280
+          : 220;
+    const ring1Radius = isMobile ? 22 : size === "large" ? 18 : 14;
+    const ring2Radius = isMobile ? 16 : size === "large" ? 13 : 10;
+    const coreRadius = isMobile ? 32 : size === "large" ? 28 : 22;
     list[0].r = coreRadius;
 
     for (let i = 0; i < ring1; i++) {
@@ -88,7 +126,7 @@ export default function NetworkGraph({
       });
     }
     return list;
-  }, [W, H, compact, size, realAgents]);
+  }, [W, H, compact, size, isMobile, realAgents]);
 
   const edges = useMemo(() => {
     const list: Array<[number, number]> = [];
@@ -173,7 +211,7 @@ export default function NetworkGraph({
             key={r}
             cx={W / 2}
             cy={H / 2}
-            r={r * (compact ? 0.7 : 1)}
+            r={r * (compact ? 0.7 : isMobile ? 1.15 : 1)}
             fill="none"
             stroke="rgba(255,255,255,0.03)"
             strokeWidth="1"
