@@ -669,7 +669,7 @@ export default function AgentProfile({
           {/* Tab content */}
           {tab === "overview" && (
             <div
-              className="grid gap-5 max-md:grid-cols-1"
+              className="overview-grid grid gap-5"
               style={{ gridTemplateColumns: "1.3fr 1fr" }}
             >
               <div>
@@ -873,7 +873,7 @@ export default function AgentProfile({
 
       <style>{`
         @media (max-width: 800px) {
-          main .grid-cols-overview { grid-template-columns: 1fr !important; }
+          .overview-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </>
