@@ -219,15 +219,62 @@ export function Avatar({
 }
 
 /* ------------------------------------------------------------------
- * BgLayers — fixed background grid + radial aura, matches design
+ * BgLayers — fixed background that combines:
+ *   - the original AIBTC wavy artwork + animated floating orbs
+ *   - the redesign's grid mesh + radial aura tokens
+ *   - a vignette so content stays legible on top
+ *
+ * Used by every page; one mount per page.
  * ------------------------------------------------------------------ */
+
+const BG_BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
 
 export function BgLayers() {
   return (
-    <>
-      <div className="bg-aura" aria-hidden />
-      <div className="bg-grid" aria-hidden />
-    </>
+    <div
+      className="pointer-events-none fixed inset-0 -z-10 overflow-hidden bg-gradient-to-br from-black via-[#0a0a0a] to-[#050208]"
+      aria-hidden
+    >
+      {/* Wavy AIBTC pattern artwork */}
+      <div
+        className="absolute inset-0 bg-cover bg-center bg-no-repeat opacity-[0.12] saturate-[1.3]"
+        style={{
+          backgroundImage: `url('${BG_BASE_PATH}/Artwork/AIBTC_Pattern1_optimized.jpg')`,
+        }}
+      />
+
+      {/* Animated colored orbs */}
+      <div className="absolute -right-[100px] -top-[150px] h-[600px] w-[600px] rounded-full bg-[radial-gradient(circle,rgba(247,147,26,0.5)_0%,rgba(247,147,26,0.2)_40%,transparent_70%)] opacity-80 blur-[80px] animate-float1 max-md:-right-[50px] max-md:-top-[75px] max-md:h-[300px] max-md:w-[300px]" />
+      <div className="absolute -bottom-[150px] -left-[100px] h-[500px] w-[500px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.45)_0%,rgba(125,162,255,0.15)_40%,transparent_70%)] opacity-70 blur-[80px] animate-float2 max-md:-bottom-[75px] max-md:-left-[50px] max-md:h-[250px] max-md:w-[250px]" />
+      <div className="absolute -right-[100px] bottom-[20%] h-[400px] w-[400px] rounded-full bg-[radial-gradient(circle,rgba(125,162,255,0.3)_0%,rgba(125,162,255,0.1)_40%,transparent_70%)] opacity-50 blur-[80px] animate-float1-reverse max-md:hidden" />
+
+      {/* Redesign tokens — soft radial wash + grid mesh on top of the artwork.
+          Inlined here (rather than reusing the .bg-aura / .bg-grid classes
+          from globals.css) because those use position: fixed and would
+          escape the wrapper's z-index. */}
+      <div
+        className="absolute inset-0"
+        style={{
+          background:
+            "radial-gradient(1200px 800px at 15% 0%, rgba(247,147,26,0.06) 0%, transparent 60%), radial-gradient(1000px 700px at 85% 100%, rgba(125,162,255,0.04) 0%, transparent 60%), radial-gradient(600px 400px at 50% 50%, rgba(247,147,26,0.025) 0%, transparent 70%)",
+        }}
+      />
+      <div
+        className="absolute inset-0"
+        style={{
+          backgroundImage:
+            "linear-gradient(rgba(255,255,255,0.018) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.018) 1px, transparent 1px)",
+          backgroundSize: "48px 48px",
+          WebkitMaskImage:
+            "radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 80%)",
+          maskImage:
+            "radial-gradient(ellipse 80% 60% at 50% 30%, black 20%, transparent 80%)",
+        }}
+      />
+
+      {/* Vignette for content legibility */}
+      <div className="absolute inset-0 bg-[radial-gradient(ellipse_at_center,rgba(0,0,0,0.55)_0%,rgba(0,0,0,0.25)_40%,transparent_70%)]" />
+    </div>
   );
 }
 
