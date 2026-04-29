@@ -1,8 +1,8 @@
 import Link from "next/link";
-import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import CopyButton from "../components/CopyButton";
+import { BgLayers } from "../components/redesign";
 
 const mcpStandard = `{
   "mcpServers": {
@@ -34,7 +34,7 @@ const editorConfigs = [
 export default function GuidesIndex() {
   return (
     <div className="relative min-h-screen text-white">
-      <AnimatedBackground />
+      <BgLayers />
 
       <div className="relative z-10">
         <Navbar />
