@@ -1,9 +1,9 @@
 import Link from "next/link";
-import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import CopyButton from "../../components/CopyButton";
 import PlatformCommandBlock from "../../components/PlatformCommandBlock";
+import { BgLayers } from "../../components/redesign";
 
 interface ConversationExchange {
   user: string;
@@ -185,7 +185,7 @@ export default function ClaudeGuide() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(howToSchema) }}
       />
-      <AnimatedBackground />
+      <BgLayers />
       <Navbar />
 
       {/* Main Content */}
