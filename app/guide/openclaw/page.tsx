@@ -1,8 +1,8 @@
 import Link from "next/link";
-import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import CopyButton from "../../components/CopyButton";
+import { BgLayers } from "../../components/redesign";
 
 interface DeployStep {
   id: number;
@@ -194,7 +194,7 @@ export default function OpenClawGuide() {
         type="application/ld+json"
         dangerouslySetInnerHTML={{ __html: JSON.stringify(howToSchema) }}
       />
-      <AnimatedBackground />
+      <BgLayers />
       <Navbar />
 
       {/* Main Content */}
