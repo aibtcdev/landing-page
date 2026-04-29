@@ -189,30 +189,45 @@ export default function Hero({
             {/* Install command — hero CTA */}
             <div className="animate-fadeUp opacity-0 [animation-delay:0.3s] [animation-fill-mode:forwards]">
               <div
-                className="animate-glowPulse inline-flex max-w-full items-stretch gap-1.5 rounded-2xl p-1.5"
+                className="animate-glowPulse flex max-w-full items-stretch gap-1.5 rounded-2xl p-1.5 w-fit"
                 style={{
                   border: "1px solid rgba(247,147,26,0.25)",
                   background:
                     "linear-gradient(180deg, rgba(247,147,26,0.08) 0%, rgba(247,147,26,0.02) 100%)",
                 }}
               >
+                {/*
+                  CSS grid trick: stack a visible animated row over an
+                  invisible "ghost" of the full command so the cell
+                  reserves exactly the final width from frame 1. Stops
+                  the Copy button from drifting as characters are typed.
+                */}
                 <div
-                  className="flex items-center overflow-hidden text-ellipsis whitespace-nowrap px-4.5 py-3.5 max-md:px-3.5"
+                  className="grid items-center px-4 py-3.5 max-md:px-3"
                   style={{
                     fontFamily: "var(--mono)",
                     fontSize: "clamp(13px, 1.4vw, 17px)",
                     color: "var(--orange)",
                   }}
                 >
-                  <span className="mr-2.5" style={{ color: "rgba(247,147,26,0.45)" }}>$</span>
-                  <span className={typed.length < INSTALL_CMD.length ? "typing" : ""}>
-                    {typed}
+                  <span
+                    aria-hidden
+                    className="col-start-1 row-start-1 whitespace-nowrap pointer-events-none invisible"
+                  >
+                    <span className="mr-2.5">$</span>
+                    {INSTALL_CMD}
+                  </span>
+                  <span className="col-start-1 row-start-1 whitespace-nowrap">
+                    <span className="mr-2.5" style={{ color: "rgba(247,147,26,0.45)" }}>$</span>
+                    <span className={typed.length < INSTALL_CMD.length ? "typing" : ""}>
+                      {typed}
+                    </span>
                   </span>
                 </div>
                 <button
                   type="button"
                   onClick={onCopy}
-                  className="btn-rd btn-rd-primary"
+                  className="btn-rd btn-rd-primary shrink-0"
                   style={{ height: "auto", minWidth: 100 }}
                 >
                   Copy
