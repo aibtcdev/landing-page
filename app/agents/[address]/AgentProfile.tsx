@@ -613,43 +613,6 @@ export default function AgentProfile({
             </div>
           )}
 
-          {hasExistingClaim && claim?.status !== "rewarded" && (
-            <div
-              className="mb-6 flex items-center justify-between rounded-xl border px-4 py-3"
-              style={{
-                borderColor: "var(--line-2)",
-                background: "rgba(255,255,255,0.02)",
-              }}
-            >
-              <div className="flex items-center gap-2 text-[13px]">
-                <span
-                  className="size-1.5 rounded-full"
-                  style={{ background: "var(--orange)" }}
-                />
-                <span style={{ color: "var(--text)" }}>Claimed</span>
-                {claim?.tweetAuthor && (
-                  <span style={{ color: "var(--text-dim)" }}>
-                    by{" "}
-                    <a
-                      href={`https://x.com/${claim.tweetAuthor}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="hover:text-white"
-                    >
-                      @{claim.tweetAuthor}
-                    </a>
-                  </span>
-                )}
-              </div>
-              <span
-                className="text-[12px]"
-                style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
-              >
-                Rewards pending
-              </span>
-            </div>
-          )}
-
           {/* Tabs */}
           <div
             className="mb-5 flex gap-0.5 overflow-x-auto"
