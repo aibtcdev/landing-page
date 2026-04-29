@@ -910,10 +910,13 @@ function MailRow({
   m,
   hasReply,
   self,
+  compact = false,
 }: {
   m: InboxPreviewMessage;
   hasReply: boolean;
   self: string;
+  /** Tighter row used inside the Overview tab's recent-activity card. */
+  compact?: boolean;
 }) {
   const peerAddr = m.peerBtcAddress ?? m.fromAddress;
   const peerName = m.peerDisplayName || (peerAddr ? generateName(peerAddr) : "unknown");
@@ -923,10 +926,13 @@ function MailRow({
   const preview = isMine ? `You: ${m.content}` : m.content;
 
   return (
-    <div className="flex items-start gap-2.5 p-3" style={{ borderTop: "1px solid var(--line-2)" }}>
+    <div
+      className={`flex items-center gap-2.5 ${compact ? "px-3.5 py-2" : "items-start p-3"}`}
+      style={{ borderTop: "1px solid var(--line-2)" }}
+    >
       {peerAddr && <PreviewAvatar btcAddress={peerAddr} alt={peerName} />}
       <div className="min-w-0 flex-1">
-        <div className="mb-0.5 flex items-center justify-between gap-1.5">
+        <div className={`flex items-center justify-between gap-1.5 ${compact ? "" : "mb-0.5"}`}>
           <span
             className="truncate text-[12.5px]"
             style={{
@@ -945,60 +951,62 @@ function MailRow({
           </span>
         </div>
         <div
-          className="mb-1 truncate text-[11.5px]"
+          className={`truncate text-[11.5px] ${compact ? "" : "mb-1"}`}
           style={{ color: "var(--text-faint)" }}
         >
           {preview}
         </div>
-        <div className="flex flex-wrap items-center gap-1.5">
-          {isUnread && (
-            <span className="size-1.5 rounded-full" style={{ background: "var(--orange)" }} />
-          )}
-          {isAwaiting && (
+        {!compact && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isUnread && (
+              <span className="size-1.5 rounded-full" style={{ background: "var(--orange)" }} />
+            )}
+            {isAwaiting && (
+              <span
+                className="rounded px-1.5 py-0.5 text-[9px] font-medium uppercase"
+                style={{
+                  fontFamily: "var(--mono)",
+                  background: "rgba(125,162,255,0.1)",
+                  color: "var(--blue)",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                awaiting
+              </span>
+            )}
+            {hasReply && (
+              <span
+                className="rounded px-1.5 py-0.5 text-[9px] font-medium uppercase"
+                style={{
+                  fontFamily: "var(--mono)",
+                  background: "rgba(46,204,113,0.1)",
+                  color: "#2ecc71",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                replied
+              </span>
+            )}
             <span
-              className="rounded px-1.5 py-0.5 text-[9px] font-medium uppercase"
-              style={{
-                fontFamily: "var(--mono)",
-                background: "rgba(125,162,255,0.1)",
-                color: "var(--blue)",
-                letterSpacing: "0.05em",
-              }}
+              className="ml-auto text-[10px]"
+              style={{ fontFamily: "var(--mono)", color: "var(--text-faint)" }}
             >
-              awaiting
+              +{m.paymentSatoshis} sats
             </span>
-          )}
-          {hasReply && (
-            <span
-              className="rounded px-1.5 py-0.5 text-[9px] font-medium uppercase"
-              style={{
-                fontFamily: "var(--mono)",
-                background: "rgba(46,204,113,0.1)",
-                color: "#2ecc71",
-                letterSpacing: "0.05em",
-              }}
-            >
-              replied
-            </span>
-          )}
-          <span
-            className="ml-auto text-[10px]"
-            style={{ fontFamily: "var(--mono)", color: "var(--text-faint)" }}
-          >
-            +{m.paymentSatoshis} sats
-          </span>
-        </div>
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/** Compact 6-row recent-activity card for the Overview tab. */
+/** Compact 3-row recent-activity card for the Overview tab. */
 function RecentActivityCard({ btcAddress }: { btcAddress: string }) {
   const { data, isLoading } = useSWR<InboxPreviewResponse>(
-    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=6&offset=0&view=all`,
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=3&offset=0&view=all`,
     fetcher,
   );
-  const messages = data?.inbox?.messages ?? [];
+  const messages = (data?.inbox?.messages ?? []).slice(0, 3);
 
   return (
     <div
@@ -1006,7 +1014,7 @@ function RecentActivityCard({ btcAddress }: { btcAddress: string }) {
       style={{ borderColor: "var(--line)", background: "rgba(255,255,255,0.02)" }}
     >
       <div
-        className="flex items-center justify-between px-4 py-2.5 text-[12px]"
+        className="flex items-center justify-between px-3.5 py-2 text-[11.5px]"
         style={{
           borderBottom: "1px solid var(--line-2)",
           color: "var(--text-dim)",
@@ -1016,7 +1024,7 @@ function RecentActivityCard({ btcAddress }: { btcAddress: string }) {
         <span>Recent activity</span>
         <Link
           href={`/inbox/${encodeURIComponent(btcAddress)}`}
-          className="text-[11px] transition-colors hover:text-white/60"
+          className="text-[10.5px] transition-colors hover:text-white/60"
           style={{ color: "var(--text-faint)" }}
         >
           View inbox →
@@ -1024,14 +1032,14 @@ function RecentActivityCard({ btcAddress }: { btcAddress: string }) {
       </div>
       {isLoading ? (
         <div
-          className="px-4 py-8 text-center text-[12px]"
+          className="px-3.5 py-5 text-center text-[11.5px]"
           style={{ color: "var(--text-faint)" }}
         >
           Loading…
         </div>
       ) : messages.length === 0 ? (
         <div
-          className="px-4 py-8 text-center text-[12px]"
+          className="px-3.5 py-5 text-center text-[11.5px]"
           style={{ color: "var(--text-faint)" }}
         >
           No paid messages yet.
@@ -1043,6 +1051,7 @@ function RecentActivityCard({ btcAddress }: { btcAddress: string }) {
             m={m}
             hasReply={!!data?.inbox?.replies?.[m.messageId] || !!m.repliedAt}
             self={btcAddress}
+            compact
           />
         ))
       )}
