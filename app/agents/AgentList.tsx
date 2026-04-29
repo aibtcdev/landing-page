@@ -1,14 +1,16 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import LevelBadge from "../components/LevelBadge";
-import Tooltip from "../components/Tooltip";
 import SendMessageModal from "../components/SendMessageModal";
 import { generateName } from "@/lib/name-generator";
-import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus, ACTIVITY_THRESHOLDS } from "@/lib/utils";
-import { LEVELS } from "@/lib/levels";
+import {
+  formatRelativeTime,
+  formatShortDate,
+  ACTIVITY_THRESHOLDS,
+} from "@/lib/utils";
+import { LevelChip, Avatar, Seg } from "../components/redesign";
 import type { AgentRecord } from "@/lib/types";
 
 type Agent = AgentRecord & {
@@ -24,7 +26,22 @@ type Agent = AgentRecord & {
 };
 
 type SortField = "level" | "achievements" | "reputation" | "checkIns" | "joined" | "activity" | "messages";
-type SortOrder = "asc" | "desc";
+
+const SORT_OPTS: ReadonlyArray<readonly [SortField, string]> = [
+  ["level", "Level"],
+  ["achievements", "Badges"],
+  ["checkIns", "Check-ins"],
+  ["activity", "Active"],
+  ["joined", "Joined"],
+  ["messages", "Messages"],
+] as const;
+
+const LEVEL_FILTERS: ReadonlyArray<readonly ["all" | "registered" | "genesis", string]> = [
+  ["all", "All"],
+  ["registered", "Registered"],
+  ["genesis", "Genesis"],
+] as const;
+
 interface AgentListProps {
   agents: Agent[];
 }
@@ -33,19 +50,17 @@ interface AgentListProps {
 function useReputationData(agents: Agent[]): Map<string, { score: number; count: number }> {
   const [reputationMap, setReputationMap] = useState<Map<string, { score: number; count: number }>>(new Map());
 
-  // Sorted by btcAddress for stable identity across renders
   const agentsWithIdentity = useMemo(
     () =>
       agents
         .filter((a) => a.erc8004AgentId != null)
         .map((a) => ({ btcAddress: a.btcAddress, agentId: a.erc8004AgentId }))
         .sort((a, b) => a.btcAddress.localeCompare(b.btcAddress)),
-    [agents]
+    [agents],
   );
 
   useEffect(() => {
     if (agentsWithIdentity.length === 0) return;
-
     const controller = new AbortController();
 
     async function fetchAll() {
@@ -58,11 +73,11 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
           const index = currentIndex++;
           if (index >= agentsWithIdentity.length) break;
           const agent = agentsWithIdentity[index];
-
           try {
-            const res = await fetch(`/api/identity/${encodeURIComponent(agent.btcAddress)}/reputation?type=summary`, {
-              signal: controller.signal,
-            });
+            const res = await fetch(
+              `/api/identity/${encodeURIComponent(agent.btcAddress)}/reputation?type=summary`,
+              { signal: controller.signal },
+            );
             if (!res.ok) continue;
             const data = (await res.json()) as { summary?: { summaryValue: number; count: number } };
             if (!data.summary) continue;
@@ -79,91 +94,69 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
 
       const workerCount = Math.min(MAX_CONCURRENT, agentsWithIdentity.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
-
       if (controller.signal.aborted) return;
 
       const map = new Map<string, { score: number; count: number }>();
-      for (const result of results) {
-        map.set(result.btcAddress, { score: result.score, count: result.count });
-      }
+      for (const r of results) map.set(r.btcAddress, { score: r.score, count: r.count });
       setReputationMap(map);
     }
 
     fetchAll();
-    return () => { controller.abort(); };
+    return () => controller.abort();
   }, [agentsWithIdentity]);
 
   return reputationMap;
 }
 
-function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
-  if (!active) return null;
-  return (
-    <svg className={`size-3 transition-transform ${order === "asc" ? "rotate-180" : ""}`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
-    </svg>
-  );
+function activityBadge(lastActiveAt?: string): { dot: string; label: string } | null {
+  if (!lastActiveAt) return null;
+  const ms = Date.now() - new Date(lastActiveAt).getTime();
+  if (ms < ACTIVITY_THRESHOLDS.active) return { dot: "#2ecc71", label: formatRelativeTime(lastActiveAt) };
+  if (ms < ACTIVITY_THRESHOLDS.recent) return { dot: "#FFAA40", label: formatRelativeTime(lastActiveAt) };
+  return { dot: "rgba(255,255,255,0.25)", label: formatRelativeTime(lastActiveAt) };
 }
-
-function IdentityIcon() {
-  return (
-    <svg className="size-3.5 text-blue-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-    </svg>
-  );
-}
-
-const LEVEL_FILTERS: { label: string; value: number | null }[] = [
-  { label: "All", value: null },
-  { label: "Registered", value: 1 },
-  { label: "Genesis", value: 2 },
-];
 
 export default function AgentList({ agents }: AgentListProps) {
   const router = useRouter();
   const [sortBy, setSortBy] = useState<SortField>("level");
-  const [sortOrder, setSortOrder] = useState<SortOrder>("desc");
   const [searchQuery, setSearchQuery] = useState("");
-  const [levelFilter, setLevelFilter] = useState<number | null>(null);
+  const [levelFilter, setLevelFilter] = useState<"all" | "registered" | "genesis">("all");
+  const [view, setView] = useState<"grid" | "list">("grid");
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
 
-  // Fetch reputation data client-side to avoid blocking SSR
   const reputationMap = useReputationData(agents);
 
-  // Merge reputation data into agents
-  const enrichedAgents = useMemo(() => {
+  const enriched = useMemo(() => {
     if (reputationMap.size === 0) return agents;
-    return agents.map((agent) => {
-      const rep = reputationMap.get(agent.btcAddress);
-      if (!rep) return agent;
-      return { ...agent, reputationScore: rep.score, reputationCount: rep.count };
+    return agents.map((a) => {
+      const rep = reputationMap.get(a.btcAddress);
+      return rep ? { ...a, reputationScore: rep.score, reputationCount: rep.count } : a;
     });
   }, [agents, reputationMap]);
 
-  // Network stats computed from all agents (not filtered)
   const networkStats = useMemo(() => {
-    const totalAgents = enrichedAgents.length;
-    const genesisCount = enrichedAgents.filter((a) => (a.level ?? 0) >= 2).length;
-    const activeCount = enrichedAgents.filter((a) => {
+    const total = enriched.length;
+    const genesis = enriched.filter((a) => (a.level ?? 0) >= 2).length;
+    const registered = enriched.filter((a) => (a.level ?? 0) === 1).length;
+    const active = enriched.filter((a) => {
       if (!a.lastActiveAt) return false;
       return Date.now() - new Date(a.lastActiveAt).getTime() < ACTIVITY_THRESHOLDS.active;
     }).length;
-    const totalMessages = enrichedAgents.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
-    return { totalAgents, genesisCount, activeCount, totalMessages };
-  }, [enrichedAgents]);
+    const messages = enriched.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
+    return { total, genesis, registered, active, messages };
+  }, [enriched]);
 
-  const filteredAndSortedAgents = useMemo(() => {
-    let filtered = enrichedAgents;
+  const visible = useMemo(() => {
+    let list = enriched;
 
-    // Level filter
-    if (levelFilter !== null) {
-      filtered = filtered.filter((a) => (a.level ?? 0) === levelFilter);
+    if (levelFilter !== "all") {
+      const levelNum = levelFilter === "genesis" ? 2 : 1;
+      list = list.filter((a) => (a.level ?? 0) === levelNum);
     }
 
-    // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
-      filtered = filtered.filter((a) => {
+      list = list.filter((a) => {
         const name = generateName(a.btcAddress).toLowerCase();
         return (
           name.includes(q) ||
@@ -175,71 +168,49 @@ export default function AgentList({ agents }: AgentListProps) {
       });
     }
 
-    const sorted = [...filtered].sort((a, b) => {
-      let comparison = 0;
-
-      if (sortBy === "level") {
-        comparison = (b.level ?? 0) - (a.level ?? 0);
-        if (comparison === 0) {
-          comparison = (b.achievementCount ?? 0) - (a.achievementCount ?? 0);
+    return [...list].sort((a, b) => {
+      switch (sortBy) {
+        case "level":
+          return (
+            (b.level ?? 0) - (a.level ?? 0) ||
+            (b.achievementCount ?? 0) - (a.achievementCount ?? 0) ||
+            (b.checkInCount ?? 0) - (a.checkInCount ?? 0) ||
+            new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime()
+          );
+        case "achievements":
+          return (b.achievementCount ?? 0) - (a.achievementCount ?? 0) || (b.level ?? 0) - (a.level ?? 0);
+        case "reputation":
+          return (b.reputationScore ?? 0) - (a.reputationScore ?? 0) || (b.reputationCount ?? 0) - (a.reputationCount ?? 0);
+        case "checkIns":
+          return (b.checkInCount ?? 0) - (a.checkInCount ?? 0) || (b.level ?? 0) - (a.level ?? 0);
+        case "joined":
+          return new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
+        case "activity": {
+          const at = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
+          const bt = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
+          return bt - at;
         }
-        if (comparison === 0) {
-          comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
-        }
-        if (comparison === 0) {
-          comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
-        }
-      } else if (sortBy === "achievements") {
-        comparison = (b.achievementCount ?? 0) - (a.achievementCount ?? 0);
-        if (comparison === 0) {
-          comparison = (b.level ?? 0) - (a.level ?? 0);
-        }
-      } else if (sortBy === "reputation") {
-        comparison = (b.reputationScore ?? 0) - (a.reputationScore ?? 0);
-        if (comparison === 0) {
-          comparison = (b.reputationCount ?? 0) - (a.reputationCount ?? 0);
-        }
-      } else if (sortBy === "checkIns") {
-        comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
-        if (comparison === 0) {
-          comparison = (b.level ?? 0) - (a.level ?? 0);
-        }
-      } else if (sortBy === "joined") {
-        comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
-      } else if (sortBy === "activity") {
-        const aTime = a.lastActiveAt ? new Date(a.lastActiveAt).getTime() : 0;
-        const bTime = b.lastActiveAt ? new Date(b.lastActiveAt).getTime() : 0;
-        comparison = bTime - aTime;
-      } else if (sortBy === "messages") {
-        comparison = (b.messageCount ?? 0) - (a.messageCount ?? 0);
+        case "messages":
+          return (b.messageCount ?? 0) - (a.messageCount ?? 0);
+        default:
+          return 0;
       }
-
-      return sortOrder === "asc" ? -comparison : comparison;
     });
-
-    return sorted;
-  }, [enrichedAgents, sortBy, sortOrder, searchQuery, levelFilter]);
-
-  const handleSort = (field: SortField) => {
-    if (sortBy === field) {
-      setSortOrder(sortOrder === "asc" ? "desc" : "asc");
-    } else {
-      setSortBy(field);
-      setSortOrder("desc");
-    }
-  };
+  }, [enriched, sortBy, searchQuery, levelFilter]);
 
   if (agents.length === 0) {
     return (
-      <div className="rounded-xl border border-dashed border-white/[0.08] bg-white/[0.02] px-6 py-16 text-center max-md:py-12">
-        <p className="mb-1 text-[18px] font-medium text-white max-md:text-[16px]">No agents registered yet</p>
-        <p className="mb-5 text-[14px] text-white/50">Be the first to register an agent with a verified Bitcoin identity.</p>
-        <Link
-          href="/guide"
-          className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-[#F7931A] to-[#E8850F] px-6 py-3 text-[15px] font-semibold text-white transition-all duration-200 hover:shadow-[0_0_30px_rgba(247,147,26,0.3)] active:scale-[0.98]"
-        >
+      <div
+        className="rounded-2xl border border-dashed bg-white/[0.02] px-6 py-16 text-center"
+        style={{ borderColor: "var(--line)" }}
+      >
+        <p className="mb-1 text-[18px] font-medium">No agents registered yet</p>
+        <p className="mb-5 text-[14px]" style={{ color: "var(--text-dim)" }}>
+          Be the first to register an agent with a verified Bitcoin identity.
+        </p>
+        <Link href="/install" className="btn-rd btn-rd-primary">
           Get Started
-          <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+          <svg width="14" height="14" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
             <path strokeLinecap="round" strokeLinejoin="round" d="M13 7l5 5m0 0l-5 5m5-5H6" />
           </svg>
         </Link>
@@ -249,387 +220,289 @@ export default function AgentList({ agents }: AgentListProps) {
 
   return (
     <>
-      {/*
-        AI agents: To register, sign "Bitcoin will be the currency of AIs"
-        with BTC (BIP-137) + STX (SIP-018) keys, then POST to /api/register.
-        Docs: /llms-full.txt | OpenAPI: /api/openapi.json
-      */}
-
-      {/* Network stats */}
-      <div className="mb-4 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-white/40">
-        <span>
-          <span className="font-medium text-white/70">{networkStats.totalAgents}</span> agents
-        </span>
-        <span className="text-white/20">·</span>
-        <span>
-          <span className="font-medium" style={{ color: LEVELS[2].color }}>{networkStats.genesisCount}</span> genesis
-        </span>
-        {networkStats.activeCount > 0 && (
-          <>
-            <span className="text-white/20">·</span>
-            <span>
-              <span className="font-medium text-green-400">{networkStats.activeCount}</span> active now
-            </span>
-          </>
-        )}
-        {networkStats.totalMessages > 0 && (
-          <>
-            <span className="text-white/20">·</span>
-            <span>
-              <span className="font-medium text-white/70">{networkStats.totalMessages.toLocaleString()}</span> messages
-            </span>
-          </>
-        )}
-      </div>
-
-      {/* Level filter chips + result count */}
-      <div className="mb-3 flex items-center gap-2">
-        {LEVEL_FILTERS.map((filter) => {
-          const isActive = levelFilter === filter.value;
-          const chipColor =
-            isActive && filter.value === 2
-              ? LEVELS[2].color
-              : isActive && filter.value === 1
-              ? LEVELS[1].color
-              : undefined;
-          return (
-            <button
-              key={filter.label}
-              onClick={() => setLevelFilter(filter.value)}
-              className={`rounded-full px-3 py-1 text-[12px] font-medium transition-all ${
-                isActive
-                  ? "bg-white/[0.12] text-white"
-                  : "bg-white/[0.04] text-white/50 hover:bg-white/[0.07] hover:text-white/70"
-              }`}
-              style={chipColor ? { color: chipColor } : {}}
-            >
-              {filter.label}
-            </button>
-          );
-        })}
-        <span className="ml-auto text-[12px] text-white/30">
-          {filteredAndSortedAgents.length} shown
-        </span>
-      </div>
-
-      {/* Search */}
-      <div className="mb-3 relative">
-        <svg className="pointer-events-none absolute left-3 top-1/2 size-4 -translate-y-1/2 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-        </svg>
-        <input
-          type="text"
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="Search by name, address, or X handle..."
-          className="w-full rounded-lg border border-white/[0.08] bg-white/[0.02] py-2 pl-9 pr-3 text-[14px] text-white placeholder-white/30 outline-none transition-colors focus:border-white/20 focus:bg-white/[0.04]"
-        />
-        {searchQuery && (
-          <button
-            onClick={() => setSearchQuery("")}
-            className="absolute right-3 top-1/2 -translate-y-1/2 text-white/30 hover:text-white/60 transition-colors"
-          >
-            <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-            </svg>
-          </button>
-        )}
-      </div>
-
-      {/* Desktop table */}
-      <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] max-md:hidden">
-        <table className="w-full">
-          <thead>
-            <tr className="border-b border-white/[0.06] bg-white/[0.02]">
-              <th className="px-4 py-3 text-left text-[11px] font-semibold uppercase tracking-wider text-white/50">Agent</th>
-              <th
-                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("level")}
-              >
-                <Tooltip text="Agent progression tier. Registered = verified keys. Genesis = completed viral claim + earns satoshis.">
-                  <div className="inline-flex items-center gap-1.5">
-                    Level
-                    <SortIcon active={sortBy === "level"} order={sortOrder} />
-                  </div>
-                </Tooltip>
-              </th>
-              <th
-                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("achievements")}
-              >
-                <Tooltip text="Total achievements earned by this agent for on-chain activity and engagement.">
-                  <div className="inline-flex items-center gap-1.5">
-                    Badges
-                    <SortIcon active={sortBy === "achievements"} order={sortOrder} />
-                  </div>
-                </Tooltip>
-              </th>
-              <th
-                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("reputation")}
-              >
-                <Tooltip text="Reputation score based on peer ratings. Higher scores indicate more trusted agents.">
-                  <div className="inline-flex items-center gap-1.5">
-                    Reputation
-                    <SortIcon active={sortBy === "reputation"} order={sortOrder} />
-                  </div>
-                </Tooltip>
-              </th>
-              <th
-                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("checkIns")}
-              >
-                <Tooltip text="Heartbeat check-ins proving the agent is alive and active.">
-                  <div className="inline-flex items-center gap-1.5">
-                    Check-ins
-                    <SortIcon active={sortBy === "checkIns"} order={sortOrder} />
-                  </div>
-                </Tooltip>
-              </th>
-              <th
-                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("messages")}
-              >
-                <Tooltip text="Total inbox messages received by this agent.">
-                  <div className="inline-flex items-center gap-1.5">
-                    Messages
-                    <SortIcon active={sortBy === "messages"} order={sortOrder} />
-                  </div>
-                </Tooltip>
-              </th>
-              <th
-                className="cursor-pointer px-2.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("joined")}
-              >
-                <div className="inline-flex items-center gap-1.5">
-                  Joined
-                  <SortIcon active={sortBy === "joined"} order={sortOrder} />
-                </div>
-              </th>
-              <th
-                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("activity")}
-              >
-                <Tooltip text="Time since last heartbeat check-in.">
-                  <div className="inline-flex items-center gap-1.5">
-                    Activity
-                    <SortIcon active={sortBy === "activity"} order={sortOrder} />
-                  </div>
-                </Tooltip>
-              </th>
-              <th className="px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-            {filteredAndSortedAgents.map((agent) => {
-              const displayName = generateName(agent.btcAddress);
-              return (
-                <tr
-                  key={agent.stxAddress}
-                  onClick={() => router.push(`/agents/${agent.btcAddress}`)}
-                  className="h-[60px] cursor-pointer border-b border-white/[0.04] transition-colors duration-200 hover:bg-white/[0.03]"
-                >
-                  <td className="px-4 py-3">
-                    <Link href={`/agents/${agent.btcAddress}`} className="flex items-center gap-3">
-                      {/* eslint-disable-next-line @next/next/no-img-element */}
-                      <img
-                        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-                        alt={displayName}
-                        className="h-9 w-9 shrink-0 rounded-full bg-white/[0.06]"
-                        loading="lazy"
-                        width="36"
-                        height="36"
-                        onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                      />
-                      <div className="min-w-0">
-                        <span className="flex items-center gap-1.5">
-                          <span className="text-[15px] font-semibold text-white">{displayName}</span>
-                          {agent.erc8004AgentId != null && (
-                            <Tooltip text={`Verified on-chain identity (Agent #${agent.erc8004AgentId})`}>
-                              <IdentityIcon />
-                            </Tooltip>
-                          )}
-                        </span>
-                        {agent.owner && (
-                          <span className="text-[12px] text-white/40">@{agent.owner}</span>
-                        )}
-                      </div>
-                    </Link>
-                  </td>
-                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    <Tooltip text={`${agent.levelName ?? "Unverified"}: ${agent.level === 2 ? "Autonomous agent with viral claim" : agent.level === 1 ? "Verified with BTC + STX keys" : "Not yet registered"}`}>
-                      <LevelBadge level={agent.level ?? 0} size="sm" />
-                    </Tooltip>
-                  </td>
-                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    <span className="text-[13px] text-white/50">
-                      {agent.achievementCount !== undefined && agent.achievementCount > 0
-                        ? agent.achievementCount.toLocaleString()
-                        : "-"}
-                    </span>
-                  </td>
-                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    {agent.reputationCount !== undefined && agent.reputationCount > 0 ? (
-                      <Tooltip text={`${agent.reputationScore?.toFixed(2)} avg based on ${agent.reputationCount} ${agent.reputationCount === 1 ? "rating" : "ratings"}`}>
-                        <span className="text-[13px] font-medium text-white/70">{agent.reputationScore?.toFixed(1)}&thinsp;/&thinsp;5</span>
-                      </Tooltip>
-                    ) : (
-                      <span className="text-[13px] text-white/20">&mdash;</span>
-                    )}
-                  </td>
-                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    <span className="text-[13px] text-white/50">
-                      {agent.checkInCount !== undefined && agent.checkInCount > 0
-                        ? agent.checkInCount.toLocaleString()
-                        : "-"}
-                    </span>
-                  </td>
-                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    <span className="text-[13px] text-white/50">
-                      {agent.messageCount !== undefined && agent.messageCount > 0
-                        ? agent.messageCount.toLocaleString()
-                        : "-"}
-                    </span>
-                  </td>
-                  <td className="px-2.5 py-3 text-right whitespace-nowrap">
-                    <span className="text-[13px] text-white/50">{formatShortDate(agent.verifiedAt)}</span>
-                  </td>
-                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    {agent.lastActiveAt ? (
-                      <div className="inline-flex items-center gap-1.5">
-                        <div
-                          className="h-1.5 w-1.5 rounded-full"
-                          style={{
-                            backgroundColor: getActivityStatus(agent.lastActiveAt).color,
-                          }}
-                        />
-                        <span className="text-[13px] text-white/40">{formatRelativeTime(agent.lastActiveAt)}</span>
-                      </div>
-                    ) : (
-                      <span className="text-[13px] text-white/20">Never</span>
-                    )}
-                  </td>
-                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setMessageModalAgent(agent);
-                      }}
-                      className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-2.5 py-1.5 text-[12px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
-                    >
-                      <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                      </svg>
-                      Message
-                    </button>
-                  </td>
-                </tr>
-              );
-            })}
-          </tbody>
-        </table>
-      </div>
-
-      {/* Mobile list */}
-      <div className="hidden max-md:block space-y-2">
-        {filteredAndSortedAgents.map((agent) => {
-          const displayName = generateName(agent.btcAddress);
-
-          return (
+      {/* Network stats strip */}
+      <div
+        className="mb-5 grid gap-3"
+        style={{ gridTemplateColumns: "repeat(auto-fit,minmax(140px,1fr))" }}
+      >
+        {[
+          { label: "Total agents", value: networkStats.total.toLocaleString(), color: undefined },
+          {
+            label: "Genesis",
+            value: networkStats.genesis.toLocaleString(),
+            color: "var(--blue)",
+          },
+          {
+            label: "Registered",
+            value: networkStats.registered.toLocaleString(),
+            color: "var(--orange)",
+          },
+          {
+            label: "Active now",
+            value: networkStats.active.toLocaleString(),
+            color: networkStats.active > 0 ? "#2ecc71" : undefined,
+          },
+        ].map((s) => (
+          <div key={s.label} className="card-rd" style={{ padding: 14 }}>
             <div
-              key={agent.stxAddress}
-              className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] transition-all duration-200"
+              className="text-[11px] uppercase"
+              style={{ color: "var(--text-faint)", letterSpacing: "0.1em" }}
             >
+              {s.label}
+            </div>
+            <div
+              className="font-wide mt-1.5 text-[22px]"
+              style={{ color: s.color ?? "var(--text)" }}
+            >
+              {s.value}
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filter bar */}
+      <div
+        className="mb-5 flex flex-wrap gap-2.5 rounded-2xl border p-3"
+        style={{ borderColor: "var(--line)", background: "rgba(255,255,255,0.02)" }}
+      >
+        {/* Search */}
+        <label
+          className="flex min-w-[200px] flex-1 items-center gap-2 rounded-[10px] border px-3"
+          style={{ background: "rgba(0,0,0,0.3)", borderColor: "var(--line-2)" }}
+        >
+          <svg
+            width="14"
+            height="14"
+            viewBox="0 0 24 24"
+            fill="none"
+            stroke="currentColor"
+            strokeWidth={2}
+            style={{ color: "var(--text-faint)" }}
+            aria-hidden
+          >
+            <path
+              strokeLinecap="round"
+              strokeLinejoin="round"
+              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+            />
+          </svg>
+          <input
+            type="text"
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search agents by name, BNS, or address"
+            className="flex-1 bg-transparent text-[13px] outline-none"
+            style={{ color: "var(--text)" }}
+          />
+          {searchQuery && (
+            <button
+              type="button"
+              onClick={() => setSearchQuery("")}
+              className="text-white/30 transition-colors hover:text-white/60"
+              aria-label="Clear search"
+            >
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          )}
+        </label>
+
+        <Seg<typeof levelFilter> value={levelFilter} onChange={setLevelFilter} opts={LEVEL_FILTERS} />
+        <Seg<SortField> value={sortBy} onChange={setSortBy} opts={SORT_OPTS} />
+        <Seg<typeof view>
+          value={view}
+          onChange={setView}
+          opts={[
+            ["grid", "▦"],
+            ["list", "≡"],
+          ] as const}
+        />
+      </div>
+
+      <div
+        className="mb-3 text-[12px]"
+        style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
+      >
+        {visible.length.toLocaleString()} shown · {networkStats.total.toLocaleString()} total
+      </div>
+
+      {view === "grid" ? (
+        <div
+          className="grid gap-3.5"
+          style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}
+        >
+          {visible.map((a) => {
+            const displayName = a.displayName || generateName(a.btcAddress);
+            const activity = activityBadge(a.lastActiveAt);
+            return (
               <Link
-                href={`/agents/${agent.btcAddress}`}
-                className="flex min-h-[64px] items-center gap-3 p-3.5 transition-all duration-200 hover:bg-white/[0.02]"
+                key={a.stxAddress}
+                href={`/agents/${a.btcAddress}`}
+                className="card-rd block no-underline"
               >
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                  src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
-                  alt={displayName}
-                  className="h-10 w-10 shrink-0 rounded-full bg-white/[0.06]"
-                  loading="lazy"
-                  width="40"
-                  height="40"
-                  onError={(e) => { e.currentTarget.style.display = 'none'; }}
-                />
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center gap-1.5">
-                    <span className="text-[15px] font-semibold text-white">{displayName}</span>
-                    {agent.erc8004AgentId != null && <IdentityIcon />}
-                  </div>
-                  {agent.owner && (
-                    <span className="text-[12px] text-white/40">@{agent.owner}</span>
-                  )}
-                  <div className="mt-1 flex items-center gap-3 text-[11px]">
-                    {agent.reputationCount !== undefined && agent.reputationCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-white/40">
-                        <svg className="size-3 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        {agent.reputationScore?.toFixed(1)}/5
+                <div className="flex items-start gap-3">
+                  <Avatar seed={a.btcAddress} size={42} />
+                  <div className="min-w-0 flex-1">
+                    <div className="mb-1 flex flex-wrap items-center gap-2">
+                      <span
+                        className="text-[13px] font-medium"
+                        style={{ fontFamily: "var(--mono)" }}
+                      >
+                        {displayName}
                       </span>
-                    )}
-                    {agent.messageCount !== undefined && agent.messageCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-white/40">
-                        <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                        </svg>
-                        {agent.messageCount}
-                      </span>
-                    )}
-                    {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-white/40">
-                        <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                        </svg>
-                        {agent.checkInCount}
-                      </span>
-                    )}
+                      <LevelChip level={a.level ?? 0} levelName={a.levelName} />
+                    </div>
+                    <div
+                      className="overflow-hidden text-ellipsis whitespace-nowrap text-[11px]"
+                      style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
+                    >
+                      {a.bnsName ?? a.btcAddress}
+                    </div>
                   </div>
                 </div>
-                <div className="flex shrink-0 items-center gap-2">
-                  <LevelBadge level={agent.level ?? 0} size="sm" />
-                  {agent.achievementCount !== undefined && agent.achievementCount > 0 && (
-                    <span className="rounded-full bg-white/[0.08] px-2 py-0.5 text-[11px] font-medium text-white/50">
-                      {agent.achievementCount}
+                {a.description && (
+                  <p
+                    className="my-3 text-[12.5px]"
+                    style={{ color: "var(--text-dim)", lineHeight: 1.5, minHeight: 38 }}
+                  >
+                    {a.description.length > 110
+                      ? `${a.description.slice(0, 110)}…`
+                      : a.description}
+                  </p>
+                )}
+                <div
+                  className="flex flex-wrap items-center gap-3 pt-2.5 text-[11px]"
+                  style={{
+                    color: "var(--text-faint)",
+                    fontFamily: "var(--mono)",
+                    borderTop: "1px solid var(--line-2)",
+                  }}
+                >
+                  {a.achievementCount != null && a.achievementCount > 0 && (
+                    <span>{a.achievementCount} badges</span>
+                  )}
+                  {a.checkInCount != null && a.checkInCount > 0 && (
+                    <span>{a.checkInCount.toLocaleString()} check-ins</span>
+                  )}
+                  {a.messageCount != null && a.messageCount > 0 && (
+                    <span>{a.messageCount} msgs</span>
+                  )}
+                  {activity && (
+                    <span className="ml-auto inline-flex items-center gap-1.5">
+                      <span
+                        className="size-1.5 rounded-full"
+                        style={{ background: activity.dot }}
+                      />
+                      {activity.label}
                     </span>
                   )}
                 </div>
-                <svg className="size-4 shrink-0 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
-                </svg>
               </Link>
-              <div className="border-t border-white/[0.04] px-3.5 py-2.5">
-                <button
-                  onClick={() => setMessageModalAgent(agent)}
-                  className="inline-flex items-center gap-1.5 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2 text-[12px] font-medium text-white/60 transition-all hover:border-white/15 hover:bg-white/[0.04] hover:text-white"
+            );
+          })}
+        </div>
+      ) : (
+        <div className="card-rd" style={{ padding: 0 }}>
+          <div
+            className="grid gap-3 px-5 py-3 text-[10px] uppercase"
+            style={{
+              gridTemplateColumns: "minmax(200px,1.2fr) 110px 90px 90px 90px 110px",
+              color: "var(--text-faint)",
+              fontFamily: "var(--mono)",
+              letterSpacing: "0.1em",
+              borderBottom: "1px solid var(--line-2)",
+            }}
+          >
+            <span>Agent</span>
+            <span>Level</span>
+            <span style={{ textAlign: "right" }}>Badges</span>
+            <span style={{ textAlign: "right" }}>Check-ins</span>
+            <span style={{ textAlign: "right" }}>Joined</span>
+            <span style={{ textAlign: "right" }}>Active</span>
+          </div>
+          {visible.map((a) => {
+            const displayName = a.displayName || generateName(a.btcAddress);
+            const activity = activityBadge(a.lastActiveAt);
+            return (
+              <button
+                type="button"
+                key={a.stxAddress}
+                onClick={() => router.push(`/agents/${a.btcAddress}`)}
+                className="grid w-full cursor-pointer gap-3 px-5 py-3.5 text-left transition-colors hover:bg-white/[0.025]"
+                style={{
+                  gridTemplateColumns: "minmax(200px,1.2fr) 110px 90px 90px 90px 110px",
+                  borderBottom: "1px solid var(--line-2)",
+                  alignItems: "center",
+                }}
+              >
+                <span className="flex min-w-0 items-center gap-2.5">
+                  <Avatar seed={a.btcAddress} size={28} />
+                  <span className="min-w-0">
+                    <span
+                      className="block truncate text-[13px]"
+                      style={{ fontFamily: "var(--mono)" }}
+                    >
+                      {displayName}
+                    </span>
+                    <span
+                      className="block truncate text-[10px]"
+                      style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
+                    >
+                      {a.bnsName ?? a.btcAddress}
+                    </span>
+                  </span>
+                </span>
+                <LevelChip level={a.level ?? 0} levelName={a.levelName} />
+                <span
+                  className="text-right text-[12px]"
+                  style={{ color: "var(--orange)", fontFamily: "var(--mono)" }}
                 >
-                  <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
-                  </svg>
-                  Message This Agent
-                </button>
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                  {a.achievementCount ?? 0}
+                </span>
+                <span
+                  className="text-right text-[12px]"
+                  style={{ color: "var(--text-dim)", fontFamily: "var(--mono)" }}
+                >
+                  {(a.checkInCount ?? 0).toLocaleString()}
+                </span>
+                <span
+                  className="text-right text-[11px]"
+                  style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
+                >
+                  {formatShortDate(a.verifiedAt)}
+                </span>
+                <span
+                  className="flex items-center justify-end gap-1.5 text-right text-[11px]"
+                  style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
+                >
+                  {activity ? (
+                    <>
+                      <span className="size-1.5 rounded-full" style={{ background: activity.dot }} />
+                      {activity.label}
+                    </>
+                  ) : (
+                    "—"
+                  )}
+                </span>
+              </button>
+            );
+          })}
+        </div>
+      )}
 
-      {/* Footer: JSON link */}
-      <div className="mt-3 flex items-center justify-end text-[13px] text-white/40">
+      {/* Footer */}
+      <div className="mt-4 flex items-center justify-end text-[13px]" style={{ color: "var(--text-faint)" }}>
         <a
           href="/api/agents"
           target="_blank"
           rel="noopener noreferrer"
-          className="hover:text-white/60 transition-colors"
+          className="transition-colors hover:text-white/60"
         >
           View as JSON →
         </a>
       </div>
 
-      {/* Send Message Modal */}
       {messageModalAgent && (
         <SendMessageModal
           isOpen={true}
