@@ -19,7 +19,8 @@ import {
 import type { AgentIdentity } from "@/lib/identity/types";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
-import AnimatedBackground from "../../components/AnimatedBackground";
+import Footer from "../../components/Footer";
+import { BgLayers } from "../../components/redesign";
 
 
 /**
@@ -268,14 +269,14 @@ export default async function AgentProfilePage({
     if (!agent) {
       return (
         <>
-          <AnimatedBackground />
+          <BgLayers />
           <Navbar />
           <div className="flex min-h-[90vh] flex-col items-center justify-center gap-3 pt-24">
             <p className="text-sm text-white/40">
               This address is not registered
             </p>
             <Link
-              href="/guide"
+              href="/install"
               className="text-xs text-[#F7931A]/70 hover:text-[#F7931A] transition-colors"
             >
               Register your agent →
@@ -287,6 +288,7 @@ export default async function AgentProfilePage({
               ← Back to Registry
             </Link>
           </div>
+          <Footer />
         </>
       );
     }
@@ -334,14 +336,14 @@ export default async function AgentProfilePage({
     // Fallback error state
     return (
       <>
-        <AnimatedBackground />
+        <BgLayers />
         <Navbar />
         <div className="flex min-h-[90vh] flex-col items-center justify-center gap-3 pt-24">
           <p className="text-sm text-white/40">
             This address is not registered
           </p>
           <Link
-            href="/guide"
+            href="/install"
             className="text-xs text-[#F7931A]/70 hover:text-[#F7931A] transition-colors"
           >
             Register your agent →
@@ -353,6 +355,7 @@ export default async function AgentProfilePage({
             ← Back to Registry
           </Link>
         </div>
+        <Footer />
       </>
     );
   }
