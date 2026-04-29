@@ -38,7 +38,9 @@ export default function NetworkGraph({
 
   // Real agent faces if provided; otherwise stylized fallback names.
   // Inner ring takes the first 8 (highest-ranked), outer ring the next 14.
-  const realAgents = agents ?? [];
+  // useMemo so identity is stable across renders even when `agents` is
+  // referentially new but value-identical from the parent.
+  const realAgents = useMemo(() => agents ?? [], [agents]);
 
   const nodes: GraphNode[] = useMemo(() => {
     const cx = W / 2;
