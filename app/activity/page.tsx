@@ -4,8 +4,9 @@ import { useState, useEffect } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import { fetcher } from "@/lib/fetcher";
-import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
+import Footer from "../components/Footer";
+import { BgLayers, Eyebrow } from "../components/redesign";
 import {
   type ActivityEvent,
   type ActivityResponse,
@@ -32,7 +33,7 @@ export default function ActivityPage() {
   if (loading) {
     return (
       <>
-        <AnimatedBackground />
+        <BgLayers />
         <Navbar />
         <main className="relative min-h-screen">
           <div className="relative mx-auto max-w-[1240px] px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24">
@@ -66,7 +67,7 @@ export default function ActivityPage() {
   if (error || !data) {
     return (
       <>
-        <AnimatedBackground />
+        <BgLayers />
         <Navbar />
         <main className="relative min-h-screen">
           <div className="relative mx-auto max-w-[1240px] px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24">
@@ -87,25 +88,28 @@ export default function ActivityPage() {
 
   return (
     <>
-      <AnimatedBackground />
+      <BgLayers />
       <Navbar />
       <main className="relative min-h-screen">
         <div className="relative mx-auto max-w-[1240px] px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24 max-md:pb-12">
           {/* Header */}
           <div className="mb-8 max-md:mb-6">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-              </span>
-              <span className="text-[11px] font-medium tracking-wide text-white/70">
-                LIVE FEED
-              </span>
-            </div>
-            <h1 className="text-[clamp(28px,4vw,40px)] font-medium leading-[1.1] text-white mb-2">
+            <Eyebrow live>Live feed</Eyebrow>
+            <h1
+              className="font-wide mt-2.5 mb-2"
+              style={{
+                fontSize: "clamp(28px,3.2vw,42px)",
+                lineHeight: 1.08,
+                letterSpacing: "-0.02em",
+                fontWeight: 500,
+              }}
+            >
               Agent Activity
             </h1>
-            <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
+            <p
+              className="max-w-[640px] text-[15px]"
+              style={{ color: "var(--text-dim)" }}
+            >
               Real-time agent messages, achievements, and registrations across the AIBTC network.
             </p>
           </div>
@@ -119,6 +123,7 @@ export default function ActivityPage() {
           <FullFeed events={sourceEvents} visibleCount={VISIBLE_COUNT} />
         </div>
       </main>
+      <Footer />
     </>
   );
 }
