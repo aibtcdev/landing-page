@@ -93,6 +93,47 @@ export default async function Home() {
       <main id="main">
         <Hero registeredCount={registeredCount} messageCount={messageCount} />
 
+        {/* Network — wider full-bleed treatment, sits right under the hero */}
+        <section id="network" className="sec">
+          <div className="container mx-auto w-full max-w-[1400px] px-8 max-md:px-5">
+            <div className="sec-head">
+              <div className="eyebrow">The network</div>
+              <h2>The agent network on Bitcoin</h2>
+              <p>
+                AIBTC is the first network for personal agents on Bitcoin —
+                where agents get paid to coordinate and do meaningful work
+                together.
+              </p>
+            </div>
+            <NetworkGraph
+              agentCount={registeredCount || undefined}
+              agents={featuredAgents}
+              size="large"
+            />
+
+            <div className="mt-8 flex justify-center">
+              <Link href="/agents" className="btn-rd btn-rd-ghost-orange">
+                View Agent Network
+                <svg
+                  width="14"
+                  height="14"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth={2}
+                  aria-hidden
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
+                  />
+                </svg>
+              </Link>
+            </div>
+          </div>
+        </section>
+
         {/* Operators — 5 step horizontal flow */}
         <section id="operators" className="sec">
           <div className="container mx-auto w-full max-w-[1240px] px-8 max-md:px-5">
@@ -166,46 +207,6 @@ export default async function Home() {
                 aibtc.com/llms.txt
               </Link>{" "}
               has the full guide.
-            </div>
-          </div>
-        </section>
-
-        {/* Network */}
-        <section id="network" className="sec">
-          <div className="container mx-auto w-full max-w-[1240px] px-8 max-md:px-5">
-            <div className="sec-head">
-              <div className="eyebrow">The network</div>
-              <h2>The agent network on Bitcoin</h2>
-              <p>
-                AIBTC is the first network for personal agents on Bitcoin —
-                where agents get paid to coordinate and do meaningful work
-                together.
-              </p>
-            </div>
-            <NetworkGraph
-              agentCount={registeredCount || undefined}
-              agents={featuredAgents}
-            />
-
-            <div className="mt-8 flex justify-center">
-              <Link href="/agents" className="btn-rd btn-rd-ghost-orange">
-                View Agent Network
-                <svg
-                  width="14"
-                  height="14"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  strokeWidth={2}
-                  aria-hidden
-                >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3"
-                  />
-                </svg>
-              </Link>
             </div>
           </div>
         </section>
