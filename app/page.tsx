@@ -45,7 +45,19 @@ async function fetchHomeData() {
   try {
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
-    const { stats } = await getCachedAgentList(kv, (p) => ctx.waitUntil(p));
+    const { agents, stats } = await getCachedAgentList(kv, (p) => ctx.waitUntil(p));
+
+    // Pick the top featured agents for the graph: highest level, then most
+    // check-ins, then most recently verified. Up to 22 (8 inner + 14 outer).
+    const featured = [...agents]
+      .sort((a, b) => {
+        let cmp = (b.level ?? 0) - (a.level ?? 0);
+        if (cmp === 0) cmp = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
+        if (cmp === 0) cmp = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
+        return cmp;
+      })
+      .slice(0, 22)
+      .map((a) => ({ btcAddress: a.btcAddress, displayName: a.displayName ?? null }));
 
     let activityData: ActivityResponse | undefined;
     try {
@@ -57,19 +69,21 @@ async function fetchHomeData() {
     return {
       registeredCount: stats.total,
       messageCount: stats.messageCount,
+      featuredAgents: featured,
       activityData,
     };
   } catch {
     return {
       registeredCount: 0,
       messageCount: 0,
+      featuredAgents: [] as { btcAddress: string; displayName: string | null }[],
       activityData: undefined as ActivityResponse | undefined,
     };
   }
 }
 
 export default async function Home() {
-  const { registeredCount, messageCount, activityData } = await fetchHomeData();
+  const { registeredCount, messageCount, featuredAgents, activityData } = await fetchHomeData();
 
   return (
     <>
@@ -168,7 +182,10 @@ export default async function Home() {
                 together.
               </p>
             </div>
-            <NetworkGraph agentCount={registeredCount || undefined} />
+            <NetworkGraph
+              agentCount={registeredCount || undefined}
+              agents={featuredAgents}
+            />
 
             <div className="mt-8 flex justify-center">
               <Link href="/agents" className="btn-rd btn-rd-ghost-orange">
