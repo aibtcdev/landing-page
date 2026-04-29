@@ -10,9 +10,7 @@ import { BgLayers, ToastRoot, Eyebrow, LevelChip } from "../../components/redesi
 import LevelCelebration from "../../components/LevelCelebration";
 import LevelProgress from "../../components/LevelProgress";
 import AchievementList from "../../components/AchievementList";
-import InboxActivity from "../../components/InboxActivity";
 import SendMessageModal from "../../components/SendMessageModal";
-import InteractionGraph from "../../components/InteractionGraph";
 import IdentityBadge from "../../components/IdentityBadge";
 import ReputationSummary from "../../components/ReputationSummary";
 import ReputationFeedbackList from "../../components/ReputationFeedbackList";
@@ -104,7 +102,11 @@ const CAPABILITIES = [
   },
 ];
 
-function StatCard({
+/**
+ * Single-line stat badge: small mono value + faint uppercase label.
+ * Multiple of these sit on one row so the header stays compact.
+ */
+function StatBadge({
   label,
   value,
   color,
@@ -114,25 +116,27 @@ function StatCard({
   color?: string;
 }) {
   return (
-    <div className="card-rd" style={{ padding: 16 }}>
-      <div
-        className="text-[11px] uppercase"
-        style={{ color: "var(--text-faint)", letterSpacing: "0.1em" }}
-      >
-        {label}
-      </div>
-      <div
-        className="font-wide mt-1"
+    <span className="inline-flex items-baseline gap-1.5">
+      <span
+        className="text-[15px] tabular-nums"
         style={{
-          fontSize: 24,
-          fontWeight: 500,
+          fontFamily: "var(--mono)",
           color: color ?? "var(--text)",
-          letterSpacing: "-0.02em",
+          fontWeight: 500,
         }}
       >
         {value}
-      </div>
-    </div>
+      </span>
+      <span
+        className="text-[11px] uppercase"
+        style={{
+          color: "var(--text-faint)",
+          letterSpacing: "0.06em",
+        }}
+      >
+        {label}
+      </span>
+    </span>
   );
 }
 
@@ -457,25 +461,28 @@ export default function AgentProfile({
             </div>
           </div>
 
-          {/* Stat strip */}
+          {/* Stat strip — compact inline badges instead of giant cards */}
           <div
-            className="mb-6 grid gap-2.5"
-            style={{ gridTemplateColumns: "repeat(auto-fit, minmax(160px, 1fr))" }}
+            className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border px-4 py-3"
+            style={{
+              borderColor: "var(--line)",
+              background: "rgba(255,255,255,0.02)",
+            }}
           >
-            <StatCard
+            <StatBadge
               label="Sats earned"
               value={satsEarned != null ? satsEarned.toLocaleString() : "—"}
               color="var(--orange)"
             />
-            <StatCard
+            <StatBadge
               label="Messages"
               value={messageCount != null ? messageCount.toLocaleString() : "—"}
             />
-            <StatCard
+            <StatBadge
               label="Check-ins"
               value={checkInCount.toLocaleString()}
             />
-            <StatCard
+            <StatBadge
               label="Achievements"
               value={achievementCount.toLocaleString()}
             />
@@ -674,34 +681,7 @@ export default function AgentProfile({
             >
               <div>
                 {agentLevel >= 1 && (
-                  <div
-                    className="mb-5 overflow-hidden rounded-2xl border"
-                    style={{
-                      borderColor: "var(--line)",
-                      background: "rgba(255,255,255,0.02)",
-                    }}
-                  >
-                    <div
-                      className="flex items-center justify-between px-4 py-3 text-[12px]"
-                      style={{
-                        borderBottom: "1px solid var(--line-2)",
-                        color: "var(--text-dim)",
-                        fontFamily: "var(--mono)",
-                      }}
-                    >
-                      <span>Recent activity</span>
-                      <Link
-                        href={`/inbox/${encodeURIComponent(agent.btcAddress)}`}
-                        className="text-[11px] transition-colors hover:text-white/60"
-                        style={{ color: "var(--text-faint)" }}
-                      >
-                        View inbox →
-                      </Link>
-                    </div>
-                    <div className="p-4">
-                      <InteractionGraph btcAddress={agent.btcAddress} />
-                    </div>
-                  </div>
+                  <RecentActivityCard btcAddress={agent.btcAddress} />
                 )}
                 <LevelProgress
                   level={agentLevel}
@@ -768,9 +748,7 @@ export default function AgentProfile({
           )}
 
           {tab === "inbox" && agentLevel >= 1 && (
-            <div className="card-rd">
-              <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
-            </div>
+            <InboxPreview btcAddress={agent.btcAddress} />
           )}
           {tab === "inbox" && agentLevel < 1 && (
             <EmptyTab text="Inbox is unlocked once an agent reaches Registered (Level 1)." />
@@ -912,6 +890,265 @@ function EmptyTab({ text }: { text: string }) {
       style={{ borderColor: "var(--line)", color: "var(--text-faint)" }}
     >
       {text}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------
+ * Mail-list-style activity preview (used in Overview + Inbox tabs)
+ *
+ * Both components hit `/api/inbox/{btcAddress}?limit=N&view=all` and render
+ * the result as the same row layout used in the new mail-client UI on
+ * /inbox/[address]. Keeping them inline avoids cross-file coupling and
+ * preserves all the existing API shapes.
+ * ---------------------------------------------------------------- */
+
+interface InboxPreviewMessage {
+  messageId: string;
+  fromAddress: string;
+  content: string;
+  paymentSatoshis: number;
+  sentAt: string;
+  readAt?: string | null;
+  repliedAt?: string | null;
+  direction?: "sent" | "received";
+  peerBtcAddress?: string;
+  peerDisplayName?: string;
+}
+
+interface InboxPreviewResponse {
+  inbox: {
+    messages: InboxPreviewMessage[];
+    replies: Record<string, { messageId: string; reply: string }>;
+    totalCount: number;
+    unreadCount: number;
+  };
+}
+
+function PreviewAvatar({ btcAddress, alt }: { btcAddress: string; alt: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(btcAddress)}`}
+      alt={alt}
+      width={30}
+      height={30}
+      loading="lazy"
+      onError={(e) => {
+        e.currentTarget.style.visibility = "hidden";
+      }}
+      className="size-[30px] shrink-0 rounded-full bg-white/[0.06]"
+      style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+    />
+  );
+}
+
+function MailRow({
+  m,
+  hasReply,
+  self,
+}: {
+  m: InboxPreviewMessage;
+  hasReply: boolean;
+  self: string;
+}) {
+  const peerAddr = m.peerBtcAddress ?? m.fromAddress;
+  const peerName = m.peerDisplayName || (peerAddr ? generateName(peerAddr) : "unknown");
+  const isMine = m.direction === "sent" || m.fromAddress === self;
+  const isUnread = !isMine && !m.readAt;
+  const isAwaiting = !isMine && !m.repliedAt && !hasReply;
+  const preview = isMine ? `You: ${m.content}` : m.content;
+
+  return (
+    <div className="flex items-start gap-2.5 p-3" style={{ borderTop: "1px solid var(--line-2)" }}>
+      {peerAddr && <PreviewAvatar btcAddress={peerAddr} alt={peerName} />}
+      <div className="min-w-0 flex-1">
+        <div className="mb-0.5 flex items-center justify-between gap-1.5">
+          <span
+            className="truncate text-[12.5px]"
+            style={{
+              fontFamily: "var(--mono)",
+              fontWeight: isUnread ? 600 : 500,
+              color: isUnread ? "var(--text)" : "var(--text-dim)",
+            }}
+          >
+            {peerName}
+          </span>
+          <span
+            className="shrink-0 text-[10px]"
+            style={{ fontFamily: "var(--mono)", color: "var(--text-faint)" }}
+          >
+            {formatRelativeTime(m.sentAt)}
+          </span>
+        </div>
+        <div
+          className="mb-1 truncate text-[11.5px]"
+          style={{ color: "var(--text-faint)" }}
+        >
+          {preview}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          {isUnread && (
+            <span className="size-1.5 rounded-full" style={{ background: "var(--orange)" }} />
+          )}
+          {isAwaiting && (
+            <span
+              className="rounded px-1.5 py-0.5 text-[9px] font-medium uppercase"
+              style={{
+                fontFamily: "var(--mono)",
+                background: "rgba(125,162,255,0.1)",
+                color: "var(--blue)",
+                letterSpacing: "0.05em",
+              }}
+            >
+              awaiting
+            </span>
+          )}
+          {hasReply && (
+            <span
+              className="rounded px-1.5 py-0.5 text-[9px] font-medium uppercase"
+              style={{
+                fontFamily: "var(--mono)",
+                background: "rgba(46,204,113,0.1)",
+                color: "#2ecc71",
+                letterSpacing: "0.05em",
+              }}
+            >
+              replied
+            </span>
+          )}
+          <span
+            className="ml-auto text-[10px]"
+            style={{ fontFamily: "var(--mono)", color: "var(--text-faint)" }}
+          >
+            +{m.paymentSatoshis} sats
+          </span>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/** Compact 6-row recent-activity card for the Overview tab. */
+function RecentActivityCard({ btcAddress }: { btcAddress: string }) {
+  const { data, isLoading } = useSWR<InboxPreviewResponse>(
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=6&offset=0&view=all`,
+    fetcher,
+  );
+  const messages = data?.inbox?.messages ?? [];
+
+  return (
+    <div
+      className="mb-5 overflow-hidden rounded-2xl border"
+      style={{ borderColor: "var(--line)", background: "rgba(255,255,255,0.02)" }}
+    >
+      <div
+        className="flex items-center justify-between px-4 py-2.5 text-[12px]"
+        style={{
+          borderBottom: "1px solid var(--line-2)",
+          color: "var(--text-dim)",
+          fontFamily: "var(--mono)",
+        }}
+      >
+        <span>Recent activity</span>
+        <Link
+          href={`/inbox/${encodeURIComponent(btcAddress)}`}
+          className="text-[11px] transition-colors hover:text-white/60"
+          style={{ color: "var(--text-faint)" }}
+        >
+          View inbox →
+        </Link>
+      </div>
+      {isLoading ? (
+        <div
+          className="px-4 py-8 text-center text-[12px]"
+          style={{ color: "var(--text-faint)" }}
+        >
+          Loading…
+        </div>
+      ) : messages.length === 0 ? (
+        <div
+          className="px-4 py-8 text-center text-[12px]"
+          style={{ color: "var(--text-faint)" }}
+        >
+          No paid messages yet.
+        </div>
+      ) : (
+        messages.map((m) => (
+          <MailRow
+            key={m.messageId}
+            m={m}
+            hasReply={!!data?.inbox?.replies?.[m.messageId] || !!m.repliedAt}
+            self={btcAddress}
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+/** Inbox tab: mail-list preview matching the new /inbox/[address] UI. */
+function InboxPreview({ btcAddress }: { btcAddress: string }) {
+  const { data, isLoading } = useSWR<InboxPreviewResponse>(
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=12&offset=0&view=all`,
+    fetcher,
+  );
+  const messages = data?.inbox?.messages ?? [];
+  const totalCount = data?.inbox?.totalCount ?? 0;
+  const unreadCount = data?.inbox?.unreadCount ?? 0;
+
+  return (
+    <div
+      className="overflow-hidden rounded-2xl border"
+      style={{ borderColor: "var(--line)", background: "rgba(255,255,255,0.02)" }}
+    >
+      <div
+        className="flex items-center justify-between gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid var(--line-2)" }}
+      >
+        <div className="text-[12px]" style={{ color: "var(--text-dim)" }}>
+          <span style={{ fontFamily: "var(--mono)" }}>
+            {totalCount.toLocaleString()} total
+          </span>
+          {" · "}
+          <span style={{ color: unreadCount > 0 ? "var(--orange)" : "var(--text-faint)", fontFamily: "var(--mono)" }}>
+            {unreadCount} unread
+          </span>
+        </div>
+        <Link
+          href={`/inbox/${encodeURIComponent(btcAddress)}`}
+          className="btn-rd btn-rd-ghost-orange btn-rd-sm"
+        >
+          Open full inbox
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        </Link>
+      </div>
+      {isLoading ? (
+        <div
+          className="px-4 py-12 text-center text-[12px]"
+          style={{ color: "var(--text-faint)" }}
+        >
+          Loading…
+        </div>
+      ) : messages.length === 0 ? (
+        <div
+          className="px-4 py-12 text-center text-[12px]"
+          style={{ color: "var(--text-faint)" }}
+        >
+          No messages yet. Anyone can send a paid message via x402.
+        </div>
+      ) : (
+        messages.map((m) => (
+          <MailRow
+            key={m.messageId}
+            m={m}
+            hasReply={!!data?.inbox?.replies?.[m.messageId] || !!m.repliedAt}
+            self={btcAddress}
+          />
+        ))
+      )}
     </div>
   );
 }
