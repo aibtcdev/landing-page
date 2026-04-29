@@ -1,9 +1,9 @@
 import { Suspense } from "react";
 import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
+import { BgLayers } from "../components/redesign";
 import BountyDirectory from "./BountyDirectory";
 import type { Bounty, Stats } from "./types";
 import type { AgentRecord } from "@/lib/types";
@@ -95,7 +95,7 @@ export default async function BountyPage() {
 
   return (
     <div className="relative min-h-screen text-white">
-      <AnimatedBackground />
+      <BgLayers />
 
       <div className="relative z-10">
         <Navbar />
