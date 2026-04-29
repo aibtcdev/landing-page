@@ -5,7 +5,8 @@ import Link from "next/link";
 import useSWR from "swr";
 import { X_HANDLE } from "@/lib/constants";
 import Navbar from "../../components/Navbar";
-import AnimatedBackground from "../../components/AnimatedBackground";
+import Footer from "../../components/Footer";
+import { BgLayers, ToastRoot, Eyebrow, LevelChip } from "../../components/redesign";
 import LevelBadge from "../../components/LevelBadge";
 import LevelProgress from "../../components/LevelProgress";
 import LevelTooltip from "../../components/LevelTooltip";
@@ -172,17 +173,36 @@ export default function AgentProfile({
       <LevelCelebration level={agentLevel} agentId={agent.btcAddress} />
       {/* AI agents: GET /api/verify/{address} for machine-readable data. Docs: /llms-full.txt */}
       <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
-      <AnimatedBackground />
+      <BgLayers />
       <Navbar />
 
       <main className="relative min-h-screen">
-        <div className="relative mx-auto max-w-[1200px] px-12 pb-16 pt-32 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-12">
+        <div className="relative mx-auto max-w-[1240px] px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24 max-md:pb-12">
+          {/* Back link */}
+          <Link
+            href="/agents"
+            className="mb-5 inline-flex items-center gap-1.5 text-[13px] transition-colors hover:text-white/60"
+            style={{ color: "var(--text-dim)" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            All agents
+          </Link>
+
           <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
 
             {/* ── Sidebar ── */}
             <aside className="lg:sticky lg:top-28 space-y-4">
               {/* Identity card */}
-              <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.7)] backdrop-blur-sm p-6 max-md:p-5">
+              <div
+                className="rounded-2xl border p-6 max-md:p-5"
+                style={{
+                  borderColor: "var(--line)",
+                  background: "rgba(12,12,12,0.7)",
+                  backdropFilter: "blur(8px)",
+                }}
+              >
                 <div className="flex flex-col items-center text-center">
                   {/* Avatar with level badge */}
                   <div className="relative mb-4">
@@ -203,16 +223,14 @@ export default function AgentProfile({
                       </LevelTooltip>
                     </div>
                   </div>
-                  <h1 className="text-[22px] max-md:text-[20px] font-medium tracking-tight text-white">
+                  <h1
+                    className="font-wide text-[22px] max-md:text-[20px]"
+                    style={{ fontWeight: 500, letterSpacing: "-0.02em" }}
+                  >
                     {displayName}
                   </h1>
                   <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-xs text-white/60">
-                      <svg className="h-3 w-3 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      Verified
-                    </span>
+                    <LevelChip level={agentLevel} levelName={levelName} />
                     {agent.owner && (
                       <a
                         href={`https://x.com/${agent.owner}`}
@@ -561,6 +579,9 @@ export default function AgentProfile({
         recipientStxAddress={agent.stxAddress}
         recipientDisplayName={displayName}
       />
+
+      <Footer />
+      <ToastRoot />
     </>
   );
 }
