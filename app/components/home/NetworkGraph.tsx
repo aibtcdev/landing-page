@@ -2,6 +2,8 @@
 
 import { useEffect, useId, useMemo, useState } from "react";
 
+const BASE_PATH = process.env.NEXT_PUBLIC_BASE_PATH || "";
+
 /** Tracks whether the viewport is mobile-width (≤768px). */
 function useIsMobile(): boolean {
   const [isMobile, setIsMobile] = useState(false);
@@ -279,22 +281,38 @@ export default function NetworkGraph({
         {nodes.map((n) => {
           const isHover = hoveredNode === n.id;
           if (n.core) {
+            const coreClipId = `${graphId}-core-clip`;
             return (
               <g key={n.id}>
+                {/* Outer glow rings (kept so the core still reads as
+                    the "hub" of the network). */}
                 <circle cx={n.x} cy={n.y} r={n.r + 10} fill="rgba(247,147,26,0.12)" />
                 <circle cx={n.x} cy={n.y} r={n.r + 4} fill="rgba(247,147,26,0.2)" />
-                <circle cx={n.x} cy={n.y} r={n.r} fill="var(--orange)" />
-                <text
-                  x={n.x}
-                  y={n.y + 4}
-                  textAnchor="middle"
-                  fontSize="10"
-                  style={{ fontFamily: "var(--mono)" }}
-                  fill="#000"
-                  fontWeight="600"
-                >
-                  aibtc
-                </text>
+                {/* Real AIBTC mark — same icon shipped as the apple-touch
+                    icon. Clipped to the core circle, with an orange ring
+                    on top so it reads as the network hub. */}
+                <defs>
+                  <clipPath id={coreClipId}>
+                    <circle cx={n.x} cy={n.y} r={n.r} />
+                  </clipPath>
+                </defs>
+                <image
+                  href={`${BASE_PATH}/apple-icon-180x180.png`}
+                  x={n.x - n.r}
+                  y={n.y - n.r}
+                  width={n.r * 2}
+                  height={n.r * 2}
+                  clipPath={`url(#${coreClipId})`}
+                  preserveAspectRatio="xMidYMid slice"
+                />
+                <circle
+                  cx={n.x}
+                  cy={n.y}
+                  r={n.r}
+                  fill="none"
+                  stroke="var(--orange)"
+                  strokeWidth="1.5"
+                />
               </g>
             );
           }
