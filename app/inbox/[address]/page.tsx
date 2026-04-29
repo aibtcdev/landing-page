@@ -193,8 +193,8 @@ export default function InboxPage() {
       <AnimatedBackground />
       <Navbar />
 
-      <div className="min-h-[90vh] overflow-hidden px-12 pt-24 pb-12 max-lg:px-8 max-md:px-5 max-md:pt-20">
-        <div className="mx-auto max-w-[1200px]">
+      <div className="min-h-[90vh] overflow-hidden px-8 pt-28 pb-12 max-md:px-5 max-md:pt-24">
+        <div className="mx-auto max-w-[1240px]">
           {/* Toolbar: avatar + name + stats + send button */}
           <div className="mb-5 flex items-center gap-2 sm:gap-3">
             {/* eslint-disable-next-line @next/next/no-img-element */}
