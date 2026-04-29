@@ -108,7 +108,7 @@ export default function MessagePermalinkPage() {
       <AnimatedBackground />
       <Navbar />
 
-      <div className="min-h-[90vh] overflow-hidden px-12 pt-24 pb-12 max-lg:px-8 max-md:px-5 max-md:pt-20">
+      <div className="min-h-[90vh] overflow-hidden px-8 pt-28 pb-12 max-md:px-5 max-md:pt-24">
         <div className="mx-auto max-w-2xl">
           {/* Back link */}
           <Link
