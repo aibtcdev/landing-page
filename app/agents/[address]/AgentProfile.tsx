@@ -640,9 +640,11 @@ export default function AgentProfile({
           {tab === "overview" && (
             <div
               className="overview-grid grid gap-5"
-              style={{ gridTemplateColumns: "1.3fr 1fr" }}
+              style={{ gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1fr)" }}
             >
-              <div>
+              {/* min-w-0 + min-h-0 so a long message preview / address can
+                  truncate instead of forcing the grid column wider. */}
+              <div className="min-w-0">
                 {agentLevel >= 1 && (
                   <RecentActivityCard btcAddress={agent.btcAddress} />
                 )}
@@ -653,7 +655,7 @@ export default function AgentProfile({
                 />
               </div>
 
-              <div>
+              <div className="min-w-0">
                 <div className="card-rd">
                   <Eyebrow className="mb-3.5">Capabilities</Eyebrow>
                   {CAPABILITIES.map((u) => (
