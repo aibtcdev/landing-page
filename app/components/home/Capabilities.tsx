@@ -125,7 +125,7 @@ export default function Capabilities() {
         </div>
 
         <div
-          className="mx-auto grid gap-3.5"
+          className="caps-grid mx-auto grid gap-3.5"
           style={{
             gridTemplateColumns: "repeat(3, 1fr)",
             maxWidth: 1040,
@@ -233,8 +233,10 @@ export default function Capabilities() {
 
       <style>{`
         @media (max-width: 900px) {
-          #capabilities .card-rd { grid-column: span 1; }
-          #capabilities > .container > div:nth-child(2) { grid-template-columns: 1fr !important; }
+          .caps-grid { grid-template-columns: repeat(2, 1fr) !important; }
+        }
+        @media (max-width: 640px) {
+          .caps-grid { grid-template-columns: 1fr !important; }
         }
       `}</style>
     </section>
