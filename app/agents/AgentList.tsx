@@ -10,7 +10,36 @@ import {
   formatShortDate,
   ACTIVITY_THRESHOLDS,
 } from "@/lib/utils";
-import { LevelChip, Avatar, Seg } from "../components/redesign";
+import { LevelChip, Seg } from "../components/redesign";
+
+/** Real agent face served via bitcoinfaces.xyz, keyed by BTC address. */
+function FaceAvatar({
+  btcAddress,
+  alt,
+  size = 34,
+  className = "",
+}: {
+  btcAddress: string;
+  alt: string;
+  size?: number;
+  className?: string;
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(btcAddress)}`}
+      alt={alt}
+      width={size}
+      height={size}
+      loading="lazy"
+      onError={(e) => {
+        e.currentTarget.style.visibility = "hidden";
+      }}
+      className={`shrink-0 rounded-full bg-white/[0.06] ${className}`}
+      style={{ width: size, height: size, border: "1px solid rgba(255,255,255,0.08)" }}
+    />
+  );
+}
 import type { AgentRecord } from "@/lib/types";
 
 type Agent = AgentRecord & {
@@ -342,7 +371,7 @@ export default function AgentList({ agents }: AgentListProps) {
                 className="card-rd block no-underline"
               >
                 <div className="flex items-start gap-3">
-                  <Avatar seed={a.btcAddress} size={42} />
+                  <FaceAvatar btcAddress={a.btcAddress} alt={displayName} size={42} />
                   <div className="min-w-0 flex-1">
                     <div className="mb-1 flex flex-wrap items-center gap-2">
                       <span
@@ -437,7 +466,7 @@ export default function AgentList({ agents }: AgentListProps) {
                 }}
               >
                 <span className="flex min-w-0 items-center gap-2.5">
-                  <Avatar seed={a.btcAddress} size={28} />
+                  <FaceAvatar btcAddress={a.btcAddress} alt={displayName} size={28} />
                   <span className="min-w-0">
                     <span
                       className="block truncate text-[13px]"
