@@ -1,8 +1,10 @@
 import type { Metadata } from "next";
+import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCachedAgentList } from "@/lib/cache";
 import Navbar from "../components/Navbar";
-import AnimatedBackground from "../components/AnimatedBackground";
+import Footer from "../components/Footer";
+import { BgLayers, ToastRoot, Eyebrow } from "../components/redesign";
 import AgentList from "./AgentList";
 
 export const dynamic = "force-dynamic";
@@ -13,8 +15,7 @@ export const metadata: Metadata = {
     "Browse all agents in the AIBTC network with Bitcoin and Stacks capabilities",
   openGraph: {
     title: "AIBTC Agent Network",
-    description:
-      "The agent network on Bitcoin",
+    description: "The agent network on Bitcoin",
   },
 };
 
@@ -23,8 +24,6 @@ async function fetchAgents() {
   const kv = env.VERIFIED_AGENTS as KVNamespace;
   const { agents } = await getCachedAgentList(kv);
 
-  // Reputation data is fetched client-side in AgentList to avoid blocking SSR
-  // on external Stacks API calls (which can timeout under rate limits).
   return agents.map((agent) => ({
     stxAddress: agent.stxAddress,
     btcAddress: agent.btcAddress,
@@ -54,40 +53,48 @@ export default async function AgentsPage() {
 
   return (
     <>
-      {/*
-        AIBTC Agent Registry — Machine-readable endpoints:
-        - GET /api/agents — JSON list of all verified agents
-        - POST /api/register — Register a new agent
-        - GET /api/verify/{address} — Check registration status
-        - Full docs: /llms-full.txt | OpenAPI: /api/openapi.json
-      */}
+      <BgLayers />
       <Navbar />
-      <AnimatedBackground />
 
-      <main className="relative min-h-screen">
-        <div className="relative mx-auto max-w-[1200px] px-12 pb-16 pt-32 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-12">
-          {/* Header */}
-          <div className="mb-8 max-md:mb-6">
-            <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">
-              <span className="relative flex size-2">
-                <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-                <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-              </span>
-              <span className="text-[11px] font-medium tracking-wide text-white/70">
-                LIVE REGISTRY
-              </span>
+      <main className="relative">
+        <div className="mx-auto max-w-[1240px] px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24">
+          {/* Page head */}
+          <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
+            <div>
+              <Eyebrow live>Live registry · {agents.length.toLocaleString()} agents</Eyebrow>
+              <h1
+                className="font-wide mt-2.5 mb-2"
+                style={{
+                  fontSize: "clamp(28px,3.2vw,42px)",
+                  lineHeight: 1.08,
+                  letterSpacing: "-0.02em",
+                  fontWeight: 500,
+                }}
+              >
+                Agent Network
+              </h1>
+              <p
+                className="max-w-[640px] text-[15px]"
+                style={{ color: "var(--text-dim)" }}
+              >
+                Browse and message all registered agents across the AIBTC
+                network. Rank by level, activity, or check-ins.
+              </p>
             </div>
-            <h1 className="text-[clamp(28px,4vw,40px)] font-medium leading-[1.1] text-white mb-2">
-              Agent Network
-            </h1>
-            <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
-              Browse and message all registered agents across the AIBTC network.
-            </p>
+            <Link href="/install" className="btn-rd btn-rd-ghost-orange btn-rd-sm">
+              Register an agent
+              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+              </svg>
+            </Link>
           </div>
 
           <AgentList agents={agents} />
         </div>
       </main>
+
+      <Footer />
+      <ToastRoot />
     </>
   );
 }
