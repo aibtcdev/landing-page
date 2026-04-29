@@ -289,64 +289,72 @@ export default function AgentList({ agents }: AgentListProps) {
         ))}
       </div>
 
-      {/* Filter bar */}
+      {/* Filter bar — single row on desktop, two stacked strips on mobile.
+          Mobile row 2 is horizontally scrollable so the (longer) sort Seg
+          never pushes past the viewport edge. */}
       <div
-        className="mb-5 flex flex-wrap gap-2.5 rounded-2xl border p-3"
+        className="mb-5 flex flex-col gap-2 rounded-2xl border p-3 max-md:p-2.5"
         style={{ borderColor: "var(--line)", background: "rgba(255,255,255,0.02)" }}
       >
-        {/* Search */}
-        <label
-          className="flex min-w-[200px] flex-1 items-center gap-2 rounded-[10px] border px-3"
-          style={{ background: "rgba(0,0,0,0.3)", borderColor: "var(--line-2)" }}
-        >
-          <svg
-            width="14"
-            height="14"
-            viewBox="0 0 24 24"
-            fill="none"
-            stroke="currentColor"
-            strokeWidth={2}
-            style={{ color: "var(--text-faint)" }}
-            aria-hidden
+        <div className="flex flex-wrap items-center gap-2.5">
+          {/* Search */}
+          <label
+            className="flex min-w-0 flex-1 items-center gap-2 rounded-[10px] border px-3"
+            style={{ background: "rgba(0,0,0,0.3)", borderColor: "var(--line-2)" }}
           >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-            />
-          </svg>
-          <input
-            type="text"
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            placeholder="Search agents by name, BNS, or address"
-            className="flex-1 bg-transparent text-[13px] outline-none"
-            style={{ color: "var(--text)" }}
-          />
-          {searchQuery && (
-            <button
-              type="button"
-              onClick={() => setSearchQuery("")}
-              className="text-white/30 transition-colors hover:text-white/60"
-              aria-label="Clear search"
+            <svg
+              width="14"
+              height="14"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth={2}
+              style={{ color: "var(--text-faint)" }}
+              aria-hidden
             >
-              <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          )}
-        </label>
+              <path
+                strokeLinecap="round"
+                strokeLinejoin="round"
+                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+              />
+            </svg>
+            <input
+              type="text"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              placeholder="Search agents by name, BNS, or address"
+              className="min-w-0 flex-1 bg-transparent py-2 text-[13px] outline-none"
+              style={{ color: "var(--text)" }}
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={() => setSearchQuery("")}
+                className="shrink-0 text-white/30 transition-colors hover:text-white/60"
+                aria-label="Clear search"
+              >
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            )}
+          </label>
+          {/* View toggle stays on row 1 — only 2 items, narrow */}
+          <Seg<typeof view>
+            value={view}
+            onChange={setView}
+            opts={[
+              ["grid", "▦"],
+              ["list", "≡"],
+            ] as const}
+          />
+        </div>
 
-        <Seg<typeof levelFilter> value={levelFilter} onChange={setLevelFilter} opts={LEVEL_FILTERS} />
-        <Seg<SortField> value={sortBy} onChange={setSortBy} opts={SORT_OPTS} />
-        <Seg<typeof view>
-          value={view}
-          onChange={setView}
-          opts={[
-            ["grid", "▦"],
-            ["list", "≡"],
-          ] as const}
-        />
+        {/* Level + Sort — wider segments. Horizontally scroll on mobile. */}
+        <div className="-mx-1 flex gap-2 overflow-x-auto px-1 max-md:flex-nowrap">
+          <Seg<typeof levelFilter> value={levelFilter} onChange={setLevelFilter} opts={LEVEL_FILTERS} />
+          <Seg<SortField> value={sortBy} onChange={setSortBy} opts={SORT_OPTS} />
+        </div>
       </div>
 
       <div
