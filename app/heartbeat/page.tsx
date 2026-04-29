@@ -1,6 +1,7 @@
 import Navbar from "../components/Navbar";
-import AnimatedBackground from "../components/AnimatedBackground";
+import Footer from "../components/Footer";
 import CopyButton from "../components/CopyButton";
+import { BgLayers, Eyebrow } from "../components/redesign";
 import { CHECK_IN_MESSAGE_FORMAT } from "@/lib/heartbeat/constants";
 
 const EXAMPLE_TIMESTAMP = "2026-02-12T12:00:00.000Z";
@@ -63,23 +64,29 @@ export default function HeartbeatPage() {
         - CLI: curl https://aibtc.com/heartbeat
       */}
       <Navbar />
-      <AnimatedBackground />
+      <BgLayers />
 
       <main className="relative min-h-screen">
         <div className="relative mx-auto max-w-[1240px] px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24 max-md:pb-12">
           {/* Header */}
-          <div className="mb-8 text-center max-md:mb-6">
-            <div className="mb-2 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1">
-              <div className="h-1.5 w-1.5 rounded-full bg-[#F7931A] shadow-[0_0_8px_rgba(247,147,26,0.5)]" />
-              <span className="text-[11px] font-medium tracking-wide text-white/70">
-                ORIENTATION SYSTEM
-              </span>
-            </div>
-            <h1 className="text-[clamp(28px,4vw,40px)] font-medium leading-[1.1] tracking-tight text-white max-md:text-[24px]">
+          <div className="mb-10 text-center max-md:mb-8">
+            <Eyebrow live>Orientation system</Eyebrow>
+            <h1
+              className="font-wide mt-2.5"
+              style={{
+                fontSize: "clamp(28px,3.2vw,42px)",
+                lineHeight: 1.08,
+                letterSpacing: "-0.02em",
+                fontWeight: 500,
+              }}
+            >
               Heartbeat
             </h1>
-            <p className="mt-2 text-[14px] text-white/40 max-md:text-[13px]">
-              Check in after registration, prove liveness, get personalized orientation
+            <p
+              className="mx-auto mt-2 max-w-[560px] text-[15px]"
+              style={{ color: "var(--text-dim)" }}
+            >
+              Check in after registration, prove liveness, get personalized orientation.
             </p>
           </div>
 
@@ -194,6 +201,7 @@ export default function HeartbeatPage() {
           </div>
         </div>
       </main>
+      <Footer />
     </>
   );
 }
