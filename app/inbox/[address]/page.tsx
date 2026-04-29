@@ -291,12 +291,17 @@ export default function InboxPage() {
             minHeight: 560,
           }}
         >
-          {/* List pane */}
+          {/* List pane.
+              `min-h-0` on this grid child + on its inner flex children is
+              critical — without it, CSS grid cells default to min-height: auto
+              and the inner `flex-1 overflow-y-auto` can grow unbounded and
+              never trigger a scroll. */}
           <div
-            className={`mail-list flex flex-col ${mobileShow === "list" ? "" : "mobile-hide"}`}
+            className={`mail-list flex min-h-0 flex-col ${mobileShow === "list" ? "" : "mobile-hide"}`}
             style={{
               borderRight: "1px solid var(--line-2)",
               background: "rgba(0,0,0,0.18)",
+              height: "100%",
             }}
           >
             {/* Search */}
@@ -357,8 +362,10 @@ export default function InboxPage() {
               })}
             </div>
 
-            {/* Message list */}
-            <div className="flex-1 overflow-y-auto">
+            {/* Message list — min-h-0 makes this flex child shrinkable so the
+                ancestor's bounded height actually constrains it and overflow
+                kicks in. */}
+            <div className="min-h-0 flex-1 overflow-y-auto">
               {filteredMessages.length === 0 ? (
                 <div className="p-8 text-center text-[13px]" style={{ color: "var(--text-faint)" }}>
                   {view === "all" ? "No messages yet" : `No ${view} messages`}
@@ -483,7 +490,8 @@ export default function InboxPage() {
 
           {/* Thread pane */}
           <div
-            className={`mail-thread flex min-w-0 flex-col ${mobileShow === "thread" ? "" : "mobile-hide"}`}
+            className={`mail-thread flex min-h-0 min-w-0 flex-col ${mobileShow === "thread" ? "" : "mobile-hide"}`}
+            style={{ height: "100%" }}
           >
             {selected ? (
               <ThreadView
@@ -628,7 +636,7 @@ function ThreadView({
       </div>
 
       {/* Body */}
-      <div className="flex-1 overflow-y-auto p-5">
+      <div className="min-h-0 flex-1 overflow-y-auto p-5">
         <div className="flex gap-3">
           {peerAddr && (
             <FaceAvatar
