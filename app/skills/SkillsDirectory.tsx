@@ -330,7 +330,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
             value={query}
             onChange={(e) => setQuery(e.target.value)}
             placeholder="Search skills…"
-            className="flex-1 bg-transparent py-2.5 text-[13px] outline-none"
+            className="flex-1 rounded-sm bg-transparent py-2.5 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-white/30"
             style={{ color: "var(--text)" }}
           />
           {query ? (

@@ -339,7 +339,7 @@ export default function InboxPage() {
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   placeholder="Search messages"
-                  className="flex-1 bg-transparent py-2 text-[12px] outline-none"
+                  className="flex-1 rounded-sm bg-transparent py-2 text-[12px] outline-none focus-visible:ring-1 focus-visible:ring-white/30"
                   style={{ color: "var(--text)" }}
                 />
               </label>
