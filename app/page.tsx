@@ -4,7 +4,7 @@ import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
 import ActivityFeed from "./components/ActivityFeed";
 import Hero from "./components/home/Hero";
-import NetworkGraph from "./components/home/NetworkGraph";
+import NetworkGraph from "./components/home/NetworkGraphLazy";
 import Capabilities from "./components/home/Capabilities";
 import { BgLayers, ToastRoot, Eyebrow } from "./components/redesign";
 import { getCachedAgentList } from "@/lib/cache";
