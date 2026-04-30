@@ -12,7 +12,6 @@ import {
   type ActivityResponse,
   EVENT_CONFIG,
   DetailedEventRow,
-  StatsGrid,
 } from "../components/activity-shared";
 
 export default function ActivityPage() {
@@ -114,9 +113,33 @@ export default function ActivityPage() {
             </p>
           </div>
 
-          {/* Stats */}
-          <div className="mb-6">
-            <StatsGrid stats={data.stats} />
+          {/* Compact stat strip — replaces the bigger StatsGrid card pile */}
+          <div
+            className="mb-6 flex flex-wrap items-center gap-x-6 gap-y-2 rounded-xl border px-4 py-3"
+            style={{
+              borderColor: "var(--line)",
+              background: "rgba(255,255,255,0.02)",
+            }}
+          >
+            <FeedStat
+              label="Agents"
+              value={data.stats.totalAgents.toLocaleString()}
+            />
+            <FeedStat
+              label="Active"
+              value={data.stats.activeAgents.toLocaleString()}
+              color="#2ecc71"
+            />
+            <FeedStat
+              label="Messages"
+              value={data.stats.totalMessages.toLocaleString()}
+              color="var(--orange)"
+            />
+            <FeedStat
+              label="Sats moved"
+              value={data.stats.totalSatsTransacted.toLocaleString()}
+              color="var(--orange)"
+            />
           </div>
 
           {/* Live Feed */}
@@ -125,6 +148,38 @@ export default function ActivityPage() {
       </main>
       <Footer />
     </>
+  );
+}
+
+/** Single inline stat — same look as the badges on /agents/[address]. */
+function FeedStat({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color?: string;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span
+        className="text-[15px] tabular-nums"
+        style={{
+          fontFamily: "var(--mono)",
+          color: color ?? "var(--text)",
+          fontWeight: 500,
+        }}
+      >
+        {value}
+      </span>
+      <span
+        className="text-[11px] uppercase"
+        style={{ color: "var(--text-faint)", letterSpacing: "0.06em" }}
+      >
+        {label}
+      </span>
+    </span>
   );
 }
 
@@ -137,43 +192,54 @@ function FullFeed({ events }: { events: ActivityEvent[]; visibleCount: number })
   }
 
   return (
-    <div className="space-y-3">
-      {/* Event feed card */}
-      <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3">
-          <div className="flex items-center gap-2.5">
-            <span className="relative flex size-2">
-              <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-              <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-            </span>
-            <span className="text-[13px] font-medium text-white/60">
-              Recent Activity
-            </span>
+    <div>
+      <div
+        className="overflow-hidden rounded-2xl border"
+        style={{
+          borderColor: "var(--line)",
+          background: "rgba(255,255,255,0.02)",
+        }}
+      >
+        {/* Card header */}
+        <div
+          className="flex items-center justify-between px-4 py-3"
+          style={{ borderBottom: "1px solid var(--line-2)" }}
+        >
+          <div className="flex items-center gap-2 text-[12px]" style={{ fontFamily: "var(--mono)" }}>
+            <span className="status-dot" />
+            <span style={{ color: "var(--text-dim)" }}>Recent activity</span>
           </div>
-
-          {/* Event counts */}
-          <div className="flex items-center gap-3 max-md:hidden">
+          <div className="flex items-center gap-3 text-[10.5px] max-md:hidden" style={{ fontFamily: "var(--mono)", color: "var(--text-faint)" }}>
             {(["message", "achievement", "registration"] as const).map((type) => {
               const config = EVENT_CONFIG[type];
               const count = counts[config.label];
               if (!count) return null;
+              const dotColor =
+                type === "message"
+                  ? "var(--orange)"
+                  : type === "achievement"
+                    ? "var(--blue)"
+                    : "#2ecc71";
               return (
-                <div key={type} className="flex items-center gap-1.5">
-                  <div className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />
-                  <span className="text-[11px] text-white/30">
-                    {count} {config.label}{count !== 1 ? "s" : ""}
-                  </span>
-                </div>
+                <span key={type} className="inline-flex items-center gap-1.5">
+                  <span className="size-1.5 rounded-full" style={{ background: dotColor }} />
+                  {count} {config.label}
+                  {count !== 1 ? "s" : ""}
+                </span>
               );
             })}
           </div>
         </div>
 
-        {/* Event list */}
-        <div className="divide-y divide-white/[0.04]">
+        {/* Event rows */}
+        <div style={{ borderTop: "1px solid var(--line-2)" }}>
           {events.map((event, i) => (
-            <DetailedEventRow key={`${event.type}-${event.timestamp}-${i}`} event={event} />
+            <div
+              key={`${event.type}-${event.timestamp}-${i}`}
+              style={{ borderTop: i === 0 ? "none" : "1px solid var(--line-2)" }}
+            >
+              <DetailedEventRow event={event} />
+            </div>
           ))}
         </div>
       </div>
