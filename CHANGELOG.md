@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.40.2](https://github.com/aibtcdev/landing-page/compare/v1.40.1...v1.40.2) (2026-04-30)
+
+
+### Bug Fixes
+
+* **stacks-api:** warn on monthly quota only, drop per-window noise ([#639](https://github.com/aibtcdev/landing-page/issues/639)) ([005f81d](https://github.com/aibtcdev/landing-page/commit/005f81d2220d873336bf92745d16d99c2a50ed0a))
+
 ## [1.40.1](https://github.com/aibtcdev/landing-page/compare/v1.40.0...v1.40.1) (2026-04-30)
 
 
