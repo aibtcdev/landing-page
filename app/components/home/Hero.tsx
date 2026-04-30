@@ -172,9 +172,11 @@ function ClaudeConsole() {
         </span>
       </div>
 
-      {/* Body */}
+      {/* Body — fixed height so the terminal doesn't grow as steps drip
+          in (which would shift everything below it on the page). Overflow
+          is hidden in the worst case; the staged content is sized to fit. */}
       <div
-        className="min-h-[360px] p-5 leading-[1.85]"
+        className="h-[400px] overflow-hidden p-5 leading-[1.85]"
         style={{ fontSize: 13, color: "var(--text-dim)" }}
       >
         {/* Stage 1 — shell prompt: $ claude */}
