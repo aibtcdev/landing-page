@@ -323,7 +323,7 @@ export default function AgentList({ agents }: AgentListProps) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Search agents by name, BNS, or address"
-              className="min-w-0 flex-1 bg-transparent py-2 text-[13px] outline-none"
+              className="min-w-0 flex-1 rounded-sm bg-transparent py-2 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-white/30"
               style={{ color: "var(--text)" }}
             />
             {searchQuery && (
