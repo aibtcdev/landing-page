@@ -488,13 +488,32 @@ section.sec { padding: var(--pad-section) 0; position: relative; }
   animation: orbit-spin-glow 4s ease-in-out infinite;
 }
 
-/* Accessibility */
+/* Accessibility — honor prefers-reduced-motion */
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
   }
+  /*
+    Explicit overrides for the animations that use animation-delay
+    + animation-fill-mode: forwards. The universal rule above only
+    shortens the duration; without these resets, an animation-delay
+    (e.g. [animation-delay:0.3s] on stat rows) would still leave the
+    element invisible until the delay fires. Force them on instantly.
+  */
+  .animate-fadeUp,
+  .animate-glowPulse,
+  .animate-feedSettle,
+  .animate-slideIn,
+  .animate-fadeIn,
+  .feed-item-enter {
+    animation: none !important;
+    opacity: 1 !important;
+    transform: none !important;
+  }
+  /* Stop the typing/blinking cursor too — it's a busy infinite animation. */
+  .typing::after { animation: none !important; opacity: 1 !important; }
 }
 
 /* Hide scrollbar */
