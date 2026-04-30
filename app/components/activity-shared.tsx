@@ -73,182 +73,179 @@ export const EVENT_CONFIG: Record<
   },
 };
 
+/* ----------------------------------------------------------------
+ * Shared row helpers — clean Ticker aesthetic shared by both compact
+ * (homepage feed) and detailed (/activity page) variants.
+ * ---------------------------------------------------------------- */
+
+interface RenderedEvent {
+  /** The face avatar to show — recipient for messages, otherwise the actor. */
+  avatarAddress: string;
+  /** Action text: bold mono name + verb + orange target (no "sats" pill). */
+  description: React.ReactNode;
+  /** Optional sats pill rendered next to the timestamp on the right. */
+  satsLabel?: string;
+  /** Where the row links to. */
+  href: string;
+}
+
+function renderEvent(event: ActivityEvent): RenderedEvent {
+  switch (event.type) {
+    case "message": {
+      const sats =
+        event.paymentSatoshis != null
+          ? `+${event.paymentSatoshis.toLocaleString()} sats`
+          : undefined;
+      if (event.recipient) {
+        return {
+          avatarAddress: event.recipient.btcAddress,
+          description: (
+            <>
+              <b className="font-mono font-medium text-white">{event.agent.displayName}</b>{" "}
+              <span style={{ color: "var(--text-dim)" }}>messaged</span>{" "}
+              <span style={{ color: "var(--orange)" }}>{event.recipient.displayName}</span>
+            </>
+          ),
+          satsLabel: sats,
+          href: `/inbox/${event.recipient.btcAddress}`,
+        };
+      }
+      return {
+        avatarAddress: event.agent.btcAddress,
+        description: (
+          <>
+            <b className="font-mono font-medium text-white">{event.agent.displayName}</b>{" "}
+            <span style={{ color: "var(--text-dim)" }}>sent a message</span>
+          </>
+        ),
+        satsLabel: sats,
+        href: `/agents/${event.agent.btcAddress}`,
+      };
+    }
+    case "achievement":
+      return {
+        avatarAddress: event.agent.btcAddress,
+        description: (
+          <>
+            <b className="font-mono font-medium text-white">{event.agent.displayName}</b>{" "}
+            <span style={{ color: "var(--text-dim)" }}>earned</span>{" "}
+            <span style={{ color: "var(--blue)" }}>{event.achievementName}</span>
+          </>
+        ),
+        href: `/agents/${event.agent.btcAddress}`,
+      };
+    case "registration":
+      return {
+        avatarAddress: event.agent.btcAddress,
+        description: (
+          <>
+            <b className="font-mono font-medium text-white">{event.agent.displayName}</b>{" "}
+            <span style={{ color: "var(--text-dim)" }}>joined the registry</span>
+          </>
+        ),
+        href: `/agents/${event.agent.btcAddress}`,
+      };
+  }
+}
+
+function ActivityFace({
+  btcAddress,
+  size,
+}: {
+  btcAddress: string;
+  size: number;
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(btcAddress)}`}
+      alt=""
+      width={size}
+      height={size}
+      loading="lazy"
+      onError={(e) => {
+        e.currentTarget.style.visibility = "hidden";
+      }}
+      className="shrink-0 rounded-full bg-white/[0.06]"
+      style={{ width: size, height: size, border: "1px solid rgba(255,255,255,0.08)" }}
+    />
+  );
+}
+
 /**
- * Compact event row for the homepage feed widget.
- * Avatar + prose description, optimized for the small ticker frame.
+ * Compact event row for the homepage live-activity widget.
+ * Tight ticker layout: 26px face + bold mono name + action + tiny time.
  */
 export function CompactEventRow({ event }: { event: ActivityEvent }) {
-  const recipientAddr = event.recipient?.btcAddress ?? event.agent.btcAddress;
-
-  let description: React.ReactNode;
-
-  switch (event.type) {
-    case "message":
-      description = event.recipient ? (
-        <>
-          <span className="font-semibold text-white">{event.recipient.displayName}</span>
-          <span className="text-white/50"> received </span>
-          {event.paymentSatoshis != null && (
-            <span className="font-semibold text-[#F7931A]">{event.paymentSatoshis.toLocaleString()} sats</span>
-          )}
-          <span className="text-white/50"> from </span>
-          <span className="font-semibold text-white">{event.agent.displayName}</span>
-        </>
-      ) : (
-        <>
-          <span className="font-semibold text-white">{event.agent.displayName}</span>
-          <span className="text-white/50"> sent a message</span>
-        </>
-      );
-      break;
-
-    case "achievement":
-      description = (
-        <>
-          <span className="font-semibold text-white">{event.agent.displayName}</span>
-          <span className="text-white/50"> earned </span>
-          <span className="font-semibold text-[#7DA2FF]">{event.achievementName}</span>
-        </>
-      );
-      break;
-
-    case "registration":
-      description = (
-        <>
-          <span className="font-semibold text-white">{event.agent.displayName}</span>
-          <span className="text-white/50"> joined the registry</span>
-        </>
-      );
-      break;
-
-    default:
-      description = "Unknown event";
-  }
-
-  // Link target based on event type
-  const href = event.type === "message" && event.recipient
-    ? `/inbox/${event.recipient.btcAddress}`
-    : `/agents/${event.agent.btcAddress}`;
-
+  const r = renderEvent(event);
   return (
-    <Link href={href} className="flex items-center gap-2.5 max-md:gap-2 px-3 max-md:px-2.5 py-2 transition-all duration-300 hover:bg-white/[0.03]" onClick={(e) => e.stopPropagation()}>
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientAddr)}`}
-        alt=""
-        className="size-8 max-md:size-7 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
-        loading="lazy"
-        width="32"
-        height="32"
-        onError={(e) => {
-          e.currentTarget.style.display = "none";
-        }}
-      />
-      <div className="min-w-0 truncate text-[12px] max-md:text-[11px] leading-snug text-white/60">
-        {description}
+    <Link
+      href={r.href}
+      className="flex items-center gap-2.5 px-3 py-2 transition-colors hover:bg-white/[0.03]"
+      onClick={(e) => e.stopPropagation()}
+    >
+      <ActivityFace btcAddress={r.avatarAddress} size={26} />
+      <div className="min-w-0 flex-1 truncate text-[12.5px] leading-tight">
+        {r.description}
       </div>
+      {r.satsLabel && (
+        <span
+          className="shrink-0 text-[10px]"
+          style={{ color: "var(--orange)", opacity: 0.85 }}
+        >
+          {r.satsLabel}
+        </span>
+      )}
+      <span
+        className="shrink-0 text-[10px]"
+        style={{ color: "var(--text-faint)" }}
+      >
+        {formatRelativeTime(event.timestamp)}
+      </span>
     </Link>
   );
 }
 
 /**
- * Detailed event row for the full activity page — larger avatar, prose description,
- * message preview, and timestamp. Matches production style.
+ * Detailed event row for the /activity page — same clean Ticker style
+ * as CompactEventRow but with a larger face, optional message preview
+ * line below, and a timestamp on the right.
  */
 export function DetailedEventRow({ event }: { event: ActivityEvent }) {
-  const relativeTime = formatRelativeTime(event.timestamp);
-
-  // For messages, the recipient is the one who "received" sats
-  const recipientAddr = event.recipient?.btcAddress ?? event.agent.btcAddress;
-
-  let description: React.ReactNode;
-
-  switch (event.type) {
-    case "message":
-      description = event.recipient ? (
-        <>
-          <Link href={`/agents/${event.recipient.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.recipient.displayName}</Link>
-          <span className="text-white/60"> received </span>
-          {event.paymentSatoshis != null && (
-            <span className="font-bold text-[#F7931A]">{event.paymentSatoshis.toLocaleString()} sats</span>
-          )}
-          <span className="text-white/60"> from </span>
-          <Link href={`/agents/${event.agent.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
-        </>
-      ) : (
-        <>
-          <Link href={`/agents/${event.agent.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
-          <span className="text-white/60"> sent a message</span>
-          {event.paymentSatoshis != null && (
-            <>
-              <span className="text-white/60"> for </span>
-              <span className="font-bold text-[#F7931A]">{event.paymentSatoshis.toLocaleString()} sats</span>
-            </>
-          )}
-        </>
-      );
-      break;
-
-    case "achievement":
-      description = (
-        <>
-          <Link href={`/agents/${event.agent.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
-          <span className="text-white/60"> earned </span>
-          <span className="font-bold text-[#7DA2FF]">{event.achievementName}</span>
-        </>
-      );
-      break;
-
-    case "registration":
-      description = (
-        <>
-          <Link href={`/agents/${event.agent.btcAddress}`} onClick={(e) => e.stopPropagation()} className="font-bold text-white hover:text-[#F7931A] transition-colors">{event.agent.displayName}</Link>
-          <span className="text-white/60"> joined the registry</span>
-        </>
-      );
-      break;
-
-    default:
-      description = "Unknown event";
-  }
-
-  // Link target based on event type
-  const href = event.type === "message" && event.recipient
-    ? `/inbox/${event.recipient.btcAddress}`
-    : `/agents/${event.agent.btcAddress}`;
-
+  const r = renderEvent(event);
   return (
-    <Link href={href} className="group/row flex items-center gap-4 max-md:gap-2.5 px-5 py-4 max-md:px-3.5 max-md:py-2.5 transition-all duration-300 hover:bg-white/[0.03]">
-      {/* Agent avatar */}
-      {/* eslint-disable-next-line @next/next/no-img-element */}
-      <img
-        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientAddr)}`}
-        alt=""
-        className="size-12 max-md:size-8 shrink-0 rounded-full border border-white/[0.08] bg-white/[0.06]"
-        loading="lazy"
-        width="48"
-        height="48"
-        onError={(e) => {
-          e.currentTarget.style.display = "none";
-        }}
-      />
-
-      {/* Description + preview (preview hidden on mobile) */}
+    <Link
+      href={r.href}
+      className="flex items-center gap-3.5 px-4 py-3 transition-colors hover:bg-white/[0.03] max-md:gap-2.5 max-md:px-3 max-md:py-2.5"
+    >
+      <ActivityFace btcAddress={r.avatarAddress} size={32} />
       <div className="min-w-0 flex-1">
-        <div className="text-[15px] max-md:text-[12px] leading-snug max-md:line-clamp-2 text-white/60">
-          {description}
+        <div className="truncate text-[13.5px] leading-tight max-md:text-[12.5px]">
+          {r.description}
         </div>
         {event.messagePreview && (
-          <div className="truncate text-[13px] text-white/30 mt-1 max-md:hidden">
+          <div
+            className="mt-1 truncate text-[12px] max-md:hidden"
+            style={{ color: "var(--text-faint)" }}
+          >
             {event.messagePreview}
           </div>
         )}
       </div>
-
-      {/* Timestamp */}
-      <div className="shrink-0 whitespace-nowrap text-right text-[13px] max-md:text-[11px] tabular-nums text-white/25 group-hover/row:text-white/35 transition-colors">
-        {relativeTime}
-      </div>
+      {r.satsLabel && (
+        <span
+          className="shrink-0 text-[11px]"
+          style={{ color: "var(--orange)", opacity: 0.85 }}
+        >
+          {r.satsLabel}
+        </span>
+      )}
+      <span
+        className="shrink-0 whitespace-nowrap text-right text-[11px] tabular-nums"
+        style={{ color: "var(--text-faint)" }}
+      >
+        {formatRelativeTime(event.timestamp)}
+      </span>
     </Link>
   );
 }
