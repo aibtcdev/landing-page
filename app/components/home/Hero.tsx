@@ -49,35 +49,88 @@ function Stat({ num, label }: { num: string; label: string }) {
   );
 }
 
-/**
- * Animated terminal that simulates a user opening Claude Code, typing
- * "register with aibtc.com", and then watching the AIBTC MCP server
- * install + register the agent on-chain.
- */
-function ClaudeConsole() {
-  const [typed, setTyped] = useState("");
-  const [visibleSteps, setVisibleSteps] = useState(0);
-  const typingDone = typed.length >= REGISTER_PROMPT.length;
+type ConsoleStage = "shell" | "welcome" | "prompt" | "response" | "done";
 
-  // Stage 1: type the prompt char-by-char.
+/** Type a string char-by-char into a state setter. Resolves when complete. */
+function useTypingEffect(
+  text: string,
+  active: boolean,
+  speedMs = 60,
+): { typed: string; done: boolean } {
+  const [typed, setTyped] = useState("");
   useEffect(() => {
+    if (!active) return;
     let i = 0;
+    setTyped("");
     const id = setInterval(() => {
       i += 1;
-      setTyped(REGISTER_PROMPT.slice(0, i));
-      if (i >= REGISTER_PROMPT.length) clearInterval(id);
-    }, 60);
+      setTyped(text.slice(0, i));
+      if (i >= text.length) clearInterval(id);
+    }, speedMs);
     return () => clearInterval(id);
-  }, []);
+  }, [text, active, speedMs]);
+  return { typed, done: typed.length >= text.length };
+}
 
-  // Stage 2: once the prompt is typed, drip in the response steps.
+/**
+ * Animated terminal that mirrors the actual Claude Code CLI flow:
+ *
+ *   Stage 1 (shell):    user types `claude` at the shell prompt
+ *   Stage 2 (welcome):  Claude welcome banner appears
+ *   Stage 3 (prompt):   user types `register with aibtc.com` into Claude
+ *   Stage 4 (response): Claude installs MCP server + registers the agent
+ */
+function ClaudeConsole() {
+  const [stage, setStage] = useState<ConsoleStage>("shell");
+  const [visibleSteps, setVisibleSteps] = useState(0);
+
+  // Stage 1: type "claude" at the shell prompt.
+  const claudeCmd = useTypingEffect("claude", stage === "shell", 75);
+
+  // Brief pause after `claude` types, then "press Enter" → welcome banner.
   useEffect(() => {
-    if (!typingDone) return;
+    if (stage === "shell" && claudeCmd.done) {
+      const t = setTimeout(() => setStage("welcome"), 500);
+      return () => clearTimeout(t);
+    }
+  }, [stage, claudeCmd.done]);
+
+  // Show the welcome banner for ~1s, then surface the > prompt.
+  useEffect(() => {
+    if (stage === "welcome") {
+      const t = setTimeout(() => setStage("prompt"), 1000);
+      return () => clearTimeout(t);
+    }
+  }, [stage]);
+
+  // Stage 3: type the register-with-aibtc.com prompt into Claude.
+  const promptInput = useTypingEffect(REGISTER_PROMPT, stage === "prompt", 60);
+
+  // Brief pause after prompt finishes, then start dripping response.
+  useEffect(() => {
+    if (stage === "prompt" && promptInput.done) {
+      const t = setTimeout(() => setStage("response"), 350);
+      return () => clearTimeout(t);
+    }
+  }, [stage, promptInput.done]);
+
+  // Stage 4: drip in the response steps.
+  useEffect(() => {
+    if (stage !== "response") return;
     const timers = CONSOLE_STEPS.map((s, i) =>
-      setTimeout(() => setVisibleSteps(i + 1), s.ms),
+      setTimeout(() => {
+        setVisibleSteps(i + 1);
+        if (i === CONSOLE_STEPS.length - 1) {
+          setTimeout(() => setStage("done"), 600);
+        }
+      }, s.ms),
     );
     return () => timers.forEach(clearTimeout);
-  }, [typingDone]);
+  }, [stage]);
+
+  const showWelcome = stage !== "shell";
+  const showClaudePrompt = stage === "prompt" || stage === "response" || stage === "done";
+  const showResponse = stage === "response" || stage === "done";
 
   return (
     <div
@@ -90,7 +143,7 @@ function ClaudeConsole() {
         backdropFilter: "blur(20px)",
       }}
     >
-      {/* Window chrome — three traffic-light dots + a "claude" tab title. */}
+      {/* Window chrome — three traffic-light dots + a tab title. */}
       <div
         className="flex items-center gap-2 px-3.5 py-3"
         style={{ borderBottom: "1px solid var(--line-2)" }}
@@ -101,13 +154,10 @@ function ClaudeConsole() {
           <span className="size-2.5 rounded-full" style={{ background: "rgba(39,201,63,0.5)" }} />
         </div>
         <div
-          className="flex flex-1 items-center justify-center gap-1.5 text-[11px]"
+          className="flex-1 text-center text-[11px]"
           style={{ color: "var(--text-faint)" }}
         >
-          <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2.2} aria-hidden>
-            <path strokeLinecap="round" strokeLinejoin="round" d="M8 9l3 3-3 3M13 15h3" />
-          </svg>
-          claude
+          ~/agent · zsh
         </div>
         <span
           className="rounded px-1.5 py-px text-[9px] uppercase"
@@ -124,55 +174,87 @@ function ClaudeConsole() {
 
       {/* Body */}
       <div
-        className="min-h-[300px] p-5 leading-[1.85]"
+        className="min-h-[360px] p-5 leading-[1.85]"
         style={{ fontSize: 13, color: "var(--text-dim)" }}
       >
-        {/* User prompt — a chevron prefix, then the typed text + cursor. */}
+        {/* Stage 1 — shell prompt: $ claude */}
         <div className="flex items-start gap-2">
-          <span
-            className="mt-0.5 shrink-0"
-            style={{ color: "rgba(247,147,26,0.55)" }}
-            aria-hidden
-          >
-            ›
+          <span className="shrink-0" style={{ color: "rgba(247,147,26,0.55)" }} aria-hidden>
+            $
           </span>
           <span style={{ color: "var(--text)" }}>
-            <span>{typed}</span>
-            {!typingDone && <span className="typing" />}
+            {claudeCmd.typed}
+            {stage === "shell" && !claudeCmd.done && <span className="typing" />}
           </span>
         </div>
 
-        {/* Spacer between prompt and response */}
-        {typingDone && (
+        {/* Stage 2 — Claude welcome banner */}
+        {showWelcome && (
+          <div
+            className="animate-fadeUp mt-3 rounded-md border px-3.5 py-2.5 opacity-0 [animation-delay:0.05s] [animation-duration:0.4s] [animation-fill-mode:forwards]"
+            style={{
+              borderColor: "rgba(247,147,26,0.25)",
+              background: "rgba(247,147,26,0.04)",
+            }}
+          >
+            <div className="flex items-center gap-2" style={{ color: "var(--orange)" }}>
+              <span aria-hidden>✻</span>
+              <span style={{ fontWeight: 500 }}>Welcome to Claude Code!</span>
+            </div>
+            <div className="mt-1" style={{ color: "var(--text-faint)", fontSize: 11.5 }}>
+              /help for help, /status for your current setup
+            </div>
+            <div className="mt-0.5" style={{ color: "var(--text-faint)", fontSize: 11.5 }}>
+              cwd: ~/agent
+            </div>
+          </div>
+        )}
+
+        {/* Stage 3 — Claude prompt (user types here) */}
+        {showClaudePrompt && (
+          <div
+            className="animate-fadeUp mt-3 flex items-start gap-2 opacity-0 [animation-duration:0.3s] [animation-fill-mode:forwards]"
+          >
+            <span className="shrink-0" style={{ color: "rgba(247,147,26,0.7)" }} aria-hidden>
+              ›
+            </span>
+            <span style={{ color: "var(--text)" }}>
+              {promptInput.typed}
+              {stage === "prompt" && !promptInput.done && <span className="typing" />}
+            </span>
+          </div>
+        )}
+
+        {/* Stage 4 — Claude responds */}
+        {showResponse && (
           <div
             className="my-3 h-px"
             style={{ background: "var(--line-2)" }}
             aria-hidden
           />
         )}
+        {showResponse &&
+          CONSOLE_STEPS.slice(0, visibleSteps).map((s, i) => (
+            <div
+              key={i}
+              className="animate-fadeUp opacity-0 [animation-fill-mode:forwards] [animation-duration:0.3s]"
+              style={{
+                color:
+                  s.status === "orange"
+                    ? "var(--orange)"
+                    : s.status === "dim"
+                      ? "var(--text-faint)"
+                      : "rgba(125,255,155,0.75)",
+              }}
+            >
+              {s.text}
+            </div>
+          ))}
 
-        {/* Response steps */}
-        {CONSOLE_STEPS.slice(0, visibleSteps).map((s, i) => (
-          <div
-            key={i}
-            className="animate-fadeUp opacity-0 [animation-fill-mode:forwards] [animation-duration:0.3s]"
-            style={{
-              color:
-                s.status === "orange"
-                  ? "var(--orange)"
-                  : s.status === "dim"
-                    ? "var(--text-faint)"
-                    : "rgba(125,255,155,0.75)",
-            }}
-          >
-            {s.text}
-          </div>
-        ))}
-
-        {/* Trailing cursor when everything has played out */}
-        {typingDone && visibleSteps >= CONSOLE_STEPS.length && (
+        {/* Idle cursor after everything plays out */}
+        {stage === "done" && (
           <div className="mt-3 flex items-center gap-2">
-            <span style={{ color: "rgba(247,147,26,0.55)" }} aria-hidden>
+            <span style={{ color: "rgba(247,147,26,0.7)" }} aria-hidden>
               ›
             </span>
             <span className="typing" />
