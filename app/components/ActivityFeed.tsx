@@ -252,43 +252,63 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const displaySats = stats.totalSatsTransacted - queuedStats.sats;
 
   return (
-    <div className="space-y-2">
-    <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] overflow-hidden transition-colors duration-200 hover:border-white/[0.12]">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3 max-md:px-4">
-        <div className="flex items-center gap-2.5">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-green-500" />
-          </span>
-          <span className="text-[13px] font-medium text-white/60">
-            Activity
-          </span>
-        </div>
-
-        <div className="flex items-center gap-3">
-          {/* Type legend — dots only, no labels (compact homepage widget) */}
-          <div className="flex items-center gap-2">
+    <div
+      className="overflow-hidden rounded-2xl border transition-colors duration-200 hover:border-white/15"
+      style={{
+        borderColor: "var(--line)",
+        background: "rgba(255,255,255,0.02)",
+      }}
+    >
+      {/* Header — slim mono strip with type-dots + "View all" */}
+      <div
+        className="flex items-center justify-between px-4 py-2.5 text-[11.5px]"
+        style={{
+          borderBottom: "1px solid var(--line-2)",
+          fontFamily: "var(--mono)",
+          color: "var(--text-dim)",
+        }}
+      >
+        <span className="inline-flex items-center gap-2">
+          <span className="status-dot" />
+          Recent activity
+        </span>
+        <span className="inline-flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5">
             {(["message", "achievement", "registration"] as const).map((type) => {
-              const config = EVENT_CONFIG[type];
+              const dot =
+                type === "message"
+                  ? "var(--orange)"
+                  : type === "achievement"
+                    ? "var(--blue)"
+                    : "#2ecc71";
               return (
-                <div key={type} className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />
+                <span
+                  key={type}
+                  className="size-1.5 rounded-full"
+                  style={{ background: dot }}
+                />
               );
             })}
-          </div>
+          </span>
           <Link
             href="/activity"
-            className="text-[11px] font-medium text-[#F7931A]/70 transition-colors hover:text-[#F7931A]"
+            className="text-[10.5px] transition-colors hover:text-[#F7931A]"
+            style={{ color: "rgba(247,147,26,0.7)" }}
           >
             View all →
           </Link>
-        </div>
+        </span>
       </div>
 
       {/* Event list — absolute positioned for smooth transitions */}
       <div
-        className="feed-container px-2 max-md:px-0 max-md:[--feed-row-h:40px]"
-        style={{ "--feed-row-h": "46px", height: `calc(var(--feed-row-h) * ${visibleCount})` } as React.CSSProperties}
+        className="feed-container max-md:[--feed-row-h:42px]"
+        style={
+          {
+            "--feed-row-h": "46px",
+            height: `calc(var(--feed-row-h) * ${visibleCount})`,
+          } as React.CSSProperties
+        }
       >
         {items.map((item, i) => (
           <div
@@ -303,18 +323,25 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
           </div>
         ))}
       </div>
-    </div>
 
-      {/* Paid messages stat — counts up to real total as events drip in */}
+      {/* Footer counter — converged on the real totals as events drip in */}
       {displayMessages > 0 && (
-        <div className="flex items-center justify-center gap-2 rounded-lg border border-[#F7931A]/15 bg-[#F7931A]/[0.04] px-4 py-2.5 max-md:px-3 max-md:py-2">
-          <svg className="size-4 max-md:size-3.5 shrink-0 text-[#F7931A]/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-          </svg>
-          <span className="text-[13px] max-md:text-[12px] text-white/50 truncate">
-            <span className="font-semibold text-white tabular-nums">{displayMessages.toLocaleString()}</span> paid messages
-            <span className="text-white/30"> &middot; </span>
-            <span className="font-semibold text-[#F7931A]/70 tabular-nums">{displaySats.toLocaleString()}</span> <span className="text-white/40">sats</span>
+        <div
+          className="flex items-center justify-between px-4 py-2.5 text-[11px]"
+          style={{
+            borderTop: "1px solid var(--line-2)",
+            fontFamily: "var(--mono)",
+            color: "var(--text-faint)",
+          }}
+        >
+          <span>
+            <span style={{ color: "var(--text)" }}>
+              {displayMessages.toLocaleString()}
+            </span>{" "}
+            paid messages
+          </span>
+          <span style={{ color: "var(--orange)" }}>
+            {displaySats.toLocaleString()} sats
           </span>
         </div>
       )}
