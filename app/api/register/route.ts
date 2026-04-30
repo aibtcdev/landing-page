@@ -717,11 +717,13 @@ export async function POST(request: NextRequest) {
       : createConsoleLogger({ rayId, path: "/api/register" });
 
     // BIP-322 wallets (bc1q/bc1p) don't expose the public key via signature recovery.
-    // Log a warning so operators can track agents with missing btcPublicKey.
-    // Registration is NOT blocked — BIP-322 agents register successfully with an empty publicKey.
+    // This is expected behavior, not an incident — registration completes
+    // normally with an empty publicKey. The remediation path (provide
+    // nostrPublicKey now, or update-pubkey via challenge later) is documented
+    // in the GET self-doc and surfaced in the response (#579).
     const btcPublicKeyMissing = !btcResult.publicKey;
     if (btcPublicKeyMissing) {
-      log.warn(
+      log.info(
         `btcPublicKey unavailable for address ${btcResult.address}: ` +
         "BIP-322 signatures do not expose the public key via recovery. " +
         "Nostr npub derivation from btcPublicKey will not work for this agent."
