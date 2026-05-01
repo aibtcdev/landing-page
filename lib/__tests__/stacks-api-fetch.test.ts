@@ -37,45 +37,15 @@ describe("stacksApiFetch logger telemetry", () => {
     mockFetch.mockClear();
   });
 
-  it("emits stacksApi.rate_limit_remaining on every parseable response", async () => {
-    const logger = createMockLogger();
-    mockFetch.mockResolvedValue({
-      ok: true,
-      status: 200,
-      url: "https://api.mainnet.hiro.so/v2/contracts/call-read/foo/bar/baz",
-      headers: mockHeaders({
-        "ratelimit-remaining": "123",
-        "ratelimit-limit": "500",
-        "ratelimit-reset": "42",
-      }),
-    });
-
-    await stacksApiFetch(
-      "https://api.mainnet.hiro.so/v2/contracts/call-read/foo/bar/baz",
-      {},
-      { logger }
-    );
-
-    const rlEvents = logger._events.filter(
-      (e) => e.message === "stacksApi.rate_limit_remaining"
-    );
-    expect(rlEvents).toHaveLength(1);
-    expect(rlEvents[0].context).toMatchObject({
-      path: "/v2/contracts/call-read/foo/bar/baz",
-      rlRemaining: 123,
-      rlLimit: 500,
-    });
-  });
-
-  it("emits stacksApi.approaching_rate_limit when remaining < 50", async () => {
+  it("emits stacksApi.approaching_monthly_quota when monthly remaining < 20% of limit", async () => {
     const logger = createMockLogger();
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
       url: "https://api.mainnet.hiro.so/extended/v1/tx/0xabc",
       headers: mockHeaders({
-        "ratelimit-remaining": "10",
-        "ratelimit-limit": "500",
+        "x-ratelimit-remaining-stacks-month": "20000",
+        "x-ratelimit-limit-stacks-month": "150000",
       }),
     });
 
@@ -86,23 +56,27 @@ describe("stacksApiFetch logger telemetry", () => {
     );
 
     const approaching = logger._events.filter(
-      (e) => e.message === "stacksApi.approaching_rate_limit"
+      (e) => e.message === "stacksApi.approaching_monthly_quota"
     );
     expect(approaching).toHaveLength(1);
     expect(approaching[0].level).toBe("warn");
     expect(approaching[0].context).toMatchObject({
-      rlRemaining: 10,
-      threshold: 50,
+      rlRemainingMonth: 20000,
+      rlLimitMonth: 150000,
+      threshold: 0.2,
     });
   });
 
-  it("does NOT emit approaching_rate_limit when remaining >= 50", async () => {
+  it("does NOT emit approaching_monthly_quota when monthly remaining >= 20% of limit", async () => {
     const logger = createMockLogger();
     mockFetch.mockResolvedValue({
       ok: true,
       status: 200,
       url: "https://api.mainnet.hiro.so/extended/v1/tx/0xabc",
-      headers: mockHeaders({ "ratelimit-remaining": "100" }),
+      headers: mockHeaders({
+        "x-ratelimit-remaining-stacks-month": "75000",
+        "x-ratelimit-limit-stacks-month": "150000",
+      }),
     });
 
     await stacksApiFetch(
@@ -112,7 +86,28 @@ describe("stacksApiFetch logger telemetry", () => {
     );
 
     const approaching = logger._events.filter(
-      (e) => e.message === "stacksApi.approaching_rate_limit"
+      (e) => e.message === "stacksApi.approaching_monthly_quota"
+    );
+    expect(approaching).toHaveLength(0);
+  });
+
+  it("does NOT emit approaching_monthly_quota when monthly headers are absent", async () => {
+    const logger = createMockLogger();
+    mockFetch.mockResolvedValue({
+      ok: true,
+      status: 200,
+      url: "https://api.mainnet.hiro.so/extended/v1/tx/0xabc",
+      headers: mockHeaders({ "ratelimit-remaining": "5" }),
+    });
+
+    await stacksApiFetch(
+      "https://api.mainnet.hiro.so/extended/v1/tx/0xabc",
+      {},
+      { logger }
+    );
+
+    const approaching = logger._events.filter(
+      (e) => e.message === "stacksApi.approaching_monthly_quota"
     );
     expect(approaching).toHaveLength(0);
   });
@@ -180,17 +175,19 @@ describe("stacksApiFetch logger telemetry", () => {
     expect(rateLimited?.context).toMatchObject({ cfRay: "abc123" });
   });
 
-  it("extractRateLimitInfo returns parsed fields even without logger", () => {
+  it("extractRateLimitInfo returns parsed monthly fields even without logger", () => {
     const response = {
       url: "https://api.mainnet.hiro.so/x",
       headers: mockHeaders({
-        "ratelimit-remaining": "42",
-        "ratelimit-limit": "500",
+        "x-ratelimit-remaining-stacks-month": "120000",
+        "x-ratelimit-limit-stacks-month": "150000",
+        "x-ratelimit-cost-stacks": "1",
       }),
     } as unknown as Response;
 
     const info = extractRateLimitInfo(response);
-    expect(info.remaining).toBe(42);
-    expect(info.limit).toBe(500);
+    expect(info.remainingMonth).toBe(120000);
+    expect(info.limitMonth).toBe(150000);
+    expect(info.costStacks).toBe(1);
   });
 });

@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.40.2](https://github.com/aibtcdev/landing-page/compare/v1.40.1...v1.40.2) (2026-04-30)
+
+
+### Bug Fixes
+
+* **stacks-api:** warn on monthly quota only, drop per-window noise ([#639](https://github.com/aibtcdev/landing-page/issues/639)) ([005f81d](https://github.com/aibtcdev/landing-page/commit/005f81d2220d873336bf92745d16d99c2a50ed0a))
+
+## [1.40.1](https://github.com/aibtcdev/landing-page/compare/v1.40.0...v1.40.1) (2026-04-30)
+
+
+### Bug Fixes
+
+* **register:** downgrade expected BIP-322 btcPublicKey-unavailable noise to info ([#640](https://github.com/aibtcdev/landing-page/issues/640)) ([88e1d07](https://github.com/aibtcdev/landing-page/commit/88e1d076ce90e170a9504922aabc03d5c61bb4c4))
+
 ## [1.40.0](https://github.com/aibtcdev/landing-page/compare/v1.39.1...v1.40.0) (2026-04-23)
 
 

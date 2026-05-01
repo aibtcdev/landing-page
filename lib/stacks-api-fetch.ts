@@ -66,40 +66,39 @@ export function detect429(
   return { isRateLimited };
 }
 
-/** Rate limit warning threshold — warn when remaining drops below this value. */
-const RATE_LIMIT_WARN_THRESHOLD = 50;
+/**
+ * Warn when monthly remaining drops below this fraction of the monthly limit.
+ * Percentage-based so it adapts to whichever plan tier the API key is on.
+ */
+const MONTHLY_QUOTA_WARN_FRACTION = 0.2;
 
-/** Parsed Hiro API rate limit headers from a response. */
+/** Parsed Hiro API monthly rate limit headers from a response. */
 export interface RateLimitInfo {
-  /** Remaining requests in the current window (ratelimit-remaining). */
-  remaining: number | null;
-  /** Total request budget for the current window (ratelimit-limit). */
-  limit: number | null;
-  /** Seconds until the current window resets (ratelimit-reset). */
-  reset: number | null;
-  /** Remaining per-minute request budget (x-ratelimit-remaining-stacks-minute). */
-  remainingMinute: number | null;
+  /** Remaining requests this month (x-ratelimit-remaining-stacks-month). */
+  remainingMonth: number | null;
+  /** Monthly request ceiling (x-ratelimit-limit-stacks-month). */
+  limitMonth: number | null;
   /** API cost units consumed by this request (x-ratelimit-cost-stacks). */
   costStacks: number | null;
 }
 
 /**
- * Extract Hiro API rate limit headers from a response.
+ * Extract Hiro API monthly quota headers from a response and warn when low.
  *
- * Reads ratelimit-remaining, ratelimit-limit, ratelimit-reset,
- * x-ratelimit-remaining-stacks-minute, and x-ratelimit-cost-stacks.
+ * Per-second / per-minute headers are intentionally ignored — short-window
+ * 429s are already absorbed by the retry logic in {@link stacksApiFetch}, so
+ * surfacing them as warns just creates noise. The monthly quota, by contrast,
+ * is the signal that actually requires action (plan upgrade or traffic shed).
  *
- * When a logger is provided, emits two structured events:
- * - `stacksApi.rate_limit_remaining` on every parseable response (for tracking
- *   how the remaining budget trends as cache hit rates rise).
- * - `stacksApi.approaching_rate_limit` (warn level) when remaining drops below
- *   RATE_LIMIT_WARN_THRESHOLD (50), so operators are alerted before key
- *   exhaustion.
+ * Emits `stacksApi.approaching_monthly_quota` (warn) when remaining drops
+ * below {@link MONTHLY_QUOTA_WARN_FRACTION} of the monthly limit. Once
+ * triggered it will fire on every subsequent call until the month rolls over;
+ * dedupe at the alerting layer if needed.
  *
  * @param response - The Response object from a Hiro API fetch
- * @param logger - Optional Logger for emitting rate-limit telemetry
+ * @param logger - Optional Logger for emitting the warn event
  * @param path - Optional precomputed pathname (avoids re-parsing response.url)
- * @returns Parsed rate limit fields (null for any header that is absent or unparseable)
+ * @returns Parsed monthly quota fields (null for any header absent or unparseable)
  */
 export function extractRateLimitInfo(
   response: Response,
@@ -113,35 +112,26 @@ export function extractRateLimitInfo(
     return isNaN(n) ? null : n;
   }
 
-  const remaining = parseIntHeader("ratelimit-remaining");
-  const limit = parseIntHeader("ratelimit-limit");
-  const reset = parseIntHeader("ratelimit-reset");
-  const remainingMinute = parseIntHeader("x-ratelimit-remaining-stacks-minute");
+  const remainingMonth = parseIntHeader("x-ratelimit-remaining-stacks-month");
+  const limitMonth = parseIntHeader("x-ratelimit-limit-stacks-month");
   const costStacks = parseIntHeader("x-ratelimit-cost-stacks");
 
-  if (logger && remaining !== null) {
-    const resolvedPath = path ?? extractPath(response.url);
-    logger.info("stacksApi.rate_limit_remaining", {
-      path: resolvedPath,
-      rlRemaining: remaining,
-      ...(limit !== null ? { rlLimit: limit } : {}),
-      ...(reset !== null ? { rlReset: reset } : {}),
-      ...(remainingMinute !== null ? { rlRemainingMinute: remainingMinute } : {}),
-      ...(costStacks !== null ? { rlCostStacks: costStacks } : {}),
+  if (
+    logger &&
+    remainingMonth !== null &&
+    limitMonth !== null &&
+    limitMonth > 0 &&
+    remainingMonth / limitMonth < MONTHLY_QUOTA_WARN_FRACTION
+  ) {
+    logger.warn("stacksApi.approaching_monthly_quota", {
+      path: path ?? extractPath(response.url),
+      rlRemainingMonth: remainingMonth,
+      rlLimitMonth: limitMonth,
+      threshold: MONTHLY_QUOTA_WARN_FRACTION,
     });
-
-    if (remaining < RATE_LIMIT_WARN_THRESHOLD) {
-      logger.warn("stacksApi.approaching_rate_limit", {
-        path: resolvedPath,
-        rlRemaining: remaining,
-        ...(limit !== null ? { rlLimit: limit } : {}),
-        ...(reset !== null ? { rlReset: reset } : {}),
-        threshold: RATE_LIMIT_WARN_THRESHOLD,
-      });
-    }
   }
 
-  return { remaining, limit, reset, remainingMinute, costStacks };
+  return { remainingMonth, limitMonth, costStacks };
 }
 
 /** Per-attempt fetch timeout in milliseconds. */
@@ -191,8 +181,8 @@ export interface StacksApiFetchConfig {
   retries429?: number;
   /**
    * Optional Logger; when provided, emits `stacksApi.*` telemetry events
-   * (rate_limit_remaining, approaching_rate_limit, retry_budget_exhausted,
-   * retrying). Silent when omitted — we do not fall back to `console.*`,
+   * (approaching_monthly_quota, retry_budget_exhausted, retrying). Silent
+   * when omitted — we do not fall back to `console.*`,
    * which would bypass the worker-logs pipeline.
    */
   logger?: Logger;
@@ -252,9 +242,9 @@ export async function stacksApiFetch(
     try {
       const response = await fetch(url, attemptOptions);
 
-      // Extract rate limit info on every response for observability (also emits
-      // stacksApi.rate_limit_remaining / approaching_rate_limit when logger present)
-      const rl = extractRateLimitInfo(response, logger, path);
+      // Side-effect only: emits stacksApi.approaching_monthly_quota when the
+      // logger is present and the monthly remaining drops below the threshold.
+      extractRateLimitInfo(response, logger, path);
 
       if (!isRetryableStatus(response.status)) {
         return response;
@@ -272,8 +262,6 @@ export async function stacksApiFetch(
             status: 429,
             attempts: retries429,
             budget: "429",
-            ...(rl.remaining !== null ? { rlRemaining: rl.remaining } : {}),
-            ...(rl.limit !== null ? { rlLimit: rl.limit } : {}),
           });
           return response;
         }
@@ -290,7 +278,6 @@ export async function stacksApiFetch(
           attempt: attempts429,
           maxAttempts: retries429,
           delayMs,
-          ...(rl.remaining !== null ? { rlRemaining: rl.remaining } : {}),
         });
         await sleep(delayMs);
       } else {
@@ -303,8 +290,6 @@ export async function stacksApiFetch(
             status: response.status,
             attempts: retries,
             budget: "5xx",
-            ...(rl.remaining !== null ? { rlRemaining: rl.remaining } : {}),
-            ...(rl.limit !== null ? { rlLimit: rl.limit } : {}),
           });
           return response;
         }
@@ -317,7 +302,6 @@ export async function stacksApiFetch(
           attempt: attempts5xx,
           maxAttempts: retries,
           delayMs,
-          ...(rl.remaining !== null ? { rlRemaining: rl.remaining } : {}),
         });
         await sleep(delayMs);
       }
