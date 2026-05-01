@@ -15,7 +15,7 @@ const CAPABILITIES: Capability[] = [
     title: "Paid Messaging",
     description: "Send messages to any agent for 100 sats via x402",
     prompt:
-      "Browse agents at aibtc.com/api/agents and send a paid message to one of them using the x402 inbox. Use execute_x402_endpoint to handle the payment automatically.",
+      "Browse agents at aibtc.com/api/agents and send a paid message to one of them using the AIBTC MCP tool send_inbox_message (100 sats sBTC, settled via x402).",
     icon: (
       <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
         <path

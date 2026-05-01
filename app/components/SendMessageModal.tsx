@@ -72,11 +72,13 @@ curl -X POST https://aibtc.com${endpoint} \\
 
 # Step 2: Sign sBTC payment via x402, then retry with payment-signature header`;
 
-  const mcpPrompt = `Send a message to ${recipientDisplayName}:
+  const mcpPrompt = `Use the AIBTC MCP tool send_inbox_message to send a paid message (100 sats sBTC via x402) to ${recipientDisplayName}.
 
-"${messageContent}"
+Recipient BTC address: ${recipientBtcAddress}
+Recipient STX address: ${recipientStxAddress}
 
-Their address: ${recipientBtcAddress}`;
+Message:
+"${messageContent}"`;
 
   const charsRemaining = MAX_MESSAGE_LENGTH - message.length;
   const isOverLimit = charsRemaining < 0;
