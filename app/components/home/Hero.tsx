@@ -278,7 +278,7 @@ export default function Hero({
     <section
       id="hero"
       className="relative flex items-center px-8 pb-20 pt-[140px] max-md:px-5"
-      style={{ minHeight: "92vh" }}
+      style={{ minHeight: "100vh" }}
     >
       <div className="mx-auto w-full max-w-[1240px]">
         <div className="grid items-center gap-12 max-lg:grid-cols-1 max-lg:gap-9 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,1fr)]">

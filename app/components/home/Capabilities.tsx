@@ -104,12 +104,14 @@ const CAPABILITIES: Capability[] = [
 ];
 
 export default function Capabilities() {
-  const [expanded, setExpanded] = useState<number | null>(null);
+  const [copiedIdx, setCopiedIdx] = useState<number | null>(null);
 
-  const copyPrompt = async (prompt: string) => {
+  const copyPrompt = async (prompt: string, idx: number) => {
     try {
       await navigator.clipboard.writeText(prompt);
       showToast("Prompt copied");
+      setCopiedIdx(idx);
+      setTimeout(() => setCopiedIdx((cur) => (cur === idx ? null : cur)), 1200);
     } catch {
       // ignore
     }
@@ -120,111 +122,74 @@ export default function Capabilities() {
       <div className="mx-auto w-full max-w-[1240px]">
         <div className="sec-head">
           <h2>Agent Superpowers</h2>
-          <p>Every registered agent gains these capabilities.</p>
+          <p>Click any card to copy the prompt for your agent.</p>
         </div>
 
-        <div
-          className="caps-grid mx-auto grid gap-3.5"
-          style={{
-            gridTemplateColumns: "repeat(3, 1fr)",
-            maxWidth: 1040,
-          }}
-        >
+        <div className="caps-grid mx-auto grid gap-5 max-md:gap-4" style={{ gridTemplateColumns: "repeat(3, 1fr)" }}>
           {CAPABILITIES.map((u, i) => {
-            const open = expanded === i;
+            const copied = copiedIdx === i;
             return (
-              <div
+              <button
                 key={u.title}
-                className="card-rd cursor-pointer"
+                type="button"
+                onClick={() => copyPrompt(u.prompt, i)}
+                className="group flex flex-col rounded-2xl border p-7 text-left transition-all hover:-translate-y-0.5 max-md:p-5"
                 style={{
-                  borderColor: open ? "rgba(247,147,26,0.35)" : "var(--line)",
-                  background: open
-                    ? "rgba(247,147,26,0.04)"
-                    : "rgba(255,255,255,0.02)",
+                  borderColor: copied ? "rgba(247,147,26,0.5)" : "var(--line)",
+                  background: copied ? "rgba(247,147,26,0.06)" : "rgba(255,255,255,0.02)",
+                  minHeight: 260,
                 }}
-                onClick={() => setExpanded(open ? null : i)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" || e.key === " ") {
-                    e.preventDefault();
-                    setExpanded(open ? null : i);
-                  }
-                }}
-                role="button"
-                tabIndex={0}
-                aria-expanded={open}
+                aria-label={`Copy prompt for ${u.title}`}
               >
-                <div className="flex items-start gap-3.5">
-                  <div
-                    className="flex size-10 shrink-0 items-center justify-center rounded-[10px] border"
-                    style={{
-                      borderColor: "var(--line)",
-                      background: "rgba(255,255,255,0.02)",
-                      color: open ? "var(--orange)" : "rgba(247,147,26,0.6)",
-                    }}
-                  >
-                    <span className="block size-[18px]">{u.icon}</span>
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <div className="text-[14px] font-medium mb-0.5">
-                      {u.title}
-                    </div>
-                    <div
-                      className="text-[12px] leading-[1.5]"
-                      style={{ color: "var(--text-faint)" }}
-                    >
-                      {u.description}
-                    </div>
-                  </div>
+                <div
+                  className="mb-5 flex size-12 items-center justify-center rounded-xl border transition-colors group-hover:border-[#F7931A]/40"
+                  style={{
+                    borderColor: "var(--line)",
+                    background: "rgba(255,255,255,0.02)",
+                    color: copied ? "var(--orange)" : "rgba(247,147,26,0.7)",
+                  }}
+                >
+                  <span className="block size-[22px]">{u.icon}</span>
+                </div>
+
+                <div className="text-[17px] font-medium leading-tight">{u.title}</div>
+                <p
+                  className="mt-1.5 text-[13px] leading-[1.55]"
+                  style={{ color: "var(--text-faint)" }}
+                >
+                  {u.description}
+                </p>
+
+                <div className="flex-1" />
+
+                <div
+                  className="mt-5 flex items-center justify-between border-t pt-3.5 text-[11px]"
+                  style={{ borderColor: "var(--line-2)", color: copied ? "var(--orange)" : "var(--text-faint)" }}
+                >
+                  <span style={{ fontFamily: "var(--mono)" }}>
+                    {copied ? "Copied" : "Click to copy prompt"}
+                  </span>
                   <svg
                     width="14"
                     height="14"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth={2}
-                    style={{
-                      color: "var(--text-faint)",
-                      transform: open ? "rotate(180deg)" : "rotate(0)",
-                      transition: "transform 200ms",
-                    }}
+                    strokeWidth={1.8}
                     aria-hidden
                   >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M19 9l-7 7-7-7"
-                    />
+                    {copied ? (
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
+                    ) : (
+                      <path
+                        strokeLinecap="round"
+                        strokeLinejoin="round"
+                        d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-2M8 5a2 2 0 002 2h4a2 2 0 002-2M8 5a2 2 0 012-2h4a2 2 0 012 2m0 0h2a2 2 0 012 2v3"
+                      />
+                    )}
                   </svg>
                 </div>
-                {open && (
-                  <div
-                    className="mt-3.5 animate-fadeUp pt-3.5"
-                    style={{ borderTop: "1px solid var(--line-2)" }}
-                  >
-                    <div
-                      className="rounded-lg border p-3 text-[12px] leading-[1.6]"
-                      style={{
-                        borderColor: "var(--line-2)",
-                        background: "rgba(0,0,0,0.3)",
-                        color: "var(--text-dim)",
-                        fontFamily: "var(--mono)",
-                      }}
-                    >
-                      {u.prompt}
-                    </div>
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        copyPrompt(u.prompt);
-                      }}
-                      className="btn-rd btn-rd-sm btn-rd-ghost-orange mt-2.5"
-                    >
-                      Copy prompt
-                    </button>
-                  </div>
-                )}
-              </div>
+              </button>
             );
           })}
         </div>

@@ -268,7 +268,17 @@
 }
 
 /* section spacing */
-section.sec { padding: var(--pad-section) 0; position: relative; }
+section.sec {
+  padding: var(--pad-section) 0;
+  position: relative;
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+@media (max-width: 768px) {
+  section.sec { min-height: auto; }
+}
 .sec-head { text-align: center; margin-bottom: 48px; }
 .sec-head h2 {
   font-family: 'Roc Grotesk Wide', 'Roc Grotesk', system-ui, sans-serif;
