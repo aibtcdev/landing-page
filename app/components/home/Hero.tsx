@@ -277,16 +277,16 @@ export default function Hero({
   return (
     <section
       id="hero"
-      className="sec relative flex items-center px-8 pb-20 pt-[140px] max-md:px-5"
+      className="relative flex items-center px-8 pb-20 pt-[140px] max-md:px-5"
       style={{ minHeight: "92vh" }}
     >
       <div className="mx-auto w-full max-w-[1240px]">
         <div className="grid items-center gap-12 max-lg:grid-cols-1 max-lg:gap-9 lg:grid-cols-[minmax(0,1.15fr)_minmax(360px,1fr)]">
           <div>
             <h1
-              className="font-wide animate-fadeUp text-[clamp(32px,4.5vw,64px)] opacity-0 [animation-delay:0.14s] [animation-fill-mode:forwards] max-md:text-[36px] max-md:leading-[1.15]"
+              className="font-wide animate-fadeUp text-[clamp(28px,2.8vw,42px)] opacity-0 [animation-delay:0.14s] [animation-fill-mode:forwards] max-md:text-[30px] max-md:leading-[1.15]"
               style={{
-                lineHeight: 1.08,
+                lineHeight: 1.1,
                 letterSpacing: "-0.02em",
                 margin: "0 0 24px",
                 fontWeight: 500,
