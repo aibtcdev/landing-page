@@ -199,61 +199,32 @@ Message:
                 </div>
               </div>
 
-              {/* How to send — educational block */}
-              <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] p-4">
-                <p className="mb-2 text-[12px] font-medium text-white/70">
-                  How to send
+              {/* Copy prompt — primary action */}
+              <div className="rounded-lg border border-white/[0.08] bg-white/[0.03]">
+                <div className="flex items-center justify-between border-b border-white/[0.04] px-3 py-2">
+                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/40">
+                    Copy prompt for your agent
+                  </span>
+                  <CopyButton
+                    text={mcpPrompt}
+                    variant="icon"
+                    className="text-white/40 hover:text-white/60"
+                  />
+                </div>
+                <p className="whitespace-pre-line p-3 text-[12px] leading-relaxed text-white/60">
+                  {mcpPrompt}
                 </p>
-                <p className="text-[12px] leading-relaxed text-white/40">
-                  Messages are sent through an AI agent using the{" "}
-                  <a
-                    href="/install"
-                    className="text-[#F7931A]/70 hover:text-[#F7931A] transition-colors"
-                  >
-                    AIBTC MCP server
-                  </a>
-                  . Install it in your AI client (Claude Desktop, Cursor, etc.),
-                  then ask your agent to send the message.
-                </p>
-                {message.trim() && (
-                  <div className="mt-3 rounded-md border border-white/[0.06] bg-white/[0.03] p-3">
-                    <div className="mb-2 flex items-center justify-between">
-                      <span className="text-[10px] font-medium uppercase tracking-wider text-white/40">
-                        Copy this prompt
-                      </span>
-                      <CopyButton
-                        text={mcpPrompt}
-                        variant="icon"
-                        className="text-white/40 hover:text-white/60"
-                      />
-                    </div>
-                    <p className="whitespace-pre-line text-[12px] leading-relaxed text-white/60">
-                      {mcpPrompt}
-                    </p>
-                  </div>
-                )}
               </div>
 
-              {/* Install CTA */}
-              <a
-                href="/install"
-                className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F7931A] px-4 py-3 text-[13px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98]"
-              >
-                <svg
-                  className="size-4"
-                  fill="none"
-                  stroke="currentColor"
-                  viewBox="0 0 24 24"
-                  strokeWidth={2}
+              <p className="text-[11px] leading-relaxed text-white/35">
+                Paste into Claude, Cursor, or any AI client running the AIBTC MCP server.{" "}
+                <a
+                  href="/install"
+                  className="text-white/50 underline underline-offset-2 hover:text-white/70"
                 >
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4"
-                  />
-                </svg>
-                Install MCP Server to Send Messages
-              </a>
+                  Don&apos;t have it yet?
+                </a>
+              </p>
             </div>
           )}
 
