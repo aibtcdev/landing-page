@@ -84,20 +84,12 @@ export default function NetworkGraph({
     // Ring radii + node radii scale with the canvas size so faces stay
     // legible on the larger homepage canvas. Mobile values are tighter
     // because the portrait viewBox has less horizontal headroom.
-    const r1 = isMobile
-      ? 160
-      : compact
-        ? 100
-        : size === "large"
-          ? 180
-          : 140;
-    const r2 = isMobile
-      ? 280
-      : compact
-        ? 150
-        : size === "large"
-          ? 280
-          : 220;
+    // Elliptical layout — wider on x than y so the graph fills the
+    // landscape canvas instead of leaving big empty gutters on the sides.
+    const rx1 = isMobile ? 160 : compact ? 100 : size === "large" ? 260 : 200;
+    const ry1 = isMobile ? 160 : compact ? 100 : size === "large" ? 150 : 120;
+    const rx2 = isMobile ? 280 : compact ? 150 : size === "large" ? 500 : 380;
+    const ry2 = isMobile ? 280 : compact ? 150 : size === "large" ? 240 : 200;
     const ring1Radius = isMobile ? 22 : size === "large" ? 18 : 14;
     const ring2Radius = isMobile ? 16 : size === "large" ? 13 : 10;
     // Core sits at the same size as inner-ring nodes so the graph reads as
@@ -109,8 +101,8 @@ export default function NetworkGraph({
       const real = realAgents[i];
       list.push({
         id: list.length,
-        x: cx + Math.cos(a) * r1,
-        y: cy + Math.sin(a) * r1,
+        x: cx + Math.cos(a) * rx1,
+        y: cy + Math.sin(a) * ry1,
         r: ring1Radius,
         name: real?.displayName || real?.btcAddress?.slice(0, 8) || FALLBACK_NAMES[i],
         btcAddress: real?.btcAddress,
@@ -121,8 +113,8 @@ export default function NetworkGraph({
       const real = realAgents[ring1 + i];
       list.push({
         id: list.length,
-        x: cx + Math.cos(a) * r2 * (0.9 + (i % 3) * 0.08),
-        y: cy + Math.sin(a) * r2 * (0.9 + (i % 2) * 0.1),
+        x: cx + Math.cos(a) * rx2 * (0.9 + (i % 3) * 0.08),
+        y: cy + Math.sin(a) * ry2 * (0.9 + (i % 2) * 0.1),
         r: ring2Radius,
         name: real?.displayName || real?.btcAddress?.slice(0, 8) || FALLBACK_NAMES[(i + 8) % FALLBACK_NAMES.length],
         btcAddress: real?.btcAddress,
@@ -131,15 +123,24 @@ export default function NetworkGraph({
     return list;
   }, [W, H, compact, size, isMobile, realAgents]);
 
+  // Edges now connect peer-to-peer (no spokes from the core) so the graph
+  // reads as a mesh network. Inner ring forms a loose chord pattern; outer
+  // nodes attach to two inner peers each.
   const edges = useMemo(() => {
     const list: Array<[number, number]> = [];
-    for (let i = 1; i <= 8; i++) list.push([0, i]);
+    // Inner ring: each node connects to the next two around the loop —
+    // creates a polygonal mesh without spoking back to a central hub.
     for (let i = 1; i <= 8; i++) {
-      const base = 9 + (((i - 1) * 2) % 14);
-      list.push([i, 9 + base % 14]);
-      list.push([i, 9 + ((base + 1) % 14)]);
+      list.push([i, 1 + (i % 8)]);
+      list.push([i, 1 + ((i + 1) % 8)]);
     }
-    for (let i = 1; i <= 8; i++) list.push([i, 1 + (i % 8)]);
+    // Outer ring nodes attach to two inner peers (offset so connections fan).
+    for (let i = 0; i < 14; i++) {
+      const inner = 1 + (i % 8);
+      const innerB = 1 + ((i + 3) % 8);
+      list.push([9 + i, inner]);
+      list.push([9 + i, innerB]);
+    }
     return list;
   }, []);
 
@@ -208,18 +209,6 @@ export default function NetworkGraph({
             </feMerge>
           </filter>
         </defs>
-
-        {[80, 160, 240, 320].map((r) => (
-          <circle
-            key={r}
-            cx={W / 2}
-            cy={H / 2}
-            r={r * (compact ? 0.7 : isMobile ? 1.15 : 1)}
-            fill="none"
-            stroke="rgba(255,255,255,0.03)"
-            strokeWidth="1"
-          />
-        ))}
 
         {edges.map((e, i) => {
           const a = nodes[e[0]];
