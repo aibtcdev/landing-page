@@ -20,16 +20,14 @@ export default function SendMessageModal({
   recipientDisplayName,
 }: SendMessageModalProps) {
   const [message, setMessage] = useState("");
-  const [activeTab, setActiveTab] = useState<"compose" | "api">("compose");
   const overlayRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  // Focus textarea on open
   useEffect(() => {
-    if (isOpen && activeTab === "compose") {
+    if (isOpen) {
       setTimeout(() => textareaRef.current?.focus(), 100);
     }
-  }, [isOpen, activeTab]);
+  }, [isOpen]);
 
   // Close on Escape
   const handleKeyDown = useCallback(
@@ -58,19 +56,7 @@ export default function SendMessageModal({
   if (!isOpen) return null;
 
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(recipientBtcAddress)}`;
-  const endpoint = `/api/inbox/${recipientBtcAddress}`;
   const messageContent = message.trim() || "Your message here";
-
-  const curlSnippet = `# Step 1: Send without payment (get 402 response with payment details)
-curl -X POST https://aibtc.com${endpoint} \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "toBtcAddress": "${recipientBtcAddress}",
-    "toStxAddress": "${recipientStxAddress}",
-    "content": "${messageContent.replace(/'/g, "\\'")}"
-  }'
-
-# Step 2: Sign sBTC payment via x402, then retry with payment-signature header`;
 
   const mcpPrompt = `Use the AIBTC MCP tool send_inbox_message to send a paid message (100 sats sBTC via x402) to ${recipientDisplayName}.
 
@@ -146,140 +132,57 @@ Message:
           </button>
         </div>
 
-        {/* Tabs */}
-        <div className="flex border-b border-white/[0.06]">
-          <button
-            onClick={() => setActiveTab("compose")}
-            className={`flex-1 px-4 py-2.5 text-[12px] font-medium transition-colors ${
-              activeTab === "compose"
-                ? "border-b-2 border-[#F7931A] text-white"
-                : "text-white/40 hover:text-white/60"
-            }`}
-          >
-            Compose
-          </button>
-          <button
-            onClick={() => setActiveTab("api")}
-            className={`flex-1 px-4 py-2.5 text-[12px] font-medium transition-colors ${
-              activeTab === "api"
-                ? "border-b-2 border-[#F7931A] text-white"
-                : "text-white/40 hover:text-white/60"
-            }`}
-          >
-            API / CLI
-          </button>
-        </div>
-
         {/* Body */}
-        <div className="p-5">
-          {activeTab === "compose" && (
-            <div className="space-y-4">
-              {/* Textarea */}
-              <div>
-                <textarea
-                  ref={textareaRef}
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Write your message..."
-                  rows={4}
-                  className="w-full resize-none rounded-lg border border-white/[0.08] bg-white/[0.03] px-3.5 py-3 text-[14px] leading-relaxed text-white placeholder:text-white/30 outline-none transition-colors focus:border-white/[0.15]"
-                />
-                <div className="mt-1.5 flex items-center justify-between">
-                  <span
-                    className={`text-[11px] ${
-                      isOverLimit
-                        ? "text-red-400"
-                        : charsRemaining < 50
-                          ? "text-[#F7931A]/70"
-                          : "text-white/30"
-                    }`}
-                  >
-                    {charsRemaining} characters remaining
-                  </span>
-                </div>
-              </div>
-
-              {/* Copy prompt — primary action */}
-              <div className="rounded-lg border border-white/[0.08] bg-white/[0.03]">
-                <div className="flex items-center justify-between border-b border-white/[0.04] px-3 py-2">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/40">
-                    Copy prompt for your agent
-                  </span>
-                  <CopyButton
-                    text={mcpPrompt}
-                    variant="icon"
-                    className="text-white/40 hover:text-white/60"
-                  />
-                </div>
-                <p className="whitespace-pre-line p-3 text-[12px] leading-relaxed text-white/60">
-                  {mcpPrompt}
-                </p>
-              </div>
-
-              <p className="text-[11px] leading-relaxed text-white/35">
-                Paste into Claude, Cursor, or any AI client running the AIBTC MCP server.{" "}
-                <a
-                  href="/install"
-                  className="text-white/50 underline underline-offset-2 hover:text-white/70"
-                >
-                  Don&apos;t have it yet?
-                </a>
-              </p>
+        <div className="space-y-4 p-5">
+          <div>
+            <textarea
+              ref={textareaRef}
+              value={message}
+              onChange={(e) => setMessage(e.target.value)}
+              placeholder="Write your message..."
+              rows={4}
+              className="w-full resize-none rounded-lg border border-white/[0.08] bg-white/[0.03] px-3.5 py-3 text-[14px] leading-relaxed text-white placeholder:text-white/30 outline-none transition-colors focus:border-white/[0.15]"
+            />
+            <div className="mt-1.5 flex items-center justify-between">
+              <span
+                className={`text-[11px] ${
+                  isOverLimit
+                    ? "text-red-400"
+                    : charsRemaining < 50
+                      ? "text-[#F7931A]/70"
+                      : "text-white/30"
+                }`}
+              >
+                {charsRemaining} characters remaining
+              </span>
             </div>
-          )}
+          </div>
 
-          {activeTab === "api" && (
-            <div className="space-y-4">
-              {/* Message input for API tab too */}
-              <div>
-                <label className="mb-1.5 block text-[11px] font-medium text-white/50">
-                  Message content
-                </label>
-                <textarea
-                  value={message}
-                  onChange={(e) => setMessage(e.target.value)}
-                  placeholder="Your message here"
-                  rows={2}
-                  className="w-full resize-none rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-[13px] leading-relaxed text-white placeholder:text-white/30 outline-none transition-colors focus:border-white/[0.15]"
-                />
-              </div>
-
-              {/* curl snippet */}
-              <div className="rounded-lg border border-white/[0.06] bg-white/[0.02]">
-                <div className="flex items-center justify-between border-b border-white/[0.04] px-3 py-2">
-                  <span className="text-[10px] font-medium uppercase tracking-wider text-white/40">
-                    x402 Payment Flow
-                  </span>
-                  <CopyButton
-                    text={curlSnippet}
-                    variant="icon"
-                    className="text-white/40 hover:text-white/60"
-                  />
-                </div>
-                <pre className="overflow-x-auto p-3 font-mono text-[11px] leading-relaxed text-white/60">
-                  {curlSnippet}
-                </pre>
-              </div>
-
-              {/* Documentation link */}
-              <div className="flex items-center justify-between rounded-lg border border-white/[0.06] bg-white/[0.02] px-4 py-3">
-                <div>
-                  <p className="text-[12px] font-medium text-white/70">
-                    Full documentation
-                  </p>
-                  <p className="text-[11px] text-white/40">
-                    Complete x402 payment flow with code examples
-                  </p>
-                </div>
-                <a
-                  href="/llms-full.txt"
-                  className="shrink-0 rounded-md bg-white/[0.06] px-3 py-1.5 text-[11px] font-medium text-white/60 transition-colors hover:bg-white/[0.1] hover:text-white"
-                >
-                  View docs
-                </a>
-              </div>
+          <div className="rounded-lg border border-white/[0.08] bg-white/[0.03]">
+            <div className="flex items-center justify-between border-b border-white/[0.04] px-3 py-2">
+              <span className="text-[10px] font-medium uppercase tracking-wider text-white/40">
+                Copy prompt for your agent
+              </span>
+              <CopyButton
+                text={mcpPrompt}
+                variant="icon"
+                className="text-white/40 hover:text-white/60"
+              />
             </div>
-          )}
+            <p className="whitespace-pre-line p-3 text-[12px] leading-relaxed text-white/60">
+              {mcpPrompt}
+            </p>
+          </div>
+
+          <p className="text-[11px] leading-relaxed text-white/35">
+            Paste into Claude, Cursor, or any AI client running the AIBTC MCP server.{" "}
+            <a
+              href="/install"
+              className="text-white/50 underline underline-offset-2 hover:text-white/70"
+            >
+              Don&apos;t have it yet?
+            </a>
+          </p>
         </div>
       </div>
     </div>
