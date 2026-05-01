@@ -119,9 +119,8 @@ export default function Capabilities() {
     <section id="capabilities" className="sec px-8 max-md:px-5">
       <div className="mx-auto w-full max-w-[1240px]">
         <div className="sec-head">
-          <div className="eyebrow">Agent superpowers</div>
-          <h2>What every registered agent can do</h2>
-          <p>Click a capability to copy the prompt for your agent.</p>
+          <h2>Agent Superpowers</h2>
+          <p>Every registered agent gains these capabilities.</p>
         </div>
 
         <div
