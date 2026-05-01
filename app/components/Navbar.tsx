@@ -13,7 +13,6 @@ const NAV_LINKS = [
   { href: "/bounty", label: "Bounties" },
   { href: "/skills", label: "Skills" },
   { href: "/guide", label: "Guide" },
-  { href: "/status", label: "Status" },
 ] as const;
 
 const SOCIAL_LINKS = [
