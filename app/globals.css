@@ -273,10 +273,11 @@ section.sec { padding: var(--pad-section) 0; position: relative; }
 .sec-head h2 {
   font-family: 'Roc Grotesk Wide', 'Roc Grotesk', system-ui, sans-serif;
   font-weight: 500;
-  font-size: clamp(28px, 3.2vw, 42px);
+  font-size: clamp(24px, 2.8vw, 38px);
   letter-spacing: -0.02em;
-  line-height: 1.1;
-  margin: 10px 0 12px;
+  line-height: 1.15;
+  margin: 10px auto 12px;
+  max-width: 720px;
 }
 .sec-head p {
   font-size: clamp(15px, 1.3vw, 17px);

@@ -190,14 +190,14 @@ export function CompactEventRow({ event }: { event: ActivityEvent }) {
       </div>
       {r.satsLabel && (
         <span
-          className="shrink-0 text-[10px]"
+          className="shrink-0 text-[11px] tabular-nums"
           style={{ color: "var(--orange)", opacity: 0.85 }}
         >
           {r.satsLabel}
         </span>
       )}
       <span
-        className="shrink-0 text-[10px]"
+        className="shrink-0 text-[11px] tabular-nums"
         style={{ color: "var(--text-faint)" }}
       >
         {formatRelativeTime(event.timestamp)}

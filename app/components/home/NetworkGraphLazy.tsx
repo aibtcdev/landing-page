@@ -20,12 +20,12 @@ const NetworkGraphInner = dynamic(() => import("./NetworkGraph"), {
   // section doesn't pop / shift content below it.
   loading: () => (
     <div
-      className="mx-auto max-w-[1280px] rounded-[20px] border"
+      className="mx-auto max-w-[1240px] rounded-[20px] border"
       style={{
         borderColor: "var(--line)",
         background:
           "radial-gradient(ellipse at center, rgba(247,147,26,0.06) 0%, transparent 60%), rgba(10,10,10,0.6)",
-        aspectRatio: "1280 / 600",
+        aspectRatio: "1240 / 600",
       }}
       aria-hidden
     />

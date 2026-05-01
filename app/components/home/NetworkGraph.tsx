@@ -58,7 +58,7 @@ export default function NetworkGraph({
   // "large" mode is used on the homepage hero — wider canvas, bigger nodes.
   // On mobile we override to a more square / portrait viewBox so the SVG
   // renders much taller for the same available width.
-  const W = isMobile ? 720 : size === "large" ? 1280 : 1040;
+  const W = isMobile ? 720 : size === "large" ? 1240 : 1040;
   const H = isMobile
     ? 800
     : compact
@@ -100,8 +100,9 @@ export default function NetworkGraph({
           : 220;
     const ring1Radius = isMobile ? 22 : size === "large" ? 18 : 14;
     const ring2Radius = isMobile ? 16 : size === "large" ? 13 : 10;
-    const coreRadius = isMobile ? 32 : size === "large" ? 28 : 22;
-    list[0].r = coreRadius;
+    // Core sits at the same size as inner-ring nodes so the graph reads as
+    // a peer network instead of a hub-and-spoke.
+    list[0].r = ring1Radius;
 
     for (let i = 0; i < ring1; i++) {
       const a = (i / ring1) * Math.PI * 2 - Math.PI / 2;
@@ -284,13 +285,6 @@ export default function NetworkGraph({
             const coreClipId = `${graphId}-core-clip`;
             return (
               <g key={n.id}>
-                {/* Outer glow rings (kept so the core still reads as
-                    the "hub" of the network). */}
-                <circle cx={n.x} cy={n.y} r={n.r + 10} fill="rgba(247,147,26,0.12)" />
-                <circle cx={n.x} cy={n.y} r={n.r + 4} fill="rgba(247,147,26,0.2)" />
-                {/* Real AIBTC mark — same icon shipped as the apple-touch
-                    icon. Clipped to the core circle, with an orange ring
-                    on top so it reads as the network hub. */}
                 <defs>
                   <clipPath id={coreClipId}>
                     <circle cx={n.x} cy={n.y} r={n.r} />
@@ -310,8 +304,8 @@ export default function NetworkGraph({
                   cy={n.y}
                   r={n.r}
                   fill="none"
-                  stroke="var(--orange)"
-                  strokeWidth="1.5"
+                  stroke="rgba(247,147,26,0.5)"
+                  strokeWidth="1"
                 />
               </g>
             );

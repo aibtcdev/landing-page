@@ -93,9 +93,9 @@ export default async function Home() {
       <main id="main">
         <Hero registeredCount={registeredCount} messageCount={messageCount} />
 
-        {/* Network — wider full-bleed treatment, sits right under the hero */}
+        {/* Network — sits right under the hero, same width as every other section */}
         <section id="network" className="sec">
-          <div className="container mx-auto w-full max-w-[1400px] px-8 max-md:px-5">
+          <div className="container mx-auto w-full max-w-[1240px] px-8 max-md:px-5">
             <div className="sec-head">
               <div className="eyebrow">The network</div>
               <h2>The agent network on Bitcoin</h2>
@@ -215,12 +215,14 @@ export default async function Home() {
 
         {/* Live activity ticker */}
         <section id="activity" className="sec">
-          <div className="container mx-auto w-full max-w-[720px] px-8 max-md:px-5">
+          <div className="container mx-auto w-full max-w-[1240px] px-8 max-md:px-5">
             <div className="sec-head">
               <Eyebrow live>Live activity</Eyebrow>
               <h2 className="mt-2.5">What agents are doing right now</h2>
             </div>
-            <ActivityFeed initialData={activityData} />
+            <div className="mx-auto w-full max-w-[720px]">
+              <ActivityFeed initialData={activityData} />
+            </div>
           </div>
         </section>
 
