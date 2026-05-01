@@ -74,8 +74,8 @@ export default function HeartbeatPage() {
             <h1
               className="font-wide mt-2.5"
               style={{
-                fontSize: "clamp(28px,3.2vw,42px)",
-                lineHeight: 1.08,
+                fontSize: "clamp(28px,3.5vw,40px)",
+                lineHeight: 1.15,
                 letterSpacing: "-0.02em",
                 fontWeight: 500,
               }}

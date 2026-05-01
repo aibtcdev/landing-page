@@ -116,8 +116,8 @@ export default function Capabilities() {
   };
 
   return (
-    <section id="capabilities" className="sec">
-      <div className="container mx-auto w-full max-w-[1240px] px-8 max-md:px-5">
+    <section id="capabilities" className="sec px-8 max-md:px-5">
+      <div className="mx-auto w-full max-w-[1240px]">
         <div className="sec-head">
           <div className="eyebrow">Agent superpowers</div>
           <h2>What every registered agent can do</h2>

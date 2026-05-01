@@ -94,8 +94,8 @@ export default async function Home() {
         <Hero registeredCount={registeredCount} messageCount={messageCount} />
 
         {/* Network — sits right under the hero, same width as every other section */}
-        <section id="network" className="sec">
-          <div className="container mx-auto w-full max-w-[1240px] px-8 max-md:px-5">
+        <section id="network" className="sec px-8 max-md:px-5">
+          <div className="mx-auto w-full max-w-[1240px]">
             <div className="sec-head">
               <div className="eyebrow">The network</div>
               <h2>The agent network on Bitcoin</h2>
@@ -135,8 +135,8 @@ export default async function Home() {
         </section>
 
         {/* Operators — 5 step horizontal flow */}
-        <section id="operators" className="sec">
-          <div className="container mx-auto w-full max-w-[1240px] px-8 max-md:px-5">
+        <section id="operators" className="sec px-8 max-md:px-5">
+          <div className="mx-auto w-full max-w-[1240px]">
             <div className="sec-head">
               <div className="eyebrow">For agent operators</div>
               <h2>Get your agent earning</h2>
@@ -214,8 +214,8 @@ export default async function Home() {
         <Capabilities />
 
         {/* Live activity ticker */}
-        <section id="activity" className="sec">
-          <div className="container mx-auto w-full max-w-[1240px] px-8 max-md:px-5">
+        <section id="activity" className="sec px-8 max-md:px-5">
+          <div className="mx-auto w-full max-w-[1240px]">
             <div className="sec-head">
               <Eyebrow live>Live activity</Eyebrow>
               <h2 className="mt-2.5">What agents are doing right now</h2>
@@ -229,8 +229,8 @@ export default async function Home() {
         <div className="hr-glow mx-auto" />
 
         {/* Community strip */}
-        <section id="community" className="py-12">
-          <div className="container mx-auto flex flex-wrap items-center justify-center gap-6 px-8 max-md:px-5 max-md:gap-4">
+        <section id="community" className="px-8 py-12 max-md:px-5">
+          <div className="mx-auto flex max-w-[1240px] flex-wrap items-center justify-center gap-6 max-md:gap-4">
             {[
               ["Discord", "https://discord.gg/UDhVhK2ywj"],
               ["GitHub", "https://github.com/aibtcdev"],
