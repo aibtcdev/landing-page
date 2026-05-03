@@ -186,3 +186,45 @@ export function createLogger(
       createLogger(logs, ctx, { ...baseContext, ...additionalContext }),
   };
 }
+
+/**
+ * Per-category sample rates for high-volume routine INFO events.
+ *
+ * 5%: cache observability is a sanity tool, not an audit log. Operators can
+ * raise to `1` (100%) temporarily while debugging an issue and roll back via
+ * deploy.
+ *
+ * Anything not listed here defaults to 100%.
+ */
+const SAMPLE_RATES: Record<string, number> = {
+  "cache.event": 0.05,
+};
+
+/**
+ * Deterministic sampling helper for high-volume routine INFO events.
+ *
+ * Returns whether the event should be emitted given the category's sample
+ * rate. Same `(category, key)` pair → same outcome → sampled streams stay
+ * coherent across deploys/replays. Hashing is FNV-1a 32-bit on the joined
+ * string; cheap and stable.
+ *
+ * WARN/ERROR/auth/payment-terminal events MUST NOT be sampled — those stay
+ * at 100% and don't go through this helper.
+ */
+export function samplingFor(
+  category: string,
+  key: string
+): { keep: boolean; rate: number } {
+  const rate = SAMPLE_RATES[category] ?? 1;
+  if (rate >= 1) return { keep: true, rate: 1 };
+  // FNV-1a 32-bit
+  let h = 0x811c9dc5;
+  const s = `${category}:${key}`;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  // unsigned >>> 0 maps int32 to uint32 so % 10000 is non-negative
+  const bucket = (h >>> 0) % 10000;
+  return { keep: bucket < Math.floor(rate * 10000), rate };
+}

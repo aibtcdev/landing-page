@@ -25,6 +25,7 @@
 
 import type { AgentIdentity } from "./types";
 import type { Logger } from "../logging";
+import { samplingFor } from "../logging";
 
 // Cache TTLs in seconds
 const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours (confirmed positive)
@@ -155,8 +156,17 @@ async function kvPut(
 
 /**
  * Emit a structured cache-hit/miss telemetry event via the logger.
- * No-op when logger is undefined (callers that don't thread a logger
- * simply skip telemetry rather than falling back to console).
+ *
+ * Cache events are sampled at 5% via {@link samplingFor} ("cache.event"
+ * category) — they're a sanity tool, not an audit log, and unsampled they
+ * dominate `aibtc-landing` worker-logs ingest. Sampling is deterministic on
+ * `(keyFamily, key)`, so the same address consistently appears or doesn't
+ * across deploys, which is enough for spot-checking. Operators can raise the
+ * rate to 1.0 in {@link SAMPLE_RATES} if a debugging session needs full
+ * visibility.
+ *
+ * No-op when logger is undefined (callers that don't thread a logger simply
+ * skip telemetry rather than falling back to console).
  */
 function logCacheEvent(
   logger: Logger | undefined,
@@ -166,8 +176,14 @@ function logCacheEvent(
   negative = false
 ): void {
   if (!logger) return;
+  const { keep, rate } = samplingFor("cache.event", `${keyFamily}:${key}`);
+  if (!keep) return;
   const payload: Record<string, unknown> = { keyFamily, key };
   if (negative) payload.negative = true;
+  if (rate < 1) {
+    payload.sampled = true;
+    payload.sample_rate = rate;
+  }
   logger.info(event, payload);
 }
 
