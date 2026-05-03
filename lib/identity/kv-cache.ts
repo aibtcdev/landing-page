@@ -162,8 +162,8 @@ async function kvPut(
  * dominate `aibtc-landing` worker-logs ingest. Sampling is deterministic on
  * `(keyFamily, key)`, so the same address consistently appears or doesn't
  * across deploys, which is enough for spot-checking. Operators can raise the
- * rate to 1.0 in {@link SAMPLE_RATES} if a debugging session needs full
- * visibility.
+ * rate to 1.0 in `SAMPLE_RATES` (see `lib/logging.ts`) if a debugging session
+ * needs full visibility.
  *
  * No-op when logger is undefined (callers that don't thread a logger simply
  * skip telemetry rather than falling back to console).

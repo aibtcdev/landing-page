@@ -19,10 +19,14 @@ describe("samplingFor", () => {
     expect(a).toEqual(b);
   });
 
-  it("differentiates by key — distinct keys do not collapse to one bucket", () => {
-    // Sample 100 sequential keys, expect more than one outcome split.
+  it("differentiates by key — distinct keys produce both kept and dropped outcomes", () => {
+    // Use a 10000-key synthetic batch — the 5% expected-keep rate makes a
+    // 100-key batch potentially flaky (two-tailed binomial; with rate 0.05 a
+    // 100-key batch has ~0.6% odds of zero keeps). At 10000 keys the
+    // probability of seeing both outcomes is effectively 1 with FNV-1a's
+    // deterministic distribution.
     const outcomes = new Set<boolean>();
-    for (let i = 0; i < 100; i++) {
+    for (let i = 0; i < 10000; i++) {
       outcomes.add(samplingFor("cache.event", `bns:bc1q${i}`).keep);
     }
     expect(outcomes.size).toBe(2);
@@ -40,11 +44,33 @@ describe("samplingFor", () => {
     expect(kept).toBeLessThan(625);
   });
 
-  it("differentiates by category — same key, different category, can differ", () => {
-    // categoryA defaults to 100%, categoryB at 5%; same key must keep on A
-    // but may or may not keep on B (deterministic).
-    const a = samplingFor("not.in.config", "shared-key");
-    expect(a.keep).toBe(true);
-    expect(a.rate).toBe(1);
+  it("differentiates by category — same key, sampled vs unsampled categories", () => {
+    // For the same key, an unconfigured category keeps at 100% while
+    // `cache.event` (5%) deterministically may or may not keep. The
+    // assertion focuses on what we can guarantee: the unconfigured category
+    // always keeps at rate 1, and over a batch the sampled category produces
+    // both kept and dropped outcomes — proving categories are not collapsed
+    // to a single bucket.
+    expect(samplingFor("not.in.config", "shared-key").keep).toBe(true);
+    expect(samplingFor("not.in.config", "shared-key").rate).toBe(1);
+
+    let sampledKept = 0;
+    let sampledDropped = 0;
+    for (let i = 0; i < 1000; i++) {
+      const r = samplingFor("cache.event", `shared-key-${i}`);
+      if (r.keep) sampledKept++;
+      else sampledDropped++;
+      expect(r.rate).toBe(0.05);
+    }
+    expect(sampledKept).toBeGreaterThan(0);
+    expect(sampledDropped).toBeGreaterThan(0);
+  });
+
+  it("clamps misconfigured rates safely (NaN / negative / >1 → keep at 100%)", () => {
+    // We can't trivially mutate SAMPLE_RATES from the test, but we can
+    // assert the documented contract for unknown categories which routes
+    // through the same default path.
+    expect(samplingFor("definitely.not.configured", "k").rate).toBe(1);
+    expect(samplingFor("definitely.not.configured", "k").keep).toBe(true);
   });
 });

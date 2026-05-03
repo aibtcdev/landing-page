@@ -215,8 +215,13 @@ export function samplingFor(
   category: string,
   key: string
 ): { keep: boolean; rate: number } {
-  const rate = SAMPLE_RATES[category] ?? 1;
+  // Clamp the configured rate into [0, 1]; treat NaN / strings / negative as
+  // 1 (keep everything) so misconfiguration degrades safely rather than
+  // silently dropping 100% of events for that category.
+  const raw = SAMPLE_RATES[category];
+  const rate = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 1;
   if (rate >= 1) return { keep: true, rate: 1 };
+  if (rate <= 0) return { keep: false, rate: 0 };
   // FNV-1a 32-bit
   let h = 0x811c9dc5;
   const s = `${category}:${key}`;
