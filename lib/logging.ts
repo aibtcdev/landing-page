@@ -215,11 +215,13 @@ export function samplingFor(
   category: string,
   key: string
 ): { keep: boolean; rate: number } {
-  // Clamp the configured rate into [0, 1]; treat NaN / strings / negative as
-  // 1 (keep everything) so misconfiguration degrades safely rather than
-  // silently dropping 100% of events for that category.
+  // Anything outside the inclusive [0, 1] range — NaN, strings, undefined,
+  // negative numbers, values >1 — is treated as misconfiguration and falls
+  // back to 1 (keep everything) so the surface degrades safely. A
+  // legitimately-configured rate of 0 still drops everything (use case:
+  // silence a category in code without removing the call site).
   const raw = SAMPLE_RATES[category];
-  const rate = Number.isFinite(raw) ? Math.max(0, Math.min(1, raw)) : 1;
+  const rate = Number.isFinite(raw) && raw >= 0 && raw <= 1 ? raw : 1;
   if (rate >= 1) return { keep: true, rate: 1 };
   if (rate <= 0) return { keep: false, rate: 0 };
   // FNV-1a 32-bit
