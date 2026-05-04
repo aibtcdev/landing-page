@@ -1116,7 +1116,11 @@ export async function POST(
       paymentResult.errorCode === "SENDER_NONCE_STALE" ||
       paymentResult.errorCode === "SENDER_NONCE_GAP";
     if (isExpectedNonceFailure) {
-      logger.warn("Payment rejected: sender nonce state (expected)", {
+      // Downgraded WARN→INFO: the message itself says "(expected)" — a sender
+      // nonce duplicate/stale/gap is normal traffic on x402 retries and was
+      // counted as an alarm metric without cause. See B3 in
+      // cloudflare-bill-reduction-tracker-2026-05.md.
+      logger.info("Payment rejected: sender nonce state (expected)", {
         errorCode: paymentResult.errorCode,
         retryAfterSeconds: paymentResult.retryAfterSeconds,
       });

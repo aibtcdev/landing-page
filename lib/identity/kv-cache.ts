@@ -25,6 +25,7 @@
 
 import type { AgentIdentity } from "./types";
 import type { Logger } from "../logging";
+import { samplingFor } from "../logging";
 
 // Cache TTLs in seconds
 const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours (confirmed positive)
@@ -155,8 +156,17 @@ async function kvPut(
 
 /**
  * Emit a structured cache-hit/miss telemetry event via the logger.
- * No-op when logger is undefined (callers that don't thread a logger
- * simply skip telemetry rather than falling back to console).
+ *
+ * Cache events are sampled at 5% via {@link samplingFor} ("cache.event"
+ * category) — they're a sanity tool, not an audit log, and unsampled they
+ * dominate `aibtc-landing` worker-logs ingest. Sampling is deterministic on
+ * `(keyFamily, key)`, so the same address consistently appears or doesn't
+ * across deploys, which is enough for spot-checking. Operators can raise the
+ * rate to 1.0 in `SAMPLE_RATES` (see `lib/logging.ts`) if a debugging session
+ * needs full visibility.
+ *
+ * No-op when logger is undefined (callers that don't thread a logger simply
+ * skip telemetry rather than falling back to console).
  */
 function logCacheEvent(
   logger: Logger | undefined,
@@ -166,8 +176,14 @@ function logCacheEvent(
   negative = false
 ): void {
   if (!logger) return;
+  const { keep, rate } = samplingFor("cache.event", `${keyFamily}:${key}`);
+  if (!keep) return;
   const payload: Record<string, unknown> = { keyFamily, key };
   if (negative) payload.negative = true;
+  if (rate < 1) {
+    payload.sampled = true;
+    payload.sample_rate = rate;
+  }
   logger.info(event, payload);
 }
 
@@ -484,6 +500,70 @@ export function setCachedTransaction(
     "tx",
     logger
   );
+}
+
+/**
+ * Short-TTL transient-failure marker for achievement-verify upstream calls.
+ *
+ * Each `verify*Achievement` helper hits an external API (mempool.space,
+ * Hiro, Unisat) under a 10s `AbortSignal.timeout`. On timeout the function
+ * previously logged + returned `false` without recording the failure, so the
+ * next call within the verify rate-limit window (5 min) re-fetched and
+ * re-timed-out. This sentinel cache short-circuits retries for a brief
+ * window so a flapping upstream stops generating one error log per call.
+ *
+ * Distinct from the data caches (tx/stacking): a hit here means "we just
+ * timed out talking to the upstream — return false without retrying"; data
+ * caches are unaffected.
+ */
+const VERIFY_TIMEOUT_CACHE_TTL = 60; // 60 seconds
+
+/**
+ * Returns true if a recent timeout has been recorded for this verify scope.
+ * Callers should short-circuit and return `false` from the verify function
+ * when this is true — the upstream is currently flapping.
+ */
+export async function isVerifyTimedOut(
+  scope: string,
+  key: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<boolean> {
+  if (!kv) return false;
+  const raw = await kvGet(
+    kv,
+    `cache:verify-timeout:${scope}:${key}`,
+    `verify-timeout:${scope}`,
+    logger
+  );
+  return raw !== null;
+}
+
+/**
+ * Record a transient timeout for a verify scope. Subsequent calls within
+ * {@link VERIFY_TIMEOUT_CACHE_TTL} short-circuit via {@link isVerifyTimedOut}.
+ */
+export async function setVerifyTimedOut(
+  scope: string,
+  key: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<void> {
+  return kvPut(
+    kv,
+    `cache:verify-timeout:${scope}:${key}`,
+    "1",
+    VERIFY_TIMEOUT_CACHE_TTL,
+    `verify-timeout:${scope}`,
+    logger
+  );
+}
+
+/** True when the error was thrown by an `AbortSignal.timeout(...)` deadline. */
+export function isTimeoutError(error: unknown): boolean {
+  if (!error || typeof error !== "object") return false;
+  const e = error as { name?: unknown; code?: unknown };
+  return e.name === "TimeoutError" || e.code === "ERR_ABORTED";
 }
 
 /** Minimal shape of a Hiro stacking response used by the stacker achievement. */

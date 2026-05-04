@@ -10,6 +10,9 @@ import {
   setCachedTransaction,
   getCachedStacking,
   setCachedStacking,
+  isVerifyTimedOut,
+  setVerifyTimedOut,
+  isTimeoutError,
 } from "@/lib/identity/kv-cache";
 import {
   buildHiroHeaders,
@@ -84,6 +87,12 @@ export async function verifySenderAchievement(
   kv: KVNamespace,
   logger?: Logger
 ): Promise<boolean> {
+  // Short-circuit if we recently timed out talking to mempool.space — avoids
+  // re-fetching and re-emitting the same error within the 5-min verify rate
+  // limit window.
+  if (await isVerifyTimedOut("sender", btcAddress, kv, logger)) {
+    return false;
+  }
   try {
     const cacheKey = `mempool-addr:${btcAddress}`;
     let txs = await getCachedTransaction(cacheKey, kv, logger);
@@ -119,6 +128,9 @@ export async function verifySenderAchievement(
 
     return hasOutgoingTx;
   } catch (error) {
+    if (isTimeoutError(error)) {
+      await setVerifyTimedOut("sender", btcAddress, kv, logger);
+    }
     logger?.error("achievement.sender.verify_error", {
       btcAddress,
       error: String(error),
@@ -147,6 +159,9 @@ export async function verifySbtcHolderAchievement(
   hiroApiKey?: string,
   logger?: Logger
 ): Promise<boolean> {
+  if (await isVerifyTimedOut("sbtc-holder", stxAddress, kv, logger)) {
+    return false;
+  }
   try {
     const cacheKey = `sbtc-balance:${stxAddress}`;
     let balanceData = await getCachedTransaction(cacheKey, kv, logger);
@@ -172,6 +187,9 @@ export async function verifySbtcHolderAchievement(
     const balance = (balanceData as { balance: string }).balance ?? "0";
     return balance !== "0" && balance !== "";
   } catch (error) {
+    if (isTimeoutError(error)) {
+      await setVerifyTimedOut("sbtc-holder", stxAddress, kv, logger);
+    }
     logger?.error("achievement.sbtc_holder.verify_error", {
       stxAddress,
       error: String(error),
@@ -197,6 +215,9 @@ export async function verifyStackerAchievement(
   hiroApiKey?: string,
   logger?: Logger
 ): Promise<boolean> {
+  if (await isVerifyTimedOut("stacker", stxAddress, kv, logger)) {
+    return false;
+  }
   try {
     let stackingData = await getCachedStacking(stxAddress, kv, logger);
 
@@ -228,6 +249,9 @@ export async function verifyStackerAchievement(
     const locked = stackingData.locked ?? "0";
     return locked !== "0" && locked !== "";
   } catch (error) {
+    if (isTimeoutError(error)) {
+      await setVerifyTimedOut("stacker", stxAddress, kv, logger);
+    }
     logger?.error("achievement.stacker.verify_error", {
       stxAddress,
       error: String(error),
@@ -373,6 +397,9 @@ export async function verifyInscriberAchievement(
   unisatApiKey?: string,
   logger?: Logger
 ): Promise<boolean> {
+  if (await isVerifyTimedOut("inscriber", inscriptionId, kv, logger)) {
+    return false;
+  }
   try {
     if (!INSCRIPTION_ID_RE.test(inscriptionId)) {
       logger?.error("achievement.inscriber.invalid_id", { inscriptionId });
@@ -417,6 +444,9 @@ export async function verifyInscriberAchievement(
 
     return inscriptionData.data.address === btcAddress;
   } catch (error) {
+    if (isTimeoutError(error)) {
+      await setVerifyTimedOut("inscriber", inscriptionId, kv, logger);
+    }
     logger?.error("achievement.inscriber.verify_error", {
       inscriptionId,
       error: String(error),
