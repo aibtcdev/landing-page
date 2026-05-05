@@ -17,7 +17,11 @@ import {
   setCachedIdentityLookupFailed,
 } from "@/lib/identity/kv-cache";
 import type { AgentIdentity } from "@/lib/identity/types";
-import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
+import { invalidateAgentsIndex } from "@/lib/agents-index";
+import {
+  lookupBtcAddressByBnsName,
+  syncBnsLookup,
+} from "@/lib/bns-reverse-index";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -36,24 +40,18 @@ async function resolveAgent(
   let agent = await lookupAgent(kv, address);
 
   // If not found and looks like a BNS name, route via the maintained
-  // agents:index — cuts ~430 KV reads per .btc request to ~2 (index
-  // + per-record fetch). Stale-index hits are filtered by validating
-  // the source-of-truth bnsName below.
+  // bns-lookup:{name} reverse index — 2 KV reads, no scan, no
+  // 130 KB index transfer. Stale-index hits are filtered by
+  // validating the source-of-truth bnsName below.
   if (!agent && address.endsWith(".btc")) {
     const target = address.toLowerCase();
-    const index = await getAgentsIndex(kv);
-    const entry = index.agents.find(
-      (e) => e.bnsName && e.bnsName.toLowerCase() === target
-    );
-    if (entry) {
-      const raw = await kv.get(`btc:${entry.btcAddress}`);
+    const btcAddress = await lookupBtcAddressByBnsName(kv, target);
+    if (btcAddress) {
+      const raw = await kv.get(`btc:${btcAddress}`);
       if (raw) {
         try {
           const record = JSON.parse(raw) as AgentRecord;
-          if (
-            record.bnsName &&
-            record.bnsName.toLowerCase() === target
-          ) {
+          if (record.bnsName && record.bnsName.toLowerCase() === target) {
             agent = record;
           }
         } catch {
@@ -70,12 +68,14 @@ async function resolveAgent(
     try {
       const bnsName = await lookupBnsName(agent.stxAddress, hiroApiKey, kv);
       if (bnsName) {
+        const previousBnsName = agent.bnsName ?? null;
         agent.bnsName = bnsName;
         const updated = JSON.stringify(agent);
         await Promise.all([
           kv.put(`stx:${agent.stxAddress}`, updated),
           kv.put(`btc:${agent.btcAddress}`, updated),
           invalidateAgentsIndex(kv),
+          syncBnsLookup(kv, previousBnsName, bnsName, agent.btcAddress),
         ]);
       }
     } catch {

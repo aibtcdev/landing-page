@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
+import { syncBnsLookup } from "@/lib/bns-reverse-index";
 import { lookupBnsNameWithOutcome } from "@/lib/bns";
 import { detectAgentIdentityWithOutcome } from "@/lib/identity/detection";
 import {
@@ -169,11 +170,19 @@ export async function POST(
         kv.put(`stx:${stxAddress}`, serialized),
         kv.put(`btc:${agent.btcAddress}`, serialized),
       ]);
-      // Invalidate agents:index only when bnsName actually changed —
-      // erc8004AgentId is not indexed, so an id-only refresh
-      // shouldn't trigger a rebuild.
+      // Maintain indices only when bnsName actually changed — id-
+      // only refreshes don't touch any indexed field.
       if (bnsChanged) {
-        await invalidateAgentsIndex(kv, logger);
+        await Promise.all([
+          invalidateAgentsIndex(kv, logger),
+          syncBnsLookup(
+            kv,
+            agent.bnsName ?? null,
+            nextBnsName,
+            agent.btcAddress,
+            logger,
+          ),
+        ]);
       }
       logger.info("identity.refresh_persisted_update", {
         stxAddress,

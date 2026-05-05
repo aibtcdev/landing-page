@@ -28,6 +28,7 @@ import {
   getAgentsIndex,
   type AgentIndexEntry,
 } from "@/lib/agents-index";
+import { lookupBtcAddressByBnsName } from "@/lib/bns-reverse-index";
 import {
   createLogger,
   createConsoleLogger,
@@ -357,12 +358,24 @@ export async function GET(
         }
       }
     } else if (identifierType === "bns") {
+      // BNS routes hit the dedicated reverse index — 2 KV reads,
+      // no scan over agents:index. The btc: re-fetch + bnsName
+      // re-validation guards against stale-index drift.
       const target = identifier.toLowerCase();
-      agent = await findAgentByIndex(
-        kv,
-        (e) => !!e.bnsName && e.bnsName.toLowerCase() === target,
-        (r) => !!r.bnsName && r.bnsName.toLowerCase() === target,
-      );
+      const btcAddress = await lookupBtcAddressByBnsName(kv, target);
+      if (btcAddress) {
+        const raw = await kv.get(`btc:${btcAddress}`);
+        if (raw) {
+          try {
+            const record = JSON.parse(raw) as AgentRecord;
+            if (record.bnsName && record.bnsName.toLowerCase() === target) {
+              agent = record;
+            }
+          } catch {
+            /* ignore */
+          }
+        }
+      }
     } else {
       const target = identifier.toLowerCase();
       agent = await findAgentByIndex(
