@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
+import { invalidateAgentsIndex } from "@/lib/agents-index";
 import {
   generateChallenge,
   storeChallenge,
@@ -404,8 +405,12 @@ export async function POST(request: NextRequest) {
 
     const levelInfo = getAgentLevel(updatedAgent, claim);
 
-    // Invalidate cached agent list (profile fields changed)
-    await invalidateAgentListCache(kv);
+    // Invalidate cached agent list and agents:index (profile fields
+    // changed). Both rebuild from source state on next read.
+    await Promise.all([
+      invalidateAgentListCache(kv),
+      invalidateAgentsIndex(kv),
+    ]);
 
     return NextResponse.json({
       success: true,

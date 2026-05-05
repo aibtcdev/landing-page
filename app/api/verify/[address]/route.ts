@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { getAgentLevel } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
+import { invalidateAgentsIndex } from "@/lib/agents-index";
 import { getCAIP19AgentId } from "@/lib/caip19";
 import {
   createLogger,
@@ -124,6 +125,7 @@ export async function GET(
       await Promise.all([
         kv.put(`stx:${agent.stxAddress}`, updated),
         kv.put(`btc:${agent.btcAddress}`, updated),
+        invalidateAgentsIndex(kv, logger),
       ]);
     }
 

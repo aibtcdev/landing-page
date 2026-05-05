@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
+import { invalidateAgentsIndex } from "@/lib/agents-index";
 import {
   publicKeyFromSignatureRsv,
   getAddressFromPublicKey,
@@ -836,6 +837,11 @@ export async function POST(request: NextRequest) {
     }
 
     await Promise.all(kvWrites);
+
+    // Invalidate agents:index so the next reader rebuilds it from
+    // source state and picks up the just-registered agent. Avoids the
+    // read-modify-write race a concurrent upsert would have.
+    await invalidateAgentsIndex(kv, log);
 
     // Store vouch record synchronously (not fire-and-forget) to enforce count limits
     if (validatedReferrer) {

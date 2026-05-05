@@ -25,6 +25,10 @@ import {
 } from "@/lib/identity";
 import { enrichAgentProfile } from "@/lib/agent-enrichment";
 import {
+  getAgentsIndex,
+  type AgentIndexEntry,
+} from "@/lib/agents-index";
+import {
   createLogger,
   createConsoleLogger,
   isLogsRPC,
@@ -109,42 +113,33 @@ async function resolveAgentIdToStxAddress(
 }
 
 /**
- * Scan all KV stx: keys to find an agent matching a predicate.
- * Used for BNS name and display name lookups.
+ * Find an agent via the maintained `agents:index`, using a slim
+ * predicate (the index carries btc/stx/taproot/bns/display/
+ * capabilities/verifiedAt — enough for BNS and display-name
+ * routing).
+ *
+ * On hit, the full AgentRecord is re-fetched from `btc:` and
+ * validated against the predicate to guard against stale index
+ * entries — drift heals on the next cold-miss rebuild.
  */
-async function findAgentByScan(
+async function findAgentByIndex(
   kv: KVNamespace,
-  predicate: (agent: AgentRecord) => boolean
+  predicate: (entry: AgentIndexEntry) => boolean,
+  validate: (record: AgentRecord) => boolean
 ): Promise<AgentRecord | null> {
-  let cursor: string | undefined;
-  let listComplete = false;
+  const index = await getAgentsIndex(kv);
+  const entry = index.agents.find(predicate);
+  if (!entry) return null;
 
-  while (!listComplete) {
-    const listResult = await kv.list({ prefix: "stx:", cursor });
-    listComplete = listResult.list_complete;
-    cursor = !listResult.list_complete ? listResult.cursor : undefined;
-
-    const values = await Promise.all(
-      listResult.keys.map(async (key) => {
-        const value = await kv.get(key.name);
-        if (!value) return null;
-        try {
-          return JSON.parse(value) as AgentRecord;
-        } catch (e) {
-          console.error(`Failed to parse agent record ${key.name}:`, e);
-          return null;
-        }
-      })
-    );
-
-    const match = values
-      .filter((v): v is AgentRecord => v !== null)
-      .find(predicate);
-
-    if (match) return match;
+  const value = await kv.get(`btc:${entry.btcAddress}`);
+  if (!value) return null;
+  let record: AgentRecord;
+  try {
+    record = JSON.parse(value) as AgentRecord;
+  } catch {
+    return null;
   }
-
-  return null;
+  return validate(record) ? record : null;
 }
 
 // ---------------------------------------------------------------------------
@@ -362,20 +357,18 @@ export async function GET(
         }
       }
     } else if (identifierType === "bns") {
-      // BNS: scan all agents and match bnsName (case-insensitive)
-      agent = await findAgentByScan(
+      const target = identifier.toLowerCase();
+      agent = await findAgentByIndex(
         kv,
-        (a) =>
-          !!a.bnsName &&
-          a.bnsName.toLowerCase() === identifier.toLowerCase()
+        (e) => !!e.bnsName && e.bnsName.toLowerCase() === target,
+        (r) => !!r.bnsName && r.bnsName.toLowerCase() === target,
       );
     } else {
-      // Display name: scan all agents and match displayName (case-insensitive)
-      agent = await findAgentByScan(
+      const target = identifier.toLowerCase();
+      agent = await findAgentByIndex(
         kv,
-        (a) =>
-          !!a.displayName &&
-          a.displayName.toLowerCase() === identifier.toLowerCase()
+        (e) => !!e.displayName && e.displayName.toLowerCase() === target,
+        (r) => !!r.displayName && r.displayName.toLowerCase() === target,
       );
     }
 

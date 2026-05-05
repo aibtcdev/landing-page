@@ -88,3 +88,93 @@ npm run typecheck
 npx vitest run lib/__tests__/sampling.test.ts \
               lib/achievements/__tests__/verify-timeout-cache.test.ts
 ```
+
+## B6: maintained agents:index — eliminate hot-path KV scans
+
+PR scope:
+- `lib/agents-index.ts`: new module. Single `agents:index` KV key holds a
+  slim `{btc, stx, taproot?, bnsName?, displayName?, capabilities?,
+  verifiedAt}` array. `getAgentsIndex(kv)` reads it; on cold miss it does
+  a one-shot `kv.list({prefix:"stx:"})` rebuild gated by a 60s sentinel.
+  `upsertAgentIndex(kv, agent)` and `removeAgentFromIndex(kv, btc)`
+  maintain it on write paths. Best-effort — drift heals on cold miss
+  and every hot-path consumer fetches the source-of-truth `btc:` record
+  before returning.
+- Hot paths replaced (each was `1 list + ~430 gets ≈ 431 reads/req`,
+  now `1 index read + 1 record read = 2 reads/req`):
+  - `app/api/agents/[address]/route.ts` `findAgentByBns`.
+  - `app/api/resolve/[identifier]/route.ts` `findAgentByScan` →
+    `findAgentByIndex`.
+  - `app/api/capabilities/route.ts` inline scan (no-filter case computes
+    counts from the index alone; filtered case fetches only the
+    paginated slice).
+  - `app/agents/[address]/page.tsx` SSR BNS fallback.
+  - `lib/cache/agent-list.ts` `rebuildAgentListCache` — index for the
+    address set, then per-record `btc:` fetch for the auxiliary fields
+    (claim/inbox/achievement reads unchanged).
+- Maintenance hooks added on every write path that mutates an index
+  field (`bnsName`, `displayName`, `taprootAddress`, `capabilities`):
+  register, challenge actions, delete-agent, identity refresh (only
+  when bns changed), verify lazy-refresh, agents/[address] lazy-refresh,
+  agents/[address] page lazy-refresh. Heartbeat/vouch/identity
+  agentId-only writes are skipped (no indexed field changes).
+
+Expected Cloudflare movement:
+- `VERIFIED_AGENTS` reads/day: pre-PR ~14.3 M (S0 verified
+  2026-05-05) → target `<5 M/day` over 7d.
+- Bill: -$5.30/day at $0.50/M after the 10M-free tier (gross
+  attribution `~$6.98/day` → `~$1.50-2.30/day` for VERIFIED_AGENTS).
+- No expected change to NewsDO, worker-logs DOs, or KV writes.
+
+Cloudflare metric to record:
+- GraphQL `kvOperationsAdaptiveGroups` for namespace
+  `f8aab2734e154953a50cabdb87083af3` (VERIFIED_AGENTS), `actionType:
+  read`, hourly. Pre-merge baseline = 24h pre, T+1.48h spot, 24h
+  closing.
+
+Dashboard fallback:
+- Cloudflare Workers & Pages → KV → `VERIFIED_AGENTS` → Metrics tab.
+
+Rollback signal:
+- BNS-name routing returns 404 for a known-good name on
+  `/api/agents/{name}.btc`, `/api/resolve/{name}.btc`, or
+  `/agents/{name}.btc` page render. Likeliest cause: stale or missing
+  `agents:index` after a write race. Mitigations: the validate-against-
+  source-record guard returns null rather than wrong data; cold-miss
+  rebuild heals within one read.
+- `/api/capabilities` returning a smaller-than-expected count. Same
+  cause; same mitigation.
+- `cache:agent-list` regression: snapshot has fewer agents than
+  `agents:index`. Surface: missing agents on `/agents` page. Cause: a
+  per-agent `btc:` fetch fails. Fix: re-trigger rebuild via
+  `invalidateAgentListCache` admin path.
+
+Maintenance backstop:
+- To force a full index rebuild: delete `agents:index` from the
+  `VERIFIED_AGENTS` namespace. Next read will scan and write a
+  fresh copy. The `agents:index:building` sentinel (60s TTL) is a
+  best-effort dogpile mitigation — KV is eventually consistent so
+  a duplicate rebuild can still happen across colos. Both writers
+  compute the same source state, so a duplicate is wasteful but
+  not incorrect.
+- Write paths use invalidate-on-write rather than upsert: every
+  register / profile update / delete-agent / lazy-BNS-refresh
+  deletes `agents:index` and lets the next reader rebuild from
+  source. Avoids the read-modify-write race a concurrent upsert
+  would have under KV's eventual-consistency model.
+- To inspect: `wrangler kv:key get "agents:index" --binding=VERIFIED_AGENTS
+  --remote` (JSON, ~130 KB at 430 agents).
+
+Size ceiling:
+- `agents:index` is ~250-300 bytes/agent. KV value cap 25 MB ≈ 80K
+  agent ceiling. Sharded layout (`agents:index:0`..`agents:index:N`)
+  is the migration path; not needed until well after 50K registered
+  agents.
+
+Local validation run for this change:
+
+```sh
+npx tsc --noEmit
+npm run lint
+npm run build
+```

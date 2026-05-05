@@ -17,6 +17,7 @@ import {
   setCachedIdentityLookupFailed,
 } from "@/lib/identity/kv-cache";
 import type { AgentIdentity } from "@/lib/identity/types";
+import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -34,29 +35,26 @@ async function resolveAgent(
   // Direct lookup by BTC or STX
   let agent = await lookupAgent(kv, address);
 
-  // If not found and looks like a BNS name, scan for it
+  // If not found and looks like a BNS name, route via the maintained
+  // agents:index — cuts ~430 KV reads per .btc request to ~2 (index
+  // + per-record fetch). Stale-index hits are filtered by validating
+  // the source-of-truth bnsName below.
   if (!agent && address.endsWith(".btc")) {
-    // Scan all agents looking for matching bnsName
-    let cursor: string | undefined;
-    let listComplete = false;
-    while (!listComplete && !agent) {
-      const listResult = await kv.list({ prefix: "stx:", cursor });
-      listComplete = listResult.list_complete;
-      cursor = !listResult.list_complete ? listResult.cursor : undefined;
-      const values = await Promise.all(
-        listResult.keys.map((key) => kv.get(key.name))
-      );
-      for (let i = 0; i < listResult.keys.length; i++) {
-        const value = values[i];
-        if (!value) continue;
+    const target = address.toLowerCase();
+    const index = await getAgentsIndex(kv);
+    const entry = index.agents.find(
+      (e) => e.bnsName && e.bnsName.toLowerCase() === target
+    );
+    if (entry) {
+      const raw = await kv.get(`btc:${entry.btcAddress}`);
+      if (raw) {
         try {
-          const record = JSON.parse(value) as AgentRecord;
+          const record = JSON.parse(raw) as AgentRecord;
           if (
             record.bnsName &&
-            record.bnsName.toLowerCase() === address.toLowerCase()
+            record.bnsName.toLowerCase() === target
           ) {
             agent = record;
-            break;
           }
         } catch {
           /* ignore */
@@ -77,6 +75,7 @@ async function resolveAgent(
         await Promise.all([
           kv.put(`stx:${agent.stxAddress}`, updated),
           kv.put(`btc:${agent.btcAddress}`, updated),
+          invalidateAgentsIndex(kv),
         ]);
       }
     } catch {
