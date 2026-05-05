@@ -168,11 +168,13 @@ export async function POST(
       await Promise.all([
         kv.put(`stx:${stxAddress}`, serialized),
         kv.put(`btc:${agent.btcAddress}`, serialized),
-        // Invalidate agents:index only when bnsName actually changed
-        // — erc8004AgentId is not indexed, so an id-only refresh
-        // shouldn't trigger a rebuild.
-        bnsChanged ? invalidateAgentsIndex(kv, logger) : Promise.resolve(),
       ]);
+      // Invalidate agents:index only when bnsName actually changed —
+      // erc8004AgentId is not indexed, so an id-only refresh
+      // shouldn't trigger a rebuild.
+      if (bnsChanged) {
+        await invalidateAgentsIndex(kv, logger);
+      }
       logger.info("identity.refresh_persisted_update", {
         stxAddress,
         bnsChanged,

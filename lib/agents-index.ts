@@ -38,6 +38,13 @@ const BACKFILL_LOCK_KEY = "agents:index:building";
 const BACKFILL_LOCK_TTL = 60;
 const BACKFILL_POLL_DEADLINE_MS = 1500;
 const BACKFILL_POLL_INTERVAL_MS = 150;
+/**
+ * Bounds peak concurrent KV reads + JSON parses during the cold-
+ * miss scan. KV's `kv.list` page cap (1000 keys) is a natural
+ * upper bound; this reduces to a tighter, predictable fan-out as
+ * the registry grows.
+ */
+const BACKFILL_FETCH_BATCH_SIZE = 500;
 
 /**
  * Slim per-agent index entry. Holds only the fields hot-path scan
@@ -92,13 +99,14 @@ async function readIndex(kv: KVNamespace): Promise<AgentsIndex | null> {
 async function writeIndex(
   kv: KVNamespace,
   agents: AgentIndexEntry[],
-): Promise<void> {
+): Promise<AgentsIndex> {
   const index: AgentsIndex = {
     agents,
     updatedAt: new Date().toISOString(),
     v: 1,
   };
   await kv.put(INDEX_KEY, JSON.stringify(index));
+  return index;
 }
 
 /**
@@ -120,24 +128,28 @@ async function buildIndexFromScan(
     listComplete = page.list_complete;
     cursor = !page.list_complete ? page.cursor : undefined;
 
-    const records = await Promise.all(
-      page.keys.map(async (key) => {
-        try {
-          const raw = await kv.get(key.name);
-          if (!raw) return null;
-          return JSON.parse(raw) as AgentRecord;
-        } catch (e) {
-          logger?.warn("agents_index.scan_parse_error", {
-            key: key.name,
-            error: String(e),
-          });
-          return null;
-        }
-      }),
-    );
-
-    for (const record of records) {
-      if (record) entries.push(toEntry(record));
+    // Chunk the page-key fetches to bound peak concurrency,
+    // matching the rebuild path's BACKFILL_FETCH_BATCH_SIZE.
+    for (let i = 0; i < page.keys.length; i += BACKFILL_FETCH_BATCH_SIZE) {
+      const batch = page.keys.slice(i, i + BACKFILL_FETCH_BATCH_SIZE);
+      const records = await Promise.all(
+        batch.map(async (key) => {
+          try {
+            const raw = await kv.get(key.name);
+            if (!raw) return null;
+            return JSON.parse(raw) as AgentRecord;
+          } catch (e) {
+            logger?.warn("agents_index.scan_parse_error", {
+              key: key.name,
+              error: String(e),
+            });
+            return null;
+          }
+        }),
+      );
+      for (const record of records) {
+        if (record) entries.push(toEntry(record));
+      }
     }
   }
 
@@ -181,13 +193,9 @@ export async function getAgentsIndex(
 
   try {
     const entries = await buildIndexFromScan(kv, logger);
-    await writeIndex(kv, entries);
+    const index = await writeIndex(kv, entries);
     logger?.info("agents_index.backfilled", { count: entries.length });
-    return {
-      agents: entries,
-      updatedAt: new Date().toISOString(),
-      v: 1,
-    };
+    return index;
   } finally {
     await kv.delete(BACKFILL_LOCK_KEY).catch(() => {});
   }
