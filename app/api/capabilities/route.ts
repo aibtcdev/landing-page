@@ -51,23 +51,36 @@ export async function GET(request: NextRequest) {
       const matching = indexed.filter((e) => e.capabilities?.includes(slug));
       const paginated = matching.slice(offset, offset + limit);
 
-      const records = await Promise.all(
+      // Re-fetch full records and re-validate the capability against
+      // the source `btc:` record. A stale agents:index entry could
+      // claim a capability the agent has since removed; this guard
+      // ensures the response only includes agents that currently
+      // have the capability per source state.
+      const fetched = await Promise.all(
         paginated.map(async (entry) => {
           const raw = await kv.get(`btc:${entry.btcAddress}`);
           if (!raw) return null;
           try { return JSON.parse(raw) as AgentRecord; } catch { return null; }
         }),
       );
+      const validated = fetched.filter(
+        (a): a is AgentRecord =>
+          a !== null && Array.isArray(a.capabilities) && a.capabilities.includes(slug),
+      );
 
       return NextResponse.json({
         capability,
-        agents: records
-          .filter((a): a is AgentRecord => a !== null)
-          .map((a) => ({
-            ...normalizeAgentRecord(a),
-            capabilities: a.capabilities,
-          })),
+        agents: validated.map((a) => ({
+          ...normalizeAgentRecord(a),
+          capabilities: a.capabilities,
+        })),
         pagination: {
+          // `total` is the index-side match count; `hasMore` follows
+          // from it. Per-page validation drops index-stale entries so
+          // the returned `agents.length` may be < `limit` even when
+          // hasMore is true. Acceptable — drift converges on the
+          // next index rebuild and operators can spot-check via the
+          // stats endpoint.
           total: matching.length,
           limit,
           offset,

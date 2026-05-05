@@ -151,8 +151,17 @@ Rollback signal:
 
 Maintenance backstop:
 - To force a full index rebuild: delete `agents:index` from the
-  `VERIFIED_AGENTS` namespace. Next read will scan and write a fresh
-  copy. Sentinel `agents:index:building` (60s TTL) prevents a stampede.
+  `VERIFIED_AGENTS` namespace. Next read will scan and write a
+  fresh copy. The `agents:index:building` sentinel (60s TTL) is a
+  best-effort dogpile mitigation — KV is eventually consistent so
+  a duplicate rebuild can still happen across colos. Both writers
+  compute the same source state, so a duplicate is wasteful but
+  not incorrect.
+- Write paths use invalidate-on-write rather than upsert: every
+  register / profile update / delete-agent / lazy-BNS-refresh
+  deletes `agents:index` and lets the next reader rebuild from
+  source. Avoids the read-modify-write race a concurrent upsert
+  would have under KV's eventual-consistency model.
 - To inspect: `wrangler kv:key get "agents:index" --binding=VERIFIED_AGENTS
   --remote` (JSON, ~130 KB at 430 agents).
 

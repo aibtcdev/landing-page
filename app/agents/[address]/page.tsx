@@ -17,7 +17,7 @@ import {
   setCachedIdentityLookupFailed,
 } from "@/lib/identity/kv-cache";
 import type { AgentIdentity } from "@/lib/identity/types";
-import { getAgentsIndex, upsertAgentIndex } from "@/lib/agents-index";
+import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -75,7 +75,7 @@ async function resolveAgent(
         await Promise.all([
           kv.put(`stx:${agent.stxAddress}`, updated),
           kv.put(`btc:${agent.btcAddress}`, updated),
-          upsertAgentIndex(kv, agent),
+          invalidateAgentsIndex(kv),
         ]);
       }
     } catch {

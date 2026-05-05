@@ -4,7 +4,7 @@ import type { AgentRecord } from "@/lib/types";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { lookupBnsName } from "@/lib/bns";
 import { enrichAgentProfile } from "@/lib/agent-enrichment";
-import { getAgentsIndex, upsertAgentIndex } from "@/lib/agents-index";
+import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
 import {
   createLogger,
   createConsoleLogger,
@@ -249,7 +249,7 @@ export async function GET(
           Promise.all([
             kv.put(`stx:${agent.stxAddress}`, updated),
             kv.put(`btc:${agent.btcAddress}`, updated),
-            upsertAgentIndex(kv, agent, logger),
+            invalidateAgentsIndex(kv, logger),
           ]).catch((err) =>
             logger.error("agents.update_agent_cache_failed", {
               btcAddress: agent.btcAddress,

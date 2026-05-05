@@ -8,15 +8,26 @@
  * **Source of truth:** `stx:` and `btc:` AgentRecord entries.
  * **This index is a soft cache.** Stale entries are tolerable
  * because every hot-path consumer fetches the full record by
- * `btc:` after the index hit and can validate (or fall through to
- * a recovery scan).
+ * `btc:` after the index hit and validates the relevant field
+ * (e.g. bnsName) against the source record. On a mismatch the
+ * consumer returns null — drift surfaces as a 404 rather than
+ * incorrect data, and converges on the next cold-miss rebuild.
  *
- * On cold miss the index is rebuilt by a one-shot scan, gated by a
- * 60s sentinel so concurrent rebuilds don't dogpile.
+ * On cold miss the index is rebuilt by a one-shot scan. A 60s
+ * sentinel `agents:index:building` is a *best-effort* dogpile
+ * mitigation: KV is eventually consistent across colos, so a
+ * sentinel write may not be visible to other rebuilders for some
+ * milliseconds-to-seconds and a duplicate rebuild can still
+ * happen. The duplicate is wasteful but not incorrect — both
+ * writers compute the same source state and the last write wins.
  *
- * Maintenance is best-effort on write paths; failures are logged
- * but don't fail the caller. Drift heals naturally on the next
- * cold-miss rebuild.
+ * Write maintenance uses {@link invalidateAgentsIndex}
+ * (delete-and-let-next-reader-rebuild). This avoids the
+ * read-modify-write race that an in-place upsert would have under
+ * concurrent registrations: KV has no native CAS, and a stale
+ * read on one writer would silently overwrite another writer's
+ * update, permanently dropping an entry from the index until
+ * manual intervention.
  */
 
 import type { AgentRecord } from "./types";
@@ -183,55 +194,32 @@ export async function getAgentsIndex(
 }
 
 /**
- * Insert or replace an agent in the index. No-op when the index
- * doesn't exist yet — the first reader will trigger a backfill
- * that picks up the source-of-truth `stx:`/`btc:` records.
+ * Invalidate the agents:index. The next reader rebuilds it from
+ * source `stx:*` records via {@link getAgentsIndex} — gated by the
+ * existing 60s sentinel so concurrent rebuilds don't dogpile.
  *
- * Best-effort: failures are logged but don't fail the caller.
- * Concurrent upserts can race and lose updates; drift heals on
- * the next cold-miss rebuild and individual hot paths re-fetch
- * the full record from `btc:` so a stale index never returns
- * incorrect data.
+ * Maintenance hook for every write path that mutates an indexed
+ * field (`bnsName`, `displayName`, `taprootAddress`, `capabilities`).
+ * Invalidate-on-write avoids the read-modify-write race that an
+ * in-place upsert would have under concurrent registrations or
+ * profile updates: KV has no native CAS, and a stale read on one
+ * writer would silently overwrite another writer's update,
+ * permanently dropping an entry until manual intervention.
+ *
+ * Cost trade-off: each invalidation triggers one full rebuild on
+ * the next index read (1 list + N stx-gets, ≈ 431 reads at current
+ * scale). At our write rate (~tens per day) this adds <1% of the
+ * read savings B6 banks; in exchange the index always converges to
+ * source state.
  */
-export async function upsertAgentIndex(
+export async function invalidateAgentsIndex(
   kv: KVNamespace,
-  agent: AgentRecord,
   logger?: Logger,
 ): Promise<void> {
   try {
-    const current = await readIndex(kv);
-    if (!current) return;
-    const entry = toEntry(agent);
-    const next = current.agents.filter(
-      (a) => a.btcAddress !== entry.btcAddress,
-    );
-    next.push(entry);
-    await writeIndex(kv, next);
+    await kv.delete(INDEX_KEY);
   } catch (e) {
-    logger?.warn("agents_index.upsert_error", {
-      btc: agent.btcAddress,
-      error: String(e),
-    });
-  }
-}
-
-/**
- * Remove an agent from the index by btcAddress. Best-effort.
- */
-export async function removeAgentFromIndex(
-  kv: KVNamespace,
-  btcAddress: string,
-  logger?: Logger,
-): Promise<void> {
-  try {
-    const current = await readIndex(kv);
-    if (!current) return;
-    const next = current.agents.filter((a) => a.btcAddress !== btcAddress);
-    if (next.length === current.agents.length) return;
-    await writeIndex(kv, next);
-  } catch (e) {
-    logger?.warn("agents_index.remove_error", {
-      btc: btcAddress,
+    logger?.warn("agents_index.invalidate_error", {
       error: String(e),
     });
   }

@@ -158,32 +158,40 @@ export async function invalidateAgentListCache(
  * full AgentRecords are still fetched per agent for the auxiliary
  * fields (description, owner, lastActiveAt, …) the snapshot needs.
  *
- * Concurrency note: KV has no batch-get API, so we use Promise.all to
- * parallelize reads. At current scale (<10k agents) this is well within
- * Workers limits. If the registry grows beyond ~10k, consider chunked
- * concurrency.
+ * Concurrency: per-record fetches are batched to bound peak
+ * concurrent KV reads + JSON parses. The previous `kv.list`
+ * implementation was already bounded by KV's 1000-keys-per-page
+ * cap; sourcing from the index removed that natural bound, so we
+ * re-impose one explicitly here.
  */
+const REBUILD_FETCH_BATCH_SIZE = 500;
+
 async function rebuildAgentListCache(
   kv: KVNamespace
 ): Promise<CachedAgentList> {
   // 1. Source agent addresses from the maintained index.
   const index = await getAgentsIndex(kv);
 
-  // 2. Fetch full AgentRecords by `btc:` (one read per agent).
-  const fetched = await Promise.all(
-    index.agents.map(async (entry) => {
-      const value = await kv.get(`btc:${entry.btcAddress}`);
-      if (!value) return null;
-      try {
-        return JSON.parse(value) as AgentRecord;
-      } catch {
-        return null;
-      }
-    })
-  );
-  const agents: AgentRecord[] = fetched.filter(
-    (v): v is AgentRecord => v !== null
-  );
+  // 2. Fetch full AgentRecords by `btc:`, batched to keep peak
+  //    concurrency in line with the prior `kv.list` per-page bound.
+  const agents: AgentRecord[] = [];
+  for (let i = 0; i < index.agents.length; i += REBUILD_FETCH_BATCH_SIZE) {
+    const batch = index.agents.slice(i, i + REBUILD_FETCH_BATCH_SIZE);
+    const fetched = await Promise.all(
+      batch.map(async (entry) => {
+        const value = await kv.get(`btc:${entry.btcAddress}`);
+        if (!value) return null;
+        try {
+          return JSON.parse(value) as AgentRecord;
+        } catch {
+          return null;
+        }
+      })
+    );
+    for (const record of fetched) {
+      if (record) agents.push(record);
+    }
+  }
 
   // 2. Enrich: claims, achievements, inbox in parallel
   const [claims, achievementCounts, inboxData] = await Promise.all([

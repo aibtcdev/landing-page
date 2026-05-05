@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
-import { upsertAgentIndex } from "@/lib/agents-index";
+import { invalidateAgentsIndex } from "@/lib/agents-index";
 import {
   generateChallenge,
   storeChallenge,
@@ -405,12 +405,11 @@ export async function POST(request: NextRequest) {
 
     const levelInfo = getAgentLevel(updatedAgent, claim);
 
-    // Invalidate cached agent list (profile fields changed) and
-    // refresh the slim agents:index so hot-path scans see the
-    // updated bnsName / displayName / taprootAddress / capabilities.
+    // Invalidate cached agent list and agents:index (profile fields
+    // changed). Both rebuild from source state on next read.
     await Promise.all([
       invalidateAgentListCache(kv),
-      upsertAgentIndex(kv, updatedAgent),
+      invalidateAgentsIndex(kv),
     ]);
 
     return NextResponse.json({
