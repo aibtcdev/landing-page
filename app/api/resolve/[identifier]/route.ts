@@ -366,13 +366,19 @@ export async function GET(
       if (btcAddress) {
         const raw = await kv.get(`btc:${btcAddress}`);
         if (raw) {
+          let record: AgentRecord;
           try {
-            const record = JSON.parse(raw) as AgentRecord;
-            if (record.bnsName && record.bnsName.toLowerCase() === target) {
-              agent = record;
-            }
+            record = JSON.parse(raw) as AgentRecord;
           } catch {
-            /* ignore */
+            // Match the other branches: surface parse failure as 500
+            // rather than masking corruption as "not found".
+            return NextResponse.json(
+              { error: "Failed to parse agent record." },
+              { status: 500 },
+            );
+          }
+          if (record.bnsName && record.bnsName.toLowerCase() === target) {
+            agent = record;
           }
         }
       }

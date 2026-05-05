@@ -199,11 +199,14 @@ PR scope:
 
 Per-request impact (BNS routes):
 - Pre-B6.2: 1 KV `get("agents:index")` (~130 KB transfer + JSON
-  parse + JS scan over ~430 entries) + 1 KV `get("btc:…")` =
-  2 reads, ~130 KB transfer, O(N) CPU.
+  parse + JS scan over ~430 entries) + 1 KV `get("btc:…")`
+  (~1 KB AgentRecord) = 2 reads, **~131 KB transfer total**, O(N)
+  CPU.
 - Post-B6.2: 1 KV `get("bns-lookup:…")` (~80 bytes) + 1 KV
-  `get("btc:…")` = 2 reads, ~16 KB transfer, O(1) CPU.
-- Same KV-read count, vastly cheaper bandwidth/CPU.
+  `get("btc:…")` (~1 KB AgentRecord) = 2 reads, **~1.1 KB transfer
+  total**, O(1) CPU.
+- Same KV-read count, ~99% bandwidth reduction (130 KB →
+  80 bytes for the index portion), no per-request linear scan.
 
 Expected Cloudflare movement:
 - KV reads: small (BNS routes were already 2 reads after B6.1).
@@ -219,9 +222,18 @@ Rollback signal:
   cause: stale or missing `bns-lookup:` entry after a write race
   or a manual KV edit. Mitigation: the validate-against-source-
   record guard returns null rather than wrong data.
-- Recovery: re-trigger the agent's bns lazy-refresh path (load
-  the agent profile once) — the `syncBnsLookup` call there will
-  rewrite the entry from source state.
+- Recovery: the lazy-refresh path **only runs when `agent.bnsName`
+  is missing**, so simply loading the profile won't rewrite a
+  stale entry whose source record already has a bnsName. Two
+  working recovery paths:
+  - **Trigger a bns-mutating write.** Calling
+    `POST /api/identity/{btc-or-stx-address}/refresh` re-runs the
+    BNS lookup and, when the value differs from current state,
+    fires `syncBnsLookup` which restores the reverse-index entry.
+  - **Manual KV put.** `wrangler kv:key put "bns-lookup:{name}"
+    "{btcAddress}" --binding=VERIFIED_AGENTS --remote` writes the
+    entry directly. Use this when the source record is already
+    correct and the index just needs to be patched.
 
 Maintenance backstop:
 - To repair a single name's index entry: run
