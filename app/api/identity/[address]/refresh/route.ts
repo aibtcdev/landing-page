@@ -165,6 +165,10 @@ export async function POST(
         bnsName: nextBnsName,
         erc8004AgentId: nextAgentId,
       };
+      // Capture the prior bnsName before any potential mutation of
+      // `agent` so syncBnsLookup sees the true old value even if a
+      // future refactor mutates `agent` in place.
+      const previousBnsName = agent.bnsName ?? null;
       const serialized = JSON.stringify(updatedRecord);
       await Promise.all([
         kv.put(`stx:${stxAddress}`, serialized),
@@ -177,7 +181,7 @@ export async function POST(
           invalidateAgentsIndex(kv, logger),
           syncBnsLookup(
             kv,
-            agent.bnsName ?? null,
+            previousBnsName,
             nextBnsName,
             agent.btcAddress,
             logger,

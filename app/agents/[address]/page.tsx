@@ -17,7 +17,7 @@ import {
   setCachedIdentityLookupFailed,
 } from "@/lib/identity/kv-cache";
 import type { AgentIdentity } from "@/lib/identity/types";
-import { invalidateAgentsIndex } from "@/lib/agents-index";
+import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
 import {
   lookupBtcAddressByBnsName,
   syncBnsLookup,
@@ -40,12 +40,24 @@ async function resolveAgent(
   let agent = await lookupAgent(kv, address);
 
   // If not found and looks like a BNS name, route via the maintained
-  // bns-lookup:{name} reverse index — 2 KV reads, no scan, no
-  // 130 KB index transfer. Stale-index hits are filtered by
+  // bns-lookup:{name} reverse index — 2 KV reads on the fast path.
+  // Cold-start fallback to agents:index covers pre-B6.2 agents whose
+  // reverse-index entry hasn't been written yet; self-heals via
+  // syncBnsLookup on hit. Stale-index hits are filtered by
   // validating the source-of-truth bnsName below.
   if (!agent && address.endsWith(".btc")) {
     const target = address.toLowerCase();
-    const btcAddress = await lookupBtcAddressByBnsName(kv, target);
+    let btcAddress = await lookupBtcAddressByBnsName(kv, target);
+    if (!btcAddress) {
+      const index = await getAgentsIndex(kv);
+      const entry = index.agents.find(
+        (a) => a.bnsName && a.bnsName.toLowerCase() === target,
+      );
+      if (entry) {
+        btcAddress = entry.btcAddress;
+        void syncBnsLookup(kv, null, target, btcAddress);
+      }
+    }
     if (btcAddress) {
       const raw = await kv.get(`btc:${btcAddress}`);
       if (raw) {

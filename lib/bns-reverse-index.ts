@@ -17,11 +17,17 @@
  * Maintenance: an agent's bnsName transition is captured by
  * {@link syncBnsLookup}, which atomically deletes any old entry
  * and writes the new one. Best-effort — failures are logged, the
- * caller's primary write succeeds. Drift heals on the next
- * cold-miss `agents:index` rebuild (which doesn't touch this
- * index, so a separate recovery is documented in the cost
- * runbook: delete the affected `bns-lookup:` key + the agent's
- * stale entry will be repopulated on its next bns mutation).
+ * caller's primary write succeeds.
+ *
+ * **Drift recovery:** the slim `agents:index` rebuild does NOT
+ * touch this reverse index. A drifted entry heals only on the
+ * next mutation of the affected agent's bnsName (register,
+ * identity refresh, lazy refresh) — or via a manual `wrangler
+ * kv:key put bns-lookup:{name} {btcAddress}
+ * --binding=VERIFIED_AGENTS --remote`. The cold-start backfill
+ * is handled by hot-path consumers, which fall back to
+ * `agents:index` on a `bns-lookup` miss and self-heal the
+ * missing entry via `syncBnsLookup` on the way out.
  */
 
 import type { Logger } from "./logging";

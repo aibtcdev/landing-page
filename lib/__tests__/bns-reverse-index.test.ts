@@ -28,7 +28,7 @@ function createMockKv(): MockKV {
   const impl = {
     get: async (key: string) => {
       stats.reads += 1;
-      return store.has(key) ? store.get(key)! : null;
+      return store.get(key) ?? null;
     },
     put: async (key: string, value: string) => {
       stats.writes += 1;

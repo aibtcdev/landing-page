@@ -4,7 +4,7 @@ import type { AgentRecord } from "@/lib/types";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { lookupBnsName } from "@/lib/bns";
 import { enrichAgentProfile } from "@/lib/agent-enrichment";
-import { invalidateAgentsIndex } from "@/lib/agents-index";
+import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
 import {
   lookupBtcAddressByBnsName,
   syncBnsLookup,
@@ -56,7 +56,14 @@ function getAddressTypeAndPrefix(
 
 /**
  * Look up agent by BNS name via the maintained `bns-lookup:{name}`
- * reverse index. Two KV reads, no scan.
+ * reverse index. Two KV reads on the fast path, no scan.
+ *
+ * Cold-start fallback: if the reverse-index entry is missing
+ * (agents registered before B6.2 deploy haven't been indexed
+ * yet), fall through to the slim `agents:index` scan and
+ * self-heal by writing the missing reverse-index entry. The
+ * fallback runs at most once per name; subsequent reads hit the
+ * fast path.
  *
  * The source `btc:` record is re-fetched after the index hit and
  * its current bnsName validated — a stale or missing index entry
@@ -67,7 +74,23 @@ async function findAgentByBns(
   bnsName: string
 ): Promise<AgentRecord | null> {
   const target = bnsName.toLowerCase();
-  const btcAddress = await lookupBtcAddressByBnsName(kv, target);
+  let btcAddress = await lookupBtcAddressByBnsName(kv, target);
+
+  if (!btcAddress) {
+    // Cold-start fallback: pre-B6.2 agents have no reverse-index
+    // entry. Find them in the slim agents:index and heal the
+    // missing entry on the way out.
+    const index = await getAgentsIndex(kv);
+    const entry = index.agents.find(
+      (a) => a.bnsName && a.bnsName.toLowerCase() === target
+    );
+    if (entry) {
+      btcAddress = entry.btcAddress;
+      // Heal best-effort; don't block on the write.
+      void syncBnsLookup(kv, null, target, btcAddress);
+    }
+  }
+
   if (!btcAddress) return null;
 
   const value = await kv.get(`btc:${btcAddress}`);
