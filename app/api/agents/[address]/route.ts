@@ -4,6 +4,7 @@ import type { AgentRecord } from "@/lib/types";
 import { getAchievementDefinition } from "@/lib/achievements";
 import { lookupBnsName } from "@/lib/bns";
 import { enrichAgentProfile } from "@/lib/agent-enrichment";
+import { getAgentsIndex, upsertAgentIndex } from "@/lib/agents-index";
 import {
   createLogger,
   createConsoleLogger,
@@ -50,61 +51,39 @@ function getAddressTypeAndPrefix(
 }
 
 /**
- * Look up agent by BNS name.
+ * Look up agent by BNS name via the maintained `agents:index`.
  *
- * Currently searches by scanning stored agents and matching the
- * agent.bnsName field (case-insensitive).
- *
- * Note: reverse lookup via Hiro API / a dedicated BNS index is a
- * potential future optimization; this function does not perform it.
+ * Hits the slim index for the BNS-name match, then re-fetches the
+ * full AgentRecord by `btc:` so a stale index entry never returns
+ * incorrect data — the source-of-truth record's current bnsName
+ * gates the result. Index drift heals on the next cold-miss
+ * rebuild.
  */
 async function findAgentByBns(
   kv: KVNamespace,
   bnsName: string
 ): Promise<AgentRecord | null> {
-  // Strategy: load all agents and check for matching bnsName
-  // This is acceptable because we already load all agents for /api/agents
-  // and the dataset is small-to-medium (<10k agents).
-  //
-  // Future optimization if needed:
-  // - Store reverse index at `bns:{name}` -> btcAddress
-  // - Update reverse index during registration and BNS refresh
+  const index = await getAgentsIndex(kv);
+  const target = bnsName.toLowerCase();
+  const entry = index.agents.find(
+    (a) => a.bnsName && a.bnsName.toLowerCase() === target
+  );
+  if (!entry) return null;
 
-  const agents: AgentRecord[] = [];
-  let cursor: string | undefined;
-  let listComplete = false;
-
-  while (!listComplete) {
-    const listResult = await kv.list({
-      prefix: "stx:",
-      cursor,
-    });
-    listComplete = listResult.list_complete;
-    cursor = !listResult.list_complete ? listResult.cursor : undefined;
-
-    const values = await Promise.all(
-      listResult.keys.map(async (key) => {
-        const value = await kv.get(key.name);
-        if (!value) return null;
-        try {
-          return JSON.parse(value) as AgentRecord;
-        } catch (e) {
-          console.error(`Failed to parse agent record ${key.name}:`, e);
-          return null;
-        }
-      })
-    );
-    agents.push(...values.filter((v): v is AgentRecord => v !== null));
+  const value = await kv.get(`btc:${entry.btcAddress}`);
+  if (!value) return null;
+  let record: AgentRecord;
+  try {
+    record = JSON.parse(value) as AgentRecord;
+  } catch {
+    return null;
   }
 
-  // Find agent with matching bnsName (case-insensitive)
-  return (
-    agents.find(
-      (agent) =>
-        agent.bnsName &&
-        agent.bnsName.toLowerCase() === bnsName.toLowerCase()
-    ) ?? null
-  );
+  // Guard against stale index: confirm the record still matches.
+  if (!record.bnsName || record.bnsName.toLowerCase() !== target) {
+    return null;
+  }
+  return record;
 }
 
 /**
@@ -270,6 +249,7 @@ export async function GET(
           Promise.all([
             kv.put(`stx:${agent.stxAddress}`, updated),
             kv.put(`btc:${agent.btcAddress}`, updated),
+            upsertAgentIndex(kv, agent, logger),
           ]).catch((err) =>
             logger.error("agents.update_agent_cache_failed", {
               btcAddress: agent.btcAddress,

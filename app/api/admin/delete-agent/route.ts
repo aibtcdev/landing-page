@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
+import { removeAgentFromIndex } from "@/lib/agents-index";
 import { requireAdmin } from "@/lib/admin/auth";
 import { lookupAgent } from "@/lib/agent-lookup";
 import type { AchievementAgentIndex } from "@/lib/achievements/types";
@@ -261,8 +262,11 @@ export async function DELETE(request: NextRequest) {
       ])
     );
 
-    // Invalidate cached agent list
-    await invalidateAgentListCache(kv);
+    // Invalidate cached agent list + drop from agents:index.
+    await Promise.all([
+      invalidateAgentListCache(kv),
+      removeAgentFromIndex(kv, agent.btcAddress),
+    ]);
 
     return NextResponse.json({
       success: true,

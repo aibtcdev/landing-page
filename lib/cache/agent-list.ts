@@ -13,6 +13,7 @@
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { getAchievementCount } from "@/lib/achievements";
+import { getAgentsIndex } from "@/lib/agents-index";
 import type { CachedAgent, CachedAgentList } from "./types";
 
 const CACHE_KEY = "cache:agent-list";
@@ -152,37 +153,37 @@ export async function invalidateAgentListCache(
  * Rebuild the agent list cache from individual KV records.
  * This is the expensive operation that the cache avoids on every page load.
  *
+ * The agent set is sourced from the maintained `agents:index`
+ * (single KV read) instead of `kv.list({prefix:"stx:"}) + N gets` —
+ * full AgentRecords are still fetched per agent for the auxiliary
+ * fields (description, owner, lastActiveAt, …) the snapshot needs.
+ *
  * Concurrency note: KV has no batch-get API, so we use Promise.all to
- * parallelize reads within each page (up to 1000 per KV list page).
- * At current scale (<10k agents) this is well within Workers limits.
- * If the registry grows beyond ~10k, consider chunked concurrency.
+ * parallelize reads. At current scale (<10k agents) this is well within
+ * Workers limits. If the registry grows beyond ~10k, consider chunked
+ * concurrency.
  */
 async function rebuildAgentListCache(
   kv: KVNamespace
 ): Promise<CachedAgentList> {
-  // 1. List all agent keys
-  const agents: AgentRecord[] = [];
-  let cursor: string | undefined;
-  let listComplete = false;
+  // 1. Source agent addresses from the maintained index.
+  const index = await getAgentsIndex(kv);
 
-  while (!listComplete) {
-    const page = await kv.list({ prefix: "stx:", cursor });
-    listComplete = page.list_complete;
-    cursor = !page.list_complete ? page.cursor : undefined;
-
-    const values = await Promise.all(
-      page.keys.map(async (key) => {
-        const value = await kv.get(key.name);
-        if (!value) return null;
-        try {
-          return JSON.parse(value) as AgentRecord;
-        } catch {
-          return null;
-        }
-      })
-    );
-    agents.push(...values.filter((v): v is AgentRecord => v !== null));
-  }
+  // 2. Fetch full AgentRecords by `btc:` (one read per agent).
+  const fetched = await Promise.all(
+    index.agents.map(async (entry) => {
+      const value = await kv.get(`btc:${entry.btcAddress}`);
+      if (!value) return null;
+      try {
+        return JSON.parse(value) as AgentRecord;
+      } catch {
+        return null;
+      }
+    })
+  );
+  const agents: AgentRecord[] = fetched.filter(
+    (v): v is AgentRecord => v !== null
+  );
 
   // 2. Enrich: claims, achievements, inbox in parallel
   const [claims, achievementCounts, inboxData] = await Promise.all([

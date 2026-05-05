@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
+import { upsertAgentIndex } from "@/lib/agents-index";
 import { lookupBnsNameWithOutcome } from "@/lib/bns";
 import { detectAgentIdentityWithOutcome } from "@/lib/identity/detection";
 import {
@@ -167,6 +168,10 @@ export async function POST(
       await Promise.all([
         kv.put(`stx:${stxAddress}`, serialized),
         kv.put(`btc:${agent.btcAddress}`, serialized),
+        // Keep agents:index in sync when bnsName changes (id is not
+        // indexed; the upsert is a no-op for index fields when only
+        // erc8004AgentId moved).
+        bnsChanged ? upsertAgentIndex(kv, updatedRecord, logger) : Promise.resolve(),
       ]);
       logger.info("identity.refresh_persisted_update", {
         stxAddress,

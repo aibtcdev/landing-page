@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
 import { normalizeAgentRecord } from "@/lib/agents";
+import { getAgentsIndex, type AgentIndexEntry } from "@/lib/agents-index";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -37,40 +38,35 @@ export async function GET(request: NextRequest) {
     const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
     const offset = parseInt(searchParams.get("offset") || "0", 10);
 
-    // Scan all agents (KV N+1 pattern, same as /api/agents)
-    const allAgents: AgentRecord[] = [];
-    let cursor: string | undefined;
-    let listComplete = false;
-
-    while (!listComplete) {
-      const listResult = await kv.list<AgentRecord>({ prefix: "stx:", cursor, limit: 1000 });
-      listComplete = listResult.list_complete;
-      cursor = !listResult.list_complete ? listResult.cursor : undefined;
-      const fetched = await Promise.all(
-        listResult.keys.map(async (key) => {
-          const raw = await kv.get(key.name);
-          if (!raw) return null;
-          try { return JSON.parse(raw) as AgentRecord; } catch { return null; }
-        })
-      );
-      for (const agent of fetched) {
-        if (agent && Array.isArray(agent.capabilities) && agent.capabilities.length > 0) {
-          allAgents.push(agent);
-        }
-      }
-    }
+    // Source capabilities + addresses from the maintained agents:index
+    // (single KV read), then only fetch full AgentRecords for the
+    // paginated slice that's actually returned.
+    const index = await getAgentsIndex(kv);
+    const indexed: AgentIndexEntry[] = index.agents.filter(
+      (e) => Array.isArray(e.capabilities) && e.capabilities.length > 0,
+    );
 
     if (capability) {
-      // Filter agents that have this capability
       const slug = capability.toLowerCase();
-      const matching = allAgents.filter(a => a.capabilities?.includes(slug));
+      const matching = indexed.filter((e) => e.capabilities?.includes(slug));
       const paginated = matching.slice(offset, offset + limit);
+
+      const records = await Promise.all(
+        paginated.map(async (entry) => {
+          const raw = await kv.get(`btc:${entry.btcAddress}`);
+          if (!raw) return null;
+          try { return JSON.parse(raw) as AgentRecord; } catch { return null; }
+        }),
+      );
+
       return NextResponse.json({
         capability,
-        agents: paginated.map(a => ({
-          ...normalizeAgentRecord(a),
-          capabilities: a.capabilities,
-        })),
+        agents: records
+          .filter((a): a is AgentRecord => a !== null)
+          .map((a) => ({
+            ...normalizeAgentRecord(a),
+            capabilities: a.capabilities,
+          })),
         pagination: {
           total: matching.length,
           limit,
@@ -80,10 +76,11 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // No capability filter: return capability inventory with counts
+    // No filter: capability inventory + counts. Computed entirely
+    // from the slim index — no per-agent record fetch needed.
     const counts: Record<string, number> = {};
-    for (const agent of allAgents) {
-      for (const cap of agent.capabilities!) {
+    for (const entry of indexed) {
+      for (const cap of entry.capabilities!) {
         counts[cap] = (counts[cap] || 0) + 1;
       }
     }
@@ -93,7 +90,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       capabilities: sorted,
-      totalAgentsWithCapabilities: allAgents.length,
+      totalAgentsWithCapabilities: indexed.length,
     });
   } catch (err: unknown) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });
