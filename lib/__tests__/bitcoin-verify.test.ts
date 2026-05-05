@@ -232,11 +232,16 @@ describe("verifyBitcoinSignature", () => {
     expect(() => verifyBitcoinSignature("", "test", TEST_ADDR_P2WPKH)).toThrow();
   });
 
-  it("should route bc1q address to P2WPKH verifier", () => {
+  // These two tests assert address-prefix derivation, not routing
+  // through `verifyBitcoinSignature`. Re-exercising the actual
+  // routing path (call the verifier with each address type and
+  // assert the P2WPKH-vs-P2TR code path) is tracked in
+  // https://github.com/aibtcdev/landing-page/issues/647.
+  it("derives a bc1q address for the P2WPKH verifier", () => {
     expect(TEST_ADDR_P2WPKH.startsWith("bc1q")).toBe(true);
   });
 
-  it("should route bc1p address to P2TR verifier", () => {
+  it("derives a bc1p address for the P2TR verifier", () => {
     const p2trAddr = p2tr(TEST_PUBKEY.slice(1), undefined, BTC_NETWORK).address!;
     expect(p2trAddr.startsWith("bc1p")).toBe(true);
   });
