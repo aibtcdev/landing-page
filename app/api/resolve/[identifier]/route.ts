@@ -29,6 +29,10 @@ import {
   type AgentIndexEntry,
 } from "@/lib/agents-index";
 import {
+  lookupBtcAddressByBnsName,
+  syncBnsLookup,
+} from "@/lib/bns-reverse-index";
+import {
   createLogger,
   createConsoleLogger,
   isLogsRPC,
@@ -357,12 +361,43 @@ export async function GET(
         }
       }
     } else if (identifierType === "bns") {
+      // BNS routes hit the dedicated reverse index — 2 KV reads
+      // on the fast path. Cold-start fallback to agents:index
+      // covers pre-B6.2 agents whose reverse-index entry hasn't
+      // been written yet; self-heals via syncBnsLookup on hit.
+      // The btc: re-fetch + bnsName re-validation guards against
+      // stale-index drift either way.
       const target = identifier.toLowerCase();
-      agent = await findAgentByIndex(
-        kv,
-        (e) => !!e.bnsName && e.bnsName.toLowerCase() === target,
-        (r) => !!r.bnsName && r.bnsName.toLowerCase() === target,
-      );
+      let btcAddress = await lookupBtcAddressByBnsName(kv, target);
+      if (!btcAddress) {
+        const index = await getAgentsIndex(kv);
+        const entry = index.agents.find(
+          (a) => a.bnsName && a.bnsName.toLowerCase() === target,
+        );
+        if (entry) {
+          btcAddress = entry.btcAddress;
+          void syncBnsLookup(kv, null, target, btcAddress);
+        }
+      }
+      if (btcAddress) {
+        const raw = await kv.get(`btc:${btcAddress}`);
+        if (raw) {
+          let record: AgentRecord;
+          try {
+            record = JSON.parse(raw) as AgentRecord;
+          } catch {
+            // Match the other branches: surface parse failure as 500
+            // rather than masking corruption as "not found".
+            return NextResponse.json(
+              { error: "Failed to parse agent record." },
+              { status: 500 },
+            );
+          }
+          if (record.bnsName && record.bnsName.toLowerCase() === target) {
+            agent = record;
+          }
+        }
+      }
     } else {
       const target = identifier.toLowerCase();
       agent = await findAgentByIndex(

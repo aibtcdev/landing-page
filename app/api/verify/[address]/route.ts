@@ -4,6 +4,7 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { getAgentLevel } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
+import { syncBnsLookup } from "@/lib/bns-reverse-index";
 import { getCAIP19AgentId } from "@/lib/caip19";
 import {
   createLogger,
@@ -120,12 +121,14 @@ export async function GET(
 
     // Apply BNS update if found
     if (bnsName) {
+      const previousBnsName = agent.bnsName ?? null;
       agent.bnsName = bnsName;
       const updated = JSON.stringify(agent);
       await Promise.all([
         kv.put(`stx:${agent.stxAddress}`, updated),
         kv.put(`btc:${agent.btcAddress}`, updated),
         invalidateAgentsIndex(kv, logger),
+        syncBnsLookup(kv, previousBnsName, bnsName, agent.btcAddress, logger),
       ]);
     }
 

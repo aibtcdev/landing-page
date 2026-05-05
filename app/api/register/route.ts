@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
+import { syncBnsLookup } from "@/lib/bns-reverse-index";
 import {
   publicKeyFromSignatureRsv,
   getAddressFromPublicKey,
@@ -838,10 +839,14 @@ export async function POST(request: NextRequest) {
 
     await Promise.all(kvWrites);
 
-    // Invalidate agents:index so the next reader rebuilds it from
-    // source state and picks up the just-registered agent. Avoids the
-    // read-modify-write race a concurrent upsert would have.
-    await invalidateAgentsIndex(kv, log);
+    // Index maintenance: invalidate the slim agents:index (next
+    // reader rebuilds) and write the BNS reverse-index entry if the
+    // new agent has a BNS name. No `oldBnsName` because this is a
+    // fresh registration.
+    await Promise.all([
+      invalidateAgentsIndex(kv, log),
+      syncBnsLookup(kv, null, record.bnsName ?? null, record.btcAddress, log),
+    ]);
 
     // Store vouch record synchronously (not fire-and-forget) to enforce count limits
     if (validatedReferrer) {

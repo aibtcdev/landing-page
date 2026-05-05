@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
+import { deleteBnsLookup } from "@/lib/bns-reverse-index";
 import { requireAdmin } from "@/lib/admin/auth";
 import { lookupAgent } from "@/lib/agent-lookup";
 import type { AchievementAgentIndex } from "@/lib/achievements/types";
@@ -262,11 +263,14 @@ export async function DELETE(request: NextRequest) {
       ])
     );
 
-    // Invalidate cached agent list + agents:index; both rebuild from
-    // source on next read.
+    // Invalidate cached agent list + agents:index, and drop the
+    // BNS reverse-index entry if the agent had one.
     await Promise.all([
       invalidateAgentListCache(kv),
       invalidateAgentsIndex(kv),
+      agent.bnsName
+        ? deleteBnsLookup(kv, agent.bnsName)
+        : Promise.resolve(),
     ]);
 
     return NextResponse.json({

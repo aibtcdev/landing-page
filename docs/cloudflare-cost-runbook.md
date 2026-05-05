@@ -178,3 +178,74 @@ npx tsc --noEmit
 npm run lint
 npm run build
 ```
+
+## B6.2: bns-lookup:{name} reverse index — eliminate agents:index scan on BNS routes
+
+PR scope:
+- `lib/bns-reverse-index.ts`: new module. Single KV key family
+  `bns-lookup:{lowercased-name}` → `btcAddress` (~80 bytes per
+  entry). `lookupBtcAddressByBnsName(kv, name)` is a single KV
+  read; `syncBnsLookup(kv, oldName, newName, btc)` handles the
+  full transition (delete old + write new in parallel, no-op on
+  unchanged); `deleteBnsLookup(kv, name)` for agent-delete paths.
+- BNS read paths switched off `agents:index` to direct lookup:
+  - `app/api/agents/[address]/route.ts` `findAgentByBns`.
+  - `app/api/resolve/[identifier]/route.ts` BNS branch.
+  - `app/agents/[address]/page.tsx` SSR `.btc` fallback.
+- `syncBnsLookup` calls added at every write that mutates
+  `bnsName`: register, identity refresh (gated on bnsChanged),
+  verify lazy-refresh, agents-route lazy-refresh, SSR-page
+  lazy-refresh. `deleteBnsLookup` added in admin/delete-agent.
+
+Per-request impact (BNS routes):
+- Pre-B6.2: 1 KV `get("agents:index")` (~130 KB transfer + JSON
+  parse + JS scan over ~430 entries) + 1 KV `get("btc:…")`
+  (~1 KB AgentRecord) = 2 reads, **~131 KB transfer total**, O(N)
+  CPU.
+- Post-B6.2: 1 KV `get("bns-lookup:…")` (~80 bytes) + 1 KV
+  `get("btc:…")` (~1 KB AgentRecord) = 2 reads, **~1.1 KB transfer
+  total**, O(1) CPU.
+- Same KV-read count, ~99% bandwidth reduction (130 KB →
+  80 bytes for the index portion), no per-request linear scan.
+
+Expected Cloudflare movement:
+- KV reads: small (BNS routes were already 2 reads after B6.1).
+  The architectural value is what justifies it — eliminates the
+  in-process scan and shrinks the value cap pressure on
+  `agents:index` (which no longer needs to carry every BNS name
+  for hot lookup).
+- Bill: marginal. Real lever for the remaining post-B6.1
+  spend is B6.3 (`caches.default` edge layer).
+
+Rollback signal:
+- BNS-name routing returns 404 for a known-good name. Likeliest
+  cause: stale or missing `bns-lookup:` entry after a write race
+  or a manual KV edit. Mitigation: the validate-against-source-
+  record guard returns null rather than wrong data.
+- Recovery: the lazy-refresh path **only runs when `agent.bnsName`
+  is missing**, so simply loading the profile won't rewrite a
+  stale entry whose source record already has a bnsName. Two
+  working recovery paths:
+  - **Trigger a bns-mutating write.** Calling
+    `POST /api/identity/{btc-or-stx-address}/refresh` re-runs the
+    BNS lookup and, when the value differs from current state,
+    fires `syncBnsLookup` which restores the reverse-index entry.
+  - **Manual KV put.** `wrangler kv:key put "bns-lookup:{name}"
+    "{btcAddress}" --binding=VERIFIED_AGENTS --remote` writes the
+    entry directly. Use this when the source record is already
+    correct and the index just needs to be patched.
+
+Maintenance backstop:
+- To repair a single name's index entry: run
+  `wrangler kv:key put "bns-lookup:{name}" "{btcAddress}" --binding=VERIFIED_AGENTS --remote`.
+- To list all reverse-index entries:
+  `wrangler kv:key list --binding=VERIFIED_AGENTS --remote --prefix="bns-lookup:"`.
+
+Local validation run for this change:
+
+```sh
+npx tsc --noEmit
+npm run lint
+npm run build
+npx vitest run lib/__tests__/bns-reverse-index.test.ts
+```
