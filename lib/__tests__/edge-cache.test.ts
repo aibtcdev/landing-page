@@ -85,6 +85,15 @@ describe("buildEdgeCacheKey", () => {
       /^https:\/\/cache\.aibtc\.local\/api\/agents\//,
     );
   });
+
+  it("URL-encodes the address so reserved chars don't break new Request()", () => {
+    // Spaces, slashes, hashes, etc. would otherwise produce an
+    // invalid URL once `new Request(url)` parses it.
+    const key = buildEdgeCacheKey("/api/agents", "weird name#1");
+    expect(() => new Request(key)).not.toThrow();
+    // The encoding survives lowercasing.
+    expect(key).toContain("weird%20name%231");
+  });
 });
 
 describe("withEdgeCache", () => {
@@ -120,12 +129,22 @@ describe("withEdgeCache", () => {
     expect(cache.store.has(key)).toBe(true);
   });
 
-  it("sets Cache-Control on the live response", async () => {
+  it("sets Cache-Control on the cached clone (not on the live response)", async () => {
     const key = "https://cache.aibtc.local/api/agents/bc1qa";
     const loader = async () => new Response("fresh", { status: 200 });
 
     const result = await withEdgeCache(key, 600, loader);
-    expect(result.headers.get("Cache-Control")).toBe("public, max-age=600");
+
+    // Live response is untouched — caller controls client-facing
+    // directives.
+    expect(result.headers.get("Cache-Control")).toBeNull();
+
+    // Cached entry carries the internal max-age so the Workers
+    // cache layer expires it on schedule.
+    const stored = cache.store.get(key);
+    expect(stored?.headers.get("Cache-Control")).toBe(
+      "public, max-age=600",
+    );
   });
 
   it("does NOT cache non-ok responses", async () => {
@@ -153,6 +172,39 @@ describe("withEdgeCache", () => {
 
     // Loader called both times — no caching of error response.
     expect(loader).toHaveBeenCalledTimes(2);
+  });
+
+  it("preserves a Cache-Control already set by the loader on the live response", async () => {
+    const key = "https://cache.aibtc.local/api/agents/bc1qa";
+    const loader = async () =>
+      new Response("fresh", {
+        status: 200,
+        headers: {
+          "Cache-Control": "public, max-age=60, s-maxage=300, stale-while-revalidate=120",
+        },
+      });
+
+    const result = await withEdgeCache(key, 600, loader);
+
+    // Live response keeps the loader's directives — only the cached
+    // clone gets our internal max-age.
+    expect(result.headers.get("Cache-Control")).toBe(
+      "public, max-age=60, s-maxage=300, stale-while-revalidate=120",
+    );
+  });
+
+  it("falls through to the loader when caches.default is unavailable", async () => {
+    // Simulate Node / `next dev` with no Workers caches global.
+    const original = (globalThis as unknown as { caches?: unknown }).caches;
+    (globalThis as unknown as { caches?: unknown }).caches = undefined;
+
+    const loader = vi.fn(async () => new Response("fresh", { status: 200 }));
+    const result = await withEdgeCache("https://x/y", 300, loader);
+
+    expect(loader).toHaveBeenCalledTimes(1);
+    expect(await result.text()).toBe("fresh");
+
+    (globalThis as unknown as { caches?: unknown }).caches = original;
   });
 });
 
@@ -191,5 +243,38 @@ describe("invalidateEdgeCache", () => {
   it("is a no-op call (still issues delete) on a missing entry", async () => {
     await invalidateEdgeCache("https://cache.aibtc.local/api/agents/absent");
     expect(cache.stats.deletes).toBe(1);
+  });
+
+  it("swallows per-URL delete failures so one bad URL doesn't block the rest", async () => {
+    const k1 = "https://cache.aibtc.local/api/agents/bc1qa";
+    const k2 = "https://cache.aibtc.local/api/agents/bc1qb";
+    cache.store.set(k1, new Response());
+    cache.store.set(k2, new Response());
+
+    // Make k1's delete throw; k2 should still succeed.
+    const cacheImpl = (globalThis as unknown as {
+      caches: { default: { delete: typeof cache["stats"] } };
+    }).caches.default;
+    const realDelete = cacheImpl.delete as unknown as typeof Cache.prototype.delete;
+    (cacheImpl as unknown as { delete: typeof Cache.prototype.delete }).delete =
+      vi.fn(async (req: Request) => {
+        if (req.url === k1) throw new Error("simulated delete failure");
+        return realDelete.call(cache as unknown as Cache, req);
+      }) as unknown as typeof Cache.prototype.delete;
+
+    await expect(invalidateEdgeCache(k1, k2)).resolves.toBeUndefined();
+    // k2 still gone despite k1's failure.
+    expect(cache.store.has(k2)).toBe(false);
+  });
+
+  it("is a no-op when caches.default is unavailable", async () => {
+    const original = (globalThis as unknown as { caches?: unknown }).caches;
+    (globalThis as unknown as { caches?: unknown }).caches = undefined;
+
+    await expect(
+      invalidateEdgeCache("https://cache.aibtc.local/api/agents/x"),
+    ).resolves.toBeUndefined();
+
+    (globalThis as unknown as { caches?: unknown }).caches = original;
   });
 });

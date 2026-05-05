@@ -25,16 +25,31 @@ const CACHE_HOST = "https://cache.aibtc.local";
 
 /**
  * Build the canonical edge-cache URL for a stable identity-keyed
- * route. Lowercases the address for case-insensitive matching;
- * the optional suffix is appended verbatim (already prefixed with
- * `/` by the caller).
+ * route. Lowercases the address for case-insensitive matching and
+ * URL-encodes it so addresses containing reserved characters
+ * (spaces, `/`, `#`, etc.) don't break `new Request(url)` and
+ * surface client errors as 500s. The optional suffix is appended
+ * verbatim — callers must pass URL-safe values (e.g.
+ * `/reputation?type=summary`).
  */
 export function buildEdgeCacheKey(
   routeBase: string,
   address: string,
   suffix = "",
 ): string {
-  return `${CACHE_HOST}${routeBase}/${address.toLowerCase()}${suffix}`;
+  return `${CACHE_HOST}${routeBase}/${encodeURIComponent(address.toLowerCase())}${suffix}`;
+}
+
+/**
+ * Resolve `caches.default` if available, otherwise null. The
+ * Cloudflare Workers runtime exposes a global `caches` with a
+ * `default` namespace; Node / `next dev` does not, so we guard
+ * to let the handler fall through to the loader without
+ * throwing in non-Workers environments.
+ */
+function getDefaultCache(): Cache | null {
+  const c = (globalThis as unknown as { caches?: { default?: Cache } }).caches;
+  return c?.default ?? null;
 }
 
 /**
@@ -53,10 +68,12 @@ export async function withEdgeCache(
   ttlSeconds: number,
   loader: () => Promise<Response>,
 ): Promise<Response> {
-  // `caches.default` is a Cloudflare Workers extension to the
-  // standard CacheStorage interface (which only declares `open()`).
-  // Cast to access the runtime-provided default namespace.
-  const cache = (caches as unknown as { default: Cache }).default;
+  // `caches.default` is a Cloudflare Workers extension; absent in
+  // Node / `next dev` runtimes. Fall through to the loader so
+  // local development isn't broken by a missing global.
+  const cache = getDefaultCache();
+  if (!cache) return await loader();
+
   const cacheKey = new Request(cacheKeyUrl, { method: "GET" });
 
   const cached = await cache.match(cacheKey);
@@ -65,9 +82,15 @@ export async function withEdgeCache(
   const response = await loader();
   if (!response.ok) return response;
 
-  response.headers.set("Cache-Control", `public, max-age=${ttlSeconds}`);
+  // Don't overwrite a Cache-Control already set by the loader —
+  // routes set their own client-facing directives (e.g.
+  // s-maxage, stale-while-revalidate). The TTL we care about is
+  // the one written into `caches.default`, which we apply only
+  // to the cached clone via a fresh Response.
+  const cachedClone = new Response(response.clone().body, response);
+  cachedClone.headers.set("Cache-Control", `public, max-age=${ttlSeconds}`);
 
-  const stash = cache.put(cacheKey, response.clone());
+  const stash = cache.put(cacheKey, cachedClone);
   const { ctx } = await getCloudflareContext();
   if (ctx) {
     ctx.waitUntil(stash);
@@ -84,17 +107,22 @@ export async function withEdgeCache(
  * who explicitly request a refresh see fresh state immediately
  * instead of waiting out the TTL.
  *
- * Best-effort: a failed delete logs and continues; the next
- * cache miss after the TTL expires will heal naturally.
+ * Best-effort: per-URL deletes are independent — a single failed
+ * delete is swallowed so one bad URL doesn't block the rest of
+ * the invalidation set. No-op outside a Workers runtime.
  */
 export async function invalidateEdgeCache(
   ...urls: string[]
 ): Promise<void> {
-  // `caches.default` is a Cloudflare Workers extension to the
-  // standard CacheStorage interface (which only declares `open()`).
-  // Cast to access the runtime-provided default namespace.
-  const cache = (caches as unknown as { default: Cache }).default;
+  const cache = getDefaultCache();
+  if (!cache) return;
   await Promise.all(
-    urls.map((u) => cache.delete(new Request(u, { method: "GET" }))),
+    urls.map(async (u) => {
+      try {
+        await cache.delete(new Request(u, { method: "GET" }));
+      } catch {
+        // Best-effort — TTL expiry will heal naturally.
+      }
+    }),
   );
 }

@@ -91,15 +91,23 @@ export async function GET(
     );
   }
 
-  // Reputation responses vary by `type` and (for feedback) `cursor`.
-  // Each (address, type, cursor) tuple gets its own cache entry.
+  // Cache strategy:
+  //  - `type=summary` is always cached (single entry per agent).
+  //  - `type=feedback` first page (no cursor) is cached.
+  //  - Paginated feedback (`cursor` present) bypasses the cache.
+  //
+  // Why bypass cursor pages: refresh invalidation can't enumerate
+  // every cursor variant that may have been cached, so caching them
+  // would let stale paginated views survive an explicit refresh for
+  // up to the TTL. Skipping them entirely keeps the invalidation set
+  // bounded to one entry per (address, type).
   const cursorParam = url.searchParams.get("cursor");
-  const cacheKeySuffix =
-    `/reputation?type=${type}` +
-    (type === "feedback" && cursorParam !== null ? `&cursor=${cursorParam}` : "");
-  const cacheKey = buildEdgeCacheKey("/api/identity", address, cacheKeySuffix);
+  const isCacheable = type === "summary" || cursorParam === null;
+  const cacheKey = isCacheable
+    ? buildEdgeCacheKey("/api/identity", address, `/reputation?type=${type}`)
+    : null;
 
-  return await withEdgeCache(cacheKey, REPUTATION_CACHE_TTL_SECONDS, async () => {
+  const handler = async (): Promise<Response> => {
 
   const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
   const baseCtx = { rayId, path: request.nextUrl.pathname };
@@ -197,5 +205,10 @@ export async function GET(
       { status: 500 }
     );
   }
-  });
+  };
+
+  if (cacheKey === null) {
+    return await handler();
+  }
+  return await withEdgeCache(cacheKey, REPUTATION_CACHE_TTL_SECONDS, handler);
 }
