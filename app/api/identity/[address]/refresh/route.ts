@@ -10,6 +10,10 @@ import {
   invalidateIdentityCache,
 } from "@/lib/identity/kv-cache";
 import {
+  buildEdgeCacheKey,
+  invalidateEdgeCache,
+} from "@/lib/edge-cache";
+import {
   createLogger,
   createConsoleLogger,
   isLogsRPC,
@@ -188,6 +192,30 @@ export async function POST(
           ),
         ]);
       }
+      // Bust the edge-cache layer so users hitting the refresh
+      // button see fresh state immediately instead of waiting out
+      // the 5-min TTL. Invalidate every form a caller could have
+      // used to address this agent (btc, stx, taproot if set, and
+      // both old + new bnsName when bnsChanged).
+      const cachedAddresses = new Set<string>([
+        agent.btcAddress,
+        stxAddress,
+      ]);
+      if (agent.taprootAddress) cachedAddresses.add(agent.taprootAddress);
+      if (previousBnsName) cachedAddresses.add(previousBnsName);
+      if (nextBnsName) cachedAddresses.add(nextBnsName);
+      const urlsToInvalidate: string[] = [];
+      for (const addr of cachedAddresses) {
+        urlsToInvalidate.push(buildEdgeCacheKey("/api/agents", addr));
+        urlsToInvalidate.push(buildEdgeCacheKey("/api/identity", addr));
+        urlsToInvalidate.push(
+          buildEdgeCacheKey("/api/identity", addr, "/reputation?type=summary"),
+        );
+        urlsToInvalidate.push(
+          buildEdgeCacheKey("/api/identity", addr, "/reputation?type=feedback"),
+        );
+      }
+      await invalidateEdgeCache(...urlsToInvalidate);
       logger.info("identity.refresh_persisted_update", {
         stxAddress,
         bnsChanged,

@@ -11,6 +11,9 @@ import {
   isLogsRPC,
   type Logger,
 } from "@/lib/logging";
+import { buildEdgeCacheKey, withEdgeCache } from "@/lib/edge-cache";
+
+const REPUTATION_CACHE_TTL_SECONDS = 300;
 
 /**
  * Look up an agent by BTC or STX address.
@@ -88,6 +91,16 @@ export async function GET(
     );
   }
 
+  // Reputation responses vary by `type` and (for feedback) `cursor`.
+  // Each (address, type, cursor) tuple gets its own cache entry.
+  const cursorParam = url.searchParams.get("cursor");
+  const cacheKeySuffix =
+    `/reputation?type=${type}` +
+    (type === "feedback" && cursorParam !== null ? `&cursor=${cursorParam}` : "");
+  const cacheKey = buildEdgeCacheKey("/api/identity", address, cacheKeySuffix);
+
+  return await withEdgeCache(cacheKey, REPUTATION_CACHE_TTL_SECONDS, async () => {
+
   const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
   const baseCtx = { rayId, path: request.nextUrl.pathname };
   // Start with a console-backed logger so errors during Cloudflare context
@@ -137,7 +150,6 @@ export async function GET(
     }
 
     // type === "feedback"
-    const cursorParam = url.searchParams.get("cursor");
     let cursor: number | undefined;
     if (cursorParam !== null) {
       const parsedCursor = parseInt(cursorParam, 10);
@@ -185,4 +197,5 @@ export async function GET(
       { status: 500 }
     );
   }
+  });
 }

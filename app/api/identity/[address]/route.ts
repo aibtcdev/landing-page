@@ -14,6 +14,9 @@ import {
   createConsoleLogger,
   isLogsRPC,
 } from "@/lib/logging";
+import { buildEdgeCacheKey, withEdgeCache } from "@/lib/edge-cache";
+
+const IDENTITY_CACHE_TTL_SECONDS = 300;
 
 /**
  * GET /api/identity/:address — Detect on-chain ERC-8004 identity for an agent.
@@ -52,6 +55,12 @@ export async function GET(
     );
   }
 
+  // Wrap the resolve + Hiro fan-out in an edge-cache layer.
+  // A cache hit skips lookupAgent + the typed-cache reads + the
+  // Hiro round-trip entirely. Validation above runs first; only
+  // ok responses inside the loader get cached.
+  const cacheKey = buildEdgeCacheKey("/api/identity", address);
+  return await withEdgeCache(cacheKey, IDENTITY_CACHE_TTL_SECONDS, async () => {
   try {
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
@@ -182,4 +191,5 @@ export async function GET(
       { status: 500 }
     );
   }
+  });
 }
