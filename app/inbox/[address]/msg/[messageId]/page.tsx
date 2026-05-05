@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
 import Navbar from "../../../../components/Navbar";
-import AnimatedBackground from "../../../../components/AnimatedBackground";
+import { BgLayers } from "../../../../components/redesign";
 import { generateName } from "@/lib/name-generator";
 import { formatRelativeTime, updateMeta } from "@/lib/utils";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
@@ -63,7 +63,7 @@ export default function MessagePermalinkPage() {
   if (loading) {
     return (
       <>
-        <AnimatedBackground />
+        <BgLayers />
         <Navbar />
         <div className="flex min-h-[90vh] items-center justify-center pt-24">
           <div className="animate-pulse text-sm text-white/40">Loading message...</div>
@@ -75,7 +75,7 @@ export default function MessagePermalinkPage() {
   if (error || !data) {
     return (
       <>
-        <AnimatedBackground />
+        <BgLayers />
         <Navbar />
         <div className="flex min-h-[90vh] flex-col items-center justify-center gap-3 pt-24">
           <p className="text-sm text-white/40">{error || "Failed to load message"}</p>
@@ -105,10 +105,10 @@ export default function MessagePermalinkPage() {
 
   return (
     <>
-      <AnimatedBackground />
+      <BgLayers />
       <Navbar />
 
-      <div className="min-h-[90vh] overflow-hidden px-12 pt-24 pb-12 max-lg:px-8 max-md:px-5 max-md:pt-20">
+      <div className="min-h-[90vh] overflow-hidden px-8 pt-28 pb-12 max-md:px-5 max-md:pt-24">
         <div className="mx-auto max-w-2xl">
           {/* Back link */}
           <Link

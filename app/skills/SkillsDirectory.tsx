@@ -241,128 +241,200 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
   /* ─── Render ─── */
   return (
     <>
-      {/* ─── Hero header ─── */}
-      <div className="mb-8 max-md:mb-6 text-center max-md:text-left">
-        <h1 className="mb-3 text-[clamp(28px,3.5vw,42px)] font-medium leading-[1.1] tracking-tight text-white">
-          Agent Skills
-        </h1>
-        <p className="mx-auto max-w-[560px] text-[18px] max-md:text-[16px] leading-[1.6] text-white/70 max-md:mx-0">
-          Install reusable capabilities — wallets, DeFi, identity, signing, and
-          messaging — with a single command.
-        </p>
-      </div>
-
-      {/* ─── Install CTA ─── */}
-      <div className="mx-auto max-w-xl mb-10 max-md:mb-7 rounded-lg border border-[#F7931A]/15 bg-gradient-to-br from-[#F7931A]/[0.05] to-[#F7931A]/[0.01] px-5 py-3 max-md:px-4 max-md:py-2.5 text-center max-md:text-left backdrop-blur-[12px] animate-glowPulse">
+      {/* Page head — matches /agents and /activity */}
+      <div className="mb-8 flex flex-wrap items-end justify-between gap-6">
+        <div>
+          <span className="eyebrow">Agent skills</span>
+          <h1
+            className="font-wide mt-2.5 mb-2"
+            style={{
+              fontSize: "clamp(24px,2.6vw,32px)",
+              lineHeight: 1.2,
+              letterSpacing: "-0.02em",
+              fontWeight: 500,
+            }}
+          >
+            Skill library
+          </h1>
+          <p
+            className="max-w-[640px] text-[15px]"
+            style={{ color: "var(--text-dim)" }}
+          >
+            Plug-and-play capabilities — wallets, DeFi, identity, signing, and
+            messaging — installable with a single command.
+          </p>
+        </div>
         <CopyButton
           text="npx skills add aibtcdev/skills"
           label={
             <span className="inline-flex items-center gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-widest text-[#F7931A]/70">Install</span>
-              <span className="font-mono text-[15px] max-md:text-[14px]">npx skills add aibtcdev/skills</span>
-              <svg aria-hidden="true" className="size-3.5 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+              <span style={{ color: "rgba(247,147,26,0.45)" }}>$</span>
+              <span style={{ fontFamily: "var(--mono)" }}>npx skills add aibtcdev/skills</span>
             </span>
           }
           variant="inline"
-          className="text-[15px] max-md:text-[14px] font-medium text-white transition-colors duration-200 hover:text-white/80"
+          className="code-pill text-[14px]"
         />
       </div>
 
-      {/* ─── Directory card ─── */}
-      <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] overflow-hidden">
-        {/* Stats strip */}
-        {data && (
-          <div className="flex items-center border-b border-white/[0.06]">
-            {[
-              { value: data.skills.length, label: "Skills" },
-              { value: totalCmds, label: "Commands" },
-              { value: tagCount, label: "Categories" },
-            ].map((s, i) => (
+      {/* Stats strip */}
+      {data && (
+        <div
+          className="mb-5 grid gap-2.5"
+          style={{ gridTemplateColumns: "repeat(auto-fit, minmax(140px, 1fr))" }}
+        >
+          {[
+            { value: data.skills.length.toLocaleString(), label: "Skills", color: "var(--orange)" },
+            { value: totalCmds.toLocaleString(), label: "Commands" },
+            { value: tagCount.toLocaleString(), label: "Categories" },
+            { value: data.version ? `v${data.version}` : "—", label: "Manifest" },
+          ].map((s) => (
+            <div key={s.label} className="card-rd" style={{ padding: 14 }}>
               <div
-                key={s.label}
-                className={`flex-1 text-center py-3 ${
-                  i > 0 ? "border-l border-white/[0.06]" : ""
-                }`}
+                className="text-[11px] uppercase"
+                style={{ color: "var(--text-faint)", letterSpacing: "0.1em" }}
               >
-                <div className="text-[18px] max-md:text-[16px] font-medium text-white tabular-nums leading-none mb-1">
-                  {s.value}
-                </div>
-                <div className="text-[11px] uppercase tracking-widest text-white/40">
-                  {s.label}
-                </div>
+                {s.label}
               </div>
-            ))}
-          </div>
-        )}
+              <div
+                className="font-wide mt-1"
+                style={{
+                  fontSize: 22,
+                  fontWeight: 500,
+                  color: s.color ?? "var(--text)",
+                  letterSpacing: "-0.02em",
+                }}
+              >
+                {s.value}
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
-        {/* Search */}
-        <div className="relative border-b border-white/[0.06]">
+      {/* Filter bar */}
+      <div
+        className="mb-5 flex flex-wrap gap-2.5 rounded-2xl border p-3"
+        style={{ borderColor: "var(--line)", background: "rgba(255,255,255,0.02)" }}
+      >
+        <label
+          className="flex min-w-[200px] flex-1 items-center gap-2 rounded-[10px] border px-3"
+          style={{ background: "rgba(0,0,0,0.3)", borderColor: "var(--line-2)" }}
+        >
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2} style={{ color: "var(--text-faint)" }}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+          </svg>
           <input
             ref={searchRef}
             type="text"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search skills ..."
-            className="w-full bg-transparent py-3 px-5 pr-14 text-[14px] text-white placeholder:text-white/35 outline-none focus:bg-white/[0.02] transition-colors"
+            placeholder="Search skills…"
+            className="flex-1 rounded-sm bg-transparent py-2.5 text-[13px] outline-none focus-visible:ring-1 focus-visible:ring-white/30"
+            style={{ color: "var(--text)" }}
           />
           {query ? (
             <button
+              type="button"
               onClick={() => setQuery("")}
-              className="absolute right-5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60 transition-colors"
+              className="text-white/40 transition-colors hover:text-white/60"
             >
-              <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <svg className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
                 <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
               </svg>
             </button>
           ) : (
-            <kbd className="absolute right-5 top-1/2 -translate-y-1/2 rounded border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 text-[11px] text-white/35 font-mono max-md:hidden">
+            <kbd
+              className="rounded border px-1.5 py-0.5 text-[10px] max-md:hidden"
+              style={{
+                background: "rgba(255,255,255,0.04)",
+                borderColor: "var(--line-2)",
+                color: "var(--text-faint)",
+                fontFamily: "var(--mono)",
+              }}
+            >
               /
             </kbd>
           )}
-        </div>
+        </label>
+      </div>
 
-        {/* ─── Tag filter chips ─── */}
-        {data && allTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 px-5 py-3 border-b border-white/[0.06]">
+      {/* Tag chips row */}
+      {data && allTags.length > 0 && (
+        <div className="mb-5 flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            aria-pressed={tagFilter === null}
+            onClick={() => setTagFilter(null)}
+            className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
+              tagFilter === null
+                ? "bg-white/[0.12] text-white"
+                : "bg-white/[0.03] text-white/50 hover:bg-white/[0.06] hover:text-white/80"
+            }`}
+            style={{ borderColor: tagFilter === null ? "rgba(255,255,255,0.15)" : "var(--line)" }}
+          >
+            All
+          </button>
+          {allTags.map((tag) => (
             <button
-              aria-pressed={tagFilter === null}
-              onClick={() => setTagFilter(null)}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                tagFilter === null
-                  ? "bg-white/[0.12] text-white"
-                  : "bg-white/[0.04] text-white/50 hover:bg-white/[0.07] hover:text-white/70"
-              }`}
+              key={tag}
+              type="button"
+              aria-pressed={tagFilter === tag}
+              onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
+              className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${tc(tag)} ${tagFilter === tag ? "opacity-100" : "opacity-60 hover:opacity-90"}`}
             >
-              All
+              {tag}
             </button>
-            {allTags.map((tag) => (
-              <button
-                key={tag}
-                aria-pressed={tagFilter === tag}
-                onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
-                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  tagFilter === tag
-                    ? tc(tag) + " opacity-100"
-                    : tc(tag) + " opacity-60 hover:opacity-80"
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
+          ))}
+        </div>
+      )}
+
+      {/* Result count strip */}
+      {data && (
+        <div
+          className="mb-3 flex items-center justify-between text-[12px]"
+          style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
+        >
+          <span>
+            {filtered.length === data.skills.length
+              ? `${filtered.length.toLocaleString()} skills`
+              : `${filtered.length.toLocaleString()} of ${data.skills.length.toLocaleString()}`}
+          </span>
+          <a
+            href="https://github.com/aibtcdev/skills"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1 transition-colors hover:text-white/60"
+            style={{ color: "rgba(247,147,26,0.7)" }}
+          >
+            <svg className="size-3" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            Contribute a skill
+          </a>
+        </div>
+      )}
+
+      {/* Container for content states */}
+      <div>
+        {/* Stats strip — empty since moved above */}
+        {false && data && (
+          <div className="hidden">{/* placeholder — stats moved up */}</div>
         )}
 
         {/* ─── Content ─── */}
 
         {/* Error (server fetch failed) */}
         {!data && (
-          <div className="px-6 py-16 text-center">
-            <p className="text-[14px] text-red-400/80 mb-3">Failed to load skills</p>
+          <div className="rounded-2xl border border-dashed py-16 text-center"
+            style={{ borderColor: "var(--line)" }}
+          >
+            <p className="mb-3 text-[14px] text-red-400/80">Failed to load skills</p>
             <button
+              type="button"
               onClick={() => window.location.reload()}
-              className="text-[13px] text-[#F7931A]/70 hover:text-[#F7931A] transition-colors"
+              className="text-[13px] transition-colors hover:text-[#F7931A]"
+              style={{ color: "rgba(247,147,26,0.7)" }}
             >
               Try again
             </button>
@@ -371,196 +443,263 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
 
         {/* Empty search */}
         {data && filtered.length === 0 && (
-          <div className="px-6 py-16 text-center">
-            <p className="text-[14px] text-white/50 mb-3">No matching skills</p>
+          <div
+            className="rounded-2xl border border-dashed py-16 text-center"
+            style={{ borderColor: "var(--line)" }}
+          >
+            <p className="mb-3 text-[14px]" style={{ color: "var(--text-dim)" }}>
+              No matching skills
+            </p>
             <button
+              type="button"
               onClick={() => { setQuery(""); setTagFilter(null); }}
-              className="text-[13px] text-[#F7931A]/70 hover:text-[#F7931A] transition-colors"
+              className="text-[13px] transition-colors hover:text-[#F7931A]"
+              style={{ color: "rgba(247,147,26,0.7)" }}
             >
               Clear filters
             </button>
           </div>
         )}
 
-        {/* ─── Rows ─── */}
+        {/* ─── Card grid ─── */}
         {data && filtered.length > 0 && (
-          <>
-            <div className="divide-y divide-white/[0.05]">
-              {filtered.map((skill) => {
-                const open = openSkill === skill.name;
-                const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
-                const slug = toSlug(skill.name);
+          <div
+            className="grid gap-3.5"
+            style={{ gridTemplateColumns: "repeat(auto-fill, minmax(280px, 1fr))" }}
+          >
+            {filtered.map((skill) => {
+              const open = openSkill === skill.name;
+              const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
+              const slug = toSlug(skill.name);
 
-                return (
-                  <div key={skill.name} ref={(el) => { skillRefs.current[skill.name] = el; }} id={slug}>
-                    {/* Row */}
-                    <button
-                      onClick={() => toggleSkill(skill.name)}
-                      aria-expanded={open}
-                      className={`group flex w-full items-center px-5 py-3.5 text-left transition-all duration-100 ${
-                        open
-                          ? "bg-white/[0.03]"
-                          : "hover:bg-white/[0.02]"
-                      }`}
+              return (
+                <div
+                  key={skill.name}
+                  ref={(el) => { skillRefs.current[skill.name] = el; }}
+                  id={slug}
+                  className="card-rd cursor-pointer transition-colors"
+                  style={{
+                    gridColumn: open ? "1 / -1" : undefined,
+                    borderColor: open ? "rgba(247,147,26,0.35)" : "var(--line)",
+                    background: open ? "rgba(247,147,26,0.04)" : "rgba(255,255,255,0.02)",
+                  }}
+                  onClick={() => toggleSkill(skill.name)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      toggleSkill(skill.name);
+                    }
+                  }}
+                  role="button"
+                  tabIndex={0}
+                  aria-expanded={open}
+                >
+                  {/* Card header */}
+                  <div className="flex items-start justify-between gap-2.5">
+                    <div className="min-w-0 flex-1">
+                      <div
+                        className="mb-1 truncate text-[14px]"
+                        style={{
+                          fontFamily: "var(--mono)",
+                          color: open ? "var(--orange)" : "var(--text)",
+                          fontWeight: 500,
+                        }}
+                      >
+                        /{skill.name}
+                      </div>
+                      <p
+                        className="text-[12.5px]"
+                        style={{ color: "var(--text-dim)", lineHeight: 1.5 }}
+                      >
+                        {shortDesc(skill)}
+                      </p>
+                    </div>
+                    <svg
+                      width="14"
+                      height="14"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth={2}
+                      style={{
+                        color: "var(--text-faint)",
+                        transform: open ? "rotate(180deg)" : "rotate(0)",
+                        transition: "transform 200ms",
+                        flexShrink: 0,
+                      }}
+                      aria-hidden
                     >
-                      {/* Name + mobile description */}
-                      <div className="min-w-0">
-                        <span className={`text-[14px] font-medium transition-colors ${open ? "text-[#F7931A]" : "text-white/90 group-hover:text-white"}`}>
-                          {skill.name}
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M19 9l-7 7-7-7" />
+                    </svg>
+                  </div>
+
+                  {/* Tag chips (always visible) */}
+                  {skill.tags.length > 0 && (
+                    <div className="mt-3 flex flex-wrap gap-1">
+                      {skill.tags.map((t) => (
+                        <span
+                          key={t}
+                          className={`inline-block rounded border px-1.5 py-0.5 text-[10px] leading-none ${tc(t)}`}
+                          style={{ fontFamily: "var(--mono)" }}
+                        >
+                          {t}
                         </span>
-                        <p className="text-[12px] text-white/50 truncate md:hidden">
-                          {shortDesc(skill)}
-                        </p>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* Expanded detail */}
+                  {open && (
+                    <div
+                      className="mt-4 space-y-3 pt-4"
+                      style={{ borderTop: "1px solid var(--line-2)" }}
+                      onClick={(e) => e.stopPropagation()}
+                    >
+                      {/* Full description */}
+                      <p
+                        className="text-[13.5px]"
+                        style={{ color: "var(--text-dim)", lineHeight: 1.6 }}
+                      >
+                        {skill.description}
+                      </p>
+
+                      {/* Install command pill */}
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <CopyButton
+                          text={`npx skills add aibtcdev/skills/${skill.name}`}
+                          label={
+                            <span className="inline-flex items-center gap-2 whitespace-nowrap">
+                              <span style={{ color: "rgba(247,147,26,0.45)" }}>$</span>
+                              <span style={{ fontFamily: "var(--mono)" }}>
+                                npx skills add aibtcdev/skills/{skill.name}
+                              </span>
+                            </span>
+                          }
+                          variant="inline"
+                          className="code-pill text-[12.5px]"
+                        />
                       </div>
 
-                      {/* Short description — right aligned, desktop */}
-                      <span className="ml-auto mr-3 text-[13px] text-white/50 truncate max-w-[320px] max-md:hidden">
-                        {shortDesc(skill)}
-                      </span>
-
-                      {/* Chevron */}
-                      <svg
-                        aria-hidden="true"
-                        className={`size-3.5 shrink-0 text-white/30 transition-transform duration-200 max-md:ml-auto ${open ? "rotate-180" : ""}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                      </svg>
-                    </button>
-
-                    {/* ─── Expanded detail ─── */}
-                    {open && (
-                      <div className="px-5 pb-5 pt-1 bg-white/[0.015]">
-                        {/* Description + share link */}
-                        <div className="flex items-start justify-between gap-3 mb-4">
-                          <p className="text-[14px] leading-[1.65] text-white/70">
-                            {skill.description}
+                      {/* Entry + Requires */}
+                      <div className="flex flex-wrap gap-x-6 gap-y-3">
+                        <div>
+                          <p
+                            className="mb-1.5 text-[10px] uppercase"
+                            style={{ color: "var(--text-faint)", letterSpacing: "0.1em", fontFamily: "var(--mono)" }}
+                          >
+                            Entry
                           </p>
-                          <CopyButton
-                            text={`${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`}
-                            label={
-                              <span className="inline-flex items-center gap-1 text-[11px] text-white/40 hover:text-white/60 transition-colors whitespace-nowrap">
-                                <svg aria-hidden="true" className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                </svg>
-                                Link
-                              </span>
-                            }
-                            variant="inline"
-                            className="shrink-0"
-                          />
-                        </div>
-
-                        {/* Install command */}
-                        <div className="mb-4 rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-2.5 overflow-x-auto">
-                          <CopyButton
-                            text={`npx skills add aibtcdev/skills/${skill.name}`}
-                            label={
-                              <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                                <span className="text-[#F7931A]/70 font-mono text-[13px] max-md:text-[12px]">$</span>
-                                <span className="font-mono text-[13px] max-md:text-[12px] text-white/80">npx skills add aibtcdev/skills/{skill.name}</span>
-                                <svg aria-hidden="true" className="size-3 shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
-                              </span>
-                            }
-                            variant="inline"
-                            className="text-[13px] max-md:text-[12px]"
-                          />
-                        </div>
-
-                        {/* Mobile tags */}
-                        <div className="flex flex-wrap gap-1.5 mb-4 md:hidden">
-                          {skill.tags.map((t) => (
-                            <span
-                              key={t}
-                              className={`inline-block rounded border px-2 py-0.5 text-[11px] leading-[16px] ${tc(t)}`}
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Entry + Requires */}
-                        <div className="flex flex-wrap gap-x-8 gap-y-3 mb-3">
-                          <div>
-                            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Entry</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {entries.map((e) => (
-                                <code key={e} className="rounded border border-white/[0.1] bg-white/[0.05] px-2.5 py-1 text-[12px] font-mono text-white/60 leading-none">{e}</code>
-                              ))}
-                            </div>
-                          </div>
-                          {skill.requires.length > 0 && (
-                            <div>
-                              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Requires</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {skill.requires.map((r) => (
-                                  <span key={r} className="rounded border border-[#F7931A]/20 bg-[#F7931A]/[0.07] px-2.5 py-1 text-[12px] text-[#F7931A]/70 leading-none">{r}</span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Commands — separate row */}
-                        <div className={(skill.author || skill.authorAgent) ? "mb-3" : ""}>
-                          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Commands</p>
                           <div className="flex flex-wrap gap-1.5">
-                            {skill.arguments.map((a) => (
-                              <code key={a} className="rounded border border-white/[0.1] bg-white/[0.05] px-2.5 py-1 text-[12px] font-mono text-white/60 leading-none">{a}</code>
+                            {entries.map((e) => (
+                              <code
+                                key={e}
+                                className="rounded border px-2 py-0.5 text-[11.5px] leading-none"
+                                style={{
+                                  borderColor: "var(--line)",
+                                  background: "rgba(255,255,255,0.04)",
+                                  color: "var(--text-dim)",
+                                  fontFamily: "var(--mono)",
+                                }}
+                              >
+                                {e}
+                              </code>
                             ))}
                           </div>
                         </div>
-
-                        {/* Author */}
-                        {(skill.author || skill.authorAgent) && (
+                        {skill.requires.length > 0 && (
                           <div>
-                            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Created by</p>
-                            <p className="text-[13px] text-white/60">
-                              {skill.author && <span>{skill.author}</span>}
-                              {skill.author && skill.authorAgent && <span className="text-white/30"> / </span>}
-                              {skill.authorAgent && <span>{skill.authorAgent}</span>}
+                            <p
+                              className="mb-1.5 text-[10px] uppercase"
+                              style={{ color: "var(--text-faint)", letterSpacing: "0.1em", fontFamily: "var(--mono)" }}
+                            >
+                              Requires
                             </p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {skill.requires.map((r) => (
+                                <span
+                                  key={r}
+                                  className="rounded border px-2 py-0.5 text-[11.5px] leading-none"
+                                  style={{
+                                    borderColor: "rgba(247,147,26,0.2)",
+                                    background: "rgba(247,147,26,0.06)",
+                                    color: "rgba(247,147,26,0.8)",
+                                  }}
+                                >
+                                  {r}
+                                </span>
+                              ))}
+                            </div>
                           </div>
                         )}
                       </div>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
 
-            {/* Footer */}
-            <div className="flex items-center justify-between px-5 py-2.5 border-t border-white/[0.06] text-[12px] text-white/40">
-              <span>
-                {filtered.length === data.skills.length
-                  ? `${filtered.length} skills`
-                  : `${filtered.length} of ${data.skills.length}`}
-              </span>
-              <div className="flex items-center gap-3">
-                {data.version && (
-                  <span className="text-[#F7931A]/50">v{data.version}</span>
-                )}
-                <span>{totalCmds} commands</span>
-                <span className="text-white/20">·</span>
-                <a
-                  href="https://github.com/aibtcdev/skills"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[#F7931A]/60 hover:text-[#F7931A] transition-colors"
-                >
-                  <svg aria-hidden="true" className="size-3" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-                  </svg>
-                  Contribute a skill
-                </a>
-              </div>
-            </div>
-          </>
+                      {/* Commands */}
+                      {skill.arguments.length > 0 && (
+                        <div>
+                          <p
+                            className="mb-1.5 text-[10px] uppercase"
+                            style={{ color: "var(--text-faint)", letterSpacing: "0.1em", fontFamily: "var(--mono)" }}
+                          >
+                            Commands
+                          </p>
+                          <div className="flex flex-wrap gap-1.5">
+                            {skill.arguments.map((a) => (
+                              <code
+                                key={a}
+                                className="rounded border px-2 py-0.5 text-[11.5px] leading-none"
+                                style={{
+                                  borderColor: "var(--line)",
+                                  background: "rgba(255,255,255,0.04)",
+                                  color: "var(--text-dim)",
+                                  fontFamily: "var(--mono)",
+                                }}
+                              >
+                                {a}
+                              </code>
+                            ))}
+                          </div>
+                        </div>
+                      )}
+
+                      {/* Author + share link */}
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        {(skill.author || skill.authorAgent) ? (
+                          <p
+                            className="text-[12px]"
+                            style={{ color: "var(--text-faint)" }}
+                          >
+                            <span style={{ fontFamily: "var(--mono)" }}>by </span>
+                            {skill.author && <span>{skill.author}</span>}
+                            {skill.author && skill.authorAgent && (
+                              <span style={{ color: "var(--line)" }}> / </span>
+                            )}
+                            {skill.authorAgent && <span>{skill.authorAgent}</span>}
+                          </p>
+                        ) : (
+                          <span />
+                        )}
+                        <CopyButton
+                          text={`${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`}
+                          label={
+                            <span
+                              className="inline-flex items-center gap-1 text-[11px] transition-colors hover:text-white/60"
+                              style={{ color: "var(--text-faint)" }}
+                            >
+                              <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                                <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                              </svg>
+                              Share link
+                            </span>
+                          }
+                          variant="inline"
+                        />
+                      </div>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
     </>

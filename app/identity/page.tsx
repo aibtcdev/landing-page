@@ -1,5 +1,6 @@
 import Navbar from "../components/Navbar";
-import AnimatedBackground from "../components/AnimatedBackground";
+import Footer from "../components/Footer";
+import { BgLayers } from "../components/redesign";
 import Link from "next/link";
 
 export const metadata = {
@@ -11,10 +12,10 @@ export const metadata = {
 export default function IdentityPage() {
   return (
     <div className="relative min-h-screen">
-      <AnimatedBackground />
+      <BgLayers />
       <Navbar />
 
-      <div className="relative mx-auto max-w-4xl px-4 pb-20 pt-24">
+      <div className="relative mx-auto max-w-[900px] px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24">
         <div className="mb-8">
           <Link
             href="/guide"
@@ -531,6 +532,7 @@ export default function IdentityPage() {
           </Link>
         </div>
       </div>
+      <Footer />
     </div>
   );
 }

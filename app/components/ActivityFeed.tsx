@@ -129,24 +129,20 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [enteringUid, setEnteringUid] = useState<number | null>(null);
 
-  // Compute initial queue for both state initializers
-  const initialQueueRef = useRef<ActivityEvent[] | null>(null);
-  if (initialQueueRef.current === null) {
-    const chrono = [...events].reverse(); // oldest → newest
-    initialQueueRef.current = chrono.slice(visibleCount);
-  }
+  // Compute initial queue once. Recompute on every render is fine (cheap)
+  // and avoids the strict-mode double-init pitfall where `useState`
+  // initializers run twice — leaving a "consumed" ref state that crashes.
+  const initialChrono = [...events].reverse(); // oldest → newest
+  const initialQueue = initialChrono.slice(visibleCount);
 
   // Track how many messages/sats/registrations are still in the queue (for counting up)
-  const [queuedStats, setQueuedStats] = useState(() => countQueuedStats(initialQueueRef.current!));
+  const [queuedStats, setQueuedStats] = useState(() => countQueuedStats(initialQueue));
 
   // Initialize: fill visible rows from the oldest events, queue the rest
   const [items, setItems] = useState(() => {
-    const chrono = [...events].reverse(); // oldest → newest
-    const initial = chrono.slice(0, visibleCount);
-    queueRef.current = initialQueueRef.current!;
-    initialQueueRef.current = null; // free reference
+    queueRef.current = initialQueue.slice();
     knownKeysRef.current = new Set(events.map(makeEventKey));
-
+    const initial = initialChrono.slice(0, visibleCount);
     // Display newest-on-top within the initial batch
     return initial.reverse().map((event) => ({
       uid: uidRef.current++,
@@ -184,11 +180,11 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   // Start/restart the drip interval when there are queued items
   const ensureInterval = useCallback(() => {
     if (intervalRef.current) return;
-    if (queueRef.current.length === 0) return;
+    if (!queueRef.current || queueRef.current.length === 0) return;
 
     intervalRef.current = setInterval(() => {
-      if (queueRef.current.length === 0) {
-        clearInterval(intervalRef.current!);
+      if (!queueRef.current || queueRef.current.length === 0) {
+        if (intervalRef.current) clearInterval(intervalRef.current);
         intervalRef.current = null;
         return;
       }
@@ -209,6 +205,7 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
 
   // When SWR revalidates with new events, queue any we haven't seen
   useEffect(() => {
+    if (!queueRef.current) queueRef.current = [];
     let addedMessages = 0;
     let addedSats = 0;
     let addedRegistrations = 0;
@@ -235,6 +232,13 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
     if (addedMessages > 0 || addedRegistrations > 0 || queueRef.current.length > 0) ensureInterval();
   }, [events, ensureInterval]);
 
+  // Also kick the interval on initial mount (the items state initializer
+  // populated queueRef but no [events] change has fired yet on first render).
+  useEffect(() => {
+    ensureInterval();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Clear entering animation after transition
   useEffect(() => {
     if (enteringUid !== null) {
@@ -248,35 +252,63 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
   const displaySats = stats.totalSatsTransacted - queuedStats.sats;
 
   return (
-    <Link href="/activity" className="block space-y-2 group/feed">
-    <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] overflow-hidden transition-colors duration-200 group-hover/feed:border-white/[0.12]">
-      {/* Header */}
-      <div className="flex items-center justify-between border-b border-white/[0.06] px-5 py-3 max-md:px-4">
-        <div className="flex items-center gap-2.5">
-          <span className="relative flex size-2">
-            <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-green-400 opacity-75" />
-            <span className="relative inline-flex size-2 rounded-full bg-green-500" />
+    <div
+      className="overflow-hidden rounded-2xl border transition-colors duration-200 hover:border-white/15"
+      style={{
+        borderColor: "var(--line)",
+        background: "rgba(255,255,255,0.02)",
+      }}
+    >
+      {/* Header — slim mono strip with type-dots + "View all" */}
+      <div
+        className="flex items-center justify-between px-4 py-2.5 text-[11.5px]"
+        style={{
+          borderBottom: "1px solid var(--line-2)",
+          fontFamily: "var(--mono)",
+          color: "var(--text-dim)",
+        }}
+      >
+        <span className="inline-flex items-center gap-2">
+          <span className="status-dot" />
+          Recent activity
+        </span>
+        <span className="inline-flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5">
+            {(["message", "achievement", "registration"] as const).map((type) => {
+              const dot =
+                type === "message"
+                  ? "var(--orange)"
+                  : type === "achievement"
+                    ? "var(--blue)"
+                    : "#2ecc71";
+              return (
+                <span
+                  key={type}
+                  className="size-1.5 rounded-full"
+                  style={{ background: dot }}
+                />
+              );
+            })}
           </span>
-          <span className="text-[13px] font-medium text-white/60">
-            Activity
-          </span>
-        </div>
-
-        {/* Type legend — dots only, no labels (compact homepage widget) */}
-        <div className="flex items-center gap-2">
-          {(["message", "achievement", "registration"] as const).map((type) => {
-            const config = EVENT_CONFIG[type];
-            return (
-              <div key={type} className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />
-            );
-          })}
-        </div>
+          <Link
+            href="/activity"
+            className="text-[10.5px] transition-colors hover:text-[#F7931A]"
+            style={{ color: "rgba(247,147,26,0.7)" }}
+          >
+            View all →
+          </Link>
+        </span>
       </div>
 
       {/* Event list — absolute positioned for smooth transitions */}
       <div
-        className="feed-container px-2 max-md:px-0 max-md:[--feed-row-h:40px]"
-        style={{ "--feed-row-h": "46px", height: `calc(var(--feed-row-h) * ${visibleCount})` } as React.CSSProperties}
+        className="feed-container max-md:[--feed-row-h:42px]"
+        style={
+          {
+            "--feed-row-h": "46px",
+            height: `calc(var(--feed-row-h) * ${visibleCount})`,
+          } as React.CSSProperties
+        }
       >
         {items.map((item, i) => (
           <div
@@ -291,21 +323,28 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
           </div>
         ))}
       </div>
-    </div>
 
-      {/* Paid messages stat — counts up to real total as events drip in */}
+      {/* Footer counter — converged on the real totals as events drip in */}
       {displayMessages > 0 && (
-        <div className="flex items-center justify-center gap-2 rounded-lg border border-[#F7931A]/15 bg-[#F7931A]/[0.04] px-4 py-2.5 max-md:px-3 max-md:py-2">
-          <svg className="size-4 max-md:size-3.5 shrink-0 text-[#F7931A]/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-            <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
-          </svg>
-          <span className="text-[13px] max-md:text-[12px] text-white/50 truncate">
-            <span className="font-semibold text-white tabular-nums">{displayMessages.toLocaleString()}</span> paid messages
-            <span className="text-white/30"> &middot; </span>
-            <span className="font-semibold text-[#F7931A]/70 tabular-nums">{displaySats.toLocaleString()}</span> <span className="text-white/40">sats</span>
+        <div
+          className="flex items-center justify-between px-4 py-2.5 text-[11px]"
+          style={{
+            borderTop: "1px solid var(--line-2)",
+            fontFamily: "var(--mono)",
+            color: "var(--text-faint)",
+          }}
+        >
+          <span>
+            <span style={{ color: "var(--text)" }}>
+              {displayMessages.toLocaleString()}
+            </span>{" "}
+            paid messages
+          </span>
+          <span style={{ color: "var(--orange)" }}>
+            {displaySats.toLocaleString()} sats
           </span>
         </div>
       )}
-    </Link>
+    </div>
   );
 }

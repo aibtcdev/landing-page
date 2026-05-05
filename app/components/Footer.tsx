@@ -136,8 +136,8 @@ function FooterSection({ section }: { section: typeof footerSections[number] }) 
 
 export default function Footer() {
   return (
-    <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-5 max-md:pb-10 max-md:pt-10">
-      <div className="mx-auto max-w-[1200px]">
+    <footer className="border-t border-white/[0.06] px-8 pb-12 pt-12 max-md:px-5 max-md:pb-10 max-md:pt-10">
+      <div className="mx-auto max-w-[1240px]">
         {/* Agent-Native Callout */}
         <div className="mb-12 max-md:mb-8">
           <div className="mx-auto max-w-[420px] rounded-xl border border-white/[0.06] bg-white/[0.02] px-6 py-5 text-center max-md:px-4 max-md:py-4">

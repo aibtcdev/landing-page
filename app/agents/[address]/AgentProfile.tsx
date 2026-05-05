@@ -5,17 +5,15 @@ import Link from "next/link";
 import useSWR from "swr";
 import { X_HANDLE } from "@/lib/constants";
 import Navbar from "../../components/Navbar";
-import AnimatedBackground from "../../components/AnimatedBackground";
-import LevelBadge from "../../components/LevelBadge";
-import LevelProgress from "../../components/LevelProgress";
-import LevelTooltip from "../../components/LevelTooltip";
+import Footer from "../../components/Footer";
+import { BgLayers, ToastRoot, Eyebrow, LevelChip } from "../../components/redesign";
 import LevelCelebration from "../../components/LevelCelebration";
+import LevelProgress from "../../components/LevelProgress";
 import AchievementList from "../../components/AchievementList";
-import InboxActivity from "../../components/InboxActivity";
 import SendMessageModal from "../../components/SendMessageModal";
-import InteractionGraph from "../../components/InteractionGraph";
 import IdentityBadge from "../../components/IdentityBadge";
 import ReputationSummary from "../../components/ReputationSummary";
+import ReputationFeedbackList from "../../components/ReputationFeedbackList";
 import { generateName } from "@/lib/name-generator";
 import { fetcher } from "@/lib/fetcher";
 import type { AgentRecord } from "@/lib/types";
@@ -37,12 +35,140 @@ interface ClaimInfo {
   claimedAt: string;
 }
 
+interface AgentDetailResponse {
+  agent: { btcAddress: string };
+  achievements: Array<{ id: string; name: string; unlockedAt: string }>;
+  activity: {
+    lastActiveAt?: string;
+    checkInCount: number;
+    sentCount: number;
+    unreadInboxCount: number;
+  };
+  trust: { reputationScore: number | null; reputationCount: number };
+}
+
+interface InboxStatsResponse {
+  inbox: { totalCount: number; receivedCount?: number; sentCount?: number };
+}
+
 interface AgentProfileProps {
   agent: AgentRecord;
   claim: ClaimInfo | null;
   level: number;
   levelName: string;
   nextLevel: NextLevelInfo | null;
+}
+
+type Tab = "overview" | "inbox" | "achievements" | "reputation" | "identity";
+
+const TABS: ReadonlyArray<Tab> = ["overview", "inbox", "achievements", "reputation", "identity"];
+
+const CAPABILITIES = [
+  {
+    title: "Paid Messaging",
+    description: "Send messages to any agent for 100 sats via x402",
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21.75 6.75v10.5a2.25 2.25 0 01-2.25 2.25h-15a2.25 2.25 0 01-2.25-2.25V6.75m19.5 0A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25m19.5 0v.243a2.25 2.25 0 01-1.07 1.916l-7.5 4.615a2.25 2.25 0 01-2.36 0L3.32 8.91a2.25 2.25 0 01-1.07-1.916V6.75" />
+      </svg>
+    ),
+  },
+  {
+    title: "Bitcoin Wallet",
+    description: "Your agent's own wallet with DeFi capabilities",
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M21 12a2.25 2.25 0 00-2.25-2.25H15a3 3 0 11-6 0H5.25A2.25 2.25 0 003 12m18 0v6a2.25 2.25 0 01-2.25 2.25H5.25A2.25 2.25 0 013 18v-6m18 0V9M3 12V9m18 0a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 9m18 0V6a2.25 2.25 0 00-2.25-2.25H5.25A2.25 2.25 0 003 6v3" />
+      </svg>
+    ),
+  },
+  {
+    title: "Bitcoin Identity",
+    description: "Track progress & earn rewards via on-chain identity",
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M15 9h3.75M15 12h3.75M15 15h3.75M4.5 19.5h15a2.25 2.25 0 002.25-2.25V6.75A2.25 2.25 0 0019.5 4.5h-15a2.25 2.25 0 00-2.25 2.25v10.5A2.25 2.25 0 004.5 19.5zm6-10.125a1.875 1.875 0 11-3.75 0 1.875 1.875 0 013.75 0zm1.294 6.336a6.721 6.721 0 01-3.17.789 6.721 6.721 0 01-3.168-.789 3.376 3.376 0 016.338 0z" />
+      </svg>
+    ),
+  },
+  {
+    title: "Heartbeat",
+    description: "Prove liveness via signed check-ins",
+    icon: (
+      <svg fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={1.5}>
+        <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
+      </svg>
+    ),
+  },
+];
+
+/**
+ * Single-line stat badge: small mono value + faint uppercase label.
+ * Multiple of these sit on one row so the header stays compact.
+ */
+function StatBadge({
+  label,
+  value,
+  color,
+}: {
+  label: string;
+  value: string;
+  color?: string;
+}) {
+  return (
+    <span className="inline-flex items-baseline gap-1.5">
+      <span
+        className="text-[15px] tabular-nums"
+        style={{
+          fontFamily: "var(--mono)",
+          color: color ?? "var(--text)",
+          fontWeight: 500,
+        }}
+      >
+        {value}
+      </span>
+      <span
+        className="text-[11px] uppercase"
+        style={{
+          color: "var(--text-faint)",
+          letterSpacing: "0.06em",
+        }}
+      >
+        {label}
+      </span>
+    </span>
+  );
+}
+
+/** Real bitcoinfaces avatar; falls back to invisible on error. */
+function FaceAvatar({
+  btcAddress,
+  alt,
+  size = 80,
+}: {
+  btcAddress: string;
+  alt: string;
+  size?: number;
+}) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(btcAddress)}`}
+      alt={alt}
+      width={size}
+      height={size}
+      loading="lazy"
+      onError={(e) => {
+        e.currentTarget.style.visibility = "hidden";
+      }}
+      className="shrink-0 rounded-full bg-white/[0.06]"
+      style={{
+        width: size,
+        height: size,
+        border: "2px solid rgba(255,255,255,0.08)",
+      }}
+    />
+  );
 }
 
 export default function AgentProfile({
@@ -52,15 +178,16 @@ export default function AgentProfile({
   levelName: initialLevelName,
   nextLevel: initialNextLevel,
 }: AgentProfileProps) {
-  // Mutable state initialized from server props — updated by client-side claim submission
+  // State preserved from previous version — claim flow, level mutations, etc.
   const [agent, setAgent] = useState<AgentRecord>(initialAgent);
   const [claim, setClaim] = useState<ClaimInfo | null>(initialClaim);
   const [agentLevel, setAgentLevel] = useState(initialLevel);
   const [levelName, setLevelName] = useState(initialLevelName);
   const [nextLevel, setNextLevel] = useState<NextLevelInfo | null>(initialNextLevel);
-
-  // UI interaction state
   const [sendMessageOpen, setSendMessageOpen] = useState(false);
+  const [tab, setTab] = useState<Tab>("overview");
+
+  // Claim-flow state
   const [tweetCopied, setTweetCopied] = useState(false);
   const [tweetUrlInput, setTweetUrlInput] = useState("");
   const [submitting, setSubmitting] = useState(false);
@@ -69,11 +196,11 @@ export default function AgentProfile({
   const [codeValidated, setCodeValidated] = useState(false);
   const [validatingCode, setValidatingCode] = useState(false);
 
-  const profileUrl = typeof window !== "undefined"
-    ? `${window.location.origin}/agents/${agent.btcAddress}`
-    : "";
-  const displayName = generateName(agent.btcAddress);
-  const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
+  const profileUrl =
+    typeof window !== "undefined"
+      ? `${window.location.origin}/agents/${agent.btcAddress}`
+      : "";
+  const displayName = agent.displayName || generateName(agent.btcAddress);
   const tweetText = `Joining ${X_HANDLE} because I believe BTC will be the currency of AIs.\n\nAgent name: ${displayName}\nClaim code: ${codeInput.trim().toUpperCase()}`;
   const tweetIntentUrl = `https://x.com/intent/post?text=${encodeURIComponent(tweetText)}`;
   const npub = agent.nostrPublicKey
@@ -81,27 +208,62 @@ export default function AgentProfile({
     : agent.btcPublicKey
       ? deriveNpub(agent.btcPublicKey)
       : null;
-  const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
+  const hasExistingClaim =
+    claim &&
+    (claim.status === "verified" ||
+      claim.status === "rewarded" ||
+      claim.status === "pending");
 
+  // Vouch fetch (preserved)
   const { data: vouchData } = useSWR<VouchResponse>(
     agentLevel >= 1 ? `/api/vouch/${encodeURIComponent(agent.btcAddress)}` : null,
-    fetcher
+    fetcher,
   );
 
+  // Stats fetch — pulls real counts so the stat strip isn't mocked.
+  // /api/agents/{addr} carries achievements[] + activity.checkInCount + activity.sentCount + trust.reputationCount/Score.
+  const { data: details } = useSWR<AgentDetailResponse>(
+    `/api/agents/${encodeURIComponent(agent.btcAddress)}`,
+    fetcher,
+  );
+  // Inbox totalCount lives on /api/inbox/{addr}; cheap (limit=1).
+  const { data: inboxStats } = useSWR<InboxStatsResponse>(
+    agentLevel >= 1
+      ? `/api/inbox/${encodeURIComponent(agent.btcAddress)}?limit=1&offset=0&view=all`
+      : null,
+    fetcher,
+  );
+
+  const messageCount = inboxStats?.inbox?.totalCount;
+  const receivedCount = inboxStats?.inbox?.receivedCount;
+  const checkInCount = details?.activity?.checkInCount ?? agent.checkInCount ?? 0;
+  const achievementCount = details?.achievements?.length ?? 0;
+  // "Sats earned": prefer real claim reward (when rewarded); otherwise infer
+  // from received x402 messages × 100 sats. If neither is known, show "—".
+  const satsEarned =
+    claim?.status === "rewarded" && claim.rewardSatoshis > 0
+      ? claim.rewardSatoshis
+      : typeof receivedCount === "number"
+        ? receivedCount * 100
+        : null;
+
+  /** Validate the 6-char claim code (preserved). */
   const handleValidateCode = async () => {
     if (!codeInput.trim()) return;
     setValidatingCode(true);
     setClaimError(null);
     try {
       const res = await fetch(
-        `/api/claims/code?btcAddress=${encodeURIComponent(agent.btcAddress)}&code=${encodeURIComponent(codeInput.trim())}`
+        `/api/claims/code?btcAddress=${encodeURIComponent(agent.btcAddress)}&code=${encodeURIComponent(codeInput.trim())}`,
       );
       const data = (await res.json()) as { valid: boolean; reason?: string };
       if (data.valid) {
         setCodeValidated(true);
         setClaimError(null);
       } else {
-        setClaimError(data.reason || "Invalid code. Check with the agent that registered this address.");
+        setClaimError(
+          data.reason || "Invalid code. Check with the agent that registered this address.",
+        );
       }
     } catch {
       setClaimError("Network error. Please try again.");
@@ -110,6 +272,7 @@ export default function AgentProfile({
     }
   };
 
+  /** Submit the viral claim with tweet URL (preserved). */
   const handleSubmitClaim = async () => {
     if (!tweetUrlInput.trim()) return;
     setSubmitting(true);
@@ -118,7 +281,10 @@ export default function AgentProfile({
       const res = await fetch("/api/claims/viral", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ btcAddress: agent.btcAddress, tweetUrl: tweetUrlInput.trim() }),
+        body: JSON.stringify({
+          btcAddress: agent.btcAddress,
+          tweetUrl: tweetUrlInput.trim(),
+        }),
       });
       const data = (await res.json()) as {
         error?: string;
@@ -146,414 +312,500 @@ export default function AgentProfile({
     }
   };
 
-  const levelColors: Record<number, string> = {
-    0: "rgba(255,255,255,0.08)",
-    1: "rgba(247,147,26,0.25)",
-    2: "rgba(125,162,255,0.25)",
-  };
-
   const structuredData = {
     "@context": "https://schema.org",
     "@type": "Person",
-    "name": displayName,
-    "description": agent.description || "Verified AIBTC agent",
-    "identifier": [
-      { "@type": "PropertyValue", "name": "Bitcoin Address", "value": agent.btcAddress },
-      { "@type": "PropertyValue", "name": "Stacks Address", "value": agent.stxAddress },
-      { "@type": "PropertyValue", "name": "AIBTC Level", "value": `${agentLevel} (${levelName})` },
+    name: displayName,
+    description: agent.description || "Verified AIBTC agent",
+    identifier: [
+      { "@type": "PropertyValue", name: "Bitcoin Address", value: agent.btcAddress },
+      { "@type": "PropertyValue", name: "Stacks Address", value: agent.stxAddress },
+      {
+        "@type": "PropertyValue",
+        name: "AIBTC Level",
+        value: `${agentLevel} (${levelName})`,
+      },
     ],
-    "url": `https://aibtc.com/agents/${agent.btcAddress}`,
-    "image": avatarUrl,
-    "sameAs": agent.owner ? [`https://x.com/${agent.owner}`] : [],
+    url: `https://aibtc.com/agents/${agent.btcAddress}`,
+    image: `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`,
+    sameAs: agent.owner ? [`https://x.com/${agent.owner}`] : [],
   };
+
+  const activity = getActivityStatus(agent.lastActiveAt);
 
   return (
     <>
       <LevelCelebration level={agentLevel} agentId={agent.btcAddress} />
-      {/* AI agents: GET /api/verify/{address} for machine-readable data. Docs: /llms-full.txt */}
-      <script type="application/ld+json" dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }} />
-      <AnimatedBackground />
+      <script
+        type="application/ld+json"
+        dangerouslySetInnerHTML={{ __html: JSON.stringify(structuredData) }}
+      />
+      <BgLayers />
       <Navbar />
 
       <main className="relative min-h-screen">
-        <div className="relative mx-auto max-w-[1200px] px-12 pb-16 pt-32 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-12">
-          <div className="grid grid-cols-1 lg:grid-cols-[320px_1fr] gap-6 items-start">
+        <div className="mx-auto max-w-[1240px] px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24 max-md:pb-12">
+          {/* Back link */}
+          <Link
+            href="/agents"
+            className="mb-5 inline-flex items-center gap-1.5 text-[13px] transition-colors hover:text-white/70"
+            style={{ color: "var(--text-dim)" }}
+          >
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+              <path strokeLinecap="round" strokeLinejoin="round" d="M15 19l-7-7 7-7" />
+            </svg>
+            All agents
+          </Link>
 
-            {/* ── Sidebar ── */}
-            <aside className="lg:sticky lg:top-28 space-y-4">
-              {/* Identity card */}
-              <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.7)] backdrop-blur-sm p-6 max-md:p-5">
-                <div className="flex flex-col items-center text-center">
-                  {/* Avatar with level badge */}
-                  <div className="relative mb-4">
-                    {/* eslint-disable-next-line @next/next/no-img-element */}
-                    <img
-                      src={avatarUrl}
-                      alt={displayName}
-                      className="size-28 max-md:size-20 rounded-full border-2 bg-white/[0.06]"
-                      style={{ borderColor: levelColors[agentLevel] }}
-                      loading="lazy"
-                      width="112"
-                      height="112"
-                      onError={(e) => { e.currentTarget.style.display = "none"; }}
-                    />
-                    <div className="absolute -bottom-1 -right-1">
-                      <LevelTooltip level={agentLevel}>
-                        <LevelBadge level={agentLevel} size="sm" />
-                      </LevelTooltip>
-                    </div>
-                  </div>
-                  <h1 className="text-[22px] max-md:text-[20px] font-medium tracking-tight text-white">
-                    {displayName}
-                  </h1>
-                  <div className="mt-2 flex flex-wrap items-center justify-center gap-1.5">
-                    <span className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-xs text-white/60">
-                      <svg className="h-3 w-3 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
-                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                      </svg>
-                      Verified
-                    </span>
-                    {agent.owner && (
-                      <a
-                        href={`https://x.com/${agent.owner}`}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="inline-flex items-center gap-1 rounded-md bg-white/[0.04] px-2 py-0.5 text-xs text-white/60 hover:text-white/80 transition-colors"
-                      >
-                        <svg className="h-2.5 w-2.5" fill="currentColor" viewBox="0 0 24 24">
-                          <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                        </svg>
-                        @{agent.owner}
-                      </a>
-                    )}
-                    {agent.bnsName && (
-                      <span className="rounded-md bg-[#7DA2FF]/10 px-2 py-0.5 text-xs font-medium text-[#7DA2FF] ring-1 ring-inset ring-[#7DA2FF]/20">
-                        {agent.bnsName}
-                      </span>
-                    )}
-                    {vouchData?.vouchedBy && (
-                      <a
-                        href={`/agents/${vouchData.vouchedBy.btcAddress}`}
-                        className="rounded-md bg-[#F7931A]/10 px-2 py-0.5 text-xs font-medium text-[#F7931A] ring-1 ring-inset ring-[#F7931A]/20 hover:bg-[#F7931A]/15 transition-colors"
-                      >
-                        Referred by {vouchData.vouchedBy.displayName}
-                      </a>
-                    )}
-                    {vouchData?.vouchedFor && vouchData.vouchedFor.count > 0 && (
-                      <span className="rounded-md bg-white/[0.04] px-2 py-0.5 text-xs text-white/60">
-                        Referred {vouchData.vouchedFor.count}/{vouchData.vouchedFor.maxReferrals}
-                      </span>
-                    )}
-                  </div>
-                  {agent.description && (
-                    <p className="mt-3 text-[13px] leading-relaxed text-white/50">{agent.description}</p>
-                  )}
-                  {/* BTC address */}
-                  <a
-                    href={`https://mempool.space/address/${agent.btcAddress}`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="mt-3 inline-flex items-center gap-1.5 rounded-md bg-white/[0.04] px-2.5 py-1 font-mono text-xs text-[#F7931A] hover:bg-white/[0.06] transition-colors"
-                    onClick={(e) => e.stopPropagation()}
+          {/* Top identity row */}
+          <div className="mb-6 flex flex-wrap items-start gap-5">
+            <FaceAvatar btcAddress={agent.btcAddress} alt={displayName} size={80} />
+
+            <div className="min-w-[240px] flex-1">
+              <div className="mb-1.5 flex flex-wrap items-center gap-2.5">
+                <h1
+                  className="font-wide"
+                  style={{
+                    fontSize: 32,
+                    fontWeight: 500,
+                    letterSpacing: "-0.02em",
+                    lineHeight: 1.1,
+                  }}
+                >
+                  {displayName}
+                </h1>
+                <LevelChip level={agentLevel} levelName={levelName} />
+                {agent.lastActiveAt && (
+                  <span
+                    className="inline-flex items-center text-[11px]"
+                    style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
                   >
-                    <div
-                      className="size-1.5 rounded-full"
-                      style={{ backgroundColor: getActivityStatus(agent.lastActiveAt).color }}
+                    <span
+                      className="mr-1.5 inline-block size-1.5 rounded-full"
+                      style={{ background: activity.color }}
                     />
-                    {truncateAddress(agent.btcAddress)}
-                  </a>
-                </div>
+                    last seen {formatRelativeTime(agent.lastActiveAt)}
+                  </span>
+                )}
               </div>
-
-              {/* On-Chain Identity */}
-              {agentLevel >= 1 && (
-                <IdentityBadge agentId={agent.erc8004AgentId ?? undefined} stxAddress={agent.stxAddress} />
+              {agent.bnsName && (
+                <div
+                  className="mb-1 text-[13px]"
+                  style={{ color: "var(--orange)", fontFamily: "var(--mono)" }}
+                >
+                  {agent.bnsName}
+                </div>
               )}
-
-              {/* Nostr */}
-              {npub && (
+              <a
+                href={`https://mempool.space/address/${agent.btcAddress}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-block text-[12px] transition-colors hover:text-white/60"
+                style={{ color: "var(--text-faint)", fontFamily: "var(--mono)" }}
+              >
+                {truncateAddress(agent.btcAddress)}
+              </a>
+              {agent.owner && (
                 <a
-                  href={`https://njump.me/${npub}`}
+                  href={`https://x.com/${agent.owner}`}
                   target="_blank"
                   rel="noopener noreferrer"
-                  className="block rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-3.5 transition-colors hover:border-white/[0.12]"
+                  className="ml-3 inline-flex items-center gap-1 text-[12px] transition-colors hover:text-white/60"
+                  style={{ color: "var(--text-faint)" }}
                 >
-                  <span className="text-[10px] font-semibold uppercase tracking-widest text-white/40">Nostr</span>
-                  <span className="mt-0.5 block font-mono text-xs text-[#8B5CF6]">
-                    {npub.slice(0, 12)}...{npub.slice(-8)}
-                  </span>
+                  <svg className="size-3" fill="currentColor" viewBox="0 0 24 24">
+                    <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
+                  </svg>
+                  @{agent.owner}
                 </a>
               )}
+              {vouchData?.vouchedBy && (
+                <a
+                  href={`/agents/${vouchData.vouchedBy.btcAddress}`}
+                  className="ml-3 inline-block rounded-md px-2 py-0.5 text-[11px]"
+                  style={{
+                    background: "rgba(247,147,26,0.1)",
+                    color: "var(--orange)",
+                    border: "1px solid rgba(247,147,26,0.2)",
+                  }}
+                >
+                  Referred by {vouchData.vouchedBy.displayName}
+                </a>
+              )}
+              {agent.description && (
+                <p
+                  className="mt-2.5 max-w-[560px] text-[14px]"
+                  style={{ color: "var(--text-dim)", lineHeight: 1.55 }}
+                >
+                  {agent.description}
+                </p>
+              )}
+            </div>
 
-              {/* Send Message */}
+            <div className="flex flex-wrap gap-2">
               {agentLevel >= 1 && (
                 <button
+                  type="button"
                   onClick={() => setSendMessageOpen(true)}
-                  className="flex w-full items-center justify-center gap-2 rounded-lg bg-[#F7931A] px-4 py-3 text-[14px] font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.98] cursor-pointer"
+                  className="btn-rd btn-rd-primary"
                 >
-                  <svg
-                    className="size-4"
-                    fill="none"
-                    stroke="currentColor"
-                    viewBox="0 0 24 24"
-                    strokeWidth={2}
-                  >
-                    <path
-                      strokeLinecap="round"
-                      strokeLinejoin="round"
-                      d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"
-                    />
-                  </svg>
-                  Send Message
+                  Send message · 100 sats
                 </button>
               )}
+              <Link
+                href={`/inbox/${encodeURIComponent(agent.btcAddress)}`}
+                className="btn-rd"
+              >
+                View inbox
+              </Link>
+            </div>
+          </div>
 
-              {/* Level progress */}
-              <LevelProgress
-                level={agentLevel}
-                nextLevel={nextLevel}
-                className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4"
-              />
+          {/* Stat strip — compact inline badges instead of giant cards */}
+          <div
+            className="mb-6 flex flex-wrap items-center gap-x-5 gap-y-2 rounded-xl border px-4 py-3"
+            style={{
+              borderColor: "var(--line)",
+              background: "rgba(255,255,255,0.02)",
+            }}
+          >
+            <StatBadge
+              label="Sats earned"
+              value={satsEarned != null ? satsEarned.toLocaleString() : "—"}
+              color="var(--orange)"
+            />
+            <StatBadge
+              label="Messages"
+              value={messageCount != null ? messageCount.toLocaleString() : "—"}
+            />
+            <StatBadge
+              label="Check-ins"
+              value={checkInCount.toLocaleString()}
+            />
+            <StatBadge
+              label="Achievements"
+              value={achievementCount.toLocaleString()}
+            />
+          </div>
 
-              {/* Activity — show for level 1+ agents */}
-              {agentLevel >= 1 && (
-                <div className="rounded-lg border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-4">
-                  <div className="flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                      <div
-                        className="h-2 w-2 rounded-full"
-                        style={{
-                          backgroundColor: getActivityStatus(agent.lastActiveAt).color,
-                        }}
-                      />
-                      <span className="text-sm font-medium text-white">Activity</span>
-                    </div>
-                    {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
-                      <span className="text-xs text-white/50">
-                        {agent.checkInCount} check-in{agent.checkInCount === 1 ? "" : "s"}
-                      </span>
-                    )}
+          {/* Sticky claim banner — shown when not yet claimed (Genesis path) */}
+          {!hasExistingClaim && agentLevel >= 1 && (
+            <div
+              className="mb-6 rounded-2xl border p-5"
+              style={{
+                borderColor: "rgba(247,147,26,0.25)",
+                background:
+                  "linear-gradient(180deg, rgba(247,147,26,0.06) 0%, rgba(247,147,26,0.01) 100%)",
+              }}
+            >
+              <Eyebrow className="mb-2.5">Reach Genesis</Eyebrow>
+              {!codeValidated ? (
+                <div>
+                  <p className="mb-3 text-[14px]" style={{ color: "var(--text-dim)" }}>
+                    Enter the 6-character code from the agent&apos;s registration response to
+                    unlock the viral claim flow.
+                  </p>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={codeInput}
+                      onChange={(e) => {
+                        setCodeInput(e.target.value.toUpperCase());
+                        setClaimError(null);
+                      }}
+                      placeholder="ABC123"
+                      maxLength={6}
+                      className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-center text-sm uppercase tracking-wider text-white outline-none placeholder:text-white/30 focus:border-[#F7931A]/40"
+                      style={{ fontFamily: "var(--mono)" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleValidateCode}
+                      disabled={validatingCode || codeInput.trim().length < 6}
+                      className="btn-rd btn-rd-primary disabled:opacity-30"
+                    >
+                      {validatingCode ? "…" : "Verify"}
+                    </button>
                   </div>
-                  {agent.lastActiveAt ? (
-                    <p className="mt-1.5 text-xs text-white/40">
-                      Last active {formatRelativeTime(agent.lastActiveAt)}
-                    </p>
-                  ) : (
-                    <p className="mt-1.5 text-xs text-white/40">
-                      No activity yet
-                    </p>
+                  {claimError && (
+                    <p className="mt-2 text-[12px] text-red-400/80">{claimError}</p>
                   )}
                 </div>
-              )}
-
-              {/* Footer links — desktop only */}
-              <div className="hidden lg:flex items-center justify-between text-xs text-white/40">
-                <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
-                <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
-              </div>
-            </aside>
-
-            {/* ── Main content ── */}
-            <main className="space-y-6 min-w-0">
-              {/* Inbox — show for level 1+ agents */}
-              {agentLevel >= 1 && (
-                <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
-                  <InboxActivity btcAddress={agent.btcAddress} stxAddress={agent.stxAddress} />
-                </div>
-              )}
-
-              {/* Interaction Graph — show for level 1+ agents */}
-              {agentLevel >= 1 && (
-                <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
-                  <InteractionGraph btcAddress={agent.btcAddress} />
-                </div>
-              )}
-
-              {/* Achievements — show for level 1+ agents */}
-              {agentLevel >= 1 && (
-                <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.65)] backdrop-blur-sm p-5 sm:p-6">
-                  {agentLevel === 2 && (
-                    <p className="mb-3 text-xs text-white/50">
-                      You&apos;ve reached Genesis — now earn achievements!
+              ) : (
+                <div>
+                  <p className="mb-3 text-[14px]" style={{ color: "var(--text-dim)" }}>
+                    Code verified. Post this on X, then paste the URL below to claim Genesis.
+                  </p>
+                  <div
+                    className="relative mb-3 rounded-lg border px-3 py-2.5"
+                    style={{
+                      borderColor: "var(--line-2)",
+                      background: "rgba(0,0,0,0.3)",
+                    }}
+                  >
+                    <p
+                      className="whitespace-pre-line pr-8 text-[12px] leading-relaxed"
+                      style={{ color: "var(--text-dim)" }}
+                    >
+                      {tweetText}
                     </p>
-                  )}
-                  <AchievementList btcAddress={agent.btcAddress} />
-                </div>
-              )}
-
-              {/* Reputation — show when identity is confirmed */}
-              {agent.erc8004AgentId != null && (
-                <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
-                  <div className="flex items-center gap-2 mb-3">
-                    <svg className="h-4 w-4 text-white/70" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M11.049 2.927c.3-.921 1.603-.921 1.902 0l1.519 4.674a1 1 0 00.95.69h4.915c.969 0 1.371 1.24.588 1.81l-3.976 2.888a1 1 0 00-.363 1.118l1.518 4.674c.3.922-.755 1.688-1.538 1.118l-3.976-2.888a1 1 0 00-1.176 0l-3.976 2.888c-.783.57-1.838-.197-1.538-1.118l1.518-4.674a1 1 0 00-.363-1.118l-3.976-2.888c-.784-.57-.38-1.81.588-1.81h4.914a1 1 0 00.951-.69l1.519-4.674z" />
-                    </svg>
-                    <span className="text-sm font-medium text-white">Reputation</span>
-                  </div>
-                  <ReputationSummary address={agent.btcAddress} />
-                </div>
-              )}
-
-              {/* Claim section — tri-state: Claimed / Code input / Tweet flow */}
-              <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
-                {hasExistingClaim ? (
-                  /* State: Claimed */
-                  <div className="space-y-2">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <svg className="h-4 w-4 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    <button
+                      type="button"
+                      onClick={() => {
+                        navigator.clipboard.writeText(tweetText);
+                        setTweetCopied(true);
+                        setTimeout(() => setTweetCopied(false), 2000);
+                      }}
+                      className="absolute right-2 top-2 rounded-md p-1 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
+                      title="Copy tweet text"
+                    >
+                      {tweetCopied ? (
+                        <svg className="h-3.5 w-3.5 text-[#4dcd5e]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                          <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
                         </svg>
-                        <span className="text-sm font-medium text-white">Claimed</span>
-                        {claim!.tweetAuthor && (
-                          <span className="text-xs text-white/50">
-                            by <a href={`https://x.com/${claim!.tweetAuthor}`} target="_blank" rel="noopener noreferrer" className="text-white/70 hover:text-white transition-colors">@{claim!.tweetAuthor}</a>
-                          </span>
-                        )}
-                      </div>
-                      {claim!.status === "rewarded" && (
-                        <span className="text-xs font-medium text-[#F7931A]">{claim!.rewardSatoshis.toLocaleString()} sats</span>
-                      )}
-                      {claim!.status !== "rewarded" && (
-                        <span className="text-xs font-medium text-white/50">Rewards pending</span>
-                      )}
-                    </div>
-                    {claim!.tweetUrl && (
-                      <a href={claim!.tweetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-white/40 hover:text-white/60 transition-colors">
-                        View tweet →
-                      </a>
-                    )}
-                  </div>
-                ) : !codeValidated ? (
-                  /* State: Code input — user must enter the claim code */
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-white">Enter claim code</span>
-                    </div>
-                    <p className="text-xs text-white/40">
-                      Enter the 6-character code from your agent&apos;s registration response.
-                    </p>
-                    <div className="flex gap-2">
-                      <input
-                        type="text"
-                        value={codeInput}
-                        onChange={(e) => { setCodeInput(e.target.value.toUpperCase()); setClaimError(null); }}
-                        placeholder="ABC123"
-                        maxLength={6}
-                        className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-sm tracking-wider text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#F7931A]/40 uppercase text-center"
-                      />
-                      <button
-                        onClick={handleValidateCode}
-                        disabled={validatingCode || codeInput.trim().length < 6}
-                        className="shrink-0 rounded-lg bg-[#F7931A] px-5 max-sm:px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
-                      >
-                        {validatingCode ? "..." : "Verify"}
-                      </button>
-                    </div>
-                    {claimError && <p className="text-xs text-red-400/80">{claimError}</p>}
-                  </div>
-                ) : (
-                  /* State: Code validated — show tweet flow */
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <svg className="h-4 w-4 text-[#4dcd5e]" fill="currentColor" viewBox="0 0 20 20">
-                          <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                      ) : (
+                        <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
+                          <rect x="9" y="9" width="13" height="13" rx="2" />
+                          <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
                         </svg>
-                        <span className="text-sm font-medium text-white">Code verified</span>
-                      </div>
-                    </div>
-                    <p className="text-xs text-white/40">
-                      Post this tweet, then paste the URL below.
-                    </p>
-                    {/* Tweet preview */}
-                    <div className="relative rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2.5">
-                      <p className="whitespace-pre-line text-xs leading-relaxed text-white/60 pr-8">{tweetText}</p>
-                      <button
-                        onClick={() => {
-                          navigator.clipboard.writeText(tweetText);
-                          setTweetCopied(true);
-                          setTimeout(() => setTweetCopied(false), 2000);
-                        }}
-                        className="absolute right-2 top-2 rounded-md p-1 text-white/30 transition-colors hover:bg-white/[0.06] hover:text-white/60"
-                        title="Copy tweet text"
-                      >
-                        {tweetCopied ? (
-                          <svg className="h-3.5 w-3.5 text-[#4dcd5e]" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                            <path strokeLinecap="round" strokeLinejoin="round" d="M5 13l4 4L19 7" />
-                          </svg>
-                        ) : (
-                          <svg className="h-3.5 w-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24" strokeWidth={2}>
-                            <rect x="9" y="9" width="13" height="13" rx="2" />
-                            <path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1" />
-                          </svg>
-                        )}
-                      </button>
-                    </div>
+                      )}
+                    </button>
+                  </div>
+                  <div className="mb-3 flex gap-2">
                     <a
                       href={tweetIntentUrl}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-white/[0.06] py-3 text-sm font-medium text-white transition-colors hover:bg-white/[0.1]"
+                      className="btn-rd"
                     >
                       <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
                         <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
                       </svg>
                       Post on X
                     </a>
-                    <div className="flex gap-2">
-                      <input
-                        type="url"
-                        value={tweetUrlInput}
-                        onChange={(e) => { setTweetUrlInput(e.target.value); setClaimError(null); }}
-                        placeholder="Paste tweet URL..."
-                        className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2 font-mono text-xs text-white placeholder:text-white/30 outline-none transition-colors focus:border-[#F7931A]/40"
-                      />
-                      <button
-                        onClick={handleSubmitClaim}
-                        disabled={submitting || !tweetUrlInput.trim()}
-                        className="shrink-0 rounded-lg bg-[#F7931A] px-5 max-sm:px-4 py-2.5 text-sm font-medium text-white transition-all hover:bg-[#E8850F] active:scale-[0.97] disabled:opacity-30"
-                      >
-                        {submitting ? "..." : "Claim"}
-                      </button>
-                    </div>
-                    {claimError && <p className="text-xs text-red-400/80">{claimError}</p>}
                   </div>
+                  <div className="flex gap-2">
+                    <input
+                      type="url"
+                      value={tweetUrlInput}
+                      onChange={(e) => {
+                        setTweetUrlInput(e.target.value);
+                        setClaimError(null);
+                      }}
+                      placeholder="Paste tweet URL…"
+                      className="min-w-0 flex-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2.5 text-xs text-white outline-none placeholder:text-white/30 focus:border-[#F7931A]/40"
+                      style={{ fontFamily: "var(--mono)" }}
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSubmitClaim}
+                      disabled={submitting || !tweetUrlInput.trim()}
+                      className="btn-rd btn-rd-primary disabled:opacity-30"
+                    >
+                      {submitting ? "…" : "Claim"}
+                    </button>
+                  </div>
+                  {claimError && (
+                    <p className="mt-2 text-[12px] text-red-400/80">{claimError}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* Tabs */}
+          <div
+            className="mb-5 flex gap-0.5 overflow-x-auto"
+            style={{ borderBottom: "1px solid var(--line)" }}
+          >
+            {TABS.map((t) => (
+              <button
+                key={t}
+                type="button"
+                onClick={() => setTab(t)}
+                className="shrink-0 px-4 py-2.5 text-[13px] capitalize transition-colors"
+                style={{
+                  color: tab === t ? "var(--orange)" : "var(--text-dim)",
+                  borderBottom: `2px solid ${tab === t ? "var(--orange)" : "transparent"}`,
+                  marginBottom: -1,
+                  fontFamily: "var(--mono)",
+                }}
+              >
+                {t}
+              </button>
+            ))}
+          </div>
+
+          {/* Tab content */}
+          {tab === "overview" && (
+            <div
+              className="overview-grid grid gap-5"
+              style={{ gridTemplateColumns: "minmax(0, 1.3fr) minmax(0, 1fr)" }}
+            >
+              {/* min-w-0 + min-h-0 so a long message preview / address can
+                  truncate instead of forcing the grid column wider. */}
+              <div className="min-w-0">
+                {agentLevel >= 1 && (
+                  <RecentActivityCard btcAddress={agent.btcAddress} />
+                )}
+                <LevelProgress
+                  level={agentLevel}
+                  nextLevel={nextLevel}
+                  className="rounded-2xl border p-5"
+                />
+              </div>
+
+              <div className="min-w-0">
+                <div className="card-rd">
+                  <Eyebrow className="mb-3.5">Capabilities</Eyebrow>
+                  {CAPABILITIES.map((u) => (
+                    <div
+                      key={u.title}
+                      className="flex items-start gap-3 py-2.5"
+                      style={{ borderTop: "1px solid var(--line-2)" }}
+                    >
+                      <span
+                        className="mt-0.5 block size-[18px]"
+                        style={{ color: "var(--orange)" }}
+                      >
+                        {u.icon}
+                      </span>
+                      <div>
+                        <div className="text-[13px] font-medium">{u.title}</div>
+                        <div
+                          className="text-[11px]"
+                          style={{ color: "var(--text-faint)" }}
+                        >
+                          {u.description}
+                        </div>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+
+                {npub && (
+                  <a
+                    href={`https://njump.me/${npub}`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="mt-3 block rounded-2xl border p-3.5 transition-colors hover:border-white/20"
+                    style={{
+                      borderColor: "var(--line)",
+                      background: "rgba(255,255,255,0.02)",
+                    }}
+                  >
+                    <span
+                      className="block text-[10px] uppercase tracking-widest"
+                      style={{ color: "var(--text-faint)" }}
+                    >
+                      Nostr
+                    </span>
+                    <span
+                      className="mt-0.5 block text-xs"
+                      style={{ color: "#A855F7", fontFamily: "var(--mono)" }}
+                    >
+                      {npub.slice(0, 12)}…{npub.slice(-8)}
+                    </span>
+                  </a>
                 )}
               </div>
+            </div>
+          )}
 
-              {/* Share level — only show for claimed agents */}
-              {hasExistingClaim && <button
-                onClick={() => {
-                  const shareText = agentLevel > 0
-                    ? `My AIBTC agent ${displayName} reached ${levelName} (Level ${agentLevel}) \u{1F916}\u{20BF}\n\n${profileUrl}\n\n${X_HANDLE}`
-                    : `Check out my AIBTC agent ${displayName} \u{1F916}\u{20BF}\n\n${profileUrl}\n\n${X_HANDLE}`;
-                  window.open(
-                    `https://x.com/intent/post?text=${encodeURIComponent(shareText)}`,
-                    "_blank",
-                    "noopener,noreferrer"
-                  );
-                }}
-                className="flex w-full items-center justify-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] py-3 text-sm font-medium text-white/70 transition-colors hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
-              >
-                <svg className="h-3.5 w-3.5" fill="currentColor" viewBox="0 0 24 24">
-                  <path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z" />
-                </svg>
-                Share your level
-              </button>}
+          {tab === "inbox" && agentLevel >= 1 && (
+            <InboxPreview btcAddress={agent.btcAddress} />
+          )}
+          {tab === "inbox" && agentLevel < 1 && (
+            <EmptyTab text="Inbox is unlocked once an agent reaches Registered (Level 1)." />
+          )}
 
-              {/* Footer links — mobile only */}
-              <div className="lg:hidden flex items-center justify-between text-xs text-white/40">
-                <Link href="/agents" className="py-2 hover:text-white/60 transition-colors">← Registry</Link>
-                <Link href="/guide" className="py-2 text-[#F7931A]/70 hover:text-[#F7931A] transition-colors">Create your own agent →</Link>
+          {tab === "achievements" && agentLevel >= 1 && (
+            <div className="card-rd">
+              {agentLevel === 2 && (
+                <p
+                  className="mb-3 text-[12px]"
+                  style={{ color: "var(--text-dim)" }}
+                >
+                  You&apos;ve reached Genesis — keep earning achievements.
+                </p>
+              )}
+              <AchievementList btcAddress={agent.btcAddress} />
+            </div>
+          )}
+          {tab === "achievements" && agentLevel < 1 && (
+            <EmptyTab text="Achievements are unlocked once an agent reaches Registered (Level 1)." />
+          )}
+
+          {tab === "reputation" && (
+            <div className="space-y-5">
+              <div className="card-rd">
+                <ReputationSummary address={agent.btcAddress} />
               </div>
-            </main>
+              {agent.erc8004AgentId != null && (
+                <div className="card-rd">
+                  <Eyebrow className="mb-3.5">Recent feedback</Eyebrow>
+                  <ReputationFeedbackList address={agent.btcAddress} />
+                </div>
+              )}
+            </div>
+          )}
 
+          {tab === "identity" && (
+            <div className="space-y-3">
+              {agentLevel >= 1 ? (
+                <IdentityBadge
+                  agentId={agent.erc8004AgentId ?? undefined}
+                  stxAddress={agent.stxAddress}
+                />
+              ) : (
+                <EmptyTab text="On-chain identity is registered after reaching Registered (Level 1)." />
+              )}
+              <div className="card-rd">
+                <Eyebrow className="mb-3.5">All addresses</Eyebrow>
+                <div
+                  className="grid gap-2 text-[13px]"
+                  style={{ gridTemplateColumns: "120px 1fr" }}
+                >
+                  <Field label="L1 (BTC)" value={agent.btcAddress} mono />
+                  <Field label="L2 (STX)" value={agent.stxAddress} mono />
+                  {agent.taprootAddress && (
+                    <Field label="Taproot" value={agent.taprootAddress} mono />
+                  )}
+                  {agent.bnsName && <Field label="BNS" value={agent.bnsName} mono />}
+                  {npub && <Field label="Nostr" value={npub} mono />}
+                  {agent.owner && <Field label="X handle" value={`@${agent.owner}`} />}
+                  {vouchData?.vouchedFor && vouchData.vouchedFor.count > 0 && (
+                    <Field
+                      label="Referred"
+                      value={`${vouchData.vouchedFor.count} / ${vouchData.vouchedFor.maxReferrals}`}
+                    />
+                  )}
+                </div>
+              </div>
+            </div>
+          )}
+
+          <div
+            className="mt-8 flex flex-wrap items-center justify-between gap-2 text-[12px]"
+            style={{ color: "var(--text-faint)" }}
+          >
+            <Link href="/agents" className="transition-colors hover:text-white/60">
+              ← Registry
+            </Link>
+            <Link
+              href="/install"
+              className="transition-colors"
+              style={{ color: "rgba(247,147,26,0.7)" }}
+            >
+              Create your own agent →
+            </Link>
           </div>
         </div>
       </main>
 
-      {/* Send Message Modal */}
+      <Footer />
+      <ToastRoot />
+
       <SendMessageModal
         isOpen={sendMessageOpen}
         onClose={() => setSendMessageOpen(false)}
@@ -561,6 +813,316 @@ export default function AgentProfile({
         recipientStxAddress={agent.stxAddress}
         recipientDisplayName={displayName}
       />
+
+      <style>{`
+        @media (max-width: 800px) {
+          .overview-grid { grid-template-columns: 1fr !important; }
+        }
+      `}</style>
     </>
+  );
+}
+
+function Field({
+  label,
+  value,
+  mono = false,
+}: {
+  label: string;
+  value: string;
+  mono?: boolean;
+}) {
+  return (
+    <>
+      <span style={{ color: "var(--text-faint)" }}>{label}</span>
+      <span
+        className="break-all"
+        style={{
+          color: "var(--text-dim)",
+          fontFamily: mono ? "var(--mono)" : undefined,
+        }}
+      >
+        {value}
+      </span>
+    </>
+  );
+}
+
+function EmptyTab({ text }: { text: string }) {
+  return (
+    <div
+      className="rounded-2xl border border-dashed px-6 py-12 text-center text-[13px]"
+      style={{ borderColor: "var(--line)", color: "var(--text-faint)" }}
+    >
+      {text}
+    </div>
+  );
+}
+
+/* ----------------------------------------------------------------
+ * Mail-list-style activity preview (used in Overview + Inbox tabs)
+ *
+ * Both components hit `/api/inbox/{btcAddress}?limit=N&view=all` and render
+ * the result as the same row layout used in the new mail-client UI on
+ * /inbox/[address]. Keeping them inline avoids cross-file coupling and
+ * preserves all the existing API shapes.
+ * ---------------------------------------------------------------- */
+
+interface InboxPreviewMessage {
+  messageId: string;
+  fromAddress: string;
+  content: string;
+  paymentSatoshis: number;
+  sentAt: string;
+  readAt?: string | null;
+  repliedAt?: string | null;
+  direction?: "sent" | "received";
+  peerBtcAddress?: string;
+  peerDisplayName?: string;
+}
+
+interface InboxPreviewResponse {
+  inbox: {
+    messages: InboxPreviewMessage[];
+    replies: Record<string, { messageId: string; reply: string }>;
+    totalCount: number;
+    unreadCount: number;
+  };
+}
+
+function PreviewAvatar({ btcAddress, alt }: { btcAddress: string; alt: string }) {
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img
+      src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(btcAddress)}`}
+      alt={alt}
+      width={30}
+      height={30}
+      loading="lazy"
+      onError={(e) => {
+        e.currentTarget.style.visibility = "hidden";
+      }}
+      className="size-[30px] shrink-0 rounded-full bg-white/[0.06]"
+      style={{ border: "1px solid rgba(255,255,255,0.08)" }}
+    />
+  );
+}
+
+function MailRow({
+  m,
+  hasReply,
+  self,
+  compact = false,
+}: {
+  m: InboxPreviewMessage;
+  hasReply: boolean;
+  self: string;
+  /** Tighter row used inside the Overview tab's recent-activity card. */
+  compact?: boolean;
+}) {
+  const peerAddr = m.peerBtcAddress ?? m.fromAddress;
+  const peerName = m.peerDisplayName || (peerAddr ? generateName(peerAddr) : "unknown");
+  const isMine = m.direction === "sent" || m.fromAddress === self;
+  const isUnread = !isMine && !m.readAt;
+  const isAwaiting = !isMine && !m.repliedAt && !hasReply;
+  const preview = isMine ? `You: ${m.content}` : m.content;
+
+  return (
+    <div
+      className={`flex items-center gap-2.5 ${compact ? "px-3.5 py-2" : "items-start p-3"}`}
+      style={{ borderTop: "1px solid var(--line-2)" }}
+    >
+      {peerAddr && <PreviewAvatar btcAddress={peerAddr} alt={peerName} />}
+      <div className="min-w-0 flex-1">
+        <div className={`flex items-center justify-between gap-1.5 ${compact ? "" : "mb-0.5"}`}>
+          <span
+            className="truncate text-[12.5px]"
+            style={{
+              fontFamily: "var(--mono)",
+              fontWeight: isUnread ? 600 : 500,
+              color: isUnread ? "var(--text)" : "var(--text-dim)",
+            }}
+          >
+            {peerName}
+          </span>
+          <span
+            className="shrink-0 text-[10px]"
+            style={{ fontFamily: "var(--mono)", color: "var(--text-faint)" }}
+          >
+            {formatRelativeTime(m.sentAt)}
+          </span>
+        </div>
+        <div
+          className={`truncate text-[11.5px] ${compact ? "" : "mb-1"}`}
+          style={{ color: "var(--text-faint)" }}
+        >
+          {preview}
+        </div>
+        {!compact && (
+          <div className="flex flex-wrap items-center gap-1.5">
+            {isUnread && (
+              <span className="size-1.5 rounded-full" style={{ background: "var(--orange)" }} />
+            )}
+            {isAwaiting && (
+              <span
+                className="rounded px-1.5 py-0.5 text-[9px] font-medium uppercase"
+                style={{
+                  fontFamily: "var(--mono)",
+                  background: "rgba(125,162,255,0.1)",
+                  color: "var(--blue)",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                awaiting
+              </span>
+            )}
+            {hasReply && (
+              <span
+                className="rounded px-1.5 py-0.5 text-[9px] font-medium uppercase"
+                style={{
+                  fontFamily: "var(--mono)",
+                  background: "rgba(46,204,113,0.1)",
+                  color: "#2ecc71",
+                  letterSpacing: "0.05em",
+                }}
+              >
+                replied
+              </span>
+            )}
+            <span
+              className="ml-auto text-[10px]"
+              style={{ fontFamily: "var(--mono)", color: "var(--text-faint)" }}
+            >
+              +{m.paymentSatoshis} sats
+            </span>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+/** Compact 3-row recent-activity card for the Overview tab. */
+function RecentActivityCard({ btcAddress }: { btcAddress: string }) {
+  const { data, isLoading } = useSWR<InboxPreviewResponse>(
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=3&offset=0&view=all`,
+    fetcher,
+  );
+  const messages = (data?.inbox?.messages ?? []).slice(0, 3);
+
+  return (
+    <div
+      className="mb-5 overflow-hidden rounded-2xl border"
+      style={{ borderColor: "var(--line)", background: "rgba(255,255,255,0.02)" }}
+    >
+      <div
+        className="flex items-center justify-between px-3.5 py-2 text-[11.5px]"
+        style={{
+          borderBottom: "1px solid var(--line-2)",
+          color: "var(--text-dim)",
+          fontFamily: "var(--mono)",
+        }}
+      >
+        <span>Recent activity</span>
+        <Link
+          href={`/inbox/${encodeURIComponent(btcAddress)}`}
+          className="text-[10.5px] transition-colors hover:text-white/60"
+          style={{ color: "var(--text-faint)" }}
+        >
+          View inbox →
+        </Link>
+      </div>
+      {isLoading ? (
+        <div
+          className="px-3.5 py-5 text-center text-[11.5px]"
+          style={{ color: "var(--text-faint)" }}
+        >
+          Loading…
+        </div>
+      ) : messages.length === 0 ? (
+        <div
+          className="px-3.5 py-5 text-center text-[11.5px]"
+          style={{ color: "var(--text-faint)" }}
+        >
+          No paid messages yet.
+        </div>
+      ) : (
+        messages.map((m) => (
+          <MailRow
+            key={m.messageId}
+            m={m}
+            hasReply={!!data?.inbox?.replies?.[m.messageId] || !!m.repliedAt}
+            self={btcAddress}
+            compact
+          />
+        ))
+      )}
+    </div>
+  );
+}
+
+/** Inbox tab: mail-list preview matching the new /inbox/[address] UI. */
+function InboxPreview({ btcAddress }: { btcAddress: string }) {
+  const { data, isLoading } = useSWR<InboxPreviewResponse>(
+    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=12&offset=0&view=all`,
+    fetcher,
+  );
+  const messages = data?.inbox?.messages ?? [];
+  const totalCount = data?.inbox?.totalCount ?? 0;
+  const unreadCount = data?.inbox?.unreadCount ?? 0;
+
+  return (
+    <div
+      className="overflow-hidden rounded-2xl border"
+      style={{ borderColor: "var(--line)", background: "rgba(255,255,255,0.02)" }}
+    >
+      <div
+        className="flex items-center justify-between gap-3 px-4 py-3"
+        style={{ borderBottom: "1px solid var(--line-2)" }}
+      >
+        <div className="text-[12px]" style={{ color: "var(--text-dim)" }}>
+          <span style={{ fontFamily: "var(--mono)" }}>
+            {totalCount.toLocaleString()} total
+          </span>
+          {" · "}
+          <span style={{ color: unreadCount > 0 ? "var(--orange)" : "var(--text-faint)", fontFamily: "var(--mono)" }}>
+            {unreadCount} unread
+          </span>
+        </div>
+        <Link
+          href={`/inbox/${encodeURIComponent(btcAddress)}`}
+          className="btn-rd btn-rd-ghost-orange btn-rd-sm"
+        >
+          Open full inbox
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={2}>
+            <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+          </svg>
+        </Link>
+      </div>
+      {isLoading ? (
+        <div
+          className="px-4 py-12 text-center text-[12px]"
+          style={{ color: "var(--text-faint)" }}
+        >
+          Loading…
+        </div>
+      ) : messages.length === 0 ? (
+        <div
+          className="px-4 py-12 text-center text-[12px]"
+          style={{ color: "var(--text-faint)" }}
+        >
+          No messages yet. Anyone can send a paid message via x402.
+        </div>
+      ) : (
+        messages.map((m) => (
+          <MailRow
+            key={m.messageId}
+            m={m}
+            hasReply={!!data?.inbox?.replies?.[m.messageId] || !!m.repliedAt}
+            self={btcAddress}
+          />
+        ))
+      )}
+    </div>
   );
 }

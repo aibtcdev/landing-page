@@ -1,9 +1,9 @@
 import { cache } from "react";
 import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
+import { BgLayers } from "../../components/redesign";
 import BountyDetail from "./BountyDetail";
 import type { BountyData } from "../types";
 import type { AgentRecord } from "@/lib/types";
@@ -81,12 +81,12 @@ export default async function BountyDetailPage({ params }: PageProps) {
 
   return (
     <div className="relative min-h-screen text-white">
-      <AnimatedBackground />
+      <BgLayers />
 
       <div className="relative z-10">
         <Navbar />
 
-        <main className="mx-auto max-w-[1200px] px-12 pt-32 pb-24 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-16">
+        <main className="mx-auto max-w-[1240px] px-8 pt-28 pb-20 max-md:px-5 max-md:pt-24 max-md:pb-12">
           <BountyDetail data={data} stxToBtc={stxToBtc} />
         </main>
 

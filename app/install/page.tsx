@@ -1,7 +1,7 @@
-import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import CopyButton from "../components/CopyButton";
+import { BgLayers } from "../components/redesign";
 
 const installers = [
   {
@@ -42,12 +42,12 @@ const installers = [
 export default function InstallIndex() {
   return (
     <div className="relative min-h-screen text-white">
-      <AnimatedBackground />
+      <BgLayers />
 
       <div className="relative z-10">
         <Navbar />
 
-        <main className="mx-auto max-w-4xl px-6 py-24">
+        <main className="mx-auto max-w-[900px] px-8 pb-20 pt-28 max-md:px-5 max-md:pt-24">
           <div className="mb-12 text-center">
             <h1 className="mb-4 text-[clamp(36px,4vw,48px)] font-medium leading-[1.1] tracking-tight text-white">
               Install Scripts

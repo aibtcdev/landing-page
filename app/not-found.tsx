@@ -2,7 +2,7 @@ import { headers } from "next/headers";
 import Link from "next/link";
 import Navbar from "./components/Navbar";
 import Footer from "./components/Footer";
-import AnimatedBackground from "./components/AnimatedBackground";
+import { BgLayers } from "./components/redesign";
 
 function isCLIUserAgent(ua: string): boolean {
   const lower = ua.toLowerCase();
@@ -35,7 +35,7 @@ export default async function NotFound() {
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
-      <AnimatedBackground />
+      <BgLayers />
       <Navbar />
       <main className="flex-1 flex flex-col items-center justify-center px-4 py-24 relative z-10">
         <div className="max-w-lg w-full text-center">
