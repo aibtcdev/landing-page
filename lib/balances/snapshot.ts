@@ -1,16 +1,16 @@
 /**
  * Dashboard snapshot: full ranked array of Genesis agents with balances.
  *
- * Cost discipline: public requests never trigger per-agent upstream fan-out.
- * The snapshot is rebuilt off the request path via `waitUntil`, single-flighted
- * by a `building` sentinel, and served stale while a rebuild is in progress.
+ * Cost discipline: warm/stale public requests read one KV snapshot key.
+ * Stale snapshots rebuild off the request path via `waitUntil`,
+ * single-flighted by a `building` sentinel, and remain available for an hour.
  *
  * Mirrors the pattern in `lib/cache/agent-list.ts`:
  *   - Fresh hit: return immediately.
  *   - Stale hit: return stale, kick off background rebuild.
  *   - Cold miss + another rebuild already in flight: poll briefly so we don't
  *     return an empty page just because we lost the race.
- *   - Cold miss + no rebuild in flight: rebuild synchronously.
+ *   - Cold miss + no rebuild in flight: rebuild synchronously to seed KV.
  *
  * The snapshot only includes Genesis-level agents (level >= 2) — the trading
  * comp's participant set. They self-select by posting on X, so the set is
@@ -65,8 +65,9 @@ function parseSnapshot(raw: string | null): DashboardSnapshot | null {
 /**
  * Read the dashboard snapshot from KV.
  *
- * Pass `waitUntil` from `getCloudflareContext()` so background rebuilds run
- * after the response is sent rather than blocking it.
+ * Pass `waitUntil` from `getCloudflareContext()` so stale-cache rebuilds run
+ * after the response is sent rather than blocking it. True cold misses still
+ * rebuild synchronously to seed the first snapshot.
  */
 export async function getDashboardSnapshot(
   kv: KVNamespace,

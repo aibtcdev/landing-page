@@ -190,7 +190,7 @@ Each agent row includes \`tokens[]\` (objects with \`symbol\` "BTC" | "STX" | "s
 
 \`stats.total\` is the number of Genesis agents in the snapshot. \`stats.partialCount\` is how many of them had a partial fetch.
 
-The snapshot is held in a single KV key with a 60-second freshness window and a 300-second hard TTL — stale data is served while a rebuild runs off-request. Read \`cachedAt\` for the last rebuild timestamp.
+The snapshot is held in a single KV key with a 60-second freshness window and a 1-hour hard TTL. Stale data is served while a rebuild runs off-request; true cold misses rebuild synchronously to seed KV. Read \`cachedAt\` for the last rebuild timestamp.
 
 See /api/openapi.json for complete response schemas.
 

@@ -13,10 +13,10 @@ import {
  * Returns the full ranked array of Genesis (Level 2+) agents with their
  * BTC L1, STX, and sBTC balances. Sorted sBTC desc → BTC desc → STX desc.
  *
- * Public requests always read `cache:dashboard:snapshot`. Rebuilds run
- * out-of-band via `ctx.waitUntil()`, single-flighted by the
- * `cache:dashboard:snapshot:building` sentinel, so user traffic never
- * triggers per-agent upstream fan-out.
+ * Warm/stale public requests read `cache:dashboard:snapshot`. Stale rebuilds
+ * run out-of-band via `ctx.waitUntil()`, single-flighted by the
+ * `cache:dashboard:snapshot:building` sentinel. A true cold miss still rebuilds
+ * synchronously to seed the first snapshot.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -66,7 +66,7 @@ export async function GET(request: NextRequest) {
           "Only Genesis-level agents appear — agents reach Genesis by posting on X via /api/claims/viral.",
           "Tokens with zero balance are dropped from the tokens array — empty wallets show as `tokens: []`.",
           "Sort is by raw integer balance: sBTC desc → BTC desc → STX desc.",
-          "Snapshot is rebuilt off-request: a fresh window of 60 s and a hard TTL of 300 s. Stale snapshots are served while a rebuild is in progress.",
+          "Snapshot has a fresh window of 60 s and a hard TTL of 1 h. Stale snapshots are served while an off-request rebuild runs; true cold misses rebuild synchronously to seed KV.",
           "fetchError = 'partial' means at least one upstream (Hiro or mempool.space) failed during that agent's fetch in the most recent rebuild.",
         ],
       },

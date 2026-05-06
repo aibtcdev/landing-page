@@ -1,11 +1,11 @@
 /**
  * Trading-comp dashboard: per-agent BTC L1 + STX + sBTC balances.
  *
- * Public requests read a single ranked snapshot key
+ * Warm/stale public requests read a single ranked snapshot key
  * (`cache:dashboard:snapshot`) holding only Genesis-level (Level 2+) agents,
  * sorted sBTC desc → BTC desc → STX desc. The snapshot is rebuilt
  * off-request via `waitUntil` and single-flighted by a building sentinel,
- * so user traffic never triggers per-agent upstream fan-out.
+ * while true cold misses synchronously seed the first snapshot.
  */
 
 export type { AgentBalance, TokenBalance } from "./types";

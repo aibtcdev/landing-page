@@ -1116,8 +1116,9 @@ export function GET() {
             "balances, sorted by sBTC desc → BTC desc → STX desc. No pagination: " +
             "the participant set is bounded by the Genesis count. No USD " +
             "valuation. The snapshot is held in a single KV key with a 60-second " +
-            "freshness window and a 300-second hard TTL; stale data is served " +
-            "while a rebuild runs off-request. Read cachedAt for freshness. " +
+            "freshness window and a 1-hour hard TTL; stale data is served " +
+            "while a rebuild runs off-request. True cold misses rebuild " +
+            "synchronously to seed KV. Read cachedAt for freshness. " +
             "Tokens with zero balance are dropped from the array.",
           parameters: [
             {

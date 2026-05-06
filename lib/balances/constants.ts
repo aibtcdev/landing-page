@@ -17,16 +17,17 @@ export const SBTC_CONTRACT_ID = `${SBTC_CONTRACTS.mainnet.address}.${SBTC_CONTRA
 
 /**
  * Snapshot cache for the trading-comp dashboard. One KV entry holds the
- * full ranked array of Genesis agents with their balances. Public requests
- * always read this key — they never trigger upstream fan-out directly.
+ * full ranked array of Genesis agents with their balances. Warm/stale public
+ * requests read this key; true cold misses rebuild once to seed it.
  *
  * Fresh window (60 s): within this age, no rebuild needed.
- * Hard TTL (300 s): how long the value persists in KV. Keeps stale data
- * around so we can serve it during a background rebuild.
+ * Hard TTL (1 h): how long the value persists in KV. Keeps stale data
+ * around so we can serve it during a background rebuild. A longer hard TTL
+ * prevents low-traffic gaps from turning the next visitor into a cold rebuild.
  */
 export const SNAPSHOT_CACHE_KEY = "cache:dashboard:snapshot";
 export const SNAPSHOT_FRESH_WINDOW_SECONDS = 60;
-export const SNAPSHOT_HARD_TTL_SECONDS = 300;
+export const SNAPSHOT_HARD_TTL_SECONDS = 3600;
 
 /**
  * Single-flight sentinel for the snapshot rebuild. While set, no other
@@ -34,7 +35,7 @@ export const SNAPSHOT_HARD_TTL_SECONDS = 300;
  * fresh snapshot or serve the stale one.
  */
 export const SNAPSHOT_BUILDING_KEY = "cache:dashboard:snapshot:building";
-export const SNAPSHOT_BUILDING_TTL_SECONDS = 60;
+export const SNAPSHOT_BUILDING_TTL_SECONDS = 120;
 
 /**
  * Upstream-failure sentinel prefix.
