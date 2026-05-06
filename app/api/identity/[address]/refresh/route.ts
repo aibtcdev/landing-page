@@ -10,6 +10,10 @@ import {
   invalidateIdentityCache,
 } from "@/lib/identity/kv-cache";
 import {
+  buildEdgeCacheKey,
+  invalidateEdgeCache,
+} from "@/lib/edge-cache";
+import {
   createLogger,
   createConsoleLogger,
   isLogsRPC,
@@ -159,16 +163,18 @@ export async function POST(
     const bnsChanged = (agent.bnsName ?? null) !== nextBnsName;
     const idChanged = (agent.erc8004AgentId ?? null) !== nextAgentId;
 
+    // Capture the prior bnsName before any potential mutation of
+    // `agent` so syncBnsLookup (and the edge-cache invalidation
+    // below) sees the true old value even if a future refactor
+    // mutates `agent` in place.
+    const previousBnsName = agent.bnsName ?? null;
+
     if (bnsChanged || idChanged) {
       const updatedRecord = {
         ...agent,
         bnsName: nextBnsName,
         erc8004AgentId: nextAgentId,
       };
-      // Capture the prior bnsName before any potential mutation of
-      // `agent` so syncBnsLookup sees the true old value even if a
-      // future refactor mutates `agent` in place.
-      const previousBnsName = agent.bnsName ?? null;
       const serialized = JSON.stringify(updatedRecord);
       await Promise.all([
         kv.put(`stx:${stxAddress}`, serialized),
@@ -205,6 +211,32 @@ export async function POST(
         idOutcome: idOutcome.state,
       });
     }
+
+    // Always bust the edge-cache layer on refresh. A user who hits
+    // "force refresh" expects fresh state immediately even when the
+    // upstream lookup confirmed no change — there may be a previously-
+    // cached response that is older than the source state. Invalidate
+    // every form a caller could have used to address this agent
+    // (btc, stx, taproot if set, and old + new bnsName).
+    const cachedAddresses = new Set<string>([
+      agent.btcAddress,
+      stxAddress,
+    ]);
+    if (agent.taprootAddress) cachedAddresses.add(agent.taprootAddress);
+    if (previousBnsName) cachedAddresses.add(previousBnsName);
+    if (nextBnsName) cachedAddresses.add(nextBnsName);
+    const urlsToInvalidate: string[] = [];
+    for (const addr of cachedAddresses) {
+      urlsToInvalidate.push(buildEdgeCacheKey("/api/agents", addr));
+      urlsToInvalidate.push(buildEdgeCacheKey("/api/identity", addr));
+      urlsToInvalidate.push(
+        buildEdgeCacheKey("/api/identity", addr, "/reputation?type=summary"),
+      );
+      urlsToInvalidate.push(
+        buildEdgeCacheKey("/api/identity", addr, "/reputation?type=feedback"),
+      );
+    }
+    await invalidateEdgeCache(...urlsToInvalidate);
 
     return NextResponse.json({
       stxAddress,

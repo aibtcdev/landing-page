@@ -249,3 +249,73 @@ npm run lint
 npm run build
 npx vitest run lib/__tests__/bns-reverse-index.test.ts
 ```
+
+## B6.3: caches.default edge layer for stable identity GETs
+
+PR scope:
+- `lib/edge-cache.ts`: new module. `withEdgeCache(url, ttl, loader)`
+  wraps a route handler — cache hits skip the loader entirely;
+  misses run the loader and write the response to `caches.default`
+  asynchronously via `ctx.waitUntil`. Only `response.ok` responses
+  are cached. `buildEdgeCacheKey(routeBase, address, suffix?)`
+  composes canonical URLs against a synthetic `cache.aibtc.local`
+  host (lowercased address). `invalidateEdgeCache(...urls)` busts
+  one or more entries.
+- Three GET handlers wrapped (cache hits collapse 7-8 KV-read
+  fan-outs to zero):
+  - `app/api/agents/[address]/route.ts` — full agent profile.
+  - `app/api/identity/[address]/route.ts` — identity NFT lookup.
+  - `app/api/identity/[address]/reputation/route.ts` —
+    reputation summary / paginated feedback. Cache key includes
+    `?type=` and (for feedback) `&cursor=` so each variant gets
+    its own entry.
+- `app/api/identity/[address]/refresh/route.ts` busts the cache
+  for every form a caller could have used to address the agent
+  (btc, stx, taproot if set, old + new bnsName) across all three
+  cached endpoints. Users hitting "force refresh" see fresh state
+  immediately rather than waiting out the 5-min TTL.
+
+TTL: 300s (5 min) for all three endpoints. Identity / reputation
+state changes infrequently; the explicit invalidation hook
+handles the user-initiated refresh case.
+
+Expected Cloudflare movement:
+- Worker invocations: cache hits skip the entire handler, so KV
+  reads, JSON renders, and downstream Hiro calls all collapse on
+  hit.
+- VERIFIED_AGENTS reads: target a 60-80% hit ratio at steady
+  state. At those rates daily reads drop from `~12.85 M/day`
+  (post-B6.1+B6.2) to `~3-5 M/day`, **inside the 10 M-per-month
+  Workers Paid free tier**, hitting the campaign target of `$0
+  extra above the $5/mo plan floor`.
+
+Rollback signal:
+- Profile data appears stale after a confirmed update for >5 min
+  (the TTL boundary). Most likely cause: a bnsName mutation path
+  that doesn't pass through `/api/identity/{address}/refresh`.
+  Mitigation: `/api/identity/{address}/refresh` invalidates all
+  three cached endpoints; for other stale-cache cases the TTL
+  expires the entry.
+- Identity NFT changes (mint / burn) not reflected in
+  `/api/identity/{address}` for >5 min. Same TTL window;
+  refresh endpoint clears immediately.
+- Reputation feedback page returning stale paginated lists.
+  Same TTL; cursor-aware cache key means new feedback at cursor 0
+  isn't masked by a cached cursor=10 page.
+
+Maintenance backstop:
+- To force-bust all edge-cache entries for an agent: `POST
+  /api/identity/{btcOrStxAddress}/refresh` (existing endpoint;
+  now also invalidates edge cache).
+- To inspect edge cache: not directly inspectable via wrangler.
+  Indirect signal: the `Cache-Control: public, max-age=300`
+  header on the response indicates a hit / fresh write.
+
+Local validation run for this change:
+
+```sh
+npx tsc --noEmit
+npm run lint
+npm run build
+npx vitest run lib/__tests__/edge-cache.test.ts
+```

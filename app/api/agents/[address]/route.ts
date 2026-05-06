@@ -9,6 +9,9 @@ import {
   lookupBtcAddressByBnsName,
   syncBnsLookup,
 } from "@/lib/bns-reverse-index";
+import { buildEdgeCacheKey, withEdgeCache } from "@/lib/edge-cache";
+
+const AGENT_PROFILE_CACHE_TTL_SECONDS = 300;
 import {
   createLogger,
   createConsoleLogger,
@@ -196,6 +199,18 @@ export async function GET(
       );
     }
 
+    // Wrap the agent-resolution + render in an edge-cache layer.
+    // Cache hits skip the entire fan-out (kv.gets for the agent
+    // record, claim, achievements, inbox, identity / bns /
+    // reputation caches). Validation above runs first so 400s
+    // never hit the cache; non-ok responses inside the loader
+    // (404 / 500) also skip caching via `withEdgeCache`'s
+    // `response.ok` gate.
+    const cacheKey = buildEdgeCacheKey("/api/agents", address);
+    return await withEdgeCache(
+      cacheKey,
+      AGENT_PROFILE_CACHE_TTL_SECONDS,
+      async () => {
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const hiroApiKey = env.HIRO_API_KEY;
@@ -344,6 +359,8 @@ export async function GET(
           "Cache-Control": "public, max-age=60, s-maxage=300",
         },
       }
+    );
+      },
     );
   } catch (e) {
     console.error("Agent profile lookup error:", e);

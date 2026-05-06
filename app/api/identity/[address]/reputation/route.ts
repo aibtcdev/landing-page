@@ -11,6 +11,9 @@ import {
   isLogsRPC,
   type Logger,
 } from "@/lib/logging";
+import { buildEdgeCacheKey, withEdgeCache } from "@/lib/edge-cache";
+
+const REPUTATION_CACHE_TTL_SECONDS = 300;
 
 /**
  * Look up an agent by BTC or STX address.
@@ -88,6 +91,24 @@ export async function GET(
     );
   }
 
+  // Cache strategy:
+  //  - `type=summary` is always cached (single entry per agent).
+  //  - `type=feedback` first page (no cursor) is cached.
+  //  - Paginated feedback (`cursor` present) bypasses the cache.
+  //
+  // Why bypass cursor pages: refresh invalidation can't enumerate
+  // every cursor variant that may have been cached, so caching them
+  // would let stale paginated views survive an explicit refresh for
+  // up to the TTL. Skipping them entirely keeps the invalidation set
+  // bounded to one entry per (address, type).
+  const cursorParam = url.searchParams.get("cursor");
+  const isCacheable = type === "summary" || cursorParam === null;
+  const cacheKey = isCacheable
+    ? buildEdgeCacheKey("/api/identity", address, `/reputation?type=${type}`)
+    : null;
+
+  const handler = async (): Promise<Response> => {
+
   const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
   const baseCtx = { rayId, path: request.nextUrl.pathname };
   // Start with a console-backed logger so errors during Cloudflare context
@@ -137,7 +158,6 @@ export async function GET(
     }
 
     // type === "feedback"
-    const cursorParam = url.searchParams.get("cursor");
     let cursor: number | undefined;
     if (cursorParam !== null) {
       const parsedCursor = parseInt(cursorParam, 10);
@@ -185,4 +205,10 @@ export async function GET(
       { status: 500 }
     );
   }
+  };
+
+  if (cacheKey === null) {
+    return await handler();
+  }
+  return await withEdgeCache(cacheKey, REPUTATION_CACHE_TTL_SECONDS, handler);
 }
