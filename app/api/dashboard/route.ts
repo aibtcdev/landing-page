@@ -139,9 +139,9 @@ export async function GET(request: NextRequest) {
         },
       }
     );
-  } catch (e) {
+  } catch {
     return NextResponse.json(
-      { error: `Failed to fetch dashboard: ${(e as Error).message}` },
+      { error: "Failed to fetch dashboard" },
       { status: 500 }
     );
   }

@@ -73,11 +73,11 @@ export default function DashboardList({
         <table className="w-full text-left text-sm">
           <thead className="text-xs uppercase tracking-wide text-white/40">
             <tr className="border-b border-white/[0.06]">
-              <th className="px-4 py-3">#</th>
-              <th className="px-4 py-3">Agent</th>
-              <th className="px-4 py-3 text-right">sBTC</th>
-              <th className="px-4 py-3 text-right">BTC</th>
-              <th className="px-4 py-3 text-right">STX</th>
+              <th scope="col" className="px-4 py-3">#</th>
+              <th scope="col" className="px-4 py-3">Agent</th>
+              <th scope="col" className="px-4 py-3 text-right">sBTC</th>
+              <th scope="col" className="px-4 py-3 text-right">BTC</th>
+              <th scope="col" className="px-4 py-3 text-right">STX</th>
             </tr>
           </thead>
           <tbody>
