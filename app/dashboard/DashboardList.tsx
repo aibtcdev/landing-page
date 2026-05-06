@@ -1,7 +1,6 @@
 "use client";
 
 import Link from "next/link";
-import { useState } from "react";
 import type { AgentBalance, TokenBalance } from "@/lib/balances";
 
 const fmtAmount = new Intl.NumberFormat("en-US", {
@@ -21,52 +20,30 @@ function findToken(
   return tokens.find((t) => t.symbol === symbol);
 }
 
-interface DashboardListProps {
-  initialAgents: AgentBalance[];
-  total: number;
-  pageSize: number;
-  initialHasMore: boolean;
+function relativeTime(iso: string): string {
+  const ms = Date.now() - Date.parse(iso);
+  if (Number.isNaN(ms) || ms < 0) return "just now";
+  const seconds = Math.floor(ms / 1000);
+  if (seconds < 60) return `${seconds}s ago`;
+  const minutes = Math.floor(seconds / 60);
+  if (minutes < 60) return `${minutes}m ago`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h ago`;
+  const days = Math.floor(hours / 24);
+  return `${days}d ago`;
 }
 
-interface PageResponse {
+interface DashboardListProps {
   agents: AgentBalance[];
-  pagination: {
-    total: number;
-    limit: number;
-    offset: number;
-    hasMore: boolean;
-  };
+  total: number;
+  cachedAt: string;
 }
 
 export default function DashboardList({
-  initialAgents,
+  agents,
   total,
-  pageSize,
-  initialHasMore,
+  cachedAt,
 }: DashboardListProps) {
-  const [agents, setAgents] = useState<AgentBalance[]>(initialAgents);
-  const [hasMore, setHasMore] = useState(initialHasMore);
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  async function loadMore() {
-    setLoading(true);
-    setError(null);
-    try {
-      const res = await fetch(
-        `/api/dashboard?offset=${agents.length}&limit=${pageSize}`
-      );
-      if (!res.ok) throw new Error(`HTTP ${res.status}`);
-      const data = (await res.json()) as PageResponse;
-      setAgents((prev) => [...prev, ...data.agents]);
-      setHasMore(data.pagination.hasMore);
-    } catch (e) {
-      setError((e as Error).message);
-    } finally {
-      setLoading(false);
-    }
-  }
-
   return (
     <>
       <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.02]">
@@ -84,7 +61,8 @@ export default function DashboardList({
             {agents.length === 0 && (
               <tr>
                 <td colSpan={5} className="px-4 py-12 text-center text-white/40">
-                  No agents yet.
+                  No Genesis agents yet. Be the first — tweet your agent on X
+                  to enter the comp.
                 </td>
               </tr>
             )}
@@ -149,26 +127,12 @@ export default function DashboardList({
         </table>
       </div>
 
-      <div className="mt-4 flex items-center justify-between gap-3 max-md:flex-col">
-        <div className="text-xs text-white/40">
-          Showing {agents.length} of {total} agents
+      <div className="mt-4 flex items-center justify-between gap-3 text-xs text-white/40 max-md:flex-col max-md:items-start">
+        <div>
+          {total} Genesis agent{total === 1 ? "" : "s"}
         </div>
-        {hasMore && (
-          <button
-            type="button"
-            onClick={loadMore}
-            disabled={loading}
-            className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] px-4 py-2 text-sm font-medium text-white/80 transition-[background-color,border-color,color] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white disabled:cursor-not-allowed disabled:opacity-60"
-          >
-            {loading ? "Loading…" : "Load more"}
-          </button>
-        )}
+        <div title={cachedAt}>Updated {relativeTime(cachedAt)}</div>
       </div>
-      {error && (
-        <div className="mt-3 rounded-lg border border-red-500/30 bg-red-500/[0.04] px-3 py-2 text-xs text-red-300/80">
-          Failed to load: {error}
-        </div>
-      )}
     </>
   );
 }

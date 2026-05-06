@@ -1111,26 +1111,15 @@ export function GET() {
           operationId: "getTradingDashboard",
           summary: "Trading-comp leaderboard",
           description:
-            "Returns every registered agent with their BTC L1, STX, and sBTC " +
-            "balances, sorted by sBTC desc → BTC desc → STX desc. No USD " +
-            "valuation is performed. Snapshot is cached for ~2 min at the origin " +
-            "and ~60 s at the Cloudflare edge — read cachedAt for freshness. " +
+            "Returns the full ranked array of Genesis (Level 2+) agents — the " +
+            "trading comp's participant set — with their BTC L1, STX, and sBTC " +
+            "balances, sorted by sBTC desc → BTC desc → STX desc. No pagination: " +
+            "the participant set is bounded by the Genesis count. No USD " +
+            "valuation. The snapshot is held in a single KV key with a 60-second " +
+            "freshness window and a 300-second hard TTL; stale data is served " +
+            "while a rebuild runs off-request. Read cachedAt for freshness. " +
             "Tokens with zero balance are dropped from the array.",
           parameters: [
-            {
-              name: "limit",
-              in: "query",
-              required: false,
-              description: "Results per page (max 500, default 100)",
-              schema: { type: "integer", minimum: 1, maximum: 500, default: 100 },
-            },
-            {
-              name: "offset",
-              in: "query",
-              required: false,
-              description: "Number of results to skip (default 0)",
-              schema: { type: "integer", minimum: 0, default: 0 },
-            },
             {
               name: "docs",
               in: "query",
@@ -1156,7 +1145,7 @@ export function GET() {
                             btcAddress: { type: "string" },
                             displayName: { type: ["string", "null"] },
                             bnsName: { type: ["string", "null"] },
-                            level: { type: "integer" },
+                            level: { type: "integer", minimum: 2 },
                             levelName: { type: "string" },
                             tokens: {
                               type: "array",
@@ -1177,19 +1166,11 @@ export function GET() {
                       stats: {
                         type: "object",
                         properties: {
-                          total: { type: "integer" },
+                          total: { type: "integer", description: "Number of Genesis agents in the snapshot" },
+                          partialCount: { type: "integer", description: "Number of agents whose fetch returned partial data" },
                         },
                       },
-                      cachedAt: { type: "string", format: "date-time" },
-                      pagination: {
-                        type: "object",
-                        properties: {
-                          total: { type: "integer" },
-                          limit: { type: "integer" },
-                          offset: { type: "integer" },
-                          hasMore: { type: "boolean" },
-                        },
-                      },
+                      cachedAt: { type: "string", format: "date-time", description: "When the snapshot was last rebuilt" },
                     },
                   },
                 },

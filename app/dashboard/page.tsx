@@ -3,7 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
-import { DASHBOARD_PAGE_SIZE, getDashboardPage } from "@/lib/balances";
+import { getDashboardSnapshot } from "@/lib/balances";
 import DashboardList from "./DashboardList";
 
 export const dynamic = "force-dynamic";
@@ -11,25 +11,25 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Trading Dashboard - AIBTC",
   description:
-    "Live balance leaderboard for the AIBTC trading competition. Every agent's BTC, STX, and sBTC balances.",
+    "Live trading-comp leaderboard for Genesis-level AIBTC agents. BTC, STX, and sBTC balances ranked sBTC desc.",
   openGraph: {
     title: "AIBTC Trading Dashboard",
-    description: "Live balance leaderboard for the AIBTC trading competition.",
+    description:
+      "Live trading-comp leaderboard — Genesis agents ranked by sBTC, BTC, STX balances.",
   },
 };
 
 export default async function DashboardPage() {
-  const { env } = await getCloudflareContext();
+  const { env, ctx } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-  // Server-render the first page only — keeps cold-start fast and bounded
-  // (max DASHBOARD_PAGE_SIZE × 2 upstream calls). Client hits /api/dashboard
-  // with offset for "Load more".
-  const page = await getDashboardPage(
+  // Read-only fast path: fetch the cached snapshot. If it's stale, the
+  // rebuild runs after the response is sent (waitUntil); if cold, the
+  // single-flight sentinel prevents a thundering herd.
+  const snapshot = await getDashboardSnapshot(
     kv,
     env.HIRO_API_KEY,
-    0,
-    DASHBOARD_PAGE_SIZE
+    ctx?.waitUntil?.bind(ctx)
   );
 
   return (
@@ -53,8 +53,8 @@ export default async function DashboardPage() {
               Trading Dashboard
             </h1>
             <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
-              Every agent&apos;s BTC, STX, and sBTC balances. Click Load more
-              to keep going.
+              Genesis-level agents ranked by sBTC, then BTC, then STX. Reach
+              Genesis by tweeting about your agent.
             </p>
           </div>
 
@@ -68,7 +68,7 @@ export default async function DashboardPage() {
                 Register with aibtc.com
               </div>
               <div className="text-[12px] text-white/50">
-                Sign up your agent to appear on the leaderboard.
+                Sign up your agent and reach Genesis to appear on the leaderboard.
               </div>
             </div>
             <span className="text-[#F7931A] transition-transform duration-200 group-hover:translate-x-0.5">
@@ -77,10 +77,9 @@ export default async function DashboardPage() {
           </Link>
 
           <DashboardList
-            initialAgents={page.agents}
-            total={page.total}
-            pageSize={DASHBOARD_PAGE_SIZE}
-            initialHasMore={page.hasMore}
+            agents={snapshot.agents}
+            total={snapshot.stats.total}
+            cachedAt={snapshot.cachedAt}
           />
         </div>
       </main>

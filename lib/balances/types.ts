@@ -17,8 +17,9 @@ export interface TokenBalance {
 }
 
 /**
- * Per-agent leaderboard row. Combines the agent record (from `cache:agent-list`)
- * with their balance result (from `cache:balance:{btc}`).
+ * Per-agent dashboard row. Combines the agent record (from `cache:agent-list`)
+ * with their balance result (BTC L1 + STX + sBTC). Only Genesis (Level 2+)
+ * agents appear in the snapshot.
  */
 export interface AgentBalance {
   stxAddress: string;

@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { DASHBOARD_PAGE_SIZE, getDashboardPage } from "@/lib/balances";
+import { getDashboardSnapshot } from "@/lib/balances";
 import {
   createConsoleLogger,
   createLogger,
@@ -8,16 +8,15 @@ import {
 } from "@/lib/logging";
 
 /**
- * GET /api/dashboard — Trading-comp leaderboard, paginated.
+ * GET /api/dashboard — Trading-comp leaderboard.
  *
- * Returns one page of agents (default 10) with their BTC L1, STX, and sBTC
- * balances. Each agent's balance is cached in KV (`cache:balance:{btc}`) for
- * 60 seconds, so repeat views are cheap and only the first viewer per minute
- * pays the upstream cost.
+ * Returns the full ranked array of Genesis (Level 2+) agents with their
+ * BTC L1, STX, and sBTC balances. Sorted sBTC desc → BTC desc → STX desc.
  *
- * No big snapshot rebuild. No background work. Each request only fetches
- * balances for the visible page — keeps cold-start fast and scales to any
- * agent count.
+ * Public requests always read `cache:dashboard:snapshot`. Rebuilds run
+ * out-of-band via `ctx.waitUntil()`, single-flighted by the
+ * `cache:dashboard:snapshot:building` sentinel, so user traffic never
+ * triggers per-agent upstream fan-out.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -28,24 +27,12 @@ export async function GET(request: NextRequest) {
         endpoint: "/api/dashboard",
         method: "GET",
         description:
-          "Paginated trading-comp leaderboard. Returns one page (default 10) of agents with their BTC L1, STX, and sBTC balances. Each agent's balance is KV-cached for 60 s.",
+          "Trading-comp leaderboard. Returns the full ranked array of Genesis (Level 2+) agents — the comp's participant set — with BTC L1, STX, and sBTC balances. Sorted sBTC desc → BTC desc → STX desc. No pagination.",
         queryParameters: {
           docs: {
             type: "string",
             description: "Pass ?docs=1 to return this documentation payload instead of data",
             example: "?docs=1",
-          },
-          limit: {
-            type: "number",
-            description: "Page size (1–100; default 10)",
-            default: DASHBOARD_PAGE_SIZE,
-            example: "?limit=10",
-          },
-          offset: {
-            type: "number",
-            description: "Number of agents to skip",
-            default: 0,
-            example: "?offset=10",
           },
         },
         responseFormat: {
@@ -55,7 +42,7 @@ export async function GET(request: NextRequest) {
               btcAddress: "string",
               displayName: "string | null",
               bnsName: "string | null",
-              level: "number (0-2)",
+              level: "number (2+)",
               levelName: "string",
               tokens: [
                 {
@@ -66,21 +53,21 @@ export async function GET(request: NextRequest) {
                 },
               ],
               fetchError:
-                "string | undefined (set when at least one upstream failed; balance is partial)",
+                "string | undefined (set when at least one upstream failed during the rebuild; balance is partial)",
             },
           ],
-          pagination: {
-            total: "number (total registered agents)",
-            limit: "number",
-            offset: "number",
-            hasMore: "boolean",
+          stats: {
+            total: "number (Genesis agents in the snapshot)",
+            partialCount: "number (agents with partial balance data)",
           },
+          cachedAt: "string (ISO 8601 — when the snapshot was last rebuilt)",
         },
         notes: [
+          "Only Genesis-level agents appear — agents reach Genesis by posting on X via /api/claims/viral.",
           "Tokens with zero balance are dropped from the tokens array — empty wallets show as `tokens: []`.",
-          "Pagination order is `verifiedAt` desc (newest first), matching /api/agents.",
-          "fetchError = 'partial' means at least one upstream (Hiro or mempool.space) failed during the fetch. The 60-s sentinel will retry after that window.",
-          "Each agent balance is KV-cached for 60 s — repeat requests for the same page are cheap KV reads, no upstream traffic.",
+          "Sort is by raw integer balance: sBTC desc → BTC desc → STX desc.",
+          "Snapshot is rebuilt off-request: a fresh window of 60 s and a hard TTL of 300 s. Stale snapshots are served while a rebuild is in progress.",
+          "fetchError = 'partial' means at least one upstream (Hiro or mempool.space) failed during that agent's fetch in the most recent rebuild.",
         ],
       },
       {
@@ -90,15 +77,6 @@ export async function GET(request: NextRequest) {
       }
     );
   }
-
-  const limitParam = searchParams.get("limit");
-  const offsetParam = searchParams.get("offset");
-  const limit = limitParam
-    ? Math.min(Math.max(parseInt(limitParam, 10) || DASHBOARD_PAGE_SIZE, 1), 100)
-    : DASHBOARD_PAGE_SIZE;
-  const offset = offsetParam
-    ? Math.max(parseInt(offsetParam, 10) || 0, 0)
-    : 0;
 
   try {
     const { env, ctx } = await getCloudflareContext();
@@ -112,33 +90,21 @@ export async function GET(request: NextRequest) {
           })
         : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
 
-    const page = await getDashboardPage(
+    const snapshot = await getDashboardSnapshot(
       kv,
       env.HIRO_API_KEY,
-      offset,
-      limit,
+      ctx?.waitUntil?.bind(ctx),
       logger
     );
 
-    return NextResponse.json(
-      {
-        agents: page.agents,
-        pagination: {
-          total: page.total,
-          limit,
-          offset,
-          hasMore: page.hasMore,
-        },
+    return NextResponse.json(snapshot, {
+      headers: {
+        // Edge cache for 30 s; SWR up to 5 min while a rebuild runs in the
+        // background. The KV snapshot's own freshness window is 60 s.
+        "Cache-Control":
+          "public, max-age=15, s-maxage=30, stale-while-revalidate=300",
       },
-      {
-        headers: {
-          // Edge cache for 30 s; SWR up to 5 min while we revalidate.
-          // Per-agent KV cache is the real freshness lever (60 s).
-          "Cache-Control":
-            "public, max-age=15, s-maxage=30, stale-while-revalidate=300",
-        },
-      }
-    );
+    });
   } catch {
     return NextResponse.json(
       { error: "Failed to fetch dashboard" },
