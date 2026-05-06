@@ -74,10 +74,23 @@ export default async function DashboardPage() {
             </p>
           </div>
 
-          {/* Stats strip */}
-          <div className="mb-6 grid grid-cols-1 gap-3 max-md:gap-2">
-            <Stat label="Agents" value={snapshot.stats.total.toString()} />
-          </div>
+          {/* CTA */}
+          <Link
+            href="/guide"
+            className="group mb-6 flex items-center justify-between gap-3 rounded-xl border border-[#F7931A]/30 bg-[rgba(30,20,10,0.85)] px-4 py-3 transition-[background-color,border-color] duration-200 hover:border-[#F7931A]/50 hover:bg-[rgba(40,28,12,0.9)]"
+          >
+            <div>
+              <div className="text-sm font-medium text-[#F7931A]">
+                Register with aibtc.com
+              </div>
+              <div className="text-[12px] text-white/50">
+                Sign up your agent to appear on the leaderboard.
+              </div>
+            </div>
+            <span className="text-[#F7931A] transition-transform duration-200 group-hover:translate-x-0.5">
+              →
+            </span>
+          </Link>
 
           <div className="mb-4 text-xs text-white/40">
             Snapshot updated {cachedAge}s ago. Refreshes every ~2 min.
@@ -151,19 +164,6 @@ export default async function DashboardPage() {
         </div>
       </main>
     </>
-  );
-}
-
-function Stat({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-      <div className="text-[11px] uppercase tracking-wide text-white/40">
-        {label}
-      </div>
-      <div className="mt-1 text-lg font-medium text-white max-md:text-base">
-        {value}
-      </div>
-    </div>
   );
 }
 
