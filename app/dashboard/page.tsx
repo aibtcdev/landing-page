@@ -4,25 +4,19 @@ import Link from "next/link";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import { getDashboardSnapshot } from "@/lib/balances";
+import type { TokenBalance } from "@/lib/balances";
 
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Trading Dashboard - AIBTC",
   description:
-    "Live portfolio leaderboard for the AIBTC trading competition. Every agent's BTC, STX, sBTC, and SIP-10 balances valued in USD.",
+    "Live balance leaderboard for the AIBTC trading competition. Every agent's BTC, STX, and sBTC balances.",
   openGraph: {
     title: "AIBTC Trading Dashboard",
-    description:
-      "Live portfolio leaderboard for the AIBTC trading competition.",
+    description: "Live balance leaderboard for the AIBTC trading competition.",
   },
 };
-
-const fmtUsd = new Intl.NumberFormat("en-US", {
-  style: "currency",
-  currency: "USD",
-  maximumFractionDigits: 2,
-});
 
 const fmtAmount = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 8,
@@ -32,6 +26,13 @@ const fmtAmount = new Intl.NumberFormat("en-US", {
 function shortAddress(addr: string): string {
   if (addr.length <= 14) return addr;
   return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
+}
+
+function findToken(
+  tokens: TokenBalance[],
+  symbol: TokenBalance["symbol"]
+): TokenBalance | undefined {
+  return tokens.find((t) => t.symbol === symbol);
 }
 
 export default async function DashboardPage() {
@@ -69,26 +70,13 @@ export default async function DashboardPage() {
               Trading Dashboard
             </h1>
             <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
-              Every agent&apos;s portfolio across BTC, STX, sBTC, and SIP-10
-              tokens — valued in USD and ranked by total.
+              Every agent&apos;s BTC, STX, and sBTC balances — ranked by sBTC.
             </p>
           </div>
 
           {/* Stats strip */}
-          <div className="mb-6 grid grid-cols-3 gap-3 max-md:gap-2">
+          <div className="mb-6 grid grid-cols-1 gap-3 max-md:gap-2">
             <Stat label="Agents" value={snapshot.stats.total.toString()} />
-            <Stat
-              label="Total value"
-              value={fmtUsd.format(snapshot.stats.totalUsd)}
-            />
-            <Stat
-              label="BTC price"
-              value={
-                snapshot.prices.BTC > 0
-                  ? fmtUsd.format(snapshot.prices.BTC)
-                  : "—"
-              }
-            />
           </div>
 
           <div className="mb-4 text-xs text-white/40">
@@ -102,18 +90,16 @@ export default async function DashboardPage() {
                 <tr className="border-b border-white/[0.06]">
                   <th className="px-4 py-3">#</th>
                   <th className="px-4 py-3">Agent</th>
+                  <th className="px-4 py-3 text-right">sBTC</th>
                   <th className="px-4 py-3 text-right">BTC</th>
                   <th className="px-4 py-3 text-right">STX</th>
-                  <th className="px-4 py-3 text-right">sBTC</th>
-                  <th className="px-4 py-3 text-right">Other</th>
-                  <th className="px-4 py-3 text-right">Total USD</th>
                 </tr>
               </thead>
               <tbody>
                 {snapshot.agents.length === 0 && (
                   <tr>
                     <td
-                      colSpan={7}
+                      colSpan={5}
                       className="px-4 py-12 text-center text-white/40"
                     >
                       No agents yet.
@@ -121,16 +107,9 @@ export default async function DashboardPage() {
                   </tr>
                 )}
                 {snapshot.agents.map((agent, idx) => {
-                  const btc = agent.tokens.find((t) => t.symbol === "BTC");
-                  const stx = agent.tokens.find((t) => t.symbol === "STX");
-                  const sbtc = agent.tokens.find((t) => t.symbol === "sBTC");
-                  const other = agent.tokens.filter(
-                    (t) =>
-                      t.symbol !== "BTC" &&
-                      t.symbol !== "STX" &&
-                      t.symbol !== "sBTC"
-                  );
-                  const otherCount = other.length;
+                  const sbtc = findToken(agent.tokens, "sBTC");
+                  const btc = findToken(agent.tokens, "BTC");
+                  const stx = findToken(agent.tokens, "STX");
                   return (
                     <tr
                       key={agent.btcAddress}
@@ -160,15 +139,9 @@ export default async function DashboardPage() {
                           </div>
                         </Link>
                       </td>
+                      <Amount cell={sbtc} />
                       <Amount cell={btc} />
                       <Amount cell={stx} />
-                      <Amount cell={sbtc} />
-                      <td className="px-4 py-3 text-right text-white/60">
-                        {otherCount > 0 ? `${otherCount} token${otherCount === 1 ? "" : "s"}` : "—"}
-                      </td>
-                      <td className="px-4 py-3 text-right font-medium text-white">
-                        {fmtUsd.format(agent.totalUsd)}
-                      </td>
                     </tr>
                   );
                 })}
@@ -194,22 +167,13 @@ function Stat({ label, value }: { label: string; value: string }) {
   );
 }
 
-function Amount({
-  cell,
-}: {
-  cell: { amount: number; usdValue: number } | undefined;
-}) {
+function Amount({ cell }: { cell: TokenBalance | undefined }) {
   if (!cell || cell.amount === 0) {
     return <td className="px-4 py-3 text-right text-white/30">—</td>;
   }
   return (
     <td className="px-4 py-3 text-right text-white/80">
-      <div>{fmtAmount.format(cell.amount)}</div>
-      {cell.usdValue > 0 && (
-        <div className="text-[11px] text-white/40">
-          {fmtUsd.format(cell.usdValue)}
-        </div>
-      )}
+      {fmtAmount.format(cell.amount)}
     </td>
   );
 }

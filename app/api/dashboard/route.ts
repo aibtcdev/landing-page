@@ -10,12 +10,11 @@ import {
 /**
  * GET /api/dashboard — Trading-comp leaderboard.
  *
- * Returns every registered agent with their full token portfolio (BTC L1,
- * STX, sBTC, SIP-10s) and a USD-summed total, sorted by total descending.
+ * Returns every registered agent with their BTC L1, STX, and sBTC balances,
+ * sorted by sBTC desc → BTC desc → STX desc. No USD valuation.
  *
  * Caching strategy (B3 runbook patterns):
  * - Edge: `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`.
- *   Most requests never invoke the worker.
  * - Origin (KV): single `cache:dashboard` snapshot with SWR — 2 min fresh,
  *   10 min hard, sentinel-gated rebuild. See `lib/balances/snapshot.ts`.
  * - Per-agent upstream failures (Hiro / mempool.space) get a 60s sentinel
@@ -30,7 +29,7 @@ export async function GET(request: NextRequest) {
         endpoint: "/api/dashboard",
         method: "GET",
         description:
-          "Trading-comp leaderboard. Returns every registered agent with their full token portfolio (BTC L1, STX, sBTC, SIP-10s) plus a USD-summed total, sorted by total value descending.",
+          "Trading-comp leaderboard. Returns every registered agent with their BTC L1, STX, and sBTC balances. Sorted by sBTC desc → BTC desc → STX desc. No USD valuation.",
         queryParameters: {
           docs: {
             type: "string",
@@ -64,29 +63,18 @@ export async function GET(request: NextRequest) {
               levelName: "string",
               tokens: [
                 {
-                  symbol: "string (BTC | STX | sBTC | SIP-10 token name)",
-                  contract: "string | undefined (Stacks contract id)",
+                  symbol: "BTC | STX | sBTC",
                   balance: "string (raw integer)",
-                  decimals: "number",
+                  decimals: "number (BTC/sBTC = 8, STX = 6)",
                   amount: "number (balance / 10^decimals)",
-                  priceUsd: "number (per-unit USD price; 0 if unknown)",
-                  usdValue: "number (amount * priceUsd)",
                 },
               ],
-              totalUsd: "number (sum of all token usdValues)",
               fetchError:
                 "string | undefined (set when at least one upstream failed; balance is partial)",
             },
           ],
-          prices: {
-            BTC: "number (USD)",
-            STX: "number (USD)",
-            sBTC: "number (USD; equal to BTC)",
-          },
           stats: {
             total: "number",
-            totalUsd: "number",
-            pricedAt: "string (ISO 8601)",
           },
           cachedAt: "string (ISO 8601)",
           pagination: {
@@ -97,9 +85,9 @@ export async function GET(request: NextRequest) {
           },
         },
         notes: [
-          "Snapshot is cached for ~2 min at the origin and ~60s at the edge. Read freshness via cachedAt and stats.pricedAt.",
-          "SIP-10 tokens we cannot price are returned with priceUsd = 0 — they don't contribute to totalUsd.",
-          "fetchError = 'partial' means at least one upstream (Hiro or mempool.space) failed during the rebuild for that agent. The 60s sentinel will retry on the next rebuild after that window.",
+          "Snapshot is cached for ~2 min at the origin and ~60 s at the edge. Read freshness via cachedAt.",
+          "Tokens with zero balance are dropped from the tokens array — empty wallets show as `tokens: []`.",
+          "fetchError = 'partial' means at least one upstream (Hiro or mempool.space) failed during the rebuild for that agent. The 60 s sentinel will retry on the next rebuild after that window.",
         ],
       },
       {
@@ -144,7 +132,6 @@ export async function GET(request: NextRequest) {
     return NextResponse.json(
       {
         agents: paginated,
-        prices: snapshot.prices,
         stats: snapshot.stats,
         cachedAt: snapshot.cachedAt,
         pagination: {

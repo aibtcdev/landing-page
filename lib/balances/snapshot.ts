@@ -27,8 +27,7 @@ import {
   DASHBOARD_FRESH_WINDOW_SECONDS,
 } from "./constants";
 import { fetchAgentBalances } from "./fetch";
-import { getPriceSnapshot } from "./prices";
-import type { AgentBalance, DashboardSnapshot } from "./types";
+import type { AgentBalance, DashboardSnapshot, TokenBalance } from "./types";
 
 type WaitUntil = (promise: Promise<unknown>) => void;
 
@@ -146,9 +145,16 @@ export async function invalidateDashboardSnapshot(
 }
 
 /**
+ * Pull the amount for a specific symbol from a token list (0 if absent).
+ * Used as a sort key — sBTC desc, then BTC, then STX.
+ */
+function tokenAmount(tokens: TokenBalance[], symbol: TokenBalance["symbol"]): number {
+  return tokens.find((t) => t.symbol === symbol)?.amount ?? 0;
+}
+
+/**
  * Rebuild the snapshot from scratch:
  * - Read agent list from existing `cache:agent-list` (one KV read).
- * - Fetch prices once (KV-cached for 5 min).
  * - Fan out per-agent balance fetches in batches of BALANCE_FETCH_CONCURRENCY.
  *   Each fetch honours the upstream-failure sentinel.
  */
@@ -157,10 +163,7 @@ async function rebuildSnapshot(
   hiroApiKey: string | undefined,
   logger?: Logger
 ): Promise<DashboardSnapshot> {
-  const [agentList, priceSnap] = await Promise.all([
-    getCachedAgentList(kv),
-    getPriceSnapshot(kv, logger),
-  ]);
+  const agentList = await getCachedAgentList(kv);
 
   const agents: AgentBalance[] = [];
   for (let i = 0; i < agentList.agents.length; i += BALANCE_FETCH_CONCURRENCY) {
@@ -170,7 +173,6 @@ async function rebuildSnapshot(
         const result = await fetchAgentBalances(
           agent.stxAddress,
           agent.btcAddress,
-          priceSnap,
           kv,
           hiroApiKey,
           logger
@@ -183,7 +185,6 @@ async function rebuildSnapshot(
           level: agent.level,
           levelName: agent.levelName,
           tokens: result.tokens,
-          totalUsd: result.totalUsd,
         };
         if (result.partial) balance.fetchError = "partial";
         return balance;
@@ -192,18 +193,18 @@ async function rebuildSnapshot(
     agents.push(...results);
   }
 
-  // Sort by total USD desc — leaderboard order
-  agents.sort((a, b) => b.totalUsd - a.totalUsd);
+  // Sort: sBTC desc, then BTC desc, then STX desc.
+  agents.sort((a, b) => {
+    const sbtcDiff = tokenAmount(b.tokens, "sBTC") - tokenAmount(a.tokens, "sBTC");
+    if (sbtcDiff !== 0) return sbtcDiff;
+    const btcDiff = tokenAmount(b.tokens, "BTC") - tokenAmount(a.tokens, "BTC");
+    if (btcDiff !== 0) return btcDiff;
+    return tokenAmount(b.tokens, "STX") - tokenAmount(a.tokens, "STX");
+  });
 
-  const totalUsd = agents.reduce((sum, a) => sum + a.totalUsd, 0);
   const snapshot: DashboardSnapshot = {
     agents,
-    prices: priceSnap.prices,
-    stats: {
-      total: agents.length,
-      totalUsd,
-      pricedAt: priceSnap.fetchedAt,
-    },
+    stats: { total: agents.length },
     cachedAt: new Date().toISOString(),
   };
 

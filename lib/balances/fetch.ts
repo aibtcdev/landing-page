@@ -1,5 +1,5 @@
 /**
- * Per-agent balance fetcher: BTC L1 + Stacks (STX + sBTC + SIP-10s).
+ * Per-agent balance fetcher: BTC L1 + STX + sBTC.
  *
  * Cost discipline (B3 runbook pattern):
  * - Upstream-failure sentinel `cache:dashboard:upstream-fail:{scope}:{addr}`
@@ -9,6 +9,8 @@
  *   already holds that). One snapshot key, no fan-out writes.
  * - All upstream calls go through `stacksApiFetch` (Hiro) or a hand-rolled
  *   AbortSignal-bounded fetch (mempool.space) so nothing hangs the worker.
+ *
+ * No USD valuation — we only surface raw balances for BTC L1, STX, sBTC.
  */
 
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
@@ -24,7 +26,6 @@ import {
   UPSTREAM_FAIL_PREFIX,
   UPSTREAM_FAIL_TTL_SECONDS,
 } from "./constants";
-import type { PriceSnapshot } from "./prices";
 import type { TokenBalance } from "./types";
 
 interface MempoolAddressStats {
@@ -106,9 +107,9 @@ async function fetchBtcL1Sats(
 }
 
 /**
- * Fetch all Stacks balances (STX + every fungible token the address holds)
- * from Hiro `/extended/v1/address/{principal}/balances`.
- * Returns null when the upstream fails or the sentinel is set.
+ * Fetch Stacks balances (STX + every fungible token the address holds) from
+ * Hiro. We only care about STX and sBTC out of the response — other SIP-10s
+ * are dropped. Returns null when the upstream fails or the sentinel is set.
  */
 async function fetchStacksBalances(
   stxAddress: string,
@@ -144,9 +145,9 @@ async function fetchStacksBalances(
 }
 
 /**
- * Convert raw integer balance (string) to a number scaled by decimals.
- * Acceptable precision for display — agent balances rarely exceed
- * the number range once divided by decimals.
+ * Convert raw integer balance (string or bigint) to a number scaled by
+ * decimals. Acceptable precision for display — agent balances rarely exceed
+ * the safe integer range once divided by decimals.
  */
 function toAmount(rawBalance: string | bigint, decimals: number): number {
   const raw = typeof rawBalance === "bigint" ? rawBalance : BigInt(rawBalance);
@@ -158,61 +159,33 @@ function toAmount(rawBalance: string | bigint, decimals: number): number {
 }
 
 /**
- * Build a TokenBalance for a Stacks fungible token entry.
- * Returns null if balance is zero (we drop empty positions to keep the
- * snapshot lean).
+ * Find the sBTC balance entry inside Hiro's fungible_tokens map.
+ * Hiro returns asset ids in the form `SP….contract-name::token-name`.
  */
-function buildSip10Balance(
-  assetId: string,
-  raw: string,
-  prices: Record<string, number>
-): TokenBalance | null {
-  if (!raw || raw === "0") return null;
-  // Hiro asset id format: "SP....contract-name::token-name"
-  const [contract, tokenName] = assetId.split("::");
-  // sBTC has known decimals + price
-  if (contract === SBTC_CONTRACT_ID) {
-    const amount = toAmount(raw, SBTC_DECIMALS);
-    const price = prices.sBTC ?? 0;
-    return {
-      symbol: "sBTC",
-      contract,
-      balance: raw,
-      decimals: SBTC_DECIMALS,
-      amount,
-      priceUsd: price,
-      usdValue: amount * price,
-    };
+function extractSbtcRaw(
+  fungibles: Record<string, HiroFungibleTokenEntry> | undefined
+): string {
+  if (!fungibles) return "0";
+  for (const [assetId, entry] of Object.entries(fungibles)) {
+    const [contract] = assetId.split("::");
+    if (contract === SBTC_CONTRACT_ID) return entry.balance ?? "0";
   }
-  // Other SIP-10s: we don't have decimals on hand and no price source,
-  // so we surface the raw balance with 0 decimals + 0 USD. UI can show
-  // "untracked token — count only".
-  return {
-    symbol: tokenName ?? assetId,
-    contract,
-    balance: raw,
-    decimals: 0,
-    amount: Number(raw),
-    priceUsd: 0,
-    usdValue: 0,
-  };
+  return "0";
 }
 
 export interface AgentBalanceFetchResult {
   tokens: TokenBalance[];
-  totalUsd: number;
   /** Set when at least one upstream failed and the result is partial. */
   partial?: boolean;
 }
 
 /**
- * Fetch every balance for a single agent and value it in USD.
- * Runs the BTC L1 + Stacks fetches in parallel.
+ * Fetch BTC L1 + STX + sBTC for a single agent. Runs the two upstream
+ * calls in parallel. Tokens with zero balance are dropped from the result.
  */
 export async function fetchAgentBalances(
   stxAddress: string,
   btcAddress: string,
-  prices: PriceSnapshot,
   kv: KVNamespace,
   hiroApiKey: string | undefined,
   logger?: Logger
@@ -225,40 +198,35 @@ export async function fetchAgentBalances(
   const tokens: TokenBalance[] = [];
 
   if (btcSats !== null && btcSats > BigInt(0)) {
-    const amount = toAmount(btcSats, BTC_DECIMALS);
-    const price = prices.prices.BTC ?? 0;
     tokens.push({
       symbol: "BTC",
       balance: btcSats.toString(),
       decimals: BTC_DECIMALS,
-      amount,
-      priceUsd: price,
-      usdValue: amount * price,
+      amount: toAmount(btcSats, BTC_DECIMALS),
     });
   }
 
   if (stacksBalances) {
     const stxRaw = stacksBalances.stx?.balance;
     if (stxRaw && stxRaw !== "0") {
-      const amount = toAmount(stxRaw, STX_DECIMALS);
-      const price = prices.prices.STX ?? 0;
       tokens.push({
         symbol: "STX",
         balance: stxRaw,
         decimals: STX_DECIMALS,
-        amount,
-        priceUsd: price,
-        usdValue: amount * price,
+        amount: toAmount(stxRaw, STX_DECIMALS),
       });
     }
-    const fungibles = stacksBalances.fungible_tokens ?? {};
-    for (const [assetId, entry] of Object.entries(fungibles)) {
-      const tb = buildSip10Balance(assetId, entry.balance ?? "0", prices.prices);
-      if (tb) tokens.push(tb);
+    const sbtcRaw = extractSbtcRaw(stacksBalances.fungible_tokens);
+    if (sbtcRaw !== "0") {
+      tokens.push({
+        symbol: "sBTC",
+        balance: sbtcRaw,
+        decimals: SBTC_DECIMALS,
+        amount: toAmount(sbtcRaw, SBTC_DECIMALS),
+      });
     }
   }
 
-  const totalUsd = tokens.reduce((sum, t) => sum + t.usdValue, 0);
   const partial = btcSats === null || stacksBalances === null;
-  return partial ? { tokens, totalUsd, partial } : { tokens, totalUsd };
+  return partial ? { tokens, partial } : { tokens };
 }

@@ -1109,14 +1109,13 @@ export function GET() {
       "/api/dashboard": {
         get: {
           operationId: "getTradingDashboard",
-          summary: "Trading-comp portfolio leaderboard",
+          summary: "Trading-comp leaderboard",
           description:
-            "Returns every registered agent with their full token portfolio (BTC L1, " +
-            "STX, sBTC, and any SIP-10 tokens) plus a USD-summed total, sorted by " +
-            "totalUsd descending. Snapshot is cached for ~2 min at the origin and " +
-            "~60 s at the Cloudflare edge — read cachedAt and stats.pricedAt for " +
-            "freshness. Prices come from CoinGecko (BTC, STX); SIP-10s we cannot " +
-            "price are returned with priceUsd: 0 and do not contribute to totalUsd.",
+            "Returns every registered agent with their BTC L1, STX, and sBTC " +
+            "balances, sorted by sBTC desc → BTC desc → STX desc. No USD " +
+            "valuation is performed. Snapshot is cached for ~2 min at the origin " +
+            "and ~60 s at the Cloudflare edge — read cachedAt for freshness. " +
+            "Tokens with zero balance are dropped from the array.",
           parameters: [
             {
               name: "limit",
@@ -1164,28 +1163,21 @@ export function GET() {
                               items: {
                                 type: "object",
                                 properties: {
-                                  symbol: { type: "string" },
-                                  contract: { type: "string" },
+                                  symbol: { type: "string", enum: ["BTC", "STX", "sBTC"] },
                                   balance: { type: "string", description: "Raw integer balance" },
                                   decimals: { type: "integer" },
                                   amount: { type: "number" },
-                                  priceUsd: { type: "number" },
-                                  usdValue: { type: "number" },
                                 },
                               },
                             },
-                            totalUsd: { type: "number" },
                             fetchError: { type: "string", description: "Set to 'partial' when at least one upstream balance fetch failed" },
                           },
                         },
                       },
-                      prices: { type: "object", additionalProperties: { type: "number" } },
                       stats: {
                         type: "object",
                         properties: {
                           total: { type: "integer" },
-                          totalUsd: { type: "number" },
-                          pricedAt: { type: "string", format: "date-time" },
                         },
                       },
                       cachedAt: { type: "string", format: "date-time" },

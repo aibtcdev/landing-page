@@ -1,25 +1,19 @@
 /**
  * Types for the trading-comp dashboard.
  *
- * Surfaces every token balance an agent holds (BTC L1, STX, sBTC, SIP-10s)
- * plus a USD-summed total so agents can be ranked by portfolio value.
+ * Surfaces three native token balances per agent: BTC L1, STX, sBTC.
+ * No USD valuation — raw token amounts only.
  */
 
 export interface TokenBalance {
-  /** Display symbol (e.g. "BTC", "STX", "sBTC", "USDA"). */
-  symbol: string;
-  /** Stacks contract identifier (omitted for native BTC L1 + STX). */
-  contract?: string;
-  /** Raw integer balance as string (preserves precision for big numbers). */
+  /** "BTC" | "STX" | "sBTC". */
+  symbol: "BTC" | "STX" | "sBTC";
+  /** Raw integer balance as string (preserves precision). */
   balance: string;
-  /** Token decimals (BTC/sBTC = 8, STX = 6, varies for SIP-10s). */
+  /** Token decimals (BTC = 8, STX = 6, sBTC = 8). */
   decimals: number;
-  /** Human-readable balance: balance / 10^decimals (number — fine for display). */
+  /** Human-readable balance: balance / 10^decimals. */
   amount: number;
-  /** Per-unit USD price used for valuation (0 if unknown). */
-  priceUsd: number;
-  /** USD value: amount * priceUsd. */
-  usdValue: number;
 }
 
 export interface AgentBalance {
@@ -30,8 +24,7 @@ export interface AgentBalance {
   level: number;
   levelName: string;
   tokens: TokenBalance[];
-  totalUsd: number;
-  /** Set when the underlying balance fetch failed (partial data may still be present). */
+  /** Set when at least one upstream failed and the result is partial. */
   fetchError?: string;
 }
 
@@ -41,12 +34,8 @@ export interface AgentBalance {
  */
 export interface DashboardSnapshot {
   agents: AgentBalance[];
-  /** Symbol → USD price used to compute totalUsd at snapshot time. */
-  prices: Record<string, number>;
   stats: {
     total: number;
-    totalUsd: number;
-    pricedAt: string;
   };
   cachedAt: string;
 }
