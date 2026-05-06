@@ -16,6 +16,10 @@ export interface TokenBalance {
   amount: number;
 }
 
+/**
+ * Per-agent leaderboard row. Combines the agent record (from `cache:agent-list`)
+ * with their balance result (from `cache:balance:{btc}`).
+ */
 export interface AgentBalance {
   stxAddress: string;
   btcAddress: string;
@@ -26,16 +30,4 @@ export interface AgentBalance {
   tokens: TokenBalance[];
   /** Set when at least one upstream failed and the result is partial. */
   fetchError?: string;
-}
-
-/**
- * Cached snapshot of every agent's balances.
- * One KV key (`cache:dashboard`) holds the whole thing.
- */
-export interface DashboardSnapshot {
-  agents: AgentBalance[];
-  stats: {
-    total: number;
-  };
-  cachedAt: string;
 }

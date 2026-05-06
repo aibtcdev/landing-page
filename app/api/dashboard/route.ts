@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { getDashboardSnapshot } from "@/lib/balances";
+import { DASHBOARD_PAGE_SIZE, getDashboardPage } from "@/lib/balances";
 import {
   createConsoleLogger,
   createLogger,
@@ -8,17 +8,16 @@ import {
 } from "@/lib/logging";
 
 /**
- * GET /api/dashboard — Trading-comp leaderboard.
+ * GET /api/dashboard — Trading-comp leaderboard, paginated.
  *
- * Returns every registered agent with their BTC L1, STX, and sBTC balances,
- * sorted by sBTC desc → BTC desc → STX desc. No USD valuation.
+ * Returns one page of agents (default 10) with their BTC L1, STX, and sBTC
+ * balances. Each agent's balance is cached in KV (`cache:balance:{btc}`) for
+ * 60 seconds, so repeat views are cheap and only the first viewer per minute
+ * pays the upstream cost.
  *
- * Caching strategy (B3 runbook patterns):
- * - Edge: `Cache-Control: public, s-maxage=60, stale-while-revalidate=300`.
- * - Origin (KV): single `cache:dashboard` snapshot with SWR — 2 min fresh,
- *   10 min hard, sentinel-gated rebuild. See `lib/balances/snapshot.ts`.
- * - Per-agent upstream failures (Hiro / mempool.space) get a 60s sentinel
- *   so one slow agent doesn't slow every rebuild.
+ * No big snapshot rebuild. No background work. Each request only fetches
+ * balances for the visible page — keeps cold-start fast and scales to any
+ * agent count.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -29,27 +28,24 @@ export async function GET(request: NextRequest) {
         endpoint: "/api/dashboard",
         method: "GET",
         description:
-          "Trading-comp leaderboard. Returns every registered agent with their BTC L1, STX, and sBTC balances. Sorted by sBTC desc → BTC desc → STX desc. No USD valuation.",
+          "Paginated trading-comp leaderboard. Returns one page (default 10) of agents with their BTC L1, STX, and sBTC balances. Each agent's balance is KV-cached for 60 s.",
         queryParameters: {
           docs: {
             type: "string",
-            description:
-              "Pass ?docs=1 to return this documentation payload instead of data",
+            description: "Pass ?docs=1 to return this documentation payload instead of data",
             example: "?docs=1",
           },
           limit: {
             type: "number",
-            description: "Maximum number of agents to return per page",
-            default: 100,
-            maximum: 500,
-            example: "?limit=50",
+            description: "Page size (1–100; default 10)",
+            default: DASHBOARD_PAGE_SIZE,
+            example: "?limit=10",
           },
           offset: {
             type: "number",
-            description: "Number of agents to skip for pagination",
+            description: "Number of agents to skip",
             default: 0,
-            minimum: 0,
-            example: "?offset=50",
+            example: "?offset=10",
           },
         },
         responseFormat: {
@@ -73,21 +69,18 @@ export async function GET(request: NextRequest) {
                 "string | undefined (set when at least one upstream failed; balance is partial)",
             },
           ],
-          stats: {
-            total: "number",
-          },
-          cachedAt: "string (ISO 8601)",
           pagination: {
-            total: "number",
+            total: "number (total registered agents)",
             limit: "number",
             offset: "number",
             hasMore: "boolean",
           },
         },
         notes: [
-          "Snapshot is cached for ~2 min at the origin and ~60 s at the edge. Read freshness via cachedAt.",
           "Tokens with zero balance are dropped from the tokens array — empty wallets show as `tokens: []`.",
-          "fetchError = 'partial' means at least one upstream (Hiro or mempool.space) failed during the rebuild for that agent. The 60 s sentinel will retry on the next rebuild after that window.",
+          "Pagination order is `verifiedAt` desc (newest first), matching /api/agents.",
+          "fetchError = 'partial' means at least one upstream (Hiro or mempool.space) failed during the fetch. The 60-s sentinel will retry after that window.",
+          "Each agent balance is KV-cached for 60 s — repeat requests for the same page are cheap KV reads, no upstream traffic.",
         ],
       },
       {
@@ -101,8 +94,8 @@ export async function GET(request: NextRequest) {
   const limitParam = searchParams.get("limit");
   const offsetParam = searchParams.get("offset");
   const limit = limitParam
-    ? Math.min(Math.max(parseInt(limitParam, 10) || 100, 1), 500)
-    : 100;
+    ? Math.min(Math.max(parseInt(limitParam, 10) || DASHBOARD_PAGE_SIZE, 1), 100)
+    : DASHBOARD_PAGE_SIZE;
   const offset = offsetParam
     ? Math.max(parseInt(offsetParam, 10) || 0, 0)
     : 0;
@@ -119,32 +112,30 @@ export async function GET(request: NextRequest) {
           })
         : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
 
-    const snapshot = await getDashboardSnapshot(
+    const page = await getDashboardPage(
       kv,
       env.HIRO_API_KEY,
-      ctx.waitUntil.bind(ctx),
+      offset,
+      limit,
       logger
     );
 
-    const total = snapshot.agents.length;
-    const paginated = snapshot.agents.slice(offset, offset + limit);
-
     return NextResponse.json(
       {
-        agents: paginated,
-        stats: snapshot.stats,
-        cachedAt: snapshot.cachedAt,
+        agents: page.agents,
         pagination: {
-          total,
+          total: page.total,
           limit,
           offset,
-          hasMore: offset + limit < total,
+          hasMore: page.hasMore,
         },
       },
       {
         headers: {
+          // Edge cache for 30 s; SWR up to 5 min while we revalidate.
+          // Per-agent KV cache is the real freshness lever (60 s).
           "Cache-Control":
-            "public, max-age=30, s-maxage=60, stale-while-revalidate=300",
+            "public, max-age=15, s-maxage=30, stale-while-revalidate=300",
         },
       }
     );

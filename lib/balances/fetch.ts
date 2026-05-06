@@ -17,6 +17,8 @@ import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE } from "@/lib/identity/constants";
 import type { Logger } from "@/lib/logging";
 import {
+  BALANCE_CACHE_PREFIX,
+  BALANCE_CACHE_TTL_SECONDS,
   BALANCE_FETCH_TIMEOUT_MS,
   BTC_DECIMALS,
   MEMPOOL_API_BASE,
@@ -229,4 +231,50 @@ export async function fetchAgentBalances(
 
   const partial = btcSats === null || stacksBalances === null;
   return partial ? { tokens, partial } : { tokens };
+}
+
+/**
+ * KV-cached wrapper around `fetchAgentBalances`.
+ *
+ * Reads `cache:balance:{btcAddress}` first; on hit, returns instantly. On
+ * miss (or expired), fetches upstream and writes the result with a 60-s TTL.
+ *
+ * Use this from the paginated `/api/dashboard` endpoint — every visible
+ * row hits this and only the first viewer per minute pays the upstream cost.
+ */
+export async function getCachedAgentBalance(
+  stxAddress: string,
+  btcAddress: string,
+  kv: KVNamespace,
+  hiroApiKey: string | undefined,
+  logger?: Logger
+): Promise<AgentBalanceFetchResult> {
+  const key = `${BALANCE_CACHE_PREFIX}${btcAddress}`;
+  const cached = await kv.get(key);
+  if (cached) {
+    try {
+      return JSON.parse(cached) as AgentBalanceFetchResult;
+    } catch {
+      // Corrupted entry — drop and refetch
+      await kv.delete(key).catch(() => {});
+    }
+  }
+
+  const fresh = await fetchAgentBalances(
+    stxAddress,
+    btcAddress,
+    kv,
+    hiroApiKey,
+    logger
+  );
+
+  // Cache even partial results so we don't re-hammer upstreams every render
+  try {
+    await kv.put(key, JSON.stringify(fresh), {
+      expirationTtl: BALANCE_CACHE_TTL_SECONDS,
+    });
+  } catch {
+    // Best-effort
+  }
+  return fresh;
 }

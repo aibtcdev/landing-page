@@ -3,8 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Link from "next/link";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
-import { getDashboardSnapshot } from "@/lib/balances";
-import type { TokenBalance } from "@/lib/balances";
+import { DASHBOARD_PAGE_SIZE, getDashboardPage } from "@/lib/balances";
+import DashboardList from "./DashboardList";
 
 export const dynamic = "force-dynamic";
 
@@ -18,35 +18,18 @@ export const metadata: Metadata = {
   },
 };
 
-const fmtAmount = new Intl.NumberFormat("en-US", {
-  maximumFractionDigits: 8,
-  minimumFractionDigits: 0,
-});
-
-function shortAddress(addr: string): string {
-  if (addr.length <= 14) return addr;
-  return `${addr.slice(0, 6)}…${addr.slice(-4)}`;
-}
-
-function findToken(
-  tokens: TokenBalance[],
-  symbol: TokenBalance["symbol"]
-): TokenBalance | undefined {
-  return tokens.find((t) => t.symbol === symbol);
-}
-
 export default async function DashboardPage() {
-  const { env, ctx } = await getCloudflareContext();
+  const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
-  const snapshot = await getDashboardSnapshot(
+
+  // Server-render the first page only — keeps cold-start fast and bounded
+  // (max DASHBOARD_PAGE_SIZE × 2 upstream calls). Client hits /api/dashboard
+  // with offset for "Load more".
+  const page = await getDashboardPage(
     kv,
     env.HIRO_API_KEY,
-    ctx.waitUntil.bind(ctx)
-  );
-
-  const cachedAge = Math.max(
     0,
-    Math.floor((Date.now() - Date.parse(snapshot.cachedAt)) / 1000)
+    DASHBOARD_PAGE_SIZE
   );
 
   return (
@@ -70,7 +53,8 @@ export default async function DashboardPage() {
               Trading Dashboard
             </h1>
             <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
-              Every agent&apos;s BTC, STX, and sBTC balances — ranked by sBTC.
+              Every agent&apos;s BTC, STX, and sBTC balances. Click Load more
+              to keep going.
             </p>
           </div>
 
@@ -92,88 +76,14 @@ export default async function DashboardPage() {
             </span>
           </Link>
 
-          <div className="mb-4 text-xs text-white/40">
-            Snapshot updated {cachedAge}s ago. Refreshes every ~2 min.
-          </div>
-
-          {/* Table */}
-          <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.02]">
-            <table className="w-full text-left text-sm">
-              <thead className="text-xs uppercase tracking-wide text-white/40">
-                <tr className="border-b border-white/[0.06]">
-                  <th className="px-4 py-3">#</th>
-                  <th className="px-4 py-3">Agent</th>
-                  <th className="px-4 py-3 text-right">sBTC</th>
-                  <th className="px-4 py-3 text-right">BTC</th>
-                  <th className="px-4 py-3 text-right">STX</th>
-                </tr>
-              </thead>
-              <tbody>
-                {snapshot.agents.length === 0 && (
-                  <tr>
-                    <td
-                      colSpan={5}
-                      className="px-4 py-12 text-center text-white/40"
-                    >
-                      No agents yet.
-                    </td>
-                  </tr>
-                )}
-                {snapshot.agents.map((agent, idx) => {
-                  const sbtc = findToken(agent.tokens, "sBTC");
-                  const btc = findToken(agent.tokens, "BTC");
-                  const stx = findToken(agent.tokens, "STX");
-                  return (
-                    <tr
-                      key={agent.btcAddress}
-                      className="border-b border-white/[0.04] transition-colors hover:bg-white/[0.02]"
-                    >
-                      <td className="px-4 py-3 text-white/40">{idx + 1}</td>
-                      <td className="px-4 py-3">
-                        <Link
-                          href={`/agents/${agent.btcAddress}`}
-                          className="block transition-colors hover:text-[#F7931A]"
-                        >
-                          <div className="font-medium text-white">
-                            {agent.bnsName ??
-                              agent.displayName ??
-                              shortAddress(agent.btcAddress)}
-                          </div>
-                          <div className="text-[11px] text-white/40">
-                            {shortAddress(agent.btcAddress)}
-                            {agent.fetchError && (
-                              <span
-                                className="ml-2 text-amber-400/70"
-                                title="Partial data — at least one upstream balance fetch failed."
-                              >
-                                · partial
-                              </span>
-                            )}
-                          </div>
-                        </Link>
-                      </td>
-                      <Amount cell={sbtc} />
-                      <Amount cell={btc} />
-                      <Amount cell={stx} />
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <DashboardList
+            initialAgents={page.agents}
+            total={page.total}
+            pageSize={DASHBOARD_PAGE_SIZE}
+            initialHasMore={page.hasMore}
+          />
         </div>
       </main>
     </>
-  );
-}
-
-function Amount({ cell }: { cell: TokenBalance | undefined }) {
-  if (!cell || cell.amount === 0) {
-    return <td className="px-4 py-3 text-right text-white/30">—</td>;
-  }
-  return (
-    <td className="px-4 py-3 text-right text-white/80">
-      {fmtAmount.format(cell.amount)}
-    </td>
   );
 }
