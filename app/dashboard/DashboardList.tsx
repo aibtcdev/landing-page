@@ -101,23 +101,41 @@ export default function DashboardList({
                   <td className="px-4 py-3">
                     <Link
                       href={`/agents/${agent.btcAddress}`}
-                      className="block transition-colors hover:text-[#F7931A]"
+                      className="flex items-center gap-3 transition-colors hover:text-[#F7931A]"
                     >
-                      <div className="font-medium text-white">
-                        {agent.bnsName ??
+                      {/* eslint-disable-next-line @next/next/no-img-element */}
+                      <img
+                        src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`}
+                        alt={
+                          agent.bnsName ??
                           agent.displayName ??
-                          shortAddress(agent.btcAddress)}
-                      </div>
-                      <div className="text-[11px] text-white/40">
-                        {shortAddress(agent.btcAddress)}
-                        {agent.fetchError && (
-                          <span
-                            className="ml-2 text-amber-400/70"
-                            title="Partial data — at least one upstream balance fetch failed."
-                          >
-                            · partial
-                          </span>
-                        )}
+                          agent.btcAddress
+                        }
+                        className="h-9 w-9 shrink-0 rounded-full bg-white/[0.06]"
+                        loading="lazy"
+                        width={36}
+                        height={36}
+                        onError={(e) => {
+                          e.currentTarget.style.display = "none";
+                        }}
+                      />
+                      <div className="min-w-0">
+                        <div className="font-medium text-white">
+                          {agent.bnsName ??
+                            agent.displayName ??
+                            shortAddress(agent.btcAddress)}
+                        </div>
+                        <div className="text-[11px] text-white/40">
+                          {shortAddress(agent.btcAddress)}
+                          {agent.fetchError && (
+                            <span
+                              className="ml-2 text-amber-400/70"
+                              title="Partial data — at least one upstream balance fetch failed."
+                            >
+                              · partial
+                            </span>
+                          )}
+                        </div>
                       </div>
                     </Link>
                   </td>
