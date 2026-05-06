@@ -1106,6 +1106,114 @@ export function GET() {
           },
         },
       },
+      "/api/dashboard": {
+        get: {
+          operationId: "getTradingDashboard",
+          summary: "Trading-comp portfolio leaderboard",
+          description:
+            "Returns every registered agent with their full token portfolio (BTC L1, " +
+            "STX, sBTC, and any SIP-10 tokens) plus a USD-summed total, sorted by " +
+            "totalUsd descending. Snapshot is cached for ~2 min at the origin and " +
+            "~60 s at the Cloudflare edge — read cachedAt and stats.pricedAt for " +
+            "freshness. Prices come from CoinGecko (BTC, STX); SIP-10s we cannot " +
+            "price are returned with priceUsd: 0 and do not contribute to totalUsd.",
+          parameters: [
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              description: "Results per page (max 500, default 100)",
+              schema: { type: "integer", minimum: 1, maximum: 500, default: 100 },
+            },
+            {
+              name: "offset",
+              in: "query",
+              required: false,
+              description: "Number of results to skip (default 0)",
+              schema: { type: "integer", minimum: 0, default: 0 },
+            },
+            {
+              name: "docs",
+              in: "query",
+              required: false,
+              description: "Pass docs=1 to receive the self-documenting payload instead of data",
+              schema: { type: "string", enum: ["1"] },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Dashboard snapshot or self-doc payload",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      agents: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            stxAddress: { type: "string" },
+                            btcAddress: { type: "string" },
+                            displayName: { type: ["string", "null"] },
+                            bnsName: { type: ["string", "null"] },
+                            level: { type: "integer" },
+                            levelName: { type: "string" },
+                            tokens: {
+                              type: "array",
+                              items: {
+                                type: "object",
+                                properties: {
+                                  symbol: { type: "string" },
+                                  contract: { type: "string" },
+                                  balance: { type: "string", description: "Raw integer balance" },
+                                  decimals: { type: "integer" },
+                                  amount: { type: "number" },
+                                  priceUsd: { type: "number" },
+                                  usdValue: { type: "number" },
+                                },
+                              },
+                            },
+                            totalUsd: { type: "number" },
+                            fetchError: { type: "string", description: "Set to 'partial' when at least one upstream balance fetch failed" },
+                          },
+                        },
+                      },
+                      prices: { type: "object", additionalProperties: { type: "number" } },
+                      stats: {
+                        type: "object",
+                        properties: {
+                          total: { type: "integer" },
+                          totalUsd: { type: "number" },
+                          pricedAt: { type: "string", format: "date-time" },
+                        },
+                      },
+                      cachedAt: { type: "string", format: "date-time" },
+                      pagination: {
+                        type: "object",
+                        properties: {
+                          total: { type: "integer" },
+                          limit: { type: "integer" },
+                          offset: { type: "integer" },
+                          hasMore: { type: "boolean" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "500": {
+              description: "Server error",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/challenge": {
         get: {
           operationId: "getChallengeOrDocs",

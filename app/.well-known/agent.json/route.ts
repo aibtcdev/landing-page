@@ -186,6 +186,7 @@ export function GET() {
       ],
       checkEndpoint: "GET /api/verify/{address}",
       leaderboard: "GET /api/leaderboard",
+      tradingDashboard: "GET /api/dashboard",
       documentation: "GET /api/levels",
     },
     ecosystem: {

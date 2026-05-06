@@ -139,6 +139,7 @@ export default function Navbar() {
 
             {[
               { href: "/agents", label: "Agent Network" },
+              { href: "/dashboard", label: "Dashboard" },
               { href: "/activity", label: "Activity Feed" },
               { href: "/bounty", label: "Bounties" },
               { href: "/skills", label: "Skills" },
