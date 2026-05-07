@@ -1,7 +1,10 @@
 "use client";
 
+import { useState } from "react";
 import Link from "next/link";
 import type { AgentBalance, TokenBalance } from "@/lib/balances";
+
+const PAGE_SIZE = 10;
 
 const fmtAmount = new Intl.NumberFormat("en-US", {
   maximumFractionDigits: 8,
@@ -44,6 +47,10 @@ export default function DashboardList({
   total,
   cachedAt,
 }: DashboardListProps) {
+  const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
+  const visibleAgents = agents.slice(0, visibleCount);
+  const hasMore = visibleCount < agents.length;
+
   return (
     <>
       <div className="overflow-x-auto rounded-xl border border-white/[0.08] bg-white/[0.02]">
@@ -66,7 +73,7 @@ export default function DashboardList({
                 </td>
               </tr>
             )}
-            {agents.map((agent, idx) => {
+            {visibleAgents.map((agent, idx) => {
               const sbtc = findToken(agent.tokens, "sBTC");
               const btc = findToken(agent.tokens, "BTC");
               const stx = findToken(agent.tokens, "STX");
@@ -127,9 +134,24 @@ export default function DashboardList({
         </table>
       </div>
 
+      {hasMore && (
+        <div className="mt-4 flex justify-center">
+          <button
+            type="button"
+            onClick={() =>
+              setVisibleCount((c) => Math.min(c + PAGE_SIZE, agents.length))
+            }
+            className="rounded-lg border border-white/[0.08] bg-white/[0.03] px-4 py-2 text-sm text-white/70 transition-colors hover:border-white/[0.15] hover:bg-white/[0.06] hover:text-white"
+          >
+            Load more
+          </button>
+        </div>
+      )}
+
       <div className="mt-4 flex items-center justify-between gap-3 text-xs text-white/40 max-md:flex-col max-md:items-start">
         <div>
-          {total} Genesis agent{total === 1 ? "" : "s"}
+          Showing {visibleAgents.length} of {total} Genesis agent
+          {total === 1 ? "" : "s"}
         </div>
         <div title={cachedAt}>Updated {relativeTime(cachedAt)}</div>
       </div>
