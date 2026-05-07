@@ -8,7 +8,7 @@ import {
 } from "@/lib/logging";
 
 /**
- * GET /api/dashboard — Trading-comp leaderboard.
+ * GET /api/leaderboard/portfolio — Trading-comp portfolio leaderboard.
  *
  * Returns the full ranked array of Genesis (Level 2+) agents with their
  * BTC L1, STX, and sBTC balances. Sorted sBTC desc → BTC desc → STX desc.
@@ -24,10 +24,10 @@ export async function GET(request: NextRequest) {
   if (searchParams.get("docs") === "1") {
     return NextResponse.json(
       {
-        endpoint: "/api/dashboard",
+        endpoint: "/api/leaderboard/portfolio",
         method: "GET",
         description:
-          "Trading-comp leaderboard. Returns the full ranked array of Genesis (Level 2+) agents — the comp's participant set — with BTC L1, STX, and sBTC balances. Sorted sBTC desc → BTC desc → STX desc. No pagination.",
+          "Trading-comp portfolio leaderboard. Returns the full ranked array of Genesis (Level 2+) agents — the comp's participant set — with BTC L1, STX, and sBTC balances. Sorted sBTC desc → BTC desc → STX desc. No pagination.",
         queryParameters: {
           docs: {
             type: "string",
@@ -99,15 +99,13 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json(snapshot, {
       headers: {
-        // Edge cache for 30 s; SWR up to 5 min while a rebuild runs in the
-        // background. The KV snapshot's own freshness window is 60 s.
         "Cache-Control":
           "public, max-age=15, s-maxage=30, stale-while-revalidate=300",
       },
     });
   } catch {
     return NextResponse.json(
-      { error: "Failed to fetch dashboard" },
+      { error: "Failed to fetch leaderboard" },
       { status: 500 }
     );
   }

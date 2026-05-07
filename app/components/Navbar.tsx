@@ -139,7 +139,7 @@ export default function Navbar() {
 
             {[
               { href: "/agents", label: "Agent Network" },
-              { href: "/dashboard", label: "Dashboard" },
+              { href: "/leaderboard", label: "Leaderboard" },
               { href: "/activity", label: "Activity Feed" },
               { href: "/bounty", label: "Bounties" },
               { href: "/skills", label: "Skills" },
@@ -147,7 +147,7 @@ export default function Navbar() {
               <Link
                 key={link.href}
                 href={link.href}
-                className="inline-flex items-center justify-center rounded-lg border border-white/15 bg-[rgba(30,30,30,0.8)] backdrop-blur-sm px-2.5 py-1.5 text-xs lg:px-4 lg:py-2 lg:text-sm font-medium text-white/80 transition-[background-color,border-color,color,transform] duration-200 hover:border-white/25 hover:bg-[rgba(45,45,45,0.85)] hover:text-white active:scale-[0.97]"
+                className="px-1 py-1 text-xs lg:text-sm font-medium text-white/70 transition-colors duration-200 hover:text-white"
               >
                 {link.label}
               </Link>

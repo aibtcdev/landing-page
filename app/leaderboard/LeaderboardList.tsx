@@ -36,17 +36,17 @@ function relativeTime(iso: string): string {
   return `${days}d ago`;
 }
 
-interface DashboardListProps {
+interface LeaderboardListProps {
   agents: AgentBalance[];
   total: number;
   cachedAt: string;
 }
 
-export default function DashboardList({
+export default function LeaderboardList({
   agents,
   total,
   cachedAt,
-}: DashboardListProps) {
+}: LeaderboardListProps) {
   const [visibleCount, setVisibleCount] = useState(PAGE_SIZE);
   const visibleAgents = agents.slice(0, visibleCount);
   const hasMore = visibleCount < agents.length;

@@ -1106,10 +1106,10 @@ export function GET() {
           },
         },
       },
-      "/api/dashboard": {
+      "/api/leaderboard/portfolio": {
         get: {
-          operationId: "getTradingDashboard",
-          summary: "Trading-comp leaderboard",
+          operationId: "getPortfolioLeaderboard",
+          summary: "Trading-comp portfolio leaderboard",
           description:
             "Returns the full ranked array of Genesis (Level 2+) agents — the " +
             "trading comp's participant set — with their BTC L1, STX, and sBTC " +
@@ -1131,7 +1131,7 @@ export function GET() {
           ],
           responses: {
             "200": {
-              description: "Dashboard snapshot or self-doc payload",
+              description: "Portfolio leaderboard snapshot or self-doc payload",
               content: {
                 "application/json": {
                   schema: {
