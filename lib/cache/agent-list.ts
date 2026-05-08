@@ -152,11 +152,26 @@ export async function invalidateAgentListCache(
 ): Promise<void> {
   try {
     const raw = await kv.get(CACHE_KEY);
+    if (raw && !parseSnapshot(raw)) {
+      // Corrupt entry — clean up immediately rather than leaving it for the
+      // next getCachedAgentList call to find.
+      await kv.delete(CACHE_KEY).catch(() => {});
+      return;
+    }
     const cached = parseSnapshot(raw);
     if (!cached) return;
+
     const stalePastFresh = new Date(
       Date.now() - (FRESH_WINDOW_SECONDS + 1) * 1000
     ).toISOString();
+
+    // Optimistic re-check: if maybeTriggerBackgroundRebuild finished between
+    // our read and now, skip the mark-stale put — the new snapshot is already
+    // current and we'd otherwise clobber it with a stale-shifted S_old.
+    const rawAgain = await kv.get(CACHE_KEY);
+    const cachedAgain = parseSnapshot(rawAgain);
+    if (cachedAgain && cachedAgain.cachedAt > cached.cachedAt) return;
+
     await kv.put(
       CACHE_KEY,
       JSON.stringify({ ...cached, cachedAt: stalePastFresh }),
