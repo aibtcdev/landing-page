@@ -788,7 +788,8 @@ export async function POST(
       recipientStx: agent.stxAddress,
     });
 
-    // Rate limit: one attempt per txid per 60 seconds (binding window matches).
+    // Rate limit: up to 20 recovery attempts per txid per 60 seconds (RATE_LIMIT_MUTATING window).
+    // Double-redemption is prevented by the inbox:redeemed-txid:{txid} key below regardless of retry count.
     let txidRecoveryLimited = false;
     try {
       const result = await env.RATE_LIMIT_MUTATING.limit({ key: `txid-recovery:${paymentTxid}` });

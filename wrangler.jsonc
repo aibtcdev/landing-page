@@ -21,10 +21,13 @@
       "remote": true
     }
   ],
-  // First-party rate limit bindings. Top-level IDs are isolated from any
-  // named production/staging envs so branch preview traffic cannot consume
-  // production counters. Mirrors the agent-news pattern (agent-news#704/#705).
+  // First-party rate limit bindings. Mirrors the agent-news pattern
+  // (agent-news#704/#705). Currently declared at top-level only — branch
+  // previews share the same namespace_ids as production. Per-env isolation
+  // tracked in #663 (will add explicit production/preview env blocks with
+  // distinct namespace_ids).
   "ratelimits": [
+    // RATE_LIMIT_READ: reserved for Phase 1 read endpoints (no callers yet).
     { "name": "RATE_LIMIT_READ",          "namespace_id": "2026050801", "simple": { "limit": 300, "period": 60 } },
     { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050802", "simple": { "limit":  20, "period": 60 } },
     { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050803", "simple": { "limit": 200, "period": 60 } }
