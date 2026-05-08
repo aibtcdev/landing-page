@@ -55,13 +55,14 @@ export async function POST(
   if (ip) {
     let ipLimited = false;
     try {
-      const result = await env.RATE_LIMIT_MUTATING.limit({ key: `outbox-validation:${ip}` });
+      const result = await env.RATE_LIMIT_MUTATING.limit({ key: `outbox-ip:${ip}` });
       ipLimited = !result.success;
     } catch (err) {
-      // Binding unavailable — fail closed in production/staging, open in dev
-      const isProduction = process.env.NODE_ENV === "production";
-      logger.warn("IP rate limit binding error", { error: String(err), failClosed: isProduction });
-      if (isProduction) ipLimited = true;
+      // Binding unavailable — fail closed in production/preview, open in dev.
+      const deployEnv = env.DEPLOY_ENV;
+      const failClosed = deployEnv !== undefined;
+      logger.warn("IP rate limit binding error", { error: String(err), failClosed });
+      if (failClosed) ipLimited = true;
     }
     if (ipLimited) {
       logger.warn("Outbox rate limited (IP)", { ip });
@@ -81,9 +82,10 @@ export async function POST(
       const result = await env.RATE_LIMIT_MUTATING.limit({ key: `outbox-unregistered:${address}` });
       unregLimited = !result.success;
     } catch (err) {
-      const isProduction = process.env.NODE_ENV === "production";
-      logger.warn("Unregistered rate limit binding error", { error: String(err), failClosed: isProduction });
-      if (isProduction) unregLimited = true;
+      const deployEnv = env.DEPLOY_ENV;
+      const failClosed = deployEnv !== undefined;
+      logger.warn("Unregistered rate limit binding error", { error: String(err), failClosed });
+      if (failClosed) unregLimited = true;
     }
     if (unregLimited) {
       logger.warn("Outbox rate limited (unregistered)", { address });
@@ -287,9 +289,10 @@ export async function POST(
     const result = await env.RATE_LIMIT_AUTHENTICATED.limit({ key: `outbox:${btcResult.address}` });
     registeredLimited = !result.success;
   } catch (err) {
-    const isProduction = process.env.NODE_ENV === "production";
-    logger.warn("Authenticated rate limit binding error", { error: String(err), failClosed: isProduction });
-    if (isProduction) registeredLimited = true;
+    const deployEnv = env.DEPLOY_ENV;
+    const failClosed = deployEnv !== undefined;
+    logger.warn("Authenticated rate limit binding error", { error: String(err), failClosed });
+    if (failClosed) registeredLimited = true;
   }
   if (registeredLimited) {
     logger.warn("Outbox rate limited (registered)", {

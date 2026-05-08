@@ -119,12 +119,13 @@ export async function PATCH(
       const result = await env.RATE_LIMIT_MUTATING.limit({ key: `inbox-mark-read:${ip}` });
       ipLimited = !result.success;
     } catch (err) {
-      // Binding unavailable — fail closed in production/staging, open in dev.
+      // Binding unavailable — fail closed in production/preview, open in dev.
       // Mark-read is abuse-protection (not revenue), so prefer blocking on
       // binding errors over allowing signature-DoS during binding outages.
-      const isProduction = process.env.NODE_ENV === "production";
-      logger.warn("Mark-read rate limit binding error", { error: String(err), failClosed: isProduction });
-      if (isProduction) ipLimited = true;
+      const deployEnv = env.DEPLOY_ENV;
+      const failClosed = deployEnv !== undefined;
+      logger.warn("Mark-read rate limit binding error", { error: String(err), failClosed });
+      if (failClosed) ipLimited = true;
     }
     if (ipLimited) {
       logger.warn("Mark-read rate limited (IP)", { ip });

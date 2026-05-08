@@ -21,11 +21,17 @@
       "remote": true
     }
   ],
-  // First-party rate limit bindings. Mirrors the agent-news pattern
-  // (agent-news#704/#705). Currently declared at top-level only — branch
-  // previews share the same namespace_ids as production. Per-env isolation
-  // tracked in #663 (will add explicit production/preview env blocks with
-  // distinct namespace_ids).
+  // Top-level vars: shared across all envs. Setting DEPLOY_ENV here makes a bare
+  // `wrangler deploy` (without --env) safe-by-default — fail-closed gating in route
+  // handlers triggers because env.DEPLOY_ENV !== undefined. Removes the footgun where
+  // a missed --env flag would deploy fail-OPEN to a worker sharing production resources.
+  "vars": {
+    "DEPLOY_ENV": "production"
+  },
+  // First-party rate limit bindings. Mirrors the agent-news pattern (agent-news#704/#705).
+  // Top-level IDs are the local-dev defaults — they are overridden in each named env
+  // block below. Wrangler does not merge top-level into named envs, so every env block
+  // must repeat all bindings it needs. See env.production / env.preview below.
   "ratelimits": [
     // RATE_LIMIT_READ: reserved for Phase 1 read endpoints (no callers yet).
     { "name": "RATE_LIMIT_READ",          "namespace_id": "2026050801", "simple": { "limit": 300, "period": 60 } },
@@ -59,5 +65,146 @@
         "max_retries": 5
       }
     ]
+  },
+
+  /**
+   * Named environments — Wrangler does NOT merge top-level config into named envs.
+   * Every binding that the Worker needs must be re-declared in each env block.
+   * Pattern matches agent-news wrangler.jsonc (agent-news#704/#705).
+   *
+   * Deploy commands:
+   *   Production: npx wrangler deploy --env production  (or push to main via CI)
+   *   Preview:    npx wrangler deploy --env preview
+   */
+  "env": {
+    "production": {
+      "name": "landing-page",
+      "workers_dev": true,
+      "preview_urls": true,
+      "routes": [{ "pattern": "aibtc.com", "custom_domain": true }],
+
+      // DEPLOY_ENV signals production context to the Worker; used for fail-closed
+      // rate-limit binding error handling (env.DEPLOY_ENV !== undefined → fail closed).
+      "vars": {
+        "DEPLOY_ENV": "production"
+      },
+
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS"
+      },
+
+      "kv_namespaces": [
+        {
+          "binding": "VERIFIED_AGENTS",
+          "id": "f8aab2734e154953a50cabdb87083af3",
+          "remote": true
+        }
+      ],
+
+      // Production ratelimit namespace_ids: 2026050801–03 (preserved from #662 so
+      // production counters are not reset by this PR).
+      "ratelimits": [
+        { "name": "RATE_LIMIT_READ",          "namespace_id": "2026050801", "simple": { "limit": 300, "period": 60 } },
+        { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050802", "simple": { "limit":  20, "period": 60 } },
+        { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050803", "simple": { "limit": 200, "period": 60 } }
+      ],
+
+      "services": [
+        {
+          "binding": "LOGS",
+          "service": "worker-logs-production",
+          "entrypoint": "LogsRPC"
+        },
+        {
+          "binding": "X402_RELAY",
+          "service": "x402-sponsor-relay-production",
+          "entrypoint": "RelayRPC"
+        }
+      ],
+
+      "queues": {
+        "producers": [
+          {
+            "binding": "INBOX_RECONCILIATION_QUEUE",
+            "queue": "landing-page-inbox-reconciliation"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "landing-page-inbox-reconciliation",
+            "max_batch_size": 1,
+            "max_retries": 5
+          }
+        ]
+      }
+    },
+
+    "preview": {
+      "name": "landing-page-preview",
+
+      // DEPLOY_ENV signals preview context; fail-closed on rate-limit binding errors
+      // (same as production — only local dev via `wrangler dev` is fail-open).
+      "vars": {
+        "DEPLOY_ENV": "preview"
+      },
+
+      "assets": {
+        "directory": ".open-next/assets",
+        "binding": "ASSETS"
+      },
+
+      "kv_namespaces": [
+        {
+          "binding": "VERIFIED_AGENTS",
+          "id": "f8aab2734e154953a50cabdb87083af3",
+          "remote": true
+        }
+      ],
+
+      // Preview ratelimit namespace_ids: 2026050811–13 — distinct from production
+      // so branch preview traffic cannot consume production rate-limit counters.
+      "ratelimits": [
+        { "name": "RATE_LIMIT_READ",          "namespace_id": "2026050811", "simple": { "limit": 300, "period": 60 } },
+        { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050812", "simple": { "limit":  20, "period": 60 } },
+        { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050813", "simple": { "limit": 200, "period": 60 } }
+      ],
+
+      // Service bindings — preview INTENTIONALLY shares production logging + relay services.
+      // No staging counterparts exist for worker-logs / x402-sponsor-relay, so preview
+      // deployments use the production services. Side effects to be aware of:
+      //   - Logs from preview land in the same logs.aibtc.com sink as production.
+      //   - x402 settlement calls hit the production relay (real sBTC if a real payment
+      //     header is provided). Preview is not isolated from real-money paths.
+      // If staging variants of these services are added later, point preview at them here.
+      "services": [
+        {
+          "binding": "LOGS",
+          "service": "worker-logs-production",
+          "entrypoint": "LogsRPC"
+        },
+        {
+          "binding": "X402_RELAY",
+          "service": "x402-sponsor-relay-production",
+          "entrypoint": "RelayRPC"
+        }
+      ],
+
+      "queues": {
+        "producers": [
+          {
+            "binding": "INBOX_RECONCILIATION_QUEUE",
+            "queue": "landing-page-inbox-reconciliation"
+          }
+        ],
+        "consumers": [
+          {
+            "queue": "landing-page-inbox-reconciliation",
+            "max_batch_size": 1,
+            "max_retries": 5
+          }
+        ]
+      }
+    }
   }
 }
