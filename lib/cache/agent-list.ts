@@ -12,7 +12,6 @@
 
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
-import { getAchievementCount } from "@/lib/achievements";
 import { getAgentsIndex } from "@/lib/agents-index";
 import type { CachedAgent, CachedAgentList } from "./types";
 
@@ -193,8 +192,11 @@ async function rebuildAgentListCache(
     }
   }
 
-  // 2. Enrich: claims, achievements, inbox in parallel
-  const [claims, achievementCounts, inboxData] = await Promise.all([
+  // 2. Enrich: claims, inbox in parallel.
+  // Achievement counts are no longer fanned out per agent — the per-agent
+  // index read was N KV reads per rebuild and ~all returned null.
+  // Tracked under #652 ahead of the full removal in #626.
+  const [claims, inboxData] = await Promise.all([
     Promise.all(
       agents.map(async (agent) => {
         const data = await kv.get(`claim:${agent.btcAddress}`);
@@ -205,9 +207,6 @@ async function rebuildAgentListCache(
           return null;
         }
       })
-    ),
-    Promise.all(
-      agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
     ),
     Promise.all(
       agents.map(async (agent) => {
@@ -249,7 +248,7 @@ async function rebuildAgentListCache(
       githubUsername: agent.githubUsername ?? null,
       level,
       levelName: LEVELS[level].name,
-      achievementCount: achievementCounts[i],
+      achievementCount: 0,
       messageCount: inbox?.messageIds.length ?? 0,
       unreadCount: inbox?.unreadCount ?? 0,
     };
