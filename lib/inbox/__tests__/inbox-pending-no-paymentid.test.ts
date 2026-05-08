@@ -24,13 +24,15 @@ const mocks = vi.hoisted(() => ({
   listSentMessages: vi.fn(),
   buildInboxPaymentRequirements: vi.fn(),
   buildSenderAuthMessage: vi.fn(),
-  checkSenderRateLimit: vi.fn(),
   enqueueInboxReconciliation: vi.fn(),
   verifyBitcoinSignature: vi.fn(),
   invalidateAgentListCache: vi.fn(),
   getPaymentRepoVersion: vi.fn(),
   logPaymentEvent: vi.fn(),
   queueSend: vi.fn(),
+  rateLimitMutating: {
+    limit: vi.fn().mockResolvedValue({ success: true }),
+  },
   logger: {
     debug: vi.fn(),
     info: vi.fn(),
@@ -59,7 +61,6 @@ vi.mock("@/lib/inbox", () => ({
   listSentMessages: mocks.listSentMessages,
   buildInboxPaymentRequirements: mocks.buildInboxPaymentRequirements,
   buildSenderAuthMessage: mocks.buildSenderAuthMessage,
-  checkSenderRateLimit: mocks.checkSenderRateLimit,
   enqueueInboxReconciliation: mocks.enqueueInboxReconciliation,
   INBOX_PRICE_SATS: 100,
   REDEEMED_TXID_TTL_SECONDS: 7776000,
@@ -108,6 +109,7 @@ describe("inbox POST canonical staged-payment semantics", () => {
         VERIFIED_AGENTS: kv,
         X402_NETWORK: NETWORK,
         X402_RELAY_URL: "https://x402-relay.aibtc.com",
+        RATE_LIMIT_MUTATING: mocks.rateLimitMutating,
         INBOX_RECONCILIATION_QUEUE: {
           send: mocks.queueSend,
         },
@@ -159,7 +161,6 @@ describe("inbox POST canonical staged-payment semantics", () => {
       // NOTE: no paymentId — canonical identity is missing
     });
 
-    mocks.checkSenderRateLimit.mockResolvedValue(null);
     mocks.storeMessage.mockResolvedValue(undefined);
     mocks.updateAgentInbox.mockResolvedValue(undefined);
     mocks.invalidateAgentListCache.mockResolvedValue(undefined);

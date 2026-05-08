@@ -1,6 +1,9 @@
 interface CloudflareEnv {
   ASSETS: Fetcher;
   VERIFIED_AGENTS: KVNamespace;
+  RATE_LIMIT_READ: RateLimit;
+  RATE_LIMIT_MUTATING: RateLimit;
+  RATE_LIMIT_AUTHENTICATED: RateLimit;
   ARC_ADMIN_API_KEY: string; // Admin API key for /api/admin/* endpoints
   HIRO_API_KEY?: string; // Hiro API key for authenticated Stacks API requests (set via wrangler secret)
   UNISAT_API_KEY?: string; // Unisat API key for Ordinals indexer requests (set via wrangler secret)

@@ -20,7 +20,6 @@ import {
   buildInboxPaymentRequirements,
   buildSenderAuthMessage,
   DEFAULT_RELAY_URL,
-  checkSenderRateLimit,
   enqueueInboxReconciliation,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
@@ -728,13 +727,6 @@ export async function POST(
   // point. Keying on a sender STX address extracted from it would let an attacker spoof
   // arbitrary senders and rate-limit victims. Instead, we key on a hash of the raw
   // payment-signature header — each unique payload gets its own rate-limit bucket.
-  //
-  // We intentionally do NOT extract the sender address or check the failure-tier here.
-  // That would require deserializing the unverified transaction, duplicating work that
-  // verifyInboxPayment() does with proper error handling. Instead, the normal 10s window
-  // applies uniformly. The payment failure cache inside verifyInboxPayment() provides
-  // the real protection: cached INSUFFICIENT_FUNDS responses skip the relay entirely,
-  // so even at 1 req/10s a broke agent never floods the relay after the first failure.
   if (paymentSigHeader) {
     // Use a stable hash of the raw header as the rate-limit key.
     // This bounds retries per unique payload without trusting its contents.
@@ -749,32 +741,31 @@ export async function POST(
       .join("")
       .slice(0, 32);
 
+    let senderLimited = false;
     try {
-      const rateCheck = await checkSenderRateLimit(kv, rateLimitKey);
-      if (rateCheck.limited) {
-        logger.warn("Sender rate limited", {
-          rateLimitKey,
-          retryAfterSeconds: rateCheck.retryAfterSeconds,
-        });
-        return NextResponse.json(
-          {
-            error: "Too many requests. You are sending messages too quickly.",
-            retryAfter: rateCheck.retryAfterSeconds,
-            resetAt: rateCheck.resetAt,
-            hint: "Please wait before sending another message.",
-          },
-          {
-            status: 429,
-            headers: { "Retry-After": String(rateCheck.retryAfterSeconds) },
-          }
-        );
-      }
+      const result = await env.RATE_LIMIT_MUTATING.limit({ key: `inbox-sender:${rateLimitKey}` });
+      senderLimited = !result.success;
     } catch (err) {
-      // KV error during rate limit check — fail open so valid payments aren't blocked
-      logger.warn("Sender rate limit check failed (KV error) — allowing request", {
+      // Binding unavailable — fail open so valid payments aren't blocked.
+      // Inbox is a revenue surface; prefer delivering over blocking on binding errors.
+      logger.warn("Sender rate limit binding error — allowing request", {
         rateLimitKey,
         error: String(err),
       });
+    }
+    if (senderLimited) {
+      logger.warn("Sender rate limited", { rateLimitKey });
+      return NextResponse.json(
+        {
+          error: "Too many requests. You are sending messages too quickly.",
+          retryAfter: 60,
+          hint: "Please wait before sending another message.",
+        },
+        {
+          status: 429,
+          headers: { "Retry-After": "60" },
+        }
+      );
     }
   }
 
@@ -797,10 +788,20 @@ export async function POST(
       recipientStx: agent.stxAddress,
     });
 
-    // Rate limit: one attempt per txid per 60 seconds
-    const rateLimitKey = `ratelimit:txid-recovery:${paymentTxid}`;
-    const rateLimitHit = await kv.get(rateLimitKey);
-    if (rateLimitHit) {
+    // Rate limit: up to 20 recovery attempts per txid per 60 seconds (RATE_LIMIT_MUTATING window).
+    // Double-redemption is prevented by the inbox:redeemed-txid:{txid} key below regardless of retry count.
+    let txidRecoveryLimited = false;
+    try {
+      const result = await env.RATE_LIMIT_MUTATING.limit({ key: `txid-recovery:${paymentTxid}` });
+      txidRecoveryLimited = !result.success;
+    } catch (err) {
+      // Fail open — allow recovery attempt if binding is unavailable.
+      logger.warn("Txid recovery rate limit binding error — allowing request", {
+        txid: paymentTxid,
+        error: String(err),
+      });
+    }
+    if (txidRecoveryLimited) {
       logger.warn("Txid recovery rate limited", { txid: paymentTxid });
       return NextResponse.json(
         {
@@ -810,7 +811,6 @@ export async function POST(
         { status: 429 }
       );
     }
-    await kv.put(rateLimitKey, "1", { expirationTtl: 60 });
 
     // Prevent double-redemption
     const redeemedKey = `inbox:redeemed-txid:${paymentTxid}`;
