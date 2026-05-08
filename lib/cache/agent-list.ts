@@ -136,15 +136,34 @@ async function maybeTriggerBackgroundRebuild(
 }
 
 /**
- * Invalidate the cached agent list so the next read triggers a rebuild.
+ * Invalidate the cached agent list so the next read returns the stale
+ * snapshot (and triggers a background rebuild) instead of forcing a
+ * cold-miss synchronous rebuild.
+ *
+ * Mark-stale shifts cachedAt past FRESH_WINDOW_SECONDS but keeps the
+ * snapshot inside CACHE_TTL_SECONDS, so getCachedAgentList sees it as
+ * stale, returns it immediately, and kicks off maybeTriggerBackgroundRebuild.
+ *
+ * If there's no existing snapshot, this is a no-op (next read will cold-miss
+ * + rebuild as before).
  */
 export async function invalidateAgentListCache(
   kv: KVNamespace
 ): Promise<void> {
   try {
-    await kv.delete(CACHE_KEY);
+    const raw = await kv.get(CACHE_KEY);
+    const cached = parseSnapshot(raw);
+    if (!cached) return;
+    const stalePastFresh = new Date(
+      Date.now() - (FRESH_WINDOW_SECONDS + 1) * 1000
+    ).toISOString();
+    await kv.put(
+      CACHE_KEY,
+      JSON.stringify({ ...cached, cachedAt: stalePastFresh }),
+      { expirationTtl: CACHE_TTL_SECONDS }
+    );
   } catch {
-    // Best-effort deletion
+    // Best-effort
   }
 }
 
