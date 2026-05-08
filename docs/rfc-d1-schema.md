@@ -71,11 +71,13 @@ CREATE TABLE agents (
   github_username       TEXT,
   referred_by_btc       TEXT,                       -- BTC address of referrer
   referral_code         TEXT NOT NULL UNIQUE,       -- 6-char code (was referral-code:{btcAddress})
-  -- Foreign-key style hint; D1 SQLite enforces FK only when PRAGMA foreign_keys=ON.
+  -- D1 enforces foreign keys by default (equivalent to PRAGMA foreign_keys=ON).
+  -- Cycle is intentional: agents.referred_by_btc → agents.btc_address self-FK.
   FOREIGN KEY (referred_by_btc) REFERENCES agents(btc_address)
 );
 
-CREATE INDEX idx_agents_stx ON agents(stx_address);
+-- stx_address already has an implicit unique index from the UNIQUE constraint;
+-- no separate idx_agents_stx needed.
 CREATE INDEX idx_agents_owner ON agents(lower(owner)) WHERE owner IS NOT NULL;
 CREATE INDEX idx_agents_referred_by ON agents(referred_by_btc) WHERE referred_by_btc IS NOT NULL;
 CREATE INDEX idx_agents_verified_at ON agents(verified_at);
@@ -83,11 +85,17 @@ CREATE INDEX idx_agents_last_active_at ON agents(last_active_at) WHERE last_acti
 ```
 
 **Notes:**
-- `btc_address` is PK because every read path eventually keys on it (BTC is the canonical agent ID); STX address is unique-indexed for STX-keyed lookups.
+- `btc_address` is PK because every read path eventually keys on it (BTC is the canonical agent ID). `stx_address` is `UNIQUE` for STX-keyed lookups; the implicit unique index that creates is sufficient — no separate `idx_agents_stx` needed.
 - `referral_code` is unique-indexed and lives on the row to remove the `referral-lookup:{CODE} → btcAddress` round-trip currently needed during register-with-ref flow.
 - `owner` is case-insensitive indexed (lowercase) because handle lookups are case-insensitive in practice.
 - `capabilities_json` is a JSON column for forward-compat; not queried directly today, can be normalized later if needed.
 - `claim-code:{btcAddress}` (the *one-time-use* claim code, separate from the *referral* code) is **not** folded in here; it lives outside the relational surface (rate-limit-protected, written-once, read-on-redeem only). Stays in KV.
+
+**Scope decision: PartialAgentRecord stays in KV until upgraded.**
+`lib/types.ts` defines `PartialAgentRecord` — agents auto-registered during a first response with only Bitcoin credentials, no Stacks credentials. The schema above requires `stx_address` / `stx_public_key` `NOT NULL`, so partial records cannot be represented in `agents`. **Phase 1.3 backfill scope:** insert only **full** `AgentRecord` rows into `agents`. Partial records remain in KV at `btc:{btcAddress}` until the agent completes registration (adds Stacks credentials), at which point Phase 2 write paths upsert them into D1. This avoids modeling a transitional state in the relational schema; it costs one extra KV read on the rare partial-agent profile lookup until the agent upgrades.
+
+**Backfill must generate missing referral codes.**
+`/api/register` currently swallows failures from `generateAndStoreReferralCode`, and `/api/referral-code` can lazy-generate later. Some KV records may have no `referral-code:{btcAddress}` entry today. Since `referral_code` is `NOT NULL UNIQUE`, **Phase 1.3 backfill must deterministically generate-and-store missing codes before inserting into D1** (using the same generator + collision-retry that `generateAndStoreReferralCode` uses). This is a backfill-time fix; the lazy-generate path on `/api/referral-code` becomes dead code post-migration and can be removed in Phase 4.x cleanup.
 
 ### `claims`
 
@@ -117,14 +125,18 @@ CREATE INDEX idx_claims_claimed_at ON claims(claimed_at);
 
 ### `inbox_messages`
 
-Replaces KV patterns `inbox:message:{messageId}` (`InboxMessage`) and `inbox:reply:{messageId}` (`OutboxReply`). The two are folded into one table via `is_reply` because outbox replies and inbox messages share most columns and a partial overlap that's easier to model as one row-shape than two cross-referenced tables. Per [#652](https://github.com/aibtcdev/landing-page/issues/652) umbrella decision and PHASES.md.
+Replaces KV patterns `inbox:message:{messageId}` (`InboxMessage`) and `inbox:reply:{messageId}` (`OutboxReply`). The two are folded into one table via `is_reply` because outbox replies and inbox messages share most columns and a partial overlap that's easier to model as one row-shape than two cross-referenced tables. Per [#652](https://github.com/aibtcdev/landing-page/issues/652) umbrella decision.
 
 ```sql
 CREATE TABLE inbox_messages (
   message_id            TEXT PRIMARY KEY,            -- "msg_{ts}_{uuid}"
   is_reply              INTEGER NOT NULL DEFAULT 0,  -- 0 = inbound message, 1 = outbox reply
   reply_to_message_id   TEXT,                        -- message being replied to (NULL for inbound)
-  from_address          TEXT NOT NULL,               -- sender's STX (inbound) or BTC (reply)
+  -- Sender address columns: exactly one is populated per row.
+  -- Inbound (is_reply=0) rows have from_stx_address (payer's STX from x402 settlement).
+  -- Reply (is_reply=1) rows have from_btc_address (recipient's BTC, signed-in via BIP-137).
+  from_stx_address      TEXT,                        -- payer's STX (inbound only)
+  from_btc_address      TEXT,                        -- replier's BTC (reply only)
   to_btc_address        TEXT NOT NULL,
   to_stx_address        TEXT,                        -- NULL for replies (BTC routing only)
   content               TEXT NOT NULL,
@@ -135,12 +147,18 @@ CREATE TABLE inbox_messages (
   receipt_id            TEXT,                        -- relay verify endpoint
   recovered_via_txid    INTEGER NOT NULL DEFAULT 0,  -- 1 if delivered via txid recovery path
   authenticated         INTEGER NOT NULL DEFAULT 0,  -- 1 if BIP-137 verified at submit time
-  sender_signature      TEXT,                        -- BIP-137 signature (when present)
-  sender_btc_address    TEXT,                        -- recovered from sender_signature
-  signature             TEXT,                        -- BIP-137 signature on reply (when is_reply=1)
+  -- Single signature column for both inbound (sender_signature) and reply paths.
+  -- For inbound rows: BIP-137 signature optionally provided by sender (proves sender_btc_address).
+  -- For reply rows: BIP-137 signature on the reply payload (proves from_btc_address).
+  bip137_signature      TEXT,
+  sender_btc_address    TEXT,                        -- recovered from bip137_signature on inbound
   sent_at               TEXT NOT NULL,               -- ISO-8601
   read_at               TEXT,                        -- inbound-message-only field
   replied_at            TEXT,                        -- inbound-message-only field
+  CHECK (
+    (is_reply = 0 AND from_stx_address IS NOT NULL AND from_btc_address IS NULL) OR
+    (is_reply = 1 AND from_btc_address IS NOT NULL AND from_stx_address IS NULL)
+  ),
   FOREIGN KEY (to_btc_address) REFERENCES agents(btc_address),
   FOREIGN KEY (reply_to_message_id) REFERENCES inbox_messages(message_id)
 );
@@ -149,7 +167,7 @@ CREATE TABLE inbox_messages (
 CREATE INDEX idx_inbox_to_btc_sent_at ON inbox_messages(to_btc_address, sent_at DESC) WHERE is_reply = 0;
 
 -- Per-recipient outbox listing (replies they've sent)
-CREATE INDEX idx_inbox_outbox_from_sent_at ON inbox_messages(from_address, sent_at DESC) WHERE is_reply = 1;
+CREATE INDEX idx_inbox_outbox_from_btc_sent_at ON inbox_messages(from_btc_address, sent_at DESC) WHERE is_reply = 1;
 
 -- Unread count per recipient (closes aibtc-mcp-server#497 via live SELECT COUNT(*))
 CREATE INDEX idx_inbox_unread ON inbox_messages(to_btc_address) WHERE is_reply = 0 AND read_at IS NULL;
@@ -157,15 +175,18 @@ CREATE INDEX idx_inbox_unread ON inbox_messages(to_btc_address) WHERE is_reply =
 -- Reply chain lookups
 CREATE INDEX idx_inbox_reply_to ON inbox_messages(reply_to_message_id) WHERE reply_to_message_id IS NOT NULL;
 
--- Txid double-redemption prevention (ALL recovery paths share this lookup)
+-- Txid double-redemption prevention (ALL recovery paths share this lookup).
+-- This is PERMANENT — see notes below for the deliberate behavior change from KV's 90d TTL.
 CREATE UNIQUE INDEX idx_inbox_payment_txid ON inbox_messages(payment_txid) WHERE payment_txid IS NOT NULL;
 ```
 
 **Notes:**
-- The `inbox:agent:{btcAddress}` index (`InboxAgentIndex` with `messageIds` + `unreadCount`) is **eliminated entirely**. `unreadCount` becomes `SELECT COUNT(*) FROM inbox_messages WHERE to_btc_address = ? AND is_reply = 0 AND read_at IS NULL` — atomic, no drift, single round-trip.
-- The `inbox:redeemed-txid:{txid}` 90-day double-redemption guard becomes the partial unique index on `payment_txid` (post-merge: any second insert with the same `payment_txid` fails). The `inbox:pending-txid:` negative cache stays in KV (60s TTL — not a relational concern).
-- `is_reply = 1` rows have `payment_satoshis = NULL` and `signature` populated; `is_reply = 0` rows have `payment_satoshis NOT NULL` (or recovered via txid) and `signature = NULL`. A CHECK constraint enforcing this is tempting but adds friction during dual-write reconciliation; deferring to application-layer validation.
-- `StagedInboxMessage` (the locally-staged record while relay confirmation is pending) is **not** modeled in D1. It lives in KV with a short TTL until relay reaches `confirmed`, at which point a row is written to `inbox_messages`. Keeping the staging buffer out of D1 avoids needing a Phase 2.5 dual-write story for transient state.
+- **`from_stx_address` + `from_btc_address` (split sender columns).** Per arc0btc's review on PR #665: a single `from_address` column with type-depending-on-`is_reply` is a latent bug surface for application code that forgets to discriminate. Splitting into two nullable columns + a `CHECK` constraint enforcing exactly-one-populated locks in the invariant at the schema level. Costs one extra `NULL` column per row; trivial.
+- **Single `bip137_signature` column** (was `sender_signature` + `signature`). Both columns held BIP-137 signatures with the same shape; the only difference was which row type wrote them. Per arc0btc's review: collapsing to one column reduces "different name, same concept in different modes" confusion.
+- **`unreadCount` becomes live `SELECT COUNT(*)`.** The `inbox:agent:{btcAddress}` index (`InboxAgentIndex` with `messageIds` + cached `unreadCount`) is **eliminated entirely**. `SELECT COUNT(*) FROM inbox_messages WHERE to_btc_address = ? AND is_reply = 0 AND read_at IS NULL` is served by `idx_inbox_unread` — atomic, no drift, single round-trip. **This closes aibtc-mcp-server#497** independent of which off-by-one branch is the cause of the cached-counter drift (the live count has nothing to drift against). Phase 1.4 reconciliation includes an empirical acceptance test (see Migration plan below).
+- **`payment_txid` uniqueness is PERMANENT (deliberate behavior change).** The `inbox:redeemed-txid:{txid}` 90-day KV TTL becomes a forever-unique partial index on `payment_txid`. This is intentional: a 90-day window for re-using a paid txid was a KV-TTL-shaped artifact, not a security requirement. A txid is a one-time on-chain event; permanent uniqueness is the correct model. If we ever need TTL-style behavior again, a separate `redeemed_txids(txid, redeemed_at)` table with a sweep job is the right shape, not relaxing this index. The `inbox:pending-txid:` negative cache (60s TTL) stays in KV — different concern.
+- **Application-layer invariants** beyond the `CHECK`: `is_reply = 1` rows have `payment_satoshis = NULL`; `is_reply = 0` rows have `payment_satoshis NOT NULL` (or `recovered_via_txid = 1`). A CHECK enforcing this is tempting but adds friction during Phase 2.5 dual-write reconciliation; deferring to application-layer validation.
+- **`StagedInboxMessage` is NOT modeled in D1.** Locally-staged record while relay confirmation is pending; lives in KV with a short TTL until relay reaches `confirmed`, at which point a row is written to `inbox_messages`. Keeping the staging buffer out of D1 avoids needing a Phase 2.5 dual-write story for transient state.
 
 ### `vouches`
 
@@ -248,16 +269,15 @@ CREATE TABLE balances (
   FOREIGN KEY (agent_address) REFERENCES agents(stx_address)
 );
 
--- Dashboard query: latest snapshot per agent per token, ordered by USD value
-CREATE INDEX idx_balances_captured_usd_desc ON balances(captured_at, usd_value DESC) WHERE usd_value IS NOT NULL;
-
--- Per-agent balance history
+-- Per-agent balance history (covers BOTH per-agent drill-in AND the dashboard
+-- "latest snapshot per agent per token" query — leftmost prefix matches both).
 CREATE INDEX idx_balances_agent_token_time ON balances(agent_address, token_id, captured_at DESC);
 ```
 
 **Notes:**
 - Composite PK `(agent_address, token_id, captured_at)` enforces snapshot-at-most-once-per-window and lets us keep historical snapshots cheaply.
-- The 5-min cadence means ~288 rows/agent/day across N tokens; with ~1K agents and ~5 tokens average, ~1.4M rows/day. D1 row limits are 50M (free) / 5B (paid); we have multi-year runway. Snapshot trim via TTL-style `DELETE WHERE captured_at < datetime('now','-90 days')` if the table grows uncomfortably; deferred until needed.
+- **Single index `idx_balances_agent_token_time` covers both query shapes** — per arc0btc's review, the original `idx_balances_captured_usd_desc(captured_at, usd_value DESC)` doesn't serve the dashboard query (which is shaped `WHERE agent_address = ? AND token_id = ? ORDER BY captured_at DESC LIMIT 1`, or a window function for the cross-agent leaderboard). The agent-token-time index is the right shape for both. Removed the captured_usd_desc index.
+- **5-min cadence row growth:** ~288 rows/agent/day across N tokens; ~1K agents × ~5 tokens average ≈ ~1.44M rows/day. D1 free tier is 50M rows ≈ ~35 days at this rate. **Phase 3.3 ships a 90-day TTL sweep alongside the cron** (per secret-mars's vote on Open Question 3): `DELETE FROM balances WHERE captured_at < datetime('now', '-90 days')` keeps the table in the free tier indefinitely. Pre-allocating the sweep-with-cron is cheaper than retrofitting it later when the table fills up — same reasoning as the agent-news rate-limit cutover discipline. If the team later wants longer retention or per-agent snapshots beyond 90 days, that's a paid-D1 decision documented at provisioning time.
 - `usd_value` is microUSD (×1,000,000) integer to keep arithmetic precise; price-feed source is documented in `source` so the dashboard can flag stale-price entries.
 - `decimals` is denormalized per row so the dashboard doesn't need a separate `tokens` table; trade-off accepted because the canonical token list is small (<20 active tokens) and decimals don't change.
 
@@ -273,15 +293,15 @@ SELECT
   taproot_address,
   verified_at,
   last_active_at
-FROM agents
-WHERE stx_address IS NOT NULL;
+FROM agents;
 ```
 
 **Notes:**
-- Today this is a thin projection over `agents` — almost a no-op view. Two reasons to define it explicitly:
+- Today this is a thin projection over `agents` — almost a no-op view. The previous `WHERE stx_address IS NOT NULL` predicate was a no-op because `agents.stx_address` is `NOT NULL` (per the partial-agent scope decision: partial records stay in KV until upgraded). Predicate removed.
+- Two reasons to define the view explicitly:
   1. Phase 3 verifier and Phase 3.4 dashboard both want to filter "swap sender ∈ registered wallets" without joining the full agent record. The view makes that intent explicit.
   2. If Phase 1.2 implementation finds the view costs anything performance-wise on D1 (unlikely — D1 SQLite optimizes simple views inline), it can be promoted to a materialized join table maintained by triggers or by the agent-write path. Application code doesn't change.
-- Returning to the gist's nuance: registered-wallet membership today ≡ "row exists in `agents` with non-null `stx_address`". If we later need richer membership (e.g., active-only, BNS-required), the view definition is the only place to update.
+- Returning to the gist's nuance: registered-wallet membership today ≡ "row exists in `agents`". If we later need richer membership (e.g., active-only, BNS-required, partial-agents-once-supported), the view definition is the only place to update.
 
 ## Architecture decisions — explicit callouts
 
@@ -298,9 +318,9 @@ Mentioning this here so future readers don't try to "consolidate" rate limits in
 These are time-bounded caches with TTL semantics that KV handles natively:
 - **BNS lookups** (`lib/identity/kv-cache.ts`): three-state cache (24h confirmed-positive, 7d confirmed-negative, 60s lookup-failed).
 - **Identity lookups** (ERC-8004 NFT detection): same three-state pattern.
-- **Activity / heartbeat counters** (`checkin:{btcAddress}`, 300s TTL): rate-limit-style state, TTL-driven.
+- **Activity / heartbeat record** (`checkin:{btcAddress}`): persistent KV key written via `kv.put(...)` without `expirationTtl`, overwritten on each check-in. Acts as the per-agent latest-activity marker plus the rate-limit gate (`/api/heartbeat` POST checks the stored timestamp's age before accepting a new check-in). **No TTL today** — the value just gets overwritten each call.
 
-D1 has no native TTL on rows. Implementing TTL via `DELETE WHERE expires_at < datetime('now')` adds a sweep-job dependency we don't want for caches. KV's natural expiration semantics are the right fit.
+D1 has no native TTL on rows. Implementing TTL via `DELETE WHERE expires_at < datetime('now')` adds a sweep-job dependency we don't want for caches. KV's natural expiration semantics (where they exist) are the right fit; for keys like `checkin:{btcAddress}` that don't use TTL today, the persistent overwritten-on-each-call pattern is fine and doesn't need migration.
 
 `caches.default` (Cloudflare's edge cache) layers on top for HTTP-cacheable responses (e.g., agent-list, profile renders) — that's an HTTP-layer concern unaffected by the substrate decision.
 
@@ -314,7 +334,7 @@ If you find yourself reaching for an atomic-increment-shaped operation:
 - **For sequence numbers** → D1 `INTEGER PRIMARY KEY AUTOINCREMENT`.
 - **For exactly-once writes** → D1 unique constraint (this is how `inbox:redeemed-txid` becomes the partial unique index on `payment_txid`).
 
-[`feedback_kv_rate_limits_antipattern.md`](https://github.com/aibtcdev/landing-page/issues/652) (memory in quest tracker) captures the prior incident; this RFC pins the principle into a public doc so future contributors don't re-derive it the hard way.
+The principle: KV's read-then-write rate-limit pattern caused the per-request bill leak that motivated this whole quest. Cloudflare `ratelimits` binding is the durable fix. D1 must not become its replacement — neither for rate-limit counters nor for any pattern that wants atomic-increment semantics. (Captured in the off-repo quest-tracker memory and pinned here in a public doc so future contributors don't re-derive the lesson the hard way.)
 
 ### 4. Worker region matches highest-traffic origin
 
@@ -333,14 +353,14 @@ If global low-latency reads become important post-launch, options are (in order 
 |-------|------|-------------|
 | **1.2** | Provision D1 + migrations 001–006 | `wrangler d1 create landing-page`; one migration per table; apply in dev + prod; document chosen region |
 | **1.3** | Backfill (KV → D1) | One-shot, idempotent script: scan `agents:index`, for each agent fetch `btc:`, `claim:`, `inbox:agent:` + per-message KV reads, `referral-code:`, `vouch:` records; INSERT into D1 with `INSERT OR IGNORE` for idempotency |
-| **1.4** | Reconciliation | Compare row counts + spot-check ~50 random agents; produce a diff report; **must show zero unexplained drift before Phase 2 starts** |
+| **1.4** | Reconciliation | Compare row counts + spot-check ~50 random agents; produce a diff report; **must show zero unexplained drift before Phase 2 starts**. **Plus an empirical `unreadCount` drift acceptance test** (per @secret-mars's #497 scout): pick 3+ addresses with non-zero unread state; verify `cached_unreadCount == SELECT COUNT(*)` post-flip. If drift is non-zero post-flip, the off-by-one isn't in the cached counter and the read-flip didn't close #497 — failure mode is detectable. |
 | **2.1** | Flip `rebuildAgentListCache` to D1 | Single `SELECT … JOIN claims … LEFT JOIN inbox_messages` replaces the per-agent fan-out reads |
 | **2.2** | Flip `/api/agents/[address]` + SSR profile | Profile read served from D1 |
 | **2.3** | Flip middleware crawler-bot OG | OG handler served from D1 |
 | **2.4** | Flip `/api/leaderboard` + `/api/og/[address]` | Leaderboard ordering matches; unblocks #651 |
-| **2.5** | Inbox/outbox dual-write → reconcile → flip | 1hr dual-write window only on `inbox_messages` (revenue surface); reconcile; flip reads then writes; **closes [aibtc-mcp-server#497](https://github.com/aibtcdev/aibtc-mcp-server/issues/497) via live `SELECT COUNT(*)`** |
+| **2.5** | Inbox **AND outbox-reply** dual-write → reconcile → flip | **Both write paths** (`inbox:message:` and `inbox:reply:`) get dual-writes during the same 1hr window; reconcile both KV → D1; flip reads then writes. Reply velocity is much lower than inbox-write velocity, so the reply reconciliation surface is naturally smaller, but the implementation should make the reply-write dual-write explicit so a reviewer can verify it didn't get skipped. **Closes [aibtc-mcp-server#497](https://github.com/aibtcdev/aibtc-mcp-server/issues/497) via live `SELECT COUNT(*)`** (validated by Phase 1.4's empirical drift test). **1hr window justification:** based on agent-news#704 cutover precedent (similar inbox-write velocity, no missed events in window); will extend to 6–24hr dual-write only if Phase 2.5 smoke shows divergence between KV and D1 row counts. |
 | **2.6** | Bounty board reads (conditional) | Move iff shape benefits |
-| **3.1–3.4** | Trading-comp verifier + chainhook + balance cron + dashboard | Builds on `swaps`, `balances`, `registered_wallets` |
+| **3.1–3.4** | Trading-comp verifier + chainhook + balance cron + dashboard | Builds on `swaps`, `balances`, `registered_wallets`. **3.3 cron ships with a 90-day TTL sweep** (`DELETE FROM balances WHERE captured_at < datetime('now', '-90 days')`) so the table stays in D1 free tier — see `balances` notes. |
 | **4.x** | Cleanup + KV archival | Read-only archive of migrated KV namespaces (6–24h verify-no-reads), then delete |
 
 Per-PR smoke window + cost-measurement comment per the established pattern from #654/#656/#658/#662.
@@ -363,11 +383,15 @@ Per-PR smoke window + cost-measurement comment per the established pattern from 
 **Non-changes:**
 - Rate limits, identity/BNS/activity caches, transient staging records (`StagedInboxMessage`, `inbox:pending-txid`), and one-time-use claim codes all stay in KV. **Each has a documented reason** (Decisions 1, 2; per-table notes).
 
-## Open questions
+## Open questions — resolved post-review
 
-1. **`registered_wallets` as view vs. join table.** Default is view (Phase 1.2 implementation choice). Opening for reviewer input — if Phase 3 query patterns suggest a maintained join table is better, decide here.
-2. **Genesis payouts table.** Currently kept in KV as `genesis:{btcAddress}`. Worth folding into D1 as `genesis_payouts` for admin-tooling queries? Defer to a separate sub-issue if there's appetite.
-3. **`balances` retention policy.** Default plan is keep-everything until table size becomes uncomfortable; could ship a 90-day TTL sweep in Phase 3.3 if we want to bound growth proactively.
+The three questions opened in the draft RFC have all been resolved by the dev-council review on PR #665 (@arc0btc + @secret-mars both approved, with concurring votes on each question).
+
+1. **`registered_wallets` as view vs. join table → VIEW.** Both reviewers concur. The `swaps.sender → agents.stx_address` FK already enforces the registered-agent membership invariant at insert time; the view is documentation of intent, not enforcement. Promotion to a maintained join table can come later if a Phase 3 query pattern measurably benefits — D1 SQLite optimizes simple views inline so there's no perf cost today.
+
+2. **Genesis payouts table → DEFER.** Both reviewers concur. Low cardinality, admin-only writes, no relational query pressure. Folding `genesis:{btcAddress}` into D1 adds a table that doesn't serve the main migration goals. File a separate sub-issue if/when admin tooling later wants relational queries on payouts.
+
+3. **`balances` retention policy → SHIP 90-DAY TTL SWEEP WITH PHASE 3.3 CRON** (per @secret-mars's vote, supported by @arc0btc's free-tier-math observation). At 1.44M rows/day, D1 free tier (50M rows) ≈ 35 days runway. Pre-allocating the sweep alongside the 5-min ingestion cron is cheaper than retrofitting later when the table fills up (same discipline as the agent-news rate-limit cutover). Sweep: `DELETE FROM balances WHERE captured_at < datetime('now', '-90 days')`. Now codified in the `balances` notes and Phase 3 migration row.
 
 ## References
 
