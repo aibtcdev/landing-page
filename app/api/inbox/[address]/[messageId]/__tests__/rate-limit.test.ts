@@ -6,11 +6,58 @@
  * IP gets clipped at the bucket limit. IP-keyed only: spoofing the `address`
  * path-param cannot bypass an exhausted IP quota.
  *
- * Mirrors the test scaffold pattern from app/api/outbox/[address]/__tests__/rate-limit.test.ts
- * — validates binding-call shape, key format, and fail-closed-in-production semantics.
+ * Tests call the real PATCH handler with mocked getCloudflareContext() and
+ * mocked downstream functions so the test exercises the handler's actual call
+ * order rather than a simulator that can drift.
  */
 
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { NextRequest } from "next/server";
+import { PATCH } from "../route";
+
+// ---- module mocks --------------------------------------------------------
+
+vi.mock("@opennextjs/cloudflare", () => ({
+  getCloudflareContext: vi.fn(),
+}));
+
+vi.mock("@/lib/bitcoin-verify", () => ({
+  verifyBitcoinSignature: vi.fn(),
+}));
+
+vi.mock("@/lib/agent-lookup", () => ({
+  lookupAgent: vi.fn(),
+}));
+
+vi.mock("@/lib/inbox", () => ({
+  getMessage: vi.fn(),
+  getReply: vi.fn(),
+  updateMessage: vi.fn(),
+  getAgentInbox: vi.fn(),
+  validateMarkRead: vi.fn(),
+  buildMarkReadMessage: vi.fn(() => "Mark as Read | msg_123"),
+  decrementUnreadCount: vi.fn(),
+}));
+
+vi.mock("@/lib/logging", () => ({
+  isLogsRPC: vi.fn(() => false),
+  createConsoleLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
+  createLogger: vi.fn(),
+}));
+
+// ---- imports after mocks -------------------------------------------------
+
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { lookupAgent } from "@/lib/agent-lookup";
+import { getMessage, validateMarkRead } from "@/lib/inbox";
+
+// ---- helpers -------------------------------------------------------------
 
 /** Minimal RateLimit binding mock with a controllable success value. */
 function createRateLimitMock(success: boolean): RateLimit {
@@ -19,7 +66,7 @@ function createRateLimitMock(success: boolean): RateLimit {
   } as unknown as RateLimit;
 }
 
-/** Binding mock that throws — simulates binding outage. */
+/** RateLimit binding mock that throws — simulates binding outage. */
 function createThrowingRateLimitMock(): RateLimit {
   return {
     limit: vi.fn(async (_opts: { key: string }) => {
@@ -28,116 +75,203 @@ function createThrowingRateLimitMock(): RateLimit {
   } as unknown as RateLimit;
 }
 
+/** Minimal valid mark-read PATCH body. */
+const VALID_BODY = JSON.stringify({
+  messageId: "msg_123_abc",
+  signature: "sig123",
+});
+
 /**
- * Simulate the IP-bucket check from the inbox/[address]/[messageId] PATCH route.
- *
- * Returns whether the request would be blocked. Mirrors the logic in
- * app/api/inbox/[address]/[messageId]/route.ts.
+ * Build a minimal NextRequest for the mark-read PATCH handler.
  */
-async function simulateMarkReadRateLimit(
-  limiter: RateLimit,
-  ip: string | null,
-  isProduction: boolean = false
-): Promise<{ blocked: boolean; verifyCalled: boolean }> {
-  const verifyMock = vi.fn();
-
-  // Skip if no IP — matches the `if (ip) { ... }` guard in the route.
-  if (!ip) {
-    verifyMock();
-    return { blocked: false, verifyCalled: verifyMock.mock.calls.length > 0 };
-  }
-
-  let ipLimited = false;
-  try {
-    const result = await limiter.limit({ key: `inbox-mark-read:${ip}` });
-    ipLimited = !result.success;
-  } catch {
-    // Fail closed in production/staging, open in dev.
-    if (isProduction) ipLimited = true;
-  }
-
-  if (ipLimited) {
-    return { blocked: true, verifyCalled: false };
-  }
-
-  // verifyBitcoinSignature would run here in the real route
-  verifyMock();
-  return { blocked: false, verifyCalled: verifyMock.mock.calls.length > 0 };
+function buildRequest(opts: { ip?: string; body?: string } = {}): NextRequest {
+  const body = opts.body ?? VALID_BODY;
+  const req = new NextRequest(
+    "https://aibtc.com/api/inbox/bc1qtest/msg_123_abc",
+    {
+      method: "PATCH",
+      headers: {
+        "content-type": "application/json",
+        "content-length": String(Buffer.byteLength(body)),
+        ...(opts.ip ? { "cf-connecting-ip": opts.ip } : {}),
+      },
+      body,
+    }
+  );
+  return req;
 }
 
-describe("inbox mark-read PATCH — IP rate limit", () => {
-  it("blocks at IP bucket when IP quota is exhausted; verifyBitcoinSignature is NOT reached", async () => {
+/**
+ * Wire up getCloudflareContext() mock to return the given env.
+ */
+function mockContext(env: Partial<CloudflareEnv>) {
+  (getCloudflareContext as Mock).mockResolvedValue({
+    env: {
+      VERIFIED_AGENTS: {} as KVNamespace,
+      ...env,
+    },
+    ctx: {},
+  });
+}
+
+// ---- test suite ----------------------------------------------------------
+
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Default stubs so tests that only care about IP-bucket behavior
+  // don't need to stub every downstream path.
+  (lookupAgent as Mock).mockResolvedValue(null);
+  (getMessage as Mock).mockResolvedValue(null);
+  (validateMarkRead as Mock).mockReturnValue({
+    errors: null,
+    data: { messageId: "msg_123_abc", signature: "sig123" },
+  });
+  (verifyBitcoinSignature as Mock).mockReturnValue({ valid: true, address: "bc1qtest" });
+});
+
+describe("inbox mark-read PATCH — IP rate limit blocks before verifyBitcoinSignature", () => {
+  it("returns 429 when IP bucket is exhausted; verifyBitcoinSignature is NOT reached", async () => {
     const exhausted = createRateLimitMock(false);
+    mockContext({ RATE_LIMIT_MUTATING: exhausted });
 
-    const result = await simulateMarkReadRateLimit(exhausted, "1.2.3.4");
+    const req = buildRequest({ ip: "1.2.3.4" });
+    const resp = await PATCH(req, {
+      params: Promise.resolve({ address: "bc1qtest", messageId: "msg_123_abc" }),
+    });
 
-    expect(result.blocked).toBe(true);
-    expect(result.verifyCalled).toBe(false);
+    expect(resp.status).toBe(429);
+    expect(verifyBitcoinSignature).not.toHaveBeenCalled();
     expect(exhausted.limit).toHaveBeenCalledTimes(1);
   });
 
-  it("proceeds to verifyBitcoinSignature when IP quota has headroom", async () => {
+  it("proceeds past IP check when quota has headroom; lookupAgent is reached", async () => {
     const passing = createRateLimitMock(true);
+    mockContext({ RATE_LIMIT_MUTATING: passing });
+    // Agent not found → 404, but that means we got past the rate limit
+    (lookupAgent as Mock).mockResolvedValue(null);
 
-    const result = await simulateMarkReadRateLimit(passing, "1.2.3.4");
+    const req = buildRequest({ ip: "1.2.3.4" });
+    const resp = await PATCH(req, {
+      params: Promise.resolve({ address: "bc1qtest", messageId: "msg_123_abc" }),
+    });
 
-    expect(result.blocked).toBe(false);
-    expect(result.verifyCalled).toBe(true);
+    expect(resp.status).not.toBe(429);
+    expect(lookupAgent).toHaveBeenCalled();
   });
 
-  it("calls limit() with the correct key format (inbox-mark-read:{ip})", async () => {
-    const limiter = createRateLimitMock(true);
+  it("calls limit() with the correct key format inbox-mark-read:{ip}", async () => {
+    const limiter = createRateLimitMock(false);
+    mockContext({ RATE_LIMIT_MUTATING: limiter });
 
-    await simulateMarkReadRateLimit(limiter, "10.20.30.40");
+    const req = buildRequest({ ip: "10.20.30.40" });
+    await PATCH(req, {
+      params: Promise.resolve({ address: "bc1qtest", messageId: "msg_123_abc" }),
+    });
 
     expect(limiter.limit).toHaveBeenCalledWith({ key: "inbox-mark-read:10.20.30.40" });
   });
 
-  it("spoofed `address` path-param cannot bypass IP bucket — IP key is the only key", async () => {
+  it("spoofed path address cannot bypass IP bucket — IP key is the only key", async () => {
     const exhausted = createRateLimitMock(false);
 
-    // The simulate function only takes IP — by construction the address is not
-    // part of the rate-limit key. Vary the IP, hold the key shape constant.
-    const result1 = await simulateMarkReadRateLimit(exhausted, "1.2.3.4");
-    const result2 = await simulateMarkReadRateLimit(exhausted, "1.2.3.4");
-    const result3 = await simulateMarkReadRateLimit(exhausted, "1.2.3.4");
+    const spoofedAddresses = [
+      "bc1qspoofed1",
+      "bc1qspoofed2",
+      "bc1qlegitimate",
+    ];
 
-    // All three requests on same IP get blocked; address-spoofing irrelevant.
-    expect(result1.blocked).toBe(true);
-    expect(result2.blocked).toBe(true);
-    expect(result3.blocked).toBe(true);
-    expect(exhausted.limit).toHaveBeenCalledTimes(3);
-    expect(exhausted.limit).toHaveBeenNthCalledWith(1, { key: "inbox-mark-read:1.2.3.4" });
-    expect(exhausted.limit).toHaveBeenNthCalledWith(2, { key: "inbox-mark-read:1.2.3.4" });
-    expect(exhausted.limit).toHaveBeenNthCalledWith(3, { key: "inbox-mark-read:1.2.3.4" });
+    for (const addr of spoofedAddresses) {
+      // Re-apply mock so we can track calls per invocation
+      (getCloudflareContext as Mock).mockResolvedValue({
+        env: {
+          VERIFIED_AGENTS: {} as KVNamespace,
+          RATE_LIMIT_MUTATING: exhausted,
+        },
+        ctx: {},
+      });
+
+      const req = buildRequest({ ip: "1.2.3.4" });
+      const resp = await PATCH(req, {
+        params: Promise.resolve({ address: addr, messageId: "msg_123_abc" }),
+      });
+
+      expect(resp.status).toBe(429);
+    }
+
+    // Called once per address variation — key is always ip-keyed, not address-keyed
+    expect(exhausted.limit).toHaveBeenCalledTimes(spoofedAddresses.length);
+    for (const call of (exhausted.limit as Mock).mock.calls) {
+      expect(call[0]).toEqual({ key: "inbox-mark-read:1.2.3.4" });
+    }
   });
 
-  it("binding error in production fails closed — request blocked, verify not reached", async () => {
-    const throwing = createThrowingRateLimitMock();
-
-    const result = await simulateMarkReadRateLimit(throwing, "1.2.3.4", /* isProduction */ true);
-
-    expect(result.blocked).toBe(true);
-    expect(result.verifyCalled).toBe(false);
-  });
-
-  it("binding error in dev fails open — request proceeds to verify", async () => {
-    const throwing = createThrowingRateLimitMock();
-
-    const result = await simulateMarkReadRateLimit(throwing, "1.2.3.4", /* isProduction */ false);
-
-    expect(result.blocked).toBe(false);
-    expect(result.verifyCalled).toBe(true);
-  });
-
-  it("no IP header (null) skips the rate-limit check entirely; verify proceeds", async () => {
+  it("no-ip header skips rate-limit check entirely; lookupAgent is reached", async () => {
     const limiter = createRateLimitMock(false); // would block, but won't be called
+    mockContext({ RATE_LIMIT_MUTATING: limiter });
+    (lookupAgent as Mock).mockResolvedValue(null);
 
-    const result = await simulateMarkReadRateLimit(limiter, null);
+    // No ip header
+    const req = buildRequest({});
+    const resp = await PATCH(req, {
+      params: Promise.resolve({ address: "bc1qtest", messageId: "msg_123_abc" }),
+    });
 
-    expect(result.blocked).toBe(false);
-    expect(result.verifyCalled).toBe(true);
+    // Skipped rate limit → proceeds to lookupAgent → 404
+    expect(resp.status).not.toBe(429);
     expect(limiter.limit).not.toHaveBeenCalled();
+    expect(lookupAgent).toHaveBeenCalled();
+  });
+});
+
+describe("inbox mark-read PATCH — fail-closed / fail-open on binding error", () => {
+  it("binding error in production (DEPLOY_ENV=production) fails closed — 429 returned", async () => {
+    const throwing = createThrowingRateLimitMock();
+    mockContext({
+      DEPLOY_ENV: "production",
+      RATE_LIMIT_MUTATING: throwing,
+    });
+
+    const req = buildRequest({ ip: "1.2.3.4" });
+    const resp = await PATCH(req, {
+      params: Promise.resolve({ address: "bc1qtest", messageId: "msg_123_abc" }),
+    });
+
+    expect(resp.status).toBe(429);
+    expect(verifyBitcoinSignature).not.toHaveBeenCalled();
+  });
+
+  it("binding error in preview (DEPLOY_ENV=preview) fails closed — 429 returned", async () => {
+    const throwing = createThrowingRateLimitMock();
+    mockContext({
+      DEPLOY_ENV: "preview",
+      RATE_LIMIT_MUTATING: throwing,
+    });
+
+    const req = buildRequest({ ip: "1.2.3.4" });
+    const resp = await PATCH(req, {
+      params: Promise.resolve({ address: "bc1qtest", messageId: "msg_123_abc" }),
+    });
+
+    expect(resp.status).toBe(429);
+    expect(verifyBitcoinSignature).not.toHaveBeenCalled();
+  });
+
+  it("binding error in dev (DEPLOY_ENV=undefined) fails open — request proceeds past IP check", async () => {
+    const throwing = createThrowingRateLimitMock();
+    mockContext({
+      // DEPLOY_ENV omitted → undefined → fail open
+      RATE_LIMIT_MUTATING: throwing,
+    });
+    (lookupAgent as Mock).mockResolvedValue(null);
+
+    const req = buildRequest({ ip: "1.2.3.4" });
+    const resp = await PATCH(req, {
+      params: Promise.resolve({ address: "bc1qtest", messageId: "msg_123_abc" }),
+    });
+
+    // Fails open → proceeds past IP check → agent not found → 404
+    expect(resp.status).not.toBe(429);
+    expect(lookupAgent).toHaveBeenCalled();
   });
 });
 
