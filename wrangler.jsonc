@@ -21,6 +21,14 @@
       "remote": true
     }
   ],
+  // First-party rate limit bindings. Top-level IDs are isolated from any
+  // named production/staging envs so branch preview traffic cannot consume
+  // production counters. Mirrors the agent-news pattern (agent-news#704/#705).
+  "ratelimits": [
+    { "name": "RATE_LIMIT_READ",          "namespace_id": "2026050801", "simple": { "limit": 300, "period": 60 } },
+    { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050802", "simple": { "limit":  20, "period": 60 } },
+    { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050803", "simple": { "limit": 200, "period": 60 } }
+  ],
   // Service bindings: worker-logs RPC and x402 sponsor relay RPC
   "services": [
     {

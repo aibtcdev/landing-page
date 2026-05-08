@@ -13,16 +13,10 @@ import {
   listInboxMessages,
   decrementUnreadCount,
 } from "@/lib/inbox";
-import {
-  OUTBOX_RATE_LIMIT_UNREGISTERED_MAX,
-  OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS,
-  OUTBOX_RATE_LIMIT_REGISTERED_MAX,
-  OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS,
-  OUTBOX_RATE_LIMIT_VALIDATION_MAX,
-  OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS,
-} from "@/lib/inbox/constants";
 import { isStxAddress } from "@/lib/validation/address";
-import { checkFixedWindowRateLimit } from "@/lib/rate-limit";
+
+/** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
+const RATE_LIMIT_RETRY_AFTER = 60;
 
 export async function POST(
   request: NextRequest,
@@ -55,17 +49,43 @@ export async function POST(
     );
   }
 
-  // Look up agent first — rate limits are applied contextually below.
+  // IP bucket check — must run BEFORE any address-keyed check so that spoofed
+  // path addresses cannot bypass an exhausted IP quota. Mirrors agent-news#705.
+  const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for");
+  if (ip) {
+    let ipLimited = false;
+    try {
+      const result = await env.RATE_LIMIT_MUTATING.limit({ key: `outbox-validation:${ip}` });
+      ipLimited = !result.success;
+    } catch (err) {
+      // Binding unavailable — fail closed in production/staging, open in dev
+      const isProduction = process.env.NODE_ENV === "production";
+      logger.warn("IP rate limit binding error", { error: String(err), failClosed: isProduction });
+      if (isProduction) ipLimited = true;
+    }
+    if (ipLimited) {
+      logger.warn("Outbox rate limited (IP)", { ip });
+      return NextResponse.json(
+        { error: "Too many requests from this IP. Slow down.", retryAfter: RATE_LIMIT_RETRY_AFTER },
+        { status: 429, headers: { "Retry-After": String(RATE_LIMIT_RETRY_AFTER) } }
+      );
+    }
+  }
+
+  // Look up agent — rate limit unregistered addresses after IP check passes.
   const agent = await lookupAgent(kv, address);
 
   if (!agent) {
-    const { limited, retryAfterSeconds, resetAt } = await checkFixedWindowRateLimit(
-      kv,
-      `ratelimit:outbox-unregistered:${address}`,
-      OUTBOX_RATE_LIMIT_UNREGISTERED_MAX,
-      OUTBOX_RATE_LIMIT_UNREGISTERED_TTL_SECONDS
-    );
-    if (limited) {
+    let unregLimited = false;
+    try {
+      const result = await env.RATE_LIMIT_MUTATING.limit({ key: `outbox-unregistered:${address}` });
+      unregLimited = !result.success;
+    } catch (err) {
+      const isProduction = process.env.NODE_ENV === "production";
+      logger.warn("Unregistered rate limit binding error", { error: String(err), failClosed: isProduction });
+      if (isProduction) unregLimited = true;
+    }
+    if (unregLimited) {
       logger.warn("Outbox rate limited (unregistered)", { address });
       return NextResponse.json(
         {
@@ -75,12 +95,11 @@ export async function POST(
           action:
             "Register at POST /api/register to use the outbox endpoint.",
           documentation: "https://aibtc.com/api/register",
-          retryAfter: retryAfterSeconds,
-          resetAt,
+          retryAfter: RATE_LIMIT_RETRY_AFTER,
         },
         {
           status: 429,
-          headers: { "Retry-After": String(retryAfterSeconds) },
+          headers: { "Retry-After": String(RATE_LIMIT_RETRY_AFTER) },
         }
       );
     }
@@ -155,31 +174,7 @@ export async function POST(
   // Validate reply body
   const validation = validateOutboxReply(body);
   if (validation.errors) {
-    const ip =
-      request.headers.get("cf-connecting-ip") ||
-      request.headers.get("x-forwarded-for");
-
-    if (ip) {
-      const { limited: validationLimited, retryAfterSeconds: validationRetry, resetAt: validationResetAt } =
-        await checkFixedWindowRateLimit(
-          kv,
-          `ratelimit:outbox-validation:${ip}`,
-          OUTBOX_RATE_LIMIT_VALIDATION_MAX,
-          OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS
-        );
-      if (validationLimited) {
-        return NextResponse.json(
-          { error: "Too many invalid requests. Slow down.", retryAfter: validationRetry, resetAt: validationResetAt },
-          {
-            status: 429,
-            headers: {
-              "Retry-After": String(validationRetry),
-            },
-          }
-        );
-      }
-    }
-
+    // IP bucket was already checked above — validation failures consume the same bucket.
     logger.warn("Validation failed", { errors: validation.errors.map((e) => e.message) });
     return NextResponse.json(
       {
@@ -284,14 +279,18 @@ export async function POST(
     );
   }
 
-  // Rate limit by signer identity (placed after signature verification)
-  const { limited: registeredLimited, retryAfterSeconds: registeredRetry, resetAt: registeredResetAt } =
-    await checkFixedWindowRateLimit(
-      kv,
-      `ratelimit:outbox:${btcResult.address}`,
-      OUTBOX_RATE_LIMIT_REGISTERED_MAX,
-      OUTBOX_RATE_LIMIT_REGISTERED_TTL_SECONDS
-    );
+  // Authenticated rate limit — keyed on verified signer identity.
+  // Placed after signature verification so the key is cryptographically bound.
+  // IP bucket already passed above; this is the per-identity follow-on check.
+  let registeredLimited = false;
+  try {
+    const result = await env.RATE_LIMIT_AUTHENTICATED.limit({ key: `outbox:${btcResult.address}` });
+    registeredLimited = !result.success;
+  } catch (err) {
+    const isProduction = process.env.NODE_ENV === "production";
+    logger.warn("Authenticated rate limit binding error", { error: String(err), failClosed: isProduction });
+    if (isProduction) registeredLimited = true;
+  }
   if (registeredLimited) {
     logger.warn("Outbox rate limited (registered)", {
       callerAddress: btcResult.address,
@@ -300,12 +299,11 @@ export async function POST(
       {
         error: "Too many outbox requests. Slow down.",
         address: btcResult.address,
-        retryAfter: registeredRetry,
-        resetAt: registeredResetAt,
+        retryAfter: RATE_LIMIT_RETRY_AFTER,
       },
       {
         status: 429,
-        headers: { "Retry-After": String(registeredRetry) },
+        headers: { "Retry-After": String(RATE_LIMIT_RETRY_AFTER) },
       }
     );
   }
