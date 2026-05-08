@@ -36,81 +36,24 @@ export async function getCheckInRecord(
 /**
  * Update the check-in record for a Bitcoin address.
  *
- * If no record exists, creates a new one with checkInCount = 1.
- * If a record exists, increments checkInCount and updates lastCheckInAt.
+ * Records the most recent check-in timestamp for rate-limiting purposes.
  *
  * @param kv - Cloudflare KV namespace
  * @param btcAddress - Bitcoin address to update
  * @param timestamp - ISO 8601 timestamp of the check-in
- * @param existing - Optional previously-fetched record to avoid a redundant KV read
  * @returns The updated CheckInRecord
  *
  * @example
  * const record = await updateCheckInRecord(kv, "bc1q...", "2026-02-10T12:00:00.000Z");
- * console.log(`Check-in count: ${record.checkInCount}`);
  */
-/**
- * Compute the UTC date string (YYYY-MM-DD) from an ISO timestamp.
- */
-function toDateString(isoTimestamp: string): string {
-  return isoTimestamp.slice(0, 10);
-}
-
-/**
- * Check if two date strings represent consecutive days.
- *
- * @returns true if dateB is exactly 1 day after dateA
- */
-function isConsecutiveDay(dateA: string, dateB: string): boolean {
-  const a = new Date(dateA + "T00:00:00Z");
-  const b = new Date(dateB + "T00:00:00Z");
-  const diffMs = b.getTime() - a.getTime();
-  return diffMs === 86_400_000;
-}
-
 export async function updateCheckInRecord(
   kv: KVNamespace,
   btcAddress: string,
-  timestamp: string,
-  existing?: CheckInRecord | null
+  timestamp: string
 ): Promise<CheckInRecord> {
-  const current = existing !== undefined ? existing : await getCheckInRecord(kv, btcAddress);
-  const todayDate = toDateString(timestamp);
-
-  let currentStreak: number;
-  let longestStreak: number;
-
-  if (!current) {
-    // First ever check-in
-    currentStreak = 1;
-    longestStreak = 1;
-  } else {
-    const lastDate = current.lastCheckInDate;
-    const prevStreak = current.currentStreak ?? 1;
-    const prevLongest = current.longestStreak ?? prevStreak;
-
-    if (lastDate === todayDate) {
-      // Same day — idempotent, no streak change
-      currentStreak = prevStreak;
-      longestStreak = prevLongest;
-    } else if (lastDate && isConsecutiveDay(lastDate, todayDate)) {
-      // Consecutive day — extend streak
-      currentStreak = prevStreak + 1;
-      longestStreak = Math.max(prevLongest, currentStreak);
-    } else {
-      // Gap > 1 day — reset streak
-      currentStreak = 1;
-      longestStreak = prevLongest;
-    }
-  }
-
   const record: CheckInRecord = {
     btcAddress,
-    checkInCount: current ? current.checkInCount + 1 : 1,
     lastCheckInAt: timestamp,
-    lastCheckInDate: todayDate,
-    currentStreak,
-    longestStreak,
   };
 
   const key = `${CHECK_IN_PREFIX}${btcAddress}`;

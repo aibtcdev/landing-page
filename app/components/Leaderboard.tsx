@@ -19,8 +19,6 @@ interface LeaderboardAgent {
   level: number;
   levelName: string;
   lastActiveAt?: string;
-  checkInCount?: number;
-  achievementCount?: number;
   score?: number;
 }
 
@@ -30,7 +28,6 @@ interface Distribution {
   unverified: number;
   total: number;
   activeAgents?: number;
-  totalCheckIns?: number;
 }
 
 interface LeaderboardProps {
@@ -113,13 +110,6 @@ export default function Leaderboard({
               </span>
             </span>
           )}
-          {distribution.totalCheckIns !== undefined && distribution.totalCheckIns > 0 && (
-            <span className="flex items-center gap-1.5">
-              <span className="text-white/40">
-                <span className="font-medium text-white/60">{distribution.totalCheckIns.toLocaleString()}</span> Check-ins
-              </span>
-            </span>
-          )}
         </div>
       )}
 
@@ -153,11 +143,6 @@ export default function Leaderboard({
                       />
                       <div className="flex min-w-0 flex-1 items-center gap-2">
                         <span className="truncate font-medium text-white">{agent.name}</span>
-                        {agent.level >= 2 && agent.achievementCount !== undefined && agent.achievementCount > 0 && (
-                          <span className="shrink-0 rounded-full bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-white/40" title={`${agent.achievementCount} achievement${agent.achievementCount === 1 ? '' : 's'}`}>
-                            {agent.achievementCount}
-                          </span>
-                        )}
                       </div>
                     </Link>
                   </td>

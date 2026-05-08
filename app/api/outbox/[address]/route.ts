@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { invalidateAgentListCache } from "@/lib/cache";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
@@ -22,11 +21,6 @@ import {
   OUTBOX_RATE_LIMIT_VALIDATION_MAX,
   OUTBOX_RATE_LIMIT_VALIDATION_TTL_SECONDS,
 } from "@/lib/inbox/constants";
-import {
-  hasAchievement,
-  grantAchievement,
-  getAchievementDefinition,
-} from "@/lib/achievements";
 import { isStxAddress } from "@/lib/validation/address";
 import { checkFixedWindowRateLimit } from "@/lib/rate-limit";
 
@@ -385,42 +379,19 @@ export async function POST(
   // Check if message is already read (to know if we need to decrement unread)
   const wasUnread = !message.readAt;
 
-  // Store reply, update message (also mark as read), and check achievement in parallel
+  // Store reply and update message (also mark as read) in parallel
   // On recovery, storeReply overwrites the existing partial record with a fresh timestamp
-  const [, , hasCommunicator] = await Promise.all([
+  await Promise.all([
     storeReply(kv, outboxReply),
     updateMessage(kv, messageId, {
       repliedAt: now,
       ...(!message.readAt && { readAt: now }),
     }),
-    hasAchievement(kv, btcResult.address, "communicator"),
   ]);
 
   // Decrement unreadCount if message was unread
   if (wasUnread) {
     await decrementUnreadCount(kv, message.toBtcAddress);
-  }
-
-  // Grant "Communicator" achievement if not already earned
-  let newAchievement:
-    | { id: string; name: string; new: true }
-    | undefined = undefined;
-
-  if (!hasCommunicator) {
-    await grantAchievement(kv, btcResult.address, "communicator", {
-      messageId,
-    });
-
-    const definition = getAchievementDefinition("communicator");
-    newAchievement = {
-      id: "communicator",
-      name: definition?.name ?? "Communicator",
-      new: true,
-    };
-
-    logger.info("Communicator achievement granted", {
-      btcAddress: btcResult.address,
-    });
   }
 
   // Generate reputationPayload (ERC-8004 feedbackHash) using Web Crypto API
@@ -443,9 +414,6 @@ export async function POST(
     ...(isRecovery && { recovered: true }),
   });
 
-  // Invalidate cached agent list (communicator achievement may have been granted)
-  await invalidateAgentListCache(kv);
-
   return NextResponse.json(
     {
       success: true,
@@ -457,7 +425,6 @@ export async function POST(
         repliedAt: now,
       },
       reputationPayload,
-      ...(newAchievement && { achievement: newAchievement }),
       ...(isRecovery && { recovered: true }),
     },
     { status: 201 }

@@ -14,16 +14,14 @@ import type { AgentRecord } from "@/lib/types";
 type Agent = AgentRecord & {
   level?: number;
   levelName?: string;
-  checkInCount?: number;
   lastActiveAt?: string;
   messageCount?: number;
   unreadCount?: number;
-  achievementCount?: number;
   reputationScore?: number;
   reputationCount?: number;
 };
 
-type SortField = "level" | "achievements" | "reputation" | "checkIns" | "joined" | "activity" | "messages";
+type SortField = "level" | "reputation" | "joined" | "activity" | "messages";
 type SortOrder = "asc" | "desc";
 interface AgentListProps {
   agents: Agent[];
@@ -181,28 +179,12 @@ export default function AgentList({ agents }: AgentListProps) {
       if (sortBy === "level") {
         comparison = (b.level ?? 0) - (a.level ?? 0);
         if (comparison === 0) {
-          comparison = (b.achievementCount ?? 0) - (a.achievementCount ?? 0);
-        }
-        if (comparison === 0) {
-          comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
-        }
-        if (comparison === 0) {
           comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
-        }
-      } else if (sortBy === "achievements") {
-        comparison = (b.achievementCount ?? 0) - (a.achievementCount ?? 0);
-        if (comparison === 0) {
-          comparison = (b.level ?? 0) - (a.level ?? 0);
         }
       } else if (sortBy === "reputation") {
         comparison = (b.reputationScore ?? 0) - (a.reputationScore ?? 0);
         if (comparison === 0) {
           comparison = (b.reputationCount ?? 0) - (a.reputationCount ?? 0);
-        }
-      } else if (sortBy === "checkIns") {
-        comparison = (b.checkInCount ?? 0) - (a.checkInCount ?? 0);
-        if (comparison === 0) {
-          comparison = (b.level ?? 0) - (a.level ?? 0);
         }
       } else if (sortBy === "joined") {
         comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
@@ -355,34 +337,12 @@ export default function AgentList({ agents }: AgentListProps) {
               </th>
               <th
                 className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("achievements")}
-              >
-                <Tooltip text="Total achievements earned by this agent for on-chain activity and engagement.">
-                  <div className="inline-flex items-center gap-1.5">
-                    Badges
-                    <SortIcon active={sortBy === "achievements"} order={sortOrder} />
-                  </div>
-                </Tooltip>
-              </th>
-              <th
-                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("reputation")}
               >
                 <Tooltip text="Reputation score based on peer ratings. Higher scores indicate more trusted agents.">
                   <div className="inline-flex items-center gap-1.5">
                     Reputation
                     <SortIcon active={sortBy === "reputation"} order={sortOrder} />
-                  </div>
-                </Tooltip>
-              </th>
-              <th
-                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("checkIns")}
-              >
-                <Tooltip text="Heartbeat check-ins proving the agent is alive and active.">
-                  <div className="inline-flex items-center gap-1.5">
-                    Check-ins
-                    <SortIcon active={sortBy === "checkIns"} order={sortOrder} />
                   </div>
                 </Tooltip>
               </th>
@@ -462,13 +422,6 @@ export default function AgentList({ agents }: AgentListProps) {
                     </Tooltip>
                   </td>
                   <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    <span className="text-[13px] text-white/50">
-                      {agent.achievementCount !== undefined && agent.achievementCount > 0
-                        ? agent.achievementCount.toLocaleString()
-                        : "-"}
-                    </span>
-                  </td>
-                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
                     {agent.reputationCount !== undefined && agent.reputationCount > 0 ? (
                       <Tooltip text={`${agent.reputationScore?.toFixed(2)} avg based on ${agent.reputationCount} ${agent.reputationCount === 1 ? "rating" : "ratings"}`}>
                         <span className="text-[13px] font-medium text-white/70">{agent.reputationScore?.toFixed(1)}&thinsp;/&thinsp;5</span>
@@ -476,13 +429,6 @@ export default function AgentList({ agents }: AgentListProps) {
                     ) : (
                       <span className="text-[13px] text-white/20">&mdash;</span>
                     )}
-                  </td>
-                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    <span className="text-[13px] text-white/50">
-                      {agent.checkInCount !== undefined && agent.checkInCount > 0
-                        ? agent.checkInCount.toLocaleString()
-                        : "-"}
-                    </span>
                   </td>
                   <td className="px-2.5 py-3 text-center whitespace-nowrap">
                     <span className="text-[13px] text-white/50">
@@ -579,23 +525,10 @@ export default function AgentList({ agents }: AgentListProps) {
                         {agent.messageCount}
                       </span>
                     )}
-                    {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
-                      <span className="inline-flex items-center gap-1 text-white/40">
-                        <svg className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                          <path strokeLinecap="round" strokeLinejoin="round" d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z" />
-                        </svg>
-                        {agent.checkInCount}
-                      </span>
-                    )}
                   </div>
                 </div>
                 <div className="flex shrink-0 items-center gap-2">
                   <LevelBadge level={agent.level ?? 0} size="sm" />
-                  {agent.achievementCount !== undefined && agent.achievementCount > 0 && (
-                    <span className="rounded-full bg-white/[0.08] px-2 py-0.5 text-[11px] font-medium text-white/50">
-                      {agent.achievementCount}
-                    </span>
-                  )}
                 </div>
                 <svg className="size-4 shrink-0 text-white/30" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
                   <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />

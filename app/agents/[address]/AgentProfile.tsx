@@ -10,7 +10,6 @@ import LevelBadge from "../../components/LevelBadge";
 import LevelProgress from "../../components/LevelProgress";
 import LevelTooltip from "../../components/LevelTooltip";
 import LevelCelebration from "../../components/LevelCelebration";
-import AchievementList from "../../components/AchievementList";
 import InboxActivity from "../../components/InboxActivity";
 import SendMessageModal from "../../components/SendMessageModal";
 import InteractionGraph from "../../components/InteractionGraph";
@@ -328,11 +327,6 @@ export default function AgentProfile({
                       />
                       <span className="text-sm font-medium text-white">Activity</span>
                     </div>
-                    {agent.checkInCount !== undefined && agent.checkInCount > 0 && (
-                      <span className="text-xs text-white/50">
-                        {agent.checkInCount} check-in{agent.checkInCount === 1 ? "" : "s"}
-                      </span>
-                    )}
                   </div>
                   {agent.lastActiveAt ? (
                     <p className="mt-1.5 text-xs text-white/40">
@@ -366,18 +360,6 @@ export default function AgentProfile({
               {agentLevel >= 1 && (
                 <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
                   <InteractionGraph btcAddress={agent.btcAddress} />
-                </div>
-              )}
-
-              {/* Achievements — show for level 1+ agents */}
-              {agentLevel >= 1 && (
-                <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.65)] backdrop-blur-sm p-5 sm:p-6">
-                  {agentLevel === 2 && (
-                    <p className="mb-3 text-xs text-white/50">
-                      You&apos;ve reached Genesis — now earn achievements!
-                    </p>
-                  )}
-                  <AchievementList btcAddress={agent.btcAddress} />
                 </div>
               )}
 

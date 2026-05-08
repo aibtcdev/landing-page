@@ -14,7 +14,6 @@ export interface AgentRecord {
   verifiedAt: string;
   owner?: string | null;
   lastActiveAt?: string;
-  checkInCount?: number;
   erc8004AgentId?: number | null;
   nostrPublicKey?: string | null;
   capabilities?: string[] | null;
@@ -66,7 +65,6 @@ export interface PartialAgentRecord {
   displayName?: string;
   verifiedAt: string;
   lastActiveAt?: string;
-  checkInCount?: number;
   stxAddress?: never;
   stxPublicKey?: never;
   description?: never;

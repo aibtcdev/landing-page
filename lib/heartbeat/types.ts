@@ -9,19 +9,12 @@
 /**
  * A check-in record stored at `checkin:{btcAddress}`.
  *
- * Tracks when an agent last checked in and their total check-in count.
- * Check-ins are rate-limited to one every 5 minutes.
+ * Tracks when an agent last checked in. Used for rate limiting check-ins
+ * to one every 5 minutes.
  */
 export interface CheckInRecord {
   btcAddress: string;
-  checkInCount: number;
   lastCheckInAt: string;
-  /** ISO date string (YYYY-MM-DD) of the last check-in day, used for streak tracking */
-  lastCheckInDate?: string;
-  /** Current consecutive-day check-in streak */
-  currentStreak?: number;
-  /** Longest consecutive-day check-in streak ever achieved */
-  longestStreak?: number;
 }
 
 /**
@@ -35,7 +28,6 @@ export interface HeartbeatOrientation {
   level: number;
   levelName: string;
   lastActiveAt?: string;
-  checkInCount?: number;
   unreadCount: number;
   nextAction: {
     step: string;

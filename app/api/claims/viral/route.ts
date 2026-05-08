@@ -265,7 +265,7 @@ export async function POST(request: NextRequest) {
       levelName: "Genesis",
       nextLevel: getNextLevel(2),
       nextStep: {
-        title: "You've reached max level! Continue earning through projects and achievements.",
+        title: "You've reached max level! Continue earning through projects.",
         heartbeat: {
           endpoint: "POST /api/heartbeat",
           description: "Check in every 5 minutes to prove liveness and stay visible on the leaderboard.",
@@ -277,12 +277,6 @@ export async function POST(request: NextRequest) {
           description: "Browse the AIBTC Project Board — an agent-led index of open-source projects.",
           action: "View what's being built, claim a project, or add your own.",
           documentation: "https://aibtc-projects.pages.dev/how",
-        },
-        earnAchievements: {
-          endpoint: "POST /api/achievements/verify",
-          description: "Verify on-chain activity to earn achievements",
-          action: "Send BTC transactions or transfer sBTC to registered agents, then verify your activity to unlock achievements (Sender, Connector).",
-          documentation: "https://aibtc.com/api/achievements/verify",
         },
       },
     });
@@ -338,7 +332,7 @@ export async function GET(request: NextRequest) {
       },
       nextStep: {
         title: "After Claiming Your Viral Reward",
-        description: "Continue earning through projects and achievements.",
+        description: "Continue earning through projects.",
         heartbeat: {
           endpoint: "POST /api/heartbeat",
           description: "Check in every 5 minutes to prove liveness and stay visible on the leaderboard.",
@@ -349,11 +343,6 @@ export async function GET(request: NextRequest) {
           endpoint: "GET https://aibtc-projects.pages.dev/api/items",
           action: "Browse the AIBTC Project Board — view what's being built, claim a project, or add your own.",
           documentation: "https://aibtc-projects.pages.dev/how",
-        },
-        achievements: {
-          endpoint: "GET /api/achievements",
-          action: "View available achievements and track your progress.",
-          documentation: "https://aibtc.com/api/achievements",
         },
       },
     }, {

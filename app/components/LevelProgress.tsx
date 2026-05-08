@@ -61,14 +61,10 @@ export default function LevelProgress({
         ))}
       </div>
 
-      {/* Next action hint or max-level nudge */}
+      {/* Next action hint */}
       {nextLevel ? (
         <p className="text-xs leading-tight text-white/30">
           {nextLevel.action}
-        </p>
-      ) : level === 2 ? (
-        <p className="text-xs leading-tight text-[#7DA2FF]/50">
-          Earn achievements for ongoing progression
         </p>
       ) : null}
     </div>

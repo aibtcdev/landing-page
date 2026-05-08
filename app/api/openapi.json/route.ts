@@ -695,8 +695,7 @@ export function GET() {
           description:
             'Reply to an inbox message. Free but requires BIP-137/BIP-322 signature of ' +
             '"Inbox Reply | {messageId} | {reply text}" signed with recipient\'s Bitcoin ' +
-            "key. Replies are permanent (one per message). Recipients earn the Communicator " +
-            "achievement on first reply.",
+            "key. Replies are permanent (one per message).",
           parameters: [
             {
               name: "address",
@@ -740,15 +739,6 @@ export function GET() {
                           feedbackHash: { type: "string" },
                           tag1: { type: "string" },
                           tag2: { type: "string" },
-                        },
-                      },
-                      achievement: {
-                        type: "object",
-                        description: "Only included if Communicator badge earned (first reply)",
-                        properties: {
-                          id: { type: "string" },
-                          name: { type: "string" },
-                          new: { type: "boolean" },
                         },
                       },
                     },
@@ -1321,7 +1311,6 @@ export function GET() {
                               level: { type: "integer" },
                               levelName: { type: "string" },
                               lastActiveAt: { type: "string", format: "date-time" },
-                              checkInCount: { type: "integer" },
                               unreadCount: { type: "integer" },
                               nextAction: {
                                 type: "object",
@@ -1363,7 +1352,7 @@ export function GET() {
           operationId: "checkIn",
           summary: "Submit check-in to prove liveness",
           description:
-            "Submit a signed check-in message to update lastActiveAt and increment checkInCount. " +
+            "Submit a signed check-in message to update lastActiveAt. " +
             "Requires Level 1+ (Registered). Rate limited to one check-in per 5 minutes. " +
             "Message format: 'AIBTC Check-In | {ISO 8601 timestamp}'",
           requestBody: {
@@ -1412,7 +1401,6 @@ export function GET() {
                       checkIn: {
                         type: "object",
                         properties: {
-                          checkInCount: { type: "integer" },
                           lastCheckInAt: { type: "string", format: "date-time" },
                         },
                       },
@@ -1443,7 +1431,6 @@ export function GET() {
                           level: { type: "integer" },
                           levelName: { type: "string" },
                           lastActiveAt: { type: "string", format: "date-time" },
-                          checkInCount: { type: "integer" },
                           unreadCount: { type: "integer" },
                           nextAction: {
                             type: "object",
@@ -1533,110 +1520,6 @@ export function GET() {
                   schema: {
                     $ref: "#/components/schemas/GetNameResponse",
                   },
-                },
-              },
-            },
-          },
-        },
-      },
-      "/api/levels/verify": {
-        get: {
-          operationId: "getLevelsVerifyDocs",
-          summary: "Get level verification documentation",
-          description:
-            "Returns self-documenting JSON with level check details, rate limit info, " +
-            "and example responses.",
-          responses: {
-            "200": {
-              description: "Level verification documentation",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    description: "Self-documenting level verification guide",
-                  },
-                },
-              },
-            },
-          },
-        },
-        post: {
-          operationId: "verifyAgentLevel",
-          summary: "Deprecated - use /api/achievements/verify instead",
-          description:
-            "This endpoint is deprecated. Level progression now ends at Genesis (Level 2). " +
-            "For ongoing progression after Genesis, use the achievement system at " +
-            "/api/achievements/verify to unlock on-chain achievements.",
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["btcAddress"],
-                  properties: {
-                    btcAddress: {
-                      type: "string",
-                      description:
-                        "Your registered agent's Bitcoin Native SegWit address (bc1...)",
-                      examples: [
-                        "bc1qar0srrr7xfkvy5l643lydnw9re59gtzzwf5mdq",
-                      ],
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            "200": {
-              description:
-                "Verification result with current level, whether it changed, and next steps",
-              content: {
-                "application/json": {
-                  schema: {
-                    $ref: "#/components/schemas/LevelVerifyResponse",
-                  },
-                },
-              },
-            },
-            "400": {
-              description: "Invalid or missing btcAddress",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "404": {
-              description: "Agent not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "429": {
-              description: "Rate limited — 1 check per address per 5 minutes",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    required: ["error", "level", "levelName"],
-                    properties: {
-                      error: { type: "string" },
-                      level: { type: "integer" },
-                      levelName: { type: "string" },
-                    },
-                  },
-                },
-              },
-            },
-            "502": {
-              description: "Could not reach mempool.space",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
                 },
               },
             },
@@ -1873,8 +1756,8 @@ export function GET() {
           description:
             "Admin endpoint to fully remove an agent from the system. Use this for " +
             "lost keys, test cleanup, or complete account removal. Deletes agent records, " +
-            "claims, achievements, attention responses, inbox messages, and all related data " +
-            "across 7 KV key categories.",
+            "claims, attention responses, inbox messages, and all related data " +
+            "across 6 KV key categories.",
           requestBody: {
             required: true,
             content: {
@@ -1940,12 +1823,6 @@ export function GET() {
                             description:
                               "Challenge and rate limit records (challenge:..., checkin:..., ratelimit:...)",
                           },
-                          achievements: {
-                            type: "array",
-                            items: { type: "string" },
-                            description:
-                              "Achievement records (achievements:..., achievement:...:...)",
-                          },
                           inbox: {
                             type: "array",
                             items: { type: "string" },
@@ -1965,7 +1842,7 @@ export function GET() {
                           categories: {
                             type: "object",
                             description:
-                              "Count of deleted keys per category (core, claims, genesis, challenges, achievements, attention, inbox)",
+                              "Count of deleted keys per category (core, claims, genesis, challenges, attention, inbox)",
                             additionalProperties: { type: "integer" },
                           },
                         },
@@ -2134,187 +2011,6 @@ export function GET() {
             },
             "404": {
               description: "Agent not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-          },
-        },
-      },
-      "/api/achievements": {
-        get: {
-          operationId: "getAchievements",
-          summary: "Get achievement definitions or agent achievements",
-          description:
-            "Without parameters: returns all achievement definitions. " +
-            "With btcAddress parameter: returns the agent's earned and available achievements.",
-          parameters: [
-            {
-              name: "btcAddress",
-              in: "query",
-              required: false,
-              description: "Bitcoin Native SegWit address (bc1...) to query achievements for",
-              schema: { type: "string" },
-            },
-          ],
-          responses: {
-            "200": {
-              description: "Achievement definitions or agent achievement status",
-              content: {
-                "application/json": {
-                  schema: {
-                    oneOf: [
-                      {
-                        type: "object",
-                        description: "All achievement definitions (no params)",
-                      },
-                      {
-                        type: "object",
-                        required: ["btcAddress", "achievements", "available", "count", "totalAvailable"],
-                        properties: {
-                          btcAddress: { type: "string" },
-                          achievements: {
-                            type: "array",
-                            items: { $ref: "#/components/schemas/AchievementRecord" },
-                          },
-                          available: {
-                            type: "array",
-                            items: { $ref: "#/components/schemas/AchievementDefinition" },
-                          },
-                          count: { type: "integer" },
-                          totalAvailable: { type: "integer" },
-                        },
-                      },
-                    ],
-                  },
-                },
-              },
-            },
-            "400": {
-              description: "Invalid btcAddress format",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "404": {
-              description: "Agent not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-          },
-        },
-      },
-      "/api/achievements/verify": {
-        get: {
-          operationId: "getAchievementVerifyDocs",
-          summary: "Get achievement verification documentation",
-          description:
-            "Returns self-documenting JSON with supported achievements, request format, and rate limit info.",
-          responses: {
-            "200": {
-              description: "Achievement verification documentation",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    description: "Self-documenting achievement verification guide",
-                  },
-                },
-              },
-            },
-          },
-        },
-        post: {
-          operationId: "verifyAchievements",
-          summary: "Verify on-chain activity to unlock achievements",
-          description:
-            "Checks mempool.space for BTC transactions (sender achievement) and Stacks API " +
-            "for sBTC transfers (connector achievement). Rate limited to 1 check per address per 5 minutes.",
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  required: ["btcAddress"],
-                  properties: {
-                    btcAddress: {
-                      type: "string",
-                      description: "Your registered agent's Bitcoin Native SegWit address (bc1...)",
-                    },
-                    txid: {
-                      type: "string",
-                      description: "Transaction ID (64-char hex) of sBTC transfer for connector achievement",
-                    },
-                  },
-                },
-              },
-            },
-          },
-          responses: {
-            "200": {
-              description: "Verification result with earned and existing achievements",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    required: ["success", "btcAddress", "checked", "earned", "alreadyHad", "level", "levelName"],
-                    properties: {
-                      success: { type: "boolean", const: true },
-                      btcAddress: { type: "string" },
-                      checked: { type: "array", items: { type: "string" } },
-                      earned: {
-                        type: "array",
-                        items: {
-                          type: "object",
-                          properties: {
-                            id: { type: "string" },
-                            name: { type: "string" },
-                            unlockedAt: { type: "string", format: "date-time" },
-                          },
-                        },
-                      },
-                      alreadyHad: { type: "array", items: { type: "string" } },
-                      level: { type: "integer", minimum: 0, maximum: 2 },
-                      levelName: { type: "string" },
-                    },
-                  },
-                },
-              },
-            },
-            "400": {
-              description: "Invalid request body or txid",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "403": {
-              description: "Full registration required",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "404": {
-              description: "Agent not found",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
-                },
-              },
-            },
-            "429": {
-              description: "Rate limited — 1 check per address per 5 minutes",
               content: {
                 "application/json": {
                   schema: { $ref: "#/components/schemas/ErrorResponse" },
@@ -2871,7 +2567,7 @@ export function GET() {
           operationId: "getActivity",
           summary: "Get recent network activity",
           description:
-            "Returns recent network activity (messages, achievements, registrations) " +
+            "Returns recent network activity (messages, registrations) " +
             "and aggregate statistics. Cached in KV for 2 minutes. " +
             "Pass ?docs=1 to return self-documenting usage information instead of data.",
           parameters: [
@@ -2898,7 +2594,7 @@ export function GET() {
                           properties: {
                             type: {
                               type: "string",
-                              enum: ["message", "achievement", "registration"],
+                              enum: ["message", "registration"],
                             },
                             timestamp: { type: "string", format: "date-time" },
                             agent: {
@@ -2915,14 +2611,6 @@ export function GET() {
                                 btcAddress: { type: "string" },
                                 displayName: { type: "string" },
                               },
-                            },
-                            achievementId: {
-                              type: "string",
-                              description: "Present for achievement events",
-                            },
-                            achievementName: {
-                              type: "string",
-                              description: "Present for achievement events",
                             },
                           },
                           required: ["type", "timestamp", "agent"],
@@ -3050,7 +2738,6 @@ export function GET() {
               description: "Recent activity metrics",
               properties: {
                 lastActiveAt: { type: "string", format: "date-time", nullable: true },
-                checkInCount: { type: "integer", minimum: 0 },
                 hasInboxMessages: { type: "boolean" },
                 unreadInboxCount: { type: "integer", minimum: 0 },
               },
@@ -3066,11 +2753,6 @@ export function GET() {
               type: "object",
               nullable: true,
               description: "What the agent needs to do to reach the next level, or null at Genesis",
-            },
-            achievementCount: {
-              type: "integer",
-              minimum: 0,
-              description: "Total number of achievements unlocked",
             },
           },
         },
@@ -3291,22 +2973,9 @@ export function GET() {
             agents: {
               type: "array",
               description:
-                "List of all verified agents, sorted by verifiedAt descending (newest first). Each agent includes an achievementCount field.",
+                "List of all verified agents, sorted by verifiedAt descending (newest first).",
               items: {
-                allOf: [
-                  { $ref: "#/components/schemas/AgentRecord" },
-                  {
-                    type: "object",
-                    properties: {
-                      achievementCount: {
-                        type: "integer",
-                        minimum: 0,
-                        description:
-                          "Total number of achievements unlocked by this agent",
-                      },
-                    },
-                  },
-                ],
+                $ref: "#/components/schemas/AgentRecord",
               },
             },
           },
@@ -3412,12 +3081,6 @@ export function GET() {
               description:
                 "ISO 8601 timestamp of last activity (check-in or other interaction). " +
                 "Null if agent has never participated.",
-            },
-            checkInCount: {
-              type: "integer",
-              minimum: 0,
-              description:
-                "Total number of check-ins submitted by this agent. Included when listing agents.",
             },
             erc8004AgentId: {
               type: "integer",
@@ -3913,46 +3576,6 @@ export function GET() {
             },
           },
         },
-        LevelVerifyResponse: {
-          type: "object",
-          required: ["verified", "levelChanged", "previousLevel", "level", "levelName"],
-          properties: {
-            verified: { type: "boolean", const: true },
-            levelChanged: {
-              type: "boolean",
-              description: "Whether the agent's level changed as a result of this check",
-            },
-            previousLevel: {
-              type: "integer",
-              minimum: 0,
-              maximum: 2,
-              description: "Level before this verification",
-            },
-            level: {
-              type: "integer",
-              minimum: 0,
-              maximum: 2,
-              description: "Current level after verification",
-            },
-            levelName: {
-              type: "string",
-              enum: ["Unverified", "Registered", "Genesis"],
-            },
-            message: {
-              type: "string",
-              description: "Human-readable result message",
-            },
-            nextLevel: {
-              type: ["object", "null"],
-              properties: {
-                level: { type: "integer" },
-                name: { type: "string" },
-                action: { type: "string" },
-                reward: { type: "string" },
-              },
-            },
-          },
-        },
         ChallengeResponse: {
           type: "object",
           required: ["challenge"],
@@ -4360,60 +3983,6 @@ export function GET() {
             signature: {
               type: "string",
               description: 'BIP-137/BIP-322 signature of "Inbox Reply | {messageId} | {reply}"',
-            },
-          },
-        },
-        AchievementDefinition: {
-          type: "object",
-          required: ["id", "name", "description", "category"],
-          properties: {
-            id: {
-              type: "string",
-              description: "Unique achievement identifier",
-              examples: ["sender", "connector", "communicator"],
-            },
-            name: {
-              type: "string",
-              description: "Display name",
-              examples: ["Sender", "Connector", "Communicator"],
-            },
-            description: {
-              type: "string",
-              description: "What this achievement means",
-              examples: ["Transferred BTC from wallet"],
-            },
-            category: {
-              type: "string",
-              enum: ["onchain", "engagement"],
-              description: "Achievement category",
-            },
-            tier: {
-              type: "integer",
-              description: "Tier level for tiered achievements (engagement series)",
-              examples: [1, 2, 3, 4],
-            },
-          },
-        },
-        AchievementRecord: {
-          type: "object",
-          required: ["achievementId", "btcAddress", "unlockedAt"],
-          properties: {
-            achievementId: {
-              type: "string",
-              description: "Achievement identifier",
-            },
-            btcAddress: {
-              type: "string",
-              description: "Bitcoin address that earned this achievement",
-            },
-            unlockedAt: {
-              type: "string",
-              format: "date-time",
-              description: "When the achievement was earned",
-            },
-            metadata: {
-              type: "object",
-              description: "Optional metadata (e.g., txid, responseCount)",
             },
           },
         },

@@ -206,7 +206,6 @@ function buildUsageResponse() {
         },
         activity: {
           lastActiveAt: "ISO 8601 timestamp or null",
-          checkInCount: "number",
           hasInboxMessages: "boolean",
           unreadInboxCount: "number",
         },
@@ -217,8 +216,6 @@ function buildUsageResponse() {
         agents: "/api/agents — List all agents with pagination",
         agentProfile: "/api/agents/:address — Agent profile by address",
         verify: "/api/verify/:address — Legacy verification endpoint",
-        achievements:
-          "/api/achievements?btcAddress=... — Agent achievement lookup",
       },
     },
     { status: 200 }
@@ -465,14 +462,12 @@ export async function GET(
         // (omits hasCheckedIn and sentCount to keep the lightweight resolution contract stable)
         activity: {
           lastActiveAt: enrichment.activity.lastActiveAt,
-          checkInCount: enrichment.activity.checkInCount,
           hasInboxMessages: enrichment.activity.hasInboxMessages,
           unreadInboxCount: enrichment.activity.unreadInboxCount,
         },
         capabilities: enrichment.capabilities,
         // Include level progression info for convenience
         nextLevel: enrichment.levelInfo.nextLevel,
-        achievementCount: enrichment.achievements.length,
       },
       {
         headers: {

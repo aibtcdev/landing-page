@@ -12,7 +12,6 @@
 
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
-import { getAchievementCount } from "@/lib/achievements";
 import { getAgentsIndex } from "@/lib/agents-index";
 import type { CachedAgent, CachedAgentList } from "./types";
 
@@ -193,8 +192,8 @@ async function rebuildAgentListCache(
     }
   }
 
-  // 2. Enrich: claims, achievements, inbox in parallel
-  const [claims, achievementCounts, inboxData] = await Promise.all([
+  // 2. Enrich: claims, inbox in parallel.
+  const [claims, inboxData] = await Promise.all([
     Promise.all(
       agents.map(async (agent) => {
         const data = await kv.get(`claim:${agent.btcAddress}`);
@@ -205,9 +204,6 @@ async function rebuildAgentListCache(
           return null;
         }
       })
-    ),
-    Promise.all(
-      agents.map((agent) => getAchievementCount(kv, agent.btcAddress))
     ),
     Promise.all(
       agents.map(async (agent) => {
@@ -241,7 +237,6 @@ async function rebuildAgentListCache(
       owner: agent.owner ?? null,
       verifiedAt: agent.verifiedAt,
       lastActiveAt: agent.lastActiveAt ?? null,
-      checkInCount: agent.checkInCount ?? 0,
       erc8004AgentId: agent.erc8004AgentId ?? null,
       nostrPublicKey: agent.nostrPublicKey ?? null,
       lastIdentityCheck: agent.lastIdentityCheck ?? null,
@@ -249,7 +244,6 @@ async function rebuildAgentListCache(
       githubUsername: agent.githubUsername ?? null,
       level,
       levelName: LEVELS[level].name,
-      achievementCount: achievementCounts[i],
       messageCount: inbox?.messageIds.length ?? 0,
       unreadCount: inbox?.unreadCount ?? 0,
     };

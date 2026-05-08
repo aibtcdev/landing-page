@@ -8,8 +8,6 @@
 
 import type { InboxMessage, InboxAgentIndex } from "@/lib/inbox/types";
 import { INBOX_PRICE_SATS } from "@/lib/inbox/constants";
-import type { AchievementAgentIndex, AchievementRecord } from "@/lib/achievements/types";
-import { ACHIEVEMENTS } from "@/lib/achievements/registry";
 import { getCachedAgentList } from "@/lib/cache";
 import type { ActivityEvent, ActivityResponse } from "@/app/components/activity-shared";
 
@@ -22,8 +20,8 @@ const ACTIVE_DAYS_THRESHOLD = 7;
  *
  * Uses getCachedAgentList() (single KV read on cache hit) instead of
  * an independent O(N) KV scan. Only the per-agent event detail fetches
- * (recent messages and achievements for top 20 active agents) remain as
- * targeted KV reads — O(20 * 6) rather than O(N).
+ * (recent messages for top 20 active agents) remain as
+ * targeted KV reads — O(20 * 3) rather than O(N).
  */
 export async function buildActivityData(kv: KVNamespace): Promise<ActivityResponse> {
   // --- 1. Get agent data from the shared cache (single KV read on hit) ---
@@ -57,7 +55,7 @@ export async function buildActivityData(kv: KVNamespace): Promise<ActivityRespon
   const agentByStx = new Map(cachedAgents.map((a) => [a.stxAddress, a]));
 
   // --- 4. Collect events from top active agents ---
-  // O(TOP_ACTIVE_AGENTS * 6) KV reads: 3 messages + 3 achievements per agent
+  // O(TOP_ACTIVE_AGENTS * 3) KV reads: 3 messages per agent
   const eventPromises = sortedAgents.map(async (agent) => {
     const agentEvents: ActivityEvent[] = [];
 
@@ -102,43 +100,6 @@ export async function buildActivityData(kv: KVNamespace): Promise<ActivityRespon
               ? message.content.slice(0, 80) + "…"
               : message.content,
             messageId: message.messageId,
-          });
-        }
-      }
-    }
-
-    // Fetch achievement index
-    const achievementIndex = await kv.get<AchievementAgentIndex>(
-      `achievements:${agent.btcAddress}`,
-      "json"
-    );
-
-    if (achievementIndex && achievementIndex.achievementIds.length > 0) {
-      // Fetch most recent 3 achievements
-      const recentAchievementIds = achievementIndex.achievementIds.slice(-3).reverse();
-      const achievements = await Promise.all(
-        recentAchievementIds.map(async (achievementId) => {
-          const achievement = await kv.get<AchievementRecord>(
-            `achievement:${agent.btcAddress}:${achievementId}`,
-            "json"
-          );
-          return achievement;
-        })
-      );
-
-      // Add achievement events
-      for (const achievement of achievements) {
-        if (achievement) {
-          const def = ACHIEVEMENTS.find((a) => a.id === achievement.achievementId);
-          agentEvents.push({
-            type: "achievement",
-            timestamp: achievement.unlockedAt,
-            agent: {
-              btcAddress: agent.btcAddress,
-              displayName: agent.displayName || agent.btcAddress,
-            },
-            achievementId: achievement.achievementId,
-            achievementName: def?.name || achievement.achievementId,
           });
         }
       }

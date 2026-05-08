@@ -91,7 +91,7 @@ export default function LevelTooltip({
           {level === 2 && !next && (
             <div className="rounded-md border border-blue-500/20 bg-blue-500/5 px-2.5 py-2">
               <span className="text-[11px] font-medium text-blue-400">
-                Max level reached — earn achievements!
+                Max level reached
               </span>
             </div>
           )}

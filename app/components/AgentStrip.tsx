@@ -9,7 +9,6 @@ interface AgentStripAgent {
   displayName?: string;
   level: number;
   levelName: string;
-  checkInCount?: number;
   score?: number;
 }
 
@@ -27,16 +26,16 @@ function face(name: string) {
 
 // Fallback agents shown while API loads
 const fallbackAgents: AgentStripAgent[] = [
-  { rank: 1, btcAddress: "bc1q-tiny-marten", displayName: "Tiny Marten", level: 2, levelName: "Genesis", checkInCount: 147 },
-  { rank: 2, btcAddress: "bc1q-ionic-anvil", displayName: "Ionic Anvil", level: 2, levelName: "Genesis", checkInCount: 89 },
-  { rank: 3, btcAddress: "bc1q-secret-mars", displayName: "Secret Mars", level: 2, levelName: "Genesis", checkInCount: 64 },
-  { rank: 4, btcAddress: "bc1q-fluid-briar", displayName: "Fluid Briar", level: 2, levelName: "Genesis", checkInCount: 52 },
-  { rank: 5, btcAddress: "bc1q-obsidian-viper", displayName: "Obsidian Viper", level: 1, levelName: "Registered", checkInCount: 31 },
-  { rank: 6, btcAddress: "bc1q-neon-spark", displayName: "Neon Spark", level: 1, levelName: "Registered", checkInCount: 24 },
-  { rank: 7, btcAddress: "bc1q-sly-harp", displayName: "Sly Harp", level: 2, levelName: "Genesis", checkInCount: 18 },
-  { rank: 8, btcAddress: "bc1q-cyber-phantom", displayName: "Cyber Phantom", level: 1, levelName: "Registered", checkInCount: 12 },
-  { rank: 9, btcAddress: "bc1q-quantum-fox", displayName: "Quantum Fox", level: 1, levelName: "Registered", checkInCount: 8 },
-  { rank: 10, btcAddress: "bc1q-trustless-indra", displayName: "Trustless Indra", level: 2, levelName: "Genesis", checkInCount: 41 },
+  { rank: 1, btcAddress: "bc1q-tiny-marten", displayName: "Tiny Marten", level: 2, levelName: "Genesis" },
+  { rank: 2, btcAddress: "bc1q-ionic-anvil", displayName: "Ionic Anvil", level: 2, levelName: "Genesis" },
+  { rank: 3, btcAddress: "bc1q-secret-mars", displayName: "Secret Mars", level: 2, levelName: "Genesis" },
+  { rank: 4, btcAddress: "bc1q-fluid-briar", displayName: "Fluid Briar", level: 2, levelName: "Genesis" },
+  { rank: 5, btcAddress: "bc1q-obsidian-viper", displayName: "Obsidian Viper", level: 1, levelName: "Registered" },
+  { rank: 6, btcAddress: "bc1q-neon-spark", displayName: "Neon Spark", level: 1, levelName: "Registered" },
+  { rank: 7, btcAddress: "bc1q-sly-harp", displayName: "Sly Harp", level: 2, levelName: "Genesis" },
+  { rank: 8, btcAddress: "bc1q-cyber-phantom", displayName: "Cyber Phantom", level: 1, levelName: "Registered" },
+  { rank: 9, btcAddress: "bc1q-quantum-fox", displayName: "Quantum Fox", level: 1, levelName: "Registered" },
+  { rank: 10, btcAddress: "bc1q-trustless-indra", displayName: "Trustless Indra", level: 2, levelName: "Genesis" },
 ];
 
 export default function AgentStrip() {
@@ -108,11 +107,6 @@ export default function AgentStrip() {
                       <span className={`inline-flex rounded-full border px-1.5 py-0.5 text-[10px] font-medium leading-none ${colorClass}`}>
                         {agent.levelName}
                       </span>
-                      {(agent.checkInCount ?? 0) > 0 && (
-                        <span className="text-[11px] text-white/30">
-                          {agent.checkInCount?.toLocaleString()} check-ins
-                        </span>
-                      )}
                     </div>
                   </div>
                 </Link>
