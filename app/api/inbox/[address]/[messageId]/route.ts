@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
@@ -11,6 +12,9 @@ import {
   buildMarkReadMessage,
   decrementUnreadCount,
 } from "@/lib/inbox";
+
+/** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
+const RATE_LIMIT_RETRY_AFTER = 60;
 
 export async function GET(
   request: NextRequest,
@@ -96,8 +100,40 @@ export async function PATCH(
   { params }: { params: Promise<{ address: string; messageId: string }> }
 ) {
   const { address, messageId } = await params;
-  const { env } = await getCloudflareContext();
+  const { env, ctx } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
+    : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
+
+  // IP bucket check — runs BEFORE verifyBitcoinSignature (the CPU-expensive
+  // path) so signature-DoS spam from one IP gets clipped at the bucket limit.
+  // IP-keyed only: spoofed `address` path-param cannot bypass an exhausted IP
+  // quota. Mirrors agent-news#705 / outbox#705 IP-before-identity ordering.
+  const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for");
+  if (ip) {
+    let ipLimited = false;
+    try {
+      const result = await env.RATE_LIMIT_MUTATING.limit({ key: `inbox-mark-read:${ip}` });
+      ipLimited = !result.success;
+    } catch (err) {
+      // Binding unavailable — fail closed in production/staging, open in dev.
+      // Mark-read is abuse-protection (not revenue), so prefer blocking on
+      // binding errors over allowing signature-DoS during binding outages.
+      const isProduction = process.env.NODE_ENV === "production";
+      logger.warn("Mark-read rate limit binding error", { error: String(err), failClosed: isProduction });
+      if (isProduction) ipLimited = true;
+    }
+    if (ipLimited) {
+      logger.warn("Mark-read rate limited (IP)", { ip });
+      return NextResponse.json(
+        { error: "Too many requests from this IP. Slow down.", retryAfter: RATE_LIMIT_RETRY_AFTER },
+        { status: 429, headers: { "Retry-After": String(RATE_LIMIT_RETRY_AFTER) } }
+      );
+    }
+  }
 
   // Resolve address (BTC or STX) to agent record
   const agent = await lookupAgent(kv, address);
