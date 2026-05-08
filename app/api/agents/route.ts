@@ -46,13 +46,11 @@ export async function GET(request: NextRequest) {
             owner: "string | null (X/Twitter handle)",
             verifiedAt: "string (ISO 8601 timestamp)",
             lastActiveAt: "string | null (ISO 8601 timestamp of last check-in)",
-            checkInCount: "number (total check-ins, default 0)",
             erc8004AgentId: "number | null (on-chain identity NFT ID)",
             nostrPublicKey: "string | null (Nostr public key)",
             referredBy: "string | null (BTC address of referrer)",
             level: "number (0-2)",
             levelName: "string (Unverified | Registered | Genesis)",
-            achievementCount: "number (total achievements unlocked)",
           },
         ],
         pagination: {
@@ -129,13 +127,11 @@ export async function GET(request: NextRequest) {
       owner: agent.owner,
       verifiedAt: agent.verifiedAt,
       lastActiveAt: agent.lastActiveAt,
-      checkInCount: agent.checkInCount,
       erc8004AgentId: agent.erc8004AgentId,
       nostrPublicKey: agent.nostrPublicKey,
       referredBy: agent.referredBy,
       level: agent.level,
       levelName: agent.levelName,
-      achievementCount: agent.achievementCount,
     }));
 
     return NextResponse.json(

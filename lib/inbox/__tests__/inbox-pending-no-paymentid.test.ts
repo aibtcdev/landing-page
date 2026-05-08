@@ -27,8 +27,6 @@ const mocks = vi.hoisted(() => ({
   checkSenderRateLimit: vi.fn(),
   enqueueInboxReconciliation: vi.fn(),
   verifyBitcoinSignature: vi.fn(),
-  hasAchievement: vi.fn(),
-  grantAchievement: vi.fn(),
   invalidateAgentListCache: vi.fn(),
   getPaymentRepoVersion: vi.fn(),
   logPaymentEvent: vi.fn(),
@@ -71,11 +69,6 @@ vi.mock("@/lib/inbox", () => ({
 
 vi.mock("@/lib/bitcoin-verify", () => ({
   verifyBitcoinSignature: mocks.verifyBitcoinSignature,
-}));
-
-vi.mock("@/lib/achievements", () => ({
-  hasAchievement: mocks.hasAchievement,
-  grantAchievement: mocks.grantAchievement,
 }));
 
 vi.mock("@/lib/cache", () => ({
@@ -169,8 +162,6 @@ describe("inbox POST canonical staged-payment semantics", () => {
     mocks.checkSenderRateLimit.mockResolvedValue(null);
     mocks.storeMessage.mockResolvedValue(undefined);
     mocks.updateAgentInbox.mockResolvedValue(undefined);
-    mocks.hasAchievement.mockResolvedValue(true);
-    mocks.grantAchievement.mockResolvedValue(undefined);
     mocks.invalidateAgentListCache.mockResolvedValue(undefined);
     mocks.getPaymentRepoVersion.mockReturnValue("0.3.0");
     mocks.queueSend.mockResolvedValue(undefined);

@@ -5,7 +5,6 @@ import { invalidateAgentsIndex } from "@/lib/agents-index";
 import { deleteBnsLookup } from "@/lib/bns-reverse-index";
 import { requireAdmin } from "@/lib/admin/auth";
 import { lookupAgent } from "@/lib/agent-lookup";
-import type { AchievementAgentIndex } from "@/lib/achievements/types";
 import type { InboxAgentIndex } from "@/lib/inbox/types";
 import type { ReferralCodeRecord } from "@/lib/vouch";
 
@@ -57,11 +56,6 @@ export async function GET(request: NextRequest) {
         challenges: [
           "challenge:{btcAddress}",
           "checkin:{btcAddress}",
-          "ratelimit:achievement-verify:{btcAddress}",
-        ],
-        achievements: [
-          "achievements:{btcAddress}",
-          "achievement:{btcAddress}:{achievementId}",
         ],
         inbox: [
           "inbox:agent:{btcAddress}",
@@ -83,9 +77,7 @@ export async function GET(request: NextRequest) {
           challenges: [
             "challenge:...",
             "checkin:...",
-            "ratelimit:achievement-verify:...",
           ],
-          achievements: ["achievements:...", "achievement:...:sender"],
           inbox: [
             "inbox:agent:...",
             "inbox:message:msg1",
@@ -93,13 +85,12 @@ export async function GET(request: NextRequest) {
           ],
         },
         summary: {
-          totalKeys: 14,
+          totalKeys: 12,
           categories: {
             core: 2,
             claims: 3,
             genesis: 1,
-            challenges: 3,
-            achievements: 2,
+            challenges: 2,
             inbox: 3,
           },
         },
@@ -160,32 +151,17 @@ export async function DELETE(request: NextRequest) {
     }
 
     // Read index records in parallel to discover related keys
-    const [achievementData, inboxData, referralCodeData] = await Promise.all([
-      kv.get(`achievements:${agent.btcAddress}`),
+    const [inboxData, referralCodeData] = await Promise.all([
       kv.get(`inbox:agent:${agent.btcAddress}`),
       kv.get(`referral-code:${agent.btcAddress}`),
     ]);
 
-    const achievementIndex = safeParseJson<AchievementAgentIndex>(
-      achievementData,
-      "achievement index"
-    );
     const inboxIndex = safeParseJson<InboxAgentIndex>(
       inboxData,
       "inbox index"
     );
 
     // Fail if any index record exists but is corrupted — partial deletion is worse than no deletion
-    if (achievementData && !achievementIndex) {
-      return NextResponse.json(
-        {
-          error: "Internal Server Error",
-          details:
-            "Corrupted achievement index data; deletion cannot be safely completed.",
-        },
-        { status: 500 }
-      );
-    }
     if (inboxData && !inboxIndex) {
       return NextResponse.json(
         {
@@ -223,13 +199,6 @@ export async function DELETE(request: NextRequest) {
       challenges: [
         `challenge:${agent.btcAddress}`,
         `checkin:${agent.btcAddress}`,
-        `ratelimit:achievement-verify:${agent.btcAddress}`,
-      ],
-      achievements: [
-        `achievements:${agent.btcAddress}`,
-        ...(achievementIndex?.achievementIds.map(
-          (id) => `achievement:${agent.btcAddress}:${id}`
-        ) || []),
       ],
       inbox: [
         `inbox:agent:${agent.btcAddress}`,

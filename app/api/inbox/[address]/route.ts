@@ -24,7 +24,6 @@ import {
   enqueueInboxReconciliation,
 } from "@/lib/inbox";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
-import { hasAchievement, grantAchievement } from "@/lib/achievements";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 import { HttpPaymentPayloadSchema } from "@aibtc/tx-schemas/http";
@@ -989,25 +988,6 @@ export async function POST(
         : []),
     ]);
 
-    // Grant "Receiver" achievement on first inbox message received (best-effort)
-    try {
-      const hasReceiverTxid = await hasAchievement(kv, toBtcAddress, "receiver");
-      if (!hasReceiverTxid) {
-        await grantAchievement(kv, toBtcAddress, "receiver", { messageId });
-        logger.info("Receiver achievement granted", {
-          btcAddress: toBtcAddress,
-          achievementName: "Receiver",
-        });
-      }
-    } catch (error) {
-      console.error("Failed to check receiver achievement during inbox store:", error);
-    }
-
-    // Grant x402-earner achievement to recipient on first x402 payment received (idempotent)
-    await grantAchievement(kv, toBtcAddress, "x402-earner", { messageId, paymentTxid }).catch((err) =>
-      logger.warn("grantAchievement failed (non-fatal)", { err, toBtcAddress })
-    );
-
     logger.info("Message stored via txid recovery", {
       messageId,
       fromAddress,
@@ -1517,23 +1497,6 @@ export async function POST(
       ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
       : []),
   ]);
-
-  try {
-    const hasReceiverX402 = await hasAchievement(kv, toBtcAddress, "receiver");
-    if (!hasReceiverX402) {
-      await grantAchievement(kv, toBtcAddress, "receiver", { messageId });
-      logger.info("Receiver achievement granted", {
-        btcAddress: toBtcAddress,
-        achievementName: "Receiver",
-      });
-    }
-  } catch (error) {
-    console.error("Failed to check receiver achievement during inbox store:", error);
-  }
-
-  await grantAchievement(kv, toBtcAddress, "x402-earner", { messageId, paymentTxid: message.paymentTxid }).catch((err) =>
-    logger.warn("grantAchievement failed (non-fatal)", { err, toBtcAddress })
-  );
 
   const deliveredPaymentStatus = message.paymentStatus ?? "confirmed";
   const deliveredCheckStatusUrl = paymentResult.paymentId

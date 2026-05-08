@@ -20,7 +20,7 @@ import {
  * in the background every 30s.
  *
  * Displays:
- * - Recent event feed (messages, achievements, registrations)
+ * - Recent event feed (messages, registrations)
  * - Paid messages stat bar that counts up to the real total
  *
  * The feed starts ~40 events behind the present and drips them in
@@ -264,7 +264,7 @@ function LiveFeed({ events, visibleCount, stats }: { events: ActivityEvent[]; vi
 
         {/* Type legend — dots only, no labels (compact homepage widget) */}
         <div className="flex items-center gap-2">
-          {(["message", "achievement", "registration"] as const).map((type) => {
+          {(["message", "registration"] as const).map((type) => {
             const config = EVENT_CONFIG[type];
             return (
               <div key={type} className={`size-1.5 rounded-full ${config.bgTint.replace("/10", "")}`} />

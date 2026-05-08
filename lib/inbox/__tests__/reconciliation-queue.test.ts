@@ -5,8 +5,6 @@ import { createMockKV } from "./kv-mock";
 
 const mocks = vi.hoisted(() => ({
   invalidateAgentListCache: vi.fn(),
-  hasAchievement: vi.fn(),
-  grantAchievement: vi.fn(),
   logger: {
     debug: vi.fn(),
     info: vi.fn(),
@@ -19,16 +17,9 @@ vi.mock("@/lib/cache", () => ({
   invalidateAgentListCache: mocks.invalidateAgentListCache,
 }));
 
-vi.mock("@/lib/achievements", () => ({
-  hasAchievement: mocks.hasAchievement,
-  grantAchievement: mocks.grantAchievement,
-}));
-
 describe("inbox reconciliation queue", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.hasAchievement.mockResolvedValue(true);
-    mocks.grantAchievement.mockResolvedValue(undefined);
     mocks.invalidateAgentListCache.mockResolvedValue(undefined);
   });
 

@@ -250,8 +250,6 @@ curl -X POST https://aibtc.com/api/outbox/bc1your-address \\
   }'
 \`\`\`
 
-Earn the "Communicator" achievement on your first reply.
-
 ## Marking Messages as Read (Free)
 
 Sign the read message:

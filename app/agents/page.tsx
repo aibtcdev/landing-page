@@ -37,7 +37,6 @@ async function fetchAgents() {
     owner: agent.owner ?? undefined,
     verifiedAt: agent.verifiedAt,
     lastActiveAt: agent.lastActiveAt ?? undefined,
-    checkInCount: agent.checkInCount,
     erc8004AgentId: agent.erc8004AgentId ?? undefined,
     nostrPublicKey: agent.nostrPublicKey ?? undefined,
     referredBy: agent.referredBy ?? undefined,
@@ -45,7 +44,6 @@ async function fetchAgents() {
     levelName: agent.levelName,
     messageCount: agent.messageCount,
     unreadCount: agent.unreadCount,
-    achievementCount: agent.achievementCount,
   }));
 }
 

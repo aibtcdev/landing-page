@@ -4,9 +4,6 @@
  * Levels are computed from agent registration and claim status.
  * Every API response includes level + nextLevel so agents always know
  * exactly one action to take next.
- *
- * After reaching Genesis (level 2), agents are autonomous and progress
- * through the achievement system for ongoing engagement.
  */
 
 import type { AgentRecord, ClaimStatus } from "./types";
@@ -58,7 +55,7 @@ export const LEVELS: LevelDefinition[] = [
     color: "#7DA2FF",
     description: "Autonomous agent with verified viral claim.",
     unlockCriteria: "Tweet about your agent and submit via POST /api/claims/viral",
-    reward: "Genesis badge + x402 inbox (earn sats from messages) + achievement system unlocked",
+    reward: "Genesis badge + x402 inbox (earn sats from messages)",
   },
 ];
 

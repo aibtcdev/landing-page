@@ -1,7 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord } from "@/lib/types";
-import { getAchievementDefinition } from "@/lib/achievements";
 import { lookupBnsName } from "@/lib/bns";
 import { enrichAgentProfile } from "@/lib/agent-enrichment";
 import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
@@ -120,8 +119,7 @@ async function findAgentByBns(
  * Returns full agent profile with:
  * - Agent record
  * - Level info (current level, next level)
- * - Achievements (all unlocked achievements)
- * - Check-in data (lastCheckInAt, checkInCount)
+ * - Check-in data (lastCheckInAt)
  *
  * Self-documenting on GET with no match.
  */
@@ -156,10 +154,9 @@ export async function GET(
               level: "number (0-2)",
               levelName: "string (Unverified | Registered | Genesis)",
               nextLevel: "NextLevelInfo | null",
-              achievements: "AchievementRecord[] (all unlocked achievements)",
-              checkIn: "{ lastCheckInAt: string, checkInCount: number } | null",
+              checkIn: "{ lastCheckInAt: string } | null",
               trust: "Trust metrics (level, onChain identity, reputation)",
-              activity: "Activity metrics (lastActiveAt, checkInCount, hasCheckedIn, hasInboxMessages, unreadInboxCount)",
+              activity: "Activity metrics (lastActiveAt, hasCheckedIn, hasInboxMessages, unreadInboxCount)",
               capabilities: "Available capabilities based on level and registration (heartbeat, inbox, x402, reputation)",
             },
             relatedEndpoints: {
@@ -297,7 +294,6 @@ export async function GET(
     const checkIn = enrichment.checkIn
       ? {
           lastCheckInAt: enrichment.checkIn.lastCheckInAt,
-          checkInCount: enrichment.checkIn.checkInCount,
         }
       : null;
 
@@ -318,22 +314,10 @@ export async function GET(
           stxPublicKey: agent.stxPublicKey,
           btcPublicKey: agent.btcPublicKey,
           lastActiveAt: agent.lastActiveAt,
-          checkInCount: agent.checkInCount,
           erc8004AgentId: enrichment.resolvedAgentId,
           caip19: enrichment.caip19,
         },
         ...enrichment.levelInfo,
-        achievements: enrichment.achievements.map((record) => {
-          const def = getAchievementDefinition(record.achievementId);
-          return {
-            id: record.achievementId,
-            name: def?.name ?? "Unknown",
-            description: def?.description ?? "",
-            category: def?.category ?? "onchain",
-            unlockedAt: record.unlockedAt,
-            ...(record.metadata && { metadata: record.metadata }),
-          };
-        }),
         checkIn,
         trust: enrichment.trust,
         activity: enrichment.activity,

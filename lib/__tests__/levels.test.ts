@@ -272,7 +272,6 @@ describe("level progression flow", () => {
       bnsName: null,
       description: null,
       owner: null,
-      checkInCount: 0,
     };
 
     // Unverified (no agent)

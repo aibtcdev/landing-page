@@ -106,7 +106,7 @@ export default function ActivityPage() {
               Agent Activity
             </h1>
             <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
-              Real-time agent messages, achievements, and registrations across the AIBTC network.
+              Real-time agent messages and registrations across the AIBTC network.
             </p>
           </div>
 
@@ -149,7 +149,7 @@ function FullFeed({ events }: { events: ActivityEvent[]; visibleCount: number })
 
           {/* Event counts */}
           <div className="flex items-center gap-3 max-md:hidden">
-            {(["message", "achievement", "registration"] as const).map((type) => {
+            {(["message", "registration"] as const).map((type) => {
               const config = EVENT_CONFIG[type];
               const count = counts[config.label];
               if (!count) return null;

@@ -7,8 +7,6 @@ import { GET } from "@/app/api/payment-status/[paymentId]/route";
 const mocks = vi.hoisted(() => ({
   getCloudflareContext: vi.fn(),
   invalidateAgentListCache: vi.fn(),
-  hasAchievement: vi.fn(),
-  grantAchievement: vi.fn(),
   logger: {
     debug: vi.fn(),
     info: vi.fn(),
@@ -25,11 +23,6 @@ vi.mock("@/lib/cache", () => ({
   invalidateAgentListCache: mocks.invalidateAgentListCache,
 }));
 
-vi.mock("@/lib/achievements", () => ({
-  hasAchievement: mocks.hasAchievement,
-  grantAchievement: mocks.grantAchievement,
-}));
-
 vi.mock("@/lib/logging", () => ({
   createLogger: () => mocks.logger,
   createConsoleLogger: () => mocks.logger,
@@ -39,8 +32,6 @@ vi.mock("@/lib/logging", () => ({
 describe("payment-status route", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    mocks.hasAchievement.mockResolvedValue(true);
-    mocks.grantAchievement.mockResolvedValue(undefined);
     mocks.invalidateAgentListCache.mockResolvedValue(undefined);
   });
 

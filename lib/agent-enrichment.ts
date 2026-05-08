@@ -1,7 +1,7 @@
 /**
  * Shared agent profile enrichment.
  *
- * Fetches identity, reputation, achievements, check-in data, claim status,
+ * Fetches identity, reputation, check-in data, claim status,
  * and inbox metrics for an agent in parallel with a timeout guard.
  *
  * Used by /api/agents/[address] and /api/resolve/[identifier] to avoid
@@ -10,16 +10,14 @@
 
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import type { AgentIdentity, ReputationSummary } from "@/lib/identity/types";
-import type { AchievementRecord } from "@/lib/achievements";
 import { getAgentLevel, type AgentLevelInfo } from "@/lib/levels";
-import { getAgentAchievements } from "@/lib/achievements";
 import { getCheckInRecord, type CheckInRecord } from "@/lib/heartbeat";
 import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
 import { getAgentInbox, getSentIndex } from "@/lib/inbox/kv-helpers";
 import { getCAIP19AgentId } from "@/lib/caip19";
 import type { Logger } from "@/lib/logging";
 
-/** Timeout for all enrichment fetches (identity, reputation, achievements, inbox). */
+/** Timeout for all enrichment fetches (identity, reputation, inbox). */
 const ENRICHMENT_TIMEOUT_MS = 10_000;
 
 /** Trust metrics derived from identity and reputation data. */
@@ -34,7 +32,6 @@ export interface TrustMetrics {
 /** Activity metrics derived from check-in and inbox data. */
 export interface ActivityMetrics {
   lastActiveAt: string | null;
-  checkInCount: number;
   hasCheckedIn: boolean;
   hasInboxMessages: boolean;
   unreadInboxCount: number;
@@ -47,7 +44,6 @@ export interface EnrichmentResult {
   claim: ClaimStatus | null;
   identity: AgentIdentity | null;
   reputation: ReputationSummary | null;
-  achievements: AchievementRecord[];
   checkIn: CheckInRecord | null;
   trust: TrustMetrics;
   activity: ActivityMetrics;
@@ -59,7 +55,7 @@ export interface EnrichmentResult {
 }
 
 /**
- * Enrich an agent record with identity, reputation, achievements, check-in,
+ * Enrich an agent record with identity, reputation, check-in,
  * claim status, and inbox data. All fetches run in parallel with a timeout
  * guard so a slow Hiro API does not block the response.
  *
@@ -87,13 +83,12 @@ export async function enrichAgentProfile(
     }, ENRICHMENT_TIMEOUT_MS);
   });
 
-  // Fetch claim, achievements, check-in, identity+reputation, inbox, and sent index in parallel.
+  // Fetch claim, check-in, identity+reputation, inbox, and sent index in parallel.
   // Identity and reputation are combined into a single slot so reputation starts immediately
   // after identity resolves, without blocking the other parallel fetches.
   const enrichmentResult = await Promise.race([
     Promise.all([
       kv.get(`claim:${agent.btcAddress}`),
-      getAgentAchievements(kv, agent.btcAddress),
       getCheckInRecord(kv, agent.btcAddress),
       fetchIdentityAndReputation(agent, hiroApiKey, kv, logger),
       getAgentInbox(kv, agent.btcAddress),
@@ -105,14 +100,12 @@ export async function enrichAgentProfile(
   // Destructure enrichment result; fall back to empty values on timeout
   const [
     claimData,
-    achievements,
     checkInRecord,
     identityAndReputation,
     inboxIndex,
     sentIndex,
   ] = enrichmentResult ?? [
     null,
-    [],
     null,
     { identity: null, reputation: null },
     null,
@@ -136,7 +129,6 @@ export async function enrichAgentProfile(
 
   const activity: ActivityMetrics = {
     lastActiveAt: agent.lastActiveAt ?? null,
-    checkInCount: (checkInRecord?.checkInCount ?? agent.checkInCount) ?? 0,
     hasCheckedIn: !!checkInRecord,
     hasInboxMessages: !!inboxIndex,
     unreadInboxCount: inboxIndex?.unreadCount ?? 0,
@@ -150,7 +142,6 @@ export async function enrichAgentProfile(
     claim,
     identity,
     reputation,
-    achievements,
     checkIn: checkInRecord,
     trust,
     activity,

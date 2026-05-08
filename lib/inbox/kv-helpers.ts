@@ -2,7 +2,7 @@
  * KV helper functions for the Inbox System.
  *
  * Provides storage and retrieval operations for inbox messages, replies,
- * and agent inbox indices. Follows the pattern from lib/achievements/kv.ts.
+ * and agent inbox indices.
  */
 
 import { KV_PREFIXES, STAGED_PAYMENT_TTL_SECONDS } from "./constants";

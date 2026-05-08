@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { invalidateAgentListCache } from "@/lib/cache";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { getAgentLevel, getNextLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
@@ -18,9 +17,6 @@ import {
   validateCheckInBody,
   type HeartbeatOrientation,
 } from "@/lib/heartbeat";
-import {
-  grantAchievementsBatch,
-} from "@/lib/achievements";
 
 /**
  * Build personalized orientation data for an agent.
@@ -43,7 +39,6 @@ function getOrientation(
     level: levelInfo.level,
     levelName: levelInfo.levelName,
     lastActiveAt: agent.lastActiveAt,
-    checkInCount: agent.checkInCount,
     unreadCount,
     nextAction,
   };
@@ -69,13 +64,13 @@ function getNextAction(
   }
 
   // Level 1+: agents who haven't checked in yet should start heartbeat
-  if (!agent.checkInCount) {
+  if (!agent.lastActiveAt) {
     return {
       step: "Start Heartbeat",
       description:
         level === 1
           ? "You're registered! Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat."
-          : "You have 0 check-ins. Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
+          : "Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
       endpoint: "POST /api/heartbeat",
     };
   }
@@ -117,72 +112,6 @@ function parseUnreadCount(inboxIndexData: string | null): number {
     return inboxIndex.unreadCount || 0;
   } catch {
     return 0;
-  }
-}
-
-async function grantLocalHeartbeatAchievements(
-  kv: KVNamespace,
-  btcAddress: string,
-  checkInRecord: Awaited<ReturnType<typeof updateCheckInRecord>>
-): Promise<boolean> {
-  const localGrants: Array<{
-    achievementId:
-      | "active"
-      | "dedicated"
-      | "devoted"
-      | "tireless"
-      | "streak-7d"
-      | "streak-30d";
-    eligible: boolean;
-    metadata: Record<string, unknown>;
-  }> = [
-    {
-      achievementId: "active",
-      eligible: checkInRecord.checkInCount >= 10,
-      metadata: { checkInCount: checkInRecord.checkInCount },
-    },
-    {
-      achievementId: "dedicated",
-      eligible: checkInRecord.checkInCount >= 100,
-      metadata: { checkInCount: checkInRecord.checkInCount },
-    },
-    {
-      achievementId: "devoted",
-      eligible: checkInRecord.checkInCount >= 1000,
-      metadata: { checkInCount: checkInRecord.checkInCount },
-    },
-    {
-      achievementId: "tireless",
-      eligible: checkInRecord.checkInCount >= 5000,
-      metadata: { checkInCount: checkInRecord.checkInCount },
-    },
-    {
-      achievementId: "streak-7d",
-      eligible: (checkInRecord.currentStreak ?? 0) >= 7,
-      metadata: { currentStreak: checkInRecord.currentStreak },
-    },
-    {
-      achievementId: "streak-30d",
-      eligible: (checkInRecord.currentStreak ?? 0) >= 30,
-      metadata: { currentStreak: checkInRecord.currentStreak },
-    },
-  ];
-
-  try {
-    const granted = await grantAchievementsBatch(
-      kv,
-      btcAddress,
-      localGrants
-        .filter((grant) => grant.eligible)
-        .map(({ achievementId, metadata }) => ({ achievementId, metadata }))
-    );
-    return granted.length > 0;
-  } catch (error) {
-    console.error("Failed to grant local heartbeat achievements", {
-      btcAddress,
-      error,
-    });
-    return false;
   }
 }
 
@@ -256,7 +185,6 @@ export async function GET(request: NextRequest) {
               level: "number",
               levelName: "string",
               lastActiveAt: "string | undefined",
-              checkInCount: "number | undefined",
               unreadCount: "number",
               nextAction: {
                 step: "string",
@@ -291,7 +219,7 @@ export async function GET(request: NextRequest) {
             'Sign the string: "AIBTC Check-In | {ISO 8601 timestamp}"',
           rateLimit: `One check-in per ${CHECK_IN_RATE_LIMIT_MS / 60000} minutes`,
           updatesLastActiveAt:
-            "Check-ins update the agent's lastActiveAt timestamp and increment checkInCount",
+            "Check-ins update the agent's lastActiveAt timestamp",
           prerequisite: {
             description:
               "Registered level (Level 1) and the AIBTC MCP server are required.",
@@ -422,38 +350,23 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update check-in record (pass existing to avoid redundant KV read)
-    const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp, existingCheckIn);
+    // Update check-in record (rate-limit timestamp only)
+    const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp);
 
-    // Heartbeat stays on the cheap local path. External identity and on-chain
-    // achievement verification now happen out of band rather than per check-in.
-    const achievementGranted = await grantLocalHeartbeatAchievements(
-      kv,
-      btcAddress,
-      checkInRecord
-    );
-
-    // Update agent record with lastActiveAt and check-in progress only.
+    // Update agent record with lastActiveAt only.
     const updatedAgent = {
       ...agent,
       lastActiveAt: timestamp,
-      checkInCount: checkInRecord.checkInCount,
     };
 
-    // Write updates to both btc: and stx: keys, fetch inbox in parallel
+    // Write updates to both btc: and stx: keys, fetch inbox in parallel.
+    // Pure timestamp updates are tolerated as stale for up to the 2-min cache
+    // TTL — no need to invalidate the cached agent list on every check-in.
     const [, , inboxIndexData] = await Promise.all([
       kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
       kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent)),
       kv.get(`inbox:agent:${btcAddress}`),
     ]);
-
-    // Only invalidate cached agent list when listing-relevant fields changed.
-    // Pure timestamp/count updates
-    // are tolerated as stale for up to 2 min TTL — avoids negating the cache
-    // on high-frequency heartbeats.
-    if (achievementGranted) {
-      await invalidateAgentListCache(kv);
-    }
 
     // Build orientation and level info (single getAgentLevel call inside getOrientation)
     const unreadCount = parseUnreadCount(inboxIndexData);
@@ -464,7 +377,6 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Check-in recorded!",
       checkIn: {
-        checkInCount: checkInRecord.checkInCount,
         lastCheckInAt: checkInRecord.lastCheckInAt,
       },
       agent: {

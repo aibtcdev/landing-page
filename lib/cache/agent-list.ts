@@ -193,9 +193,6 @@ async function rebuildAgentListCache(
   }
 
   // 2. Enrich: claims, inbox in parallel.
-  // Achievement counts are no longer fanned out per agent — the per-agent
-  // index read was N KV reads per rebuild and ~all returned null.
-  // Tracked under #652 ahead of the full removal in #626.
   const [claims, inboxData] = await Promise.all([
     Promise.all(
       agents.map(async (agent) => {
@@ -240,7 +237,6 @@ async function rebuildAgentListCache(
       owner: agent.owner ?? null,
       verifiedAt: agent.verifiedAt,
       lastActiveAt: agent.lastActiveAt ?? null,
-      checkInCount: agent.checkInCount ?? 0,
       erc8004AgentId: agent.erc8004AgentId ?? null,
       nostrPublicKey: agent.nostrPublicKey ?? null,
       lastIdentityCheck: agent.lastIdentityCheck ?? null,
@@ -248,7 +244,6 @@ async function rebuildAgentListCache(
       githubUsername: agent.githubUsername ?? null,
       level,
       levelName: LEVELS[level].name,
-      achievementCount: 0,
       messageCount: inbox?.messageIds.length ?? 0,
       unreadCount: inbox?.unreadCount ?? 0,
     };

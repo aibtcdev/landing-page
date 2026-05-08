@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
-import { SCORING, computeLevelBonus, computeCheckInBonus } from "@/lib/scoring";
+import { SCORING, computeLevelBonus } from "@/lib/scoring";
 import { getCachedAgentList } from "@/lib/cache";
 
 export async function GET(request: NextRequest) {
@@ -64,13 +64,11 @@ export async function GET(request: NextRequest) {
             owner: "string | null (X/Twitter handle)",
             verifiedAt: "string (ISO 8601 timestamp)",
             lastActiveAt: "string | null (ISO 8601 timestamp of last check-in)",
-            checkInCount: "number (total check-ins, default 0)",
             erc8004AgentId: "number | null (on-chain identity NFT ID)",
             nostrPublicKey: "string | null (Nostr public key)",
             referredBy: "string | null (BTC address of referrer)",
             level: "number (0-2)",
             levelName: "string (Unverified | Registered | Genesis)",
-            achievementCount: "number (total achievements unlocked)",
             score: "number (composite activity score)",
           },
         ],
@@ -80,7 +78,6 @@ export async function GET(request: NextRequest) {
           unverified: "number (count of level 0 agents)",
           total: "number (total agents in filtered set)",
           activeAgents: "number (agents with lastActiveAt within last hour)",
-          totalCheckIns: "number (sum of checkInCount across all agents)",
         },
         pagination: {
           total: "number (total agents in filtered set)",
@@ -90,19 +87,18 @@ export async function GET(request: NextRequest) {
         },
       },
       sortingRules: [
-        "Default (sort=score): Composite activity score descending. Score = levelBonus (100 registered / 500 genesis) + (achievements * 100) + min(checkIns, 50) + bnsName (300) + recency bonus (+50 active, +25 recent)",
+        "Default (sort=score): Composite activity score descending. Score = levelBonus (100 registered / 500 genesis) + bnsName (300) + recency bonus (+50 active, +25 recent)",
         "Registration (sort=registration): Primary sort by level (highest first), secondary sort by verifiedAt (earliest first, pioneer priority)",
         "Activity (sort=activity): Sort by lastActiveAt descending (most recently active first). Agents with no lastActiveAt sort last.",
       ],
       levelSystem: {
-        description: "Three-tier progression system from registration to Genesis. After reaching Genesis, agents earn achievements.",
+        description: "Three-tier progression system from registration to Genesis.",
         levels: LEVELS.map((l, i) => ({
           level: i,
           name: l.name,
           color: l.color,
           unlockCriteria: l.description,
         })),
-        afterGenesis: "Earn achievements through on-chain activity and engagement. See GET /api/achievements for details.",
       },
       examples: {
         allAgents: "/api/leaderboard?limit=100 (first 100 agents, all levels)",
@@ -147,19 +143,13 @@ export async function GET(request: NextRequest) {
     // Build ranked list with composite scores from cached data
     const now = Date.now();
     let ranked = cachedAgents.map((agent) => {
-      const { level, achievementCount, checkInCount } = agent;
+      const { level } = agent;
 
       // Level bonus: 100 for registered, 500 for genesis (was level * 1000)
       const levelBonus = computeLevelBonus(level);
 
-      // Check-in bonus: capped at 50 to reduce passive farming advantage
-      const checkInBonus = computeCheckInBonus(checkInCount);
-
       // BNS name bonus: +300 for having a registered BNS name
       const bnsBonus = agent.bnsName ? SCORING.BNS_NAME : 0;
-
-      // Achievement bonus: 100 per achievement
-      const achievementBonus = achievementCount * SCORING.ACHIEVEMENT_BASE;
 
       // Recency bonus
       let recencyBonus = 0;
@@ -172,8 +162,8 @@ export async function GET(request: NextRequest) {
         }
       }
 
-      // Composite score: levelBonus + checkInBonus + bnsBonus + achievementBonus + recencyBonus
-      const score = levelBonus + checkInBonus + bnsBonus + achievementBonus + recencyBonus;
+      // Composite score: levelBonus + bnsBonus + recencyBonus
+      const score = levelBonus + bnsBonus + recencyBonus;
 
       return {
         stxAddress: agent.stxAddress,
@@ -187,13 +177,11 @@ export async function GET(request: NextRequest) {
         owner: agent.owner,
         verifiedAt: agent.verifiedAt,
         lastActiveAt: agent.lastActiveAt,
-        checkInCount: agent.checkInCount,
         erc8004AgentId: agent.erc8004AgentId,
         nostrPublicKey: agent.nostrPublicKey,
         referredBy: agent.referredBy,
         level: agent.level,
         levelName: agent.levelName,
-        achievementCount: agent.achievementCount,
         score,
       };
     });
@@ -237,7 +225,6 @@ export async function GET(request: NextRequest) {
       activeAgents: ranked.filter((a) =>
         a.lastActiveAt && new Date(a.lastActiveAt).getTime() > activeThreshold
       ).length,
-      totalCheckIns: ranked.reduce((sum, a) => sum + (a.checkInCount || 0), 0),
     };
 
     // Paginate

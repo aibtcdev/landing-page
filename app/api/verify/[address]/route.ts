@@ -157,7 +157,6 @@ export async function GET(
           verifiedAt: agent.verifiedAt,
           owner: agent.owner,
           lastActiveAt: agent.lastActiveAt,
-          checkInCount: agent.checkInCount,
           erc8004AgentId: agent.erc8004AgentId ?? null,
           caip19: getCAIP19AgentId(agent.erc8004AgentId ?? null),
         },

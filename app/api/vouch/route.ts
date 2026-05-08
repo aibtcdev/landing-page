@@ -23,7 +23,6 @@ import {
   type VouchRecord,
 } from "@/lib/vouch";
 import type { ClaimStatus } from "@/lib/types";
-import { hasAchievement, grantAchievement } from "@/lib/achievements";
 
 function verifyStacksSignature(signature: string, message: string): {
   valid: boolean;
@@ -320,18 +319,8 @@ export async function POST(request: NextRequest) {
     };
     await storeVouch(kv, vouchRecord);
 
-    // Invalidate cached agent list (referredBy changed, achievement may be granted)
+    // Invalidate cached agent list (referredBy changed)
     await invalidateAgentListCache(kv);
-
-    // Grant voucher achievement to referrer on their first successful referral (best-effort)
-    try {
-      const hasVoucher = await hasAchievement(kv, referrer.btcAddress, "voucher");
-      if (!hasVoucher) {
-        await grantAchievement(kv, referrer.btcAddress, "voucher", { refereeAddress: agent.btcAddress });
-      }
-    } catch (err) {
-      console.error("Failed to grant voucher achievement to referrer:", err);
-    }
 
     return NextResponse.json({
       success: true,

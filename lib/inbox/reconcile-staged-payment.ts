@@ -4,7 +4,6 @@ import {
 } from "@aibtc/tx-schemas/core";
 import { PaymentStatusHttpResponseSchema } from "@aibtc/tx-schemas/http";
 import { invalidateAgentListCache } from "@/lib/cache";
-import { hasAchievement, grantAchievement } from "@/lib/achievements";
 import type { Logger } from "@/lib/logging";
 import {
   deleteStagedInboxPayment,
@@ -201,30 +200,6 @@ export async function reconcileStagedInboxPayment(
     }
 
     await invalidateAgentListCache(kv);
-
-    try {
-      const hasReceiver = await hasAchievement(kv, finalized.toBtcAddress, "receiver");
-      if (!hasReceiver) {
-        await grantAchievement(kv, finalized.toBtcAddress, "receiver", {
-          messageId: finalized.messageId,
-        });
-      }
-    } catch (error) {
-      logger.warn("Failed to grant receiver achievement after payment confirmation", {
-        paymentId: result.paymentId,
-        error: String(error),
-      });
-    }
-
-    await grantAchievement(kv, finalized.toBtcAddress, "x402-earner", {
-      messageId: finalized.messageId,
-      paymentTxid: finalized.paymentTxid,
-    }).catch((error) =>
-      logger.warn("Failed to grant x402-earner achievement after payment confirmation", {
-        paymentId: result.paymentId,
-        error: String(error),
-      })
-    );
 
     logPaymentEvent(logger, "info", "payment.delivery_confirmed", repoVersion, {
       route,

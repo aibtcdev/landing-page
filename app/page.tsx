@@ -97,10 +97,9 @@ async function fetchHomeData() {
       ctx.waitUntil(p)
     );
 
-    // Sort: level desc, then check-ins desc, then recent first
+    // Sort: level desc, then recent first
     const sorted = [...agents].sort((a, b) => {
       let cmp = b.level - a.level;
-      if (cmp === 0) cmp = b.checkInCount - a.checkInCount;
       if (cmp === 0) cmp = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
       return cmp;
     });

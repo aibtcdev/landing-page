@@ -21,7 +21,6 @@ export interface CachedAgent {
   owner: string | null;
   verifiedAt: string;
   lastActiveAt: string | null;
-  checkInCount: number;
   erc8004AgentId: number | null;
   nostrPublicKey: string | null;
   lastIdentityCheck: string | null;
@@ -29,7 +28,6 @@ export interface CachedAgent {
   githubUsername: string | null;
   level: number;
   levelName: string;
-  achievementCount: number;
   messageCount: number;
   unreadCount: number;
 }

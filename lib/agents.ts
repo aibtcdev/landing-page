@@ -18,7 +18,6 @@ export function normalizeAgentRecord(agent: AgentRecord) {
     owner: agent.owner ?? null,
     verifiedAt: agent.verifiedAt,
     lastActiveAt: agent.lastActiveAt ?? null,
-    checkInCount: agent.checkInCount ?? 0,
     erc8004AgentId: agent.erc8004AgentId ?? null,
     nostrPublicKey: agent.nostrPublicKey ?? null,
     lastIdentityCheck: agent.lastIdentityCheck ?? null,
