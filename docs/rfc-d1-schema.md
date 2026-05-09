@@ -314,7 +314,7 @@ CREATE INDEX idx_balances_agent_token_time ON balances(agent_address, token_id, 
 **Notes:**
 - Composite PK `(agent_address, token_id, captured_at)` enforces snapshot-at-most-once-per-window and lets us keep historical snapshots cheaply.
 - **Single index `idx_balances_agent_token_time` covers both query shapes** — per arc0btc's review, the original `idx_balances_captured_usd_desc(captured_at, usd_value DESC)` doesn't serve the dashboard query (which is shaped `WHERE agent_address = ? AND token_id = ? ORDER BY captured_at DESC LIMIT 1`, or a window function for the cross-agent leaderboard). The agent-token-time index is the right shape for both. Removed the captured_usd_desc index.
-- **5-min cadence row growth:** ~288 rows/agent/day across N tokens; ~1K agents × ~5 tokens average ≈ ~1.44M rows/day. D1 free tier is 50M rows ≈ ~35 days at this rate. **Phase 3.3 ships a 90-day TTL sweep alongside the cron** (per secret-mars's vote on Open Question 3): `DELETE FROM balances WHERE captured_at < datetime('now', '-90 days')` keeps the table in the free tier indefinitely. Pre-allocating the sweep-with-cron is cheaper than retrofitting it later when the table fills up — same reasoning as the agent-news rate-limit cutover discipline. If the team later wants longer retention or per-agent snapshots beyond 90 days, that's a paid-D1 decision documented at provisioning time.
+- **5-min cadence row growth:** ~288 rows/agent/day across N tokens; ~1K agents × ~5 tokens average ≈ ~1.44M rows/day. The org is on the **Workers Paid ($5/mo) tier**, so D1 limits are well above projected traffic — without a sweep we'd hit row-count concerns on the order of years, not weeks. **Phase 3.3 still ships the 90-day TTL sweep** (per secret-mars's vote on Open Question 3): `DELETE FROM balances WHERE captured_at < datetime('now', '-90 days')`. Three reasons the sweep ships even though we have paid-tier headroom: (a) **SpaceX-5 efficiency** — design tight even when limits are generous, so growth stays predictable for cost modeling and disaster recovery; (b) older snapshots beyond 90 days have no current product use and incur ongoing index-maintenance cost on `idx_balances_agent_token_time`; (c) pre-allocating the sweep with the ingestion cron is cheaper than retrofitting it later (same discipline as the agent-news rate-limit cutover). If the team later wants per-agent retention beyond 90 days, that's a feature ask, not a tier decision.
 - `usd_value` is microUSD (×1,000,000) integer to keep arithmetic precise; price-feed source is documented in `source` so the dashboard can flag stale-price entries.
 - `decimals` is denormalized per row so the dashboard doesn't need a separate `tokens` table; trade-off accepted because the canonical token list is small (<20 active tokens) and decimals don't change.
 
@@ -373,16 +373,28 @@ If you find yourself reaching for an atomic-increment-shaped operation:
 
 The principle: KV's read-then-write rate-limit pattern caused the per-request bill leak that motivated this whole quest. Cloudflare `ratelimits` binding is the durable fix. D1 must not become its replacement — neither for rate-limit counters nor for any pattern that wants atomic-increment semantics. (Captured in the off-repo quest-tracker memory and pinned here in a public doc so future contributors don't re-derive the lesson the hard way.)
 
-### 4. Worker region matches highest-traffic origin
+### 4. Worker region matches highest-traffic origin → **us-west** (`wnam`)
 
 D1 is **single-region**. A read from a Worker running in a different region than the D1 instance pays an inter-region round-trip (~10–100ms depending on geography). For latency-sensitive reads (`/api/agents/{address}`, profile SSR, leaderboard) this would noticeably regress vs. KV's globally-replicated reads.
 
-**Action item for Phase 1.2:** before provisioning the production D1 instance, identify the highest-traffic region (per-Workers-Analytics from `dash.cloudflare.com`) and provision D1 in the same region. Document the chosen region in `wrangler.jsonc` next to the D1 binding so future deploys don't accidentally relocate.
+**Decision for Phase 1.2:** provision the production D1 instance in **us-west** (Cloudflare region hint `wnam`) — matches the highest-traffic Worker region per maintainer (whoabuddy). Document the chosen region in `wrangler.jsonc` next to the D1 binding so future deploys don't accidentally relocate. Cloudflare D1 region selection at create time uses the `--location` flag: `wrangler d1 create landing-page --location wnam`.
 
 If global low-latency reads become important post-launch, options are (in order of effort):
 1. Edge-cache hot reads via `caches.default` (already done for some routes).
 2. D1 read replicas (in beta as of writing — verify availability before depending on this).
 3. Per-region cache layer (KV) for the read path with explicit invalidation hooks; reverts to the pre-D1 stale-read problem and is **not recommended**.
+
+### 6. Workers Paid ($5/mo) tier — design tight despite generous headroom
+
+The org is on **Workers Paid** at the $5/mo tier. D1 limits at this tier are well above projected traffic — `balances` row growth (~1.44M rows/day) hits row-count concerns on the order of years, not weeks. KV reads/writes likewise have material headroom post-Phase-0 cutover.
+
+**Design discipline (SpaceX-5 efficiency):** even with generous limits, the schema and operational plan are scoped to be *tight*:
+- 6 tables + 1 view cover the entire relational surface; no speculative tables.
+- 90-day TTL sweep on `balances` (Phase 3.3) keeps DB size predictable for cost modeling.
+- Each architecture decision (1–5) explicitly says what stays in KV / `ratelimits` binding so D1 doesn't accumulate things that don't belong.
+- Per-PR cost-measurement comments per the established Phase 0 pattern (#654/#656/#658/#662/#664/#666) keep visibility on actual usage relative to projection.
+
+If actual usage diverges from projection by >2x in either direction (cheaper or more expensive), that's a checkpoint trigger per the quest LOOP_PROMPT — model is wrong, revisit before scaling further.
 
 ### 5. Payment state model mirrors x402-sponsor-relay; terminal outcomes only
 
@@ -415,7 +427,7 @@ If global low-latency reads become important post-launch, options are (in order 
 | **2.4** | Flip `/api/leaderboard` + `/api/og/[address]` | Leaderboard ordering matches; unblocks #651 |
 | **2.5** | Inbox **AND outbox-reply** dual-write → reconcile → flip | **Both write paths** (`inbox:message:` and `inbox:reply:`) get dual-writes during the same 1hr window; reconcile both KV → D1; flip reads then writes. Reply velocity is much lower than inbox-write velocity, so the reply reconciliation surface is naturally smaller, but the implementation should make the reply-write dual-write explicit so a reviewer can verify it didn't get skipped. **Closes [aibtc-mcp-server#497](https://github.com/aibtcdev/aibtc-mcp-server/issues/497) via live `SELECT COUNT(*)`** (validated by Phase 1.4's empirical drift test). **1hr window justification:** based on agent-news#704 cutover precedent (similar inbox-write velocity, no missed events in window); will extend to 6–24hr dual-write only if Phase 2.5 smoke shows divergence between KV and D1 row counts. |
 | **2.6** | Bounty board reads (conditional) | Move iff shape benefits |
-| **3.1–3.4** | Trading-comp verifier + chainhook + balance cron + dashboard | Builds on `swaps`, `balances`, `registered_wallets`. **3.3 cron ships with a 90-day TTL sweep** (`DELETE FROM balances WHERE captured_at < datetime('now', '-90 days')`) so the table stays in D1 free tier — see `balances` notes. |
+| **3.1–3.4** | Trading-comp verifier + chainhook + balance cron + dashboard | Builds on `swaps`, `balances`, `registered_wallets`. **3.3 cron ships with a 90-day TTL sweep** (`DELETE FROM balances WHERE captured_at < datetime('now', '-90 days')`) so DB size stays predictable per SpaceX-5 efficiency framing — see `balances` notes and Decision 6. |
 | **4.x** | Cleanup + KV archival | Read-only archive of migrated KV namespaces (6–24h verify-no-reads), then delete |
 
 Per-PR smoke window + cost-measurement comment per the established pattern from #654/#656/#658/#662.
@@ -446,7 +458,7 @@ The three questions opened in the draft RFC have all been resolved by the dev-co
 
 2. **Genesis payouts table → DEFER.** Both reviewers concur. Low cardinality, admin-only writes, no relational query pressure. Folding `genesis:{btcAddress}` into D1 adds a table that doesn't serve the main migration goals. File a separate sub-issue if/when admin tooling later wants relational queries on payouts.
 
-3. **`balances` retention policy → SHIP 90-DAY TTL SWEEP WITH PHASE 3.3 CRON** (per @secret-mars's vote, supported by @arc0btc's free-tier-math observation). At 1.44M rows/day, D1 free tier (50M rows) ≈ 35 days runway. Pre-allocating the sweep alongside the 5-min ingestion cron is cheaper than retrofitting later when the table fills up (same discipline as the agent-news rate-limit cutover). Sweep: `DELETE FROM balances WHERE captured_at < datetime('now', '-90 days')`. Now codified in the `balances` notes and Phase 3 migration row.
+3. **`balances` retention policy → SHIP 90-DAY TTL SWEEP WITH PHASE 3.3 CRON** (per @secret-mars's vote). Originally framed as "keep us in D1 free tier"; with the org on Workers Paid ($5/mo), the row-count math gives years of runway without a sweep. The sweep ships anyway under SpaceX-5 efficiency framing (Decision 6): design tight even with generous limits, because predictable DB size protects cost modeling and DR. Sweep: `DELETE FROM balances WHERE captured_at < datetime('now', '-90 days')`. Codified in the `balances` notes and Phase 3 migration row.
 
 ## References
 
