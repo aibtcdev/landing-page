@@ -226,6 +226,11 @@ const OUTBOX_REPLY_1 = JSON.stringify({
   repliedAt: "2026-01-01T04:00:00Z",
 });
 
+// INSERT INTO agents (..., referred_by_btc, referral_code) binds referral_code as the 17th arg.
+const AGENT_INSERT_REFERRAL_CODE_BIND_INDEX = 16;
+// INSERT INTO inbox_messages for inbound rows binds reply_to_message_id as the 2nd arg.
+const INBOX_INSERT_REPLY_TO_BIND_INDEX = 1;
+
 // ── beforeEach ───────────────────────────────────────────────────────────
 
 beforeEach(() => {
@@ -417,14 +422,17 @@ describe("idempotency", () => {
     expect(body1.cursor).toBe("referred_by:");
 
     const insertChildBind = bindMock.mock.calls[0] as unknown[];
-    expect(insertChildBind[16]).toBe("ABC123");
+    expect(insertChildBind[AGENT_INSERT_REFERRAL_CODE_BIND_INDEX]).toBe("ABC123");
 
     const resp2 = await POST(buildPostRequest({ table: "agents", cursor: body1.cursor! }));
     const body2 = await resp2.json() as { failed: unknown[]; cursor: string | null };
     expect(body2.failed).toHaveLength(0);
     expect(body2.cursor).toBeNull();
 
-    const updateBind = bindMock.mock.calls[2] as unknown[];
+    const updateBind = bindMock.mock.calls.find(
+      (args) => (args as unknown[]).length === 3 && (args as unknown[])[0] === "bc1qparent"
+    ) as unknown[] | undefined;
+    expect(updateBind).toBeDefined();
     expect(updateBind).toEqual(["bc1qparent", "bc1qchild", "bc1qparent"]);
   });
 });
@@ -599,7 +607,7 @@ describe("inbox_messages backfill", () => {
 
     const inboundFirstBind = bindMock.mock.calls[0] as unknown[];
     const inboundWithReplyTo = bindMock.mock.calls.find(
-      (args) => (args as unknown[])[1] === "msg_parent_1"
+      (args) => (args as unknown[])[INBOX_INSERT_REPLY_TO_BIND_INDEX] === "msg_parent_1"
     ) as unknown[] | undefined;
     const replyBind = bindMock.mock.calls[11] as unknown[];
 
@@ -610,17 +618,17 @@ describe("inbox_messages backfill", () => {
   });
 
   it("resolves reply to_btc_address from stx: lookup when reply stores an STX principal", async () => {
-    const stxPrincipal = "SP1234567890ABCDEFGHJKLMNPQRSTUVWX123456";
+    const recipientStxAddress = "SP1234567890ABCDEFGHJKLMNPQRSTUVWX123456";
     const replyWithStxRecipient = JSON.stringify({
       ...JSON.parse(OUTBOX_REPLY_1) as Record<string, unknown>,
-      toBtcAddress: stxPrincipal,
+      toBtcAddress: recipientStxAddress,
     });
 
     const kv = buildKvMock({
       "inbox:reply:msg_parent_1": replyWithStxRecipient,
-      [`stx:${stxPrincipal}`]: JSON.stringify({
-        btcAddress: "bc1qsenderbtc",
-        stxAddress: stxPrincipal,
+      [`stx:${recipientStxAddress}`]: JSON.stringify({
+        btcAddress: "bc1qrecipientbtc",
+        stxAddress: recipientStxAddress,
       }),
     });
 
@@ -640,7 +648,7 @@ describe("inbox_messages backfill", () => {
     expect(runMock).toHaveBeenCalledTimes(1);
 
     const bindArgs = bindMock.mock.calls[0] as unknown[];
-    expect(bindArgs[3]).toBe("bc1qsenderbtc");
+    expect(bindArgs[3]).toBe("bc1qrecipientbtc");
   });
 });
 

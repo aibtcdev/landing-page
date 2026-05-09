@@ -113,8 +113,7 @@ function encodeAgentCursor(pass: AgentBackfillPass, kvCursor: string | null): st
     if (!kvCursor) return null;
     return `insert:${kvCursor}`;
   }
-  if (!kvCursor) return null;
-  return `referred_by:${kvCursor}`;
+  return `referred_by:${kvCursor ?? ""}`;
 }
 
 async function resolveReplyRecipientBtcAddress(
@@ -163,23 +162,23 @@ async function backfillAgents(
     const raw = await kv.get(kvKey.name);
     if (!raw) continue;
 
-    let parsed: unknown;
+    let parsedAgentRecord: unknown;
     try {
-      parsed = JSON.parse(raw);
+      parsedAgentRecord = JSON.parse(raw);
     } catch {
       counts.failed.push({ key: kvKey.name, reason: "JSON parse error" });
       continue;
     }
 
     // Skip partial agent records — they lack stx_address / stx_public_key
-    if (isPartialAgentRecord(parsed)) {
+    if (isPartialAgentRecord(parsedAgentRecord)) {
       if (pass === "insert") {
         counts.skipped_partial++;
       }
       continue;
     }
 
-    const agent = parsed as AgentRecord;
+    const agent = parsedAgentRecord as AgentRecord;
 
     // Validate minimum required fields for D1 insert
     if (
@@ -201,8 +200,8 @@ async function backfillAgents(
       try {
         const codeData = await kv.get(`referral-code:${agent.btcAddress}`);
         if (codeData) {
-          const codeRecord = JSON.parse(codeData) as { code: string };
-          referralCode = codeRecord.code;
+          const parsed = JSON.parse(codeData) as { code: string };
+          referralCode = parsed.code;
         } else {
           // Missing referral code — generate and persist
           referralCode = await generateAndStoreReferralCodeForBackfill(
@@ -302,7 +301,7 @@ async function backfillAgents(
     }
     return {
       ...counts,
-      nextCursor: "referred_by:",
+      nextCursor: encodeAgentCursor("referred_by", null),
     };
   }
 
