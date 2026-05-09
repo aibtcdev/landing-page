@@ -42,7 +42,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 
 /**
  * Build a minimal mock KVNamespace from a plain key→value map.
- * Supports get, put, list (prefix filter only, no cursor simulation).
+ * Supports get, put, list with prefix + simple numeric cursor pagination.
  */
 function buildKvMock(data: Record<string, string>): KVNamespace {
   const store = { ...data };
@@ -58,11 +58,16 @@ function buildKvMock(data: Record<string, string>): KVNamespace {
     list: vi.fn(async (opts: KVNamespaceListOptions = {}) => {
       const prefix = opts.prefix ?? "";
       const limit = opts.limit ?? 1000;
-      const keys = Object.keys(store)
+      const start = opts.cursor ? parseInt(opts.cursor, 10) : 0;
+      const all = Object.keys(store)
         .filter((k) => k.startsWith(prefix))
-        .slice(0, limit)
+        .sort();
+      const page = all.slice(start, start + limit);
+      const next = start + page.length;
+      const listComplete = next >= all.length;
+      const keys = page
         .map((name) => ({ name }));
-      return { keys, list_complete: true, cursor: undefined };
+      return { keys, list_complete: listComplete, cursor: listComplete ? undefined : String(next) };
     }),
     getWithMetadata: vi.fn(),
   } as unknown as KVNamespace;
@@ -95,6 +100,7 @@ function buildD1Mock(config: D1MockConfig = {}): {
   db: D1Database;
   runMock: Mock;
   prepareMock: Mock;
+  bindMock: Mock;
 } {
   const sequence = config.changesSequence ?? [];
   let callIndex = 0;
@@ -114,8 +120,10 @@ function buildD1Mock(config: D1MockConfig = {}): {
     all: vi.fn(async () => ({ results: [], success: true, meta: {} })),
   };
 
+  const bindMock = vi.fn(() => boundStatement);
+
   const statement = {
-    bind: vi.fn(() => boundStatement),
+    bind: bindMock,
   };
 
   const prepareMock = vi.fn(() => statement);
@@ -127,7 +135,7 @@ function buildD1Mock(config: D1MockConfig = {}): {
     dump: vi.fn(),
   } as unknown as D1Database;
 
-  return { db, runMock, prepareMock };
+  return { db, runMock, prepareMock, bindMock };
 }
 
 // ── Context mock helper ──────────────────────────────────────────────────
@@ -207,6 +215,15 @@ const VOUCH_1 = JSON.stringify({
 const REFERRAL_CODE_1 = JSON.stringify({
   code: "ABC123",
   createdAt: "2026-01-01T00:00:00Z",
+});
+
+const OUTBOX_REPLY_1 = JSON.stringify({
+  messageId: "msg_parent_1",
+  fromAddress: "bc1qagent1",
+  toBtcAddress: "SP2SENDER1",
+  reply: "pong",
+  signature: "sig_123",
+  repliedAt: "2026-01-01T04:00:00Z",
 });
 
 // ── beforeEach ───────────────────────────────────────────────────────────
@@ -359,6 +376,57 @@ describe("idempotency", () => {
     expect(body2.skipped_idempotent).toBe(1);
     expect(runMock2).toHaveBeenCalledTimes(1);
   });
+
+  it("backfills referredBy in a second pass to avoid self-FK ordering issues", async () => {
+    const parentAgent = JSON.stringify({
+      btcAddress: "bc1qparent",
+      stxAddress: "SP1PARENT",
+      stxPublicKey: "03parent",
+      btcPublicKey: "02parent",
+      verifiedAt: "2026-01-01T00:00:00Z",
+      referredBy: null,
+    });
+    const childAgent = JSON.stringify({
+      btcAddress: "bc1qchild",
+      stxAddress: "SP1CHILD",
+      stxPublicKey: "03child",
+      btcPublicKey: "02child",
+      verifiedAt: "2026-01-01T00:00:00Z",
+      referredBy: "bc1qparent",
+    });
+
+    const kv = buildKvMock({
+      "btc:bc1qchild": childAgent,
+      "btc:bc1qparent": parentAgent,
+      "referral-code:bc1qchild": REFERRAL_CODE_1,
+      "referral-code:bc1qparent": JSON.stringify({ code: "XYZ789", createdAt: "2026-01-01T00:00:00Z" }),
+    });
+
+    const { db, bindMock } = buildD1Mock({ changesSequence: [1, 1, 1] });
+
+    mockContext({
+      ARC_ADMIN_API_KEY: "test-admin-key",
+      VERIFIED_AGENTS: kv,
+      DB: db,
+    });
+
+    const resp1 = await POST(buildPostRequest({ table: "agents" }));
+    const body1 = await resp1.json() as { inserted: number; failed: unknown[]; cursor: string | null };
+    expect(body1.inserted).toBe(2);
+    expect(body1.failed).toHaveLength(0);
+    expect(body1.cursor).toBe("referred_by:");
+
+    const insertChildBind = bindMock.mock.calls[0] as unknown[];
+    expect(insertChildBind[16]).toBe("ABC123");
+
+    const resp2 = await POST(buildPostRequest({ table: "agents", cursor: body1.cursor! }));
+    const body2 = await resp2.json() as { failed: unknown[]; cursor: string | null };
+    expect(body2.failed).toHaveLength(0);
+    expect(body2.cursor).toBeNull();
+
+    const updateBind = bindMock.mock.calls[2] as unknown[];
+    expect(updateBind).toEqual(["bc1qparent", "bc1qchild", "bc1qparent"]);
+  });
 });
 
 // ── Test 3: missing referral code generates one ──────────────────────────
@@ -472,6 +540,107 @@ describe("vouches table backfill", () => {
     // Only 1 insert — the vouch:index: entry was skipped
     expect(body.inserted).toBe(1);
     expect(runMock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("inbox_messages backfill", () => {
+  it("completes inbound pass before reply pass across paginated calls", async () => {
+    const bulkMessages = Object.fromEntries(
+      Array.from({ length: 11 }, (_, i) => {
+        const id = `msg_parent_${i + 1}`;
+        return [
+          `inbox:message:${id}`,
+          JSON.stringify({
+            messageId: id,
+            fromAddress: `SP2SENDER${i + 1}`,
+            toBtcAddress: "bc1qagent1",
+            toStxAddress: "SP1AGENT1",
+            content: `hello-${i + 1}`,
+            paymentSatoshis: 100,
+            ...(i === 1 ? { replyTo: "msg_parent_1" } : {}),
+            sentAt: `2026-01-01T02:${String(i).padStart(2, "0")}:00Z`,
+          }),
+        ];
+      })
+    );
+
+    const kv = buildKvMock({
+      ...bulkMessages,
+      "inbox:reply:msg_parent_1": OUTBOX_REPLY_1,
+      "stx:SP2SENDER1": FULL_AGENT_1,
+    });
+
+    const { db, bindMock } = buildD1Mock({ changesSequence: [1, 1, 1] });
+
+    mockContext({
+      ARC_ADMIN_API_KEY: "test-admin-key",
+      VERIFIED_AGENTS: kv,
+      DB: db,
+    });
+
+    const resp1 = await POST(buildPostRequest({ table: "inbox_messages", batchSize: "10" }));
+    const body1 = await resp1.json() as { inserted: number; cursor: string | null };
+    expect(body1.inserted).toBe(10);
+    expect(body1.cursor).toBe("inbound:10");
+
+    const resp2 = await POST(
+      buildPostRequest({ table: "inbox_messages", batchSize: "1", cursor: body1.cursor! })
+    );
+    const body2 = await resp2.json() as { inserted: number; cursor: string | null };
+    expect(body2.inserted).toBe(1);
+    expect(body2.cursor).toBe("reply:");
+
+    const resp3 = await POST(
+      buildPostRequest({ table: "inbox_messages", batchSize: "1", cursor: body2.cursor! })
+    );
+    const body3 = await resp3.json() as { inserted: number; cursor: string | null };
+    expect(body3.inserted).toBe(1);
+    expect(body3.cursor).toBeNull();
+
+    const inboundFirstBind = bindMock.mock.calls[0] as unknown[];
+    const inboundWithReplyTo = bindMock.mock.calls.find(
+      (args) => (args as unknown[])[1] === "msg_parent_1"
+    ) as unknown[] | undefined;
+    const replyBind = bindMock.mock.calls[11] as unknown[];
+
+    expect(inboundWithReplyTo).toBeDefined();
+    expect(inboundFirstBind[1]).toBeNull();
+    expect(replyBind[0]).toBe("reply_msg_parent_1");
+    expect(replyBind[1]).toBe("msg_parent_1");
+  });
+
+  it("resolves reply to_btc_address from stx: lookup when reply stores an STX principal", async () => {
+    const stxPrincipal = "SP1234567890ABCDEFGHJKLMNPQRSTUVWX123456";
+    const replyWithStxRecipient = JSON.stringify({
+      ...JSON.parse(OUTBOX_REPLY_1) as Record<string, unknown>,
+      toBtcAddress: stxPrincipal,
+    });
+
+    const kv = buildKvMock({
+      "inbox:reply:msg_parent_1": replyWithStxRecipient,
+      [`stx:${stxPrincipal}`]: JSON.stringify({
+        btcAddress: "bc1qsenderbtc",
+        stxAddress: stxPrincipal,
+      }),
+    });
+
+    const { db, bindMock, runMock } = buildD1Mock({ changesSequence: [1] });
+
+    mockContext({
+      ARC_ADMIN_API_KEY: "test-admin-key",
+      VERIFIED_AGENTS: kv,
+      DB: db,
+    });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", cursor: "reply:" }));
+    const body = await resp.json() as { inserted: number; failed: unknown[] };
+
+    expect(body.inserted).toBe(1);
+    expect(body.failed).toHaveLength(0);
+    expect(runMock).toHaveBeenCalledTimes(1);
+
+    const bindArgs = bindMock.mock.calls[0] as unknown[];
+    expect(bindArgs[3]).toBe("bc1qsenderbtc");
   });
 });
 

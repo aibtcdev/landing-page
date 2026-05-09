@@ -5,8 +5,10 @@ import { isPartialAgentRecord } from "@/lib/types";
 import type { AgentRecord, ClaimRecord } from "@/lib/types";
 import type { VouchRecord } from "@/lib/vouch/types";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
+import { REPLY_D1_PK_PREFIX } from "@/lib/inbox/constants";
 import { generateClaimCode } from "@/lib/claim-code";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
+import { isStxAddress } from "@/lib/validation/address";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -30,6 +32,8 @@ interface AccumulatedCounts {
   skipped_partial: number;
   failed: { key: string; reason: string }[];
 }
+
+type AgentBackfillPass = "insert" | "referred_by";
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -72,6 +76,12 @@ async function generateAndStoreReferralCodeForBackfill(
         continue;
       }
 
+      // Also guard against collisions in KV during partial migration windows.
+      const existingLookup = await kv.get(`referral-lookup:${code}`);
+      if (existingLookup && existingLookup !== btcAddress) {
+        continue;
+      }
+
       // Write to KV so it's persisted for future use
       const record = JSON.stringify({ code, createdAt: new Date().toISOString() });
       await Promise.all([
@@ -85,6 +95,43 @@ async function generateAndStoreReferralCodeForBackfill(
   throw new Error(
     `Failed to generate unique referral code for ${btcAddress} after ${MAX_ATTEMPTS} attempts`
   );
+}
+
+function decodeAgentCursor(cursor: string | null): { pass: AgentBackfillPass; kvCursor: string | null } {
+  if (!cursor) return { pass: "insert", kvCursor: null };
+  if (cursor.startsWith("referred_by:")) {
+    return { pass: "referred_by", kvCursor: cursor.slice("referred_by:".length) || null };
+  }
+  if (cursor.startsWith("insert:")) {
+    return { pass: "insert", kvCursor: cursor.slice("insert:".length) || null };
+  }
+  return { pass: "insert", kvCursor: cursor };
+}
+
+function encodeAgentCursor(pass: AgentBackfillPass, kvCursor: string | null): string | null {
+  if (pass === "insert") {
+    if (!kvCursor) return null;
+    return `insert:${kvCursor}`;
+  }
+  if (!kvCursor) return null;
+  return `referred_by:${kvCursor}`;
+}
+
+async function resolveReplyRecipientBtcAddress(
+  kv: KVNamespace,
+  candidateAddress: string
+): Promise<string | null> {
+  if (!isStxAddress(candidateAddress)) return candidateAddress;
+
+  const stxRecordRaw = await kv.get(`stx:${candidateAddress}`);
+  if (!stxRecordRaw) return null;
+
+  try {
+    const parsed = JSON.parse(stxRecordRaw) as Partial<AgentRecord>;
+    return typeof parsed.btcAddress === "string" ? parsed.btcAddress : null;
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -106,8 +153,9 @@ async function backfillAgents(
     failed: [],
   };
 
+  const { pass, kvCursor } = decodeAgentCursor(cursor);
   const listOpts: KVNamespaceListOptions = { prefix: "btc:", limit: batchSize };
-  if (cursor) listOpts.cursor = cursor;
+  if (kvCursor) listOpts.cursor = kvCursor;
 
   const page = await kv.list(listOpts);
 
@@ -125,7 +173,9 @@ async function backfillAgents(
 
     // Skip partial agent records — they lack stx_address / stx_public_key
     if (isPartialAgentRecord(parsed)) {
-      counts.skipped_partial++;
+      if (pass === "insert") {
+        counts.skipped_partial++;
+      }
       continue;
     }
 
@@ -138,92 +188,127 @@ async function backfillAgents(
       !agent.btcPublicKey ||
       !agent.verifiedAt
     ) {
-      counts.failed.push({
-        key: kvKey.name,
-        reason: "Missing required AgentRecord fields (stxAddress/stxPublicKey/btcPublicKey/verifiedAt)",
-      });
-      continue;
-    }
-
-    // Resolve or generate referral code
-    let referralCode: string;
-    try {
-      const codeData = await kv.get(`referral-code:${agent.btcAddress}`);
-      if (codeData) {
-        const parsed = JSON.parse(codeData) as { code: string };
-        referralCode = parsed.code;
-      } else {
-        // Missing referral code — generate and persist
-        referralCode = await generateAndStoreReferralCodeForBackfill(
-          kv,
-          db,
-          agent.btcAddress,
-          dryRun
-        );
+        counts.failed.push({
+          key: kvKey.name,
+          reason: "Missing required AgentRecord fields (stxAddress/stxPublicKey/btcPublicKey/verifiedAt)",
+        });
+        continue;
       }
-    } catch (e) {
-      counts.failed.push({
-        key: kvKey.name,
-        reason: `Referral code error: ${(e as Error).message}`,
-      });
-      continue;
-    }
 
-    if (dryRun) {
-      // Count as would-be-inserted without touching D1
-      counts.inserted++;
-      continue;
-    }
+    if (pass === "insert") {
+      // Resolve or generate referral code
+      let referralCode: string;
+      try {
+        const codeData = await kv.get(`referral-code:${agent.btcAddress}`);
+        if (codeData) {
+          const codeRecord = JSON.parse(codeData) as { code: string };
+          referralCode = codeRecord.code;
+        } else {
+          // Missing referral code — generate and persist
+          referralCode = await generateAndStoreReferralCodeForBackfill(
+            kv,
+            db,
+            agent.btcAddress,
+            dryRun
+          );
+        }
+      } catch (e) {
+        counts.failed.push({
+          key: kvKey.name,
+          reason: `Referral code error: ${(e as Error).message}`,
+        });
+        continue;
+      }
 
-    try {
-      const result = await db
-        .prepare(
-          `INSERT OR IGNORE INTO agents (
+      if (dryRun) {
+        counts.inserted++;
+        continue;
+      }
+
+      try {
+        const result = await db
+          .prepare(
+            `INSERT INTO agents (
             btc_address, stx_address, stx_public_key, btc_public_key,
             taproot_address, display_name, description, bns_name,
             owner, verified_at, last_active_at, erc8004_agent_id,
             nostr_public_key, capabilities_json, last_identity_check,
             github_username, referred_by_btc, referral_code
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
-        )
-        .bind(
-          agent.btcAddress,
-          agent.stxAddress,
-          agent.stxPublicKey,
-          agent.btcPublicKey,
-          agent.taprootAddress ?? null,
-          agent.displayName ?? null,
-          agent.description ?? null,
-          agent.bnsName ?? null,
-          agent.owner ?? null,
-          agent.verifiedAt,
-          agent.lastActiveAt ?? null,
-          agent.erc8004AgentId ?? null,
-          agent.nostrPublicKey ?? null,
-          agent.capabilities ? JSON.stringify(agent.capabilities) : null,
-          agent.lastIdentityCheck ?? null,
-          agent.githubUsername ?? null,
-          agent.referredBy ?? null,
-          referralCode
-        )
-        .run();
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?)
+           ON CONFLICT(btc_address) DO NOTHING`
+          )
+          .bind(
+            agent.btcAddress,
+            agent.stxAddress,
+            agent.stxPublicKey,
+            agent.btcPublicKey,
+            agent.taprootAddress ?? null,
+            agent.displayName ?? null,
+            agent.description ?? null,
+            agent.bnsName ?? null,
+            agent.owner ?? null,
+            agent.verifiedAt,
+            agent.lastActiveAt ?? null,
+            agent.erc8004AgentId ?? null,
+            agent.nostrPublicKey ?? null,
+            agent.capabilities ? JSON.stringify(agent.capabilities) : null,
+            agent.lastIdentityCheck ?? null,
+            agent.githubUsername ?? null,
+            referralCode
+          )
+          .run();
 
-      if (result.meta.changes === 1) {
-        counts.inserted++;
-      } else {
-        counts.skipped_idempotent++;
+        if (result.meta.changes === 1) {
+          counts.inserted++;
+        } else {
+          counts.skipped_idempotent++;
+        }
+      } catch (e) {
+        counts.failed.push({
+          key: kvKey.name,
+          reason: `D1 insert error: ${(e as Error).message}`,
+        });
       }
+      continue;
+    }
+
+    // Second pass: set referred_by_btc only after all agents exist.
+    if (!agent.referredBy || dryRun) continue;
+
+    try {
+      await db
+        .prepare(
+          `UPDATE agents
+             SET referred_by_btc = ?
+           WHERE btc_address = ?
+             AND (referred_by_btc IS NULL OR referred_by_btc != ?)`
+        )
+        .bind(agent.referredBy, agent.btcAddress, agent.referredBy)
+        .run();
     } catch (e) {
       counts.failed.push({
         key: kvKey.name,
-        reason: `D1 insert error: ${(e as Error).message}`,
+        reason: `D1 referral update error: ${(e as Error).message}`,
       });
     }
   }
 
+  if (pass === "insert") {
+    if (!page.list_complete) {
+      return {
+        ...counts,
+        nextCursor: encodeAgentCursor("insert", page.cursor ?? null),
+      };
+    }
+    return {
+      ...counts,
+      nextCursor: "referred_by:",
+    };
+  }
+
   return {
     ...counts,
-    nextCursor: page.list_complete ? null : (page.cursor ?? null),
+    nextCursor: page.list_complete ? null : encodeAgentCursor("referred_by", page.cursor ?? null),
   };
 }
 
@@ -286,13 +371,14 @@ async function backfillClaims(
     }
 
     try {
-      const result = await db
-        .prepare(
-          `INSERT OR IGNORE INTO claims (
+        const result = await db
+          .prepare(
+            `INSERT INTO claims (
             btc_address, display_name, tweet_url, tweet_author,
             claimed_at, reward_satoshis, reward_txid, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)`
-        )
+          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+           ON CONFLICT(btc_address) DO NOTHING`
+          )
         .bind(
           claim.btcAddress,
           claim.displayName,
@@ -396,7 +482,7 @@ async function backfillInboxMessages(
       try {
         const result = await db
           .prepare(
-            `INSERT OR IGNORE INTO inbox_messages (
+            `INSERT INTO inbox_messages (
               message_id, is_reply, reply_to_message_id,
               from_stx_address, from_btc_address,
               to_btc_address, to_stx_address,
@@ -408,7 +494,7 @@ async function backfillInboxMessages(
               bitcoin_signature, sender_btc_address,
               sent_at, read_at, replied_at
             ) VALUES (
-              ?, 0, NULL,
+              ?, 0, ?,
               ?, NULL,
               ?, ?,
               ?, ?, ?,
@@ -417,17 +503,18 @@ async function backfillInboxMessages(
               ?, ?,
               ?, ?,
               ?, ?, ?
-            )`
+            ) ON CONFLICT(message_id) DO NOTHING`
           )
           .bind(
             msg.messageId,
+            msg.replyTo ?? null,
             // from_stx_address = fromAddress (payer's STX address)
             msg.fromAddress,
             msg.toBtcAddress,
             msg.toStxAddress,
             msg.content,
             msg.paymentTxid ?? null,
-            msg.paymentSatoshis,
+            msg.paymentSatoshis ?? null,
             // payment_status: map RelayPaymentStatus to D1 enum; absent = null
             msg.paymentStatus ?? null,
             msg.paymentId ?? null,
@@ -501,12 +588,21 @@ async function backfillInboxMessages(
     // The KV key is `inbox:reply:{messageId}` where messageId is the parent message's
     // ID. The reply IS linked to that parent message row in D1.
     // We generate a distinct ID for the reply row itself to avoid PK collision.
-    const replyMessageId = `reply_${reply.messageId}`;
+    const replyMessageId = `${REPLY_D1_PK_PREFIX}${reply.messageId}`;
+
+    const resolvedToBtcAddress = await resolveReplyRecipientBtcAddress(kv, reply.toBtcAddress);
+    if (!resolvedToBtcAddress) {
+      counts.failed.push({
+        key: kvKey.name,
+        reason: `Unable to resolve reply recipient BTC address from "${reply.toBtcAddress}"`,
+      });
+      continue;
+    }
 
     try {
       const result = await db
         .prepare(
-          `INSERT OR IGNORE INTO inbox_messages (
+          `INSERT INTO inbox_messages (
             message_id, is_reply, reply_to_message_id,
             from_stx_address, from_btc_address,
             to_btc_address, to_stx_address,
@@ -527,7 +623,7 @@ async function backfillInboxMessages(
             0, 0,
             ?, NULL,
             ?, NULL, NULL
-          )`
+          ) ON CONFLICT(message_id) DO NOTHING`
         )
         .bind(
           replyMessageId,
@@ -535,7 +631,7 @@ async function backfillInboxMessages(
           reply.messageId,
           // from_btc_address = replier's BTC address
           reply.fromAddress,
-          reply.toBtcAddress,
+          resolvedToBtcAddress,
           // content = reply text
           reply.reply,
           // bitcoin_signature = BIP-322 signature on the reply
@@ -609,9 +705,10 @@ async function backfillVouches(
     try {
       const result = await db
         .prepare(
-          `INSERT OR IGNORE INTO vouches (
+          `INSERT INTO vouches (
             referrer_btc, referee_btc, registered_at, message_sent, paid_out
-          ) VALUES (?, ?, ?, ?, ?)`
+          ) VALUES (?, ?, ?, ?, ?)
+           ON CONFLICT(referrer_btc, referee_btc) DO NOTHING`
         )
         .bind(
           vouch.referrer,
@@ -664,6 +761,8 @@ export async function GET(request: NextRequest) {
       cursor: "Resume cursor from previous response. For inbox_messages: encoded as 'inbound:<kv-cursor>' or 'reply:<kv-cursor>'.",
       dryRun: "If 'true', counts rows without writing to D1 or KV. Default: false.",
     },
+    warning:
+      "table=all is one-shot with no cursor; use per-table + cursor loop for large datasets to avoid request timeout.",
     response: {
       table: "Table targeted",
       dryRun: "Whether this was a dry run",

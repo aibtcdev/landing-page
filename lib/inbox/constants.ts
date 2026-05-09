@@ -20,6 +20,8 @@ export function buildMarkReadMessage(messageId: string): string {
 
 /** BIP-137 signing format for inbox replies (bound to specific message). */
 export const REPLY_MESSAGE_FORMAT = "Inbox Reply | {messageId} | {reply}";
+/** Prefix used when materializing KV outbox replies into D1 inbox_messages PKs. */
+export const REPLY_D1_PK_PREFIX = "reply_";
 
 export function buildReplyMessage(messageId: string, reply: string): string {
   return `Inbox Reply | ${messageId} | ${reply}`;
