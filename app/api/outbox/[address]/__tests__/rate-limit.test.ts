@@ -191,8 +191,6 @@ describe("outbox rate limit — IP bucket blocks before address-keyed buckets", 
   });
 
   it("unregistered bucket is checked after IP passes; returns 429 for unregistered agent", async () => {
-    const passingIp = createRateLimitMock(true);
-    const exhaustedUnreg = createRateLimitMock(false);
     mockContext({
       RATE_LIMIT_MUTATING: {
         limit: vi.fn()
@@ -207,7 +205,6 @@ describe("outbox rate limit — IP bucket blocks before address-keyed buckets", 
     const resp = await POST(req, { params: Promise.resolve({ address: "bc1qunreg" }) });
 
     expect(resp.status).toBe(429);
-    void passingIp; void exhaustedUnreg; // consumed by mockContext
   });
 
   it("no-ip request skips IP bucket and falls through to unregistered 404", async () => {

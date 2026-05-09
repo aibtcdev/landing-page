@@ -14,6 +14,7 @@ import {
   decrementUnreadCount,
 } from "@/lib/inbox";
 import { isStxAddress } from "@/lib/validation/address";
+import { shouldFailClosed } from "@/lib/env";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -59,8 +60,7 @@ export async function POST(
       ipLimited = !result.success;
     } catch (err) {
       // Binding unavailable — fail closed in production/preview, open in dev.
-      const deployEnv = env.DEPLOY_ENV;
-      const failClosed = deployEnv !== undefined;
+      const failClosed = shouldFailClosed(env);
       logger.warn("IP rate limit binding error", { error: String(err), failClosed });
       if (failClosed) ipLimited = true;
     }
@@ -82,8 +82,7 @@ export async function POST(
       const result = await env.RATE_LIMIT_MUTATING.limit({ key: `outbox-unregistered:${address}` });
       unregLimited = !result.success;
     } catch (err) {
-      const deployEnv = env.DEPLOY_ENV;
-      const failClosed = deployEnv !== undefined;
+      const failClosed = shouldFailClosed(env);
       logger.warn("Unregistered rate limit binding error", { error: String(err), failClosed });
       if (failClosed) unregLimited = true;
     }
@@ -289,8 +288,7 @@ export async function POST(
     const result = await env.RATE_LIMIT_AUTHENTICATED.limit({ key: `outbox:${btcResult.address}` });
     registeredLimited = !result.success;
   } catch (err) {
-    const deployEnv = env.DEPLOY_ENV;
-    const failClosed = deployEnv !== undefined;
+    const failClosed = shouldFailClosed(env);
     logger.warn("Authenticated rate limit binding error", { error: String(err), failClosed });
     if (failClosed) registeredLimited = true;
   }
