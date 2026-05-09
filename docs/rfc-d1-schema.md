@@ -134,7 +134,7 @@ CREATE TABLE inbox_messages (
   reply_to_message_id   TEXT,                        -- message being replied to (NULL for inbound)
   -- Sender address columns: exactly one is populated per row.
   -- Inbound (is_reply=0) rows have from_stx_address (payer's STX from x402 settlement).
-  -- Reply (is_reply=1) rows have from_btc_address (recipient's BTC, signed-in via BIP-137).
+  -- Reply (is_reply=1) rows have from_btc_address (recipient's BTC, signed-in via BIP-322 for segwit / BIP-137 for legacy).
   from_stx_address      TEXT,                        -- payer's STX (inbound only)
   from_btc_address      TEXT,                        -- replier's BTC (reply only)
   to_btc_address        TEXT NOT NULL,
@@ -142,16 +142,32 @@ CREATE TABLE inbox_messages (
   content               TEXT NOT NULL,
   payment_txid          TEXT,
   payment_satoshis      INTEGER,                     -- NULL for replies (free)
-  payment_status        TEXT CHECK (payment_status IN ('confirmed', 'pending') OR payment_status IS NULL),
+  -- Payment lifecycle state. Mirrors aibtcdev/x402-sponsor-relay's PaymentStatus
+  -- (https://github.com/aibtcdev/x402-sponsor-relay src/services/payment-status.ts)
+  -- so the inbox row records the relay's terminal outcome rather than its own
+  -- weaker enum. NULL when the row is a reply (no payment) or a fresh inbound
+  -- before any settlement step has run.
+  payment_status        TEXT CHECK (payment_status IN (
+                          'pending',     -- relay accepted, not yet on-chain
+                          'confirmed',   -- on-chain success
+                          'failed',      -- terminal failure (see payment_terminal_reason)
+                          'replaced'     -- RBF/head-bump; agent should resubmit
+                        ) OR payment_status IS NULL),
+  payment_terminal_reason TEXT,                      -- canonical TerminalReason (mirrors @aibtc/tx-schemas/core)
+  payment_error_code    TEXT,                        -- machine-readable (e.g., INSUFFICIENT_FUNDS)
+  payment_replacement_txid TEXT,                     -- replacement on-chain txid for RBF tracking
   payment_id            TEXT,                        -- relay payment identity for staged/confirmed
   receipt_id            TEXT,                        -- relay verify endpoint
   recovered_via_txid    INTEGER NOT NULL DEFAULT 0,  -- 1 if delivered via txid recovery path
-  authenticated         INTEGER NOT NULL DEFAULT 0,  -- 1 if BIP-137 verified at submit time
-  -- Single signature column for both inbound (sender_signature) and reply paths.
-  -- For inbound rows: BIP-137 signature optionally provided by sender (proves sender_btc_address).
-  -- For reply rows: BIP-137 signature on the reply payload (proves from_btc_address).
-  bip137_signature      TEXT,
-  sender_btc_address    TEXT,                        -- recovered from bip137_signature on inbound
+  authenticated         INTEGER NOT NULL DEFAULT 0,  -- 1 if Bitcoin signature verified at submit time
+  -- Single Bitcoin-message-signature column for both inbound and reply paths.
+  -- Verifier (lib/bitcoin-verify.ts) handles BIP-322 (segwit, the dominant
+  -- case for bc1q/bc1p addresses) and BIP-137 (legacy P2PKH). Generic column
+  -- name accommodates future BIP-340/Schnorr/taproot signing without a rename.
+  -- For inbound rows: signature optionally provided by sender (proves sender_btc_address).
+  -- For reply rows: signature on the reply payload (proves from_btc_address).
+  bitcoin_signature     TEXT,
+  sender_btc_address    TEXT,                        -- recovered from bitcoin_signature on inbound
   sent_at               TEXT NOT NULL,               -- ISO-8601
   read_at               TEXT,                        -- inbound-message-only field
   replied_at            TEXT,                        -- inbound-message-only field
@@ -182,7 +198,15 @@ CREATE UNIQUE INDEX idx_inbox_payment_txid ON inbox_messages(payment_txid) WHERE
 
 **Notes:**
 - **`from_stx_address` + `from_btc_address` (split sender columns).** Per arc0btc's review on PR #665: a single `from_address` column with type-depending-on-`is_reply` is a latent bug surface for application code that forgets to discriminate. Splitting into two nullable columns + a `CHECK` constraint enforcing exactly-one-populated locks in the invariant at the schema level. Costs one extra `NULL` column per row; trivial.
-- **Single `bip137_signature` column** (was `sender_signature` + `signature`). Both columns held BIP-137 signatures with the same shape; the only difference was which row type wrote them. Per arc0btc's review: collapsing to one column reduces "different name, same concept in different modes" confusion.
+- **Single `bitcoin_signature` column** (was `sender_signature` + `signature`). Both columns held the same shape — Bitcoin message signatures verified by `lib/bitcoin-verify.ts`, which handles **BIP-322 (segwit, the dominant case for `bc1q...`/`bc1p...` addresses)** and **BIP-137 (legacy P2PKH `1...`)** uniformly. Generic column name avoids implying a single-standard limitation and accommodates future **BIP-340 / Schnorr / taproot signing** without a schema migration. Per arc0btc's review: collapsing to one column reduces "different name, same concept in different modes" confusion.
+- **Payment state model mirrors x402-sponsor-relay** (`payment_status` enum + `payment_terminal_reason` + `payment_error_code` + `payment_replacement_txid`). The previous enum (`'confirmed' | 'pending'`) discarded the relay's richer outcome data. Now: `pending` (in flight) / `confirmed` (on-chain success) / `failed` (terminal — populate `payment_terminal_reason` from the canonical `TerminalReason` set in `@aibtc/tx-schemas/core`, plus optional `payment_error_code` like `INSUFFICIENT_FUNDS`) / `replaced` (RBF or head-bump — populate `payment_replacement_txid` so the agent knows the new on-chain identity to track or resubmit against). Source-of-truth for the in-flight detail (`submitted` / `queued` / `broadcasting` / `mempool`) stays in the relay; D1 records the **terminal outcome** plus enough state to reason about replays. Phase 2.5 dual-write reconciliation includes payment-status validation: KV's `inbox:redeemed-txid:` + `inbox:pending-txid:` + `ratelimit:payment-failure:` keys collectively encode this state across multiple namespaces today; the D1 columns consolidate them into one row. Sample query for "how many of today's inbox attempts failed and why":
+  ```sql
+  SELECT payment_terminal_reason, COUNT(*)
+  FROM inbox_messages
+  WHERE is_reply = 0 AND payment_status = 'failed' AND sent_at >= datetime('now', '-1 day')
+  GROUP BY payment_terminal_reason
+  ORDER BY 2 DESC;
+  ```
 - **`unreadCount` becomes live `SELECT COUNT(*)`.** The `inbox:agent:{btcAddress}` index (`InboxAgentIndex` with `messageIds` + cached `unreadCount`) is **eliminated entirely**. `SELECT COUNT(*) FROM inbox_messages WHERE to_btc_address = ? AND is_reply = 0 AND read_at IS NULL` is served by `idx_inbox_unread` — atomic, no drift, single round-trip. **This closes aibtc-mcp-server#497** independent of which off-by-one branch is the cause of the cached-counter drift (the live count has nothing to drift against). Phase 1.4 reconciliation includes an empirical acceptance test (see Migration plan below).
 - **`payment_txid` uniqueness is PERMANENT (deliberate behavior change).** The `inbox:redeemed-txid:{txid}` 90-day KV TTL becomes a forever-unique partial index on `payment_txid`. This is intentional: a 90-day window for re-using a paid txid was a KV-TTL-shaped artifact, not a security requirement. A txid is a one-time on-chain event; permanent uniqueness is the correct model. If we ever need TTL-style behavior again, a separate `redeemed_txids(txid, redeemed_at)` table with a sweep job is the right shape, not relaxing this index. The `inbox:pending-txid:` negative cache (60s TTL) stays in KV — different concern.
 - **Application-layer invariants** beyond the `CHECK`: `is_reply = 1` rows have `payment_satoshis = NULL`; `is_reply = 0` rows have `payment_satoshis NOT NULL` (or `recovered_via_txid = 1`). A CHECK enforcing this is tempting but adds friction during Phase 2.5 dual-write reconciliation; deferring to application-layer validation.
@@ -228,7 +252,21 @@ CREATE TABLE swaps (
   amount_in         INTEGER NOT NULL,              -- raw on-chain units
   amount_out        INTEGER NOT NULL,
   burn_block_time   INTEGER NOT NULL,              -- unix seconds
-  tx_status         TEXT NOT NULL CHECK (tx_status IN ('success', 'abort_by_response', 'abort_by_post_condition', 'dropped_replace_by_fee')),
+  -- Tx terminal status. Pending/in-flight swaps don't get rows yet; only terminal
+  -- states are persisted (one row per terminal txid). Set mirrors the
+  -- TerminalFailureStatuses in x402-sponsor-relay's stacks-tx-verify.ts +
+  -- the success path. Don't add 'pending' here — pending swaps are tracked by
+  -- the verifier upstream, not in this table.
+  tx_status         TEXT NOT NULL CHECK (tx_status IN (
+                      'success',
+                      'abort_by_response',
+                      'abort_by_post_condition',
+                      'dropped_replace_by_fee',
+                      'dropped_replace_across_fork',
+                      'dropped_too_expensive',
+                      'dropped_stale_garbage_collect',
+                      'dropped_problematic'
+                    )),
   scored_value      INTEGER,                       -- comp-scoring numerator, NULL if not scored
   scored_at         TEXT,                          -- when scoring ran
   source            TEXT NOT NULL CHECK (source IN ('agent', 'cron', 'chainhook')),
@@ -346,6 +384,24 @@ If global low-latency reads become important post-launch, options are (in order 
 1. Edge-cache hot reads via `caches.default` (already done for some routes).
 2. D1 read replicas (in beta as of writing — verify availability before depending on this).
 3. Per-region cache layer (KV) for the read path with explicit invalidation hooks; reverts to the pre-D1 stale-read problem and is **not recommended**.
+
+### 5. Payment state model mirrors x402-sponsor-relay; terminal outcomes only
+
+`inbox_messages.payment_status` mirrors the **terminal subset** of `aibtcdev/x402-sponsor-relay`'s `PaymentStatus` (defined in `src/services/payment-status.ts`). The relay tracks the full lifecycle (`submitted` → `queued` → `broadcasting` → `mempool` → `confirmed`/`failed`/`replaced`) inside its own KV records (24h TTL); D1 records only the **terminal outcome** plus enough metadata to act on replays:
+
+| Relay state | Persisted to inbox_messages? |
+|-------------|------------------------------|
+| `submitted` | No — transient pre-broadcast |
+| `queued` | No — relay-internal |
+| `broadcasting` | No — relay-internal |
+| `mempool` | Yes (`pending`) — first observable on-chain step |
+| `confirmed` | Yes (`confirmed`) |
+| `failed` | Yes (`failed`) — populate `payment_terminal_reason` + optional `payment_error_code` |
+| `replaced` | Yes (`replaced`) — populate `payment_replacement_txid` so agents know which on-chain id to track |
+
+`TerminalReason` values come from the canonical `@aibtc/tx-schemas/core` enum (the same set the relay populates). Recording the relay's reason verbatim means the inbox table is a faithful audit trail of payment outcomes without duplicating the in-flight queue model.
+
+**Why this matters for migration:** today the same state is encoded across three KV namespaces (`inbox:redeemed-txid:`, `inbox:pending-txid:`, `ratelimit:payment-failure:`) plus the relay's own KV. Phase 2.5 reconciliation collapses all of this into the row's `payment_status` + companion columns, so future debug of "why did this message fail" is a single `SELECT *`, not a multi-namespace KV scan.
 
 ## Migration plan (Phase 1.2 → 1.4 → Phase 2)
 
