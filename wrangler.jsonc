@@ -20,7 +20,7 @@
     {
       "binding": "DB",
       "database_name": "landing-page",
-      "database_id": "<TBD-from-d1-create>",
+      "database_id": "89a00080-d1e1-48bd-823a-0fdd93bf0875",
       "migrations_dir": "migrations"
     }
   ],
@@ -108,12 +108,12 @@
       },
 
       // D1 database binding — same database_id as top-level; D1 has no per-env isolation.
-      // Replace <TBD-from-d1-create> with UUID from: wrangler d1 create landing-page --location wnam
+      // D1 binding (created 2026-05-09 via `wrangler d1 create landing-page --location wnam`).
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "landing-page",
-          "database_id": "<TBD-from-d1-create>",
+          "database_id": "89a00080-d1e1-48bd-823a-0fdd93bf0875",
           "migrations_dir": "migrations"
         }
       ],
@@ -179,12 +179,12 @@
       },
 
       // D1 database binding — same database_id as top-level; D1 has no per-env isolation.
-      // Replace <TBD-from-d1-create> with UUID from: wrangler d1 create landing-page --location wnam
+      // D1 binding (created 2026-05-09 via `wrangler d1 create landing-page --location wnam`).
       "d1_databases": [
         {
           "binding": "DB",
           "database_name": "landing-page",
-          "database_id": "<TBD-from-d1-create>",
+          "database_id": "89a00080-d1e1-48bd-823a-0fdd93bf0875",
           "migrations_dir": "migrations"
         }
       ],
