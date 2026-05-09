@@ -134,7 +134,7 @@ CREATE TABLE inbox_messages (
   reply_to_message_id   TEXT,                        -- message being replied to (NULL for inbound)
   -- Sender address columns: exactly one is populated per row.
   -- Inbound (is_reply=0) rows have from_stx_address (payer's STX from x402 settlement).
-  -- Reply (is_reply=1) rows have from_btc_address (recipient's BTC, signed-in via BIP-322 for segwit / BIP-137 for legacy).
+  -- Reply (is_reply=1) rows have from_btc_address (recipient's BTC, BIP-322 signed-in).
   from_stx_address      TEXT,                        -- payer's STX (inbound only)
   from_btc_address      TEXT,                        -- replier's BTC (reply only)
   to_btc_address        TEXT NOT NULL,
@@ -161,9 +161,8 @@ CREATE TABLE inbox_messages (
   recovered_via_txid    INTEGER NOT NULL DEFAULT 0,  -- 1 if delivered via txid recovery path
   authenticated         INTEGER NOT NULL DEFAULT 0,  -- 1 if Bitcoin signature verified at submit time
   -- Single Bitcoin-message-signature column for both inbound and reply paths.
-  -- Verifier (lib/bitcoin-verify.ts) handles BIP-322 (segwit, the dominant
-  -- case for bc1q/bc1p addresses) and BIP-137 (legacy P2PKH). Generic column
-  -- name accommodates future BIP-340/Schnorr/taproot signing without a rename.
+  -- BIP-322 only (segwit addresses: bc1q P2WPKH, bc1p P2TR). Generic column
+  -- name accommodates future BIP-340 / Schnorr / taproot signing without a rename.
   -- For inbound rows: signature optionally provided by sender (proves sender_btc_address).
   -- For reply rows: signature on the reply payload (proves from_btc_address).
   bitcoin_signature     TEXT,
@@ -198,7 +197,7 @@ CREATE UNIQUE INDEX idx_inbox_payment_txid ON inbox_messages(payment_txid) WHERE
 
 **Notes:**
 - **`from_stx_address` + `from_btc_address` (split sender columns).** Per arc0btc's review on PR #665: a single `from_address` column with type-depending-on-`is_reply` is a latent bug surface for application code that forgets to discriminate. Splitting into two nullable columns + a `CHECK` constraint enforcing exactly-one-populated locks in the invariant at the schema level. Costs one extra `NULL` column per row; trivial.
-- **Single `bitcoin_signature` column** (was `sender_signature` + `signature`). Both columns held the same shape — Bitcoin message signatures verified by `lib/bitcoin-verify.ts`, which handles **BIP-322 (segwit, the dominant case for `bc1q...`/`bc1p...` addresses)** and **BIP-137 (legacy P2PKH `1...`)** uniformly. Generic column name avoids implying a single-standard limitation and accommodates future **BIP-340 / Schnorr / taproot signing** without a schema migration. Per arc0btc's review: collapsing to one column reduces "different name, same concept in different modes" confusion.
+- **Single `bitcoin_signature` column** (was `sender_signature` + `signature`). Both columns held the same shape — Bitcoin message signatures over **BIP-322** (segwit-only: `bc1q` P2WPKH and `bc1p` P2TR addresses). Legacy P2PKH (`1...`) is **not in scope**; if it ever needs to come back, that's an explicit decision documented at the time. Generic column name avoids implying a single-standard limitation and accommodates future **BIP-340 / Schnorr / taproot signing** without another schema migration. Per arc0btc's review: collapsing the two columns reduces "different name, same concept in different modes" confusion.
 - **Payment state model mirrors x402-sponsor-relay** (`payment_status` enum + `payment_terminal_reason` + `payment_error_code` + `payment_replacement_txid`). The previous enum (`'confirmed' | 'pending'`) discarded the relay's richer outcome data. Now: `pending` (in flight) / `confirmed` (on-chain success) / `failed` (terminal — populate `payment_terminal_reason` from the canonical `TerminalReason` set in `@aibtc/tx-schemas/core`, plus optional `payment_error_code` like `INSUFFICIENT_FUNDS`) / `replaced` (RBF or head-bump — populate `payment_replacement_txid` so the agent knows the new on-chain identity to track or resubmit against). Source-of-truth for the in-flight detail (`submitted` / `queued` / `broadcasting` / `mempool`) stays in the relay; D1 records the **terminal outcome** plus enough state to reason about replays. Phase 2.5 dual-write reconciliation includes payment-status validation: KV's `inbox:redeemed-txid:` + `inbox:pending-txid:` + `ratelimit:payment-failure:` keys collectively encode this state across multiple namespaces today; the D1 columns consolidate them into one row. Sample query for "how many of today's inbox attempts failed and why":
   ```sql
   SELECT payment_terminal_reason, COUNT(*)
