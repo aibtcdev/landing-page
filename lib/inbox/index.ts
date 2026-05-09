@@ -115,3 +115,6 @@ export {
   getPaymentStatusHttpCode,
   reconcileStagedInboxPayment,
 } from "./reconcile-staged-payment";
+
+// D1 PK helpers
+export { REPLY_D1_PK_PREFIX, deriveReplyD1Id } from "./d1-pk";
