@@ -12,6 +12,7 @@ import {
   buildMarkReadMessage,
   decrementUnreadCount,
 } from "@/lib/inbox";
+import { shouldFailClosed } from "@/lib/env";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -122,8 +123,7 @@ export async function PATCH(
       // Binding unavailable — fail closed in production/preview, open in dev.
       // Mark-read is abuse-protection (not revenue), so prefer blocking on
       // binding errors over allowing signature-DoS during binding outages.
-      const deployEnv = env.DEPLOY_ENV;
-      const failClosed = deployEnv !== undefined;
+      const failClosed = shouldFailClosed(env);
       logger.warn("Mark-read rate limit binding error", { error: String(err), failClosed });
       if (failClosed) ipLimited = true;
     }
