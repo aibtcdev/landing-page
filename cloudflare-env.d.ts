@@ -1,5 +1,6 @@
 interface CloudflareEnv {
   ASSETS: Fetcher;
+  DB: D1Database; // D1 relational database (agents, claims, inbox_messages, vouches, swaps, balances)
   VERIFIED_AGENTS: KVNamespace;
   RATE_LIMIT_READ: RateLimit;
   RATE_LIMIT_MUTATING: RateLimit;
