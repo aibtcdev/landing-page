@@ -139,6 +139,47 @@ export async function insertInboundMessageToD1(
 }
 
 /**
+ * UPDATE read_at and/or replied_at on an existing D1 inbox_messages row.
+ *
+ * Called from the mark-read PATCH and the outbox-reply POST to keep D1 in
+ * sync with KV state updates. Builds a dynamic SET clause so callers only
+ * pass the fields they actually changed.
+ *
+ * Safety contract:
+ *  - Noop when updates is empty (no fields → no SQL executed).
+ *  - Caller is expressing "set this to this value now"; we do NOT coalesce
+ *    here — the caller already checked KV state before deciding what to send.
+ *  - If the D1 row doesn't exist (orphan-recipient messages), the UPDATE
+ *    simply affects 0 rows; no error is raised.
+ *  - Callers wrap this in ctx.waitUntil(...).catch(logger.error) so a D1
+ *    failure is logged-and-swallowed and never blocks the response.
+ */
+export async function updateMessageStateD1(
+  db: D1Database,
+  messageId: string,
+  updates: { readAt?: string; repliedAt?: string }
+): Promise<void> {
+  const setClauses: string[] = [];
+  const values: unknown[] = [];
+  if (updates.readAt !== undefined) {
+    setClauses.push("read_at = ?");
+    values.push(updates.readAt);
+  }
+  if (updates.repliedAt !== undefined) {
+    setClauses.push("replied_at = ?");
+    values.push(updates.repliedAt);
+  }
+  if (setClauses.length === 0) return; // noop guard — nothing to update
+  values.push(messageId);
+  await db
+    .prepare(
+      `UPDATE inbox_messages SET ${setClauses.join(", ")} WHERE message_id = ?`
+    )
+    .bind(...(values as Parameters<D1PreparedStatement["bind"]>))
+    .run();
+}
+
+/**
  * INSERT a reply (is_reply=1) into D1.
  *
  * Column mapping (verified against migrations/003_inbox_messages.sql):

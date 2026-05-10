@@ -13,6 +13,7 @@ import {
   decrementUnreadCount,
 } from "@/lib/inbox";
 import { shouldFailClosed } from "@/lib/env";
+import { updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -279,6 +280,21 @@ export async function PATCH(
 
   // Decrement unreadCount on the agent inbox index (clamped to 0)
   await decrementUnreadCount(kv, message.toBtcAddress);
+
+  // D1 dual-write (Phase 2.5 Step 3 readiness).
+  // KV is still the source of truth; D1 UPDATE is fire-and-forget.
+  // D1 failure is logged-and-swallowed — it must NOT fail the response.
+  if (env.DB) {
+    ctx.waitUntil(
+      updateMessageStateD1(env.DB as D1Database, messageId, { readAt: now }).catch((err) =>
+        logger.error("mark_read.dual_write_d1_failed", {
+          messageId,
+          path: "mark_read",
+          error: String(err),
+        })
+      )
+    );
+  }
 
   return NextResponse.json({
     success: true,
