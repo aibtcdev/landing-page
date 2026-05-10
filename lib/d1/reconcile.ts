@@ -119,17 +119,30 @@ export function computeAgentsDrift(
 export interface TableReconcileResult {
   table: TableTarget;
   kv_count: number;
-  /** Agents only: count of PartialAgentRecord entries excluded from kv_count. */
+  /**
+   * Agents only: count of PartialAgentRecord entries excluded from kv_count.
+   * These are records without stxAddress — intentionally absent from D1.
+   */
   kv_count_partial_excluded: number;
+  /**
+   * Agents only: count of records that passed isPartialAgentRecord===false but
+   * are still missing a required field (stxAddress / stxPublicKey / btcPublicKey
+   * / verifiedAt). These match backfill's "Missing required AgentRecord fields"
+   * rejection path and are intentionally absent from D1. Kept separate from
+   * kv_count_partial_excluded to surface this category explicitly.
+   */
+  kv_count_invalid_excluded: number;
   d1_count: number;
   drift: number;
   drift_explained: number;
   drift_unexplained: number;
   /**
-   * Per-table breakdown of explained categories (inbox only currently uses these).
-   * For agents/claims/vouches this is empty; for inbox it carries cascade/replay/stx counts.
+   * Per-table breakdown of explained categories.
+   * Always present (may be empty object {}). For agents this is {}; for
+   * claims/vouches it carries partial_cascade; for inbox it also carries
+   * unique_payment_txid_replay and unresolvable_stx_reply.
    */
-  explained_categories?: {
+  explained_categories: {
     partial_cascade?: number;
     unique_payment_txid_replay?: number;
     unresolvable_stx_reply?: number;
