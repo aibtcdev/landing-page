@@ -73,6 +73,24 @@ export interface InvalidAgentEntry {
   /** Why the record was rejected: "partial" means isPartialAgentRecord returned true */
   rejection_reason: "partial" | "missing_required_fields" | "json_parse_error";
   tentative_bucket: TentativeBucket;
+  /**
+   * Step 1.5 stx: twin fields — READ-ONLY lookups to inform Step 2 repair-source decision.
+   * Only populated when the btc: record carries a non-empty stxAddress.
+   * null means the btc: record has no stxAddress, so no twin key to look up.
+   */
+  /** Whether the stx:{stxAddress} twin key exists in KV */
+  stx_twin_present: boolean | null;
+  /**
+   * Whether the stx: twin record carries a non-empty btcPublicKey string.
+   * null when stx_twin_present is false or null.
+   */
+  stx_twin_has_btcpubkey: boolean | null;
+  /**
+   * First 8 characters of the twin's btcPublicKey for sanity-checking format.
+   * Compressed pubkeys start with "02" or "03"; uncompressed start with "04".
+   * null when stx_twin_has_btcpubkey is false or null.
+   */
+  stx_twin_btcpubkey_value_preview: string | null;
 }
 
 interface FieldMissingnessFrequency {
@@ -86,6 +104,35 @@ interface MissingFieldPattern {
   count: number;
   percent_of_invalid: string;
   tentative_bucket: TentativeBucket;
+}
+
+interface StxTwinAggregate {
+  /**
+   * Count of invalid records that have a non-null stxAddress
+   * (i.e., records for which a stx: twin lookup was attempted).
+   */
+  records_with_stx_address: number;
+  /**
+   * Count of records whose stx:{stxAddress} twin key exists in KV.
+   * Step 2 load-bearing number: if this equals records_with_stx_address,
+   * all repairable records have a twin to copy btcPublicKey from.
+   */
+  stx_twin_present_count: number;
+  /**
+   * Count of records whose stx: twin carries a non-empty btcPublicKey.
+   * This is the key Step 2 decision number: if equal to stx_twin_present_count,
+   * repair is a single-pass copy from the twin record.
+   */
+  stx_twin_has_btcpubkey_count: number;
+  /** Count of records where the stx: twin is present but missing btcPublicKey */
+  stx_twin_missing_btcpubkey_count: number;
+  /** btcPublicKey format breakdown based on 8-char preview prefix */
+  btcpubkey_format_breakdown: {
+    compressed_02: number; // starts with "02" — compressed secp256k1
+    compressed_03: number; // starts with "03" — compressed secp256k1
+    uncompressed_04: number; // starts with "04" — uncompressed secp256k1
+    other: number; // any other prefix (unexpected)
+  };
 }
 
 interface AuditReport {
@@ -113,6 +160,8 @@ interface AuditReport {
   missing_field_patterns: MissingFieldPattern[];
   /** Records grouped by how many required fields are missing */
   missing_count_histogram: Record<string, number>;
+  /** Step 1.5: stx: twin presence + btcPublicKey check aggregate stats */
+  stx_twin_aggregate: StxTwinAggregate;
   records: InvalidAgentEntry[];
   /** Pagination cursor; null when scan complete */
   cursor: string | null;
@@ -140,6 +189,9 @@ function classifyBucket(
 
 /**
  * Build an InvalidAgentEntry for a record that failed strict validation.
+ *
+ * The stx_twin_* fields are initialised to null here and filled in by
+ * the scan loop after the parallel stx: twin kv.get calls complete.
  */
 function buildEntry(
   kvKey: string,
@@ -156,6 +208,9 @@ function buildEntry(
       missing_required_count: REQUIRED_FIELDS.length,
       rejection_reason: "json_parse_error",
       tentative_bucket: "schema-unfixable",
+      stx_twin_present: null,
+      stx_twin_has_btcpubkey: null,
+      stx_twin_btcpubkey_value_preview: null,
     };
   }
 
@@ -184,7 +239,31 @@ function buildEntry(
     missing_required_count: missingRequired.length,
     rejection_reason: rejectionReason,
     tentative_bucket: classifyBucket(btcAddress, missingRequired),
+    // stx_twin_* fields are populated by the scan loop after the twin kv.get calls
+    stx_twin_present: null,
+    stx_twin_has_btcpubkey: null,
+    stx_twin_btcpubkey_value_preview: null,
   };
+}
+
+/**
+ * Extract the stxAddress string from a parsed record if present and non-empty.
+ */
+function extractStxAddress(parsed: Record<string, unknown>): string | null {
+  const val = parsed["stxAddress"];
+  return typeof val === "string" && val ? val : null;
+}
+
+/**
+ * Classify a stx: twin's btcPublicKey into a format category based on its 2-char prefix.
+ */
+function classifyBtcPubkeyFormat(
+  preview: string
+): keyof StxTwinAggregate["btcpubkey_format_breakdown"] {
+  if (preview.startsWith("02")) return "compressed_02";
+  if (preview.startsWith("03")) return "compressed_03";
+  if (preview.startsWith("04")) return "uncompressed_04";
+  return "other";
 }
 
 // ── Audit scan ────────────────────────────────────────────────────────────
@@ -192,8 +271,20 @@ function buildEntry(
 /**
  * Scan `btc:` KV prefix and collect all records that fail strict validation.
  *
+ * For each invalid record that carries a stxAddress, also fetches the stx:
+ * twin record (READ-ONLY) to determine whether the twin has a btcPublicKey.
+ * This is the Step 1.5 data needed to decide whether repair is a single-pass
+ * copy from the twin (Step 2 design decision).
+ *
  * Reads values in parallel batches of 50 (mirrors the reconcile route pattern).
  * Pagination is cursor-based for large datasets (expected ~1664 btc: keys).
+ *
+ * Subrequest budget per call at batchSize=200:
+ *   - 1      kv.list
+ *   - ~200   kv.get for btc: values (parallel batches of 50)
+ *   - ≤200   kv.get for stx: twin values (only invalid records with stxAddress;
+ *             fetched after Phase 1 in batches of 50)
+ *   Total: ~401 — still well under the Workers 1000-subrequest cap.
  *
  * Returns the entries plus a next cursor (null when scan complete).
  */
@@ -214,8 +305,12 @@ async function scanInvalidAgents(
 
   const page = await kv.list(listOpts);
 
-  // Fetch values in parallel batches of 50 to stay under subrequest budget
+  // Phase 1: Classify btc: records in parallel batches of 50.
+  // Also collect (entryIndex → stxAddress) pairs for Phase 2 twin lookups.
   const FETCH_BATCH = 50;
+  // Maps entry index (position in entries[]) to the stxAddress string for twin lookup
+  const twinLookupMap = new Map<number, string>(); // entryIndex → stxAddress
+
   for (let i = 0; i < page.keys.length; i += FETCH_BATCH) {
     const batch = page.keys.slice(i, i + FETCH_BATCH);
     const values = await Promise.all(batch.map((k) => kv.get(k.name)));
@@ -240,14 +335,12 @@ async function scanInvalidAgents(
 
       // Guard 1: isPartialAgentRecord (matches backfill's skip logic)
       if (isPartialAgentRecord(parsed)) {
-        entries.push(
-          buildEntry(
-            kvKey,
-            raw,
-            "partial",
-            parsed as unknown as Record<string, unknown>
-          )
-        );
+        const rec = parsed as unknown as Record<string, unknown>;
+        const entryIdx = entries.length;
+        entries.push(buildEntry(kvKey, raw, "partial", rec));
+        // Partial records may still carry stxAddress — check for twin
+        const stxAddr = extractStxAddress(rec);
+        if (stxAddr) twinLookupMap.set(entryIdx, stxAddr);
         continue;
       }
 
@@ -259,14 +352,66 @@ async function scanInvalidAgents(
       });
 
       if (missingRequired.length > 0) {
-        entries.push(
-          buildEntry(kvKey, raw, "missing_required_fields", rec)
-        );
+        const entryIdx = entries.length;
+        entries.push(buildEntry(kvKey, raw, "missing_required_fields", rec));
+        // These records have stxAddress in present_fields if the field is present
+        const stxAddr = extractStxAddress(rec);
+        if (stxAddr) twinLookupMap.set(entryIdx, stxAddr);
         continue;
       }
 
       // Passed both guards — valid record (in D1)
       validCount++;
+    }
+  }
+
+  // Phase 2: Fetch stx: twin records for all entries that have a stxAddress.
+  // Execute in batches of 50 to mirror Phase 1's subrequest pattern.
+  if (twinLookupMap.size > 0) {
+    const twinEntries = Array.from(twinLookupMap.entries()); // [entryIdx, stxAddress]
+
+    for (let i = 0; i < twinEntries.length; i += FETCH_BATCH) {
+      const twinBatch = twinEntries.slice(i, i + FETCH_BATCH);
+      const twinValues = await Promise.all(
+        twinBatch.map(([, stxAddr]) => kv.get(`stx:${stxAddr}`))
+      );
+
+      for (let j = 0; j < twinBatch.length; j++) {
+        const [entryIdx] = twinBatch[j];
+        const twinRaw = twinValues[j];
+        const entry = entries[entryIdx];
+
+        if (!twinRaw) {
+          // stx: key doesn't exist at all
+          entry.stx_twin_present = false;
+          entry.stx_twin_has_btcpubkey = null;
+          entry.stx_twin_btcpubkey_value_preview = null;
+          continue;
+        }
+
+        entry.stx_twin_present = true;
+
+        let twinParsed: unknown;
+        try {
+          twinParsed = JSON.parse(twinRaw);
+        } catch {
+          // twin exists but is not valid JSON — treat as no btcPublicKey
+          entry.stx_twin_has_btcpubkey = false;
+          entry.stx_twin_btcpubkey_value_preview = null;
+          continue;
+        }
+
+        const twin = twinParsed as Record<string, unknown>;
+        const twinBtcPubkey = twin["btcPublicKey"];
+        if (typeof twinBtcPubkey === "string" && twinBtcPubkey) {
+          entry.stx_twin_has_btcpubkey = true;
+          // Only store the first 8 chars — enough to verify 02/03/04 prefix + 3 more hex chars
+          entry.stx_twin_btcpubkey_value_preview = twinBtcPubkey.slice(0, 8);
+        } else {
+          entry.stx_twin_has_btcpubkey = false;
+          entry.stx_twin_btcpubkey_value_preview = null;
+        }
+      }
     }
   }
 
@@ -284,6 +429,7 @@ function computeAggregates(records: InvalidAgentEntry[]): {
   missing_field_frequency: FieldMissingnessFrequency[];
   missing_field_patterns: MissingFieldPattern[];
   missing_count_histogram: Record<string, number>;
+  stx_twin_aggregate: StxTwinAggregate;
 } {
   const buckets: AuditReport["aggregate_buckets"] = {
     repairable: 0,
@@ -300,6 +446,19 @@ function computeAggregates(records: InvalidAgentEntry[]): {
 
   const patternMap = new Map<string, { count: number; bucket: TentativeBucket }>();
   const histogram: Record<string, number> = {};
+
+  const stxTwin: StxTwinAggregate = {
+    records_with_stx_address: 0,
+    stx_twin_present_count: 0,
+    stx_twin_has_btcpubkey_count: 0,
+    stx_twin_missing_btcpubkey_count: 0,
+    btcpubkey_format_breakdown: {
+      compressed_02: 0,
+      compressed_03: 0,
+      uncompressed_04: 0,
+      other: 0,
+    },
+  };
 
   for (const rec of records) {
     buckets[rec.tentative_bucket]++;
@@ -318,6 +477,23 @@ function computeAggregates(records: InvalidAgentEntry[]): {
 
     const countKey = String(rec.missing_required_count);
     histogram[countKey] = (histogram[countKey] ?? 0) + 1;
+
+    // stx_twin_aggregate: tally records that had a stx: twin lookup attempted
+    if (rec.stx_twin_present !== null) {
+      stxTwin.records_with_stx_address++;
+      if (rec.stx_twin_present) {
+        stxTwin.stx_twin_present_count++;
+        if (rec.stx_twin_has_btcpubkey) {
+          stxTwin.stx_twin_has_btcpubkey_count++;
+          if (rec.stx_twin_btcpubkey_value_preview) {
+            const fmt = classifyBtcPubkeyFormat(rec.stx_twin_btcpubkey_value_preview);
+            stxTwin.btcpubkey_format_breakdown[fmt]++;
+          }
+        } else {
+          stxTwin.stx_twin_missing_btcpubkey_count++;
+        }
+      }
+    }
   }
 
   const total = records.length;
@@ -344,6 +520,7 @@ function computeAggregates(records: InvalidAgentEntry[]): {
     missing_field_frequency,
     missing_field_patterns,
     missing_count_histogram: histogram,
+    stx_twin_aggregate: stxTwin,
   };
 }
 
@@ -361,11 +538,13 @@ export async function GET(request: NextRequest) {
   return NextResponse.json({
     endpoint: "/api/admin/audit-invalid-agents",
     description:
-      "Step 1 of issue #691: Inventory pass for invalid KV agent records. " +
+      "Step 1.5 of issue #691: stx: twin btcPublicKey check — read-only extension of the Step 1 inventory. " +
       "Scans all btc: keys, applies the same two-step rejection as the backfill route " +
-      "(isPartialAgentRecord guard + strict required-field check), and returns a structured " +
-      "report with per-record field presence/absence and tentative bucket suggestions. " +
-      "READ-ONLY — no writes to KV, D1, or any other storage.",
+      "(isPartialAgentRecord guard + strict required-field check), and for each invalid record " +
+      "with a stxAddress, fetches the stx:{stxAddress} twin record to check whether it carries " +
+      "a btcPublicKey. The stx_twin_aggregate.stx_twin_has_btcpubkey_count is the load-bearing " +
+      "number for the Step 2 design decision: if it equals records_with_stx_address, repair is " +
+      "a single-pass copy from the twin. READ-ONLY — no writes to KV, D1, or any other storage.",
     authentication: "Requires X-Admin-Key header",
     methods: ["GET", "POST"],
     queryParams: {
@@ -410,12 +589,19 @@ done`,
       missing_field_frequency: "Per-field count of how often each required field is missing",
       missing_field_patterns: "Distinct combinations of missing fields, sorted by frequency",
       missing_count_histogram: "Distribution of records by missing-field count",
-      records: "Per-record detail array",
+      stx_twin_aggregate: {
+        records_with_stx_address: "Invalid records that have a non-null stxAddress (twin lookup was attempted)",
+        stx_twin_present_count: "Records whose stx:{stxAddress} twin key exists in KV",
+        stx_twin_has_btcpubkey_count: "LOAD-BEARING: Records whose twin carries a non-empty btcPublicKey. If equal to records_with_stx_address, repair is a single-pass copy.",
+        stx_twin_missing_btcpubkey_count: "Records where the twin exists but lacks btcPublicKey",
+        btcpubkey_format_breakdown: "Format distribution of twin btcPublicKey values (02/03 = compressed, 04 = uncompressed, other = unexpected)",
+      },
+      records: "Per-record detail array (each includes stx_twin_present, stx_twin_has_btcpubkey, stx_twin_btcpubkey_value_preview)",
       cursor: "Resume cursor; null when scan complete",
       duration_ms: "Wall-clock milliseconds for this call",
     },
     step_gate:
-      "This route implements Step 1 (inventory only). " +
+      "This route implements Step 1.5 (stx: twin check — read-only extension of Step 1). " +
       "Steps 2–5 (bucket assignment, repair, archive, fallback removal) require explicit user sign-off " +
       "because they involve production writes/deletes affecting live agents.",
   });
@@ -424,7 +610,7 @@ done`,
 /**
  * POST /api/admin/audit-invalid-agents
  *
- * Run one page of the invalid-agent inventory scan.
+ * Run one page of the invalid-agent inventory scan (Step 1.5: stx: twin check).
  *
  * Body: { cursor?: string } — resume cursor from prior response.
  * Query params:
@@ -434,9 +620,10 @@ done`,
  * across pages and re-runs aggregates on the full dataset at the end.
  *
  * Subrequest budget per call at batchSize=200:
- *   - 1  kv.list
- *   - ~200  kv.get (parallel batches of 50)
- *   Total: ~201 — well under the Workers 1000-subrequest cap.
+ *   - 1      kv.list
+ *   - ~200   kv.get for btc: values (parallel batches of 50)
+ *   - ≤200   kv.get for stx: twin values (only invalid records with stxAddress)
+ *   Total: ~401 — well under the Workers 1000-subrequest cap.
  */
 export async function POST(request: NextRequest) {
   const denied = await requireAdmin(request);
@@ -482,7 +669,11 @@ export async function POST(request: NextRequest) {
       invalid_required_fields_count: invalidRequiredCount,
       json_parse_error_count: jsonParseErrorCount,
       total_invalid_count: entries.length,
-      ...aggregates,
+      aggregate_buckets: aggregates.aggregate_buckets,
+      missing_field_frequency: aggregates.missing_field_frequency,
+      missing_field_patterns: aggregates.missing_field_patterns,
+      missing_count_histogram: aggregates.missing_count_histogram,
+      stx_twin_aggregate: aggregates.stx_twin_aggregate,
       records: entries,
       cursor: nextCursor,
       duration_ms: Date.now() - start,
