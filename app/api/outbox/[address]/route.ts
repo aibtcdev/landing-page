@@ -15,7 +15,7 @@ import {
 } from "@/lib/inbox";
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
-import { insertReplyToD1 } from "@/lib/inbox/d1-dual-write";
+import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -406,6 +406,25 @@ export async function POST(
         logger.error("outbox.dual_write_d1_failed", {
           messageId: outboxReply.messageId,
           path: "kv_reply",
+          error: String(err),
+        })
+      )
+    );
+
+    // D1 dual-write for the PARENT message's read_at / replied_at state
+    // (Phase 2.5 Step 3 readiness — closes the updateMessage dual-write gap).
+    // The outbox POST updates the parent message in KV (sets repliedAt + possibly readAt).
+    // We mirror that here. Target is the parent's message_id directly — no derivation.
+    // wasUnread reflects whether readAt is being set for the first time.
+    const parentUpdates: { readAt?: string; repliedAt?: string } = {
+      repliedAt: now,
+      ...(wasUnread && { readAt: now }),
+    };
+    ctx.waitUntil(
+      updateMessageStateD1(env.DB as D1Database, messageId, parentUpdates).catch((err) =>
+        logger.error("outbox.dual_write_d1_parent_state_failed", {
+          messageId,
+          path: "kv_reply_parent_state",
           error: String(err),
         })
       )

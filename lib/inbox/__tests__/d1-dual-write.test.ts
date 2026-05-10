@@ -16,6 +16,7 @@ import {
   insertInboundMessageToD1,
   insertReplyToD1,
   resolveReplyRecipientBtcAddress,
+  updateMessageStateD1,
 } from "../d1-dual-write";
 import { deriveReplyD1Id } from "../d1-pk";
 import type { InboxMessage, OutboxReply } from "../types";
@@ -358,5 +359,117 @@ describe("insertReplyToD1", () => {
     // to_btc_address = the BTC address passed through unchanged
     expect(bindArgs[3]).toBe(replyWithBtcRecipient.toBtcAddress);
     expect(kv.get).not.toHaveBeenCalled();
+  });
+});
+
+// ── updateMessageStateD1 ──────────────────────────────────────────────────────
+
+describe("updateMessageStateD1", () => {
+  const MSG_ID = "msg_1771381602504_30487f5e-1f3a-473a-8068-e040295a76bf";
+  const READ_AT = "2026-05-10T12:00:00.000Z";
+  const REPLIED_AT = "2026-05-10T12:05:00.000Z";
+
+  it("is a noop when updates object is empty — does not call D1", async () => {
+    const db = createMockD1();
+    await updateMessageStateD1(db, MSG_ID, {});
+    expect(db.prepare).not.toHaveBeenCalled();
+  });
+
+  it("builds a single-clause UPDATE when only readAt is provided", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement();
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await updateMessageStateD1(db, MSG_ID, { readAt: READ_AT });
+
+    expect(db.prepare).toHaveBeenCalledOnce();
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("UPDATE inbox_messages SET");
+    expect(sql).toContain("read_at = ?");
+    expect(sql).not.toContain("replied_at");
+  });
+
+  it("binds readAt and messageId in correct order for single-field update", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement();
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await updateMessageStateD1(db, MSG_ID, { readAt: READ_AT });
+
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(READ_AT);    // first SET value
+    expect(bindArgs[1]).toBe(MSG_ID);     // WHERE message_id = ?
+  });
+
+  it("builds a single-clause UPDATE when only repliedAt is provided", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement();
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await updateMessageStateD1(db, MSG_ID, { repliedAt: REPLIED_AT });
+
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("replied_at = ?");
+    expect(sql).not.toContain("read_at");
+  });
+
+  it("binds repliedAt and messageId in correct order for single-field update", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement();
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await updateMessageStateD1(db, MSG_ID, { repliedAt: REPLIED_AT });
+
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(REPLIED_AT);
+    expect(bindArgs[1]).toBe(MSG_ID);
+  });
+
+  it("builds a two-clause UPDATE when both readAt and repliedAt are provided", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement();
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await updateMessageStateD1(db, MSG_ID, { readAt: READ_AT, repliedAt: REPLIED_AT });
+
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("read_at = ?");
+    expect(sql).toContain("replied_at = ?");
+  });
+
+  it("binds readAt, repliedAt, and messageId in correct order for two-field update", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement();
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await updateMessageStateD1(db, MSG_ID, { readAt: READ_AT, repliedAt: REPLIED_AT });
+
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(READ_AT);     // first SET value
+    expect(bindArgs[1]).toBe(REPLIED_AT);  // second SET value
+    expect(bindArgs[2]).toBe(MSG_ID);      // WHERE message_id = ?
+  });
+
+  it("calls .run() on the prepared statement", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement();
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await updateMessageStateD1(db, MSG_ID, { readAt: READ_AT });
+
+    expect(stmtMock.run).toHaveBeenCalledOnce();
+  });
+
+  it("targets the correct row via WHERE message_id = ?", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement();
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    const customMsgId = "msg_custom_id_for_test";
+    await updateMessageStateD1(db, customMsgId, { readAt: READ_AT });
+
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    // Last bind param must be the messageId (WHERE clause)
+    expect(bindArgs[bindArgs.length - 1]).toBe(customMsgId);
   });
 });

@@ -59,6 +59,7 @@ vi.mock("@/lib/inbox/payment-logging", () => ({
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
   insertInboundMessageToD1: vi.fn().mockResolvedValue(undefined),
   insertReplyToD1: vi.fn().mockResolvedValue(undefined),
+  updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/bitcoin-verify", () => ({
@@ -120,7 +121,7 @@ import {
   buildReplyMessage,
   decrementUnreadCount,
 } from "@/lib/inbox";
-import { insertInboundMessageToD1, insertReplyToD1 } from "@/lib/inbox/d1-dual-write";
+import { insertInboundMessageToD1, insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { POST as inboxPOST } from "../route";
 import { POST as outboxPOST } from "../.././../outbox/[address]/route";
@@ -530,5 +531,197 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
     // deriveReplyD1Id is called INSIDE insertReplyToD1, not in the route
     expect(outboxReplyArg.messageId).toBe(MESSAGE_ID);
     expect(outboxReplyArg.fromAddress).toBe(AGENT.btcAddress);
+  });
+});
+
+// ── outbox POST parent-state dual-write tests ─────────────────────────────
+
+describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2.5 Step 3 readiness)", () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+    (lookupAgent as Mock).mockResolvedValue(AGENT);
+    (storeReply as Mock).mockResolvedValue(undefined);
+    (updateMessage as Mock).mockResolvedValue(undefined);
+    (decrementUnreadCount as Mock).mockResolvedValue(undefined);
+    (getReply as Mock).mockResolvedValue(null); // no existing reply
+    (buildReplyMessage as Mock).mockReturnValue("Inbox Reply | msg_123 | hello");
+  });
+
+  it("schedules D1 parent-state UPDATE via ctx.waitUntil after reply write (unread message)", async () => {
+    const waitUntilFn = vi.fn(async (p: Promise<unknown>) => { await p; });
+    const ctx = createCtxWithWaitUntil(waitUntilFn);
+    const db = createMockDB();
+    const kv = createMockKV();
+
+    mockCloudflareContext(
+      {
+        VERIFIED_AGENTS: kv,
+        DB: db,
+        RATE_LIMIT_MUTATING: createRateLimitMock(true),
+        RATE_LIMIT_AUTHENTICATED: createRateLimitMock(true),
+      },
+      ctx
+    );
+
+    (validateOutboxReply as Mock).mockReturnValue({
+      data: { messageId: MESSAGE_ID, reply: "hello", signature: "sig123" },
+    });
+
+    // Message is UNREAD (no readAt) — both readAt and repliedAt should be set
+    (getMessage as Mock).mockResolvedValue({
+      messageId: MESSAGE_ID,
+      toBtcAddress: AGENT.btcAddress,
+      fromAddress: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
+      content: "Hello agent",
+      sentAt: "2026-02-18T02:26:42.598Z",
+      authenticated: false,
+      // readAt absent — unread
+    });
+
+    (verifyBitcoinSignature as Mock).mockReturnValue({
+      valid: true,
+      address: AGENT.btcAddress,
+    });
+
+    const req = new NextRequest(`https://aibtc.com/api/outbox/${AGENT.btcAddress}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": "50",
+        "cf-connecting-ip": "1.2.3.4",
+      },
+      body: JSON.stringify({ messageId: MESSAGE_ID, reply: "hello", signature: "sig123" }),
+    });
+
+    const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
+
+    expect(resp.status).toBe(201);
+    // waitUntil called at least twice: once for insertReplyToD1, once for updateMessageStateD1
+    expect(waitUntilFn).toHaveBeenCalledTimes(2);
+    expect(updateMessageStateD1).toHaveBeenCalledOnce();
+
+    const [calledDb, calledMessageId, calledUpdates] = (
+      updateMessageStateD1 as Mock
+    ).mock.calls[0];
+    expect(calledDb).toBe(db);
+    // Must target the PARENT message_id directly (not the derived reply PK)
+    expect(calledMessageId).toBe(MESSAGE_ID);
+    // Message was unread → both fields should be set
+    expect(calledUpdates).toHaveProperty("repliedAt");
+    expect(calledUpdates).toHaveProperty("readAt");
+    expect(typeof calledUpdates.repliedAt).toBe("string");
+    expect(typeof calledUpdates.readAt).toBe("string");
+  });
+
+  it("sets only repliedAt (not readAt) when parent message was already read", async () => {
+    const waitUntilFn = vi.fn(async (p: Promise<unknown>) => { await p; });
+    const ctx = createCtxWithWaitUntil(waitUntilFn);
+    const db = createMockDB();
+    const kv = createMockKV();
+
+    mockCloudflareContext(
+      {
+        VERIFIED_AGENTS: kv,
+        DB: db,
+        RATE_LIMIT_MUTATING: createRateLimitMock(true),
+        RATE_LIMIT_AUTHENTICATED: createRateLimitMock(true),
+      },
+      ctx
+    );
+
+    (validateOutboxReply as Mock).mockReturnValue({
+      data: { messageId: MESSAGE_ID, reply: "hello", signature: "sig123" },
+    });
+
+    // Message is ALREADY READ — only repliedAt should be set
+    (getMessage as Mock).mockResolvedValue({
+      messageId: MESSAGE_ID,
+      toBtcAddress: AGENT.btcAddress,
+      fromAddress: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
+      content: "Hello agent",
+      sentAt: "2026-02-18T02:26:42.598Z",
+      authenticated: false,
+      readAt: "2026-05-10T10:00:00.000Z", // already read
+    });
+
+    (verifyBitcoinSignature as Mock).mockReturnValue({
+      valid: true,
+      address: AGENT.btcAddress,
+    });
+
+    const req = new NextRequest(`https://aibtc.com/api/outbox/${AGENT.btcAddress}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": "50",
+        "cf-connecting-ip": "1.2.3.4",
+      },
+      body: JSON.stringify({ messageId: MESSAGE_ID, reply: "hello", signature: "sig123" }),
+    });
+
+    const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
+
+    expect(resp.status).toBe(201);
+    expect(updateMessageStateD1).toHaveBeenCalledOnce();
+
+    const [, , calledUpdates] = (updateMessageStateD1 as Mock).mock.calls[0];
+    // Message was already read → only repliedAt set, no readAt override
+    expect(calledUpdates).toHaveProperty("repliedAt");
+    expect(calledUpdates).not.toHaveProperty("readAt");
+  });
+
+  it("D1 parent-state UPDATE failure does NOT fail the 201 response", async () => {
+    const d1Error = new Error("D1 update failed");
+    (updateMessageStateD1 as Mock).mockRejectedValue(d1Error);
+
+    const waitUntilFn = vi.fn(async (p: Promise<unknown>) => {
+      try { await p; } catch { /* swallow */ }
+    });
+    const ctx = createCtxWithWaitUntil(waitUntilFn);
+    const db = createMockDB();
+    const kv = createMockKV();
+
+    mockCloudflareContext(
+      {
+        VERIFIED_AGENTS: kv,
+        DB: db,
+        RATE_LIMIT_MUTATING: createRateLimitMock(true),
+        RATE_LIMIT_AUTHENTICATED: createRateLimitMock(true),
+      },
+      ctx
+    );
+
+    (validateOutboxReply as Mock).mockReturnValue({
+      data: { messageId: MESSAGE_ID, reply: "hello", signature: "sig123" },
+    });
+
+    (getMessage as Mock).mockResolvedValue({
+      messageId: MESSAGE_ID,
+      toBtcAddress: AGENT.btcAddress,
+      fromAddress: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
+      content: "Hello agent",
+      sentAt: "2026-02-18T02:26:42.598Z",
+      authenticated: false,
+    });
+
+    (verifyBitcoinSignature as Mock).mockReturnValue({
+      valid: true,
+      address: AGENT.btcAddress,
+    });
+
+    const req = new NextRequest(`https://aibtc.com/api/outbox/${AGENT.btcAddress}`, {
+      method: "POST",
+      headers: {
+        "content-type": "application/json",
+        "content-length": "50",
+        "cf-connecting-ip": "1.2.3.4",
+      },
+      body: JSON.stringify({ messageId: MESSAGE_ID, reply: "hello", signature: "sig123" }),
+    });
+
+    const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
+
+    // D1 failure must NOT propagate to the user response
+    expect(resp.status).toBe(201);
   });
 });
