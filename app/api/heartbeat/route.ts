@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { verifyBitcoinSignature, persistBtcPubkeyIfMissing } from "@/lib/bitcoin-verify";
 import { getAgentLevel, getNextLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
 import { X_HANDLE } from "@/lib/constants";
@@ -310,10 +310,10 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { address: btcAddress } = btcResult;
+    const { address: btcAddress, publicKey: witnessPublicKey } = btcResult;
 
     // Get KV namespace
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     // Require Registered level (Level 1+)
@@ -325,6 +325,15 @@ export async function POST(request: NextRequest) {
       );
     }
     const { agent, claim } = result;
+
+    // Opportunistic btcPublicKey capture: BIP-322 P2WPKH signatures include the
+    // compressed pubkey in the witness stack. If the agent's stored record is missing
+    // it, persist it now without blocking the response.
+    if (witnessPublicKey && !agent.btcPublicKey) {
+      ctx.waitUntil(
+        persistBtcPubkeyIfMissing(kv, env.DB, btcAddress, witnessPublicKey, agent)
+      );
+    }
 
     // Check rate limit
     const existingCheckIn = await getCheckInRecord(kv, btcAddress);

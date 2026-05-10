@@ -13,6 +13,7 @@ import {
   Address,
   NETWORK as BTC_NETWORK,
 } from "@scure/btc-signer";
+import type { AgentRecord } from "@/lib/types";
 
 export { BTC_NETWORK };
 export const BITCOIN_MSG_PREFIX = "\x18Bitcoin Signed Message:\n";
@@ -213,12 +214,16 @@ function bip322BuildToSpendTxId(
  *
  * Tries spec-compliant hash first; falls back to legacy (varint-prepend) hash for
  * agents using older signing tools, with a deprecation warning on the legacy path.
+ *
+ * Returns an object with `valid` and `pubkeyHex` (the 33-byte compressed pubkey,
+ * hex-encoded, extracted from the witness stack). The pubkey is only populated when
+ * `valid` is true and the derived address matches the claimed address.
  */
 export function bip322VerifyP2WPKH(
   message: string,
   signatureBase64: string,
   address: string
-): boolean {
+): { valid: boolean; pubkeyHex: string } {
   const sigBytes = Uint8Array.from(Buffer.from(signatureBase64, "base64"));
   const witnessItems = RawWitness.decode(sigBytes);
 
@@ -261,7 +266,7 @@ export function bip322VerifyP2WPKH(
   if (!verifySighash(toSpendTxid)) {
     // Fall back to legacy tagged hash (varint prepend) for agents using older signing tools.
     const toSpendTxidLegacy = bip322BuildToSpendTxId(message, scriptPubKey, true);
-    if (!verifySighash(toSpendTxidLegacy)) return false;
+    if (!verifySighash(toSpendTxidLegacy)) return { valid: false, pubkeyHex: "" };
     console.warn(
       "BIP-322 signature uses non-standard tagged hash. Update your signing tool — see aibtcdev/skills or install latest @aibtc/mcp-server."
     );
@@ -269,7 +274,9 @@ export function bip322VerifyP2WPKH(
 
   // Confirm derived address matches claimed address.
   const derivedAddress = p2wpkh(pubkeyBytes, BTC_NETWORK).address;
-  return derivedAddress === address;
+  if (derivedAddress !== address) return { valid: false, pubkeyHex: "" };
+
+  return { valid: true, pubkeyHex: hex.encode(pubkeyBytes) };
 }
 
 /**
@@ -435,8 +442,8 @@ export function verifyBitcoinSignature(
 
     if (isP2WPKH) {
       try {
-        const isValid = bip322VerifyP2WPKH(message, signature, btcAddress);
-        return { valid: isValid, address: btcAddress, publicKey: "" };
+        const p2wpkhResult = bip322VerifyP2WPKH(message, signature, btcAddress);
+        return { valid: p2wpkhResult.valid, address: btcAddress, publicKey: p2wpkhResult.pubkeyHex };
       } catch {
         return { valid: false, address: btcAddress, publicKey: "" };
       }
@@ -513,4 +520,78 @@ function verifyBip137(
     address,
     publicKey: hex.encode(recoveredPubKey),
   };
+}
+
+// ---------------------------------------------------------------------------
+// Opportunistic btcPublicKey persistence (BIP-322 witness extraction)
+// ---------------------------------------------------------------------------
+
+/**
+ * Persist a btcPublicKey extracted from a valid BIP-322 P2WPKH witness into KV
+ * (and D1 when available) if the agent's stored record is missing it.
+ *
+ * This is a fire-and-forget helper; callers should wrap it in ctx.waitUntil()
+ * so it never blocks the response. All errors are caught and logged — a
+ * persistence failure must never fail the calling request.
+ *
+ * The pubkey has already been address-crosschecked by bip322VerifyP2WPKH
+ * (derived address must match claimed address), so we do not re-derive here.
+ * We do confirm that the stored btcPublicKey is empty before writing.
+ *
+ * @param kv           - Cloudflare KV namespace (VERIFIED_AGENTS)
+ * @param db           - Cloudflare D1 database (DB); may be undefined pre-PR-A
+ * @param btcAddress   - The bc1q address that signed; used as the KV key
+ * @param pubkeyHex    - 33-byte compressed pubkey, hex-encoded, from the witness
+ * @param agent        - Pre-fetched agent record (avoids an extra KV read)
+ */
+export async function persistBtcPubkeyIfMissing(
+  kv: KVNamespace,
+  db: D1Database | undefined,
+  btcAddress: string,
+  pubkeyHex: string,
+  agent: AgentRecord
+): Promise<void> {
+  try {
+    if (!pubkeyHex) return;
+
+    // Guard: only persist if currently empty/missing.
+    if (agent.btcPublicKey) return;
+
+    const updatedAgent: AgentRecord = { ...agent, btcPublicKey: pubkeyHex };
+
+    // Write to both KV keys atomically (best-effort — KV has no real atomics,
+    // but both keys hold identical data so partial writes are safe to re-run).
+    await Promise.all([
+      kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
+      kv.put(`stx:${updatedAgent.stxAddress}`, JSON.stringify(updatedAgent)),
+    ]);
+
+    console.log(
+      `[btcPublicKey-capture] Persisted pubkey for ${btcAddress} via BIP-322 witness`
+    );
+
+    // D1 UPDATE — only runs when the DB binding is available and the agents
+    // table has a btc_public_key column (post-PR-A). Pre-PR-A this is a no-op
+    // because the column does not exist; post-PR-A it fills NULL slots.
+    if (db) {
+      try {
+        await db
+          .prepare(
+            "UPDATE agents SET btc_public_key = ? WHERE btc_address = ? AND (btc_public_key IS NULL OR btc_public_key = '')"
+          )
+          .bind(pubkeyHex, btcAddress)
+          .run();
+      } catch (d1Err) {
+        // Column may not exist yet (pre-PR-A schema). Log and continue.
+        console.warn(
+          `[btcPublicKey-capture] D1 UPDATE skipped (schema not ready?): ${(d1Err as Error).message}`
+        );
+      }
+    }
+  } catch (err) {
+    // Never throw — persistence failure must not affect the calling request.
+    console.error(
+      `[btcPublicKey-capture] Failed to persist pubkey for ${btcAddress}: ${(err as Error).message}`
+    );
+  }
 }
