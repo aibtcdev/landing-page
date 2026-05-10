@@ -1,10 +1,17 @@
 import { ImageResponse } from "next/og";
 import { NextRequest } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { ClaimStatus } from "@/lib/types";
+import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
-import { lookupAgent } from "@/lib/agent-lookup";
+import {
+  classifyAddress,
+  lookupProfileByBtcAddress,
+  lookupProfileByStxAddress,
+  mapRowToAgentRecord,
+  mapRowToClaimRecord,
+  claimRecordToStatus,
+} from "@/lib/cache/agent-profile";
 import { BG_PATTERN_DATA_URI } from "../bg-pattern";
 
 const levelColors: Record<number, string> = {
@@ -45,20 +52,85 @@ export async function GET(
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database;
 
-    // lookupAgent handles all address formats (bc1, 1..., 3..., SP, bc1p taproot)
-    const agent = await lookupAgent(kv, address);
-    if (!agent) {
+    // Phase 2.4: D1-first lookup — single SELECT + LEFT JOIN claims.
+    // Taproot (bc1p*), BTC (bc1q*, 1*, 3*), and STX (SP*, ST*, SM*) addresses
+    // are all handled from the first commit (no early-return on non-btc/non-stx).
+    // For validation-excluded agents (~708 records, #691) not yet in D1,
+    // fall back to KV btc:/stx: key to preserve 200 image responses.
+    const branch = classifyAddress(address);
+
+    // Numeric (erc8004 ID) and BNS names are out of scope for OG URLs —
+    // OG endpoints receive canonical addresses, not IDs or BNS names.
+    if (branch !== "btc" && branch !== "stx" && branch !== "taproot") {
       return new Response("Agent not found", { status: 404 });
     }
 
-    // Get claim status for level computation
-    const claimData = await kv.get(`claim:${agent.btcAddress}`);
+    let agent: AgentRecord | null = null;
     let claim: ClaimStatus | null = null;
-    if (claimData) {
-      try {
-        claim = JSON.parse(claimData) as ClaimStatus;
-      } catch { /* ignore */ }
+    let kvFallbackKey: string | null = null;
+
+    if (branch === "btc") {
+      const row = await lookupProfileByBtcAddress(db, address);
+      if (row) {
+        agent = mapRowToAgentRecord(row);
+        const claimRecord = mapRowToClaimRecord(row);
+        if (claimRecord) claim = claimRecordToStatus(claimRecord);
+      } else {
+        kvFallbackKey = `btc:${address}`;
+      }
+    } else if (branch === "taproot") {
+      // Taproot bc1p* — reverse-lookup canonical btc via KV `taproot:{addr}`
+      // (the taproot KV index is not being migrated in Phase 2.4 per RFC), then D1.
+      const canonicalBtc = await kv.get(`taproot:${address}`);
+      if (canonicalBtc) {
+        const row = await lookupProfileByBtcAddress(db, canonicalBtc);
+        if (row) {
+          agent = mapRowToAgentRecord(row);
+          const claimRecord = mapRowToClaimRecord(row);
+          if (claimRecord) claim = claimRecordToStatus(claimRecord);
+        } else {
+          kvFallbackKey = `btc:${canonicalBtc}`;
+        }
+      }
+    } else {
+      // branch === "stx"
+      const row = await lookupProfileByStxAddress(db, address);
+      if (row) {
+        agent = mapRowToAgentRecord(row);
+        const claimRecord = mapRowToClaimRecord(row);
+        if (claimRecord) claim = claimRecordToStatus(claimRecord);
+      } else {
+        kvFallbackKey = `stx:${address}`;
+      }
+    }
+
+    // KV fallback for validation-excluded agents (transitional per #691).
+    // These agents exist in KV but have not been backfilled to D1 yet.
+    // Mirrors pre-flip behavior: one KV read for agent, one for claim.
+    if (!agent && kvFallbackKey) {
+      const kvValue = await kv.get(kvFallbackKey);
+      if (kvValue) {
+        try {
+          agent = JSON.parse(kvValue) as AgentRecord;
+          // Also attempt claim KV read on fallback path (mirrors pre-flip behavior).
+          const claimData = await kv.get(`claim:${agent.btcAddress}`);
+          if (claimData) {
+            try {
+              claim = JSON.parse(claimData) as ClaimStatus;
+            } catch {
+              /* malformed claim — leave null */
+            }
+          }
+        } catch {
+          // Malformed KV record — leave agent null, fall through to 404
+        }
+      }
+    }
+
+    if (!agent) {
+      return new Response("Agent not found", { status: 404 });
     }
 
     const level = computeLevel(agent, claim);
