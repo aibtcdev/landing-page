@@ -722,7 +722,7 @@ async function reconcileInboxMessagesPaginated(
     drift_explained_partial_cascade: 0,
     drift_explained_unique_payment_txid_replay: 0,
     drift_explained_unresolvable_stx_reply: 0,
-    txidCounts: {},
+    txidCounts: new Set<string>(),
   };
 
   let currentPrefix: "inbox:message:" | "inbox:reply:" = cursorState?.prefix ?? "inbox:message:";
@@ -775,11 +775,10 @@ async function reconcileInboxMessagesPaginated(
           }
 
           if (typeof paymentTxid === "string" && paymentTxid.length > 0) {
-            const prev = accumulated.txidCounts[paymentTxid] ?? 0;
-            accumulated.txidCounts[paymentTxid] = prev + 1;
-            if (prev >= 1) {
-              // This is a duplicate (prev was already >= 1 meaning at least 2 total)
+            if (accumulated.txidCounts.has(paymentTxid)) {
               accumulated.drift_explained_unique_payment_txid_replay++;
+            } else {
+              accumulated.txidCounts.add(paymentTxid);
             }
           }
         } else {

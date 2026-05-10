@@ -1717,7 +1717,7 @@ describe("cursor encode/decode roundtrip", () => {
         drift_explained_partial_cascade: 10,
         drift_explained_unique_payment_txid_replay: 2,
         drift_explained_unresolvable_stx_reply: 3,
-        txidCounts: { txid_a: 2, txid_b: 1 },
+        txidCounts: new Set(["txid_a", "txid_b"]),
       },
     };
     const encoded = encodeCursor(state);
@@ -1729,7 +1729,10 @@ describe("cursor encode/decode roundtrip", () => {
     expect(decoded.kvCursor).toBe(state.kvCursor);
     expect(decoded.partialCounts.kv_count).toBe(500);
     expect(decoded.partialCounts.drift_explained_partial_cascade).toBe(10);
-    expect(decoded.partialCounts.txidCounts).toEqual({ txid_a: 2, txid_b: 1 });
+    expect(decoded.partialCounts.txidCounts).toBeInstanceOf(Set);
+    expect(decoded.partialCounts.txidCounts.has("txid_a")).toBe(true);
+    expect(decoded.partialCounts.txidCounts.has("txid_b")).toBe(true);
+    expect(decoded.partialCounts.txidCounts.size).toBe(2);
   });
 
   it("encodes cursor with null kvCursor (start of prefix)", () => {
@@ -1741,7 +1744,7 @@ describe("cursor encode/decode roundtrip", () => {
         drift_explained_partial_cascade: 0,
         drift_explained_unique_payment_txid_replay: 0,
         drift_explained_unresolvable_stx_reply: 0,
-        txidCounts: {},
+        txidCounts: new Set<string>(),
       },
     };
     const encoded = encodeCursor(state);
@@ -1749,6 +1752,8 @@ describe("cursor encode/decode roundtrip", () => {
     expect(decoded.prefix).toBe("inbox:reply:");
     expect(decoded.kvCursor).toBeNull();
     expect(decoded.partialCounts.kv_count).toBe(1000);
+    expect(decoded.partialCounts.txidCounts).toBeInstanceOf(Set);
+    expect(decoded.partialCounts.txidCounts.size).toBe(0);
   });
 
   it("is URL-safe (no +/= characters)", () => {
@@ -1760,7 +1765,7 @@ describe("cursor encode/decode roundtrip", () => {
         drift_explained_partial_cascade: 0,
         drift_explained_unique_payment_txid_replay: 0,
         drift_explained_unresolvable_stx_reply: 0,
-        txidCounts: {},
+        txidCounts: new Set<string>(),
       },
     };
     const encoded = encodeCursor(state);
@@ -2038,7 +2043,7 @@ describe("paginated inbox reconciliation (Path A)", () => {
         drift_explained_partial_cascade: 0,
         drift_explained_unique_payment_txid_replay: 0,
         drift_explained_unresolvable_stx_reply: 0,
-        txidCounts: {},
+        txidCounts: new Set<string>(),
       },
     });
 

@@ -15,8 +15,8 @@ export interface InboxPartialCounts {
   drift_explained_partial_cascade: number;
   drift_explained_unique_payment_txid_replay: number;
   drift_explained_unresolvable_stx_reply: number;
-  /** txid → occurrence count, carried between pages to detect cross-page duplicates */
-  txidCounts: Record<string, number>;
+  /** Set of seen txids, carried between pages to detect cross-page duplicates */
+  txidCounts: Set<string>;
 }
 
 /**
@@ -33,7 +33,14 @@ export interface InboxCursorState {
 
 /** Encode cursor state to a base64url string safe for URL query parameters. */
 export function encodeCursor(state: InboxCursorState): string {
-  const json = JSON.stringify(state);
+  const serializable = {
+    ...state,
+    partialCounts: {
+      ...state.partialCounts,
+      txidCounts: Array.from(state.partialCounts.txidCounts),
+    },
+  };
+  const json = JSON.stringify(serializable);
   return btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
@@ -62,9 +69,21 @@ export function decodeCursor(encoded: string): InboxCursorState {
     !parsed.partialCounts ||
     typeof parsed.partialCounts !== "object" ||
     !("txidCounts" in (parsed.partialCounts as object)) ||
-    typeof (parsed.partialCounts as Record<string, unknown>).txidCounts !== "object"
+    !Array.isArray((parsed.partialCounts as Record<string, unknown>).txidCounts) ||
+    !(parsed.partialCounts as Record<string, unknown[]>).txidCounts.every(
+      (v) => typeof v === "string"
+    )
   ) {
     throw new Error("decodeCursor: malformed cursor shape");
   }
-  return parsed as InboxCursorState;
+  const raw = parsed as Omit<InboxCursorState, "partialCounts"> & {
+    partialCounts: Omit<InboxPartialCounts, "txidCounts"> & { txidCounts: string[] };
+  };
+  return {
+    ...raw,
+    partialCounts: {
+      ...raw.partialCounts,
+      txidCounts: new Set(raw.partialCounts.txidCounts),
+    },
+  };
 }
