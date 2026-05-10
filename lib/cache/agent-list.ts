@@ -8,11 +8,14 @@
  * empty list just because another request happens to be rebuilding.
  *
  * Mutation endpoints call invalidateAgentListCache() to force a rebuild.
+ *
+ * Phase 2.1: rebuildAgentListCache body replaced with a single D1 SELECT +
+ * LEFT JOIN claims + COUNT subqueries on inbox_messages. Zero KV reads on the
+ * rebuild path (vs ~750 fan-out reads before).
  */
 
-import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { computeLevel, LEVELS } from "@/lib/levels";
-import { getAgentsIndex } from "@/lib/agents-index";
 import type { CachedAgent, CachedAgentList } from "./types";
 
 const CACHE_KEY = "cache:agent-list";
@@ -58,6 +61,9 @@ function parseSnapshot(raw: string | null): CachedAgentList | null {
  * - Cold miss: if another request is already rebuilding, poll briefly so we
  *   can serve the fresh result instead of an empty list. Otherwise rebuild
  *   synchronously.
+ *
+ * @param kv - VERIFIED_AGENTS KV namespace (cache layer only; rebuild reads D1)
+ * @param waitUntil - optional Cloudflare Workers waitUntil for background tasks
  */
 export async function getCachedAgentList(
   kv: KVNamespace,
@@ -183,114 +189,149 @@ export async function invalidateAgentListCache(
 }
 
 /**
- * Rebuild the agent list cache from individual KV records.
- * This is the expensive operation that the cache avoids on every page load.
- *
- * The agent set is sourced from the maintained `agents:index`
- * (single KV read) instead of `kv.list({prefix:"stx:"}) + N gets` —
- * full AgentRecords are still fetched per agent for the auxiliary
- * fields (description, owner, lastActiveAt, …) the snapshot needs.
- *
- * Concurrency: per-record fetches are batched to bound peak
- * concurrent KV reads + JSON parses. The previous `kv.list`
- * implementation was already bounded by KV's 1000-keys-per-page
- * cap; sourcing from the index removed that natural bound, so we
- * re-impose one explicitly here.
+ * D1 row shape returned by the agent-list SELECT.
+ * Column names match the D1 schema exactly (snake_case).
  */
-const REBUILD_FETCH_BATCH_SIZE = 500;
+interface AgentListRow {
+  btc_address: string;
+  stx_address: string;
+  stx_public_key: string;
+  btc_public_key: string;
+  taproot_address: string | null;
+  display_name: string | null;
+  description: string | null;
+  bns_name: string | null;
+  owner: string | null;
+  verified_at: string;
+  last_active_at: string | null;
+  erc8004_agent_id: number | null;
+  nostr_public_key: string | null;
+  last_identity_check: string | null;
+  referred_by_btc: string | null;
+  github_username: string | null;
+  claim_status: string | null;
+  claimed_at: string | null;
+  message_count: number;
+  unread_count: number;
+}
 
+/**
+ * Map a single D1 row to a CachedAgent.
+ *
+ * level/levelName are computed via computeLevel() using a lightweight
+ * AgentRecord + ClaimStatus reconstructed from the joined columns.
+ */
+export function mapRowToCachedAgent(row: AgentListRow): CachedAgent {
+  // Reconstruct the minimal shapes that computeLevel() requires.
+  // Full AgentRecord is not needed — computeLevel only checks agent existence
+  // and claim.status being "verified" or "rewarded".
+  const agentShape: Parameters<typeof computeLevel>[0] = {
+    btcAddress: row.btc_address,
+  } as Parameters<typeof computeLevel>[0];
+
+  // claimed_at is NOT NULL by schema (migrations/002_claims.sql), so a non-null
+  // claim_status implies a present claimed_at; guard on status alone to avoid
+  // silently downgrading verified agents on hypothetical schema-violation rows.
+  const claimShape =
+    row.claim_status !== null
+      ? ({
+          status: row.claim_status as "pending" | "verified" | "rewarded" | "failed",
+          claimedAt: row.claimed_at ?? "",
+        } as Parameters<typeof computeLevel>[1])
+      : null;
+
+  const level = computeLevel(agentShape, claimShape);
+
+  return {
+    stxAddress: row.stx_address,
+    btcAddress: row.btc_address,
+    stxPublicKey: row.stx_public_key,
+    btcPublicKey: row.btc_public_key,
+    taprootAddress: row.taproot_address,
+    displayName: row.display_name,
+    description: row.description,
+    bnsName: row.bns_name,
+    owner: row.owner,
+    verifiedAt: row.verified_at,
+    lastActiveAt: row.last_active_at,
+    erc8004AgentId: row.erc8004_agent_id,
+    nostrPublicKey: row.nostr_public_key,
+    lastIdentityCheck: row.last_identity_check,
+    referredBy: row.referred_by_btc,
+    githubUsername: row.github_username,
+    level,
+    levelName: LEVELS[level].name,
+    messageCount: row.message_count,
+    unreadCount: row.unread_count,
+  };
+}
+
+/**
+ * Rebuild the agent list cache from a single D1 SELECT.
+ *
+ * Phase 2.1 source-flip: replaces ~750 KV fan-out reads (btc:, claim:,
+ * inbox:agent: per agent at ~250 agents) with one D1 query.
+ *
+ * The SELECT joins agents → claims (LEFT JOIN) and uses correlated
+ * COUNT subqueries on inbox_messages for messageCount / unreadCount.
+ * Results are ordered by verified_at DESC, matching the prior sort order.
+ *
+ * D1 binding is sourced from getCloudflareContext().env.DB to match the
+ * existing pattern in all route files; no new binding parameter needed.
+ */
 async function rebuildAgentListCache(
   kv: KVNamespace
 ): Promise<CachedAgentList> {
-  // 1. Source agent addresses from the maintained index.
-  const index = await getAgentsIndex(kv);
+  const { env } = await getCloudflareContext();
+  const db = env.DB as D1Database;
 
-  // 2. Fetch full AgentRecords by `btc:`, batched to keep peak
-  //    concurrency in line with the prior `kv.list` per-page bound.
-  const agents: AgentRecord[] = [];
-  for (let i = 0; i < index.agents.length; i += REBUILD_FETCH_BATCH_SIZE) {
-    const batch = index.agents.slice(i, i + REBUILD_FETCH_BATCH_SIZE);
-    const fetched = await Promise.all(
-      batch.map(async (entry) => {
-        const value = await kv.get(`btc:${entry.btcAddress}`);
-        if (!value) return null;
-        try {
-          return JSON.parse(value) as AgentRecord;
-        } catch {
-          return null;
-        }
-      })
-    );
-    for (const record of fetched) {
-      if (record) agents.push(record);
-    }
+  const result = await db
+    .prepare(
+      `SELECT
+        a.btc_address,
+        a.stx_address,
+        a.stx_public_key,
+        a.btc_public_key,
+        a.taproot_address,
+        a.display_name,
+        a.description,
+        a.bns_name,
+        a.owner,
+        a.verified_at,
+        a.last_active_at,
+        a.erc8004_agent_id,
+        a.nostr_public_key,
+        a.last_identity_check,
+        a.referred_by_btc,
+        a.github_username,
+        c.status   AS claim_status,
+        c.claimed_at,
+        (SELECT COUNT(*) FROM inbox_messages
+           WHERE to_btc_address = a.btc_address AND is_reply = 0
+        ) AS message_count,
+        (SELECT COUNT(*) FROM inbox_messages
+           WHERE to_btc_address = a.btc_address AND is_reply = 0 AND read_at IS NULL
+        ) AS unread_count
+      FROM agents a
+      LEFT JOIN claims c ON c.btc_address = a.btc_address
+      ORDER BY a.verified_at DESC`
+    )
+    .all<AgentListRow>();
+
+  // Surface D1 errors to worker-logs — without this, a binding misconfig or
+  // schema drift produces a silent 0-agent snapshot cached for 600s. This is
+  // a library module without request-scoped logger access; raw console is
+  // intentional for diagnostic visibility on a path that otherwise swallows.
+  if (!result.success) {
+    // eslint-disable-next-line no-console
+    console.error("agent-list rebuild: D1 query failed", result.error);
   }
 
-  // 2. Enrich: claims, inbox in parallel.
-  const [claims, inboxData] = await Promise.all([
-    Promise.all(
-      agents.map(async (agent) => {
-        const data = await kv.get(`claim:${agent.btcAddress}`);
-        if (!data) return null;
-        try {
-          return JSON.parse(data) as ClaimStatus;
-        } catch {
-          return null;
-        }
-      })
-    ),
-    Promise.all(
-      agents.map(async (agent) => {
-        const data = await kv.get(`inbox:agent:${agent.btcAddress}`);
-        if (!data) return null;
-        try {
-          return JSON.parse(data) as {
-            messageIds: string[];
-            unreadCount: number;
-          };
-        } catch {
-          return null;
-        }
-      })
-    ),
-  ]);
-
-  // 3. Build cached agents
-  const cachedAgents: CachedAgent[] = agents.map((agent, i) => {
-    const level = computeLevel(agent, claims[i]);
-    const inbox = inboxData[i];
-    return {
-      stxAddress: agent.stxAddress,
-      btcAddress: agent.btcAddress,
-      stxPublicKey: agent.stxPublicKey,
-      btcPublicKey: agent.btcPublicKey,
-      taprootAddress: agent.taprootAddress ?? null,
-      displayName: agent.displayName ?? null,
-      description: agent.description ?? null,
-      bnsName: agent.bnsName ?? null,
-      owner: agent.owner ?? null,
-      verifiedAt: agent.verifiedAt,
-      lastActiveAt: agent.lastActiveAt ?? null,
-      erc8004AgentId: agent.erc8004AgentId ?? null,
-      nostrPublicKey: agent.nostrPublicKey ?? null,
-      lastIdentityCheck: agent.lastIdentityCheck ?? null,
-      referredBy: agent.referredBy ?? null,
-      githubUsername: agent.githubUsername ?? null,
-      level,
-      levelName: LEVELS[level].name,
-      messageCount: inbox?.messageIds.length ?? 0,
-      unreadCount: inbox?.unreadCount ?? 0,
-    };
-  });
+  const rows = result.results ?? [];
+  const cachedAgents: CachedAgent[] = rows.map(mapRowToCachedAgent);
 
   const genesisCount = cachedAgents.filter((a) => a.level >= 2).length;
-
-  // Derive total message count from already-fetched inbox data
-  // (avoids a separate O(M) kv.list scan over inbox:message:* keys)
-  const messageCount = inboxData.reduce(
-    (sum, inbox) => sum + (inbox?.messageIds.length ?? 0),
-    0
-  );
+  const messageCount = cachedAgents.reduce((sum, a) => sum + a.messageCount, 0);
 
   const snapshot: CachedAgentList = {
     agents: cachedAgents,
