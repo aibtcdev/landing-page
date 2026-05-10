@@ -109,13 +109,24 @@ async function sampleKvKeys(
 
 /**
  * Single-pass scan of `btc:` KV prefix — returns the set of btcAddress values
- * whose agent record is NOT PartialAgentRecord. Used by claims/inbox/vouches
+ * whose agent record passes BOTH the PartialAgentRecord check AND the strict
+ * required-field check that backfill applies. Used by claims/inbox/vouches
  * to compute drift_explained from KV truth (not D1 absence).
+ *
+ * Matches backfill's two-step rejection logic:
+ *   1. Skip isPartialAgentRecord — counted as partial_count
+ *   2. Skip records missing stxAddress/stxPublicKey/btcPublicKey/verifiedAt — invalid_count
  *
  * Reads values in parallel batches of 50 to keep wall-clock manageable.
  */
-async function buildFullAgentSet(kv: KVNamespace): Promise<Set<string>> {
+async function buildFullAgentSet(kv: KVNamespace): Promise<{
+  fullAgents: Set<string>;
+  partial_count: number;
+  invalid_count: number;
+}> {
   const fullAgents = new Set<string>();
+  let partial_count = 0;
+  let invalid_count = 0;
   let cursor: string | undefined = undefined;
 
   do {
@@ -131,22 +142,42 @@ async function buildFullAgentSet(kv: KVNamespace): Promise<Set<string>> {
       for (let j = 0; j < batch.length; j++) {
         const raw = values[j];
         if (!raw) continue;
+        let parsed: unknown;
         try {
-          const parsed = JSON.parse(raw);
-          if (!isPartialAgentRecord(parsed)) {
-            // Strip the "btc:" prefix to get the btcAddress
-            fullAgents.add(batch[j].name.slice("btc:".length));
-          }
+          parsed = JSON.parse(raw);
         } catch {
-          // malformed — skip
+          // malformed — skip (not counted as partial or invalid)
+          continue;
         }
+        if (isPartialAgentRecord(parsed)) {
+          partial_count++;
+          continue;
+        }
+        // Apply the same strict required-field check that backfill uses:
+        // records missing any of these are rejected by backfill and absent from D1.
+        const agent = parsed as Record<string, unknown>;
+        if (
+          typeof agent.stxAddress !== "string" ||
+          !agent.stxAddress ||
+          typeof agent.stxPublicKey !== "string" ||
+          !agent.stxPublicKey ||
+          typeof agent.btcPublicKey !== "string" ||
+          !agent.btcPublicKey ||
+          typeof agent.verifiedAt !== "string" ||
+          !agent.verifiedAt
+        ) {
+          invalid_count++;
+          continue;
+        }
+        // Strip the "btc:" prefix to get the btcAddress
+        fullAgents.add(batch[j].name.slice("btc:".length));
       }
     }
 
     cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
   } while (cursor !== undefined);
 
-  return fullAgents;
+  return { fullAgents, partial_count, invalid_count };
 }
 
 // ── Per-table reconciliation ───────────────────────────────────────────────
@@ -165,77 +196,84 @@ async function reconcileAgents(
   db: D1Database,
   sampleSize: number
 ): Promise<Omit<TableReconcileResult, "duration_ms">> {
-  // Count KV agents; scan values to identify partials
-  const { total: kv_total, partial: kv_partial } = await countKvKeys(
-    kv,
-    "btc:",
-    true // read values to detect partials
-  );
+  // Use buildFullAgentSet to apply the same strict criteria as backfill:
+  // both isPartialAgentRecord rejects AND missing-required-field rejects are excluded.
+  const { fullAgents, partial_count, invalid_count } = await buildFullAgentSet(kv);
+
+  const kv_total = fullAgents.size + partial_count + invalid_count;
+  // For computeAgentsDrift: treat partial + invalid both as "excluded"; D1 only contains full agents.
+  const kv_excluded = partial_count + invalid_count;
 
   // D1 count
   const d1Row = await db.prepare("SELECT COUNT(*) AS cnt FROM agents").first<{ cnt: number }>();
   const d1_count = d1Row?.cnt ?? 0;
 
-  const breakdown = computeAgentsDrift(kv_total, kv_partial, d1_count);
+  const breakdown = computeAgentsDrift(kv_total, kv_excluded, d1_count);
 
-  // Field-level spot-check — only on full agents; skip entirely when sampleSize=0
-  const sampledKeys = sampleSize > 0 ? await sampleKvKeys(kv, "btc:", sampleSize * 3) : []; // oversample to account for partials
+  // Field-level spot-check — sample from the fullAgents set (already known to be full+valid).
+  // Skip entirely when sampleSize=0.
   const field_diffs: FieldDiff[] = [];
   let checked = 0;
 
-  for (const key of sampledKeys) {
-    if (checked >= sampleSize) break;
-
-    const raw = await kv.get(key);
-    if (!raw) continue;
-
-    let agent: unknown;
-    try {
-      agent = JSON.parse(raw);
-    } catch {
-      continue;
+  if (sampleSize > 0) {
+    // Sample up to sampleSize addresses from the full-agent set (Fisher-Yates on array)
+    const allAddresses = Array.from(fullAgents);
+    for (let i = allAddresses.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [allAddresses[i], allAddresses[j]] = [allAddresses[j], allAddresses[i]];
     }
+    const sampledAddresses = allAddresses.slice(0, sampleSize);
 
-    // Skip partials in spot-check — they are intentionally absent from D1
-    if (isPartialAgentRecord(agent)) continue;
+    for (const address of sampledAddresses) {
+      const key = `btc:${address}`;
+      const raw = await kv.get(key);
+      if (!raw) continue;
 
-    const rec = agent as AgentRecord;
-    checked++;
+      let agent: unknown;
+      try {
+        agent = JSON.parse(raw);
+      } catch {
+        continue;
+      }
 
-    const d1Agent = await db
-      .prepare(
-        "SELECT btc_address, stx_address, stx_public_key, btc_public_key, verified_at FROM agents WHERE btc_address = ?"
-      )
-      .bind(rec.btcAddress)
-      .first<{
-        btc_address: string;
-        stx_address: string;
-        stx_public_key: string;
-        btc_public_key: string;
-        verified_at: string;
-      }>();
+      const rec = agent as AgentRecord;
+      checked++;
 
-    if (!d1Agent) {
-      field_diffs.push({
-        key,
-        field: "_row_missing",
-        kv_value: rec.btcAddress,
-        d1_value: null,
-      });
-      continue;
-    }
+      const d1Agent = await db
+        .prepare(
+          "SELECT btc_address, stx_address, stx_public_key, btc_public_key, verified_at FROM agents WHERE btc_address = ?"
+        )
+        .bind(rec.btcAddress)
+        .first<{
+          btc_address: string;
+          stx_address: string;
+          stx_public_key: string;
+          btc_public_key: string;
+          verified_at: string;
+        }>();
 
-    // Compare critical fields
-    const checks: Array<[string, unknown, unknown]> = [
-      ["stx_address", rec.stxAddress, d1Agent.stx_address],
-      ["stx_public_key", rec.stxPublicKey, d1Agent.stx_public_key],
-      ["btc_public_key", rec.btcPublicKey, d1Agent.btc_public_key],
-      ["verified_at", rec.verifiedAt, d1Agent.verified_at],
-    ];
+      if (!d1Agent) {
+        field_diffs.push({
+          key,
+          field: "_row_missing",
+          kv_value: rec.btcAddress,
+          d1_value: null,
+        });
+        continue;
+      }
 
-    for (const [field, kv_value, d1_value] of checks) {
-      if (kv_value !== d1_value) {
-        field_diffs.push({ key, field, kv_value, d1_value });
+      // Compare critical fields
+      const checks: Array<[string, unknown, unknown]> = [
+        ["stx_address", rec.stxAddress, d1Agent.stx_address],
+        ["stx_public_key", rec.stxPublicKey, d1Agent.stx_public_key],
+        ["btc_public_key", rec.btcPublicKey, d1Agent.btc_public_key],
+        ["verified_at", rec.verifiedAt, d1Agent.verified_at],
+      ];
+
+      for (const [field, kv_value, d1_value] of checks) {
+        if (kv_value !== d1_value) {
+          field_diffs.push({ key, field, kv_value, d1_value });
+        }
       }
     }
   }
@@ -243,11 +281,13 @@ async function reconcileAgents(
   return {
     table: "agents",
     kv_count: breakdown.kv_count_full,
-    kv_count_partial_excluded: kv_partial,
+    kv_count_partial_excluded: partial_count,
+    kv_count_invalid_excluded: invalid_count,
     d1_count: breakdown.d1_count,
     drift: breakdown.drift,
     drift_explained: breakdown.drift_explained,
     drift_unexplained: breakdown.drift_unexplained,
+    explained_categories: {},
     sample_size: checked,
     field_diffs,
   };
@@ -335,11 +375,12 @@ async function reconcileClaims(
     table: "claims",
     kv_count: breakdown.kv_count_full,
     kv_count_partial_excluded: 0,
+    kv_count_invalid_excluded: 0,
     d1_count: breakdown.d1_count,
     drift: breakdown.drift,
     drift_explained: breakdown.drift_explained,
     drift_unexplained: breakdown.drift_unexplained,
-    explained_categories: breakdown.explained_categories,
+    explained_categories: breakdown.explained_categories ?? {},
     sample_size: checked,
     field_diffs,
   };
@@ -362,12 +403,15 @@ async function reconcileInboxMessages(
   sampleSize: number,
   fullAgents: Set<string>
 ): Promise<Omit<TableReconcileResult, "duration_ms">> {
-  // Single-pass: collect all parsed inbox records to derive all category counts
+  // Single-pass: collect all parsed inbox records to derive all category counts.
+  // Reads in parallel batches of 50 to avoid sequential kv.get() across ~10K keys
+  // which exceeded the Worker 5-min wall budget in the 2026-05-10T01:25Z production run.
+  const INBOX_BATCH_SIZE = 50;
   type ParsedMsg = { type: "message"; toBtcAddress?: string; paymentTxid?: string };
   type ParsedReply = { type: "reply"; replyTo?: string; messageId?: string };
   const allRecords: Array<ParsedMsg | ParsedReply> = [];
 
-  // Scan inbox:message: prefix
+  // Scan inbox:message: prefix in parallel batches
   let kv_inbound = 0;
   {
     let cursor: string | undefined = undefined;
@@ -376,25 +420,28 @@ async function reconcileInboxMessages(
       if (cursor) opts.cursor = cursor;
       const page = await kv.list(opts);
       kv_inbound += page.keys.length;
-      for (const key of page.keys) {
-        const raw = await kv.get(key.name);
-        if (!raw) continue;
-        try {
-          const msg = JSON.parse(raw) as Record<string, unknown>;
-          allRecords.push({
-            type: "message",
-            toBtcAddress: msg.toBtcAddress as string | undefined,
-            paymentTxid: msg.paymentTxid as string | undefined,
-          });
-        } catch {
-          // ignore malformed
+      for (let i = 0; i < page.keys.length; i += INBOX_BATCH_SIZE) {
+        const batch = page.keys.slice(i, i + INBOX_BATCH_SIZE);
+        const values = await Promise.all(batch.map((k) => kv.get(k.name)));
+        for (const raw of values) {
+          if (!raw) continue;
+          try {
+            const msg = JSON.parse(raw) as Record<string, unknown>;
+            allRecords.push({
+              type: "message",
+              toBtcAddress: msg.toBtcAddress as string | undefined,
+              paymentTxid: msg.paymentTxid as string | undefined,
+            });
+          } catch {
+            // ignore malformed
+          }
         }
       }
       cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
     } while (cursor !== undefined);
   }
 
-  // Scan inbox:reply: prefix
+  // Scan inbox:reply: prefix in parallel batches
   let kv_reply = 0;
   {
     let cursor: string | undefined = undefined;
@@ -403,18 +450,21 @@ async function reconcileInboxMessages(
       if (cursor) opts.cursor = cursor;
       const page = await kv.list(opts);
       kv_reply += page.keys.length;
-      for (const key of page.keys) {
-        const raw = await kv.get(key.name);
-        if (!raw) continue;
-        try {
-          const reply = JSON.parse(raw) as Record<string, unknown>;
-          allRecords.push({
-            type: "reply",
-            replyTo: reply.replyTo as string | undefined,
-            messageId: reply.messageId as string | undefined,
-          });
-        } catch {
-          // ignore malformed
+      for (let i = 0; i < page.keys.length; i += INBOX_BATCH_SIZE) {
+        const batch = page.keys.slice(i, i + INBOX_BATCH_SIZE);
+        const values = await Promise.all(batch.map((k) => kv.get(k.name)));
+        for (const raw of values) {
+          if (!raw) continue;
+          try {
+            const reply = JSON.parse(raw) as Record<string, unknown>;
+            allRecords.push({
+              type: "reply",
+              replyTo: reply.replyTo as string | undefined,
+              messageId: reply.messageId as string | undefined,
+            });
+          } catch {
+            // ignore malformed
+          }
         }
       }
       cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
@@ -542,11 +592,12 @@ async function reconcileInboxMessages(
     table: "inbox_messages",
     kv_count: breakdown.kv_count_full,
     kv_count_partial_excluded: 0,
+    kv_count_invalid_excluded: 0,
     d1_count: breakdown.d1_count,
     drift: breakdown.drift,
     drift_explained: breakdown.drift_explained,
     drift_unexplained: breakdown.drift_unexplained,
-    explained_categories: breakdown.explained_categories,
+    explained_categories: breakdown.explained_categories ?? {},
     sample_size: checked,
     field_diffs,
   };
@@ -643,11 +694,12 @@ async function reconcileVouches(
     table: "vouches",
     kv_count: breakdown.kv_count_full,
     kv_count_partial_excluded: 0,
+    kv_count_invalid_excluded: 0,
     d1_count: breakdown.d1_count,
     drift: breakdown.drift,
     drift_explained: breakdown.drift_explained,
     drift_unexplained: breakdown.drift_unexplained,
-    explained_categories: breakdown.explained_categories,
+    explained_categories: breakdown.explained_categories ?? {},
     sample_size: checked,
     field_diffs,
   };
@@ -849,8 +901,9 @@ export async function POST(request: NextRequest) {
 
   try {
     if (rawTable === "all") {
-      // Build full-agent set once — shared by claims/inbox/vouches for KV-truth drift_explained
-      const fullAgents = await buildFullAgentSet(kv);
+      // Build full-agent set once — shared by claims/inbox/vouches for KV-truth drift_explained.
+      // buildFullAgentSet now applies the same two-step rejection as backfill (Partial + invalid).
+      const { fullAgents } = await buildFullAgentSet(kv);
 
       // Run all tables sequentially (D1 query budget concerns); track per-table duration
       let tableStart = Date.now();
@@ -962,17 +1015,17 @@ export async function POST(request: NextRequest) {
         result = await reconcileAgents(kv, db, sampleSize);
         break;
       case "claims": {
-        const fullAgents = await buildFullAgentSet(kv);
+        const { fullAgents } = await buildFullAgentSet(kv);
         result = await reconcileClaims(kv, db, sampleSize, fullAgents);
         break;
       }
       case "inbox_messages": {
-        const fullAgents = await buildFullAgentSet(kv);
+        const { fullAgents } = await buildFullAgentSet(kv);
         result = await reconcileInboxMessages(kv, db, sampleSize, fullAgents);
         break;
       }
       case "vouches": {
-        const fullAgents = await buildFullAgentSet(kv);
+        const { fullAgents } = await buildFullAgentSet(kv);
         result = await reconcileVouches(kv, db, sampleSize, fullAgents);
         break;
       }

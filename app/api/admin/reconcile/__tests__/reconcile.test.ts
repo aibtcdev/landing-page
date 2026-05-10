@@ -991,3 +991,357 @@ describe("sampleSize=0 short-circuit", () => {
     expect(body.field_diffs).toHaveLength(0);
   });
 });
+
+// ── Bug 1: strict-criteria alignment with backfill ────────────────────────
+//
+// Records that pass isPartialAgentRecord===false but are missing one of the
+// four required fields (stxAddress / stxPublicKey / btcPublicKey / verifiedAt)
+// are rejected by backfill and therefore absent from D1. Before this fix,
+// reconcile counted them as full agents (false unexplained drift). After the
+// fix they appear in kv_count_invalid_excluded and do NOT contribute to drift.
+
+describe("Bug 1: invalid records excluded same as backfill (criteria alignment)", () => {
+  // Fixture: passes isPartialAgentRecord (has stxAddress) but missing btcPublicKey
+  const INVALID_AGENT_MISSING_BTC_PUBKEY = JSON.stringify({
+    btcAddress: "bc1qinvalid1",
+    stxAddress: "SP1INVALID1",
+    stxPublicKey: "03abcdef99",
+    // btcPublicKey intentionally missing
+    verifiedAt: "2026-01-05T00:00:00Z",
+  });
+
+  // Fixture: passes isPartialAgentRecord but has empty verifiedAt
+  const INVALID_AGENT_EMPTY_VERIFIED_AT = JSON.stringify({
+    btcAddress: "bc1qinvalid2",
+    stxAddress: "SP1INVALID2",
+    stxPublicKey: "03abcdef98",
+    btcPublicKey: "02abcdef98",
+    verifiedAt: "", // empty string — backfill rejects as falsy
+  });
+
+  it("agents: excludes invalid record (missing btcPublicKey) from kv_count and reports kv_count_invalid_excluded", async () => {
+    // KV: 1 full agent + 1 invalid (non-partial but missing btcPublicKey)
+    // D1: 1 agent (only full agent backfilled)
+    // Expected: kv_count=1, kv_count_invalid_excluded=1, drift=0, drift_unexplained=0
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qinvalid1": INVALID_AGENT_MISSING_BTC_PUBKEY,
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "agents", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      kv_count_partial_excluded: number;
+      kv_count_invalid_excluded: number;
+      d1_count: number;
+      drift: number;
+      drift_unexplained: number;
+    };
+
+    expect(body.kv_count).toBe(1); // only full agent
+    expect(body.kv_count_partial_excluded).toBe(0); // none are partial
+    expect(body.kv_count_invalid_excluded).toBe(1); // invalid agent surfaced separately
+    expect(body.d1_count).toBe(1);
+    expect(body.drift).toBe(0); // no unexplained gap
+    expect(body.drift_unexplained).toBe(0);
+  });
+
+  it("agents: excludes invalid record (empty verifiedAt) — not counted as drift", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qinvalid2": INVALID_AGENT_EMPTY_VERIFIED_AT,
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "agents", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      kv_count_invalid_excluded: number;
+      drift: number;
+      drift_unexplained: number;
+    };
+
+    expect(body.kv_count).toBe(1);
+    expect(body.kv_count_invalid_excluded).toBe(1);
+    expect(body.drift).toBe(0);
+    expect(body.drift_unexplained).toBe(0);
+  });
+
+  it("agents: distinguishes partial, invalid, and full counts in a mixed KV", async () => {
+    // KV: 1 full + 1 partial (isPartialAgentRecord) + 1 invalid (missing btcPublicKey)
+    // D1: 1 agent (only full backfilled)
+    // Expected: kv_count=1, partial_excluded=1, invalid_excluded=1, drift=0
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qpartial": PARTIAL_AGENT,
+      "btc:bc1qinvalid1": INVALID_AGENT_MISSING_BTC_PUBKEY,
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "agents", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      kv_count_partial_excluded: number;
+      kv_count_invalid_excluded: number;
+      d1_count: number;
+      drift: number;
+      drift_unexplained: number;
+    };
+
+    expect(body.kv_count).toBe(1); // full only
+    expect(body.kv_count_partial_excluded).toBe(1); // true partial
+    expect(body.kv_count_invalid_excluded).toBe(1); // non-partial but missing field
+    expect(body.d1_count).toBe(1);
+    expect(body.drift).toBe(0);
+    expect(body.drift_unexplained).toBe(0);
+  });
+
+  it("claims: invalid agent's claim is also drift_explained (cascades from KV-truth)", async () => {
+    // KV: 1 full + 1 invalid; 2 claims; D1: 1 claim (only full agent's)
+    // The invalid agent's claim is not in D1 (backfill rejected the parent).
+    // reconcile should explain this via drift_explained, not drift_unexplained.
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qinvalid1": INVALID_AGENT_MISSING_BTC_PUBKEY,
+      "claim:bc1qagent1": CLAIM_1,
+      "claim:bc1qinvalid1": JSON.stringify({
+        btcAddress: "bc1qinvalid1",
+        status: "verified",
+        claimedAt: "2026-01-05T01:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM claims": { cnt: 1 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "claims", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+    };
+
+    expect(body.kv_count).toBe(2); // 2 claims in KV
+    expect(body.d1_count).toBe(1);
+    expect(body.drift).toBe(1);
+    // Invalid agent is not in fullAgents → claim is drift_explained
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+  });
+});
+
+// ── Bug 2: inbox parallelization — structural verification ────────────────
+//
+// The production timeout was caused by sequential kv.get() across ~10K inbox
+// keys. The fix parallelizes in batches of 50. We can't measure wall-clock
+// in unit tests, but we CAN verify the mock's get() is called for ALL keys
+// (not just a subset), and that count/drift results are identical before and
+// after the change (no regressions from the structural refactor).
+
+describe("Bug 2: inbox parallel scan — correctness after batched reads", () => {
+  it("reads all inbox:message: values (not just keys) for category derivation", async () => {
+    // KV: 3 messages (2 to full agent, 1 to partial agent)
+    // D1: 2 messages (partial agent's message not backfilled)
+    // After parallelization: drift_explained=1 (partial_cascade), drift_unexplained=0
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qpartial": PARTIAL_AGENT,
+      "inbox:message:msg001": JSON.stringify({
+        messageId: "msg001",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_001",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+      "inbox:message:msg002": JSON.stringify({
+        messageId: "msg002",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_002",
+        sentAt: "2026-01-01T01:00:00Z",
+      }),
+      "inbox:message:msg003": JSON.stringify({
+        messageId: "msg003",
+        toBtcAddress: "bc1qpartial", // partial agent — should be drift_explained
+        paymentTxid: "txid_003",
+        sentAt: "2026-01-01T02:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM inbox_messages": { cnt: 2 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories: { partial_cascade?: number };
+    };
+
+    expect(body.kv_count).toBe(3);
+    expect(body.d1_count).toBe(2);
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+    expect(body.explained_categories.partial_cascade).toBe(1);
+  });
+
+  it("reads all inbox:reply: values and counts unresolvable stx replies", async () => {
+    // KV: 1 reply with a Stacks address replyTo that does not have a stx: KV key
+    // D1: 1 reply
+    // Expected: unresolvable_stx_reply=1, drift_explained=1, drift_unexplained=0
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:reply:msg001": JSON.stringify({
+        messageId: "msg001",
+        replyTo: "SP1NOSUCHADDR",  // Stacks address but no stx: key in KV
+        repliedAt: "2026-01-01T03:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM inbox_messages": { cnt: 0 }, // reply not in D1 (unresolvable)
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories: { unresolvable_stx_reply?: number };
+    };
+
+    expect(body.kv_count).toBe(1); // 1 reply key
+    expect(body.d1_count).toBe(0);
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+    expect(body.explained_categories.unresolvable_stx_reply).toBe(1);
+  });
+});
+
+// ── explained_categories always present ──────────────────────────────────
+
+describe("explained_categories is always present in response", () => {
+  it("agents table returns explained_categories as empty object {}", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+    });
+
+    const db = buildD1Mock({
+      firstResults: { "FROM agents": { cnt: 1 } },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "agents", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as { explained_categories: unknown };
+    // Must be present and be an object (not undefined / null)
+    expect(body.explained_categories).toBeDefined();
+    expect(typeof body.explained_categories).toBe("object");
+    expect(body.explained_categories).not.toBeNull();
+  });
+
+  it("claims table returns explained_categories with partial_cascade", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "claim:bc1qagent1": CLAIM_1,
+    });
+
+    const db = buildD1Mock({
+      firstResults: { "FROM claims": { cnt: 1 } },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "claims", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as { explained_categories: Record<string, unknown> };
+    expect(body.explained_categories).toBeDefined();
+    expect(typeof body.explained_categories).toBe("object");
+  });
+
+  it("kv_count_invalid_excluded field is always present", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+    });
+
+    const db = buildD1Mock({
+      firstResults: { "FROM agents": { cnt: 1 } },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "agents", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as { kv_count_invalid_excluded: unknown };
+    expect(body.kv_count_invalid_excluded).toBeDefined();
+    expect(typeof body.kv_count_invalid_excluded).toBe("number");
+  });
+});
