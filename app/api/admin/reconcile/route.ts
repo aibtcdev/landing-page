@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { isPartialAgentRecord } from "@/lib/types";
 import type { AgentRecord } from "@/lib/types";
 import type { InboxAgentIndex } from "@/lib/inbox/types";
-import { REPLY_D1_PK_PREFIX } from "@/lib/inbox/constants";
+import { deriveReplyD1Id } from "@/lib/inbox/d1-pk";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import {
   computeDrift,
@@ -395,7 +395,7 @@ async function reconcileClaims(
  * unique_payment_txid_replay (duplicate payment txids), and unresolvable_stx_reply
  * (reply whose STX replyTo cannot be resolved to a full agent).
  *
- * Reply rows in D1 have message_id prefixed with REPLY_D1_PK_PREFIX.
+ * Reply rows in D1 have message_id synthesized via `deriveReplyD1Id` (see `lib/inbox/d1-pk.ts`).
  */
 async function reconcileInboxMessages(
   kv: KVNamespace,
@@ -593,7 +593,7 @@ async function reconcileInboxMessages(
     }
     checked++;
     const parentId = reply.messageId as string;
-    const replyMessageId = `${REPLY_D1_PK_PREFIX}${parentId}`;
+    const replyMessageId = deriveReplyD1Id(parentId);
 
     const d1Reply = await db
       .prepare("SELECT message_id, reply_to_message_id FROM inbox_messages WHERE message_id = ?")

@@ -5,7 +5,7 @@ import { isPartialAgentRecord } from "@/lib/types";
 import type { AgentRecord, ClaimRecord } from "@/lib/types";
 import type { VouchRecord } from "@/lib/vouch/types";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
-import { REPLY_D1_PK_PREFIX } from "@/lib/inbox/constants";
+import { deriveReplyD1Id } from "@/lib/inbox/d1-pk";
 import { generateClaimCode } from "@/lib/claim-code";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { isStxAddress } from "@/lib/validation/address";
@@ -583,11 +583,11 @@ async function backfillInboxMessages(
       continue;
     }
 
-    // Replies use the messageId as both their own message_id and reply_to_message_id.
-    // The KV key is `inbox:reply:{messageId}` where messageId is the parent message's
-    // ID. The reply IS linked to that parent message row in D1.
-    // We generate a distinct ID for the reply row itself to avoid PK collision.
-    const replyMessageId = `${REPLY_D1_PK_PREFIX}${reply.messageId}`;
+    // KV key is `inbox:reply:{messageId}` where messageId is the parent's ID.
+    // The reply row's own message_id is synthesized via deriveReplyD1Id to avoid
+    // PK collision with the parent inbound row (which uses messageId directly).
+    // The reply_to_message_id FK column links back to the parent unchanged.
+    const replyMessageId = deriveReplyD1Id(reply.messageId);
 
     const resolvedToBtcAddress = await resolveReplyRecipientBtcAddress(kv, reply.toBtcAddress);
     if (!resolvedToBtcAddress) {
