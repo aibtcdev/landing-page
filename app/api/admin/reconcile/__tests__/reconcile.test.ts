@@ -11,8 +11,9 @@
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { NextRequest } from "next/server";
-import { GET, POST, encodeCursor, decodeCursor } from "../route";
-import type { InboxCursorState } from "../route";
+import { GET, POST } from "../route";
+import { encodeCursor, decodeCursor } from "@/lib/d1/reconcile-cursor";
+import type { InboxCursorState } from "@/lib/d1/reconcile-cursor";
 import { computeDrift, computeAgentsDrift } from "@/lib/d1/reconcile";
 
 // ── Module mocks ─────────────────────────────────────────────────────────
@@ -2028,7 +2029,7 @@ describe("paginated inbox reconciliation (Path A)", () => {
     mockContext({ VERIFIED_AGENTS: kv, DB: db });
 
     // Build a valid cursor representing a continuation state
-    const { encodeCursor } = await import("../route");
+    const { encodeCursor } = await import("@/lib/d1/reconcile-cursor");
     const continuationCursor = encodeCursor({
       prefix: "inbox:message:",
       kvCursor: null,

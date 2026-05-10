@@ -17,35 +17,20 @@ import {
 } from "@/lib/d1/reconcile";
 
 // ── Inbox pagination types ─────────────────────────────────────────────────
+// Cursor types + encode/decode live in lib/d1/reconcile-cursor.ts because
+// Next.js App Router rejects non-Route exports from route.ts files.
 
-/**
- * Accumulated counts carried across paginated inbox reconcile calls.
- */
-export interface InboxPartialCounts {
-  kv_count: number;
-  drift_explained_partial_cascade: number;
-  drift_explained_unique_payment_txid_replay: number;
-  drift_explained_unresolvable_stx_reply: number;
-  /** txid → occurrence count, carried between pages to detect cross-page duplicates */
-  txidCounts: Record<string, number>;
-}
-
-/**
- * Cursor state serialized as base64(JSON) and passed between paginated calls.
- */
-export interface InboxCursorState {
-  /** Which KV prefix we are currently scanning */
-  prefix: "inbox:message:" | "inbox:reply:";
-  /** KV pagination cursor for the current prefix (null = start of prefix) */
-  kvCursor: string | null;
-  /** Accumulated counts so far */
-  partialCounts: InboxPartialCounts;
-}
+import {
+  encodeCursor,
+  decodeCursor,
+  type InboxCursorState,
+  type InboxPartialCounts,
+} from "@/lib/d1/reconcile-cursor";
 
 /**
  * Response shape for a paginated inbox reconcile call (non-final page).
  */
-export interface InboxPartialResponse {
+interface InboxPartialResponse {
   table: "inbox_messages";
   partial: true;
   cursor: string;
@@ -67,38 +52,7 @@ export interface InboxFinalResponse extends Omit<TableReconcileResult, "duration
   cursor: null;
 }
 
-// ── Cursor encode/decode ───────────────────────────────────────────────────
-
-/** Encode cursor state to a base64url string safe for URL query parameters. */
-export function encodeCursor(state: InboxCursorState): string {
-  const json = JSON.stringify(state);
-  return btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
-}
-
-/** Decode a base64url cursor string back to InboxCursorState. */
-export function decodeCursor(encoded: string): InboxCursorState {
-  const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
-  const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
-  const json = atob(padded + pad);
-  const parsed = JSON.parse(json) as unknown;
-  // Structural validation — a malformed cursor (wrong type, missing fields,
-  // injected from external source) must throw cleanly, not produce a runtime
-  // error deep in the inbox loop.
-  if (
-    !parsed ||
-    typeof parsed !== "object" ||
-    !("prefix" in parsed) ||
-    (parsed.prefix !== "inbox:message:" && parsed.prefix !== "inbox:reply:") ||
-    !("kvCursor" in parsed) ||
-    (parsed.kvCursor !== null && typeof parsed.kvCursor !== "string") ||
-    !("partialCounts" in parsed) ||
-    !parsed.partialCounts ||
-    typeof parsed.partialCounts !== "object"
-  ) {
-    throw new Error("decodeCursor: malformed cursor shape");
-  }
-  return parsed as InboxCursorState;
-}
+// (Cursor encode/decode moved to lib/d1/reconcile-cursor.ts.)
 
 /** Parse and clamp maxKeysPerCall to [1, 1000], default 500. */
 function parseMaxKeys(raw: string | null): number {
@@ -789,7 +743,9 @@ async function reconcileInboxMessagesPaginated(
 
     const page = await kv.list(opts);
     prefixExhausted = page.list_complete;
-    kvCursor = prefixExhausted ? null : (page.cursor ?? null);
+    // page.cursor only exists on the list_complete=false variant of the
+    // discriminated union; narrow before reading it.
+    kvCursor = page.list_complete ? null : (page.cursor ?? null);
 
     // Fetch values in parallel batches of 50
     for (let i = 0; i < page.keys.length; i += INBOX_BATCH_SIZE) {
