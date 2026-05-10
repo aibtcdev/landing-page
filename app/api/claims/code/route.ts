@@ -136,10 +136,19 @@ export async function POST(request: NextRequest) {
     }
 
     // Verify the signature came from the registered key.
-    // BIP-322 verifiers return publicKey: "" — address ownership is already
-    // proven via witness reconstruction, so skip the key-binding check for
-    // that path. BIP-137 recovers the pubkey from the signature, so enforce.
-    if (sigResult.publicKey && sigResult.publicKey !== agent.btcPublicKey) {
+    // BIP-137 always recovers a pubkey; BIP-322 P2WPKH exposes the witness
+    // pubkey post-#712; BIP-322 P2TR still returns publicKey: "" (witness
+    // path doesn't expose the key). The address-derivation crosscheck inside
+    // the BIP-322 verifier already binds witness → claimed address; this
+    // predicate adds a second integrity guard when both sides have a value
+    // to compare. The `agent.btcPublicKey &&` guard avoids a 403 against
+    // legacy records that pre-date #712 + #713 and still have an empty
+    // stored pubkey in KV until heartbeat backfill catches up.
+    if (
+      sigResult.publicKey &&
+      agent.btcPublicKey &&
+      sigResult.publicKey !== agent.btcPublicKey
+    ) {
       return NextResponse.json(
         { error: "Signature does not match the registered Bitcoin key" },
         { status: 403 }
