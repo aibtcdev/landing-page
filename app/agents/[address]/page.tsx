@@ -2,8 +2,7 @@ import { cache } from "react";
 import type { Metadata } from "next";
 import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord, ClaimStatus, ClaimRecord } from "@/lib/types";
-import { lookupAgent } from "@/lib/agent-lookup";
+import type { AgentRecord, ClaimRecord } from "@/lib/types";
 import { getAgentLevel, computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { lookupBnsName } from "@/lib/bns";
@@ -17,35 +16,79 @@ import {
   setCachedIdentityLookupFailed,
 } from "@/lib/identity/kv-cache";
 import type { AgentIdentity } from "@/lib/identity/types";
-import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
+import { getAgentsIndex } from "@/lib/agents-index";
 import {
   lookupBtcAddressByBnsName,
   syncBnsLookup,
 } from "@/lib/bns-reverse-index";
+import {
+  classifyAddress,
+  lookupProfileByBtcAddress,
+  lookupProfileByStxAddress,
+  lookupProfileByAgentId,
+  mapRowToAgentRecord,
+  mapRowToClaimRecord,
+} from "@/lib/cache/agent-profile";
 import AgentProfile from "./AgentProfile";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
 
 
 /**
- * Resolve an agent from KV by BTC address, STX address, or BNS name.
- * Also performs a lazy BNS refresh if the agent is missing a BNS name.
+ * Resolve an agent + claim from D1 by any supported address shape.
+ *
+ * Phase 2.2: replaces KV lookupAgent() + KV claim fetch with a single D1
+ * SELECT + LEFT JOIN claims. Taproot and BNS still use KV for the reverse-lookup
+ * step (those KV keys are not being migrated in Phase 2.2).
+ *
+ * Returns { agent, claim } or null if not found.
  */
-async function resolveAgent(
+async function resolveAgentAndClaim(
+  db: D1Database,
   kv: KVNamespace,
   address: string,
   hiroApiKey?: string
-): Promise<AgentRecord | null> {
-  // Direct lookup by BTC or STX
-  let agent = await lookupAgent(kv, address);
+): Promise<{ agent: AgentRecord; claim: ClaimRecord | null } | null> {
+  const branch = classifyAddress(address);
+  if (!branch) return null;
 
-  // If not found and looks like a BNS name, route via the maintained
-  // bns-lookup:{name} reverse index — 2 KV reads on the fast path.
-  // Cold-start fallback to agents:index covers pre-B6.2 agents whose
-  // reverse-index entry hasn't been written yet; self-heals via
-  // syncBnsLookup on hit. Stale-index hits are filtered by
-  // validating the source-of-truth bnsName below.
-  if (!agent && address.endsWith(".btc")) {
+  let agent: AgentRecord | null = null;
+  let claim: ClaimRecord | null = null;
+
+  if (branch === "btc") {
+    const row = await lookupProfileByBtcAddress(db, address);
+    if (row) {
+      agent = mapRowToAgentRecord(row);
+      claim = mapRowToClaimRecord(row);
+    }
+  } else if (branch === "stx") {
+    const row = await lookupProfileByStxAddress(db, address);
+    if (row) {
+      agent = mapRowToAgentRecord(row);
+      claim = mapRowToClaimRecord(row);
+    }
+  } else if (branch === "numeric") {
+    const agentId = parseInt(address, 10);
+    if (!Number.isNaN(agentId)) {
+      const row = await lookupProfileByAgentId(db, agentId);
+      if (row) {
+        agent = mapRowToAgentRecord(row);
+        claim = mapRowToClaimRecord(row);
+      }
+    }
+  } else if (branch === "taproot") {
+    // KV reverse-lookup for taproot (not migrated in Phase 2.2), then D1
+    const canonicalBtcAddress = await kv.get(`taproot:${address}`);
+    if (canonicalBtcAddress) {
+      const row = await lookupProfileByBtcAddress(db, canonicalBtcAddress);
+      if (row) {
+        agent = mapRowToAgentRecord(row);
+        claim = mapRowToClaimRecord(row);
+      }
+    }
+  } else {
+    // BNS name: KV reverse-index fast path, then fallback to agents:index,
+    // then Hiro BNS API as last resort. Only final agent record fetch uses D1.
     const target = address.toLowerCase();
     let btcAddress = await lookupBtcAddressByBnsName(kv, target);
     if (!btcAddress) {
@@ -58,52 +101,34 @@ async function resolveAgent(
         void syncBnsLookup(kv, null, target, btcAddress);
       }
     }
+
     if (btcAddress) {
-      const raw = await kv.get(`btc:${btcAddress}`);
-      if (raw) {
-        try {
-          const record = JSON.parse(raw) as AgentRecord;
-          if (record.bnsName && record.bnsName.toLowerCase() === target) {
-            agent = record;
-          }
-        } catch {
-          /* ignore */
+      const row = await lookupProfileByBtcAddress(db, btcAddress);
+      if (row && row.bns_name && row.bns_name.toLowerCase() === target) {
+        agent = mapRowToAgentRecord(row);
+        claim = mapRowToClaimRecord(row);
+      }
+    }
+
+    // Last resort: Hiro BNS API
+    if (!agent) {
+      const resolvedStx = await lookupBnsName(target, hiroApiKey, kv).catch(() => null);
+      if (resolvedStx) {
+        const row = await lookupProfileByStxAddress(db, resolvedStx);
+        if (row) {
+          agent = mapRowToAgentRecord(row);
+          claim = mapRowToClaimRecord(row);
         }
       }
     }
   }
 
   if (!agent) return null;
-
-  // Lazy BNS refresh (blocks this request but acceptable for correctness)
-  if (!agent.bnsName && agent.stxAddress) {
-    try {
-      const bnsName = await lookupBnsName(agent.stxAddress, hiroApiKey, kv);
-      if (bnsName) {
-        const previousBnsName = agent.bnsName ?? null;
-        agent.bnsName = bnsName;
-        const updated = JSON.stringify(agent);
-        await Promise.all([
-          kv.put(`stx:${agent.stxAddress}`, updated),
-          kv.put(`btc:${agent.btcAddress}`, updated),
-          invalidateAgentsIndex(kv),
-          syncBnsLookup(kv, previousBnsName, bnsName, agent.btcAddress),
-        ]);
-      }
-    } catch {
-      /* ignore BNS lookup failures */
-    }
-  }
-
-  return agent;
+  return { agent, claim };
 }
 
 /**
  * Detect and cache the on-chain ERC-8004 identity for an agent.
- *
- * Uses the typed identity KV cache (cache:identity: prefix) for both positive
- * and negative results. Positive results are cached for 24h (immutable NFT).
- * Negative results are cached for 5min so newly registered agents are detected.
  */
 async function resolveIdentity(
   kv: KVNamespace,
@@ -128,17 +153,12 @@ async function resolveIdentity(
     const assetId = `${contractAddress}.${contractName}::agent-identity`;
     const url = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${agent.stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
-    // SSR profile path — reduced retry budget so a throttled Hiro cannot
-    // block page rendering for tens of seconds. Falls back to the uncached
-    // agent record on failure.
     const resp = await stacksApiFetch(
       url,
       { headers: buildHiroHeaders(hiroApiKey) },
       { retries: 2, retries429: 1 }
     );
     if (!resp.ok) {
-      // Transient upstream error — short-TTL lookup-failed cache so concurrent
-      // profile views don't all re-hit Hiro.
       await setCachedIdentityLookupFailed(agent.stxAddress, kv);
       return agent;
     }
@@ -152,7 +172,6 @@ async function resolveIdentity(
     const newAgentId = match ? Number(match[1]) : null;
 
     if (newAgentId != null) {
-      // Found identity — update agent record and write positive cache
       agent.erc8004AgentId = newAgentId;
       const updated = JSON.stringify(agent);
       const identity: AgentIdentity = { agentId: newAgentId, owner: agent.stxAddress, uri: "" };
@@ -162,12 +181,9 @@ async function resolveIdentity(
         setCachedIdentity(agent.stxAddress, identity, kv),
       ]);
     } else {
-      // Confirmed no identity NFT for this address — 7d cache (bust on mint via refresh endpoint).
       await setCachedIdentityNegative(agent.stxAddress, kv);
     }
   } catch {
-    // Best-effort — transient Hiro errors should not break profile rendering.
-    // Short-TTL lookup-failed cache so the hammer doesn't recur on every view.
     await setCachedIdentityLookupFailed(agent.stxAddress, kv);
   }
 
@@ -175,35 +191,14 @@ async function resolveIdentity(
 }
 
 /**
- * Fetch claim record from KV.
- */
-async function fetchClaim(
-  kv: KVNamespace,
-  btcAddress: string
-): Promise<ClaimRecord | null> {
-  const claimData = await kv.get(`claim:${btcAddress}`);
-  if (!claimData) return null;
-  try {
-    return JSON.parse(claimData) as ClaimRecord;
-  } catch {
-    return null;
-  }
-}
-
-/**
  * Cached wrappers so generateMetadata() and AgentProfilePage() share
- * the same KV reads within a single request.
+ * the same D1 reads within a single request.
  */
-const cachedResolveAgent = cache(async (address: string) => {
+const cachedResolveAgentAndClaim = cache(async (address: string) => {
   const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
-  return resolveAgent(kv, address, env.HIRO_API_KEY);
-});
-
-const cachedFetchClaim = cache(async (btcAddress: string) => {
-  const { env } = await getCloudflareContext();
-  const kv = env.VERIFIED_AGENTS as KVNamespace;
-  return fetchClaim(kv, btcAddress);
+  const db = env.DB as D1Database;
+  return resolveAgentAndClaim(db, kv, address, env.HIRO_API_KEY);
 });
 
 export async function generateMetadata({
@@ -214,19 +209,19 @@ export async function generateMetadata({
   const { address } = await params;
 
   try {
-    const agent = await cachedResolveAgent(address);
-    if (!agent) return { title: "Agent Not Found" };
+    const result = await cachedResolveAgentAndClaim(address);
+    if (!result) return { title: "Agent Not Found" };
 
+    const { agent, claim: claimRecord } = result;
     const displayName = agent.displayName || generateName(agent.btcAddress);
     const description =
       agent.description ||
       "Verified AIBTC agent with Bitcoin and Stacks capabilities";
 
-    const claimRecord = await cachedFetchClaim(agent.btcAddress);
-    const claim: ClaimStatus | null = claimRecord
+    const claimStatus = claimRecord
       ? { status: claimRecord.status, claimedAt: claimRecord.claimedAt, rewardSatoshis: claimRecord.rewardSatoshis }
       : null;
-    const level = computeLevel(agent, claim);
+    const level = computeLevel(agent, claimStatus);
     const levelName = LEVELS[level].name;
 
     const ogTitle = `${displayName} — ${levelName} Agent`;
@@ -274,9 +269,9 @@ export default async function AgentProfilePage({
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     // Use cached resolver (shared with generateMetadata)
-    const agent = await cachedResolveAgent(address);
+    const result = await cachedResolveAgentAndClaim(address);
 
-    if (!agent) {
+    if (!result) {
       return (
         <>
           <AnimatedBackground />
@@ -302,25 +297,23 @@ export default async function AgentProfilePage({
       );
     }
 
-    // Fetch claim and resolve identity in parallel
-    const [claimRecord, agentWithIdentity] = await Promise.all([
-      cachedFetchClaim(agent.btcAddress),
-      resolveIdentity(kv, agent, env.HIRO_API_KEY),
-    ]);
+    const { agent, claim: claimRecord } = result;
+
+    // Resolve identity (cached KV + Hiro)
+    const agentWithIdentity = await resolveIdentity(kv, agent, env.HIRO_API_KEY);
 
     // Compute level info
-    const claimStatus: ClaimStatus | null =
-      claimRecord
-        ? {
-            status: claimRecord.status,
-            claimedAt: claimRecord.claimedAt,
-            rewardSatoshis: claimRecord.rewardSatoshis,
-          }
-        : null;
+    const claimStatus = claimRecord
+      ? {
+          status: claimRecord.status,
+          claimedAt: claimRecord.claimedAt,
+          rewardSatoshis: claimRecord.rewardSatoshis,
+        }
+      : null;
 
     const levelInfo = getAgentLevel(agentWithIdentity, claimStatus);
 
-    // Build claim info for the client (matching the ClaimInfo shape)
+    // Build claim info for the client (matching the ClaimInfo shape expected by AgentProfile)
     const claimInfo = claimRecord
       ? {
           status: claimRecord.status,
