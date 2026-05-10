@@ -10,7 +10,17 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { mapRowToCachedAgent } from "../agent-list";
+
+// Mock @opennextjs/cloudflare BEFORE importing agent-list so the module's
+// transitive imports of getCloudflareContext pick up the mock. vi.mock is
+// hoisted by Vitest to the top of the transformed file, but listing it
+// explicitly above the agent-list import documents the dependency.
+vi.mock("@opennextjs/cloudflare", () => ({
+  getCloudflareContext: vi.fn(),
+}));
+
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { mapRowToCachedAgent, getCachedAgentList } from "../agent-list";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -220,15 +230,8 @@ describe("mapRowToCachedAgent", () => {
 // getCachedAgentList — cold miss D1 path with mock D1 + KV
 // ---------------------------------------------------------------------------
 
-// Mock getCloudflareContext before importing agent-list so the module picks
-// up the mock when rebuildAgentListCache calls it.
-vi.mock("@opennextjs/cloudflare", () => ({
-  getCloudflareContext: vi.fn(),
-}));
-
-// Import after mock registration
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { getCachedAgentList } from "../agent-list";
+// Mock + imports are at top of file (so getCloudflareContext + getCachedAgentList
+// are already in scope from the file-level imports above).
 
 interface MockKV {
   get: ReturnType<typeof vi.fn>;

@@ -220,21 +220,23 @@ interface AgentListRow {
  *
  * level/levelName are computed via computeLevel() using a lightweight
  * AgentRecord + ClaimStatus reconstructed from the joined columns.
- * achievementCount is hardcoded to 0 (removed in Phase 0.1 via #654).
  */
 export function mapRowToCachedAgent(row: AgentListRow): CachedAgent {
   // Reconstruct the minimal shapes that computeLevel() requires.
   // Full AgentRecord is not needed — computeLevel only checks agent existence
   // and claim.status being "verified" or "rewarded".
-  const agentShape = { btcAddress: row.btc_address } as Parameters<
-    typeof computeLevel
-  >[0];
+  const agentShape: Parameters<typeof computeLevel>[0] = {
+    btcAddress: row.btc_address,
+  } as Parameters<typeof computeLevel>[0];
 
+  // claimed_at is NOT NULL by schema (migrations/002_claims.sql), so a non-null
+  // claim_status implies a present claimed_at; guard on status alone to avoid
+  // silently downgrading verified agents on hypothetical schema-violation rows.
   const claimShape =
-    row.claim_status !== null && row.claimed_at !== null
+    row.claim_status !== null
       ? ({
           status: row.claim_status as "pending" | "verified" | "rewarded" | "failed",
-          claimedAt: row.claimed_at,
+          claimedAt: row.claimed_at ?? "",
         } as Parameters<typeof computeLevel>[1])
       : null;
 
