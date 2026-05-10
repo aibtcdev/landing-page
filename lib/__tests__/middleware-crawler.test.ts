@@ -17,7 +17,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest } from "next/server";
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
 
@@ -26,7 +26,8 @@ vi.mock("@opennextjs/cloudflare", () => ({
 }));
 
 // Mock the D1 lookup helpers so we can control what the DB returns without
-// actually preparing SQL. The real helpers are tested in profile-d1.test.ts.
+// actually preparing SQL. The real helpers are tested in
+// app/api/agents/[address]/__tests__/profile-d1.test.ts.
 vi.mock("@/lib/cache/agent-profile", async (importOriginal) => {
   const real = await importOriginal<typeof import("@/lib/cache/agent-profile")>();
   return {
@@ -42,8 +43,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   lookupProfileByBtcAddress,
   lookupProfileByStxAddress,
-  mapRowToAgentRecord,
-  mapRowToClaimRecord,
 } from "@/lib/cache/agent-profile";
 import type { AgentProfileRow } from "@/lib/cache/agent-profile";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
@@ -332,12 +331,34 @@ describe("middleware handleCrawlerAgentPage — Phase 2.3 D1 flip", () => {
     });
   });
 
-  describe("crawler UA + out-of-scope address shapes → falls through", () => {
-    it("taproot address (bc1p) → falls through without D1/KV lookup helpers", async () => {
+  describe("crawler UA + taproot address — KV reverse-lookup → D1", () => {
+    it("taproot (bc1p) resolves via KV taproot:{addr} → D1 → renders OG HTML", async () => {
+      const taproot = "bc1pme88yyvca6gjlu9zqpwhlg93j6gfzreu3l6j0zrsgz8el55zgfkq202ed2";
+      const canonicalBtc = SAMPLE_BTC_ADDRESS;
+      const req = makeRequest(taproot, CRAWLER_UA);
+
+      // KV `taproot:{addr}` → canonical btc string (bare, not JSON)
+      const kv = buildKvMock({ [`taproot:${taproot}`]: canonicalBtc });
+      const db = buildD1Mock();
+      (lookupProfileByBtcAddress as Mock).mockResolvedValueOnce(makeProfileRow());
+      (getCloudflareContext as Mock).mockResolvedValue({
+        env: { VERIFIED_AGENTS: kv, DB: db },
+      });
+
+      const res = await middleware(req);
+
+      // Reverse-lookup hit + D1 helper called with canonical btc
+      expect(kv.get).toHaveBeenCalledWith(`taproot:${taproot}`);
+      expect(lookupProfileByBtcAddress).toHaveBeenCalledWith(db, canonicalBtc);
+      // OG HTML returned
+      expect(res.headers.get("content-type")).toContain("text/html");
+    });
+
+    it("taproot with no taproot:{addr} entry → falls through (no agent)", async () => {
       const taproot = "bc1pme88yyvca6gjlu9zqpwhlg93j6gfzreu3l6j0zrsgz8el55zgfkq202ed2";
       const req = makeRequest(taproot, CRAWLER_UA);
 
-      const kv = buildKvMock({});
+      const kv = buildKvMock({}); // no taproot: entry
       const db = buildD1Mock();
       (getCloudflareContext as Mock).mockResolvedValue({
         env: { VERIFIED_AGENTS: kv, DB: db },
@@ -345,14 +366,13 @@ describe("middleware handleCrawlerAgentPage — Phase 2.3 D1 flip", () => {
 
       const res = await middleware(req);
 
-      // Should fall through — taproot is not in scope; no D1 lookup helpers called
       expect(lookupProfileByBtcAddress).not.toHaveBeenCalled();
-      expect(lookupProfileByStxAddress).not.toHaveBeenCalled();
-      // No OG HTML in the response
       const contentType = res.headers.get("content-type");
       expect(contentType === null || !contentType.includes("text/html")).toBe(true);
     });
+  });
 
+  describe("crawler UA + out-of-scope address shapes → falls through", () => {
     it("numeric agent-id → falls through without D1/KV lookup helpers", async () => {
       const req = makeRequest("42", CRAWLER_UA);
 

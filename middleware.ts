@@ -73,10 +73,13 @@ async function handleCrawlerAgentPage(
     return NextResponse.next();
   }
 
-  // Middleware only handles btc/stx prefixes — taproot and numeric are out of scope.
-  // classifyAddress handles all prefix detection including SM (Stacks legacy mainnet).
+  // Middleware handles btc/stx/taproot prefixes — numeric (erc8004 ID) is out of
+  // scope (no realistic crawler probes for /agents/<numeric>). Taproot reverse-
+  // lookup goes through KV `taproot:` then D1. Pre-flip behavior treated bc1p
+  // as a btc lookup; post-flip we honor the taproot indirection so agents whose
+  // canonical btc differs from their bc1p taproot still render OG.
   const branch = classifyAddress(address);
-  if (branch !== "btc" && branch !== "stx") {
+  if (branch !== "btc" && branch !== "stx" && branch !== "taproot") {
     return NextResponse.next();
   }
 
@@ -101,6 +104,20 @@ async function handleCrawlerAgentPage(
         if (claimRecord) claim = claimRecordToStatus(claimRecord);
       } else {
         kvFallbackKey = `btc:${address}`;
+      }
+    } else if (branch === "taproot") {
+      // Taproot bc1p* — reverse-lookup canonical btc via KV `taproot:{addr}`
+      // (the taproot KV index isn't being migrated in Phase 2.3 per RFC), then D1.
+      const canonicalBtc = await kv.get(`taproot:${address}`);
+      if (canonicalBtc) {
+        const row = await lookupProfileByBtcAddress(db, canonicalBtc);
+        if (row) {
+          agent = mapRowToAgentRecord(row);
+          const claimRecord = mapRowToClaimRecord(row);
+          if (claimRecord) claim = claimRecordToStatus(claimRecord);
+        } else {
+          kvFallbackKey = `btc:${canonicalBtc}`;
+        }
       }
     } else {
       // branch === "stx"
