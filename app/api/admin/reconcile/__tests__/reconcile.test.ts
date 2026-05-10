@@ -6,12 +6,13 @@
  * app/api/admin/backfill/__tests__/route.test.ts.
  *
  * Also includes unit tests for the pure computeDrift / computeAgentsDrift
- * helpers from lib/d1/reconcile.ts.
+ * helpers from lib/d1/reconcile.ts, and unit tests for cursor encode/decode.
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { NextRequest } from "next/server";
-import { GET, POST } from "../route";
+import { GET, POST, encodeCursor, decodeCursor } from "../route";
+import type { InboxCursorState } from "../route";
 import { computeDrift, computeAgentsDrift } from "@/lib/d1/reconcile";
 
 // ── Module mocks ─────────────────────────────────────────────────────────
@@ -80,6 +81,12 @@ interface D1MockConfig {
   firstResults?: Record<string, FirstResult>;
   /** Default result for first() if no key matches. */
   defaultFirst?: FirstResult;
+  /**
+   * Map of SQL keyword → all() results array.
+   * Used for SELECT btc_address FROM agents and similar multi-row queries.
+   * Key matching works like firstResults (substring match, longest first).
+   */
+  allResults?: Record<string, unknown[]>;
 }
 
 function buildD1Mock(config: D1MockConfig = {}): D1Database {
@@ -96,13 +103,24 @@ function buildD1Mock(config: D1MockConfig = {}): D1Database {
     return defaultFirst;
   });
 
+  const allMock = vi.fn(async (query: string) => {
+    const { allResults = {} } = config;
+    const sortedKeys = Object.keys(allResults).sort((a, b) => b.length - a.length);
+    for (const key of sortedKeys) {
+      if (query.includes(key)) {
+        return { results: allResults[key], success: true, meta: {} };
+      }
+    }
+    return { results: [], success: true, meta: {} };
+  });
+
   // Track last bound query for first() dispatch
   let lastPreparedQuery = "";
 
   const boundStatement = {
     run: vi.fn(async () => ({ meta: { changes: 0 }, results: [], success: true })),
     first: vi.fn(async () => firstMock(lastPreparedQuery)),
-    all: vi.fn(async () => ({ results: [], success: true, meta: {} })),
+    all: vi.fn(async () => allMock(lastPreparedQuery)),
   };
 
   const bindMock = vi.fn(() => boundStatement);
@@ -111,7 +129,7 @@ function buildD1Mock(config: D1MockConfig = {}): D1Database {
     bind: bindMock,
     first: vi.fn(async () => firstMock(lastPreparedQuery)),
     run: vi.fn(async () => ({ meta: { changes: 0 }, results: [], success: true })),
-    all: vi.fn(async () => ({ results: [], success: true, meta: {} })),
+    all: vi.fn(async () => allMock(lastPreparedQuery)),
   };
 
   const prepareMock = vi.fn((query: string) => {
@@ -822,8 +840,12 @@ describe("inbox explained_categories", () => {
 
     const db = buildD1Mock({
       firstResults: {
+        // pre-condition: agents drift_unexplained must be 0 (1 full agent in KV, 1 in D1)
+        "FROM agents": { cnt: 1 },
         "FROM inbox_messages": { cnt: 2 }, // only 2 made it to D1 (1 replay skipped)
       },
+      // buildFullAgentsFromD1: SELECT btc_address FROM agents
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
       defaultFirst: null,
     });
 
@@ -877,8 +899,12 @@ describe("inbox explained_categories", () => {
 
     const db = buildD1Mock({
       firstResults: {
+        // pre-condition: 1 full agent in KV (partial excluded), 1 in D1 → drift_unexplained=0
+        "FROM agents": { cnt: 1 },
         "FROM inbox_messages": { cnt: 1 },
       },
+      // buildFullAgentsFromD1: only the full agent (not partial)
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
       defaultFirst: null,
     });
 
@@ -1209,8 +1235,11 @@ describe("Bug 2: inbox parallel scan — correctness after batched reads", () =>
 
     const db = buildD1Mock({
       firstResults: {
+        // pre-condition: 1 full agent (partial excluded) in KV, 1 in D1 → drift_unexplained=0
+        "FROM agents": { cnt: 1 },
         "FROM inbox_messages": { cnt: 2 },
       },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
       defaultFirst: null,
     });
 
@@ -1251,8 +1280,11 @@ describe("Bug 2: inbox parallel scan — correctness after batched reads", () =>
 
     const db = buildD1Mock({
       firstResults: {
+        // pre-condition: 1 full agent in KV, 1 in D1 → drift_unexplained=0
+        "FROM agents": { cnt: 1 },
         "FROM inbox_messages": { cnt: 0 }, // reply not in D1 (unresolvable)
       },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
       defaultFirst: null,
     });
 
@@ -1370,8 +1402,10 @@ describe("Bug A: BTC-shaped replyTo classified as partial_cascade", () => {
 
     const db = buildD1Mock({
       firstResults: {
+        "FROM agents": { cnt: 1 },
         "FROM inbox_messages": { cnt: 0 },
       },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
       defaultFirst: null,
     });
 
@@ -1416,8 +1450,10 @@ describe("Bug A: BTC-shaped replyTo classified as partial_cascade", () => {
 
     const db = buildD1Mock({
       firstResults: {
+        "FROM agents": { cnt: 1 },
         "FROM inbox_messages": { cnt: 1 },
       },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
       defaultFirst: null,
     });
 
@@ -1506,8 +1542,11 @@ describe("Bug B: null payment_txid not counted in unique_payment_txid_replay", (
 
     const db = buildD1Mock({
       firstResults: {
+        // pre-condition: 1 full agent in KV, 1 in D1 → drift_unexplained=0
+        "FROM agents": { cnt: 1 },
         "FROM inbox_messages": { cnt: 8 }, // all 8 in D1
       },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
       defaultFirst: null,
     });
 
@@ -1570,8 +1609,10 @@ describe("Bug C: STX replyTo resolver — no btcAddress field → unresolvable_s
 
     const db = buildD1Mock({
       firstResults: {
+        "FROM agents": { cnt: 1 },
         "FROM inbox_messages": { cnt: 0 },
       },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
       defaultFirst: null,
     });
 
@@ -1622,8 +1663,10 @@ describe("Bug C: STX replyTo resolver — no btcAddress field → unresolvable_s
 
     const db = buildD1Mock({
       firstResults: {
+        "FROM agents": { cnt: 1 },
         "FROM inbox_messages": { cnt: 0 },
       },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
       defaultFirst: null,
     });
 
@@ -1648,5 +1691,378 @@ describe("Bug C: STX replyTo resolver — no btcAddress field → unresolvable_s
     // Resolution succeeded (btcAddress found), but recipient not in fullAgents → partial_cascade
     expect(body.explained_categories.partial_cascade).toBe(1);
     expect(body.explained_categories.unresolvable_stx_reply).toBe(0);
+  });
+});
+
+// ── Phase 1.4 path A: cursor encode/decode ────────────────────────────────
+
+describe("cursor encode/decode roundtrip", () => {
+  it("encodes and decodes cursor state without loss", () => {
+    const state: InboxCursorState = {
+      prefix: "inbox:message:",
+      kvCursor: "abc123",
+      partialCounts: {
+        kv_count: 500,
+        drift_explained_partial_cascade: 10,
+        drift_explained_unique_payment_txid_replay: 2,
+        drift_explained_unresolvable_stx_reply: 3,
+        txidCounts: { txid_a: 2, txid_b: 1 },
+      },
+    };
+    const encoded = encodeCursor(state);
+    expect(typeof encoded).toBe("string");
+    expect(encoded.length).toBeGreaterThan(0);
+
+    const decoded = decodeCursor(encoded);
+    expect(decoded.prefix).toBe(state.prefix);
+    expect(decoded.kvCursor).toBe(state.kvCursor);
+    expect(decoded.partialCounts.kv_count).toBe(500);
+    expect(decoded.partialCounts.drift_explained_partial_cascade).toBe(10);
+    expect(decoded.partialCounts.txidCounts).toEqual({ txid_a: 2, txid_b: 1 });
+  });
+
+  it("encodes cursor with null kvCursor (start of prefix)", () => {
+    const state: InboxCursorState = {
+      prefix: "inbox:reply:",
+      kvCursor: null,
+      partialCounts: {
+        kv_count: 1000,
+        drift_explained_partial_cascade: 0,
+        drift_explained_unique_payment_txid_replay: 0,
+        drift_explained_unresolvable_stx_reply: 0,
+        txidCounts: {},
+      },
+    };
+    const encoded = encodeCursor(state);
+    const decoded = decodeCursor(encoded);
+    expect(decoded.prefix).toBe("inbox:reply:");
+    expect(decoded.kvCursor).toBeNull();
+    expect(decoded.partialCounts.kv_count).toBe(1000);
+  });
+
+  it("is URL-safe (no +/= characters)", () => {
+    const state: InboxCursorState = {
+      prefix: "inbox:message:",
+      kvCursor: "cursor_value_with_long_content_to_ensure_base64_padding_characters",
+      partialCounts: {
+        kv_count: 0,
+        drift_explained_partial_cascade: 0,
+        drift_explained_unique_payment_txid_replay: 0,
+        drift_explained_unresolvable_stx_reply: 0,
+        txidCounts: {},
+      },
+    };
+    const encoded = encodeCursor(state);
+    // base64url uses - and _ instead of + and /, and no padding =
+    expect(encoded).not.toMatch(/[+/=]/);
+  });
+});
+
+// ── Phase 1.4 path A: paginated inbox reconciliation ─────────────────────
+
+describe("paginated inbox reconciliation (Path A)", () => {
+  it("returns partial=true with cursor when KV has more keys than maxKeysPerCall", async () => {
+    // KV: 3 inbox messages; maxKeysPerCall=1 → first call processes 1, returns partial
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:message:msg001": JSON.stringify({
+        messageId: "msg001",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_001",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+      "inbox:message:msg002": JSON.stringify({
+        messageId: "msg002",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_002",
+        sentAt: "2026-01-01T00:01:00Z",
+      }),
+      "inbox:message:msg003": JSON.stringify({
+        messageId: "msg003",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_003",
+        sentAt: "2026-01-01T00:02:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+        "FROM inbox_messages": { cnt: 3 },
+      },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", maxKeysPerCall: "1" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      table: string;
+      partial: boolean;
+      cursor: string | null;
+      partial_counts: {
+        kv_count: number;
+        drift_explained_partial_cascade: number;
+        drift_explained_unique_payment_txid_replay: number;
+        drift_explained_unresolvable_stx_reply: number;
+      };
+    };
+
+    expect(body.table).toBe("inbox_messages");
+    expect(body.partial).toBe(true);
+    expect(typeof body.cursor).toBe("string");
+    expect(body.cursor).not.toBeNull();
+    expect(body.partial_counts.kv_count).toBeGreaterThanOrEqual(1);
+  });
+
+  it("completes in final call returning partial=false with full drift breakdown (~3 pages)", async () => {
+    // Simulate 3 pages of 1 key each (3 inbox messages total, maxKeysPerCall=1)
+    // This test drives the full cursor loop manually.
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:message:msg001": JSON.stringify({
+        messageId: "msg001",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_001",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+      "inbox:message:msg002": JSON.stringify({
+        messageId: "msg002",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_002",
+        sentAt: "2026-01-01T00:01:00Z",
+      }),
+      "inbox:message:msg003": JSON.stringify({
+        messageId: "msg003",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_003",
+        sentAt: "2026-01-01T00:02:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+        "FROM inbox_messages": { cnt: 3 },
+      },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    // Drive the cursor loop manually
+    let cursor: string | null = null;
+    let pages = 0;
+    let finalBody: {
+      partial: boolean;
+      cursor: string | null;
+      kv_count?: number;
+      d1_count?: number;
+      drift?: number;
+      drift_explained?: number;
+      drift_unexplained?: number;
+      explained_categories?: { partial_cascade?: number };
+    } | null = null;
+
+    do {
+      const params: Record<string, string> = { table: "inbox_messages", maxKeysPerCall: "1" };
+      if (cursor) params.cursor = cursor;
+
+      const resp = await POST(buildPostRequest(params));
+      expect(resp.status).toBe(200);
+
+      const body = await resp.json() as typeof finalBody;
+      expect(body).not.toBeNull();
+
+      pages++;
+      if (body!.partial === false) {
+        finalBody = body;
+        cursor = null;
+      } else {
+        cursor = body!.cursor as string;
+      }
+    } while (cursor !== null);
+
+    // Processed 3 pages for 3 keys (maxKeysPerCall=1)
+    expect(pages).toBeGreaterThanOrEqual(3);
+
+    // Final response has drift breakdown
+    expect(finalBody).not.toBeNull();
+    expect(finalBody!.partial).toBe(false);
+    expect(finalBody!.cursor).toBeNull();
+    expect(finalBody!.kv_count).toBe(3);
+    expect(finalBody!.d1_count).toBe(3);
+    expect(finalBody!.drift).toBe(0);
+    expect(finalBody!.drift_unexplained).toBe(0);
+  });
+
+  it("backwards compat: no cursor + small data returns final shape (partial=false, cursor=null)", async () => {
+    // When no cursor is provided and all data fits in one call, response is the final shape.
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:message:msg001": JSON.stringify({
+        messageId: "msg001",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_001",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+        "FROM inbox_messages": { cnt: 1 },
+      },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    // No cursor param — backwards compat path
+    const resp = await POST(buildPostRequest({ table: "inbox_messages" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      table: string;
+      partial: boolean;
+      cursor: string | null;
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      drift_unexplained: number;
+    };
+
+    expect(body.table).toBe("inbox_messages");
+    expect(body.partial).toBe(false);
+    expect(body.cursor).toBeNull();
+    expect(body.kv_count).toBe(1);
+    expect(body.d1_count).toBe(1);
+    expect(body.drift).toBe(0);
+    expect(body.drift_unexplained).toBe(0);
+  });
+
+  it("returns 409 with pre-condition message when agents.drift_unexplained > 0", async () => {
+    // KV: 2 full agents; D1 agents: 1 → drift_unexplained=1 → inbox blocked
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qagent2": JSON.stringify({
+        btcAddress: "bc1qagent2",
+        stxAddress: "SP1AGENT2",
+        stxPublicKey: "03abcdef02",
+        btcPublicKey: "02abcdef02",
+        verifiedAt: "2026-01-02T00:00:00Z",
+      }),
+    });
+
+    // D1 agents count is 1 (one agent missing → unexplained drift)
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 }, // 2 full in KV, only 1 in D1 → drift_unexplained=1
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages" }));
+    expect(resp.status).toBe(409);
+
+    const body = await resp.json() as {
+      error: string;
+      agents_drift_unexplained: number;
+      hint: string;
+    };
+
+    expect(body.error).toContain("Pre-condition failed");
+    expect(body.error).toContain("agents.drift_unexplained");
+    expect(body.agents_drift_unexplained).toBe(1);
+    expect(body.hint).toContain("?table=agents");
+  });
+
+  it("returns 400 for malformed cursor", async () => {
+    const kv = buildKvMock({ "btc:bc1qagent1": FULL_AGENT });
+    const db = buildD1Mock({
+      firstResults: { "FROM agents": { cnt: 1 } },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    // Send a garbage cursor that cannot be decoded
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", cursor: "!!!not-base64!!!" }));
+    expect(resp.status).toBe(400);
+
+    const body = await resp.json() as { error: string };
+    expect(body.error).toContain("Invalid cursor");
+  });
+
+  it("cross-page duplicate txid detected (txidCounts carried via cursor)", async () => {
+    // Page 1 sees txid_shared once; page 2 sees txid_shared again.
+    // The cursor carries txidCounts between pages so the replay is detected.
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      // sorted alphabetically: msg_a comes before msg_b
+      "inbox:message:msg_a": JSON.stringify({
+        messageId: "msg_a",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_shared",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+      "inbox:message:msg_b": JSON.stringify({
+        messageId: "msg_b",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_shared", // same txid — replay
+        sentAt: "2026-01-01T00:01:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+        "FROM inbox_messages": { cnt: 1 }, // 1 replay kept out → D1 has 1
+      },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    // maxKeysPerCall=1 forces 2 pages: page 1 sees msg_a, page 2 sees msg_b
+    let cursor: string | null = null;
+    let finalBody: {
+      partial: boolean;
+      kv_count?: number;
+      d1_count?: number;
+      drift?: number;
+      drift_explained?: number;
+      explained_categories?: { unique_payment_txid_replay?: number };
+    } | null = null;
+
+    do {
+      const params: Record<string, string> = { table: "inbox_messages", maxKeysPerCall: "1" };
+      if (cursor) params.cursor = cursor;
+      const resp = await POST(buildPostRequest(params));
+      expect(resp.status).toBe(200);
+      const body = await resp.json() as typeof finalBody;
+      if (body!.partial === false) {
+        finalBody = body;
+        cursor = null;
+      } else {
+        cursor = (body as { cursor: string }).cursor;
+      }
+    } while (cursor !== null);
+
+    expect(finalBody).not.toBeNull();
+    expect(finalBody!.kv_count).toBe(2);
+    expect(finalBody!.d1_count).toBe(1);
+    expect(finalBody!.drift).toBe(1);
+    expect(finalBody!.drift_explained).toBe(1);
+    expect(finalBody!.explained_categories?.unique_payment_txid_replay).toBe(1);
   });
 });
