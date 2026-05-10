@@ -186,6 +186,18 @@ const FULL_AGENT_1 = JSON.stringify({
   referredBy: null,
 });
 
+// BIP-322 bc1q agent: has Stacks credentials + verifiedAt but NO btcPublicKey.
+// These are valid registrations — btcPublicKey is NULLable since migration 008.
+const BIP322_AGENT = JSON.stringify({
+  btcAddress: "bc1qbip322",
+  stxAddress: "SP1BIP322",
+  stxPublicKey: "03bip32200",
+  btcPublicKey: "",  // empty string — the actual KV shape for bc1q agents
+  verifiedAt: "2026-03-01T00:00:00Z",
+  displayName: "BIP-322 Agent",
+  referredBy: null,
+});
+
 const PARTIAL_AGENT = JSON.stringify({
   btcAddress: "bc1qpartial",
   btcPublicKey: "02abcdef02",
@@ -786,6 +798,149 @@ describe("claims backfill", () => {
     expect(body.failed[0].reason).toContain("Invalid status value");
 
     // D1 run should NOT have been called for the bad row
+    expect(runMock).not.toHaveBeenCalled();
+  });
+});
+
+// ── BIP-322 / nullable btcPublicKey backfill tests ───────────────────────
+// Locks the three-case contract introduced by migration 008:
+//   1. Full record (btcPublicKey present)  → inserted with non-null btcPublicKey
+//   2. BIP-322 record (btcPublicKey empty) → inserted with NULL, counted in inserted_null_btcpubkey
+//   3. Missing verifiedAt                  → failed[] (true data error)
+
+describe("BIP-322 nullable btcPublicKey backfill (migration 008)", () => {
+  it("case 1: full record with btcPublicKey is inserted with non-null btc_public_key", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT_1,
+      "referral-code:bc1qagent1": REFERRAL_CODE_1,
+    });
+    const { db, runMock, bindMock } = buildD1Mock({ changesSequence: [1] });
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        ARC_ADMIN_API_KEY: "test-admin-key",
+        VERIFIED_AGENTS: kv,
+        DB: db,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const resp = await POST(buildPostRequest({ table: "agents" }));
+    const body = await resp.json() as {
+      inserted: number;
+      inserted_null_btcpubkey: number;
+      failed: unknown[];
+    };
+
+    expect(body.inserted).toBe(1);
+    expect(body.inserted_null_btcpubkey).toBe(0);
+    expect(body.failed).toHaveLength(0);
+    expect(runMock).toHaveBeenCalledTimes(1);
+
+    // Verify btcPublicKey was passed as the 4th bind arg (non-null)
+    const bindArgs = bindMock.mock.calls[0] as unknown[];
+    expect(bindArgs[3]).toBe("02abcdef01");
+  });
+
+  it("case 2: BIP-322 record with empty btcPublicKey is inserted with NULL and counted in inserted_null_btcpubkey", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qbip322": BIP322_AGENT,
+      "referral-code:bc1qbip322": JSON.stringify({ code: "BIP322", createdAt: "2026-03-01T00:00:00Z" }),
+    });
+    const { db, runMock, bindMock } = buildD1Mock({ changesSequence: [1] });
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        ARC_ADMIN_API_KEY: "test-admin-key",
+        VERIFIED_AGENTS: kv,
+        DB: db,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const resp = await POST(buildPostRequest({ table: "agents" }));
+    const body = await resp.json() as {
+      inserted: number;
+      inserted_null_btcpubkey: number;
+      failed: unknown[];
+    };
+
+    expect(body.inserted).toBe(1);
+    expect(body.inserted_null_btcpubkey).toBe(1);
+    expect(body.failed).toHaveLength(0);
+    expect(runMock).toHaveBeenCalledTimes(1);
+
+    // Verify btcPublicKey was bound as null (not the empty string)
+    const bindArgs = bindMock.mock.calls[0] as unknown[];
+    expect(bindArgs[3]).toBeNull();
+  });
+
+  it("case 3: record missing verifiedAt (with or without btcPublicKey) goes to failed[]", async () => {
+    const missingVerifiedAt = JSON.stringify({
+      btcAddress: "bc1qnotime",
+      stxAddress: "SP1NOTIME",
+      stxPublicKey: "03notime00",
+      btcPublicKey: "",
+      // verifiedAt absent — true data error
+    });
+
+    const kv = buildKvMock({
+      "btc:bc1qnotime": missingVerifiedAt,
+    });
+    const { db, runMock } = buildD1Mock();
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        ARC_ADMIN_API_KEY: "test-admin-key",
+        VERIFIED_AGENTS: kv,
+        DB: db,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const resp = await POST(buildPostRequest({ table: "agents" }));
+    const body = await resp.json() as {
+      inserted: number;
+      inserted_null_btcpubkey: number;
+      failed: { key: string; reason: string }[];
+    };
+
+    expect(body.inserted).toBe(0);
+    expect(body.inserted_null_btcpubkey).toBe(0);
+    expect(body.failed).toHaveLength(1);
+    expect(body.failed[0].key).toBe("btc:bc1qnotime");
+    expect(body.failed[0].reason).toContain("verifiedAt");
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it("dry-run counts BIP-322 record in inserted_null_btcpubkey without writing to D1", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qbip322": BIP322_AGENT,
+      "referral-code:bc1qbip322": JSON.stringify({ code: "BIP322", createdAt: "2026-03-01T00:00:00Z" }),
+    });
+    const { db, runMock } = buildD1Mock();
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        ARC_ADMIN_API_KEY: "test-admin-key",
+        VERIFIED_AGENTS: kv,
+        DB: db,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const resp = await POST(buildPostRequest({ table: "agents", dryRun: "true" }));
+    const body = await resp.json() as {
+      inserted: number;
+      inserted_null_btcpubkey: number;
+      dryRun: boolean;
+      failed: unknown[];
+    };
+
+    expect(body.dryRun).toBe(true);
+    expect(body.inserted).toBe(1);
+    expect(body.inserted_null_btcpubkey).toBe(1);
+    expect(body.failed).toHaveLength(0);
     expect(runMock).not.toHaveBeenCalled();
   });
 });

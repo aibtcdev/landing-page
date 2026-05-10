@@ -1038,16 +1038,20 @@ describe("sampleSize=0 short-circuit", () => {
 // fix they appear in kv_count_invalid_excluded and do NOT contribute to drift.
 
 describe("Bug 1: invalid records excluded same as backfill (criteria alignment)", () => {
-  // Fixture: passes isPartialAgentRecord (has stxAddress) but missing btcPublicKey
-  const INVALID_AGENT_MISSING_BTC_PUBKEY = JSON.stringify({
+  // Since migration 008: btcPublicKey is NULLable. A record with stxAddress +
+  // stxPublicKey + verifiedAt but NO btcPublicKey is now a VALID BIP-322 agent
+  // that belongs in D1 with btc_public_key = NULL. It is NOT invalid_excluded.
+
+  // Fixture: BIP-322 agent — valid post-migration-008 (btcPublicKey absent but all other fields present)
+  const BIP322_AGENT_RECONCILE = JSON.stringify({
     btcAddress: "bc1qinvalid1",
     stxAddress: "SP1INVALID1",
     stxPublicKey: "03abcdef99",
-    // btcPublicKey intentionally missing
+    // btcPublicKey intentionally missing — valid per migration 008
     verifiedAt: "2026-01-05T00:00:00Z",
   });
 
-  // Fixture: passes isPartialAgentRecord but has empty verifiedAt
+  // Fixture: truly invalid — empty verifiedAt (still rejected by backfill post-migration-008)
   const INVALID_AGENT_EMPTY_VERIFIED_AT = JSON.stringify({
     btcAddress: "bc1qinvalid2",
     stxAddress: "SP1INVALID2",
@@ -1056,18 +1060,19 @@ describe("Bug 1: invalid records excluded same as backfill (criteria alignment)"
     verifiedAt: "", // empty string — backfill rejects as falsy
   });
 
-  it("agents: excludes invalid record (missing btcPublicKey) from kv_count and reports kv_count_invalid_excluded", async () => {
-    // KV: 1 full agent + 1 invalid (non-partial but missing btcPublicKey)
-    // D1: 1 agent (only full agent backfilled)
-    // Expected: kv_count=1, kv_count_invalid_excluded=1, drift=0, drift_unexplained=0
+  it("agents: BIP-322 record (missing btcPublicKey) counts as full agent post-migration-008", async () => {
+    // Migration 008 made btc_public_key NULLable. Records with stxAddress + stxPublicKey +
+    // verifiedAt but no btcPublicKey are now VALID and go to D1. They must appear in
+    // kv_count (not kv_count_invalid_excluded) and D1 count must match for drift=0.
     const kv = buildKvMock({
       "btc:bc1qagent1": FULL_AGENT,
-      "btc:bc1qinvalid1": INVALID_AGENT_MISSING_BTC_PUBKEY,
+      "btc:bc1qinvalid1": BIP322_AGENT_RECONCILE,
     });
 
     const db = buildD1Mock({
       firstResults: {
-        "FROM agents": { cnt: 1 },
+        // D1 now has 2 agents (full + BIP-322), so drift=0
+        "FROM agents": { cnt: 2 },
       },
       defaultFirst: null,
     });
@@ -1086,15 +1091,17 @@ describe("Bug 1: invalid records excluded same as backfill (criteria alignment)"
       drift_unexplained: number;
     };
 
-    expect(body.kv_count).toBe(1); // only full agent
-    expect(body.kv_count_partial_excluded).toBe(0); // none are partial
-    expect(body.kv_count_invalid_excluded).toBe(1); // invalid agent surfaced separately
-    expect(body.d1_count).toBe(1);
-    expect(body.drift).toBe(0); // no unexplained gap
+    // Both agents are now "full" (BIP-322 record is valid post-migration-008)
+    expect(body.kv_count).toBe(2);
+    expect(body.kv_count_partial_excluded).toBe(0);
+    expect(body.kv_count_invalid_excluded).toBe(0);
+    expect(body.d1_count).toBe(2);
+    expect(body.drift).toBe(0);
     expect(body.drift_unexplained).toBe(0);
   });
 
   it("agents: excludes invalid record (empty verifiedAt) — not counted as drift", async () => {
+    // Empty verifiedAt is still a true data error post-migration-008.
     const kv = buildKvMock({
       "btc:bc1qagent1": FULL_AGENT,
       "btc:bc1qinvalid2": INVALID_AGENT_EMPTY_VERIFIED_AT,
@@ -1125,19 +1132,21 @@ describe("Bug 1: invalid records excluded same as backfill (criteria alignment)"
     expect(body.drift_unexplained).toBe(0);
   });
 
-  it("agents: distinguishes partial, invalid, and full counts in a mixed KV", async () => {
-    // KV: 1 full + 1 partial (isPartialAgentRecord) + 1 invalid (missing btcPublicKey)
-    // D1: 1 agent (only full backfilled)
-    // Expected: kv_count=1, partial_excluded=1, invalid_excluded=1, drift=0
+  it("agents: distinguishes partial, BIP-322, and full counts in a mixed KV", async () => {
+    // Post-migration-008:
+    //   - 1 full agent (has btcPublicKey)
+    //   - 1 partial (isPartialAgentRecord — no stxAddress)
+    //   - 1 BIP-322 (stxAddress + stxPublicKey + verifiedAt, no btcPublicKey — now VALID)
+    // D1: 2 agents (full + BIP-322 both inserted)
     const kv = buildKvMock({
       "btc:bc1qagent1": FULL_AGENT,
       "btc:bc1qpartial": PARTIAL_AGENT,
-      "btc:bc1qinvalid1": INVALID_AGENT_MISSING_BTC_PUBKEY,
+      "btc:bc1qinvalid1": BIP322_AGENT_RECONCILE,
     });
 
     const db = buildD1Mock({
       firstResults: {
-        "FROM agents": { cnt: 1 },
+        "FROM agents": { cnt: 2 },
       },
       defaultFirst: null,
     });
@@ -1156,32 +1165,38 @@ describe("Bug 1: invalid records excluded same as backfill (criteria alignment)"
       drift_unexplained: number;
     };
 
-    expect(body.kv_count).toBe(1); // full only
+    // full + BIP-322 = 2 full agents; partial excluded; 0 invalid
+    expect(body.kv_count).toBe(2);
     expect(body.kv_count_partial_excluded).toBe(1); // true partial
-    expect(body.kv_count_invalid_excluded).toBe(1); // non-partial but missing field
-    expect(body.d1_count).toBe(1);
+    expect(body.kv_count_invalid_excluded).toBe(0); // BIP-322 is now valid
+    expect(body.d1_count).toBe(2);
     expect(body.drift).toBe(0);
     expect(body.drift_unexplained).toBe(0);
   });
 
-  it("claims: invalid agent's claim is also drift_explained (cascades from KV-truth)", async () => {
-    // KV: 1 full + 1 invalid; 2 claims; D1: 1 claim (only full agent's)
-    // The invalid agent's claim is not in D1 (backfill rejected the parent).
-    // reconcile should explain this via drift_explained, not drift_unexplained.
+  it("claims: BIP-322 agent's claim is in fullAgents → NOT drift_explained (post-migration-008)", async () => {
+    // Post-migration-008: BIP-322 record is in fullAgents (it's a valid D1 agent).
+    // Its claim is also in D1. So kv_count=2, d1_count=2, drift=0.
     const kv = buildKvMock({
       "btc:bc1qagent1": FULL_AGENT,
-      "btc:bc1qinvalid1": INVALID_AGENT_MISSING_BTC_PUBKEY,
+      "btc:bc1qinvalid1": BIP322_AGENT_RECONCILE,
       "claim:bc1qagent1": CLAIM_1,
       "claim:bc1qinvalid1": JSON.stringify({
         btcAddress: "bc1qinvalid1",
         status: "verified",
         claimedAt: "2026-01-05T01:00:00Z",
+        displayName: "BIP-322 Agent",
+        tweetUrl: "https://x.com/bip322/status/456",
+        tweetAuthor: "bip322",
+        rewardSatoshis: 0,
+        rewardTxid: null,
       }),
     });
 
     const db = buildD1Mock({
       firstResults: {
-        "FROM claims": { cnt: 1 },
+        // Both claims in D1 (both agents are valid)
+        "FROM claims": { cnt: 2 },
       },
       defaultFirst: null,
     });
@@ -1200,10 +1215,9 @@ describe("Bug 1: invalid records excluded same as backfill (criteria alignment)"
     };
 
     expect(body.kv_count).toBe(2); // 2 claims in KV
-    expect(body.d1_count).toBe(1);
-    expect(body.drift).toBe(1);
-    // Invalid agent is not in fullAgents → claim is drift_explained
-    expect(body.drift_explained).toBe(1);
+    expect(body.d1_count).toBe(2); // 2 claims in D1 (BIP-322 is now a valid agent)
+    expect(body.drift).toBe(0);
+    expect(body.drift_explained).toBe(0);
     expect(body.drift_unexplained).toBe(0);
   });
 });

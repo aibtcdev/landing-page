@@ -169,13 +169,16 @@ async function sampleKvKeys(
 
 /**
  * Single-pass scan of `btc:` KV prefix — returns the set of btcAddress values
- * whose agent record passes BOTH the PartialAgentRecord check AND the strict
- * required-field check that backfill applies. Used by claims/inbox/vouches
- * to compute drift_explained from KV truth (not D1 absence).
+ * whose agent record passes BOTH the PartialAgentRecord check AND the required-field
+ * check that backfill applies. Used by claims/inbox/vouches to compute drift_explained
+ * from KV truth (not D1 absence).
  *
- * Matches backfill's two-step rejection logic:
- *   1. Skip isPartialAgentRecord — counted as partial_count
- *   2. Skip records missing stxAddress/stxPublicKey/btcPublicKey/verifiedAt — invalid_count
+ * Matches backfill's two-step rejection logic (post-migration-008):
+ *   1. Skip isPartialAgentRecord — counted as partial_count (no stxAddress)
+ *   2. Skip records missing stxAddress/stxPublicKey/verifiedAt — invalid_count
+ *      NOTE: btcPublicKey is NULLable since migration 008; absent btcPublicKey alone
+ *      does NOT make a record invalid. BIP-322 bc1q agents with empty/absent btcPublicKey
+ *      are valid and belong in D1 with btc_public_key = NULL.
  *
  * Reads values in parallel batches of 50 to keep wall-clock manageable.
  */
@@ -213,16 +216,16 @@ async function buildFullAgentSet(kv: KVNamespace): Promise<{
           partial_count++;
           continue;
         }
-        // Apply the same strict required-field check that backfill uses:
-        // records missing any of these are rejected by backfill and absent from D1.
+        // Apply the same required-field check that backfill uses (post-migration-008):
+        // btcPublicKey is NULLable — BIP-322 bc1q records with empty/absent btcPublicKey
+        // are now valid and inserted into D1 with btc_public_key = NULL.
+        // Only missing stxAddress, stxPublicKey, or verifiedAt makes a record invalid.
         const agent = parsed as Record<string, unknown>;
         if (
           typeof agent.stxAddress !== "string" ||
           !agent.stxAddress ||
           typeof agent.stxPublicKey !== "string" ||
           !agent.stxPublicKey ||
-          typeof agent.btcPublicKey !== "string" ||
-          !agent.btcPublicKey ||
           typeof agent.verifiedAt !== "string" ||
           !agent.verifiedAt
         ) {
