@@ -16,6 +16,52 @@ import {
   type AcceptanceTestResults,
 } from "@/lib/d1/reconcile";
 
+// ── Inbox pagination types ─────────────────────────────────────────────────
+// Cursor types + encode/decode live in lib/d1/reconcile-cursor.ts because
+// Next.js App Router rejects non-Route exports from route.ts files.
+
+import {
+  encodeCursor,
+  decodeCursor,
+  type InboxCursorState,
+  type InboxPartialCounts,
+} from "@/lib/d1/reconcile-cursor";
+
+/**
+ * Response shape for a paginated inbox reconcile call (non-final page).
+ */
+interface InboxPartialResponse {
+  table: "inbox_messages";
+  partial: true;
+  cursor: string;
+  partial_counts: {
+    kv_count: number;
+    drift_explained_partial_cascade: number;
+    drift_explained_unique_payment_txid_replay: number;
+    drift_explained_unresolvable_stx_reply: number;
+  };
+}
+
+/**
+ * Response shape for the final page of a paginated inbox reconcile call.
+ * Matches the existing single-call TableReconcileResult shape extended with
+ * pagination fields for forward-compat.
+ */
+export interface InboxFinalResponse extends Omit<TableReconcileResult, "duration_ms"> {
+  partial: false;
+  cursor: null;
+}
+
+// (Cursor encode/decode moved to lib/d1/reconcile-cursor.ts.)
+
+/** Parse and clamp maxKeysPerCall to [1, 1000], default 500. */
+function parseMaxKeys(raw: string | null): number {
+  if (!raw) return 500;
+  const n = parseInt(raw, 10);
+  if (!Number.isFinite(n)) return 500;
+  return Math.max(1, Math.min(1000, n));
+}
+
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /**
@@ -178,6 +224,26 @@ async function buildFullAgentSet(kv: KVNamespace): Promise<{
   } while (cursor !== undefined);
 
   return { fullAgents, partial_count, invalid_count };
+}
+
+// ── D1-based fullAgents for inbox pagination ───────────────────────────────
+
+/**
+ * Build the fullAgents set from D1 instead of KV.
+ *
+ * Used by the paginated inbox reconcile path to avoid the ~1664 KV reads that
+ * `buildFullAgentSet` requires. One D1 subrequest retrieves all 243 btc_address
+ * values that passed backfill and are resident in D1. Semantically equivalent to
+ * `buildFullAgentSet` for the inbox cascade check when agents.drift_unexplained === 0,
+ * which is verified as a pre-condition before calling this function.
+ */
+async function buildFullAgentsFromD1(db: D1Database): Promise<Set<string>> {
+  const rows = await db.prepare("SELECT btc_address FROM agents").all<{ btc_address: string }>();
+  const fullAgents = new Set<string>();
+  for (const row of rows.results) {
+    if (row.btc_address) fullAgents.add(row.btc_address);
+  }
+  return fullAgents;
 }
 
 // ── Per-table reconciliation ───────────────────────────────────────────────
@@ -621,6 +687,210 @@ async function reconcileInboxMessages(
 }
 
 /**
+ * One page of the paginated inbox reconcile pass.
+ *
+ * Processes up to `maxKeys` KV keys from the current cursor position across the
+ * two inbox prefixes (inbox:message: then inbox:reply:). Accumulates counts from
+ * prior pages via the decoded cursor state and returns either a partial response
+ * (more pages remain) or the final response (both prefixes exhausted).
+ *
+ * Subrequest budget per call (~maxKeys=500):
+ *   - 1  kv.list (the page fetch)
+ *   - ~500  kv.get (page values; batch-parallel, count as ~500 subrequests)
+ *   - ≤50  stx: kv.get (cached within invocation via stxResolutionCache)
+ *   - 1  SELECT btc_address FROM agents (first call only, passed in)
+ *   - 1  SELECT COUNT(*) FROM inbox_messages (final page only)
+ *   Total: ~552 first call, ~551 subsequent (well under 1000 cap).
+ *
+ * With maxKeys=1000:
+ *   Total: ~1052 first call, ~1051 subsequent (tight; use 500 if hitting cap).
+ */
+async function reconcileInboxMessagesPaginated(
+  kv: KVNamespace,
+  db: D1Database,
+  fullAgents: Set<string>,
+  cursorState: InboxCursorState | null,
+  maxKeys: number,
+  stxResolutionCache: Map<string, string | null>
+): Promise<InboxPartialResponse | InboxFinalResponse> {
+  const INBOX_BATCH_SIZE = 50;
+  const PREFIXES: Array<"inbox:message:" | "inbox:reply:"> = ["inbox:message:", "inbox:reply:"];
+
+  // Restore accumulated state from cursor or start fresh
+  const accumulated: InboxPartialCounts = cursorState?.partialCounts ?? {
+    kv_count: 0,
+    drift_explained_partial_cascade: 0,
+    drift_explained_unique_payment_txid_replay: 0,
+    drift_explained_unresolvable_stx_reply: 0,
+    txidCounts: {},
+  };
+
+  let currentPrefix: "inbox:message:" | "inbox:reply:" = cursorState?.prefix ?? "inbox:message:";
+  let kvCursor: string | null = cursorState?.kvCursor ?? null;
+
+  let keysProcessed = 0;
+  let prefixExhausted = false;
+  let bothPrefixesDone = false;
+
+  // Process one page within the budget
+  while (keysProcessed < maxKeys) {
+    const remaining = maxKeys - keysProcessed;
+    const opts: KVNamespaceListOptions = {
+      prefix: currentPrefix,
+      limit: Math.min(1000, remaining),
+    };
+    if (kvCursor) opts.cursor = kvCursor;
+
+    const page = await kv.list(opts);
+    prefixExhausted = page.list_complete;
+    // page.cursor only exists on the list_complete=false variant of the
+    // discriminated union; narrow before reading it.
+    kvCursor = page.list_complete ? null : (page.cursor ?? null);
+
+    // Fetch values in parallel batches of 50
+    for (let i = 0; i < page.keys.length; i += INBOX_BATCH_SIZE) {
+      const batch = page.keys.slice(i, i + INBOX_BATCH_SIZE);
+      const values = await Promise.all(batch.map((k) => kv.get(k.name)));
+      for (let j = 0; j < batch.length; j++) {
+        const raw = values[j];
+        if (!raw) continue;
+        let parsed: Record<string, unknown>;
+        // Count every KV entry that exists at the prefix — kv_count tracks total
+        // KV records, not just successfully-parsed ones. Malformed records are
+        // implicitly excluded from drift_explained categorization (no accumulator
+        // increments), but they still appear in kv_count vs d1_count drift math.
+        accumulated.kv_count++;
+        try {
+          parsed = JSON.parse(raw) as Record<string, unknown>;
+        } catch {
+          continue;
+        }
+
+        if (currentPrefix === "inbox:message:") {
+          const toBtcAddress = parsed.toBtcAddress as string | undefined;
+          const paymentTxid = parsed.paymentTxid as unknown;
+
+          if (toBtcAddress && !fullAgents.has(toBtcAddress)) {
+            accumulated.drift_explained_partial_cascade++;
+          }
+
+          if (typeof paymentTxid === "string" && paymentTxid.length > 0) {
+            const prev = accumulated.txidCounts[paymentTxid] ?? 0;
+            accumulated.txidCounts[paymentTxid] = prev + 1;
+            if (prev >= 1) {
+              // This is a duplicate (prev was already >= 1 meaning at least 2 total)
+              accumulated.drift_explained_unique_payment_txid_replay++;
+            }
+          }
+        } else {
+          // inbox:reply: prefix
+          const replyTo = parsed.toBtcAddress as string | undefined;
+          if (replyTo && (replyTo.startsWith("SP") || replyTo.startsWith("ST"))) {
+            // Stacks address — look up stx: KV key (cache within invocation)
+            let resolvedBtc: string | null | undefined = stxResolutionCache.get(replyTo);
+            if (resolvedBtc === undefined) {
+              const stxRaw = await kv.get(`stx:${replyTo}`);
+              if (!stxRaw) {
+                resolvedBtc = null;
+              } else {
+                try {
+                  const stxRecord = JSON.parse(stxRaw) as Record<string, unknown>;
+                  resolvedBtc = (stxRecord.btcAddress as string | undefined) ?? null;
+                } catch {
+                  resolvedBtc = null;
+                }
+              }
+              stxResolutionCache.set(replyTo, resolvedBtc);
+            }
+            if (resolvedBtc === null) {
+              accumulated.drift_explained_unresolvable_stx_reply++;
+            } else if (!fullAgents.has(resolvedBtc)) {
+              accumulated.drift_explained_partial_cascade++;
+            }
+          } else if (replyTo && (replyTo.startsWith("bc1q") || replyTo.startsWith("bc1p"))) {
+            if (!fullAgents.has(replyTo)) {
+              accumulated.drift_explained_partial_cascade++;
+            }
+          }
+        }
+      }
+    }
+
+    keysProcessed += page.keys.length;
+
+    if (prefixExhausted) {
+      const prefixIdx = PREFIXES.indexOf(currentPrefix);
+      if (prefixIdx < PREFIXES.length - 1) {
+        // Advance to next prefix
+        currentPrefix = PREFIXES[prefixIdx + 1];
+        kvCursor = null;
+      } else {
+        // Both prefixes exhausted
+        bothPrefixesDone = true;
+        break;
+      }
+    } else {
+      // Page was full — we've consumed the budget for this invocation
+      break;
+    }
+  }
+
+  if (!bothPrefixesDone) {
+    // More pages remain — return partial response
+    const nextState: InboxCursorState = {
+      prefix: currentPrefix,
+      kvCursor,
+      partialCounts: accumulated,
+    };
+    return {
+      table: "inbox_messages",
+      partial: true,
+      cursor: encodeCursor(nextState),
+      partial_counts: {
+        kv_count: accumulated.kv_count,
+        drift_explained_partial_cascade: accumulated.drift_explained_partial_cascade,
+        drift_explained_unique_payment_txid_replay:
+          accumulated.drift_explained_unique_payment_txid_replay,
+        drift_explained_unresolvable_stx_reply: accumulated.drift_explained_unresolvable_stx_reply,
+      },
+    };
+  }
+
+  // Final page — compute totals and fetch D1 count
+  const d1Row = await db
+    .prepare("SELECT COUNT(*) AS cnt FROM inbox_messages")
+    .first<{ cnt: number }>();
+  const d1_count = d1Row?.cnt ?? 0;
+
+  const partial_cascade = accumulated.drift_explained_partial_cascade;
+  const unique_payment_txid_replay = accumulated.drift_explained_unique_payment_txid_replay;
+  const unresolvable_stx_reply = accumulated.drift_explained_unresolvable_stx_reply;
+  const drift_explained = partial_cascade + unique_payment_txid_replay + unresolvable_stx_reply;
+
+  const breakdown = computeDrift(accumulated.kv_count, 0, d1_count, drift_explained, {
+    partial_cascade,
+    unique_payment_txid_replay,
+    unresolvable_stx_reply,
+  });
+
+  return {
+    table: "inbox_messages",
+    partial: false,
+    cursor: null,
+    kv_count: breakdown.kv_count_full,
+    kv_count_partial_excluded: 0,
+    kv_count_invalid_excluded: 0,
+    d1_count: breakdown.d1_count,
+    drift: breakdown.drift,
+    drift_explained: breakdown.drift_explained,
+    drift_unexplained: breakdown.drift_unexplained,
+    explained_categories: breakdown.explained_categories ?? {},
+    sample_size: 0,
+    field_diffs: [],
+  };
+}
+
+/**
  * Reconcile the vouches table.
  *
  * Drift is explained by vouch records where either the referrer or referee
@@ -846,6 +1116,31 @@ export async function GET(request: NextRequest) {
       sampleSize: "Field-level spot-check sample size: 1–500 (default: 50)",
       acceptanceTests:
         "Pass 'unreadCount' to include unread count acceptance test (default: included for inbox_messages and all)",
+      cursor:
+        "[inbox_messages only] Base64-encoded cursor from prior partial response. Absent = first call.",
+      maxKeysPerCall:
+        "[inbox_messages only] KV keys to process per invocation: 1–1000 (default: 500). Lower if hitting subrequest cap.",
+    },
+    pagination: {
+      note: "inbox_messages uses cursor-based pagination to stay under the Workers 1000-subrequest cap (~7K+ inbox keys).",
+      cursorLocation:
+        "cursor must be sent in the POST request body as JSON { \"cursor\": \"...\" }. Other params (table, maxKeysPerCall) remain as URL query params. This avoids URL length limits as txidCounts grows O(n) across pages.",
+      callerLoop: `cursor=""
+while :; do
+  payload=$(jq -nc --arg c "$cursor" '{cursor: $c}')
+  resp=$(curl -sS -X POST "https://aibtc.com/api/admin/reconcile?table=inbox_messages&maxKeysPerCall=500" \\
+    -H "X-Admin-Key: $KEY" \\
+    -H "Content-Type: application/json" \\
+    -d "$payload")
+  cursor=$(echo "$resp" | jq -r '.cursor // empty')
+  [ -z "$cursor" ] && break
+done`,
+      partialResponse: "{ table, partial: true, cursor, partial_counts: { kv_count, drift_explained_* } }",
+      finalResponse: "{ table, partial: false, cursor: null, kv_count, d1_count, drift, drift_explained, drift_unexplained, explained_categories }",
+      precondition:
+        "agents.drift_unexplained must be 0 before calling inbox_messages (first page only). The pre-condition runs on the first call (no cursor) and returns 409 if not met. Cursor continuation calls skip the check — if it passed on page 1, it holds for subsequent pages (agents table changes are rare at reconcile-run timescales). If the agents table changes mid-reconcile-run, the caller would still complete the run but cascade-detection results may be stale; recommend re-running the full loop.",
+      subrequestBudget:
+        "~552 per call at maxKeysPerCall=500 (1 kv.list + ~500 kv.get + ≤50 stx: lookups + 1 D1 query). ~1052 at maxKeysPerCall=1000.",
     },
     baseline: {
       note: "Phase 1.3 operational backfill (2026-05-09T23:55Z) produced these drift numbers:",
@@ -866,9 +1161,11 @@ export async function GET(request: NextRequest) {
         "unread_count_drift: [{address, kv_cached, d1_count, drift}] — Phase 2.5 gate",
     },
     operationalPlan: {
-      step1: "POST ?table=all&sampleSize=50 — run full reconciliation",
-      step2: "Verify drift_unexplained == 0 for all tables before Phase 2 begins",
-      step3: "Check acceptance_tests.passed == true for unreadCount drift",
+      step1: "POST ?table=agents&sampleSize=0 — verify agents drift_unexplained == 0 first",
+      step2: "POST ?table=inbox_messages&maxKeysPerCall=500 — loop with cursor until partial=false",
+      step3: "POST ?table=claims and POST ?table=vouches separately — single calls each (small datasets, no cap risk)",
+      step4: "Verify drift_unexplained == 0 for all tables before Phase 2 begins",
+      step5: "Check acceptance_tests.passed == true for unreadCount drift",
     },
   });
 }
@@ -901,6 +1198,12 @@ export async function POST(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const rawTable = searchParams.get("table") ?? "all";
   const sampleSize = parseSampleSize(searchParams.get("sampleSize"));
+  const maxKeysPerCall = parseMaxKeys(searchParams.get("maxKeysPerCall"));
+  // cursor is read from the POST body (not URL query) to avoid URL length limits —
+  // txidCounts grows O(n) across pages and can exceed browser/proxy URL length caps.
+  // Other params (table, maxKeysPerCall) remain as URL query params (they are small).
+  const body = await request.json().catch(() => ({}));
+  const rawCursor = (body as { cursor?: string }).cursor ?? null;
   const includeUnreadTest =
     rawTable === "all" ||
     rawTable === "inbox_messages" ||
@@ -1022,8 +1325,111 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(response);
     }
 
+    // ── inbox_messages: cursor-based paginated path ──────────────────────────
+    if (rawTable === "inbox_messages") {
+      // Decode cursor (null = first call)
+      let cursorState: InboxCursorState | null = null;
+      if (rawCursor) {
+        try {
+          cursorState = decodeCursor(rawCursor);
+        } catch {
+          return NextResponse.json({ error: "Invalid cursor: could not decode" }, { status: 400 });
+        }
+      }
+
+      // Pre-condition: run agents drift check only on the first page (no cursor).
+      // Cursor continuations skip this check — if it passed on page 1, it holds for
+      // subsequent pages because agents table changes are rare at reconcile-run timescales.
+      // Running this on every page would cost ~1664 KV reads per call, which defeats the
+      // purpose of pagination (staying under the Workers 1000-subrequest cap).
+      if (!rawCursor) {
+        const agentsPreCheck = await reconcileAgents(kv, db, 0);
+        if (agentsPreCheck.drift_unexplained !== 0) {
+          logger.warn("reconcile.inbox.precondition_failed", {
+            agents_drift_unexplained: agentsPreCheck.drift_unexplained,
+          });
+          return NextResponse.json(
+            {
+              error:
+                "Pre-condition failed: agents.drift_unexplained must be 0 before running inbox reconciliation. " +
+                "Run ?table=agents to diagnose and fix agents drift first.",
+              agents_drift_unexplained: agentsPreCheck.drift_unexplained,
+              hint: "POST ?table=agents&sampleSize=50 to see agents drift breakdown",
+            },
+            { status: 409 }
+          );
+        }
+      }
+
+      logger.info("reconcile.inbox.paginated.start", {
+        maxKeysPerCall,
+        hasCursor: !!rawCursor,
+        prefix: cursorState?.prefix ?? "inbox:message:",
+      });
+
+      // Build fullAgents from D1 (1 subrequest vs ~1664 KV reads for buildFullAgentSet)
+      const fullAgents = await buildFullAgentsFromD1(db);
+
+      // Per-invocation STX address resolution cache (avoids duplicate stx: lookups)
+      const stxResolutionCache = new Map<string, string | null>();
+
+      const paginatedResult = await reconcileInboxMessagesPaginated(
+        kv,
+        db,
+        fullAgents,
+        cursorState,
+        maxKeysPerCall,
+        stxResolutionCache
+      );
+
+      const duration_ms = Date.now() - start;
+
+      if (paginatedResult.partial) {
+        logger.info("reconcile.inbox.paginated.partial", {
+          kv_count_so_far: paginatedResult.partial_counts.kv_count,
+          duration_ms,
+        });
+        return NextResponse.json({ ...paginatedResult, duration_ms });
+      }
+
+      // Final page
+      logger.info("reconcile.table.done", {
+        table: "inbox_messages",
+        drift: paginatedResult.drift,
+        drift_unexplained: paginatedResult.drift_unexplained,
+        duration_ms,
+      });
+
+      if (paginatedResult.drift_unexplained !== 0) {
+        logger.warn("reconcile.drift.unexplained", {
+          table: "inbox_messages",
+          drift_unexplained: paginatedResult.drift_unexplained,
+        });
+      }
+
+      let acceptance_tests: AcceptanceTestResults | undefined;
+      if (includeUnreadTest) {
+        acceptance_tests = await runUnreadCountAcceptanceTest(kv, db);
+        logger.info("reconcile.acceptance.done", {
+          unread_drift_count: acceptance_tests.unread_count_drift.length,
+          passed: acceptance_tests.passed,
+        });
+        if (!acceptance_tests.passed) {
+          logger.warn("reconcile.acceptance.failed", {
+            entries: acceptance_tests.unread_count_drift.filter((e) => e.drift !== 0),
+          });
+        }
+      }
+
+      return NextResponse.json({
+        ...paginatedResult,
+        duration_ms,
+        ...(acceptance_tests ? { acceptance_tests } : {}),
+      });
+    }
+
     // Single table — build fullAgents only when needed
-    const table = rawTable as TableTarget;
+    const table = rawTable as Exclude<TableTarget, "inbox_messages">;
     logger.info("reconcile.table.start", { table });
 
     let result: Omit<TableReconcileResult, "duration_ms">;
@@ -1036,15 +1442,13 @@ export async function POST(request: NextRequest) {
         result = await reconcileClaims(kv, db, sampleSize, fullAgents);
         break;
       }
-      case "inbox_messages": {
-        const { fullAgents } = await buildFullAgentSet(kv);
-        result = await reconcileInboxMessages(kv, db, sampleSize, fullAgents);
-        break;
-      }
       case "vouches": {
         const { fullAgents } = await buildFullAgentSet(kv);
         result = await reconcileVouches(kv, db, sampleSize, fullAgents);
         break;
+      }
+      default: {
+        throw new Error(`unhandled table: ${table satisfies never}`);
       }
     }
 
