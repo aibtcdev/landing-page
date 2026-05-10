@@ -14,7 +14,7 @@ The route at `app/api/admin/reconcile/route.ts` regenerates these numbers on dem
 |-------|---------:|---------:|------:|----------------:|-------------------:|-------------|
 | `agents` | **951** (post-partial-filter; 0 partial excluded; 708 invalid surfaced via `kv_count_invalid_excluded`) | 243 | **708** | 708 (`kv_count_invalid_excluded` — strict-required-field rejection per backfill validation) | **0 ✅** | reconcile route, route-level |
 | `claims` | **577** | 123 | **454** | 454 (FK cascade from invalid agents) | **0 ✅** | reconcile route, route-level |
-| `inbox_messages` | **7761** (5223 inserted + 2538 backfill rejects) | 5223 | **2538** | 2538 (categorical breakdown below) | **0 ✅** (count-level) / pagination needed for per-row | reconcile route + backfill artifact |
+| `inbox_messages` | **7761** (5223 inserted + 2538 backfill rejects) | 5223 | **2538** | 2538 (categorical breakdown below) | **0 ✅** (count-level) / pagination needed for per-row | count + categorical breakdown derived from the Phase 1.3 backfill operational summary on [#671](https://github.com/aibtcdev/landing-page/issues/671); route-level per-row verification queued at [#684](https://github.com/aibtcdev/landing-page/issues/684) |
 | `vouches` | **95** | 30 | **65** | 65 (FK cascade) | **0 ✅** | reconcile route, route-level |
 
 Reconcile route's response shape includes a per-table `explained_categories` field that surfaces this breakdown on demand. Numbers above are the operational run output; expected to remain stable absent net-new agent registrations or inbox writes.
@@ -49,7 +49,7 @@ No "small variance" — the figures balance to the row.
 - **Agents (route-level):** `buildFullAgentSet` enumerates KV `btc:` prefix, classifies each record via `isPartialAgentRecord` + the strict-required-field check (matching backfill validation in `app/api/admin/backfill/route.ts:174-195`). Three distinct counts — `kv_count` (full), `kv_count_partial_excluded`, `kv_count_invalid_excluded` — are surfaced in the route's response.
 - **Claims (route-level):** scans `claim:` prefix; for each KV claim's `btcAddress`, checks `fullAgents.has(addr)`; rows whose parent agent isn't full are bucketed as `partial_cascade`. PR #680 introduced this KV-truth-based detection (replacing the prior D1-existence check that misclassified backfill failures as explained).
 - **Vouches (route-level):** scans `vouch:` prefix; checks both `referrer` and `referee` against `fullAgents`. Same `partial_cascade` model.
-- **Inbox (artifact-level today; route-level pending pagination):** the route's count pass exceeds Cloudflare Workers' 1000-subrequest-per-invocation limit on Workers Paid (~12K subrequests needed). Count + categorical-breakdown verification today comes from this document + the backfill artifact at `phases/03-d1-backfill/2026-05-09T2330Z-backfill-production.md` (off-repo planning store, summarized here in-repo).
+- **Inbox (artifact-level today; route-level pending pagination):** the route's count pass exceeds Cloudflare Workers' 1000-subrequest-per-invocation limit on Workers Paid (~12K subrequests needed). Count + categorical-breakdown verification today comes from this document, derived from the operational backfill summary posted on [#671](https://github.com/aibtcdev/landing-page/issues/671#issuecomment-4414012014). Route-level per-row verification arrives with [#684](https://github.com/aibtcdev/landing-page/issues/684).
 
 ## Phase 2.x gate satisfaction
 
@@ -64,7 +64,7 @@ For Phase 2.5 (inbox dual-write → flip), the `unreadCount` empirical acceptanc
 ## Reproducing this baseline
 
 ```bash
-ADMIN_API_KEY=<value from credentials store: arc0btc landing-page/admin_api_key>
+ADMIN_API_KEY=<admin api key>  # ARC_ADMIN_API_KEY worker secret value; obtain from the maintainer's secret store
 
 # Three tables verified at the route:
 for t in agents claims vouches; do
@@ -84,4 +84,4 @@ done
 - RFC: `docs/rfc-d1-schema.md` (§1 architectural decisions)
 - Phase 1.3 backfill: PR [#672](https://github.com/aibtcdev/landing-page/pull/672) + sub-issue [#671](https://github.com/aibtcdev/landing-page/issues/671) (operational summary in comment)
 - Phase 1.4 reconcile: PRs [#678](https://github.com/aibtcdev/landing-page/pull/678) [#680](https://github.com/aibtcdev/landing-page/pull/680) [#681](https://github.com/aibtcdev/landing-page/pull/681) [#682](https://github.com/aibtcdev/landing-page/pull/682) + sub-issue [#675](https://github.com/aibtcdev/landing-page/issues/675)
-- Operational planning store (off-repo, append-only): `~/.planning/active/2026-05-08-landing-page-d1-migration/phases/04-d1-reconcile/`
+- Operational backfill summary (in-repo via comment): [#671 — operational backfill complete](https://github.com/aibtcdev/landing-page/issues/671#issuecomment-4414012014)
