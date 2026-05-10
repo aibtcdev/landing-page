@@ -104,6 +104,28 @@ export function getAgentLevel(
 }
 
 /**
+ * Format a level title suffix for use in HTML <title> and og:title strings.
+ *
+ * `LEVELS[1].name` is "Verified Agent" — already includes "Agent" suffix.
+ * `LEVELS[0].name` ("Unverified") and `LEVELS[2].name` ("Genesis") don't.
+ * Naive concatenation `${levelName} Agent` produces "Verified Agent Agent"
+ * for level=1, visible to social-media crawlers and browser tab titles.
+ *
+ * This helper is the single source of truth — both `middleware.ts` (crawler-bot
+ * OG path) and `app/agents/[address]/page.tsx` (SSR profile page) use it.
+ *
+ * @example
+ *   formatLevelTitleSuffix(0) // => "Unverified Agent"
+ *   formatLevelTitleSuffix(1) // => "Verified Agent"  (no doubled "Agent")
+ *   formatLevelTitleSuffix(2) // => "Genesis Agent"
+ */
+export function formatLevelTitleSuffix(level: number): string {
+  const levelName = LEVELS[level].name;
+  // LEVELS[1].name "Verified Agent" already contains "Agent"; avoid doubling.
+  return level === 1 ? levelName : `${levelName} Agent`;
+}
+
+/**
  * Given a current level, return what the agent needs to do to reach the next one.
  * Returns null for max level (Genesis = level 2).
  */
