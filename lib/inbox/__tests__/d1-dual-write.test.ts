@@ -138,12 +138,10 @@ describe("insertInboundMessageToD1", () => {
 
   it("passes is_reply=0 as the second positional bind parameter", async () => {
     const db = createMockD1();
-    const stmt = (db.prepare as ReturnType<typeof vi.fn>).mock.results[0];
     await insertInboundMessageToD1(db, INBOUND_MESSAGE);
     // is_reply=0 is hardcoded in the SQL literal, not a bind param — verify SQL contains ", 0,"
     const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(sql).toContain(", 0,"); // "?, 0, ?," — is_reply literal
-    void stmt; // satisfy TS
   });
 
   it("binds message_id to message.messageId", async () => {

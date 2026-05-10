@@ -405,6 +405,7 @@ export async function POST(
       insertReplyToD1(env.DB as D1Database, kv, outboxReply).catch((err) =>
         logger.error("outbox.dual_write_d1_failed", {
           messageId: outboxReply.messageId,
+          path: "kv_reply",
           error: String(err),
         })
       )
