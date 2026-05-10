@@ -136,18 +136,28 @@ export async function GET(
         // Resolve to an AgentRecord via the appropriate D1 branch.
         // Taproot and BNS still use KV for the reverse-lookup step only —
         // those KV keys are not being migrated in Phase 2.2.
+        //
+        // kvFallbackKey: when D1 misses but the resolver produced a candidate
+        // BTC/STX address, we try the KV record at that key as a last resort.
+        // This preserves pre-flip 200 behavior for the ~708 validation-excluded
+        // agents documented in docs/d1-reconcile-baseline.md (Phase 1.4 baseline).
+        // Tracked for cleanup at #691; this fallback is transitional scaffolding.
         let agent: AgentRecord | null = null;
+        let kvFallbackKey: string | null = null;
 
         if (branch === "btc") {
           // Branch 1: BTC address → D1 WHERE btc_address = ?
           const row = await lookupProfileByBtcAddress(db, address);
           if (row) agent = mapRowToAgentRecord(row);
+          else kvFallbackKey = `btc:${address}`;
         } else if (branch === "stx") {
           // Branch 2: STX address → D1 WHERE stx_address = ?
           const row = await lookupProfileByStxAddress(db, address);
           if (row) agent = mapRowToAgentRecord(row);
+          else kvFallbackKey = `stx:${address}`;
         } else if (branch === "numeric") {
           // Branch 3: ERC-8004 agent-id → D1 WHERE erc8004_agent_id = ?
+          // No KV fallback: agents are not indexed by erc8004_agent_id in KV.
           const agentId = parseInt(address, 10);
           if (!Number.isNaN(agentId)) {
             const row = await lookupProfileByAgentId(db, agentId);
@@ -160,6 +170,7 @@ export async function GET(
           if (canonicalBtcAddress) {
             const row = await lookupProfileByBtcAddress(db, canonicalBtcAddress);
             if (row) agent = mapRowToAgentRecord(row);
+            else kvFallbackKey = `btc:${canonicalBtcAddress}`;
           }
         } else {
           // Branch 5: BNS name → KV/BNS resolution → D1 WHERE stx_address = ?
@@ -191,6 +202,9 @@ export async function GET(
                 agent = mapRowToAgentRecord(row);
                 stxAddress = row.stx_address;
               }
+            } else {
+              // D1 missed for the BNS-resolved BTC address — set fallback key
+              kvFallbackKey = `btc:${btcAddress}`;
             }
           }
 
@@ -201,6 +215,21 @@ export async function GET(
             if (resolvedStx) {
               const row = await lookupProfileByStxAddress(db, resolvedStx);
               if (row) agent = mapRowToAgentRecord(row);
+              else if (!kvFallbackKey) kvFallbackKey = `stx:${resolvedStx}`;
+            }
+          }
+        }
+
+        // KV fallback for validation-excluded agents (708 records per
+        // docs/d1-reconcile-baseline.md). Transitional — see #691 for cleanup.
+        if (!agent && kvFallbackKey) {
+          const kvValue = await kv.get(kvFallbackKey);
+          if (kvValue) {
+            try {
+              agent = JSON.parse(kvValue) as AgentRecord;
+              logger.info("profile.kv_fallback_hit", { key: kvFallbackKey });
+            } catch {
+              // Malformed KV record — leave agent null
             }
           }
         }
