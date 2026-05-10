@@ -190,5 +190,130 @@ export async function lookupBnsName(
   return outcome.name;
 }
 
+// ---------------------------------------------------------------------------
+// Reverse BNS lookup: BNS name → owner STX address
+// ---------------------------------------------------------------------------
+
+/**
+ * Cache TTLs for the BNS owner lookup (name → STX address direction).
+ *
+ * Same three-state model as the forward lookup:
+ *   24h positive / 7d confirmed-negative / 60s lookup-failed
+ */
+const BNS_OWNER_CACHE_TTL = 24 * 60 * 60; // 24h — confirmed owner address
+const BNS_OWNER_NEGATIVE_TTL = 7 * 24 * 60 * 60; // 7d — confirmed no such name
+const BNS_OWNER_FAILED_TTL = 60; // 60s — transient Hiro error
+
+const BNS_OWNER_NONE_SENTINEL = "__NONE__";
+const BNS_OWNER_CACHE_PREFIX = "cache:bns-owner:";
+
+/**
+ * Look up the owner STX address for a BNS name using Hiro's
+ * `GET /v1/names/{name}` REST endpoint.
+ *
+ * This is the *reverse* direction: BNS name → STX address.
+ * (The forward direction, STX address → BNS name, is handled by {@link lookupBnsName}.)
+ *
+ * Cache key prefix: `cache:bns-owner:{bnsName}`
+ * TTLs follow the same three-state model as the forward lookup:
+ *   - 24h  — Hiro returned an owner address (confirmed positive)
+ *   - 7d   — Hiro returned 404 / no owner (confirmed name does not exist)
+ *   - 60s  — Transient Hiro error (429 / 5xx / timeout / parse failure)
+ *
+ * @param bnsName - Full BNS name to look up (e.g. `"alice.btc"`)
+ * @param hiroApiKey - Optional Hiro API key for authenticated requests
+ * @param kv - Optional KV namespace for persistent caching
+ * @param logger - Optional Logger for cache telemetry and error logging
+ * @returns Resolved STX address, or null (confirmed-negative or lookup-failed)
+ */
+export async function lookupOwnerByBnsName(
+  bnsName: string,
+  hiroApiKey?: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<string | null> {
+  const cacheKey = `${BNS_OWNER_CACHE_PREFIX}${bnsName}`;
+
+  // Cache read
+  if (kv) {
+    try {
+      const cached = await kv.get(cacheKey);
+      if (cached !== null) {
+        if (cached === BNS_OWNER_NONE_SENTINEL) return null;
+        logger?.info("bns.owner_cache_hit", { bnsName });
+        return cached;
+      }
+    } catch (e) {
+      logger?.error("bns.owner_cache_read_failed", { bnsName, error: String(e) });
+    }
+  }
+
+  const headers = buildHiroHeaders(hiroApiKey);
+
+  try {
+    const res = await stacksApiFetch(
+      `${STACKS_API_BASE}/v1/names/${encodeURIComponent(bnsName)}`,
+      { headers },
+      { retries: 2, retries429: 1, logger }
+    );
+
+    if (res.status === 404) {
+      // Confirmed: name does not exist. Cache as confirmed-negative (7d).
+      logger?.info("bns.owner_not_found", { bnsName });
+      if (kv) {
+        await kv.put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
+          expirationTtl: BNS_OWNER_NEGATIVE_TTL,
+        });
+      }
+      return null;
+    }
+
+    if (!res.ok) {
+      logger?.warn("bns.owner_upstream_error", { bnsName, status: res.status });
+      if (kv) {
+        await kv.put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
+          expirationTtl: BNS_OWNER_FAILED_TTL,
+        });
+      }
+      return null;
+    }
+
+    const data = (await res.json()) as {
+      address?: string;
+      owner?: string;
+      zonefile_hash?: string;
+    };
+
+    // Hiro v1/names/{name} returns { address: "SP...", ... }
+    const ownerAddress = data.address ?? data.owner ?? null;
+    if (!ownerAddress || typeof ownerAddress !== "string") {
+      logger?.warn("bns.owner_no_address_field", { bnsName });
+      if (kv) {
+        await kv.put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
+          expirationTtl: BNS_OWNER_FAILED_TTL,
+        });
+      }
+      return null;
+    }
+
+    // Positive result — cache 24h
+    if (kv) {
+      await kv.put(cacheKey, ownerAddress, {
+        expirationTtl: BNS_OWNER_CACHE_TTL,
+      });
+    }
+    logger?.info("bns.owner_resolved", { bnsName, ownerAddress });
+    return ownerAddress;
+  } catch (e) {
+    logger?.error("bns.owner_lookup_failed", { bnsName, error: String(e) });
+    if (kv) {
+      await kv.put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
+        expirationTtl: BNS_OWNER_FAILED_TTL,
+      });
+    }
+    return null;
+  }
+}
+
 // Re-export for convenience so refresh-style callers can import once.
 export type { LookupOutcomeState };

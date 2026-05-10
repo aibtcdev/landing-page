@@ -8,7 +8,7 @@
  * duplicating the same enrichment logic in both route handlers.
  */
 
-import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import type { AgentRecord, ClaimRecord, ClaimStatus } from "@/lib/types";
 import type { AgentIdentity, ReputationSummary } from "@/lib/identity/types";
 import { getAgentLevel, type AgentLevelInfo } from "@/lib/levels";
 import { getCheckInRecord, type CheckInRecord } from "@/lib/heartbeat";
@@ -63,6 +63,11 @@ export interface EnrichmentResult {
  * @param kv - Cloudflare KV namespace
  * @param hiroApiKey - Optional Hiro API key for authenticated Stacks API requests
  * @param logPrefix - Prefix for timeout warning logs (e.g. "agents/bc1q...")
+ * @param logger - Optional logger for telemetry
+ * @param prefetchedClaim - Optional claim already fetched from D1 (skips the KV
+ *   `claim:{btcAddress}` read when provided). Pass null to indicate "no claim"
+ *   (same as a KV miss), or omit / pass undefined to preserve the existing
+ *   KV-fetch behavior (backwards-compatible for callers without a D1 claim).
  * @returns Enrichment result with all derived metrics
  */
 export async function enrichAgentProfile(
@@ -70,7 +75,8 @@ export async function enrichAgentProfile(
   kv: KVNamespace,
   hiroApiKey?: string,
   logPrefix?: string,
-  logger?: Logger
+  logger?: Logger,
+  prefetchedClaim?: ClaimRecord | ClaimStatus | null
 ): Promise<EnrichmentResult> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const enrichmentTimeout = new Promise<null>((resolve) => {
@@ -83,12 +89,19 @@ export async function enrichAgentProfile(
     }, ENRICHMENT_TIMEOUT_MS);
   });
 
-  // Fetch claim, check-in, identity+reputation, inbox, and sent index in parallel.
+  // If a prefetched claim was supplied by the caller (e.g. from a D1 SELECT that
+  // already LEFT JOINed the claims table), skip the `claim:{btcAddress}` KV read.
+  // undefined means "not provided" (fall back to KV fetch).
+  // null means "caller confirmed no claim" (same as a KV miss).
+  const hasPrefetchedClaim = prefetchedClaim !== undefined;
+
+  // Fetch check-in, identity+reputation, inbox, and sent index in parallel.
+  // Claim is either passed in (skips KV) or fetched from KV alongside the others.
   // Identity and reputation are combined into a single slot so reputation starts immediately
   // after identity resolves, without blocking the other parallel fetches.
   const enrichmentResult = await Promise.race([
     Promise.all([
-      kv.get(`claim:${agent.btcAddress}`),
+      hasPrefetchedClaim ? Promise.resolve(null) : kv.get(`claim:${agent.btcAddress}`),
       getCheckInRecord(kv, agent.btcAddress),
       fetchIdentityAndReputation(agent, hiroApiKey, kv, logger),
       getAgentInbox(kv, agent.btcAddress),
@@ -115,7 +128,15 @@ export async function enrichAgentProfile(
   const identity = identityAndReputation?.identity ?? null;
   const reputation = identityAndReputation?.reputation ?? null;
 
-  const claim = parseClaim(claimData, agent.btcAddress, logger);
+  // Resolve claim: use prefetched value when provided, otherwise parse KV data.
+  // prefetchedClaim may be a ClaimRecord (from D1) or ClaimStatus (from a
+  // direct caller) — both have a `status` field, so they're compatible for
+  // level computation. parseClaim is only called on the raw KV string path.
+  const claim: ClaimStatus | null = hasPrefetchedClaim
+    ? (prefetchedClaim
+        ? ({ status: prefetchedClaim.status, claimedAt: prefetchedClaim.claimedAt, rewardSatoshis: prefetchedClaim.rewardSatoshis } as ClaimStatus)
+        : null)
+    : parseClaim(claimData, agent.btcAddress, logger);
   const levelInfo = getAgentLevel(agent, claim);
   const resolvedAgentId = identity?.agentId ?? agent.erc8004AgentId ?? null;
 
