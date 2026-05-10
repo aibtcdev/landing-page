@@ -1,12 +1,14 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   formatBitcoinMessage,
   doubleSha256,
   bip322VerifyP2WPKH,
   bip322VerifyP2TR,
   verifyBitcoinSignature,
+  persistBtcPubkeyIfMissing,
   BITCOIN_MSG_PREFIX,
 } from "../bitcoin-verify";
+import type { AgentRecord } from "../types";
 import { p2wpkh, p2tr, Address, NETWORK as BTC_NETWORK, RawWitness } from "@scure/btc-signer";
 import { secp256k1 } from "@noble/curves/secp256k1.js";
 import { hex } from "@scure/base";
@@ -331,5 +333,185 @@ describe("Address derivation", () => {
     if (decoded.type === "tr") {
       expect(decoded.pubkey).toBeInstanceOf(Uint8Array);
     }
+  });
+});
+
+// ---------------------------------------------------------------------------
+// bip322VerifyP2WPKH return type — pubkeyHex extraction
+// ---------------------------------------------------------------------------
+
+describe("bip322VerifyP2WPKH pubkeyHex return", () => {
+  it("returns { valid: false, pubkeyHex: '' } for a mismatched witness signature", () => {
+    // Build a witness with a real 33-byte pubkey but a bogus ECDSA sig (wrong msg hash).
+    // The address IS derived from pubkeyBytes so the address-crosscheck would pass,
+    // but the ECDSA verification fails because the sighash doesn't match.
+    const privkey = hex.decode("0000000000000000000000000000000000000000000000000000000000000001");
+    const pubkeyBytes = secp256k1.getPublicKey(privkey, true);
+    const addr = p2wpkh(pubkeyBytes, BTC_NETWORK).address!;
+
+    // A witness with a plausible-looking 71-byte sig (0x30 header) but garbage content
+    // + the correct pubkey — this will fail the sighash verify step.
+    const fakeDer = new Uint8Array(71);
+    fakeDer[0] = 0x30;
+    fakeDer[1] = 0x44;
+    fakeDer[2] = 0x02;
+    fakeDer[3] = 0x20; // r_len = 32
+    // r bytes: leave as zeros (will fail parseDERSignature midway or produce wrong sig)
+    // We actually want it to parse but verify incorrectly — fill with something parseable.
+    for (let i = 4; i < 36; i++) fakeDer[i] = 0x01; // r = 0x0101...
+    fakeDer[36] = 0x02;
+    fakeDer[37] = 0x20; // s_len = 32
+    for (let i = 38; i < 70; i++) fakeDer[i] = 0x01; // s = 0x0101...
+    fakeDer[70] = 0x01; // SIGHASH_ALL
+
+    const witness = RawWitness.encode([fakeDer, pubkeyBytes]);
+    const result = bip322VerifyP2WPKH("test-message", toBase64(witness), addr);
+    expect(result.valid).toBe(false);
+    expect(result.pubkeyHex).toBe("");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// verifyBitcoinSignature — publicKey surfaced from BIP-322 P2WPKH witness
+// ---------------------------------------------------------------------------
+
+describe("verifyBitcoinSignature publicKey from BIP-322 P2WPKH", () => {
+  it("returns empty publicKey for failed P2WPKH verification", () => {
+    // Any base64-encoded witness that's structurally valid but fails ECDSA.
+    const privkey = hex.decode("0000000000000000000000000000000000000000000000000000000000000001");
+    const pubkeyBytes = secp256k1.getPublicKey(privkey, true);
+    const addr = p2wpkh(pubkeyBytes, BTC_NETWORK).address!;
+
+    // A 2-item witness: [65-byte all-zeros sig, 33-byte pubkey] — will fail DER parse
+    // (header byte 0x00 != 0x30), which causes the outer catch to return valid: false.
+    const badWitness = RawWitness.encode([new Uint8Array(65), pubkeyBytes]);
+    const result = verifyBitcoinSignature(toBase64(badWitness), "test-message", addr);
+    expect(result.valid).toBe(false);
+    expect(result.publicKey).toBe("");
+  });
+
+  it("returns empty publicKey for P2TR verification (bc1p does not expose pubkey via this path)", () => {
+    const privkey = hex.decode("0000000000000000000000000000000000000000000000000000000000000002");
+    const pubkey = secp256k1.getPublicKey(privkey, true);
+    const addr = p2tr(pubkey.slice(1), undefined, BTC_NETWORK).address!;
+    // A 1-item witness with wrong Schnorr sig — will return valid: false
+    const badWitness = RawWitness.encode([new Uint8Array(64)]);
+    const result = verifyBitcoinSignature(toBase64(badWitness), "test-message", addr);
+    expect(result.valid).toBe(false);
+    expect(result.publicKey).toBe(""); // P2TR never populates publicKey in this PR
+  });
+});
+
+// ---------------------------------------------------------------------------
+// persistBtcPubkeyIfMissing — idempotent, guarded, error-isolated
+// ---------------------------------------------------------------------------
+
+function makeAgent(overrides: Partial<AgentRecord> = {}): AgentRecord {
+  return {
+    stxAddress: "SP123",
+    btcAddress: "bc1qtest",
+    stxPublicKey: "03aabb",
+    btcPublicKey: "",
+    verifiedAt: "2026-01-01T00:00:00.000Z",
+    ...overrides,
+  };
+}
+
+function makeMockKv(existingValue?: string) {
+  return {
+    get: vi.fn().mockResolvedValue(existingValue ?? null),
+    put: vi.fn().mockResolvedValue(undefined),
+  } as unknown as KVNamespace;
+}
+
+describe("persistBtcPubkeyIfMissing", () => {
+  it("writes to both KV keys when btcPublicKey is empty", async () => {
+    const agent = makeAgent({ btcPublicKey: "" });
+    const kv = makeMockKv();
+    const pubkeyHex = "02" + "ab".repeat(32);
+
+    await persistBtcPubkeyIfMissing(kv, undefined, "bc1qtest", pubkeyHex, agent);
+
+    expect(kv.put).toHaveBeenCalledTimes(2);
+    const calls = (kv.put as ReturnType<typeof vi.fn>).mock.calls;
+    const keys = calls.map((c: unknown[]) => c[0] as string);
+    expect(keys).toContain("btc:bc1qtest");
+    expect(keys).toContain("stx:SP123");
+
+    // Verify stored JSON has updated btcPublicKey
+    const storedBtc = JSON.parse((kv.put as ReturnType<typeof vi.fn>).mock.calls.find(
+      (c: unknown[]) => c[0] === "btc:bc1qtest"
+    )![1] as string) as AgentRecord;
+    expect(storedBtc.btcPublicKey).toBe(pubkeyHex);
+  });
+
+  it("is a no-op when btcPublicKey is already set", async () => {
+    const agent = makeAgent({ btcPublicKey: "02" + "cc".repeat(32) });
+    const kv = makeMockKv();
+    const pubkeyHex = "02" + "ab".repeat(32);
+
+    await persistBtcPubkeyIfMissing(kv, undefined, "bc1qtest", pubkeyHex, agent);
+
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("is a no-op when pubkeyHex is empty", async () => {
+    const agent = makeAgent({ btcPublicKey: "" });
+    const kv = makeMockKv();
+
+    await persistBtcPubkeyIfMissing(kv, undefined, "bc1qtest", "", agent);
+
+    expect(kv.put).not.toHaveBeenCalled();
+  });
+
+  it("does not throw when KV put fails", async () => {
+    const agent = makeAgent({ btcPublicKey: "" });
+    const kv = {
+      get: vi.fn().mockResolvedValue(null),
+      put: vi.fn().mockRejectedValue(new Error("KV write failed")),
+    } as unknown as KVNamespace;
+    const pubkeyHex = "02" + "ab".repeat(32);
+
+    // Must not throw — errors are swallowed to protect the calling request
+    await expect(
+      persistBtcPubkeyIfMissing(kv, undefined, "bc1qtest", pubkeyHex, agent)
+    ).resolves.not.toThrow();
+  });
+
+  it("runs D1 UPDATE when db binding is provided", async () => {
+    const agent = makeAgent({ btcPublicKey: "" });
+    const kv = makeMockKv();
+    const pubkeyHex = "02" + "ab".repeat(32);
+
+    const mockStmt = { bind: vi.fn().mockReturnThis(), run: vi.fn().mockResolvedValue({}) };
+    const db = { prepare: vi.fn().mockReturnValue(mockStmt) } as unknown as D1Database;
+
+    await persistBtcPubkeyIfMissing(kv, db, "bc1qtest", pubkeyHex, agent);
+
+    expect(db.prepare).toHaveBeenCalledWith(
+      expect.stringContaining("UPDATE agents SET btc_public_key")
+    );
+    expect(mockStmt.bind).toHaveBeenCalledWith(pubkeyHex, "bc1qtest");
+    expect(mockStmt.run).toHaveBeenCalled();
+  });
+
+  it("does not throw when D1 UPDATE fails (schema not ready yet)", async () => {
+    const agent = makeAgent({ btcPublicKey: "" });
+    const kv = makeMockKv();
+    const pubkeyHex = "02" + "ab".repeat(32);
+
+    const mockStmt = {
+      bind: vi.fn().mockReturnThis(),
+      run: vi.fn().mockRejectedValue(new Error("no such column: btc_public_key")),
+    };
+    const db = { prepare: vi.fn().mockReturnValue(mockStmt) } as unknown as D1Database;
+
+    // Must not throw — D1 errors are caught separately from KV errors
+    await expect(
+      persistBtcPubkeyIfMissing(kv, db, "bc1qtest", pubkeyHex, agent)
+    ).resolves.not.toThrow();
+
+    // KV write should still have happened despite D1 failure
+    expect(kv.put).toHaveBeenCalledTimes(2);
   });
 });
