@@ -233,33 +233,5 @@ export async function fetchRepliesForMessages(
   return map;
 }
 
-/**
- * Fetch the IDs of all reply rows in D1 whose message_id starts with the
- * REPLY_D1_PK_PREFIX, so the route knows which inbound messages have replies.
- * This is a lightweight alternative to joining — we only need to know whether
- * a reply exists, not its full contents, for the `repliedAt` flag.
- *
- * Returns the set of PARENT message IDs that have a reply row in D1.
- */
-export async function fetchRepliedMessageIds(
-  db: D1Database,
-  btcAddress: string
-): Promise<Set<string>> {
-  // Reply rows: is_reply=1, to_btc_address identifies the sender (original message recipient)
-  // reply_to_message_id links back to the inbound row
-  const sql = `
-    SELECT DISTINCT reply_to_message_id
-    FROM inbox_messages
-    WHERE is_reply = 1 AND to_btc_address = ?
-      AND reply_to_message_id IS NOT NULL
-  `;
-  const result = await db
-    .prepare(sql)
-    .bind(btcAddress)
-    .all<{ reply_to_message_id: string }>();
-
-  return new Set((result.results ?? []).map((r) => r.reply_to_message_id));
-}
-
 // Re-export the prefix so tests can verify synthesized IDs
 export { REPLY_D1_PK_PREFIX };
