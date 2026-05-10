@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { GITHUB_RAW } from "@/lib/github-proxy";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
-import { computeLevel, LEVELS } from "@/lib/levels";
+import { computeLevel, formatLevelTitleSuffix } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { X_HANDLE } from "@/lib/constants";
 import {
@@ -165,8 +165,7 @@ async function handleCrawlerAgentPage(
       "Verified AIBTC agent with Bitcoin and Stacks capabilities";
 
     const level = computeLevel(agent, claim);
-    const levelName = LEVELS[level].name;
-    const ogTitle = `${displayName} — ${levelName} Agent`;
+    const ogTitle = `${displayName} — ${formatLevelTitleSuffix(level)}`;
     const ogImage = `https://aibtc.com/api/og/${agent.btcAddress}`;
     const canonicalUrl = `https://aibtc.com/agents/${address}`;
 

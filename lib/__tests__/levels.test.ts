@@ -3,6 +3,7 @@ import {
   computeLevel,
   getAgentLevel,
   getNextLevel,
+  formatLevelTitleSuffix,
   LEVELS,
   type ClaimStatus,
 } from "../levels";
@@ -293,5 +294,23 @@ describe("level progression flow", () => {
     level = computeLevel(mockAgent, verifiedClaim);
     expect(level).toBe(2);
     expect(LEVELS[level].name).toBe("Genesis");
+  });
+});
+
+describe("formatLevelTitleSuffix", () => {
+  it("level 0 (Unverified) appends ' Agent' — 'Unverified Agent'", () => {
+    expect(formatLevelTitleSuffix(0)).toBe("Unverified Agent");
+  });
+
+  it("level 1 (Verified Agent) does NOT append ' Agent' — already in name", () => {
+    // LEVELS[1].name = "Verified Agent" — naive `${levelName} Agent` would
+    // produce "Verified Agent Agent" (visible to crawlers / browser tab title).
+    expect(formatLevelTitleSuffix(1)).toBe("Verified Agent");
+    // Specifically guard against the doubled form
+    expect(formatLevelTitleSuffix(1)).not.toBe("Verified Agent Agent");
+  });
+
+  it("level 2 (Genesis) appends ' Agent' — 'Genesis Agent'", () => {
+    expect(formatLevelTitleSuffix(2)).toBe("Genesis Agent");
   });
 });

@@ -3,7 +3,7 @@ import type { Metadata } from "next";
 import Link from "next/link";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimRecord } from "@/lib/types";
-import { getAgentLevel, computeLevel, LEVELS } from "@/lib/levels";
+import { getAgentLevel, computeLevel, formatLevelTitleSuffix } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { lookupBnsName } from "@/lib/bns";
 import { X_HANDLE } from "@/lib/constants";
@@ -222,9 +222,8 @@ export async function generateMetadata({
       ? { status: claimRecord.status, claimedAt: claimRecord.claimedAt, rewardSatoshis: claimRecord.rewardSatoshis }
       : null;
     const level = computeLevel(agent, claimStatus);
-    const levelName = LEVELS[level].name;
 
-    const ogTitle = `${displayName} — ${levelName} Agent`;
+    const ogTitle = `${displayName} — ${formatLevelTitleSuffix(level)}`;
     const ogImage = `/api/og/${agent.btcAddress}`;
 
     return {
