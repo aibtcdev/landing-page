@@ -5,7 +5,7 @@
  * with a single D1 SELECT + LEFT JOIN on claims.
  *
  * Resolver branches handled here:
- *   1. BTC address (bc1q*, bc1p as primary BTC, 1*, 3*)   → WHERE btc_address = ?
+ *   1. BTC address (bc1q*, 1*, 3*)                         → WHERE btc_address = ?
  *   2. STX address (SP*, ST*)                              → WHERE stx_address = ?
  *   3. ERC-8004 agent-id (numeric)                        → WHERE erc8004_agent_id = ?
  *   4. Taproot (bc1p*) as reverse-lookup path              → KV taproot:{addr} → btc_address → WHERE btc_address = ?
