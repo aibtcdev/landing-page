@@ -19,6 +19,7 @@ interface BackfillResult {
   dryRun: boolean;
   batchSize: number;
   inserted: number;
+  inserted_null_btcpubkey: number;
   skipped_idempotent: number;
   skipped_partial: number;
   failed: { key: string; reason: string }[];
@@ -28,6 +29,7 @@ interface BackfillResult {
 
 interface AccumulatedCounts {
   inserted: number;
+  inserted_null_btcpubkey: number;
   skipped_idempotent: number;
   skipped_partial: number;
   failed: { key: string; reason: string }[];
@@ -147,6 +149,7 @@ async function backfillAgents(
 ): Promise<AccumulatedCounts & { nextCursor: string | null }> {
   const counts: AccumulatedCounts = {
     inserted: 0,
+    inserted_null_btcpubkey: 0,
     skipped_idempotent: 0,
     skipped_partial: 0,
     failed: [],
@@ -190,16 +193,22 @@ async function backfillAgents(
       continue;
     }
 
-    // Validate remaining required fields for D1 insert — these are actual data errors
-    // on records that claimed to be full agents (have stxAddress/stxPublicKey) but
-    // are missing other non-nullable columns.
-    if (!agent.btcPublicKey || !agent.verifiedAt) {
+    // Validate remaining required fields for D1 insert.
+    // btcPublicKey is NULLable in D1 (migration 008): agents registered via BIP-322
+    // segwit (bc1q) have no capturable pubkey in the signature. Records with
+    // stxAddress + stxPublicKey + btcAddress + verifiedAt are valid even when
+    // btcPublicKey is absent or empty — they are inserted with btc_public_key = NULL.
+    // Only missing verifiedAt is a true data error for a claimed-full agent.
+    if (!agent.verifiedAt) {
       counts.failed.push({
         key: kvKey.name,
-        reason: "Missing required AgentRecord fields (btcPublicKey/verifiedAt)",
+        reason: "Missing required AgentRecord field: verifiedAt",
       });
       continue;
     }
+
+    // Track whether this record has no BTC pubkey (for operational reporting).
+    const hasNullBtcPubkey = !agent.btcPublicKey;
 
     if (pass === "insert") {
       // Resolve or generate referral code
@@ -228,6 +237,7 @@ async function backfillAgents(
 
       if (dryRun) {
         counts.inserted++;
+        if (hasNullBtcPubkey) counts.inserted_null_btcpubkey++;
         continue;
       }
 
@@ -247,7 +257,9 @@ async function backfillAgents(
             agent.btcAddress,
             agent.stxAddress,
             agent.stxPublicKey,
-            agent.btcPublicKey,
+            // btc_public_key is NULLable (migration 008): store null when absent/empty.
+            // BIP-322 bc1q agents never had a capturable pubkey at registration time.
+            agent.btcPublicKey || null,
             agent.taprootAddress ?? null,
             agent.displayName ?? null,
             agent.description ?? null,
@@ -266,6 +278,7 @@ async function backfillAgents(
 
         if (result.meta.changes === 1) {
           counts.inserted++;
+          if (hasNullBtcPubkey) counts.inserted_null_btcpubkey++;
         } else {
           counts.skipped_idempotent++;
         }
@@ -334,6 +347,7 @@ async function backfillClaims(
 ): Promise<AccumulatedCounts & { nextCursor: string | null }> {
   const counts: AccumulatedCounts = {
     inserted: 0,
+    inserted_null_btcpubkey: 0,
     skipped_idempotent: 0,
     skipped_partial: 0,
     failed: [],
@@ -440,6 +454,7 @@ async function backfillInboxMessages(
 ): Promise<AccumulatedCounts & { nextCursor: string | null }> {
   const counts: AccumulatedCounts = {
     inserted: 0,
+    inserted_null_btcpubkey: 0,
     skipped_idempotent: 0,
     skipped_partial: 0,
     failed: [],
@@ -678,6 +693,7 @@ async function backfillVouches(
 ): Promise<AccumulatedCounts & { nextCursor: string | null }> {
   const counts: AccumulatedCounts = {
     inserted: 0,
+    inserted_null_btcpubkey: 0,
     skipped_idempotent: 0,
     skipped_partial: 0,
     failed: [],
@@ -774,9 +790,10 @@ export async function GET(request: NextRequest) {
       dryRun: "Whether this was a dry run",
       batchSize: "Effective batch size used",
       inserted: "Rows newly inserted",
+      inserted_null_btcpubkey: "Subset of inserted with btc_public_key = NULL (BIP-322 bc1q agents; expected ~708 on first full backfill)",
       skipped_idempotent: "Rows skipped due to existing D1 row (INSERT OR IGNORE)",
       skipped_partial: "PartialAgentRecord rows skipped (agents table only)",
-      failed: "Array of { key, reason } for rows that errored",
+      failed: "Array of { key, reason } for rows that errored (missing verifiedAt or D1 error)",
       cursor: "Opaque resume cursor; null when scan complete",
       duration_ms: "Wall-clock milliseconds for this request",
     },
@@ -841,6 +858,7 @@ export async function POST(request: NextRequest) {
     if (table === "all") {
       const totals: AccumulatedCounts = {
         inserted: 0,
+        inserted_null_btcpubkey: 0,
         skipped_idempotent: 0,
         skipped_partial: 0,
         failed: [],
@@ -851,6 +869,7 @@ export async function POST(request: NextRequest) {
       do {
         const res = await backfillAgents(kv, db, batchSize, agentCursor, dryRun);
         totals.inserted += res.inserted;
+        totals.inserted_null_btcpubkey += res.inserted_null_btcpubkey;
         totals.skipped_idempotent += res.skipped_idempotent;
         totals.skipped_partial += res.skipped_partial;
         totals.failed.push(...res.failed);
@@ -858,6 +877,7 @@ export async function POST(request: NextRequest) {
         logger.info("backfill.batch", {
           table: "agents",
           inserted_so_far: totals.inserted,
+          inserted_null_btcpubkey_so_far: totals.inserted_null_btcpubkey,
           scanned_so_far: totals.inserted + totals.skipped_idempotent + totals.skipped_partial + totals.failed.length,
           cursor: agentCursor,
         });
@@ -915,6 +935,7 @@ export async function POST(request: NextRequest) {
       logger.info("backfill.complete", {
         table: "all",
         inserted: totals.inserted,
+        inserted_null_btcpubkey: totals.inserted_null_btcpubkey,
         skipped_idempotent: totals.skipped_idempotent,
         skipped_partial: totals.skipped_partial,
         failed_count: totals.failed.length,
@@ -926,6 +947,7 @@ export async function POST(request: NextRequest) {
         dryRun,
         batchSize,
         inserted: totals.inserted,
+        inserted_null_btcpubkey: totals.inserted_null_btcpubkey,
         skipped_idempotent: totals.skipped_idempotent,
         skipped_partial: totals.skipped_partial,
         failed: totals.failed,
@@ -961,6 +983,7 @@ export async function POST(request: NextRequest) {
     logger.info("backfill.batch", {
       table,
       inserted_so_far: res.inserted,
+      inserted_null_btcpubkey_so_far: res.inserted_null_btcpubkey,
       scanned_so_far:
         res.inserted +
         res.skipped_idempotent +
@@ -973,6 +996,7 @@ export async function POST(request: NextRequest) {
       logger.info("backfill.complete", {
         table,
         inserted: res.inserted,
+        inserted_null_btcpubkey: res.inserted_null_btcpubkey,
         skipped_idempotent: res.skipped_idempotent,
         skipped_partial: res.skipped_partial,
         failed_count: res.failed.length,
@@ -989,6 +1013,7 @@ export async function POST(request: NextRequest) {
       dryRun,
       batchSize,
       inserted: res.inserted,
+      inserted_null_btcpubkey: res.inserted_null_btcpubkey,
       skipped_idempotent: res.skipped_idempotent,
       skipped_partial: res.skipped_partial,
       failed: res.failed,

@@ -6,7 +6,17 @@ export interface AgentRecord {
   stxAddress: string;
   btcAddress: string;
   stxPublicKey: string;
-  btcPublicKey: string;
+  /**
+   * Bitcoin compressed public key (33 bytes, hex-encoded).
+   *
+   * Optional/NULLable: BIP-322 segwit (P2WPKH / bc1q) signing does not
+   * include the pubkey in the signature output. Agents that registered via
+   * a bc1q wallet have no capturable pubkey at registration time. NULL is
+   * the correct stored value — do NOT substitute stxPublicKey (different
+   * BIP-44 derivation path). Pubkey may be captured opportunistically later
+   * via the `update-pubkey` challenge action.
+   */
+  btcPublicKey?: string | null;
   taprootAddress?: string | null;
   displayName?: string;
   description?: string | null;
