@@ -459,7 +459,10 @@ async function reconcileInboxMessages(
             const reply = JSON.parse(raw) as Record<string, unknown>;
             allRecords.push({
               type: "reply",
-              replyTo: reply.replyTo as string | undefined,
+              // OutboxReply records store the reply target in `toBtcAddress`
+              // (despite the field name, the value can be STX-shaped per the
+              // backfill route's STX→BTC resolution helper added in c777549).
+              replyTo: reply.toBtcAddress as string | undefined,
               messageId: reply.messageId as string | undefined,
             });
           } catch {
