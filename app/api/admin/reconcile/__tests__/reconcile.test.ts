@@ -1244,7 +1244,7 @@ describe("Bug 2: inbox parallel scan — correctness after batched reads", () =>
       "btc:bc1qagent1": FULL_AGENT,
       "inbox:reply:msg001": JSON.stringify({
         messageId: "msg001",
-        replyTo: "SP1NOSUCHADDR",  // Stacks address but no stx: key in KV
+        toBtcAddress: "SP1NOSUCHADDR",  // Stacks address but no stx: key in KV
         repliedAt: "2026-01-01T03:00:00Z",
       }),
     });
@@ -1363,7 +1363,7 @@ describe("Bug A: BTC-shaped replyTo classified as partial_cascade", () => {
       "btc:bc1qagent1": FULL_AGENT,
       "inbox:reply:msg001": JSON.stringify({
         messageId: "msg001",
-        replyTo: "bc1qnotanagent1234",  // BTC address NOT in fullAgents
+        toBtcAddress: "bc1qnotanagent1234",  // BTC address NOT in fullAgents
         repliedAt: "2026-01-01T03:00:00Z",
       }),
     });
@@ -1409,7 +1409,7 @@ describe("Bug A: BTC-shaped replyTo classified as partial_cascade", () => {
       "btc:bc1qagent1": FULL_AGENT,  // bc1qagent1 is a full agent
       "inbox:reply:msg001": JSON.stringify({
         messageId: "msg001",
-        replyTo: "bc1qagent1",  // BTC address that IS in fullAgents
+        toBtcAddress: "bc1qagent1",  // BTC address that IS in fullAgents
         repliedAt: "2026-01-01T03:00:00Z",
       }),
     });
@@ -1486,19 +1486,19 @@ describe("Bug B: null payment_txid not counted in unique_payment_txid_replay", (
       // 3 replies — payment_txid is null (no payment required for replies)
       "inbox:reply:msg001": JSON.stringify({
         messageId: "msg001",
-        replyTo: "bc1qagent1",
+        toBtcAddress: "bc1qagent1",
         payment_txid: null,
         repliedAt: "2026-01-01T01:00:00Z",
       }),
       "inbox:reply:msg002": JSON.stringify({
         messageId: "msg002",
-        replyTo: "bc1qagent1",
+        toBtcAddress: "bc1qagent1",
         payment_txid: null,
         repliedAt: "2026-01-01T01:01:00Z",
       }),
       "inbox:reply:msg003": JSON.stringify({
         messageId: "msg003",
-        replyTo: "bc1qagent1",
+        toBtcAddress: "bc1qagent1",
         payment_txid: null,
         repliedAt: "2026-01-01T01:02:00Z",
       }),
@@ -1563,7 +1563,7 @@ describe("Bug C: STX replyTo resolver — no btcAddress field → unresolvable_s
       }),
       "inbox:reply:msg001": JSON.stringify({
         messageId: "msg001",
-        replyTo: "SP1NOSUCHBTC",  // STX address whose stx: record has no btcAddress
+        toBtcAddress: "SP1NOSUCHBTC",  // STX address whose stx: record has no btcAddress
         repliedAt: "2026-01-01T03:00:00Z",
       }),
     });
@@ -1615,7 +1615,7 @@ describe("Bug C: STX replyTo resolver — no btcAddress field → unresolvable_s
       }),
       "inbox:reply:msg001": JSON.stringify({
         messageId: "msg001",
-        replyTo: "SP1RESOLVES",
+        toBtcAddress: "SP1RESOLVES",
         repliedAt: "2026-01-01T03:00:00Z",
       }),
     });
