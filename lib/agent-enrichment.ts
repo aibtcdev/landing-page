@@ -134,7 +134,16 @@ export async function enrichAgentProfile(
   // level computation. parseClaim is only called on the raw KV string path.
   const claim: ClaimStatus | null = hasPrefetchedClaim
     ? (prefetchedClaim
-        ? ({ status: prefetchedClaim.status, claimedAt: prefetchedClaim.claimedAt, rewardSatoshis: prefetchedClaim.rewardSatoshis } as ClaimStatus)
+        ? ({
+            status: prefetchedClaim.status,
+            claimedAt: prefetchedClaim.claimedAt,
+            rewardSatoshis: prefetchedClaim.rewardSatoshis,
+            // Pass through rewardTxid if present on the source shape; both
+            // ClaimRecord and ClaimStatus have it as optional.
+            ...("rewardTxid" in prefetchedClaim && prefetchedClaim.rewardTxid
+              ? { rewardTxid: prefetchedClaim.rewardTxid }
+              : {}),
+          } as ClaimStatus)
         : null)
     : parseClaim(claimData, agent.btcAddress, logger);
   const levelInfo = getAgentLevel(agent, claim);

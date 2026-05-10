@@ -232,7 +232,10 @@ export async function lookupOwnerByBnsName(
   kv?: KVNamespace,
   logger?: Logger
 ): Promise<string | null> {
-  const cacheKey = `${BNS_OWNER_CACHE_PREFIX}${bnsName}`;
+  // BNS names are case-insensitive on-chain; normalize to lowercase for cache key
+  // to avoid cache fragmentation (e.g. "Alice.btc" and "alice.btc" share state).
+  const normalizedBnsName = bnsName.toLowerCase();
+  const cacheKey = `${BNS_OWNER_CACHE_PREFIX}${normalizedBnsName}`;
 
   // Cache read
   if (kv) {
@@ -261,9 +264,13 @@ export async function lookupOwnerByBnsName(
       // Confirmed: name does not exist. Cache as confirmed-negative (7d).
       logger?.info("bns.owner_not_found", { bnsName });
       if (kv) {
-        await kv.put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
-          expirationTtl: BNS_OWNER_NEGATIVE_TTL,
-        });
+        await kv
+          .put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
+            expirationTtl: BNS_OWNER_NEGATIVE_TTL,
+          })
+          .catch((e) =>
+            logger?.error("bns.owner_cache_write_failed", { bnsName, error: String(e) })
+          );
       }
       return null;
     }
@@ -271,9 +278,13 @@ export async function lookupOwnerByBnsName(
     if (!res.ok) {
       logger?.warn("bns.owner_upstream_error", { bnsName, status: res.status });
       if (kv) {
-        await kv.put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
-          expirationTtl: BNS_OWNER_FAILED_TTL,
-        });
+        await kv
+          .put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
+            expirationTtl: BNS_OWNER_FAILED_TTL,
+          })
+          .catch((e) =>
+            logger?.error("bns.owner_cache_write_failed", { bnsName, error: String(e) })
+          );
       }
       return null;
     }
@@ -289,27 +300,40 @@ export async function lookupOwnerByBnsName(
     if (!ownerAddress || typeof ownerAddress !== "string") {
       logger?.warn("bns.owner_no_address_field", { bnsName });
       if (kv) {
-        await kv.put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
-          expirationTtl: BNS_OWNER_FAILED_TTL,
-        });
+        await kv
+          .put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
+            expirationTtl: BNS_OWNER_FAILED_TTL,
+          })
+          .catch((e) =>
+            logger?.error("bns.owner_cache_write_failed", { bnsName, error: String(e) })
+          );
       }
       return null;
     }
 
     // Positive result — cache 24h
     if (kv) {
-      await kv.put(cacheKey, ownerAddress, {
-        expirationTtl: BNS_OWNER_CACHE_TTL,
-      });
+      await kv
+        .put(cacheKey, ownerAddress, { expirationTtl: BNS_OWNER_CACHE_TTL })
+        .catch((e) =>
+          logger?.error("bns.owner_cache_write_failed", { bnsName, error: String(e) })
+        );
     }
     logger?.info("bns.owner_resolved", { bnsName, ownerAddress });
     return ownerAddress;
   } catch (e) {
     logger?.error("bns.owner_lookup_failed", { bnsName, error: String(e) });
     if (kv) {
-      await kv.put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
-        expirationTtl: BNS_OWNER_FAILED_TTL,
-      });
+      await kv
+        .put(cacheKey, BNS_OWNER_NONE_SENTINEL, {
+          expirationTtl: BNS_OWNER_FAILED_TTL,
+        })
+        .catch((cacheErr) =>
+          logger?.error("bns.owner_cache_write_failed", {
+            bnsName,
+            error: String(cacheErr),
+          })
+        );
     }
     return null;
   }

@@ -12,25 +12,24 @@ import type { AgentRecord, ClaimRecord, ClaimStatus } from "../types";
 // Mock dependencies so enrichAgentProfile does not need real KV / Hiro
 // ---------------------------------------------------------------------------
 
-// Mock the entire identity module (detectAgentIdentity, getReputationSummary)
-vi.mock("../identity", () => ({
+// agent-enrichment.ts imports via the `@/...` alias, so mocks must use the
+// same path — relative `../identity` would NOT intercept the actual module
+// loaded by enrichAgentProfile (vitest treats them as different modules).
+vi.mock("@/lib/identity", () => ({
   detectAgentIdentity: vi.fn().mockResolvedValue(null),
   getReputationSummary: vi.fn().mockResolvedValue(null),
 }));
 
-// Mock heartbeat (getCheckInRecord)
-vi.mock("../heartbeat", () => ({
+vi.mock("@/lib/heartbeat", () => ({
   getCheckInRecord: vi.fn().mockResolvedValue(null),
 }));
 
-// Mock inbox helpers
-vi.mock("../inbox/kv-helpers", () => ({
+vi.mock("@/lib/inbox/kv-helpers", () => ({
   getAgentInbox: vi.fn().mockResolvedValue(null),
   getSentIndex: vi.fn().mockResolvedValue(null),
 }));
 
-// Mock CAIP-19
-vi.mock("../caip19", () => ({
+vi.mock("@/lib/caip19", () => ({
   getCAIP19AgentId: vi.fn().mockReturnValue(null),
 }));
 
