@@ -15,6 +15,8 @@ export interface InboxPartialCounts {
   drift_explained_partial_cascade: number;
   drift_explained_unique_payment_txid_replay: number;
   drift_explained_unresolvable_stx_reply: number;
+  /** Messages to addresses absent from both KV btc: set and D1 agents (dead-letter). */
+  drift_explained_orphan_recipient: number;
   /** Set of seen txids, carried between pages to detect cross-page duplicates */
   txidCounts: Set<string>;
 }
@@ -77,6 +79,7 @@ export function decodeCursor(encoded: string): InboxCursorState {
     typeof pc.drift_explained_partial_cascade !== "number" ||
     typeof pc.drift_explained_unique_payment_txid_replay !== "number" ||
     typeof pc.drift_explained_unresolvable_stx_reply !== "number" ||
+    typeof pc.drift_explained_orphan_recipient !== "number" ||
     !Array.isArray(pc.txidCounts) ||
     !(pc.txidCounts as unknown[]).every((v) => typeof v === "string")
   ) {
