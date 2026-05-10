@@ -121,8 +121,12 @@ async function countKvKeys(
 
 /**
  * Sample up to `n` random KV keys from those with `prefix`.
- * Returns a shuffled subset of the keys (not the values).
+ * Returns a random subset of the keys (not the values).
  * Skips keys starting with any of `skipPrefixes`.
+ *
+ * Uses reservoir sampling (Algorithm R) during KV pagination:
+ * O(N) time, O(sampleSize) memory — never materializes the full key list.
+ * This matters for large prefixes like `inbox:message:` with 5K+ keys.
  */
 async function sampleKvKeys(
   kv: KVNamespace,
@@ -130,27 +134,37 @@ async function sampleKvKeys(
   n: number,
   skipPrefixes: string[] = []
 ): Promise<string[]> {
-  const keys: string[] = [];
+  if (n <= 0) return [];
+
+  const reservoir: string[] = [];
+  let seen = 0; // count of eligible keys seen so far
   let cursor: string | undefined = undefined;
 
   do {
     const opts: KVNamespaceListOptions = { prefix, limit: 1000 };
     if (cursor) opts.cursor = cursor;
     const page = await kv.list(opts);
+
     for (const key of page.keys) {
       if (skipPrefixes.some((p) => key.name.startsWith(p))) continue;
-      keys.push(key.name);
+
+      if (seen < n) {
+        // Fill the reservoir until it has n entries
+        reservoir.push(key.name);
+      } else {
+        // Reservoir full: replace a random slot with decreasing probability
+        const j = Math.floor(Math.random() * (seen + 1));
+        if (j < n) {
+          reservoir[j] = key.name;
+        }
+      }
+      seen++;
     }
+
     cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
   } while (cursor !== undefined);
 
-  // Fisher-Yates shuffle for fair random sample
-  for (let i = keys.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [keys[i], keys[j]] = [keys[j], keys[i]];
-  }
-
-  return keys.slice(0, n);
+  return reservoir;
 }
 
 /**
