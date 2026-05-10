@@ -23,7 +23,6 @@ export {
   MAX_REPLY_LENGTH,
   MARK_READ_MESSAGE_FORMAT,
   REPLY_MESSAGE_FORMAT,
-  REPLY_D1_PK_PREFIX,
   SENDER_AUTH_MESSAGE_FORMAT,
   SBTC_CONTRACTS,
   KV_PREFIXES,
@@ -43,6 +42,9 @@ export {
   buildReplyMessage,
   buildSenderAuthMessage,
 } from "./constants";
+
+// D1 PK Helpers
+export { REPLY_D1_PK_PREFIX, deriveReplyD1Id } from "./d1-pk";
 
 // Payment Failure Cache
 export { getCachedPaymentFailure, cachePaymentFailure } from "./payment-cache";
