@@ -489,7 +489,10 @@ async function reconcileInboxMessages(
       if (toBtcAddress && !fullAgents.has(toBtcAddress)) {
         partial_cascade++;
       }
-      if (paymentTxid) {
+      // Only count string txids — replies have payment_txid=null/undefined per RFC.
+      // Use typeof guard (not just truthiness) to explicitly exclude null values
+      // that were cast from JSON, which would otherwise form a single shared bucket.
+      if (typeof paymentTxid === "string" && paymentTxid.length > 0) {
         txidCounts.set(paymentTxid, (txidCounts.get(paymentTxid) ?? 0) + 1);
       }
     } else {
@@ -504,18 +507,29 @@ async function reconcileInboxMessages(
           try {
             const stxRecord = JSON.parse(stxRaw) as Record<string, unknown>;
             const resolvedBtc = stxRecord.btcAddress as string | undefined;
-            if (!resolvedBtc || !fullAgents.has(resolvedBtc)) {
+            if (!resolvedBtc) {
+              // stx: record exists but has no btcAddress field — resolver returned no address
+              unresolvable_stx_reply++;
+            } else if (!fullAgents.has(resolvedBtc)) {
+              // resolved to a BTC address, but that agent is not in fullAgents
               partial_cascade++;
             }
           } catch {
             unresolvable_stx_reply++;
           }
         }
+      } else if (replyTo && (replyTo.startsWith("bc1q") || replyTo.startsWith("bc1p"))) {
+        // BTC address shape — use replyTo directly as to_btc_address
+        if (!fullAgents.has(replyTo)) {
+          partial_cascade++;
+        }
       }
     }
   }
 
-  // unique_payment_txid_replay: sum of (count - 1) for all txids seen more than once
+  // unique_payment_txid_replay: sum of (count - 1) for all txids seen more than once.
+  // Only string txids are counted — replies have payment_txid=null/undefined per RFC
+  // and must not be keyed under undefined (which would inflate the duplicate count).
   let unique_payment_txid_replay = 0;
   for (const count of txidCounts.values()) {
     if (count > 1) unique_payment_txid_replay += count - 1;

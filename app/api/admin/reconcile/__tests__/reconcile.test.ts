@@ -1345,3 +1345,308 @@ describe("explained_categories is always present in response", () => {
     expect(typeof body.kv_count_invalid_excluded).toBe("number");
   });
 });
+
+// ── Bug A: BTC replyTo classification ────────────────────────────────────
+//
+// Reply rows can have a BTC-shaped replyTo (bc1q…/bc1p…) instead of an STX address.
+// The backfill uses the BTC replyTo directly as to_btc_address — if that BTC is not
+// a full agent in D1 (FK fails), the reply is absent from D1. Before this fix,
+// reconcile's reply branch only handled STX replyTo and silently skipped BTC replyTo,
+// under-counting partial_cascade by ~681 in the 2026-05-10T01:45Z production run.
+
+describe("Bug A: BTC-shaped replyTo classified as partial_cascade", () => {
+  it("reply with BTC replyTo not in fullAgents → partial_cascade incremented", async () => {
+    // KV: 1 full agent + 1 reply whose replyTo is a BTC address NOT in fullAgents
+    // The BTC replyTo recipient is a now-invalid agent, absent from fullAgents.
+    // D1: 0 messages (reply not backfilled — FK would fail on recipient)
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:reply:msg001": JSON.stringify({
+        messageId: "msg001",
+        replyTo: "bc1qnotanagent1234",  // BTC address NOT in fullAgents
+        repliedAt: "2026-01-01T03:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM inbox_messages": { cnt: 0 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories: {
+        partial_cascade?: number;
+        unresolvable_stx_reply?: number;
+      };
+    };
+
+    expect(body.kv_count).toBe(1);
+    expect(body.d1_count).toBe(0);
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+    // Must be partial_cascade, not unresolvable_stx_reply
+    expect(body.explained_categories.partial_cascade).toBe(1);
+    expect(body.explained_categories.unresolvable_stx_reply).toBe(0);
+  });
+
+  it("reply with BTC replyTo that IS in fullAgents → no drift increment", async () => {
+    // KV: 1 full agent + 1 reply whose replyTo IS that full agent's BTC address
+    // D1: 1 message (reply backfilled successfully — FK resolves)
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,  // bc1qagent1 is a full agent
+      "inbox:reply:msg001": JSON.stringify({
+        messageId: "msg001",
+        replyTo: "bc1qagent1",  // BTC address that IS in fullAgents
+        repliedAt: "2026-01-01T03:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM inbox_messages": { cnt: 1 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories: { partial_cascade?: number };
+    };
+
+    expect(body.drift).toBe(0);
+    expect(body.drift_explained).toBe(0);
+    expect(body.drift_unexplained).toBe(0);
+    expect(body.explained_categories.partial_cascade).toBe(0);
+  });
+});
+
+// ── Bug B: null/undefined txid over-counting ──────────────────────────────
+//
+// Replies have payment_txid=null/undefined per RFC. The txid-frequency map must
+// skip non-string values; otherwise null-txid replies collapse into a single bucket
+// and inflate unique_payment_txid_replay by (nullCount - 1).
+// Production gap: 15 reported vs 7 actual (8 over-count from null replies).
+
+describe("Bug B: null payment_txid not counted in unique_payment_txid_replay", () => {
+  it("mixed inbox with null-txid replies → unique_payment_txid_replay is 0", async () => {
+    // 5 inbound messages (all with string txids) + 3 replies (all with payment_txid=null)
+    // No duplicate txids among the 5 messages → unique_payment_txid_replay should be 0
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:message:msg001": JSON.stringify({
+        messageId: "msg001",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_001",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+      "inbox:message:msg002": JSON.stringify({
+        messageId: "msg002",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_002",
+        sentAt: "2026-01-01T00:01:00Z",
+      }),
+      "inbox:message:msg003": JSON.stringify({
+        messageId: "msg003",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_003",
+        sentAt: "2026-01-01T00:02:00Z",
+      }),
+      "inbox:message:msg004": JSON.stringify({
+        messageId: "msg004",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_004",
+        sentAt: "2026-01-01T00:03:00Z",
+      }),
+      "inbox:message:msg005": JSON.stringify({
+        messageId: "msg005",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_005",
+        sentAt: "2026-01-01T00:04:00Z",
+      }),
+      // 3 replies — payment_txid is null (no payment required for replies)
+      "inbox:reply:msg001": JSON.stringify({
+        messageId: "msg001",
+        replyTo: "bc1qagent1",
+        payment_txid: null,
+        repliedAt: "2026-01-01T01:00:00Z",
+      }),
+      "inbox:reply:msg002": JSON.stringify({
+        messageId: "msg002",
+        replyTo: "bc1qagent1",
+        payment_txid: null,
+        repliedAt: "2026-01-01T01:01:00Z",
+      }),
+      "inbox:reply:msg003": JSON.stringify({
+        messageId: "msg003",
+        replyTo: "bc1qagent1",
+        payment_txid: null,
+        repliedAt: "2026-01-01T01:02:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM inbox_messages": { cnt: 8 }, // all 8 in D1
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      explained_categories: {
+        partial_cascade?: number;
+        unique_payment_txid_replay?: number;
+        unresolvable_stx_reply?: number;
+      };
+    };
+
+    expect(body.kv_count).toBe(8);
+    expect(body.d1_count).toBe(8);
+    expect(body.drift).toBe(0);
+    // unique_payment_txid_replay must be 0 — null txids must NOT be counted
+    expect(body.explained_categories.unique_payment_txid_replay).toBe(0);
+    expect(body.explained_categories.partial_cascade).toBe(0);
+    expect(body.explained_categories.unresolvable_stx_reply).toBe(0);
+  });
+});
+
+// ── Bug C: STX replyTo resolver split ────────────────────────────────────
+//
+// When stx: KV lookup returns a record that has no btcAddress field, the backfill
+// considers the STX→BTC resolution to have failed (unresolvable). Previously,
+// reconcile bucketed this as partial_cascade instead. The semantic fix:
+//   - stx: record missing/null → unresolvable_stx_reply
+//   - stx: record has no btcAddress field → unresolvable_stx_reply
+//   - resolved btcAddress not in fullAgents → partial_cascade
+// Production gap: 2 cases were bucketed as partial_cascade instead of unresolvable_stx_reply.
+
+describe("Bug C: STX replyTo resolver — no btcAddress field → unresolvable_stx_reply", () => {
+  it("stx: record exists but has no btcAddress field → unresolvable_stx_reply (not partial_cascade)", async () => {
+    // KV: 1 full agent + 1 stx: record without a btcAddress field + 1 reply pointing at that STX
+    // The stx: record exists but is missing the btcAddress key.
+    // Backfill's STX→BTC resolver would return null → counts as unresolvable.
+    // D1: 0 messages (reply not backfilled)
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      // stx: record exists but has no btcAddress — resolver returns no address
+      "stx:SP1NOSUCHBTC": JSON.stringify({
+        stxAddress: "SP1NOSUCHBTC",
+        stxPublicKey: "03aabbcc",
+        // btcAddress intentionally absent
+      }),
+      "inbox:reply:msg001": JSON.stringify({
+        messageId: "msg001",
+        replyTo: "SP1NOSUCHBTC",  // STX address whose stx: record has no btcAddress
+        repliedAt: "2026-01-01T03:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM inbox_messages": { cnt: 0 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories: {
+        partial_cascade?: number;
+        unresolvable_stx_reply?: number;
+      };
+    };
+
+    expect(body.kv_count).toBe(1);
+    expect(body.d1_count).toBe(0);
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+    // Must be unresolvable_stx_reply, NOT partial_cascade
+    expect(body.explained_categories.unresolvable_stx_reply).toBe(1);
+    expect(body.explained_categories.partial_cascade).toBe(0);
+  });
+
+  it("stx: record resolves to btcAddress but that BTC is not in fullAgents → partial_cascade (not unresolvable)", async () => {
+    // KV: 1 full agent + 1 stx: record WITH a btcAddress that is NOT in fullAgents
+    // The resolver returns a BTC address — resolution succeeded.
+    // But that BTC agent is not a full agent → FK would fail → partial_cascade.
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      // stx: record has a btcAddress but that address is NOT in fullAgents (no btc: key)
+      "stx:SP1RESOLVES": JSON.stringify({
+        stxAddress: "SP1RESOLVES",
+        btcAddress: "bc1qnotafull1234",  // valid BTC, but no btc: key → not in fullAgents
+      }),
+      "inbox:reply:msg001": JSON.stringify({
+        messageId: "msg001",
+        replyTo: "SP1RESOLVES",
+        repliedAt: "2026-01-01T03:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM inbox_messages": { cnt: 0 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories: {
+        partial_cascade?: number;
+        unresolvable_stx_reply?: number;
+      };
+    };
+
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+    // Resolution succeeded (btcAddress found), but recipient not in fullAgents → partial_cascade
+    expect(body.explained_categories.partial_cascade).toBe(1);
+    expect(body.explained_categories.unresolvable_stx_reply).toBe(0);
+  });
+});
