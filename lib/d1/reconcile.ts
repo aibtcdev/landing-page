@@ -30,8 +30,17 @@ export interface DriftBreakdown {
    * whose parent agent is Partial (surfaced by the caller from backfill data).
    */
   drift_explained: number;
-  /** drift - drift_explained. Must be zero for Phase 2.x to start. */
+  /** drift - drift_explained, clamped to >= 0. Must be zero for Phase 2.x to start. */
   drift_unexplained: number;
+  /**
+   * Per-table breakdown of explained categories (inbox only currently uses these).
+   * For agents/claims/vouches this is empty; for inbox it carries cascade/replay/stx counts.
+   */
+  explained_categories?: {
+    partial_cascade?: number;
+    unique_payment_txid_replay?: number;
+    unresolvable_stx_reply?: number;
+  };
 }
 
 /**
@@ -56,14 +65,14 @@ export function computeDrift(
   kv_count_total: number,
   kv_count_partial: number,
   d1_count: number,
-  drift_explained: number
+  drift_explained: number,
+  explained_categories?: DriftBreakdown["explained_categories"]
 ): DriftBreakdown {
   const kv_count_full = kv_count_total - kv_count_partial;
   const drift = kv_count_full - d1_count;
-  // drift_unexplained: rows absent from D1 that cannot be attributed to Partial cascade.
-  // For agents: drift is already computed against full-only count, so unexplained = drift.
-  // For claims/inbox/vouches: drift_explained rows account for the gap; residual is unexplained.
-  const drift_unexplained = drift - drift_explained;
+  // Clamped to >= 0: drift_explained and drift are derived from independent passes
+  // (KV-truth vs count math) and minor floor-skew is possible in transit.
+  const drift_unexplained = Math.max(0, drift - drift_explained);
   return {
     kv_count_total,
     kv_count_full,
@@ -71,6 +80,7 @@ export function computeDrift(
     drift,
     drift_explained,
     drift_unexplained,
+    ...(explained_categories ? { explained_categories } : {}),
   };
 }
 
@@ -115,6 +125,15 @@ export interface TableReconcileResult {
   drift: number;
   drift_explained: number;
   drift_unexplained: number;
+  /**
+   * Per-table breakdown of explained categories (inbox only currently uses these).
+   * For agents/claims/vouches this is empty; for inbox it carries cascade/replay/stx counts.
+   */
+  explained_categories?: {
+    partial_cascade?: number;
+    unique_payment_txid_replay?: number;
+    unresolvable_stx_reply?: number;
+  };
   sample_size: number;
   field_diffs: FieldDiff[];
   duration_ms: number;

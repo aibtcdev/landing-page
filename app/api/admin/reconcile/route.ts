@@ -19,13 +19,14 @@ import {
 // ── Helpers ────────────────────────────────────────────────────────────────
 
 /**
- * Clamp sampleSize to [1, 500], default 50.
+ * Clamp sampleSize to [0, 500], default 50.
+ * sampleSize=0 skips field-level spot-checks entirely (count-only reconciliation).
  */
 function parseSampleSize(raw: string | null): number {
   if (!raw) return 50;
   const n = parseInt(raw, 10);
   if (!Number.isFinite(n)) return 50;
-  return Math.max(1, Math.min(500, n));
+  return Math.max(0, Math.min(500, n));
 }
 
 /**
@@ -106,6 +107,48 @@ async function sampleKvKeys(
   return keys.slice(0, n);
 }
 
+/**
+ * Single-pass scan of `btc:` KV prefix — returns the set of btcAddress values
+ * whose agent record is NOT PartialAgentRecord. Used by claims/inbox/vouches
+ * to compute drift_explained from KV truth (not D1 absence).
+ *
+ * Reads values in parallel batches of 50 to keep wall-clock manageable.
+ */
+async function buildFullAgentSet(kv: KVNamespace): Promise<Set<string>> {
+  const fullAgents = new Set<string>();
+  let cursor: string | undefined = undefined;
+
+  do {
+    const opts: KVNamespaceListOptions = { prefix: "btc:", limit: 1000 };
+    if (cursor) opts.cursor = cursor;
+    const page = await kv.list(opts);
+
+    // Fetch values in parallel batches of 50
+    const BATCH_SIZE = 50;
+    for (let i = 0; i < page.keys.length; i += BATCH_SIZE) {
+      const batch = page.keys.slice(i, i + BATCH_SIZE);
+      const values = await Promise.all(batch.map((k) => kv.get(k.name)));
+      for (let j = 0; j < batch.length; j++) {
+        const raw = values[j];
+        if (!raw) continue;
+        try {
+          const parsed = JSON.parse(raw);
+          if (!isPartialAgentRecord(parsed)) {
+            // Strip the "btc:" prefix to get the btcAddress
+            fullAgents.add(batch[j].name.slice("btc:".length));
+          }
+        } catch {
+          // malformed — skip
+        }
+      }
+    }
+
+    cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
+  } while (cursor !== undefined);
+
+  return fullAgents;
+}
+
 // ── Per-table reconciliation ───────────────────────────────────────────────
 
 /**
@@ -135,8 +178,8 @@ async function reconcileAgents(
 
   const breakdown = computeAgentsDrift(kv_total, kv_partial, d1_count);
 
-  // Field-level spot-check — only on full agents
-  const sampledKeys = await sampleKvKeys(kv, "btc:", sampleSize * 3); // oversample to account for partials
+  // Field-level spot-check — only on full agents; skip entirely when sampleSize=0
+  const sampledKeys = sampleSize > 0 ? await sampleKvKeys(kv, "btc:", sampleSize * 3) : []; // oversample to account for partials
   const field_diffs: FieldDiff[] = [];
   let checked = 0;
 
@@ -213,14 +256,15 @@ async function reconcileAgents(
 /**
  * Reconcile the claims table.
  *
- * Drift is explained by claims whose FK target (btc_address → agents) is a
- * Partial agent not in D1. We count these by checking if the claim's btcAddress
- * exists in D1 agents.
+ * Drift is explained by claims whose FK parent agent is absent from the full-agent
+ * set (i.e., the agent is a PartialAgentRecord not in D1). Uses KV-truth via
+ * buildFullAgentSet rather than D1 SELECT — backfill failures no longer look explained.
  */
 async function reconcileClaims(
   kv: KVNamespace,
   db: D1Database,
-  sampleSize: number
+  sampleSize: number,
+  fullAgents: Set<string>
 ): Promise<Omit<TableReconcileResult, "duration_ms">> {
   // Count KV claim keys (claim: prefix, no claim-code: entries)
   const { total: kv_total } = await countKvKeys(kv, "claim:", false, ["claim-code:"]);
@@ -228,8 +272,7 @@ async function reconcileClaims(
   const d1Row = await db.prepare("SELECT COUNT(*) AS cnt FROM claims").first<{ cnt: number }>();
   const d1_count = d1Row?.cnt ?? 0;
 
-  // Determine drift_explained: scan claim keys and count those whose agent is absent from D1
-  // (i.e., the agent was a Partial, never inserted into agents table)
+  // Determine drift_explained: scan claim keys using KV-truth (fullAgents set)
   let drift_explained = 0;
   {
     let cursor: string | undefined = undefined;
@@ -240,20 +283,18 @@ async function reconcileClaims(
       for (const key of page.keys) {
         if (key.name.startsWith("claim-code:")) continue;
         const btcAddress = key.name.slice("claim:".length);
-        const exists = await db
-          .prepare("SELECT 1 FROM agents WHERE btc_address = ?")
-          .bind(btcAddress)
-          .first<{ 1: number }>();
-        if (!exists) drift_explained++;
+        if (!fullAgents.has(btcAddress)) drift_explained++;
       }
       cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
     } while (cursor !== undefined);
   }
 
-  const breakdown = computeDrift(kv_total, 0, d1_count, drift_explained);
+  const breakdown = computeDrift(kv_total, 0, d1_count, drift_explained, {
+    partial_cascade: drift_explained,
+  });
 
-  // Field-level spot-check
-  const sampledKeys = await sampleKvKeys(kv, "claim:", sampleSize, ["claim-code:"]);
+  // Field-level spot-check; skipped when sampleSize=0
+  const sampledKeys = sampleSize > 0 ? await sampleKvKeys(kv, "claim:", sampleSize, ["claim-code:"]) : [];
   const field_diffs: FieldDiff[] = [];
   let checked = 0;
 
@@ -298,6 +339,7 @@ async function reconcileClaims(
     drift: breakdown.drift,
     drift_explained: breakdown.drift_explained,
     drift_unexplained: breakdown.drift_unexplained,
+    explained_categories: breakdown.explained_categories,
     sample_size: checked,
     field_diffs,
   };
@@ -308,20 +350,77 @@ async function reconcileClaims(
  *
  * KV has two sub-prefixes: inbox:message: (inbound) and inbox:reply: (replies).
  * Both are folded into a single inbox_messages D1 table.
- * Drift is explained by messages whose sender/recipient agent is Partial
- * (FK cascade) plus the known 7 UNIQUE-constraint replays + 2 unresolvable STX.
+ * Drift explained via KV-truth: partial_cascade (recipient not a full agent),
+ * unique_payment_txid_replay (duplicate payment txids), and unresolvable_stx_reply
+ * (reply whose STX replyTo cannot be resolved to a full agent).
  *
  * Reply rows in D1 have message_id prefixed with REPLY_D1_PK_PREFIX.
  */
 async function reconcileInboxMessages(
   kv: KVNamespace,
   db: D1Database,
-  sampleSize: number
+  sampleSize: number,
+  fullAgents: Set<string>
 ): Promise<Omit<TableReconcileResult, "duration_ms">> {
-  const [{ total: kv_inbound }, { total: kv_reply }] = await Promise.all([
-    countKvKeys(kv, "inbox:message:"),
-    countKvKeys(kv, "inbox:reply:"),
-  ]);
+  // Single-pass: collect all parsed inbox records to derive all category counts
+  type ParsedMsg = { type: "message"; toBtcAddress?: string; paymentTxid?: string };
+  type ParsedReply = { type: "reply"; replyTo?: string; messageId?: string };
+  const allRecords: Array<ParsedMsg | ParsedReply> = [];
+
+  // Scan inbox:message: prefix
+  let kv_inbound = 0;
+  {
+    let cursor: string | undefined = undefined;
+    do {
+      const opts: KVNamespaceListOptions = { prefix: "inbox:message:", limit: 500 };
+      if (cursor) opts.cursor = cursor;
+      const page = await kv.list(opts);
+      kv_inbound += page.keys.length;
+      for (const key of page.keys) {
+        const raw = await kv.get(key.name);
+        if (!raw) continue;
+        try {
+          const msg = JSON.parse(raw) as Record<string, unknown>;
+          allRecords.push({
+            type: "message",
+            toBtcAddress: msg.toBtcAddress as string | undefined,
+            paymentTxid: msg.paymentTxid as string | undefined,
+          });
+        } catch {
+          // ignore malformed
+        }
+      }
+      cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
+    } while (cursor !== undefined);
+  }
+
+  // Scan inbox:reply: prefix
+  let kv_reply = 0;
+  {
+    let cursor: string | undefined = undefined;
+    do {
+      const opts: KVNamespaceListOptions = { prefix: "inbox:reply:", limit: 500 };
+      if (cursor) opts.cursor = cursor;
+      const page = await kv.list(opts);
+      kv_reply += page.keys.length;
+      for (const key of page.keys) {
+        const raw = await kv.get(key.name);
+        if (!raw) continue;
+        try {
+          const reply = JSON.parse(raw) as Record<string, unknown>;
+          allRecords.push({
+            type: "reply",
+            replyTo: reply.replyTo as string | undefined,
+            messageId: reply.messageId as string | undefined,
+          });
+        } catch {
+          // ignore malformed
+        }
+      }
+      cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
+    } while (cursor !== undefined);
+  }
+
   const kv_total = kv_inbound + kv_reply;
 
   const d1Row = await db
@@ -329,71 +428,61 @@ async function reconcileInboxMessages(
     .first<{ cnt: number }>();
   const d1_count = d1Row?.cnt ?? 0;
 
-  // Compute drift_explained: count KV inbound messages whose to_btc_address
-  // is absent from D1 agents (Partial cascade). Also count KV reply rows
-  // where the parent message is absent from D1 (implies sender was Partial).
-  // We approximate: check inbound messages' to_btc_address.
-  let drift_explained = 0;
-  {
-    let cursor: string | undefined = undefined;
-    do {
-      const opts: KVNamespaceListOptions = { prefix: "inbox:message:", limit: 500 };
-      if (cursor) opts.cursor = cursor;
-      const page = await kv.list(opts);
-      for (const key of page.keys) {
-        const raw = await kv.get(key.name);
-        if (!raw) continue;
-        try {
-          const msg = JSON.parse(raw) as Record<string, unknown>;
-          const toBtc = msg.toBtcAddress as string | undefined;
-          if (toBtc) {
-            const exists = await db
-              .prepare("SELECT 1 FROM agents WHERE btc_address = ?")
-              .bind(toBtc)
-              .first<{ 1: number }>();
-            if (!exists) drift_explained++;
-          }
-        } catch {
-          // ignore
-        }
-      }
-      cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
-    } while (cursor !== undefined);
+  // Derive explained categories from the single-pass records
+  let partial_cascade = 0;
+  let unresolvable_stx_reply = 0;
+  const txidCounts = new Map<string, number>();
 
-    // For replies: check if parent message_id exists in D1
-    cursor = undefined;
-    do {
-      const opts: KVNamespaceListOptions = { prefix: "inbox:reply:", limit: 500 };
-      if (cursor) opts.cursor = cursor;
-      const page = await kv.list(opts);
-      for (const key of page.keys) {
-        const raw = await kv.get(key.name);
-        if (!raw) continue;
-        try {
-          const reply = JSON.parse(raw) as Record<string, unknown>;
-          const parentId = reply.messageId as string | undefined;
-          if (parentId) {
-            const exists = await db
-              .prepare("SELECT 1 FROM inbox_messages WHERE message_id = ?")
-              .bind(parentId)
-              .first<{ 1: number }>();
-            if (!exists) drift_explained++;
+  for (const rec of allRecords) {
+    if (rec.type === "message") {
+      const { toBtcAddress, paymentTxid } = rec;
+      if (toBtcAddress && !fullAgents.has(toBtcAddress)) {
+        partial_cascade++;
+      }
+      if (paymentTxid) {
+        txidCounts.set(paymentTxid, (txidCounts.get(paymentTxid) ?? 0) + 1);
+      }
+    } else {
+      // reply record
+      const { replyTo } = rec;
+      if (replyTo && (replyTo.startsWith("SP") || replyTo.startsWith("ST"))) {
+        // Stacks address shape — look up stx: KV key to resolve to btcAddress
+        const stxRaw = await kv.get(`stx:${replyTo}`);
+        if (!stxRaw) {
+          unresolvable_stx_reply++;
+        } else {
+          try {
+            const stxRecord = JSON.parse(stxRaw) as Record<string, unknown>;
+            const resolvedBtc = stxRecord.btcAddress as string | undefined;
+            if (!resolvedBtc || !fullAgents.has(resolvedBtc)) {
+              partial_cascade++;
+            }
+          } catch {
+            unresolvable_stx_reply++;
           }
-        } catch {
-          // ignore
         }
       }
-      cursor = page.list_complete ? undefined : (page.cursor ?? undefined);
-    } while (cursor !== undefined);
+    }
   }
 
-  const breakdown = computeDrift(kv_total, 0, d1_count, drift_explained);
+  // unique_payment_txid_replay: sum of (count - 1) for all txids seen more than once
+  let unique_payment_txid_replay = 0;
+  for (const count of txidCounts.values()) {
+    if (count > 1) unique_payment_txid_replay += count - 1;
+  }
 
-  // Field-level spot-check on inbound messages only
-  const sampleInbound = Math.ceil(sampleSize * 0.7);
-  const sampleReply = sampleSize - sampleInbound;
-  const inboundKeys = await sampleKvKeys(kv, "inbox:message:", sampleInbound);
-  const replyKeys = await sampleKvKeys(kv, "inbox:reply:", sampleReply);
+  const drift_explained = partial_cascade + unique_payment_txid_replay + unresolvable_stx_reply;
+  const breakdown = computeDrift(kv_total, 0, d1_count, drift_explained, {
+    partial_cascade,
+    unique_payment_txid_replay,
+    unresolvable_stx_reply,
+  });
+
+  // Field-level spot-check on inbound messages only; skipped when sampleSize=0
+  const sampleInbound = sampleSize > 0 ? Math.ceil(sampleSize * 0.7) : 0;
+  const sampleReply = sampleSize > 0 ? sampleSize - sampleInbound : 0;
+  const inboundKeys = sampleSize > 0 ? await sampleKvKeys(kv, "inbox:message:", sampleInbound) : [];
+  const replyKeys = sampleSize > 0 ? await sampleKvKeys(kv, "inbox:reply:", sampleReply) : [];
   const field_diffs: FieldDiff[] = [];
   let checked = 0;
 
@@ -457,6 +546,7 @@ async function reconcileInboxMessages(
     drift: breakdown.drift,
     drift_explained: breakdown.drift_explained,
     drift_unexplained: breakdown.drift_unexplained,
+    explained_categories: breakdown.explained_categories,
     sample_size: checked,
     field_diffs,
   };
@@ -466,19 +556,21 @@ async function reconcileInboxMessages(
  * Reconcile the vouches table.
  *
  * Drift is explained by vouch records where either the referrer or referee
- * is a Partial agent (absent from D1 agents table).
+ * is absent from the full-agent set (i.e., a PartialAgentRecord). Uses KV-truth
+ * via fullAgents rather than D1 SELECT — one explained row regardless of which side missed.
  */
 async function reconcileVouches(
   kv: KVNamespace,
   db: D1Database,
-  sampleSize: number
+  sampleSize: number,
+  fullAgents: Set<string>
 ): Promise<Omit<TableReconcileResult, "duration_ms">> {
   const { total: kv_total } = await countKvKeys(kv, "vouch:", false, ["vouch:index:"]);
 
   const d1Row = await db.prepare("SELECT COUNT(*) AS cnt FROM vouches").first<{ cnt: number }>();
   const d1_count = d1Row?.cnt ?? 0;
 
-  // drift_explained: vouch rows with Partial referrer or referee
+  // drift_explained: vouch rows with Partial referrer or referee (KV-truth)
   let drift_explained = 0;
   {
     let cursor: string | undefined = undefined;
@@ -495,11 +587,7 @@ async function reconcileVouches(
           const referrer = vouch.referrer as string | undefined;
           const referee = vouch.referee as string | undefined;
           if (referrer && referee) {
-            const [refExist, refeeExist] = await Promise.all([
-              db.prepare("SELECT 1 FROM agents WHERE btc_address = ?").bind(referrer).first<{ 1: number }>(),
-              db.prepare("SELECT 1 FROM agents WHERE btc_address = ?").bind(referee).first<{ 1: number }>(),
-            ]);
-            if (!refExist || !refeeExist) drift_explained++;
+            if (!fullAgents.has(referrer) || !fullAgents.has(referee)) drift_explained++;
           }
         } catch {
           // ignore
@@ -509,10 +597,12 @@ async function reconcileVouches(
     } while (cursor !== undefined);
   }
 
-  const breakdown = computeDrift(kv_total, 0, d1_count, drift_explained);
+  const breakdown = computeDrift(kv_total, 0, d1_count, drift_explained, {
+    partial_cascade: drift_explained,
+  });
 
-  // Field-level spot-check
-  const sampledKeys = await sampleKvKeys(kv, "vouch:", sampleSize, ["vouch:index:"]);
+  // Field-level spot-check; skipped when sampleSize=0
+  const sampledKeys = sampleSize > 0 ? await sampleKvKeys(kv, "vouch:", sampleSize, ["vouch:index:"]) : [];
   const field_diffs: FieldDiff[] = [];
   let checked = 0;
 
@@ -557,6 +647,7 @@ async function reconcileVouches(
     drift: breakdown.drift,
     drift_explained: breakdown.drift_explained,
     drift_unexplained: breakdown.drift_unexplained,
+    explained_categories: breakdown.explained_categories,
     sample_size: checked,
     field_diffs,
   };
@@ -758,46 +849,61 @@ export async function POST(request: NextRequest) {
 
   try {
     if (rawTable === "all") {
-      // Run all tables sequentially (D1 query budget concerns)
+      // Build full-agent set once — shared by claims/inbox/vouches for KV-truth drift_explained
+      const fullAgents = await buildFullAgentSet(kv);
+
+      // Run all tables sequentially (D1 query budget concerns); track per-table duration
+      let tableStart = Date.now();
       logger.info("reconcile.table.start", { table: "agents" });
       const agentsResult = await reconcileAgents(kv, db, sampleSize);
+      const agentsDuration = Date.now() - tableStart;
       logger.info("reconcile.table.done", {
         table: "agents",
         drift: agentsResult.drift,
         drift_unexplained: agentsResult.drift_unexplained,
+        duration_ms: agentsDuration,
       });
       if (agentsResult.drift_unexplained !== 0) {
         logger.warn("reconcile.drift.unexplained", { table: "agents", drift_unexplained: agentsResult.drift_unexplained });
       }
 
+      tableStart = Date.now();
       logger.info("reconcile.table.start", { table: "claims" });
-      const claimsResult = await reconcileClaims(kv, db, sampleSize);
+      const claimsResult = await reconcileClaims(kv, db, sampleSize, fullAgents);
+      const claimsDuration = Date.now() - tableStart;
       logger.info("reconcile.table.done", {
         table: "claims",
         drift: claimsResult.drift,
         drift_unexplained: claimsResult.drift_unexplained,
+        duration_ms: claimsDuration,
       });
       if (claimsResult.drift_unexplained !== 0) {
         logger.warn("reconcile.drift.unexplained", { table: "claims", drift_unexplained: claimsResult.drift_unexplained });
       }
 
+      tableStart = Date.now();
       logger.info("reconcile.table.start", { table: "inbox_messages" });
-      const inboxResult = await reconcileInboxMessages(kv, db, sampleSize);
+      const inboxResult = await reconcileInboxMessages(kv, db, sampleSize, fullAgents);
+      const inboxDuration = Date.now() - tableStart;
       logger.info("reconcile.table.done", {
         table: "inbox_messages",
         drift: inboxResult.drift,
         drift_unexplained: inboxResult.drift_unexplained,
+        duration_ms: inboxDuration,
       });
       if (inboxResult.drift_unexplained !== 0) {
         logger.warn("reconcile.drift.unexplained", { table: "inbox_messages", drift_unexplained: inboxResult.drift_unexplained });
       }
 
+      tableStart = Date.now();
       logger.info("reconcile.table.start", { table: "vouches" });
-      const vouchesResult = await reconcileVouches(kv, db, sampleSize);
+      const vouchesResult = await reconcileVouches(kv, db, sampleSize, fullAgents);
+      const vouchesDuration = Date.now() - tableStart;
       logger.info("reconcile.table.done", {
         table: "vouches",
         drift: vouchesResult.drift,
         drift_unexplained: vouchesResult.drift_unexplained,
+        duration_ms: vouchesDuration,
       });
       if (vouchesResult.drift_unexplained !== 0) {
         logger.warn("reconcile.drift.unexplained", { table: "vouches", drift_unexplained: vouchesResult.drift_unexplained });
@@ -834,10 +940,10 @@ export async function POST(request: NextRequest) {
 
       const response: ReconcileAllResponse = {
         tables: [
-          { ...agentsResult, duration_ms },
-          { ...claimsResult, duration_ms },
-          { ...inboxResult, duration_ms },
-          { ...vouchesResult, duration_ms },
+          { ...agentsResult, duration_ms: agentsDuration },
+          { ...claimsResult, duration_ms: claimsDuration },
+          { ...inboxResult, duration_ms: inboxDuration },
+          { ...vouchesResult, duration_ms: vouchesDuration },
         ],
         total_drift_unexplained,
         acceptance_tests,
@@ -846,7 +952,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(response);
     }
 
-    // Single table
+    // Single table — build fullAgents only when needed
     const table = rawTable as TableTarget;
     logger.info("reconcile.table.start", { table });
 
@@ -855,15 +961,21 @@ export async function POST(request: NextRequest) {
       case "agents":
         result = await reconcileAgents(kv, db, sampleSize);
         break;
-      case "claims":
-        result = await reconcileClaims(kv, db, sampleSize);
+      case "claims": {
+        const fullAgents = await buildFullAgentSet(kv);
+        result = await reconcileClaims(kv, db, sampleSize, fullAgents);
         break;
-      case "inbox_messages":
-        result = await reconcileInboxMessages(kv, db, sampleSize);
+      }
+      case "inbox_messages": {
+        const fullAgents = await buildFullAgentSet(kv);
+        result = await reconcileInboxMessages(kv, db, sampleSize, fullAgents);
         break;
-      case "vouches":
-        result = await reconcileVouches(kv, db, sampleSize);
+      }
+      case "vouches": {
+        const fullAgents = await buildFullAgentSet(kv);
+        result = await reconcileVouches(kv, db, sampleSize, fullAgents);
         break;
+      }
     }
 
     const duration_ms = Date.now() - start;

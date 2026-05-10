@@ -85,8 +85,13 @@ interface D1MockConfig {
 function buildD1Mock(config: D1MockConfig = {}): D1Database {
   const firstMock = vi.fn(async (query: string): Promise<FirstResult> => {
     const { firstResults = {}, defaultFirst = null } = config;
-    for (const [keyword, result] of Object.entries(firstResults)) {
-      if (query.includes(keyword)) return result;
+    // Match on full SQL string (longest/most-specific match wins) to avoid keyword collisions.
+    // Sort keys descending by length so a query like
+    //   "SELECT 1 FROM agents WHERE btc_address = ?" matches
+    //   "SELECT 1 FROM agents WHERE btc_address = ?" before "FROM agents".
+    const sortedKeys = Object.keys(firstResults).sort((a, b) => b.length - a.length);
+    for (const key of sortedKeys) {
+      if (query.includes(key)) return firstResults[key];
     }
     return defaultFirst;
   });
@@ -227,15 +232,22 @@ describe("computeDrift (pure unit)", () => {
   });
 
   it("correctly accounts for partial exclusion in kv_count_full", () => {
-    // 150 KV total, 50 partial → 100 full; D1 has 100 → no raw drift
-    // drift_explained=50 is informational (FK cascade rows), drift_unexplained = 0 - 50 = -50
-    // But this scenario is for claims/inbox/vouches where kv_count_partial=0 and
-    // drift_explained is the number of FK-cascade rows
+    // 100 KV total claims, D1 has 60 → drift=40; drift_explained=40 (all explained by partial cascade)
+    // drift_unexplained = max(0, 40 - 40) = 0
     const result = computeDrift(100, 0, 60, 40);
     expect(result.kv_count_full).toBe(100);
     expect(result.drift).toBe(40);
     expect(result.drift_explained).toBe(40);
     expect(result.drift_unexplained).toBe(0);
+  });
+
+  it("clamps drift_unexplained to 0 when drift_explained exceeds drift (floor-skew scenario)", () => {
+    // drift=2 but drift_explained=5 (independent passes can produce minor skew)
+    // drift_unexplained must be clamped to 0, not go negative
+    const result = computeDrift(10, 0, 8, 5);
+    expect(result.drift).toBe(2);
+    expect(result.drift_explained).toBe(5);
+    expect(result.drift_unexplained).toBe(0); // clamped: max(0, 2-5) = 0
   });
 
   it("surfaces unexplained drift when drift_explained is insufficient", () => {
@@ -250,6 +262,17 @@ describe("computeDrift (pure unit)", () => {
     const result = computeDrift(0, 0, 0, 0);
     expect(result.drift).toBe(0);
     expect(result.drift_unexplained).toBe(0);
+  });
+
+  it("passes through explained_categories when provided", () => {
+    const cats = { partial_cascade: 3, unique_payment_txid_replay: 1, unresolvable_stx_reply: 0 };
+    const result = computeDrift(10, 0, 6, 4, cats);
+    expect(result.explained_categories).toEqual(cats);
+  });
+
+  it("omits explained_categories when not provided", () => {
+    const result = computeDrift(10, 0, 6, 4);
+    expect(result.explained_categories).toBeUndefined();
   });
 });
 
@@ -640,5 +663,331 @@ describe("table=all reconciliation", () => {
       acceptance_tests?: { passed: boolean };
     };
     expect(body.acceptance_tests).toBeDefined();
+  });
+
+  it("returns independent per-table duration_ms (not the overall run duration)", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+        "FROM claims": { cnt: 0 },
+        "FROM inbox_messages": { cnt: 0 },
+        "FROM vouches": { cnt: 0 },
+        "WHERE to_btc_address": { cnt: 0 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "all", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      tables: Array<{ table: string; duration_ms: number }>;
+      duration_ms: number;
+    };
+
+    // Each per-table duration_ms must be a non-negative number
+    for (const t of body.tables) {
+      expect(typeof t.duration_ms).toBe("number");
+      expect(t.duration_ms).toBeGreaterThanOrEqual(0);
+    }
+
+    // Per-table duration_ms values should not all be the same as total (they're independent)
+    // They should each be <= total since they are sub-ranges of the overall run
+    for (const t of body.tables) {
+      expect(t.duration_ms).toBeLessThanOrEqual(body.duration_ms + 100); // small slack for clock
+    }
+  });
+});
+
+// ── KV-truth drift_explained (buildFullAgentSet) ───────────────────────────
+
+describe("KV-truth drift_explained via buildFullAgentSet", () => {
+  it("classifies claims with partial-agent parents as drift_explained using KV data only", async () => {
+    // KV: 1 full agent + 1 partial agent; 2 claims (one for each)
+    // D1: 1 claim row (only full agent's claim backfilled)
+    // Expected: kv_count=2, d1_count=1, drift=1, drift_explained=1 (partial cascade), drift_unexplained=0
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,        // full agent
+      "btc:bc1qpartial": PARTIAL_AGENT,     // partial agent
+      "claim:bc1qagent1": CLAIM_1,          // claim for full agent
+      "claim:bc1qpartial": JSON.stringify({ // claim for partial agent (not in D1)
+        btcAddress: "bc1qpartial",
+        status: "verified",
+        claimedAt: "2026-01-03T00:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM claims": { cnt: 1 }, // only the full-agent's claim is in D1
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "claims", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories?: { partial_cascade?: number };
+    };
+
+    expect(body.kv_count).toBe(2);
+    expect(body.d1_count).toBe(1);
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1); // partial agent's claim is explained
+    expect(body.drift_unexplained).toBe(0);
+    expect(body.explained_categories?.partial_cascade).toBe(1);
+  });
+
+  it("classifies vouch with partial-agent participant as drift_explained", async () => {
+    // KV: 1 full agent + 1 partial agent + 1 vouch between them
+    // D1: 0 vouches (neither is backfilled since one is partial)
+    // Expected: drift=1, drift_explained=1, drift_unexplained=0
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qpartial": PARTIAL_AGENT,
+      "vouch:bc1qagent1:bc1qpartial": JSON.stringify({
+        referrer: "bc1qagent1",
+        referee: "bc1qpartial",
+        registeredAt: "2026-03-01T00:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM vouches": { cnt: 0 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "vouches", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories?: { partial_cascade?: number };
+    };
+
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+    expect(body.explained_categories?.partial_cascade).toBe(1);
+  });
+});
+
+// ── inbox explained_categories ─────────────────────────────────────────────
+
+describe("inbox explained_categories", () => {
+  it("counts unique_payment_txid_replay when multiple messages share same payment_txid", async () => {
+    // 3 inbox messages: 2 share the same payment_txid → 1 unique_payment_txid_replay
+    // All go to full agent (no partial_cascade), no stx replies (unresolvable_stx_reply=0)
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:message:msg001": JSON.stringify({
+        messageId: "msg001",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_shared",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+      "inbox:message:msg002": JSON.stringify({
+        messageId: "msg002",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_shared", // same txid → replay
+        sentAt: "2026-01-01T00:01:00Z",
+      }),
+      "inbox:message:msg003": JSON.stringify({
+        messageId: "msg003",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_unique", // unique txid
+        sentAt: "2026-01-01T00:02:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM inbox_messages": { cnt: 2 }, // only 2 made it to D1 (1 replay skipped)
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories?: {
+        partial_cascade?: number;
+        unique_payment_txid_replay?: number;
+        unresolvable_stx_reply?: number;
+      };
+    };
+
+    expect(body.kv_count).toBe(3);
+    expect(body.d1_count).toBe(2);
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1); // 1 unique_payment_txid_replay
+    expect(body.drift_unexplained).toBe(0);
+    expect(body.explained_categories?.unique_payment_txid_replay).toBe(1);
+    expect(body.explained_categories?.partial_cascade).toBe(0);
+    expect(body.explained_categories?.unresolvable_stx_reply).toBe(0);
+  });
+
+  it("counts partial_cascade for inbox messages to partial-agent recipients", async () => {
+    // 2 inbox messages: 1 to full agent, 1 to partial agent
+    // D1 has 1 (only full agent's message backfilled)
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qpartial": PARTIAL_AGENT,
+      "inbox:message:msg_full": JSON.stringify({
+        messageId: "msg_full",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_a",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+      "inbox:message:msg_partial": JSON.stringify({
+        messageId: "msg_partial",
+        toBtcAddress: "bc1qpartial",
+        paymentTxid: "txid_b",
+        sentAt: "2026-01-01T00:01:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM inbox_messages": { cnt: 1 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories?: { partial_cascade?: number };
+    };
+
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+    expect(body.explained_categories?.partial_cascade).toBe(1);
+  });
+});
+
+// ── sampleSize=0 short-circuit ─────────────────────────────────────────────
+
+describe("sampleSize=0 short-circuit", () => {
+  it("agents table with sampleSize=0 returns sample_size=0 and empty field_diffs", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "agents", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      sample_size: number;
+      field_diffs: unknown[];
+    };
+
+    expect(body.sample_size).toBe(0);
+    expect(body.field_diffs).toHaveLength(0);
+  });
+
+  it("claims table with sampleSize=0 returns sample_size=0 and empty field_diffs", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "claim:bc1qagent1": CLAIM_1,
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM claims": { cnt: 1 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "claims", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      sample_size: number;
+      field_diffs: unknown[];
+    };
+
+    expect(body.sample_size).toBe(0);
+    expect(body.field_diffs).toHaveLength(0);
+  });
+
+  it("vouches table with sampleSize=0 returns sample_size=0 and empty field_diffs", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qagent2": JSON.stringify({
+        btcAddress: "bc1qagent2",
+        stxAddress: "SP1AGENT2",
+        stxPublicKey: "03abcdef02",
+        btcPublicKey: "02abcdef02",
+        verifiedAt: "2026-01-02T00:00:00Z",
+      }),
+      "vouch:bc1qagent1:bc1qagent2": VOUCH_1,
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM vouches": { cnt: 1 },
+      },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "vouches", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      sample_size: number;
+      field_diffs: unknown[];
+    };
+
+    expect(body.sample_size).toBe(0);
+    expect(body.field_diffs).toHaveLength(0);
   });
 });
