@@ -5,7 +5,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import type { AgentRecord, ClaimRecord } from "@/lib/types";
 import { getAgentLevel, computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
-import { lookupBnsName } from "@/lib/bns";
+import { lookupOwnerByBnsName } from "@/lib/bns";
 import { X_HANDLE } from "@/lib/constants";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
@@ -110,9 +110,11 @@ async function resolveAgentAndClaim(
       }
     }
 
-    // Last resort: Hiro BNS API
+    // Last resort: Hiro BNS API.
+    // lookupOwnerByBnsName resolves BNS name → owner STX address (reverse lookup).
+    // lookupBnsName would be wrong here: it resolves STX address → BNS name (forward).
     if (!agent) {
-      const resolvedStx = await lookupBnsName(target, hiroApiKey, kv).catch(() => null);
+      const resolvedStx = await lookupOwnerByBnsName(target, hiroApiKey, kv).catch(() => null);
       if (resolvedStx) {
         const row = await lookupProfileByStxAddress(db, resolvedStx);
         if (row) {

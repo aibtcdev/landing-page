@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
-import { lookupBnsName, lookupBnsNameWithOutcome } from "../bns";
+import { lookupBnsName, lookupBnsNameWithOutcome, lookupOwnerByBnsName } from "../bns";
 
 // Mock fetch globally
 const mockFetch = vi.fn();
@@ -486,6 +486,178 @@ describe("lookupBnsName", () => {
       expect(callBody.sender).toBe(
         "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
+    });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// lookupOwnerByBnsName — reverse BNS lookup (name → STX address)
+// ---------------------------------------------------------------------------
+
+describe("lookupOwnerByBnsName", () => {
+  /** Build an in-memory KV mock that records put() calls. */
+  function createMockKv() {
+    const store = new Map<string, { value: string; ttl?: number }>();
+    return {
+      get: vi.fn(async (key: string) => store.get(key)?.value ?? null),
+      put: vi.fn(
+        async (
+          key: string,
+          value: string,
+          options?: { expirationTtl?: number }
+        ) => {
+          store.set(key, { value, ttl: options?.expirationTtl });
+        }
+      ),
+      _store: store,
+    };
+  }
+
+  beforeEach(() => {
+    mockFetch.mockClear();
+  });
+
+  afterEach(() => {
+    vi.clearAllTimers();
+  });
+
+  describe("positive cache (24h)", () => {
+    it("returns the owner STX address on a successful Hiro response", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: mockHeaders(),
+        json: async () => ({ address: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7", zonefile_hash: "abc" }),
+      });
+
+      const result = await lookupOwnerByBnsName("alice.btc");
+      expect(result).toBe("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+    });
+
+    it("caches the owner address with a 24h TTL", async () => {
+      const kv = createMockKv();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: mockHeaders(),
+        json: async () => ({ address: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7" }),
+      });
+
+      await lookupOwnerByBnsName("alice.btc", undefined, kv as unknown as KVNamespace);
+
+      const cacheKey = "cache:bns-owner:alice.btc";
+      expect(kv._store.get(cacheKey)?.value).toBe("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(24 * 60 * 60);
+    });
+
+    it("returns the cached address without hitting Hiro on a cache hit", async () => {
+      const kv = createMockKv();
+      // Pre-seed the cache
+      kv._store.set("cache:bns-owner:alice.btc", { value: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7" });
+
+      const result = await lookupOwnerByBnsName("alice.btc", undefined, kv as unknown as KVNamespace);
+
+      expect(result).toBe("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+
+    it("calls the correct Hiro v1/names endpoint", async () => {
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: mockHeaders(),
+        json: async () => ({ address: "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7" }),
+      });
+
+      await lookupOwnerByBnsName("alice.btc");
+
+      expect(mockFetch).toHaveBeenCalledWith(
+        "https://api.mainnet.hiro.so/v1/names/alice.btc",
+        expect.objectContaining({ signal: expect.any(AbortSignal) })
+      );
+    });
+  });
+
+  describe("confirmed-negative cache (7d) — name does not exist", () => {
+    it("returns null on 404 and caches with 7d TTL", async () => {
+      const kv = createMockKv();
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 404,
+        headers: mockHeaders(),
+      });
+
+      const result = await lookupOwnerByBnsName("noname.btc", undefined, kv as unknown as KVNamespace);
+
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns-owner:noname.btc";
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(7 * 24 * 60 * 60);
+    });
+
+    it("serves null from negative cache without hitting Hiro again", async () => {
+      const kv = createMockKv();
+      kv._store.set("cache:bns-owner:noname.btc", { value: "__NONE__" });
+
+      const result = await lookupOwnerByBnsName("noname.btc", undefined, kv as unknown as KVNamespace);
+
+      expect(result).toBeNull();
+      expect(mockFetch).not.toHaveBeenCalled();
+    });
+  });
+
+  describe("lookup-failed cache (60s) — transient upstream errors", () => {
+    it("returns null on 5xx and caches with 60s TTL", async () => {
+      const kv = createMockKv();
+      mockFetch.mockResolvedValue({
+        ok: false,
+        status: 500,
+        headers: mockHeaders(),
+      });
+
+      const result = await lookupOwnerByBnsName("alice.btc", undefined, kv as unknown as KVNamespace);
+
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns-owner:alice.btc";
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
+    });
+
+    it("returns null on network error and caches with 60s TTL", async () => {
+      const kv = createMockKv();
+      mockFetch.mockRejectedValue(new Error("Network error"));
+
+      const result = await lookupOwnerByBnsName("alice.btc", undefined, kv as unknown as KVNamespace);
+
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns-owner:alice.btc";
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
+    });
+
+    it("returns null when response has no address field and caches 60s TTL", async () => {
+      const kv = createMockKv();
+      mockFetch.mockResolvedValue({
+        ok: true,
+        status: 200,
+        headers: mockHeaders(),
+        json: async () => ({ zonefile_hash: "abc" }), // no address field
+      });
+
+      const result = await lookupOwnerByBnsName("alice.btc", undefined, kv as unknown as KVNamespace);
+
+      expect(result).toBeNull();
+      const cacheKey = "cache:bns-owner:alice.btc";
+      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
+      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
+    });
+
+    it("does not throw on timeout", async () => {
+      mockFetch.mockRejectedValue(new DOMException("Aborted", "AbortError"));
+
+      await expect(
+        lookupOwnerByBnsName("alice.btc")
+      ).resolves.toBeNull();
     });
   });
 });

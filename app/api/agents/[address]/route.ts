@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import type { AgentRecord } from "@/lib/types";
-import { lookupBnsName } from "@/lib/bns";
+import type { AgentRecord, ClaimRecord } from "@/lib/types";
+import { lookupBnsName, lookupOwnerByBnsName } from "@/lib/bns";
 import { enrichAgentProfile } from "@/lib/agent-enrichment";
 import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
 import {
@@ -15,6 +15,7 @@ import {
   lookupProfileByStxAddress,
   lookupProfileByAgentId,
   mapRowToAgentRecord,
+  mapRowToClaimRecord,
 } from "@/lib/cache/agent-profile";
 import {
   createLogger,
@@ -143,25 +144,36 @@ export async function GET(
         // agents documented in docs/d1-reconcile-baseline.md (Phase 1.4 baseline).
         // Tracked for cleanup at #691; this fallback is transitional scaffolding.
         let agent: AgentRecord | null = null;
+        // D1-joined claim record: set when the agent row comes from D1 (claim
+        // is available from the LEFT JOIN). Left as undefined when the KV fallback
+        // path is used — undefined signals enrichAgentProfile to fall back to KV.
+        let d1Claim: ClaimRecord | null | undefined = undefined;
         let kvFallbackKey: string | null = null;
 
         if (branch === "btc") {
           // Branch 1: BTC address → D1 WHERE btc_address = ?
           const row = await lookupProfileByBtcAddress(db, address);
-          if (row) agent = mapRowToAgentRecord(row);
-          else kvFallbackKey = `btc:${address}`;
+          if (row) {
+            agent = mapRowToAgentRecord(row);
+            d1Claim = mapRowToClaimRecord(row);
+          } else kvFallbackKey = `btc:${address}`;
         } else if (branch === "stx") {
           // Branch 2: STX address → D1 WHERE stx_address = ?
           const row = await lookupProfileByStxAddress(db, address);
-          if (row) agent = mapRowToAgentRecord(row);
-          else kvFallbackKey = `stx:${address}`;
+          if (row) {
+            agent = mapRowToAgentRecord(row);
+            d1Claim = mapRowToClaimRecord(row);
+          } else kvFallbackKey = `stx:${address}`;
         } else if (branch === "numeric") {
           // Branch 3: ERC-8004 agent-id → D1 WHERE erc8004_agent_id = ?
           // No KV fallback: agents are not indexed by erc8004_agent_id in KV.
           const agentId = parseInt(address, 10);
           if (!Number.isNaN(agentId)) {
             const row = await lookupProfileByAgentId(db, agentId);
-            if (row) agent = mapRowToAgentRecord(row);
+            if (row) {
+              agent = mapRowToAgentRecord(row);
+              d1Claim = mapRowToClaimRecord(row);
+            }
           }
         } else if (branch === "taproot") {
           // Branch 4: Taproot reverse-lookup via KV (KV stays per Phase 2.2 RFC),
@@ -169,8 +181,10 @@ export async function GET(
           const canonicalBtcAddress = await kv.get(`taproot:${address}`);
           if (canonicalBtcAddress) {
             const row = await lookupProfileByBtcAddress(db, canonicalBtcAddress);
-            if (row) agent = mapRowToAgentRecord(row);
-            else kvFallbackKey = `btc:${canonicalBtcAddress}`;
+            if (row) {
+              agent = mapRowToAgentRecord(row);
+              d1Claim = mapRowToClaimRecord(row);
+            } else kvFallbackKey = `btc:${canonicalBtcAddress}`;
           }
         } else {
           // Branch 5: BNS name → KV/BNS resolution → D1 WHERE stx_address = ?
@@ -200,6 +214,7 @@ export async function GET(
               // Guard: confirm the stored bns_name matches (stale index protection)
               if (row.bns_name && row.bns_name.toLowerCase() === target) {
                 agent = mapRowToAgentRecord(row);
+                d1Claim = mapRowToClaimRecord(row);
                 stxAddress = row.stx_address;
               }
             } else {
@@ -208,20 +223,25 @@ export async function GET(
             }
           }
 
-          // If still unresolved, try Hiro BNS API as last resort
+          // If still unresolved, try Hiro BNS API as last resort.
+          // lookupOwnerByBnsName resolves BNS name → owner STX address (reverse lookup).
+          // lookupBnsName would be wrong here: it resolves STX address → BNS name (forward).
           if (!agent && !stxAddress) {
-            const resolvedStx = await lookupBnsName(target, hiroApiKey, kv, logger)
+            const resolvedStx = await lookupOwnerByBnsName(target, hiroApiKey, kv, logger)
               .catch(() => null);
             if (resolvedStx) {
               const row = await lookupProfileByStxAddress(db, resolvedStx);
-              if (row) agent = mapRowToAgentRecord(row);
-              else if (!kvFallbackKey) kvFallbackKey = `stx:${resolvedStx}`;
+              if (row) {
+                agent = mapRowToAgentRecord(row);
+                d1Claim = mapRowToClaimRecord(row);
+              } else if (!kvFallbackKey) kvFallbackKey = `stx:${resolvedStx}`;
             }
           }
         }
 
         // KV fallback for validation-excluded agents (708 records per
         // docs/d1-reconcile-baseline.md). Transitional — see #691 for cleanup.
+        // d1Claim stays undefined here — enrichAgentProfile will fall back to KV.
         if (!agent && kvFallbackKey) {
           const kvValue = await kv.get(kvFallbackKey);
           if (kvValue) {
@@ -276,12 +296,16 @@ export async function GET(
           }).catch(() => {});
         }
 
+        // Pass d1Claim so enrichAgentProfile skips the redundant KV read when the
+        // agent came from D1 (covers all non-KV-fallback paths). When d1Claim is
+        // undefined (KV fallback agents), enrichAgentProfile falls back to KV.
         const enrichment = await enrichAgentProfile(
           agent,
           kv,
           hiroApiKey,
           `agents/${agent.btcAddress}`,
-          logger
+          logger,
+          d1Claim
         );
 
         const checkIn = enrichment.checkIn
