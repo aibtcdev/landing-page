@@ -395,7 +395,7 @@ async function reconcileClaims(
  * unique_payment_txid_replay (duplicate payment txids), and unresolvable_stx_reply
  * (reply whose STX replyTo cannot be resolved to a full agent).
  *
- * Reply rows in D1 have message_id prefixed with REPLY_D1_PK_PREFIX.
+ * Reply rows in D1 have message_id synthesized via `deriveReplyD1Id` (see `lib/inbox/d1-pk.ts`).
  */
 async function reconcileInboxMessages(
   kv: KVNamespace,

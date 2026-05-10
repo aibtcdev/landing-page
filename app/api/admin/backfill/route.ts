@@ -583,10 +583,10 @@ async function backfillInboxMessages(
       continue;
     }
 
-    // Replies use the messageId as both their own message_id and reply_to_message_id.
-    // The KV key is `inbox:reply:{messageId}` where messageId is the parent message's
-    // ID. The reply IS linked to that parent message row in D1.
-    // We generate a distinct ID for the reply row itself to avoid PK collision.
+    // KV key is `inbox:reply:{messageId}` where messageId is the parent's ID.
+    // The reply row's own message_id is synthesized via deriveReplyD1Id to avoid
+    // PK collision with the parent inbound row (which uses messageId directly).
+    // The reply_to_message_id FK column links back to the parent unchanged.
     const replyMessageId = deriveReplyD1Id(reply.messageId);
 
     const resolvedToBtcAddress = await resolveReplyRecipientBtcAddress(kv, reply.toBtcAddress);
