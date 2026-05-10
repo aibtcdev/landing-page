@@ -52,7 +52,10 @@ CREATE TABLE agents_new (
   FOREIGN KEY (referred_by_btc) REFERENCES agents_new(btc_address)
 );
 
--- Step 2: Copy all existing rows.
+-- Step 2a: Copy all rows with referred_by_btc = NULL first to satisfy the
+-- self-referential FK constraint during the bulk INSERT. The FK on agents_new
+-- points to agents_new.btc_address, so rows with referrals fail if the
+-- referrer row hasn't been inserted yet. We clear it here and restore below.
 INSERT INTO agents_new
 SELECT
   btc_address,
@@ -71,9 +74,19 @@ SELECT
   capabilities_json,
   last_identity_check,
   github_username,
-  referred_by_btc,
+  NULL,            -- referred_by_btc: restored in step 2b after all rows exist
   referral_code
 FROM agents;
+
+-- Step 2b: Restore referred_by_btc values now that all rows exist in agents_new.
+-- Standard SQLite correlated-update syntax (no FROM clause).
+UPDATE agents_new
+SET referred_by_btc = (
+  SELECT referred_by_btc FROM agents WHERE agents.btc_address = agents_new.btc_address
+)
+WHERE btc_address IN (
+  SELECT btc_address FROM agents WHERE referred_by_btc IS NOT NULL
+);
 
 -- Step 3: Drop the old table (and its indexes — they are table-scoped).
 DROP TABLE agents;
