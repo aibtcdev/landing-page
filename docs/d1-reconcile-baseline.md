@@ -12,7 +12,7 @@ The route at `app/api/admin/reconcile/route.ts` regenerates these numbers on dem
 
 | Table | KV total | D1 count | Drift | Drift explained | Drift unexplained | Verified by |
 |-------|---------:|---------:|------:|----------------:|-------------------:|-------------|
-| `agents` | 951 (full) + 0 partial + 708 invalid = **1659** | 243 | **0** | — | **0 ✅** | reconcile route, route-level |
+| `agents` | **951** (post-partial-filter; 0 partial excluded; 708 invalid surfaced via `kv_count_invalid_excluded`) | 243 | **708** | 708 (`kv_count_invalid_excluded` — strict-required-field rejection per backfill validation) | **0 ✅** | reconcile route, route-level |
 | `claims` | **577** | 123 | **454** | 454 (FK cascade from invalid agents) | **0 ✅** | reconcile route, route-level |
 | `inbox_messages` | **7761** (5223 inserted + 2538 backfill rejects) | 5223 | **2538** | 2538 (categorical breakdown below) | **0 ✅** (count-level) / pagination needed for per-row | reconcile route + backfill artifact |
 | `vouches` | **95** | 30 | **65** | 65 (FK cascade) | **0 ✅** | reconcile route, route-level |
@@ -59,7 +59,7 @@ For Phase 2.5 (inbox dual-write → flip), the `unreadCount` empirical acceptanc
 
 ## Open follow-up
 
-- **Path A (pagination refactor):** Add `?cursor=…&maxKeysPerCall=1000` query params to inbox reconcile, keeping single-call shape for agents/claims/vouches. Cursor in URL/body (stateless route). Filed as a separate sub-issue (TBD link).
+- **Path A (pagination refactor):** Add `?cursor=…&maxKeysPerCall=1000` query params to inbox reconcile, keeping single-call shape for agents/claims/vouches. Cursor in URL/body (stateless route). Filed as separate sub-issue [#684](https://github.com/aibtcdev/landing-page/issues/684).
 
 ## Reproducing this baseline
 
