@@ -40,6 +40,7 @@ export interface DriftBreakdown {
     partial_cascade?: number;
     unique_payment_txid_replay?: number;
     unresolvable_stx_reply?: number;
+    orphan_recipient?: number;
   };
 }
 
@@ -140,12 +141,14 @@ export interface TableReconcileResult {
    * Per-table breakdown of explained categories.
    * Always present (may be empty object {}). For agents this is {}; for
    * claims/vouches it carries partial_cascade; for inbox it also carries
-   * unique_payment_txid_replay and unresolvable_stx_reply.
+   * unique_payment_txid_replay, unresolvable_stx_reply, and orphan_recipient.
    */
   explained_categories: {
     partial_cascade?: number;
     unique_payment_txid_replay?: number;
     unresolvable_stx_reply?: number;
+    /** Messages to addresses with no KV btc: record AND no D1 agents row (dead-letter). */
+    orphan_recipient?: number;
   };
   sample_size: number;
   field_diffs: FieldDiff[];

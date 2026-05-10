@@ -39,6 +39,7 @@ interface InboxPartialResponse {
     drift_explained_partial_cascade: number;
     drift_explained_unique_payment_txid_replay: number;
     drift_explained_unresolvable_stx_reply: number;
+    drift_explained_orphan_recipient: number;
   };
 }
 
@@ -564,16 +565,33 @@ async function reconcileInboxMessages(
     .first<{ cnt: number }>();
   const d1_count = d1Row?.cnt ?? 0;
 
-  // Derive explained categories from the single-pass records
+  // Derive explained categories from the single-pass records.
+  // orphan_recipient: messages to addresses absent from both KV btc: set and D1 agents.
+  // Detected lazily per address with an in-scan cache to avoid O(n) KV reads for repeated recipients.
   let partial_cascade = 0;
   let unresolvable_stx_reply = 0;
+  let orphan_recipient = 0;
   const txidCounts = new Map<string, number>();
+  // Cache for `btc:{address}` existence: true = KV record exists (partial_cascade), false = orphan
+  const btcExistenceCache = new Map<string, boolean>();
 
   for (const rec of allRecords) {
     if (rec.type === "message") {
       const { toBtcAddress, paymentTxid } = rec;
       if (toBtcAddress && !fullAgents.has(toBtcAddress)) {
-        partial_cascade++;
+        // Recipient is not a full agent — check if they have any btc: KV record (partial or invalid)
+        let existsInKv = btcExistenceCache.get(toBtcAddress);
+        if (existsInKv === undefined) {
+          existsInKv = (await kv.get(`btc:${toBtcAddress}`)) !== null;
+          btcExistenceCache.set(toBtcAddress, existsInKv);
+        }
+        if (existsInKv) {
+          // Has a KV record (partial or otherwise) — partial cascade explains the absence
+          partial_cascade++;
+        } else {
+          // No KV record at all — dead-letter to an orphan address
+          orphan_recipient++;
+        }
       }
       // Only count string txids — replies have payment_txid=null/undefined per RFC.
       // Use typeof guard (not just truthiness) to explicitly exclude null values
@@ -597,8 +615,17 @@ async function reconcileInboxMessages(
               // stx: record exists but has no btcAddress field — resolver returned no address
               unresolvable_stx_reply++;
             } else if (!fullAgents.has(resolvedBtc)) {
-              // resolved to a BTC address, but that agent is not in fullAgents
-              partial_cascade++;
+              // resolved to a BTC address — check if it exists in KV at all
+              let existsInKv = btcExistenceCache.get(resolvedBtc);
+              if (existsInKv === undefined) {
+                existsInKv = (await kv.get(`btc:${resolvedBtc}`)) !== null;
+                btcExistenceCache.set(resolvedBtc, existsInKv);
+              }
+              if (existsInKv) {
+                partial_cascade++;
+              } else {
+                orphan_recipient++;
+              }
             }
           } catch {
             unresolvable_stx_reply++;
@@ -607,7 +634,16 @@ async function reconcileInboxMessages(
       } else if (replyTo && (replyTo.startsWith("bc1q") || replyTo.startsWith("bc1p"))) {
         // BTC address shape — use replyTo directly as to_btc_address
         if (!fullAgents.has(replyTo)) {
-          partial_cascade++;
+          let existsInKv = btcExistenceCache.get(replyTo);
+          if (existsInKv === undefined) {
+            existsInKv = (await kv.get(`btc:${replyTo}`)) !== null;
+            btcExistenceCache.set(replyTo, existsInKv);
+          }
+          if (existsInKv) {
+            partial_cascade++;
+          } else {
+            orphan_recipient++;
+          }
         }
       }
     }
@@ -621,11 +657,12 @@ async function reconcileInboxMessages(
     if (count > 1) unique_payment_txid_replay += count - 1;
   }
 
-  const drift_explained = partial_cascade + unique_payment_txid_replay + unresolvable_stx_reply;
+  const drift_explained = partial_cascade + unique_payment_txid_replay + unresolvable_stx_reply + orphan_recipient;
   const breakdown = computeDrift(kv_total, 0, d1_count, drift_explained, {
     partial_cascade,
     unique_payment_txid_replay,
     unresolvable_stx_reply,
+    orphan_recipient,
   });
 
   // Field-level spot-check on inbound messages only; skipped when sampleSize=0
@@ -715,12 +752,15 @@ async function reconcileInboxMessages(
  *   - 1  kv.list (the page fetch)
  *   - ~500  kv.get (page values; batch-parallel, count as ~500 subrequests)
  *   - ≤50  stx: kv.get (cached within invocation via stxResolutionCache)
+ *   - ≤N  btc: kv.get (unique orphan-candidate addresses; cached within invocation via btcExistenceCache)
  *   - 1  SELECT btc_address FROM agents (first call only, passed in)
  *   - 1  SELECT COUNT(*) FROM inbox_messages (final page only)
- *   Total: ~552 first call, ~551 subsequent (well under 1000 cap).
+ *   Total: ~552+ first call (N extra for orphan checks; in practice N < unique orphan addresses per page).
+ *   Orphan addresses tend to be repeated senders (same orphan receives 100s of messages), so
+ *   btcExistenceCache keeps N low (typically 1–10 unique orphans per page vs 500 messages).
  *
  * With maxKeys=1000:
- *   Total: ~1052 first call, ~1051 subsequent (tight; use 500 if hitting cap).
+ *   Total: ~1052+ first call (same orphan-check caveat; use 500 if hitting cap).
  */
 async function reconcileInboxMessagesPaginated(
   kv: KVNamespace,
@@ -739,8 +779,13 @@ async function reconcileInboxMessagesPaginated(
     drift_explained_partial_cascade: 0,
     drift_explained_unique_payment_txid_replay: 0,
     drift_explained_unresolvable_stx_reply: 0,
+    drift_explained_orphan_recipient: 0,
     txidCounts: new Set<string>(),
   };
+
+  // Per-invocation cache for btc: KV existence checks (orphan_recipient detection).
+  // Not persisted in cursor — lookups are deterministic within a reconcile run.
+  const btcExistenceCache = new Map<string, boolean>();
 
   let currentPrefix: "inbox:message:" | "inbox:reply:" = cursorState?.prefix ?? "inbox:message:";
   let kvCursor: string | null = cursorState?.kvCursor ?? null;
@@ -788,7 +833,19 @@ async function reconcileInboxMessagesPaginated(
           const paymentTxid = parsed.paymentTxid as unknown;
 
           if (toBtcAddress && !fullAgents.has(toBtcAddress)) {
-            accumulated.drift_explained_partial_cascade++;
+            // Recipient is not a full agent — check if they have any btc: KV record
+            let existsInKv = btcExistenceCache.get(toBtcAddress);
+            if (existsInKv === undefined) {
+              existsInKv = (await kv.get(`btc:${toBtcAddress}`)) !== null;
+              btcExistenceCache.set(toBtcAddress, existsInKv);
+            }
+            if (existsInKv) {
+              // Has a KV record (partial or otherwise) — partial cascade explains the absence
+              accumulated.drift_explained_partial_cascade++;
+            } else {
+              // No KV record at all — dead-letter to an orphan address
+              accumulated.drift_explained_orphan_recipient++;
+            }
           }
 
           if (typeof paymentTxid === "string" && paymentTxid.length > 0) {
@@ -821,11 +878,30 @@ async function reconcileInboxMessagesPaginated(
             if (resolvedBtc === null) {
               accumulated.drift_explained_unresolvable_stx_reply++;
             } else if (!fullAgents.has(resolvedBtc)) {
-              accumulated.drift_explained_partial_cascade++;
+              // Resolved to a BTC address — check if it exists in KV at all
+              let existsInKv = btcExistenceCache.get(resolvedBtc);
+              if (existsInKv === undefined) {
+                existsInKv = (await kv.get(`btc:${resolvedBtc}`)) !== null;
+                btcExistenceCache.set(resolvedBtc, existsInKv);
+              }
+              if (existsInKv) {
+                accumulated.drift_explained_partial_cascade++;
+              } else {
+                accumulated.drift_explained_orphan_recipient++;
+              }
             }
           } else if (replyTo && (replyTo.startsWith("bc1q") || replyTo.startsWith("bc1p"))) {
             if (!fullAgents.has(replyTo)) {
-              accumulated.drift_explained_partial_cascade++;
+              let existsInKv = btcExistenceCache.get(replyTo);
+              if (existsInKv === undefined) {
+                existsInKv = (await kv.get(`btc:${replyTo}`)) !== null;
+                btcExistenceCache.set(replyTo, existsInKv);
+              }
+              if (existsInKv) {
+                accumulated.drift_explained_partial_cascade++;
+              } else {
+                accumulated.drift_explained_orphan_recipient++;
+              }
             }
           }
         }
@@ -868,6 +944,7 @@ async function reconcileInboxMessagesPaginated(
         drift_explained_unique_payment_txid_replay:
           accumulated.drift_explained_unique_payment_txid_replay,
         drift_explained_unresolvable_stx_reply: accumulated.drift_explained_unresolvable_stx_reply,
+        drift_explained_orphan_recipient: accumulated.drift_explained_orphan_recipient,
       },
     };
   }
@@ -881,12 +958,14 @@ async function reconcileInboxMessagesPaginated(
   const partial_cascade = accumulated.drift_explained_partial_cascade;
   const unique_payment_txid_replay = accumulated.drift_explained_unique_payment_txid_replay;
   const unresolvable_stx_reply = accumulated.drift_explained_unresolvable_stx_reply;
-  const drift_explained = partial_cascade + unique_payment_txid_replay + unresolvable_stx_reply;
+  const orphan_recipient = accumulated.drift_explained_orphan_recipient;
+  const drift_explained = partial_cascade + unique_payment_txid_replay + unresolvable_stx_reply + orphan_recipient;
 
   const breakdown = computeDrift(accumulated.kv_count, 0, d1_count, drift_explained, {
     partial_cascade,
     unique_payment_txid_replay,
     unresolvable_stx_reply,
+    orphan_recipient,
   });
 
   return {
@@ -1151,8 +1230,8 @@ while :; do
   cursor=$(echo "$resp" | jq -r '.cursor // empty')
   [ -z "$cursor" ] && break
 done`,
-      partialResponse: "{ table, partial: true, cursor, partial_counts: { kv_count, drift_explained_* } }",
-      finalResponse: "{ table, partial: false, cursor: null, kv_count, d1_count, drift, drift_explained, drift_unexplained, explained_categories }",
+      partialResponse: "{ table, partial: true, cursor, partial_counts: { kv_count, drift_explained_partial_cascade, drift_explained_unique_payment_txid_replay, drift_explained_unresolvable_stx_reply, drift_explained_orphan_recipient } }",
+      finalResponse: "{ table, partial: false, cursor: null, kv_count, d1_count, drift, drift_explained, drift_unexplained, explained_categories: { partial_cascade, unique_payment_txid_replay, unresolvable_stx_reply, orphan_recipient } }",
       precondition:
         "agents.drift_unexplained must be 0 before calling inbox_messages (first page only). The pre-condition runs on the first call (no cursor) and returns 409 if not met. Cursor continuation calls skip the check — if it passed on page 1, it holds for subsequent pages (agents table changes are rare at reconcile-run timescales). If the agents table changes mid-reconcile-run, the caller would still complete the run but cascade-detection results may be stale; recommend re-running the full loop.",
       subrequestBudget:
@@ -1182,6 +1261,12 @@ done`,
       step3: "POST ?table=claims and POST ?table=vouches separately — single calls each (small datasets, no cap risk)",
       step4: "Verify drift_unexplained == 0 for all tables before Phase 2 begins",
       step5: "Check acceptance_tests.passed == true for unreadCount drift",
+      inboxExplainedCategories: {
+        partial_cascade: "Messages/replies whose recipient exists in KV (as partial or invalid agent) but not in D1 — excluded by FK cascade",
+        unique_payment_txid_replay: "Inbound messages sharing a payment txid with a prior message — duplicate payment recovery attempts",
+        unresolvable_stx_reply: "Replies whose STX-address replyTo cannot be resolved to a btcAddress via kv stx: lookup",
+        orphan_recipient: "Messages/replies to addresses absent from both KV btc: set AND D1 agents — dead-letter mail, never reachable via inbox UI",
+      },
     },
   });
 }

@@ -1412,15 +1412,23 @@ describe("explained_categories is always present in response", () => {
 // under-counting partial_cascade by ~681 in the 2026-05-10T01:45Z production run.
 
 describe("Bug A: BTC-shaped replyTo classified as partial_cascade", () => {
-  it("reply with BTC replyTo not in fullAgents → partial_cascade incremented", async () => {
-    // KV: 1 full agent + 1 reply whose replyTo is a BTC address NOT in fullAgents
-    // The BTC replyTo recipient is a now-invalid agent, absent from fullAgents.
-    // D1: 0 messages (reply not backfilled — FK would fail on recipient)
+  it("reply with BTC replyTo that is a partial agent in KV but not in fullAgents → partial_cascade", async () => {
+    // KV: 1 full agent + 1 partial agent + 1 reply whose replyTo is the partial agent's BTC address.
+    // The partial agent IS in KV (as btc:bc1qpartial1234) but NOT in fullAgents (not in D1).
+    // partial_cascade explains the absence — the partial agent was excluded from D1 by FK design.
+    // D1: 0 messages (reply not backfilled — FK would fail on partial recipient)
     const kv = buildKvMock({
       "btc:bc1qagent1": FULL_AGENT,
+      // Partial agent whose BTC address is the reply target
+      "btc:bc1qpartial1234": JSON.stringify({
+        btcAddress: "bc1qpartial1234",
+        btcPublicKey: "02aabbcc77",
+        verifiedAt: "2026-01-04T00:00:00Z",
+        // No stxAddress — PartialAgentRecord
+      }),
       "inbox:reply:msg001": JSON.stringify({
         messageId: "msg001",
-        toBtcAddress: "bc1qnotanagent1234",  // BTC address NOT in fullAgents
+        toBtcAddress: "bc1qpartial1234",  // partial agent's BTC address (in KV, not in D1)
         repliedAt: "2026-01-01T03:00:00Z",
       }),
     });
@@ -1448,6 +1456,7 @@ describe("Bug A: BTC-shaped replyTo classified as partial_cascade", () => {
       explained_categories: {
         partial_cascade?: number;
         unresolvable_stx_reply?: number;
+        orphan_recipient?: number;
       };
     };
 
@@ -1456,9 +1465,10 @@ describe("Bug A: BTC-shaped replyTo classified as partial_cascade", () => {
     expect(body.drift).toBe(1);
     expect(body.drift_explained).toBe(1);
     expect(body.drift_unexplained).toBe(0);
-    // Must be partial_cascade, not unresolvable_stx_reply
+    // Recipient is in KV (as partial) → partial_cascade, not orphan_recipient or stx_reply
     expect(body.explained_categories.partial_cascade).toBe(1);
     expect(body.explained_categories.unresolvable_stx_reply).toBe(0);
+    expect(body.explained_categories.orphan_recipient).toBe(0);
   });
 
   it("reply with BTC replyTo that IS in fullAgents → no drift increment", async () => {
@@ -1802,16 +1812,22 @@ describe("Bug C: STX replyTo resolver — no btcAddress field → unresolvable_s
     expect(body.explained_categories.partial_cascade).toBe(0);
   });
 
-  it("stx: record resolves to btcAddress but that BTC is not in fullAgents → partial_cascade (not unresolvable)", async () => {
-    // KV: 1 full agent + 1 stx: record WITH a btcAddress that is NOT in fullAgents
-    // The resolver returns a BTC address — resolution succeeded.
-    // But that BTC agent is not a full agent → FK would fail → partial_cascade.
+  it("stx: record resolves to btcAddress in KV (partial) but not in fullAgents → partial_cascade (not unresolvable)", async () => {
+    // KV: 1 full agent + 1 partial agent + 1 stx: record pointing to the partial agent.
+    // The resolver returns a BTC address that IS in KV (as a partial agent) but NOT in fullAgents.
+    // partial_cascade explains the absence — the partial agent was excluded from D1 by FK design.
     const kv = buildKvMock({
       "btc:bc1qagent1": FULL_AGENT,
-      // stx: record has a btcAddress but that address is NOT in fullAgents (no btc: key)
+      // The resolved BTC address IS in KV as a partial agent
+      "btc:bc1qpartial1234": JSON.stringify({
+        btcAddress: "bc1qpartial1234",
+        btcPublicKey: "02aabbcc99",
+        verifiedAt: "2026-01-04T00:00:00Z",
+        // No stxAddress — PartialAgentRecord
+      }),
       "stx:SP1RESOLVES": JSON.stringify({
         stxAddress: "SP1RESOLVES",
-        btcAddress: "bc1qnotafull1234",  // valid BTC, but no btc: key → not in fullAgents
+        btcAddress: "bc1qpartial1234",  // resolves to the partial agent above
       }),
       "inbox:reply:msg001": JSON.stringify({
         messageId: "msg001",
@@ -1841,15 +1857,17 @@ describe("Bug C: STX replyTo resolver — no btcAddress field → unresolvable_s
       explained_categories: {
         partial_cascade?: number;
         unresolvable_stx_reply?: number;
+        orphan_recipient?: number;
       };
     };
 
     expect(body.drift).toBe(1);
     expect(body.drift_explained).toBe(1);
     expect(body.drift_unexplained).toBe(0);
-    // Resolution succeeded (btcAddress found), but recipient not in fullAgents → partial_cascade
+    // Resolution succeeded (btcAddress found in KV as partial) → partial_cascade
     expect(body.explained_categories.partial_cascade).toBe(1);
     expect(body.explained_categories.unresolvable_stx_reply).toBe(0);
+    expect(body.explained_categories.orphan_recipient).toBe(0);
   });
 });
 
@@ -1865,6 +1883,7 @@ describe("cursor encode/decode roundtrip", () => {
         drift_explained_partial_cascade: 10,
         drift_explained_unique_payment_txid_replay: 2,
         drift_explained_unresolvable_stx_reply: 3,
+        drift_explained_orphan_recipient: 7,
         txidCounts: new Set(["txid_a", "txid_b"]),
       },
     };
@@ -1879,6 +1898,7 @@ describe("cursor encode/decode roundtrip", () => {
     expect(decoded.partialCounts.drift_explained_partial_cascade).toBe(10);
     expect(decoded.partialCounts.drift_explained_unique_payment_txid_replay).toBe(2);
     expect(decoded.partialCounts.drift_explained_unresolvable_stx_reply).toBe(3);
+    expect(decoded.partialCounts.drift_explained_orphan_recipient).toBe(7);
     expect(decoded.partialCounts.txidCounts).toBeInstanceOf(Set);
     expect(decoded.partialCounts.txidCounts.has("txid_a")).toBe(true);
     expect(decoded.partialCounts.txidCounts.has("txid_b")).toBe(true);
@@ -1894,6 +1914,7 @@ describe("cursor encode/decode roundtrip", () => {
         drift_explained_partial_cascade: 0,
         drift_explained_unique_payment_txid_replay: 0,
         drift_explained_unresolvable_stx_reply: 0,
+        drift_explained_orphan_recipient: 0,
         txidCounts: new Set<string>(),
       },
     };
@@ -1902,6 +1923,7 @@ describe("cursor encode/decode roundtrip", () => {
     expect(decoded.prefix).toBe("inbox:reply:");
     expect(decoded.kvCursor).toBeNull();
     expect(decoded.partialCounts.kv_count).toBe(1000);
+    expect(decoded.partialCounts.drift_explained_orphan_recipient).toBe(0);
     expect(decoded.partialCounts.txidCounts).toBeInstanceOf(Set);
     expect(decoded.partialCounts.txidCounts.size).toBe(0);
   });
@@ -1915,6 +1937,7 @@ describe("cursor encode/decode roundtrip", () => {
         drift_explained_partial_cascade: 0,
         drift_explained_unique_payment_txid_replay: 0,
         drift_explained_unresolvable_stx_reply: 0,
+        drift_explained_orphan_recipient: 0,
         txidCounts: new Set<string>(),
       },
     };
@@ -2193,6 +2216,7 @@ describe("paginated inbox reconciliation (Path A)", () => {
         drift_explained_partial_cascade: 0,
         drift_explained_unique_payment_txid_replay: 0,
         drift_explained_unresolvable_stx_reply: 0,
+        drift_explained_orphan_recipient: 0,
         txidCounts: new Set<string>(),
       },
     });
@@ -2282,5 +2306,239 @@ describe("paginated inbox reconciliation (Path A)", () => {
     expect(finalBody!.drift).toBe(1);
     expect(finalBody!.drift_explained).toBe(1);
     expect(finalBody!.explained_categories?.unique_payment_txid_replay).toBe(1);
+  });
+});
+
+// ── orphan_recipient explained category (issue #718) ─────────────────────
+//
+// Messages/replies whose to_btc_address is absent from BOTH the KV btc: set
+// (full + partial + invalid) AND D1 agents table. These are dead-letter messages
+// that can never be delivered via the inbox UI. Previously counted as unexplained
+// drift; now classified as orphan_recipient and subtracted from drift_unexplained.
+
+describe("orphan_recipient explained category", () => {
+  // Fixture: full agent for the registered recipient
+  const FULL_AGENT_2 = JSON.stringify({
+    btcAddress: "bc1qagent2",
+    stxAddress: "SP1AGENT2",
+    stxPublicKey: "03abcdef02",
+    btcPublicKey: "02abcdef02",
+    verifiedAt: "2026-01-02T00:00:00Z",
+  });
+
+  it("inbound message to a registered agent: no orphan_recipient increment", async () => {
+    // Message goes to bc1qagent1 which IS in fullAgents (D1 agents) → no orphan
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:message:msg_ok": JSON.stringify({
+        messageId: "msg_ok",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_ok",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+        "FROM inbox_messages": { cnt: 1 },
+      },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      drift: number;
+      drift_unexplained: number;
+      explained_categories: {
+        orphan_recipient?: number;
+        partial_cascade?: number;
+      };
+    };
+
+    expect(body.drift).toBe(0);
+    expect(body.drift_unexplained).toBe(0);
+    // Registered agent → no orphan
+    expect(body.explained_categories.orphan_recipient).toBe(0);
+    expect(body.explained_categories.partial_cascade).toBe(0);
+  });
+
+  it("inbound message to an orphan address (no KV record, no D1 row): increments orphan_recipient", async () => {
+    // Message to bc1qorphan9 which has no btc: KV entry and no D1 agents row.
+    // Should be classified as orphan_recipient, NOT partial_cascade.
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:message:msg_orphan": JSON.stringify({
+        messageId: "msg_orphan",
+        toBtcAddress: "bc1qorphan9",  // no btc: key, not in D1
+        paymentTxid: "txid_orphan",
+        sentAt: "2026-01-01T01:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+        "FROM inbox_messages": { cnt: 0 },  // orphan message was FK-rejected from D1
+      },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      kv_count: number;
+      d1_count: number;
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories: {
+        orphan_recipient?: number;
+        partial_cascade?: number;
+        unique_payment_txid_replay?: number;
+        unresolvable_stx_reply?: number;
+      };
+    };
+
+    expect(body.kv_count).toBe(1);
+    expect(body.d1_count).toBe(0);
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+    expect(body.explained_categories.orphan_recipient).toBe(1);
+    expect(body.explained_categories.partial_cascade).toBe(0);
+  });
+
+  it("reply to an orphan BTC address: increments orphan_recipient", async () => {
+    // Reply whose toBtcAddress (bc1qorphan9) has no btc: KV entry → orphan_recipient.
+    // The reply field-path is also toBtcAddress per KV spec (OutboxReply uses that field name).
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:reply:msg_reply_orphan": JSON.stringify({
+        messageId: "msg_reply_orphan",
+        toBtcAddress: "bc1qorphan9",  // BTC-shaped but orphan (no btc: key)
+        reply: "hello?",
+        repliedAt: "2026-01-01T04:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+        "FROM inbox_messages": { cnt: 0 },
+      },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", sampleSize: "0" }));
+    expect(resp.status).toBe(200);
+
+    const body = await resp.json() as {
+      drift: number;
+      drift_explained: number;
+      drift_unexplained: number;
+      explained_categories: {
+        orphan_recipient?: number;
+        partial_cascade?: number;
+      };
+    };
+
+    expect(body.drift).toBe(1);
+    expect(body.drift_explained).toBe(1);
+    expect(body.drift_unexplained).toBe(0);
+    expect(body.explained_categories.orphan_recipient).toBe(1);
+    expect(body.explained_categories.partial_cascade).toBe(0);
+  });
+
+  it("cross-page orphan_recipient accumulation: orphan count sums correctly across cursor pages", async () => {
+    // 3 messages: msg_a and msg_b go to a registered agent (no drift),
+    // msg_c goes to an orphan address. With maxKeysPerCall=1, messages span 3 pages.
+    // The orphan_recipient count of 1 must appear in the final response.
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "inbox:message:msg_a": JSON.stringify({
+        messageId: "msg_a",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_a",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+      "inbox:message:msg_b": JSON.stringify({
+        messageId: "msg_b",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_b",
+        sentAt: "2026-01-01T00:01:00Z",
+      }),
+      "inbox:message:msg_c": JSON.stringify({
+        messageId: "msg_c",
+        toBtcAddress: "bc1qorphan9",  // orphan: no btc: key, not in D1
+        paymentTxid: "txid_c",
+        sentAt: "2026-01-01T00:02:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 },
+        "FROM inbox_messages": { cnt: 2 },  // only 2 (msg_a + msg_b) made it to D1
+      },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    // Drive cursor loop: maxKeysPerCall=1 forces 3 pages minimum
+    type OrphanLoopBody = {
+      partial: boolean;
+      cursor?: string | null;
+      kv_count?: number;
+      d1_count?: number;
+      drift?: number;
+      drift_explained?: number;
+      drift_unexplained?: number;
+      explained_categories?: {
+        orphan_recipient?: number;
+        partial_cascade?: number;
+      };
+    };
+
+    let cursor: string | null = null;
+    let finalBody: OrphanLoopBody | null = null;
+
+    do {
+      const params: Record<string, string> = { table: "inbox_messages", maxKeysPerCall: "1" };
+      if (cursor) params.cursor = cursor;
+      const resp = await POST(buildPostRequest(params));
+      expect(resp.status).toBe(200);
+      const body = await resp.json() as OrphanLoopBody;
+      if (body.partial === false) {
+        finalBody = body;
+        cursor = null;
+      } else {
+        cursor = body.cursor as string;
+      }
+    } while (cursor !== null);
+
+    expect(finalBody).not.toBeNull();
+    expect(finalBody!.kv_count).toBe(3);
+    expect(finalBody!.d1_count).toBe(2);
+    expect(finalBody!.drift).toBe(1);
+    expect(finalBody!.drift_explained).toBe(1);
+    expect(finalBody!.drift_unexplained).toBe(0);
+    // The orphan message (msg_c) is now explained as orphan_recipient
+    expect(finalBody!.explained_categories?.orphan_recipient).toBe(1);
+    expect(finalBody!.explained_categories?.partial_cascade).toBe(0);
   });
 });
