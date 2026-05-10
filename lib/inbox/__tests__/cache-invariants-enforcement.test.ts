@@ -49,9 +49,27 @@ type Posture = "public-only-get" | "auth-required-get";
 
 const POSTURE_PATTERN = /\/\/\s*CACHE_INVARIANTS:POSTURE=([a-z-]+)/;
 
+/**
+ * Patterns that match `Cache-Control: private` (or `private, no-store` etc.)
+ * across the forms Next.js route handlers commonly use to set the header.
+ *
+ * Coverage:
+ *   - Object-literal header maps:   `{ 'Cache-Control': 'private, no-store' }`
+ *     (used by `NextResponse.json(body, { headers: {...} })` and
+ *     `new Headers({...})`) — matched by patterns 1 and 2.
+ *   - `Headers#set` method calls:    `headers.set('Cache-Control', 'private, ...')`
+ *     — matched by patterns 3 and 4.
+ *   - Doc/comment forms:             `// Cache-Control: private`
+ *     — matched by pattern 1.
+ *
+ * Adding a new form? Add a positive case to the "pattern coverage" describe
+ * block below so the form is locked in by a unit test, not just by reading.
+ */
 const CACHE_CONTROL_PRIVATE_PATTERNS: RegExp[] = [
   /Cache-Control['"\s:]+private/,
   /['"]Cache-Control['"]\s*:\s*['"]private/,
+  /headers\.set\s*\(\s*['"]Cache-Control['"]\s*,\s*['"]private/,
+  /['"]Cache-Control['"]\s*,\s*['"]private/,
 ];
 
 /**
@@ -78,6 +96,48 @@ function extractPosture(content: string): Posture | null {
 function hasCacheControlPrivate(content: string): boolean {
   return CACHE_CONTROL_PRIVATE_PATTERNS.some((p) => p.test(content));
 }
+
+describe("hasCacheControlPrivate pattern coverage", () => {
+  // Each case below documents a real Next.js form for setting Cache-Control
+  // and asserts the pattern set matches it. When a new form needs to be
+  // accepted, add a case here BEFORE adding the pattern — that pins the
+  // behavior to a test instead of relying on regex inspection.
+
+  it("matches NextResponse.json headers object literal", () => {
+    const src = `return NextResponse.json(body, { headers: { "Cache-Control": "private, no-store" } });`;
+    expect(hasCacheControlPrivate(src)).toBe(true);
+  });
+
+  it("matches single-quoted object-literal form", () => {
+    const src = `new Headers({ 'Cache-Control': 'private, max-age=0' })`;
+    expect(hasCacheControlPrivate(src)).toBe(true);
+  });
+
+  it("matches headers.set() method call", () => {
+    const src = `response.headers.set('Cache-Control', 'private, no-store');`;
+    expect(hasCacheControlPrivate(src)).toBe(true);
+  });
+
+  it("matches headers.set() with double quotes and extra whitespace", () => {
+    const src = `response.headers.set( "Cache-Control" , "private, no-store" );`;
+    expect(hasCacheControlPrivate(src)).toBe(true);
+  });
+
+  it("matches doc/comment form", () => {
+    const src = `// Cache-Control: private, no-store on auth'd response paths`;
+    expect(hasCacheControlPrivate(src)).toBe(true);
+  });
+
+  it("does not match a public Cache-Control header", () => {
+    const src = `response.headers.set('Cache-Control', 'public, max-age=3600');`;
+    expect(hasCacheControlPrivate(src)).toBe(false);
+  });
+
+  it("does not match an unrelated 'private' usage", () => {
+    const src = `// the inbox list endpoint is private to the recipient`;
+    expect(hasCacheControlPrivate(src)).toBe(false);
+  });
+});
 
 describe("CACHE_INVARIANTS structural enforcement", () => {
   for (const relPath of INBOX_ROUTE_FILES) {
