@@ -161,11 +161,26 @@ function stripStringLiterals(code: string): string {
     .replace(/`(?:[^`\\]|\\.)*`/g, "``");
 }
 
-function getHandlerHasAuthToken(content: string): boolean {
+/**
+ * Returns the first auth-token pattern that fires inside the GET handler's
+ * lexical scope (after string-literal stripping), or null if none do — or
+ * null if the file has no GET handler.
+ *
+ * Single source of truth: both the public boolean helper and the structural
+ * enforcement test against real files MUST go through this function so a
+ * future drift between "what the helper-unit-tests check" and "what the
+ * structural-test-against-real-files checks" can't reopen the same bug
+ * class commit `d457ecb` introduced.
+ */
+function findAuthTokenInGetHandler(content: string): RegExp | null {
   const scope = extractGetHandlerScope(content);
-  if (scope === null) return false;
+  if (scope === null) return null;
   const scrubbed = stripStringLiterals(scope);
-  return AUTH_TOKENS_IN_GET.some((p) => p.test(scrubbed));
+  return AUTH_TOKENS_IN_GET.find((p) => p.test(scrubbed)) ?? null;
+}
+
+function getHandlerHasAuthToken(content: string): boolean {
+  return findAuthTokenInGetHandler(content) !== null;
 }
 
 /**
@@ -405,19 +420,22 @@ describe("CACHE_INVARIANTS structural enforcement", () => {
         if (!fileExists) return;
         const posture = extractPosture(content);
         if (posture !== "public-only-get") return;
-        const scope = extractGetHandlerScope(content);
-        if (scope === null) return; // file has no GET handler — nothing to check
-        const matchedToken = AUTH_TOKENS_IN_GET.find((p) => p.test(scope));
+        // Goes through the SAME findAuthTokenInGetHandler used by the unit
+        // helper — single source of truth so a future drift in scan logic
+        // can't make the helper-unit-tests pass while the structural-test-
+        // against-real-files quietly diverges (the d457ecb bug class).
+        const matchedToken = findAuthTokenInGetHandler(content);
         expect(
           matchedToken,
           `${relPath} declares posture=public-only-get but the GET handler ` +
-            `body contains an auth/session token matching ${matchedToken?.source}. ` +
+            `body contains an auth/session token matching ${matchedToken?.source} ` +
+            `(after stripping string literals). ` +
             `Either update the marker to auth-required-get and add ` +
             `\`Cache-Control: private, no-store\` on the auth'd response paths, ` +
             `OR remove the auth gate from the GET handler. ` +
             `See lib/inbox/CACHE_INVARIANTS.md (Invariant 2, public-only-get definition) ` +
             `and https://github.com/aibtcdev/agent-news/issues/802 for the bug class.`
-        ).toBeUndefined();
+        ).toBeNull();
       });
     });
   }
