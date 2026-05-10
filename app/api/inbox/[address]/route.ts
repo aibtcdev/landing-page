@@ -30,6 +30,7 @@ import {
   getPaymentRepoVersion,
   logPaymentEvent,
 } from "@/lib/inbox/payment-logging";
+import { insertInboundMessageToD1 } from "@/lib/inbox/d1-dual-write";
 
 /** Maps nonce-related error codes to structured action strings for agents and operators. */
 const NONCE_ACTION_MAP: Record<string, string> = {
@@ -988,6 +989,21 @@ export async function POST(
         : []),
     ]);
 
+    // D1 dual-write (Phase 2.5 Step 1 — reversible scaffolding).
+    // KV is still the source of truth; D1 INSERT is fire-and-forget.
+    // D1 failure is logged-and-swallowed — it must NOT fail the response.
+    if (env.DB) {
+      ctx.waitUntil(
+        insertInboundMessageToD1(env.DB as D1Database, message).catch((err) =>
+          logger.error("inbox.dual_write_d1_failed", {
+            messageId: message.messageId,
+            path: "txid_recovery",
+            error: String(err),
+          })
+        )
+      );
+    }
+
     logger.info("Message stored via txid recovery", {
       messageId,
       fromAddress,
@@ -1497,6 +1513,21 @@ export async function POST(
       ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
       : []),
   ]);
+
+  // D1 dual-write (Phase 2.5 Step 1 — reversible scaffolding).
+  // KV is still the source of truth; D1 INSERT is fire-and-forget.
+  // D1 failure is logged-and-swallowed — it must NOT fail the response.
+  if (env.DB) {
+    ctx.waitUntil(
+      insertInboundMessageToD1(env.DB as D1Database, message).catch((err) =>
+        logger.error("inbox.dual_write_d1_failed", {
+          messageId: message.messageId,
+          path: "x402_payment",
+          error: String(err),
+        })
+      )
+    );
+  }
 
   const deliveredPaymentStatus = message.paymentStatus ?? "confirmed";
   const deliveredCheckStatusUrl = paymentResult.paymentId

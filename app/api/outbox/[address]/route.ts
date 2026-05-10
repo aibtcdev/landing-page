@@ -15,6 +15,7 @@ import {
 } from "@/lib/inbox";
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
+import { insertReplyToD1 } from "@/lib/inbox/d1-dual-write";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -391,6 +392,24 @@ export async function POST(
   // Decrement unreadCount if message was unread
   if (wasUnread) {
     await decrementUnreadCount(kv, message.toBtcAddress);
+  }
+
+  // D1 dual-write (Phase 2.5 Step 1 — reversible scaffolding).
+  // KV is still the source of truth; D1 INSERT is fire-and-forget.
+  // D1 failure is logged-and-swallowed — it must NOT fail the response.
+  // Note: insertReplyToD1 resolves outboxReply.toBtcAddress (may be STX) to BTC
+  // via KV lookup before inserting. If resolution fails, it throws and the catch
+  // logs it as a dual-write failure.
+  if (env.DB) {
+    ctx.waitUntil(
+      insertReplyToD1(env.DB as D1Database, kv, outboxReply).catch((err) =>
+        logger.error("outbox.dual_write_d1_failed", {
+          messageId: outboxReply.messageId,
+          path: "kv_reply",
+          error: String(err),
+        })
+      )
+    );
   }
 
   // Generate reputationPayload (ERC-8004 feedbackHash) using Web Crypto API
