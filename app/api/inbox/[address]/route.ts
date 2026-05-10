@@ -1,3 +1,7 @@
+// CACHE_INVARIANTS:POSTURE=public-only-get
+// See lib/inbox/CACHE_INVARIANTS.md — GET handler is public; POST has its own
+// auth for sender verification but does not cache, so Invariant 2 does not apply.
+
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
@@ -203,27 +207,13 @@ export async function GET(
   // the data; we are simply swapping the read source.
   //
   // This endpoint is FULLY PUBLIC — there is no auth gate on the inbox list GET.
-  // Cache-key invariants from #697 umbrella apply to any future auth'd branch:
   //
-  //   Invariant 1 (auth'd vs public branch separation): This endpoint currently
-  //   has only a public branch. When an auth'd branch is added, its cache key
-  //   MUST include a verified-address-hash suffix OR be excluded from any shared
-  //   cache, so a public caller cannot receive an auth'd cached response.
+  // Cache-key invariants: see lib/inbox/CACHE_INVARIANTS.md
+  //   (auth'd-branch separation / private no-store / pre-gate cache safety)
   //
-  //   Invariant 2 (auth'd branch must set Cache-Control: private, no-store):
-  //   The current public path does not set this header. Any future PR that adds
-  //   an auth'd branch MUST add Cache-Control: private, no-store on that branch.
-  //   This is not needed today because the public projection has no per-user data.
-  //
-  //   Invariant 3 (pre-gate cache safety): No cache lookup is performed before
-  //   the auth gate because there is no auth gate yet. A future PR adding auth
-  //   MUST ensure the auth gate runs before any cache lookup to prevent the
-  //   agent-news#802 unauthenticated-HIT bug class (public caller receiving an
-  //   auth'd cached response). This is safe by construction on this PR because
-  //   there is no caching at all on this route today.
-  //
-  // See: https://github.com/aibtcdev/landing-page/issues/721
-  // See: https://github.com/aibtcdev/landing-page/issues/697
+  // See: https://github.com/aibtcdev/landing-page/issues/721 (Step 3.1 spec)
+  // See: https://github.com/aibtcdev/landing-page/issues/697 (Phase 2.5 umbrella)
+  // See: https://github.com/aibtcdev/landing-page/issues/723 (cache-invariant extraction)
 
   // This route only supports received messages for the inbox list GET.
   // The 'view' param is preserved for response-shape compatibility and

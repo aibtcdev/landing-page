@@ -1,5 +1,5 @@
 /**
- * D1 read helpers for GET /api/inbox/[address].
+ * D1 read helpers for GET /api/inbox/[address] and sibling routes.
  *
  * Phase 2.5 Step 3.1 — flip inbox-list GET from KV reads to D1 SELECTs.
  * KV writes are NOT removed here (that is Step 4).
@@ -15,22 +15,12 @@
  * computing the count via live SELECT COUNT(*) WHERE read_at IS NULL,
  * replacing the stale cached KV counter.
  *
- * Cache-key invariants (from #697 umbrella, non-negotiable):
- *   1. Auth'd vs public branch separation — no auth'd branch exists on this
- *      endpoint yet (the GET is fully public). When an auth'd branch is added
- *      in a future PR, its cache key MUST include a verified-address-hash suffix
- *      OR be excluded from any shared cache. This file documents that invariant
- *      so the constraint survives future diffs.
- *   2. Auth'd branch responses MUST set Cache-Control: private, no-store.
- *      The current (public-only) path does not set this header; adding an
- *      auth'd branch without adding this header would violate invariant 2.
- *   3. Pre-gate cache safety — never serve a cache HIT before the auth gate runs.
- *      Not currently at risk (no auth gate on this GET), but a follow-up PR
- *      adding auth MUST gate any cache lookup behind signature verification to
- *      avoid the agent-news#802 unauthenticated-HIT bug class.
+ * Cache-key invariants: see lib/inbox/CACHE_INVARIANTS.md
+ *   (auth'd-branch separation / private no-store / pre-gate cache safety)
  *
- * See: https://github.com/aibtcdev/landing-page/issues/721
- * See: https://github.com/aibtcdev/landing-page/issues/697
+ * See: https://github.com/aibtcdev/landing-page/issues/721 (Step 3.1 spec)
+ * See: https://github.com/aibtcdev/landing-page/issues/697 (Phase 2.5 umbrella)
+ * See: https://github.com/aibtcdev/landing-page/issues/723 (cache-invariant extraction)
  */
 
 import type { InboxMessage, OutboxReply } from "./types";

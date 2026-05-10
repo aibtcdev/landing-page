@@ -1,3 +1,7 @@
+// CACHE_INVARIANTS:POSTURE=public-only-get
+// See lib/inbox/CACHE_INVARIANTS.md — GET handler is public; POST (reply) uses
+// verifyBitcoinSignature for caller auth on writes but does not cache.
+
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
