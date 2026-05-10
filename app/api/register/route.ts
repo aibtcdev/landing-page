@@ -717,16 +717,18 @@ export async function POST(request: NextRequest) {
       ? createLogger(env.LOGS, ctx, { rayId, path: "/api/register" })
       : createConsoleLogger({ rayId, path: "/api/register" });
 
-    // BIP-322 wallets (bc1q/bc1p) don't expose the public key via signature recovery.
-    // This is expected behavior, not an incident — registration completes
-    // normally with an empty publicKey. The remediation path (provide
-    // nostrPublicKey now, or update-pubkey via challenge later) is documented
-    // in the GET self-doc and surfaced in the response (#579).
+    // BIP-322 P2TR (bc1p) signatures don't expose the public key via the
+    // witness path; BIP-322 P2WPKH (bc1q) does post-#712 (witness item [1]
+    // is the 33-byte compressed pubkey). Empty publicKey at this point is
+    // expected for P2TR or any other path that doesn't surface the key — not
+    // an incident. Registration completes normally; remediation paths
+    // (provide nostrPublicKey now, or update-pubkey via challenge later)
+    // are documented in the GET self-doc and surfaced in the response (#579).
     const btcPublicKeyMissing = !btcResult.publicKey;
     if (btcPublicKeyMissing) {
       log.info(
         `btcPublicKey unavailable for address ${btcResult.address}: ` +
-        "BIP-322 signatures do not expose the public key via recovery. " +
+        "this signature path did not expose the public key. " +
         "Nostr npub derivation from btcPublicKey will not work for this agent."
       );
     }
