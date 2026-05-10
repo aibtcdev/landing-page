@@ -12,8 +12,6 @@ import {
   storeStagedInboxPayment,
   updateAgentInbox,
   updateSentIndex,
-  listInboxMessages,
-  listSentMessages,
   INBOX_PRICE_SATS,
   REDEEMED_TXID_TTL_SECONDS,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
@@ -31,6 +29,12 @@ import {
   logPaymentEvent,
 } from "@/lib/inbox/payment-logging";
 import { insertInboundMessageToD1 } from "@/lib/inbox/d1-dual-write";
+import {
+  listInboxMessagesFromD1,
+  countInboxMessagesFromD1,
+  fetchRepliesForMessages,
+  type StatusFilter,
+} from "@/lib/inbox/d1-reads";
 
 /** Maps nonce-related error codes to structured action strings for agents and operators. */
 const NONCE_ACTION_MAP: Record<string, string> = {
@@ -176,112 +180,144 @@ export async function GET(
   }
 
   // Validate status param
-  if (!["unread", "all"].includes(statusParam)) {
+  // Phase 2.5 Step 3.1: expanded to support 'read' as well as 'unread'/'all'
+  // to match the D1 query capabilities. 'read' was previously unsupported on
+  // the KV path; adding it here does not break existing clients (they only used
+  // 'unread' or 'all').
+  if (!["unread", "read", "all"].includes(statusParam)) {
     return NextResponse.json(
       {
-        error: "Invalid status parameter. Must be 'unread' or 'all'.",
+        error: "Invalid status parameter. Must be 'unread', 'read', or 'all'.",
       },
       { status: 400 }
     );
   }
 
   const view = viewParam as "sent" | "received" | "all";
-  const statusFilter = statusParam as "unread" | "all";
+  const statusFilter = statusParam as StatusFilter;
 
-  // Fetch data based on view param
-  const includeReceived = view === "received" || view === "all";
-  const includeSent = (view === "sent" || view === "all") && statusFilter !== "unread";
+  // ── Phase 2.5 Step 3.1: D1 read flip ──────────────────────────────────────
+  // The GET /api/inbox/[address] list path now reads from D1 instead of KV.
+  // KV writes (POST handler) are NOT removed in this PR — that is Step 4.
+  // The dual-write scaffolding from Steps 1+2 (PRs #705 + #720) means D1 has
+  // the data; we are simply swapping the read source.
+  //
+  // This endpoint is FULLY PUBLIC — there is no auth gate on the inbox list GET.
+  // Cache-key invariants from #697 umbrella apply to any future auth'd branch:
+  //
+  //   Invariant 1 (auth'd vs public branch separation): This endpoint currently
+  //   has only a public branch. When an auth'd branch is added, its cache key
+  //   MUST include a verified-address-hash suffix OR be excluded from any shared
+  //   cache, so a public caller cannot receive an auth'd cached response.
+  //
+  //   Invariant 2 (auth'd branch must set Cache-Control: private, no-store):
+  //   The current public path does not set this header. Any future PR that adds
+  //   an auth'd branch MUST add Cache-Control: private, no-store on that branch.
+  //   This is not needed today because the public projection has no per-user data.
+  //
+  //   Invariant 3 (pre-gate cache safety): No cache lookup is performed before
+  //   the auth gate because there is no auth gate yet. A future PR adding auth
+  //   MUST ensure the auth gate runs before any cache lookup to prevent the
+  //   agent-news#802 unauthenticated-HIT bug class (public caller receiving an
+  //   auth'd cached response). This is safe by construction on this PR because
+  //   there is no caching at all on this route today.
+  //
+  // See: https://github.com/aibtcdev/landing-page/issues/721
+  // See: https://github.com/aibtcdev/landing-page/issues/697
 
-  // For "all" view, we need enough messages to fill the page after merging
-  // and sorting by date. When partners are requested, fetch more so partner
-  // computation has a complete picture. Otherwise use limit+offset as the cap.
-  // When filtering by unread, fetch all received messages so we can filter then paginate.
-  const fetchLimit = (view === "all" || statusFilter === "unread")
-    ? (includePartners ? 100 : (statusFilter === "unread" ? 1000 : limit + offset))
-    : limit;
-  const fetchOffset = (view === "all" || statusFilter === "unread") ? 0 : offset;
+  // This route only supports received messages for the inbox list GET.
+  // The 'view' param is preserved for response-shape compatibility and
+  // future extension; for now only received/all is meaningful for inbox-list.
+  // Sent messages (outbox view) are not yet flipped in this PR (Step 3.3).
+  //
+  // For 'view=sent' with D1, we fall back to the same D1 path but return
+  // only received messages (view=all treats inbox as the source of truth).
+  // The sent-outbox flip will be handled in Step 3.3.
 
-  const [receivedResult, sentResult] = await Promise.all([
-    includeReceived
-      ? listInboxMessages(kv, agent.btcAddress, fetchLimit, fetchOffset, { includeReplies: true })
-      : Promise.resolve(null),
-    includeSent
-      ? listSentMessages(kv, agent.btcAddress, fetchLimit, fetchOffset, { includeReplies: true })
-      : Promise.resolve(null),
-  ]);
+  // Fetch the paginated message list from D1
+  const db = env.DB as D1Database | undefined;
 
-  // Build combined message list with direction
-  type DirectionMessage = { message: import("@/lib/inbox/types").InboxMessage; direction: "sent" | "received" };
-  let combined: DirectionMessage[] = [];
-
-  if (receivedResult) {
-    for (const msg of receivedResult.messages) {
-      combined.push({ message: msg, direction: "received" });
-    }
-  }
-  if (sentResult) {
-    for (const msg of sentResult.messages) {
-      combined.push({ message: msg, direction: "sent" });
-    }
-  }
-
-  // Sort by sentAt descending
-  combined.sort(
-    (a, b) =>
-      new Date(b.message.sentAt).getTime() -
-      new Date(a.message.sentAt).getTime()
-  );
-
-  // Apply unread filter (only received messages can be unread)
-  if (statusFilter === "unread") {
-    combined = combined.filter(
-      (item) => item.direction === "received" && !item.message.readAt
+  if (!db) {
+    // D1 binding not available — this should not happen in production but
+    // guards against misconfigured environments. Log and return 503.
+    return NextResponse.json(
+      { error: "Database unavailable. Please try again shortly." },
+      { status: 503 }
     );
   }
 
-  // Track filtered count before pagination (for hasMore calculation)
-  const filteredCount = combined.length;
+  // Run the message list query and count queries in parallel for the
+  // received inbox. For 'view=sent', we return an empty inbox (Step 3.3
+  // handles the outbox flip). For 'view=all' and 'view=received', query D1.
+  const includeReceived = view === "received" || view === "all";
 
-  // Apply pagination for "all" view or when status filter changed the set
-  if (view === "all" || statusFilter === "unread") {
-    combined = combined.slice(offset, offset + limit);
+  // D1-throws fallback policy (declared per #722 dev-council Cycle 26 advisory):
+  // If the D1 query layer throws — transient unavailability, network error,
+  // schema mismatch — return 503 with a structured retry hint rather than
+  // letting Next.js produce an unstructured 500. Step 3.2/3.3/3.4 will follow
+  // this same pattern so the cutover series has a uniform fallback contract.
+  // KV remains the source of truth (writes still go there per #720); a 503
+  // here means "D1 read transiently unavailable — retry."
+  let receivedMessages: import("@/lib/inbox/types").InboxMessage[];
+  let unreadCount: number;
+  let totalCount: number;
+  let receivedCount: number;
+  try {
+    // D1 query: received messages with status filter and pagination.
+    // All four queries run in parallel to minimise latency:
+    //   [0] paginated message list (the page the caller asked for)
+    //   [1] unreadCount — live SELECT COUNT(*) WHERE read_at IS NULL (closes aibtc-mcp-server#497)
+    //   [2] totalCount — total matching the status filter (drives hasMore / pagination)
+    //   [3] receivedCount — total inbound messages regardless of filter (for economics)
+    [receivedMessages, unreadCount, totalCount, receivedCount] = await Promise.all([
+      includeReceived
+        ? listInboxMessagesFromD1(db, agent.btcAddress, limit, offset, statusFilter)
+        : Promise.resolve([] as import("@/lib/inbox/types").InboxMessage[]),
+      // unreadCount: live SELECT COUNT(*) WHERE read_at IS NULL — closes aibtc-mcp-server#497
+      includeReceived
+        ? countInboxMessagesFromD1(db, agent.btcAddress, "unread")
+        : Promise.resolve(0),
+      // totalCount: total for the current status filter (used for hasMore)
+      includeReceived
+        ? countInboxMessagesFromD1(db, agent.btcAddress, statusFilter)
+        : Promise.resolve(0),
+      // receivedCount: total inbound messages regardless of status filter (for economics)
+      includeReceived
+        ? countInboxMessagesFromD1(db, agent.btcAddress, "all")
+        : Promise.resolve(0),
+    ]);
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
   }
 
-  // Merge reply maps — only include replies for messages in the final paginated set
-  const visibleMessageIds = new Set(combined.map(({ message }) => message.messageId));
+  const sentCount = 0; // Step 3.3: outbox flip not yet done
+
+  // Build inline replies map for the returned page
+  const visibleMessageIds = receivedMessages.map((m) => m.messageId);
+  const repliesMap = await fetchRepliesForMessages(db, visibleMessageIds);
   const repliesObject: Record<string, unknown> = {};
-  if (receivedResult) {
-    for (const [messageId, reply] of receivedResult.replies) {
-      if (visibleMessageIds.has(messageId)) repliesObject[messageId] = reply;
-    }
-  }
-  if (sentResult) {
-    for (const [messageId, reply] of sentResult.replies) {
-      if (visibleMessageIds.has(messageId)) repliesObject[messageId] = reply;
-    }
+  for (const [messageId, reply] of repliesMap) {
+    repliesObject[messageId] = reply;
   }
 
-  const receivedCount = receivedResult?.index?.messageIds.length ?? 0;
-  const sentCount = sentResult?.index?.messageIds.length ?? 0;
-  const unreadCount = receivedResult?.index?.unreadCount ?? 0;
-  const totalCount = statusFilter === "unread"
-    ? filteredCount
-    : view === "all"
-      ? receivedCount + sentCount
-      : view === "received"
-        ? receivedCount
-        : sentCount;
-
-  // Compute economic stats from index counts (not paginated messages)
+  // Compute economic stats from count queries (not paginated messages)
   // Each message costs INBOX_PRICE_SATS, so total = count * price
   const satsReceived = receivedCount * INBOX_PRICE_SATS;
   const satsSent = sentCount * INBOX_PRICE_SATS;
 
-  // Resolve sender/recipient agent info for display names and BTC addresses
+  // Resolve sender agent info for display names and BTC addresses.
+  // All messages in receivedMessages are received (direction="received"),
+  // so we look up the fromAddress (sender's STX address) for each.
   const addressSet = new Set<string>();
-  for (const { message, direction } of combined) {
-    if (direction === "received") addressSet.add(message.fromAddress); // STX address
-    else addressSet.add(message.toBtcAddress); // BTC address
+  for (const msg of receivedMessages) {
+    addressSet.add(msg.fromAddress); // STX address of sender
   }
   const agentLookupMap = new Map<string, import("@/lib/types").AgentRecord>();
   await Promise.all(
@@ -291,22 +327,23 @@ export async function GET(
     })
   );
 
-  // Build response messages with direction and resolved peer info
-  const messages = combined.map(({ message, direction }) => {
-    const peerAddress = direction === "received" ? message.fromAddress : message.toBtcAddress;
-    const peer = agentLookupMap.get(peerAddress);
+  // Build response messages with direction and resolved peer info.
+  // All messages from D1 inbox list are received (is_reply=0 where to_btc_address=agent).
+  const messages = receivedMessages.map((message) => {
+    const peer = agentLookupMap.get(message.fromAddress);
     return {
       ...message,
-      direction,
-      peerBtcAddress: peer?.btcAddress ?? (direction === "sent" ? message.toBtcAddress : undefined),
+      direction: "received" as const,
+      peerBtcAddress: peer?.btcAddress,
       peerDisplayName: peer?.displayName,
     };
   });
 
-  // Compute partner summary if requested
+  // Compute partner summary if requested.
+  // For now partners are computed from the received messages only (Step 3.3 will add sent).
   let partners: import("@/lib/inbox/types").InboxPartner[] | undefined;
   if (includePartners && totalCount > 0) {
-    // Group messages by partner address
+    // Group received messages by partner (sender) address
     const partnerMap = new Map<string, {
       btcAddress: string;
       stxAddress?: string;
@@ -315,38 +352,16 @@ export async function GET(
       directions: Set<"sent" | "received">;
     }>();
 
-    // Use all fetched messages (not just paginated subset) for complete partner view
-    const allMessages = [...(receivedResult?.messages ?? []), ...(sentResult?.messages ?? [])];
-
-    for (const msg of allMessages) {
-      // Determine partner address based on direction
-      let partnerStxAddress: string | undefined;
-      let partnerBtcAddress: string | undefined;
-      let direction: "sent" | "received";
-
-      // For received messages, partner is the sender (fromAddress = STX)
-      // Use message data (not reference equality) to determine direction
-      if (msg.toBtcAddress === agent.btcAddress) {
-        partnerStxAddress = msg.fromAddress;
-        direction = "received";
-      }
-      // For sent messages, partner is the recipient (toBtcAddress = BTC)
-      else {
-        partnerBtcAddress = msg.toBtcAddress;
-        direction = "sent";
-      }
-
-      // Skip if we can't identify the partner
-      if (!partnerStxAddress && !partnerBtcAddress) continue;
-
-      // Use a consistent key (prefer BTC address if available)
-      const partnerKey = partnerBtcAddress || partnerStxAddress!;
+    for (const msg of receivedMessages) {
+      // For received messages, partner is the sender (fromAddress = STX address)
+      const partnerStxAddress = msg.fromAddress;
+      const partnerBtcAddress = agentLookupMap.get(partnerStxAddress)?.btcAddress;
+      const partnerKey = partnerBtcAddress || partnerStxAddress;
 
       const existing = partnerMap.get(partnerKey);
       if (existing) {
         existing.messageCount++;
-        existing.directions.add(direction);
-        // Update last interaction if this message is more recent
+        existing.directions.add("received");
         if (new Date(msg.sentAt).getTime() > new Date(existing.lastInteractionAt).getTime()) {
           existing.lastInteractionAt = msg.sentAt;
         }
@@ -356,7 +371,7 @@ export async function GET(
           stxAddress: partnerStxAddress,
           messageCount: 1,
           lastInteractionAt: msg.sentAt,
-          directions: new Set([direction]),
+          directions: new Set(["received"]),
         });
       }
     }
@@ -364,12 +379,11 @@ export async function GET(
     // Resolve partner addresses to agent records for display names
     const partnerEntries = Array.from(partnerMap.entries());
     const resolvedPartners = await Promise.all(
-      partnerEntries.map(async ([key, data]) => {
-        // Look up agent by STX or BTC address
+      partnerEntries.map(async ([_key, data]) => {
         const lookupAddress = data.stxAddress || data.btcAddress;
         const partnerAgent = lookupAddress ? await lookupAgent(kv, lookupAddress) : null;
 
-        // Determine final direction
+        // Determine final direction — all received-only for now (Step 3.3 adds sent)
         let finalDirection: "sent" | "received" | "both";
         if (data.directions.has("sent") && data.directions.has("received")) {
           finalDirection = "both";
@@ -470,7 +484,7 @@ export async function GET(
       },
       parameters: {
         view: "Filter messages: 'sent', 'received', or 'all' (default: 'all')",
-        status: "Filter by read status: 'unread' or 'all' (default: 'all'). When 'unread', only received messages without readAt are returned.",
+        status: "Filter by read status: 'unread', 'read', or 'all' (default: 'all'). When 'unread', only received messages without readAt are returned.",
         limit: "Max messages per page (1-100, default: 20)",
         offset: "Number of messages to skip (default: 0)",
       },
