@@ -67,12 +67,18 @@ export function decodeCursor(encoded: string): InboxCursorState {
     (parsed.kvCursor !== null && typeof parsed.kvCursor !== "string") ||
     !("partialCounts" in parsed) ||
     !parsed.partialCounts ||
-    typeof parsed.partialCounts !== "object" ||
-    !("txidCounts" in (parsed.partialCounts as object)) ||
-    !Array.isArray((parsed.partialCounts as Record<string, unknown>).txidCounts) ||
-    !(parsed.partialCounts as Record<string, unknown[]>).txidCounts.every(
-      (v) => typeof v === "string"
-    )
+    typeof parsed.partialCounts !== "object"
+  ) {
+    throw new Error("decodeCursor: malformed cursor shape");
+  }
+  const pc = parsed.partialCounts as Record<string, unknown>;
+  if (
+    typeof pc.kv_count !== "number" ||
+    typeof pc.drift_explained_partial_cascade !== "number" ||
+    typeof pc.drift_explained_unique_payment_txid_replay !== "number" ||
+    typeof pc.drift_explained_unresolvable_stx_reply !== "number" ||
+    !Array.isArray(pc.txidCounts) ||
+    !(pc.txidCounts as unknown[]).every((v) => typeof v === "string")
   ) {
     throw new Error("decodeCursor: malformed cursor shape");
   }

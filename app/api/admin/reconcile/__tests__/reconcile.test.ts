@@ -1729,6 +1729,8 @@ describe("cursor encode/decode roundtrip", () => {
     expect(decoded.kvCursor).toBe(state.kvCursor);
     expect(decoded.partialCounts.kv_count).toBe(500);
     expect(decoded.partialCounts.drift_explained_partial_cascade).toBe(10);
+    expect(decoded.partialCounts.drift_explained_unique_payment_txid_replay).toBe(2);
+    expect(decoded.partialCounts.drift_explained_unresolvable_stx_reply).toBe(3);
     expect(decoded.partialCounts.txidCounts).toBeInstanceOf(Set);
     expect(decoded.partialCounts.txidCounts.has("txid_a")).toBe(true);
     expect(decoded.partialCounts.txidCounts.has("txid_b")).toBe(true);
