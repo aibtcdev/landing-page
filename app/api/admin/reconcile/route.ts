@@ -80,7 +80,24 @@ export function decodeCursor(encoded: string): InboxCursorState {
   const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
   const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
   const json = atob(padded + pad);
-  return JSON.parse(json) as InboxCursorState;
+  const parsed = JSON.parse(json) as unknown;
+  // Structural validation — a malformed cursor (wrong type, missing fields,
+  // injected from external source) must throw cleanly, not produce a runtime
+  // error deep in the inbox loop.
+  if (
+    !parsed ||
+    typeof parsed !== "object" ||
+    !("prefix" in parsed) ||
+    (parsed.prefix !== "inbox:message:" && parsed.prefix !== "inbox:reply:") ||
+    !("kvCursor" in parsed) ||
+    (parsed.kvCursor !== null && typeof parsed.kvCursor !== "string") ||
+    !("partialCounts" in parsed) ||
+    !parsed.partialCounts ||
+    typeof parsed.partialCounts !== "object"
+  ) {
+    throw new Error("decodeCursor: malformed cursor shape");
+  }
+  return parsed as InboxCursorState;
 }
 
 /** Parse and clamp maxKeysPerCall to [1, 1000], default 500. */
@@ -782,13 +799,16 @@ async function reconcileInboxMessagesPaginated(
         const raw = values[j];
         if (!raw) continue;
         let parsed: Record<string, unknown>;
+        // Count every KV entry that exists at the prefix — kv_count tracks total
+        // KV records, not just successfully-parsed ones. Malformed records are
+        // implicitly excluded from drift_explained categorization (no accumulator
+        // increments), but they still appear in kv_count vs d1_count drift math.
+        accumulated.kv_count++;
         try {
           parsed = JSON.parse(raw) as Record<string, unknown>;
         } catch {
           continue;
         }
-
-        accumulated.kv_count++;
 
         if (currentPrefix === "inbox:message:") {
           const toBtcAddress = parsed.toBtcAddress as string | undefined;
@@ -1187,7 +1207,7 @@ done`,
     operationalPlan: {
       step1: "POST ?table=agents&sampleSize=0 — verify agents drift_unexplained == 0 first",
       step2: "POST ?table=inbox_messages&maxKeysPerCall=500 — loop with cursor until partial=false",
-      step3: "POST ?table=claims&table=vouches — single calls (small datasets, no cap risk)",
+      step3: "POST ?table=claims and POST ?table=vouches separately — single calls each (small datasets, no cap risk)",
       step4: "Verify drift_unexplained == 0 for all tables before Phase 2 begins",
       step5: "Check acceptance_tests.passed == true for unreadCount drift",
     },
