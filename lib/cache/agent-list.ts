@@ -318,6 +318,12 @@ async function rebuildAgentListCache(
     )
     .all<AgentListRow>();
 
+  // Surface D1 errors to worker-logs — without this, a binding misconfig or
+  // schema drift produces a silent 0-agent snapshot cached for 600s.
+  if (!result.success) {
+    console.error("agent-list rebuild: D1 query failed", result.error);
+  }
+
   const rows = result.results ?? [];
   const cachedAgents: CachedAgent[] = rows.map(mapRowToCachedAgent);
 
