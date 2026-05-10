@@ -180,19 +180,26 @@ async function backfillAgents(
 
     const agent = parsedAgentRecord as AgentRecord;
 
-    // Validate minimum required fields for D1 insert
-    if (
-      !agent.stxAddress ||
-      !agent.stxPublicKey ||
-      !agent.btcPublicKey ||
-      !agent.verifiedAt
-    ) {
-        counts.failed.push({
-          key: kvKey.name,
-          reason: "Missing required AgentRecord fields (stxAddress/stxPublicKey/btcPublicKey/verifiedAt)",
-        });
-        continue;
+    // Secondary partial-detection: records that slipped through isPartialAgentRecord
+    // because btcPublicKey was absent (pre-type-enforcement production records).
+    // Any record without stxAddress is a partial — intentionally not migrated.
+    if (!agent.stxAddress || !agent.stxPublicKey) {
+      if (pass === "insert") {
+        counts.skipped_partial++;
       }
+      continue;
+    }
+
+    // Validate remaining required fields for D1 insert — these are actual data errors
+    // on records that claimed to be full agents (have stxAddress/stxPublicKey) but
+    // are missing other non-nullable columns.
+    if (!agent.btcPublicKey || !agent.verifiedAt) {
+      counts.failed.push({
+        key: kvKey.name,
+        reason: "Missing required AgentRecord fields (btcPublicKey/verifiedAt)",
+      });
+      continue;
+    }
 
     if (pass === "insert") {
       // Resolve or generate referral code

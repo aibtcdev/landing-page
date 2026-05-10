@@ -193,6 +193,14 @@ const PARTIAL_AGENT = JSON.stringify({
   // No stxAddress — this is a PartialAgentRecord
 });
 
+// Pre-type-enforcement partial: no btcPublicKey either (older production records).
+// These slipped through isPartialAgentRecord but must still land in skipped_partial.
+const PARTIAL_AGENT_NO_BTC_PUBKEY = JSON.stringify({
+  btcAddress: "bc1qlegacypartial",
+  verifiedAt: "2025-12-01T00:00:00Z",
+  // No stxAddress, no btcPublicKey — raw partial from before type enforcement
+});
+
 const CLAIM_1 = JSON.stringify({
   btcAddress: "bc1qagent1",
   displayName: "Agent One",
@@ -331,6 +339,71 @@ describe("dry-run mode", () => {
 
     // KV put for referral code must NOT have been called in dry run
     expect((kv.put as Mock)).not.toHaveBeenCalled();
+  });
+});
+
+// ── Test: PartialAgentRecord classification ──────────────────────────────
+// Locks the contract from #677: partials must land in skipped_partial, never failed[].
+
+describe("PartialAgentRecord classification", () => {
+  it("classifies standard partial (has btcPublicKey, no stxAddress) as skipped_partial", async () => {
+    const kv = buildKvMock({
+      "btc:bc1qpartial": PARTIAL_AGENT,
+    });
+    const { db, runMock } = buildD1Mock();
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        ARC_ADMIN_API_KEY: "test-admin-key",
+        VERIFIED_AGENTS: kv,
+        DB: db,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const resp = await POST(buildPostRequest({ table: "agents" }));
+    const body = await resp.json() as {
+      skipped_partial: number;
+      failed: { key: string; reason: string }[];
+      inserted: number;
+    };
+
+    expect(body.skipped_partial).toBe(1);
+    expect(body.failed).toHaveLength(0);
+    expect(body.inserted).toBe(0);
+    // D1 must NOT have been touched for partial records
+    expect(runMock).not.toHaveBeenCalled();
+  });
+
+  it("classifies legacy partial (no btcPublicKey, no stxAddress) as skipped_partial, not failed", async () => {
+    // Reproduces the production case from the 2026-05-09 operational run where
+    // 1421 partials appeared in failed[] because isPartialAgentRecord() required
+    // btcPublicKey — older KV records had no btcPublicKey at all.
+    const kv = buildKvMock({
+      "btc:bc1qlegacypartial": PARTIAL_AGENT_NO_BTC_PUBKEY,
+    });
+    const { db, runMock } = buildD1Mock();
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        ARC_ADMIN_API_KEY: "test-admin-key",
+        VERIFIED_AGENTS: kv,
+        DB: db,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const resp = await POST(buildPostRequest({ table: "agents" }));
+    const body = await resp.json() as {
+      skipped_partial: number;
+      failed: { key: string; reason: string }[];
+      inserted: number;
+    };
+
+    expect(body.skipped_partial).toBe(1);
+    expect(body.failed).toHaveLength(0);
+    expect(body.inserted).toBe(0);
+    expect(runMock).not.toHaveBeenCalled();
   });
 });
 
