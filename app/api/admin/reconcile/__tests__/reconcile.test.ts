@@ -160,14 +160,24 @@ function mockContext(env: Partial<CloudflareEnv>) {
 
 // ── Request builders ─────────────────────────────────────────────────────
 
+/**
+ * Build a POST request for the reconcile route.
+ * `cursor` is extracted from params and placed in the JSON body (not the URL)
+ * to match the production contract (cursor size grows O(n) and exceeds URL limits).
+ * All other params remain as URL query params.
+ */
 function buildPostRequest(params: Record<string, string> = {}): NextRequest {
   const url = new URL("https://aibtc.com/api/admin/reconcile");
-  for (const [k, v] of Object.entries(params)) {
+  const { cursor, ...queryParams } = params;
+  for (const [k, v] of Object.entries(queryParams)) {
     url.searchParams.set(k, v);
   }
+  const bodyObj: Record<string, string> = {};
+  if (cursor !== undefined) bodyObj.cursor = cursor;
   return new NextRequest(url.toString(), {
     method: "POST",
-    headers: { "X-Admin-Key": "test-admin-key" },
+    headers: { "X-Admin-Key": "test-admin-key", "Content-Type": "application/json" },
+    body: JSON.stringify(bodyObj),
   });
 }
 
@@ -1982,6 +1992,58 @@ describe("paginated inbox reconciliation (Path A)", () => {
     expect(body.error).toContain("agents.drift_unexplained");
     expect(body.agents_drift_unexplained).toBe(1);
     expect(body.hint).toContain("?table=agents");
+  });
+
+  it("skips pre-condition check (no 409) on cursor continuation even if agents drift > 0", async () => {
+    // Cursor continuations skip the agents pre-condition check to avoid ~1664 KV reads
+    // per page. If it passed on page 1, it holds for subsequent pages.
+    // Simulate: 2 full agents in KV but only 1 in D1 (would trigger 409 on first page).
+    // But with a valid cursor present, the 409 must NOT be returned.
+    const kv = buildKvMock({
+      "btc:bc1qagent1": FULL_AGENT,
+      "btc:bc1qagent2": JSON.stringify({
+        btcAddress: "bc1qagent2",
+        stxAddress: "SP1AGENT2",
+        stxPublicKey: "03abcdef02",
+        btcPublicKey: "02abcdef02",
+        verifiedAt: "2026-01-02T00:00:00Z",
+      }),
+      "inbox:message:msg001": JSON.stringify({
+        messageId: "msg001",
+        toBtcAddress: "bc1qagent1",
+        paymentTxid: "txid_001",
+        sentAt: "2026-01-01T00:00:00Z",
+      }),
+    });
+
+    const db = buildD1Mock({
+      firstResults: {
+        "FROM agents": { cnt: 1 }, // 2 full in KV → drift_unexplained=1 (would 409 on page 1)
+        "FROM inbox_messages": { cnt: 1 },
+      },
+      allResults: { "SELECT btc_address FROM agents": [{ btc_address: "bc1qagent1" }] },
+      defaultFirst: null,
+    });
+
+    mockContext({ VERIFIED_AGENTS: kv, DB: db });
+
+    // Build a valid cursor representing a continuation state
+    const { encodeCursor } = await import("../route");
+    const continuationCursor = encodeCursor({
+      prefix: "inbox:message:",
+      kvCursor: null,
+      partialCounts: {
+        kv_count: 0,
+        drift_explained_partial_cascade: 0,
+        drift_explained_unique_payment_txid_replay: 0,
+        drift_explained_unresolvable_stx_reply: 0,
+        txidCounts: {},
+      },
+    });
+
+    const resp = await POST(buildPostRequest({ table: "inbox_messages", cursor: continuationCursor }));
+    // Must NOT be 409 — pre-condition is skipped on cursor continuations
+    expect(resp.status).toBe(200);
   });
 
   it("returns 400 for malformed cursor", async () => {

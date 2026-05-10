@@ -69,14 +69,17 @@ export interface InboxFinalResponse extends Omit<TableReconcileResult, "duration
 
 // ── Cursor encode/decode ───────────────────────────────────────────────────
 
-/** Encode cursor state to a base64 string safe for URL query parameters. */
+/** Encode cursor state to a base64url string safe for URL query parameters. */
 export function encodeCursor(state: InboxCursorState): string {
-  return Buffer.from(JSON.stringify(state)).toString("base64url");
+  const json = JSON.stringify(state);
+  return btoa(json).replace(/\+/g, "-").replace(/\//g, "_").replace(/=/g, "");
 }
 
-/** Decode a base64 cursor string back to InboxCursorState. */
+/** Decode a base64url cursor string back to InboxCursorState. */
 export function decodeCursor(encoded: string): InboxCursorState {
-  const json = Buffer.from(encoded, "base64url").toString("utf-8");
+  const padded = encoded.replace(/-/g, "+").replace(/_/g, "/");
+  const pad = padded.length % 4 === 0 ? "" : "=".repeat(4 - (padded.length % 4));
+  const json = atob(padded + pad);
   return JSON.parse(json) as InboxCursorState;
 }
 
@@ -1140,20 +1143,26 @@ export async function GET(request: NextRequest) {
       cursor:
         "[inbox_messages only] Base64-encoded cursor from prior partial response. Absent = first call.",
       maxKeysPerCall:
-        "[inbox_messages only] KV keys to process per invocation: 100–1000 (default: 500). Lower if hitting subrequest cap.",
+        "[inbox_messages only] KV keys to process per invocation: 1–1000 (default: 500). Lower if hitting subrequest cap.",
     },
     pagination: {
       note: "inbox_messages uses cursor-based pagination to stay under the Workers 1000-subrequest cap (~7K+ inbox keys).",
+      cursorLocation:
+        "cursor must be sent in the POST request body as JSON { \"cursor\": \"...\" }. Other params (table, maxKeysPerCall) remain as URL query params. This avoids URL length limits as txidCounts grows O(n) across pages.",
       callerLoop: `cursor=""
 while :; do
-  resp=$(curl -sS -X POST "...?table=inbox_messages&cursor=$cursor&maxKeysPerCall=500" -H "X-Admin-Key: $KEY")
+  payload=$(jq -nc --arg c "$cursor" '{cursor: $c}')
+  resp=$(curl -sS -X POST "https://aibtc.com/api/admin/reconcile?table=inbox_messages&maxKeysPerCall=500" \\
+    -H "X-Admin-Key: $KEY" \\
+    -H "Content-Type: application/json" \\
+    -d "$payload")
   cursor=$(echo "$resp" | jq -r '.cursor // empty')
   [ -z "$cursor" ] && break
 done`,
       partialResponse: "{ table, partial: true, cursor, partial_counts: { kv_count, drift_explained_* } }",
       finalResponse: "{ table, partial: false, cursor: null, kv_count, d1_count, drift, drift_explained, drift_unexplained, explained_categories }",
       precondition:
-        "agents.drift_unexplained must be 0 before calling inbox_messages. Route enforces this and returns 409 if not met.",
+        "agents.drift_unexplained must be 0 before calling inbox_messages (first page only). The pre-condition runs on the first call (no cursor) and returns 409 if not met. Cursor continuation calls skip the check — if it passed on page 1, it holds for subsequent pages (agents table changes are rare at reconcile-run timescales). If the agents table changes mid-reconcile-run, the caller would still complete the run but cascade-detection results may be stale; recommend re-running the full loop.",
       subrequestBudget:
         "~552 per call at maxKeysPerCall=500 (1 kv.list + ~500 kv.get + ≤50 stx: lookups + 1 D1 query). ~1052 at maxKeysPerCall=1000.",
     },
@@ -1213,8 +1222,12 @@ export async function POST(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const rawTable = searchParams.get("table") ?? "all";
   const sampleSize = parseSampleSize(searchParams.get("sampleSize"));
-  const rawCursor = searchParams.get("cursor");
   const maxKeysPerCall = parseMaxKeys(searchParams.get("maxKeysPerCall"));
+  // cursor is read from the POST body (not URL query) to avoid URL length limits —
+  // txidCounts grows O(n) across pages and can exceed browser/proxy URL length caps.
+  // Other params (table, maxKeysPerCall) remain as URL query params (they are small).
+  const body = await request.json().catch(() => ({}));
+  const rawCursor = (body as { cursor?: string }).cursor ?? null;
   const includeUnreadTest =
     rawTable === "all" ||
     rawTable === "inbox_messages" ||
@@ -1338,26 +1351,6 @@ export async function POST(request: NextRequest) {
 
     // ── inbox_messages: cursor-based paginated path ──────────────────────────
     if (rawTable === "inbox_messages") {
-      // Pre-condition: agents must have zero unexplained drift before we can trust
-      // fullAgentsFromD1 as a proxy for fullAgentSet(kv). If agents are drifting,
-      // the cascade detection will under-count and inbox drift_unexplained will be wrong.
-      const agentsPreCheck = await reconcileAgents(kv, db, 0);
-      if (agentsPreCheck.drift_unexplained !== 0) {
-        logger.warn("reconcile.inbox.precondition_failed", {
-          agents_drift_unexplained: agentsPreCheck.drift_unexplained,
-        });
-        return NextResponse.json(
-          {
-            error:
-              "Pre-condition failed: agents.drift_unexplained must be 0 before running inbox reconciliation. " +
-              "Run ?table=agents to diagnose and fix agents drift first.",
-            agents_drift_unexplained: agentsPreCheck.drift_unexplained,
-            hint: "POST ?table=agents&sampleSize=50 to see agents drift breakdown",
-          },
-          { status: 409 }
-        );
-      }
-
       // Decode cursor (null = first call)
       let cursorState: InboxCursorState | null = null;
       if (rawCursor) {
@@ -1365,6 +1358,30 @@ export async function POST(request: NextRequest) {
           cursorState = decodeCursor(rawCursor);
         } catch {
           return NextResponse.json({ error: "Invalid cursor: could not decode" }, { status: 400 });
+        }
+      }
+
+      // Pre-condition: run agents drift check only on the first page (no cursor).
+      // Cursor continuations skip this check — if it passed on page 1, it holds for
+      // subsequent pages because agents table changes are rare at reconcile-run timescales.
+      // Running this on every page would cost ~1664 KV reads per call, which defeats the
+      // purpose of pagination (staying under the Workers 1000-subrequest cap).
+      if (!rawCursor) {
+        const agentsPreCheck = await reconcileAgents(kv, db, 0);
+        if (agentsPreCheck.drift_unexplained !== 0) {
+          logger.warn("reconcile.inbox.precondition_failed", {
+            agents_drift_unexplained: agentsPreCheck.drift_unexplained,
+          });
+          return NextResponse.json(
+            {
+              error:
+                "Pre-condition failed: agents.drift_unexplained must be 0 before running inbox reconciliation. " +
+                "Run ?table=agents to diagnose and fix agents drift first.",
+              agents_drift_unexplained: agentsPreCheck.drift_unexplained,
+              hint: "POST ?table=agents&sampleSize=50 to see agents drift breakdown",
+            },
+            { status: 409 }
+          );
         }
       }
 
@@ -1454,22 +1471,25 @@ export async function POST(request: NextRequest) {
         result = await reconcileVouches(kv, db, sampleSize, fullAgents);
         break;
       }
+      default: {
+        throw new Error(`unhandled table: ${table satisfies never}`);
+      }
     }
 
     const duration_ms = Date.now() - start;
 
     logger.info("reconcile.table.done", {
       table,
-      drift: result!.drift,
-      drift_unexplained: result!.drift_unexplained,
-      field_diffs: result!.field_diffs.length,
+      drift: result.drift,
+      drift_unexplained: result.drift_unexplained,
+      field_diffs: result.field_diffs.length,
       duration_ms,
     });
 
-    if (result!.drift_unexplained !== 0) {
+    if (result.drift_unexplained !== 0) {
       logger.warn("reconcile.drift.unexplained", {
         table,
-        drift_unexplained: result!.drift_unexplained,
+        drift_unexplained: result.drift_unexplained,
       });
     }
 
@@ -1488,7 +1508,7 @@ export async function POST(request: NextRequest) {
     }
 
     const response: ReconcileResponse = {
-      ...result!,
+      ...result,
       duration_ms,
       ...(acceptance_tests ? { acceptance_tests } : {}),
     };
