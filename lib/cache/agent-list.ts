@@ -319,8 +319,11 @@ async function rebuildAgentListCache(
     .all<AgentListRow>();
 
   // Surface D1 errors to worker-logs — without this, a binding misconfig or
-  // schema drift produces a silent 0-agent snapshot cached for 600s.
+  // schema drift produces a silent 0-agent snapshot cached for 600s. This is
+  // a library module without request-scoped logger access; raw console is
+  // intentional for diagnostic visibility on a path that otherwise swallows.
   if (!result.success) {
+    // eslint-disable-next-line no-console
     console.error("agent-list rebuild: D1 query failed", result.error);
   }
 
