@@ -382,6 +382,8 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 
 **Note on AgentRecord**: The `erc8004AgentId` field (optional number) stores the agent's on-chain identity NFT ID when detected. The `referredBy` field (optional string) stores the BTC address of the agent who vouched for this agent during registration (immutable once set).
 
+**Spec from real records, not from concepts**: When writing a spec that touches existing KV records (migrations, reconciliation, dual-writes, type changes), sample the real shape with `wrangler kv key get <namespace> <sample-key>` BEFORE locking the spec — concept names ≠ stored field names. Example: `OutboxReply` records store the reply target in `toBtcAddress` (sometimes STX-shaped pre-resolution), not `replyTo` — three fix-up PRs (#680/#681/#682) chased that mismatch during the Phase 1.4 reconcile build before the actual record was sampled.
+
 ## Key Files
 
 ### Library
