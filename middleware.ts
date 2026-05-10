@@ -5,6 +5,14 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, LEVELS } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { X_HANDLE } from "@/lib/constants";
+import {
+  classifyAddress,
+  lookupProfileByBtcAddress,
+  lookupProfileByStxAddress,
+  mapRowToAgentRecord,
+  mapRowToClaimRecord,
+  claimRecordToStatus,
+} from "@/lib/cache/agent-profile";
 
 const CRAWLER_UA_PATTERNS = [
   "twitterbot",
@@ -65,40 +73,79 @@ async function handleCrawlerAgentPage(
     return NextResponse.next();
   }
 
-  // Support all Bitcoin address formats (bc1, 1..., 3...) and STX (SP...)
-  const prefix = address.startsWith("SP") || address.startsWith("SM")
-    ? "stx"
-    : address.startsWith("bc1") || address.startsWith("1") || address.startsWith("3")
-      ? "btc"
-      : null;
-  if (!prefix) {
+  // Middleware only handles btc/stx prefixes — taproot and numeric are out of scope.
+  // classifyAddress handles all prefix detection including SM (Stacks legacy mainnet).
+  const branch = classifyAddress(address);
+  if (branch !== "btc" && branch !== "stx") {
     return NextResponse.next();
   }
 
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database;
 
-    const agentData = await kv.get(`${prefix}:${address}`);
-    if (!agentData) {
+    // Phase 2.3: D1-first lookup — single SELECT + LEFT JOIN claims.
+    // For validation-excluded agents (~708 records, #691) that are not yet in D1,
+    // fall back to the KV btc:/stx: key to avoid 404ing crawler bots (which would
+    // cause search engines to deindex those agent pages).
+    let agent: AgentRecord | null = null;
+    let claim: ClaimStatus | null = null;
+    let kvFallbackKey: string | null = null;
+
+    if (branch === "btc") {
+      const row = await lookupProfileByBtcAddress(db, address);
+      if (row) {
+        agent = mapRowToAgentRecord(row);
+        const claimRecord = mapRowToClaimRecord(row);
+        if (claimRecord) claim = claimRecordToStatus(claimRecord);
+      } else {
+        kvFallbackKey = `btc:${address}`;
+      }
+    } else {
+      // branch === "stx"
+      const row = await lookupProfileByStxAddress(db, address);
+      if (row) {
+        agent = mapRowToAgentRecord(row);
+        const claimRecord = mapRowToClaimRecord(row);
+        if (claimRecord) claim = claimRecordToStatus(claimRecord);
+      } else {
+        kvFallbackKey = `stx:${address}`;
+      }
+    }
+
+    // KV fallback for validation-excluded agents (transitional per #691).
+    // Crawlers MUST NOT 404 these — it would deindex them from search engines.
+    // Validation-excluded agents likely don't have D1 claims, so we mirror
+    // pre-flip behavior: one KV read for agent, one for claim.
+    if (!agent && kvFallbackKey) {
+      const kvValue = await kv.get(kvFallbackKey);
+      if (kvValue) {
+        try {
+          agent = JSON.parse(kvValue) as AgentRecord;
+          // Also attempt claim KV read on fallback path (mirrors pre-flip behavior).
+          const claimData = await kv.get(`claim:${agent.btcAddress}`);
+          if (claimData) {
+            try {
+              claim = JSON.parse(claimData) as ClaimStatus;
+            } catch {
+              /* malformed claim — leave null */
+            }
+          }
+        } catch {
+          // Malformed KV record — leave agent null, fall through to next()
+        }
+      }
+    }
+
+    if (!agent) {
       return NextResponse.next();
     }
 
-    const agent = JSON.parse(agentData) as AgentRecord;
     const displayName = agent.displayName || generateName(agent.btcAddress);
     const description =
       agent.description ||
       "Verified AIBTC agent with Bitcoin and Stacks capabilities";
-
-    const claimData = await kv.get(`claim:${agent.btcAddress}`);
-    let claim: ClaimStatus | null = null;
-    if (claimData) {
-      try {
-        claim = JSON.parse(claimData) as ClaimStatus;
-      } catch {
-        /* ignore */
-      }
-    }
 
     const level = computeLevel(agent, claim);
     const levelName = LEVELS[level].name;
