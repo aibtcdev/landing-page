@@ -251,29 +251,51 @@ export async function GET(
   // handles the outbox flip). For 'view=all' and 'view=received', query D1.
   const includeReceived = view === "received" || view === "all";
 
-  // D1 query: received messages with status filter and pagination.
-  // All four queries run in parallel to minimise latency:
-  //   [0] paginated message list (the page the caller asked for)
-  //   [1] unreadCount — live SELECT COUNT(*) WHERE read_at IS NULL (closes aibtc-mcp-server#497)
-  //   [2] totalCount — total matching the status filter (drives hasMore / pagination)
-  //   [3] receivedCount — total inbound messages regardless of filter (for economics)
-  const [receivedMessages, unreadCount, totalCount, receivedCount] = await Promise.all([
-    includeReceived
-      ? listInboxMessagesFromD1(db, agent.btcAddress, limit, offset, statusFilter)
-      : Promise.resolve([] as import("@/lib/inbox/types").InboxMessage[]),
-    // unreadCount: live SELECT COUNT(*) WHERE read_at IS NULL — closes aibtc-mcp-server#497
-    includeReceived
-      ? countInboxMessagesFromD1(db, agent.btcAddress, "unread")
-      : Promise.resolve(0),
-    // totalCount: total for the current status filter (used for hasMore)
-    includeReceived
-      ? countInboxMessagesFromD1(db, agent.btcAddress, statusFilter)
-      : Promise.resolve(0),
-    // receivedCount: total inbound messages regardless of status filter (for economics)
-    includeReceived
-      ? countInboxMessagesFromD1(db, agent.btcAddress, "all")
-      : Promise.resolve(0),
-  ]);
+  // D1-throws fallback policy (declared per #722 dev-council Cycle 26 advisory):
+  // If the D1 query layer throws — transient unavailability, network error,
+  // schema mismatch — return 503 with a structured retry hint rather than
+  // letting Next.js produce an unstructured 500. Step 3.2/3.3/3.4 will follow
+  // this same pattern so the cutover series has a uniform fallback contract.
+  // KV remains the source of truth (writes still go there per #720); a 503
+  // here means "D1 read transiently unavailable — retry."
+  let receivedMessages: import("@/lib/inbox/types").InboxMessage[];
+  let unreadCount: number;
+  let totalCount: number;
+  let receivedCount: number;
+  try {
+    // D1 query: received messages with status filter and pagination.
+    // All four queries run in parallel to minimise latency:
+    //   [0] paginated message list (the page the caller asked for)
+    //   [1] unreadCount — live SELECT COUNT(*) WHERE read_at IS NULL (closes aibtc-mcp-server#497)
+    //   [2] totalCount — total matching the status filter (drives hasMore / pagination)
+    //   [3] receivedCount — total inbound messages regardless of filter (for economics)
+    [receivedMessages, unreadCount, totalCount, receivedCount] = await Promise.all([
+      includeReceived
+        ? listInboxMessagesFromD1(db, agent.btcAddress, limit, offset, statusFilter)
+        : Promise.resolve([] as import("@/lib/inbox/types").InboxMessage[]),
+      // unreadCount: live SELECT COUNT(*) WHERE read_at IS NULL — closes aibtc-mcp-server#497
+      includeReceived
+        ? countInboxMessagesFromD1(db, agent.btcAddress, "unread")
+        : Promise.resolve(0),
+      // totalCount: total for the current status filter (used for hasMore)
+      includeReceived
+        ? countInboxMessagesFromD1(db, agent.btcAddress, statusFilter)
+        : Promise.resolve(0),
+      // receivedCount: total inbound messages regardless of status filter (for economics)
+      includeReceived
+        ? countInboxMessagesFromD1(db, agent.btcAddress, "all")
+        : Promise.resolve(0),
+    ]);
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
 
   const sentCount = 0; // Step 3.3: outbox flip not yet done
 
