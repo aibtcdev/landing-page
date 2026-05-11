@@ -30,6 +30,23 @@ import { PROVIDER_ATTRIBUTION_CONTRACTS } from "./allowlist";
  */
 export const STX_ASSET_ID = "stx";
 
+/**
+ * Hiro `event_type` values that identify an STX transfer event.
+ *
+ * The mainnet `/extended/v1/tx/{txid}` endpoint returns `stx_asset` today
+ * (verified against tx `0x46bc5587…f0ee0e4` — Bitflow stableswap-stx-ststx).
+ * The older blockchain-api and some downstream tooling emit
+ * `stx_transfer_event` / `stx_transfer`; both are kept here so the parser
+ * stays correct if we read from a different Hiro version or a self-hosted
+ * indexer. STX events in the Hiro response do NOT carry an `asset_id`, so
+ * we synthesize STX_ASSET_ID from the event_type discriminator.
+ */
+const STX_EVENT_TYPES: ReadonlySet<string> = new Set([
+  "stx_asset",
+  "stx_transfer_event",
+  "stx_transfer",
+]);
+
 /** Minimal contract-call shape from the Hiro tx response. */
 export interface HiroContractCall {
   contract_id: string;
@@ -146,7 +163,7 @@ export function parseSwapFromTx(tx: HiroTxForSwap): ParseResult {
     }
 
     const assetId =
-      ev.event_type === "stx_transfer_event" || ev.event_type === "stx_transfer"
+      STX_EVENT_TYPES.has(ev.event_type ?? "")
         ? STX_ASSET_ID
         : a.asset_id ?? "unknown";
 
