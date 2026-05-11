@@ -2,6 +2,7 @@
  * D1 read helpers for GET /api/inbox/[address] and sibling routes.
  *
  * Phase 2.5 Step 3.1 — flip inbox-list GET from KV reads to D1 SELECTs.
+ * Phase 2.5 Step 3.2 — adds getInboxMessageFromD1 for the single-message GET.
  * KV writes are NOT removed here (that is Step 4).
  *
  * These helpers query the inbox_messages table that is being populated by
@@ -19,6 +20,7 @@
  *   (auth'd-branch separation / private no-store / pre-gate cache safety)
  *
  * See: https://github.com/aibtcdev/landing-page/issues/721 (Step 3.1 spec)
+ * See: https://github.com/aibtcdev/landing-page/issues/725 (Step 3.2 spec)
  * See: https://github.com/aibtcdev/landing-page/issues/697 (Phase 2.5 umbrella)
  * See: https://github.com/aibtcdev/landing-page/issues/723 (cache-invariant extraction)
  */
@@ -221,6 +223,46 @@ export async function fetchRepliesForMessages(
     }
   }
   return map;
+}
+
+/**
+ * Fetch a single inbound message by messageId AND btcAddress from D1.
+ *
+ * The AND clause on to_btc_address is the security gate: it prevents a caller
+ * from fetching a message that belongs to a different address (address-match
+ * guard — Step 3.2 block-on-merge per issue #725 / secret-mars v167 elevation).
+ *
+ * SQL shape:
+ *   SELECT … FROM inbox_messages
+ *   WHERE message_id = ? AND to_btc_address = ? AND is_reply = 0
+ *
+ * Returns null when:
+ *   - message_id does not exist
+ *   - message_id exists but to_btc_address does not match (→ 404, not 400/200)
+ */
+export async function getInboxMessageFromD1(
+  db: D1Database,
+  btcAddress: string,
+  messageId: string
+): Promise<InboxMessage | null> {
+  const sql = `
+    SELECT
+      message_id, from_stx_address, to_btc_address, to_stx_address,
+      content, payment_txid, payment_satoshis, payment_status,
+      payment_id, receipt_id, recovered_via_txid, authenticated,
+      bitcoin_signature, sender_btc_address,
+      sent_at, read_at, replied_at, reply_to_message_id
+    FROM inbox_messages
+    WHERE message_id = ? AND to_btc_address = ? AND is_reply = 0
+  `;
+
+  const row = await db
+    .prepare(sql)
+    .bind(messageId, btcAddress)
+    .first<D1InboxRow>();
+
+  if (!row) return null;
+  return rowToInboxMessage(row);
 }
 
 // Re-export the prefix so tests can verify synthesized IDs
