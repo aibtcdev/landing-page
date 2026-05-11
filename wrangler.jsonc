@@ -80,17 +80,6 @@
     ]
   },
 
-  // Cloudflare Cron Triggers. Fires the Worker's `scheduled()` handler on the
-  // listed schedules — no HTTP secret needed because the runtime invokes the
-  // handler directly. The `/api/competition/leaderboard/refresh` POST route
-  // remains as an `X-Cron-Secret`-guarded manual trigger for ad-hoc rebuilds.
-  // Repeated in every named env (Wrangler does not merge top-level into envs).
-  // Schedule:
-  //   "*/30 * * * *" → every 30 minutes (leaderboard snapshot rebuild)
-  "triggers": {
-    "crons": ["*/30 * * * *"]
-  },
-
   /**
    * Named environments — Wrangler does NOT merge top-level config into named envs.
    * Every binding that the Worker needs must be re-declared in each env block.
@@ -172,12 +161,6 @@
             "max_retries": 5
           }
         ]
-      },
-
-      // Cron triggers (see top-level note). Production rebuilds the leaderboard
-      // snapshot every 30 min via the Worker's scheduled() handler.
-      "triggers": {
-        "crons": ["*/30 * * * *"]
       }
     },
 
@@ -256,15 +239,6 @@
             "max_retries": 5
           }
         ]
-      },
-
-      // Cron triggers (see top-level note). Preview runs the same 30-min
-      // leaderboard rebuild so the preview URL has live data without manual
-      // seeding. The snapshot is keyed against the shared KV namespace, so a
-      // preview tick writes the same `cache:leaderboard:score` slot production
-      // would — fine for now since both envs aggregate the same D1 swaps.
-      "triggers": {
-        "crons": ["*/30 * * * *"]
       }
     }
   }
