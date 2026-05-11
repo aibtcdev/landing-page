@@ -57,6 +57,33 @@ function useRelativeTimeFrom(iso: string | null): string {
   return diffDay === 1 ? "1 day ago" : `${diffDay} days ago`;
 }
 
+/**
+ * Live mm:ss countdown to the next clock-aligned cron tick. The cron is
+ * scheduled at `slash-30 * * * *` (UTC minute 0 and 30 of every hour),
+ * and unix-epoch second 0 happens to align to those boundaries — so
+ * `unixSeconds % periodSeconds` is the offset into the current window.
+ *
+ * Isolated as its own component so the 1Hz timer doesn't re-render the
+ * whole leaderboard tree every second.
+ */
+function CountdownToNextTick({ periodSeconds }: { periodSeconds: number }) {
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const t = setInterval(() => setNow(Date.now()), 1000);
+    return () => clearInterval(t);
+  }, []);
+
+  const unixSec = Math.floor(now / 1000);
+  const secondsLeft = periodSeconds - (unixSec % periodSeconds);
+  const mm = Math.floor(secondsLeft / 60);
+  const ss = secondsLeft % 60;
+  return (
+    <span className="font-mono tabular-nums text-white/90">
+      {String(mm).padStart(2, "0")}:{String(ss).padStart(2, "0")}
+    </span>
+  );
+}
+
 function FreshnessBadge({
   cachedAt,
   refreshIntervalSeconds,
@@ -69,21 +96,24 @@ function FreshnessBadge({
 
   if (!cachedAt) {
     return (
-      <div className="inline-flex items-center gap-2 rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-3 py-2">
+      <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-yellow-500/20 bg-yellow-500/5 px-3 py-2">
         <span className="size-2 rounded-full bg-yellow-500" aria-hidden />
         <span className="text-xs text-yellow-200/80">
-          Snapshot not yet built — first cron run pending. Refreshes every {refreshMinutes} min.
+          Snapshot not yet built — first cron run in{" "}
+          <CountdownToNextTick periodSeconds={refreshIntervalSeconds} />
         </span>
       </div>
     );
   }
 
   return (
-    <div className="inline-flex items-center gap-2 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
+    <div className="inline-flex flex-wrap items-center gap-x-2 gap-y-1 rounded-lg border border-white/[0.08] bg-white/[0.03] px-3 py-2">
       <span className="size-2 rounded-full bg-green-500" aria-hidden />
       <span className="text-xs text-white/70">
         Updated <span className="font-medium text-white/90">{relative}</span>
-        <span className="text-white/40"> · refreshes every {refreshMinutes} min</span>
+        <span className="text-white/40"> · next refresh in </span>
+        <CountdownToNextTick periodSeconds={refreshIntervalSeconds} />
+        <span className="text-white/40"> ({refreshMinutes}-min cadence)</span>
       </span>
     </div>
   );
