@@ -182,12 +182,7 @@ describe("Phase 2.5 Step 3.2 — GET /api/inbox/[address]/[messageId] D1 flip", 
   });
 
   it("address-match guard: msg_X exists for addr_A but GET with addr_B returns 404 (not 200)", async () => {
-    // BLOCK-ON-MERGE: secret-mars v167 elevation.
-    // msg_X.to_btc_address = ADDR_A
-    // caller provides ADDR_B in the URL path
-    // getInboxMessageFromD1 is called with (db, AGENT_B.btcAddress, MSG_ID)
-    // because the SQL binds btcAddress from the resolved agent, not any user input
-    // D1 WHERE clause: message_id = ? AND to_btc_address = ? → no match → null
+    // BLOCK-ON-MERGE per #725 / secret-mars v167. SQL security gate in `getInboxMessageFromD1` (lib/inbox/d1-reads.ts).
     (lookupAgent as Mock).mockResolvedValue(AGENT_B);
     // D1 returns null because ADDR_B does not match ADDR_A in the WHERE clause
     (getInboxMessageFromD1 as Mock).mockResolvedValue(null);

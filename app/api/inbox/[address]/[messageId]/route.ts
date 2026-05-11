@@ -20,6 +20,7 @@ import {
   getInboxMessageFromD1,
   fetchRepliesForMessages,
 } from "@/lib/inbox/d1-reads";
+import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -46,12 +47,9 @@ export async function GET(
     );
   }
 
-  // Phase 2.5 Step 3.2 — D1 read flip.
-  // getInboxMessageFromD1 binds both messageId AND btcAddress (address-match guard):
-  //   WHERE message_id = ? AND to_btc_address = ?
-  // A mismatched address returns null → 404 (not a disclosure leak).
-  // The AND clause is the load-bearing security gate (issue #725 block-on-merge).
-  let message, repliesMap;
+  // Phase 2.5 Step 3.2 — D1 read flip. Security gate (composite WHERE message_id = ? AND to_btc_address = ?) in `getInboxMessageFromD1` (lib/inbox/d1-reads.ts); see #725 block-on-merge.
+  let message: InboxMessage | null;
+  let repliesMap: Map<string, OutboxReply>;
   try {
     const db = env.DB as D1Database;
     message = await getInboxMessageFromD1(db, agent.btcAddress, messageId);
@@ -106,6 +104,9 @@ export async function GET(
   );
 }
 
+// PATCH (mark-read) intentionally still writes to KV alongside the D1 dual-write
+// from #720. Phase 2.5 Step 4 (#730) removes the KV writes; until then, KV remains
+// authoritative for the write path so a Step 3.x rollback is bounded.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ address: string; messageId: string }> }
