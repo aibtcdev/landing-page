@@ -224,26 +224,12 @@ export async function verifyAndPersistSwap(
   source: SwapRow["source"],
   logger?: Logger
 ): Promise<VerifyResult> {
-  const fetchRes = await fetchTxFromHiro(env, txid, logger);
-  if (!fetchRes.ok) {
-    return { status: "rejected", code: fetchRes.code, reason: fetchRes.reason };
-  }
-  const tx = fetchRes.tx;
-
-  if (PENDING_STATUSES.has(tx.tx_status)) {
-    return { status: "pending" };
-  }
-  if (!TERMINAL_STATUSES.has(tx.tx_status)) {
-    return {
-      status: "rejected",
-      code: "malformed_tx",
-      reason: `Unknown tx_status '${tx.tx_status}'`,
-    };
-  }
-
-  // Idempotent re-submission shortcut: if the row already exists, return it.
-  // Saves a redundant parse + INSERT OR IGNORE roundtrip when another path
-  // (chainhook / cron) wrote the row first.
+  // D1 readSwap runs FIRST — if the row already exists (idempotent
+  // re-submission OR another ingestion path wrote it), short-circuit
+  // before the Hiro fetch. Saves the wasted upstream call on every
+  // duplicate submit and lets the route layer return 409 Conflict
+  // promptly. The route is responsible for translating
+  // { inserted: false } into a 409 with the existing_row payload.
   let existing: SwapRow | null = null;
   try {
     existing = await readSwap(db, txid);
@@ -260,6 +246,23 @@ export async function verifyAndPersistSwap(
   }
   if (existing) {
     return { status: "verified", inserted: false, row: existing };
+  }
+
+  const fetchRes = await fetchTxFromHiro(env, txid, logger);
+  if (!fetchRes.ok) {
+    return { status: "rejected", code: fetchRes.code, reason: fetchRes.reason };
+  }
+  const tx = fetchRes.tx;
+
+  if (PENDING_STATUSES.has(tx.tx_status)) {
+    return { status: "pending" };
+  }
+  if (!TERMINAL_STATUSES.has(tx.tx_status)) {
+    return {
+      status: "rejected",
+      code: "malformed_tx",
+      reason: `Unknown tx_status '${tx.tx_status}'`,
+    };
   }
 
   // Sender + allowlist gates. The allowlist check depends on a parsed
