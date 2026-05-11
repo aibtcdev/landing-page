@@ -121,10 +121,20 @@ export async function buildLeaderboardSnapshot(
   // 2. Compute the OHLC fetch window. Earliest swap → now, with a
   //    floor of "last 30 days" so the first refresh after deploy still
   //    has data even when D1 is empty.
+  //
+  //    We use reduce rather than Math.min(...swaps.map(...)) — spreading a
+  //    large array into Math.min puts every element on the call stack, and
+  //    V8 (CF Workers runtime) throws RangeError around ~10k elements.
+  //    The cron reads every success swap with no LIMIT (full-history
+  //    aggregation), so this matters once the comp has meaningful volume.
   const nowTs = Math.floor(Date.now() / 1000);
-  const earliestSwapTs = swaps.length > 0
-    ? Math.min(...swaps.map((s) => s.burn_block_time))
-    : nowTs - PRICE_HISTORY_DEFAULT_LOOKBACK_SECONDS;
+  const earliestSwapTs =
+    swaps.length > 0
+      ? swaps.reduce(
+          (min, s) => Math.min(min, s.burn_block_time),
+          swaps[0].burn_block_time
+        )
+      : nowTs - PRICE_HISTORY_DEFAULT_LOOKBACK_SECONDS;
   const fromTs = Math.min(earliestSwapTs, nowTs - PRICE_HISTORY_DEFAULT_LOOKBACK_SECONDS);
 
   // 3. Refresh price histories (cron path: hits Tenero OHLC, writes KV).
