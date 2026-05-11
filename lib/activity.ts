@@ -6,8 +6,8 @@
  * route handler module.
  */
 
-import type { InboxMessage, InboxAgentIndex } from "@/lib/inbox/types";
 import { INBOX_PRICE_SATS } from "@/lib/inbox/constants";
+import { listInboxMessagesFromD1 } from "@/lib/inbox/d1-reads";
 import { getCachedAgentList } from "@/lib/cache";
 import type { ActivityEvent, ActivityResponse } from "@/app/components/activity-shared";
 
@@ -19,11 +19,19 @@ const ACTIVE_DAYS_THRESHOLD = 7;
  * Assemble activity data using the shared agent-list cache.
  *
  * Uses getCachedAgentList() (single KV read on cache hit) instead of
- * an independent O(N) KV scan. Only the per-agent event detail fetches
- * (recent messages for top 20 active agents) remain as
- * targeted KV reads — O(20 * 3) rather than O(N).
+ * an independent O(N) KV scan. Per-agent recent-message fetches now read
+ * from D1 via `listInboxMessagesFromD1` (one query/agent, ordered by
+ * sent_at DESC LIMIT 3) — collapses the previous 4 KV reads/agent
+ * (inbox:agent index + 3 inbox:message lookups) to a single SELECT.
+ *
+ * When `db` is undefined (legacy / test paths), message events are
+ * skipped rather than reading stale KV indexes (KV inbox writes were
+ * removed in #730 Step 4 / PR #745). Registration events still surface.
  */
-export async function buildActivityData(kv: KVNamespace): Promise<ActivityResponse> {
+export async function buildActivityData(
+  kv: KVNamespace,
+  db: D1Database | undefined
+): Promise<ActivityResponse> {
   // --- 1. Get agent data from the shared cache (single KV read on hit) ---
   const { agents: cachedAgents, stats: agentStats } = await getCachedAgentList(kv);
 
@@ -55,53 +63,42 @@ export async function buildActivityData(kv: KVNamespace): Promise<ActivityRespon
   const agentByStx = new Map(cachedAgents.map((a) => [a.stxAddress, a]));
 
   // --- 4. Collect events from top active agents ---
-  // O(TOP_ACTIVE_AGENTS * 3) KV reads: 3 messages per agent
+  // One D1 query/agent (LIMIT 3 ORDER BY sent_at DESC) replaces the prior
+  // 4 KV reads/agent (inbox:agent index + 3 inbox:message lookups).
   const eventPromises = sortedAgents.map(async (agent) => {
     const agentEvents: ActivityEvent[] = [];
 
-    // Fetch inbox index for this agent
-    const inboxIndex = await kv.get<InboxAgentIndex>(
-      `inbox:agent:${agent.btcAddress}`,
-      "json"
-    );
-
-    if (inboxIndex && inboxIndex.messageIds.length > 0) {
-      // Fetch most recent 3 messages for the event feed
-      const recentMessageIds = inboxIndex.messageIds.slice(-3).reverse();
-      const messages = await Promise.all(
-        recentMessageIds.map(async (messageId) => {
-          const message = await kv.get<InboxMessage>(
-            `inbox:message:${messageId}`,
-            "json"
-          );
-          return message;
-        })
+    if (db) {
+      // listInboxMessagesFromD1 returns most-recent first (ORDER BY sent_at DESC)
+      const messages = await listInboxMessagesFromD1(
+        db,
+        agent.btcAddress,
+        3,
+        0,
+        "all"
       );
 
-      // Add message events
       for (const message of messages) {
-        if (message) {
-          // Find sender agent for display name (O(1) Map lookup)
-          const senderAgent = agentByStx.get(message.fromAddress);
+        // Find sender agent for display name (O(1) Map lookup)
+        const senderAgent = agentByStx.get(message.fromAddress);
 
-          agentEvents.push({
-            type: "message",
-            timestamp: message.sentAt,
-            agent: {
-              btcAddress: senderAgent?.btcAddress || message.fromAddress,
-              displayName: senderAgent?.displayName || "Unknown Agent",
-            },
-            recipient: {
-              btcAddress: agent.btcAddress,
-              displayName: agent.displayName || agent.btcAddress,
-            },
-            paymentSatoshis: message.paymentSatoshis,
-            messagePreview: message.content.length > 80
-              ? message.content.slice(0, 80) + "…"
-              : message.content,
-            messageId: message.messageId,
-          });
-        }
+        agentEvents.push({
+          type: "message",
+          timestamp: message.sentAt,
+          agent: {
+            btcAddress: senderAgent?.btcAddress || message.fromAddress,
+            displayName: senderAgent?.displayName || "Unknown Agent",
+          },
+          recipient: {
+            btcAddress: agent.btcAddress,
+            displayName: agent.displayName || agent.btcAddress,
+          },
+          paymentSatoshis: message.paymentSatoshis,
+          messagePreview: message.content.length > 80
+            ? message.content.slice(0, 80) + "…"
+            : message.content,
+          messageId: message.messageId,
+        });
       }
     }
 

@@ -6,6 +6,10 @@
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { enrichAgentProfile } from "../agent-enrichment";
+import {
+  countInboxMessagesFromD1,
+  countOutboxRepliesFromD1,
+} from "../inbox/d1-reads";
 import type { AgentRecord, ClaimRecord, ClaimStatus } from "../types";
 
 // ---------------------------------------------------------------------------
@@ -24,9 +28,9 @@ vi.mock("@/lib/heartbeat", () => ({
   getCheckInRecord: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("@/lib/inbox/kv-helpers", () => ({
-  getAgentInbox: vi.fn().mockResolvedValue(null),
-  getSentIndex: vi.fn().mockResolvedValue(null),
+vi.mock("@/lib/inbox/d1-reads", () => ({
+  countInboxMessagesFromD1: vi.fn().mockResolvedValue(0),
+  countOutboxRepliesFromD1: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock("@/lib/caip19", () => ({
@@ -113,6 +117,7 @@ describe("enrichAgentProfile", () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         claim
       );
 
@@ -128,6 +133,7 @@ describe("enrichAgentProfile", () => {
       await enrichAgentProfile(
         agent,
         kv as unknown as KVNamespace,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -150,6 +156,7 @@ describe("enrichAgentProfile", () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         claim
       );
 
@@ -166,6 +173,7 @@ describe("enrichAgentProfile", () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         null
       );
 
@@ -179,6 +187,7 @@ describe("enrichAgentProfile", () => {
       const result = await enrichAgentProfile(
         agent,
         kv as unknown as KVNamespace,
+        undefined,
         undefined,
         undefined,
         undefined,
@@ -199,6 +208,7 @@ describe("enrichAgentProfile", () => {
         undefined,
         undefined,
         undefined,
+        undefined,
         claim
       );
 
@@ -213,7 +223,8 @@ describe("enrichAgentProfile", () => {
 
       await enrichAgentProfile(
         agent,
-        kv as unknown as KVNamespace
+        kv as unknown as KVNamespace,
+        undefined
       );
 
       const claimKvReads = kv._getCallKeys.filter((k) =>
@@ -246,7 +257,8 @@ describe("enrichAgentProfile", () => {
 
       const result = await enrichAgentProfile(
         agent,
-        kv as unknown as KVNamespace
+        kv as unknown as KVNamespace,
+        undefined
       );
 
       expect(result.claim).toBeNull();
@@ -263,11 +275,92 @@ describe("enrichAgentProfile", () => {
 
       const result = await enrichAgentProfile(
         agent,
-        kv as unknown as KVNamespace
+        kv as unknown as KVNamespace,
+        undefined
       );
 
       expect(result.claim).not.toBeNull();
       expect(result.claim?.status).toBe("rewarded");
+    });
+  });
+
+  // -------------------------------------------------------------------------
+  // Inbox/sent counts post-#730 Step 4 (PR #745) — D1 reads, not KV
+  // -------------------------------------------------------------------------
+  describe("inbox/sent counts from D1 (post-Step-4)", () => {
+    function makeMockDb(): D1Database {
+      // enrichAgentProfile only calls countInboxMessagesFromD1 + countOutboxRepliesFromD1,
+      // which are vi.mock()ed at the top of the file. The D1Database object
+      // itself is opaque to enrichAgentProfile (only passed through), so a
+      // sentinel is sufficient.
+      return { __mock: true } as unknown as D1Database;
+    }
+
+    it("returns zero counts when db is undefined (no stale KV fallback)", async () => {
+      const agent = makeAgent();
+
+      const result = await enrichAgentProfile(
+        agent,
+        kv as unknown as KVNamespace,
+        undefined // db undefined → skip D1 reads, return zeros
+      );
+
+      expect(result.activity.unreadInboxCount).toBe(0);
+      expect(result.activity.sentCount).toBe(0);
+      expect(result.activity.hasInboxMessages).toBe(false);
+      expect(countInboxMessagesFromD1).not.toHaveBeenCalled();
+      expect(countOutboxRepliesFromD1).not.toHaveBeenCalled();
+    });
+
+    it("reads inbox unread + total counts from D1 when db is provided", async () => {
+      const agent = makeAgent();
+      const db = makeMockDb();
+
+      vi.mocked(countInboxMessagesFromD1)
+        .mockResolvedValueOnce(7) // total
+        .mockResolvedValueOnce(3); // unread
+      vi.mocked(countOutboxRepliesFromD1).mockResolvedValueOnce(5);
+
+      const result = await enrichAgentProfile(
+        agent,
+        kv as unknown as KVNamespace,
+        db
+      );
+
+      expect(result.activity.unreadInboxCount).toBe(3);
+      expect(result.activity.sentCount).toBe(5);
+      expect(result.activity.hasInboxMessages).toBe(true);
+      expect(countInboxMessagesFromD1).toHaveBeenCalledWith(
+        db,
+        agent.btcAddress,
+        "all"
+      );
+      expect(countInboxMessagesFromD1).toHaveBeenCalledWith(
+        db,
+        agent.btcAddress,
+        "unread"
+      );
+      expect(countOutboxRepliesFromD1).toHaveBeenCalledWith(db, agent.btcAddress);
+    });
+
+    it("hasInboxMessages=false when D1 returns zero total", async () => {
+      const agent = makeAgent();
+      const db = makeMockDb();
+
+      vi.mocked(countInboxMessagesFromD1)
+        .mockResolvedValueOnce(0) // total
+        .mockResolvedValueOnce(0); // unread
+      vi.mocked(countOutboxRepliesFromD1).mockResolvedValueOnce(0);
+
+      const result = await enrichAgentProfile(
+        agent,
+        kv as unknown as KVNamespace,
+        db
+      );
+
+      expect(result.activity.hasInboxMessages).toBe(false);
+      expect(result.activity.unreadInboxCount).toBe(0);
+      expect(result.activity.sentCount).toBe(0);
     });
   });
 });

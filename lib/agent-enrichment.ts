@@ -13,7 +13,10 @@ import type { AgentIdentity, ReputationSummary } from "@/lib/identity/types";
 import { getAgentLevel, type AgentLevelInfo } from "@/lib/levels";
 import { getCheckInRecord, type CheckInRecord } from "@/lib/heartbeat";
 import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
-import { getAgentInbox, getSentIndex } from "@/lib/inbox/kv-helpers";
+import {
+  countInboxMessagesFromD1,
+  countOutboxRepliesFromD1,
+} from "@/lib/inbox/d1-reads";
 import { getCAIP19AgentId } from "@/lib/caip19";
 import type { Logger } from "@/lib/logging";
 
@@ -60,7 +63,11 @@ export interface EnrichmentResult {
  * guard so a slow Hiro API does not block the response.
  *
  * @param agent - The agent record to enrich
- * @param kv - Cloudflare KV namespace
+ * @param kv - Cloudflare KV namespace (still used for claim, check-in, identity)
+ * @param db - D1 binding for live inbox/sent counts. Required post-#730 Step 4
+ *   for accurate `unreadInboxCount` / `sentCount` / `hasInboxMessages`. When
+ *   undefined (e.g. legacy KV-fallback test paths), inbox metrics return zero
+ *   rather than reading stale KV data.
  * @param hiroApiKey - Optional Hiro API key for authenticated Stacks API requests
  * @param logPrefix - Prefix for timeout warning logs (e.g. "agents/bc1q...")
  * @param logger - Optional logger for telemetry
@@ -73,6 +80,7 @@ export interface EnrichmentResult {
 export async function enrichAgentProfile(
   agent: AgentRecord,
   kv: KVNamespace,
+  db: D1Database | undefined,
   hiroApiKey?: string,
   logPrefix?: string,
   logger?: Logger,
@@ -95,17 +103,22 @@ export async function enrichAgentProfile(
   // null means "caller confirmed no claim" (same as a KV miss).
   const hasPrefetchedClaim = prefetchedClaim !== undefined;
 
-  // Fetch check-in, identity+reputation, inbox, and sent index in parallel.
+  // Fetch check-in, identity+reputation, inbox count, and sent count in parallel.
   // Claim is either passed in (skips KV) or fetched from KV alongside the others.
   // Identity and reputation are combined into a single slot so reputation starts immediately
   // after identity resolves, without blocking the other parallel fetches.
+  //
+  // Inbox/sent counts read from D1 post-#730 Step 4 (PR #745) — KV inbox writes
+  // were dropped, so reading via getAgentInbox/getSentIndex would return frozen
+  // data. When `db` is undefined, return zeros rather than stale KV reads.
   const enrichmentResult = await Promise.race([
     Promise.all([
       hasPrefetchedClaim ? Promise.resolve(null) : kv.get(`claim:${agent.btcAddress}`),
       getCheckInRecord(kv, agent.btcAddress),
       fetchIdentityAndReputation(agent, hiroApiKey, kv, logger),
-      getAgentInbox(kv, agent.btcAddress),
-      getSentIndex(kv, agent.btcAddress),
+      db ? countInboxMessagesFromD1(db, agent.btcAddress, "all") : Promise.resolve(0),
+      db ? countInboxMessagesFromD1(db, agent.btcAddress, "unread") : Promise.resolve(0),
+      db ? countOutboxRepliesFromD1(db, agent.btcAddress) : Promise.resolve(0),
     ]).finally(() => clearTimeout(timeoutId)),
     enrichmentTimeout,
   ]);
@@ -115,14 +128,16 @@ export async function enrichAgentProfile(
     claimData,
     checkInRecord,
     identityAndReputation,
-    inboxIndex,
-    sentIndex,
+    inboxTotal,
+    inboxUnread,
+    sentTotal,
   ] = enrichmentResult ?? [
     null,
     null,
     { identity: null, reputation: null },
-    null,
-    null,
+    0,
+    0,
+    0,
   ];
 
   const identity = identityAndReputation?.identity ?? null;
@@ -160,9 +175,9 @@ export async function enrichAgentProfile(
   const activity: ActivityMetrics = {
     lastActiveAt: agent.lastActiveAt ?? null,
     hasCheckedIn: !!checkInRecord,
-    hasInboxMessages: !!inboxIndex,
-    unreadInboxCount: inboxIndex?.unreadCount ?? 0,
-    sentCount: sentIndex?.messageIds.length ?? 0,
+    hasInboxMessages: inboxTotal > 0,
+    unreadInboxCount: inboxUnread,
+    sentCount: sentTotal,
   };
 
   const capabilities = deriveCapabilities(levelInfo.level, agent, identity);
