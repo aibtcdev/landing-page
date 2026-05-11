@@ -24,9 +24,12 @@ vi.mock("@/lib/heartbeat", () => ({
   getCheckInRecord: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("@/lib/inbox/kv-helpers", () => ({
-  getAgentInbox: vi.fn().mockResolvedValue(null),
-  getSentIndex: vi.fn().mockResolvedValue(null),
+// Phase 2.5 #746: enrichAgentProfile now uses D1 reads for inbox/sent metrics.
+// The kv-helpers mock is no longer needed for inbox reads (kv-helpers is no
+// longer imported by agent-enrichment.ts). Mock d1-reads instead.
+vi.mock("@/lib/inbox/d1-reads", () => ({
+  getAgentInboxFromD1: vi.fn().mockResolvedValue(null),
+  getSentIndexFromD1: vi.fn().mockResolvedValue(null),
 }));
 
 vi.mock("@/lib/caip19", () => ({

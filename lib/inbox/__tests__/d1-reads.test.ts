@@ -31,6 +31,9 @@ import {
   listOutboxRepliesFromD1,
   countOutboxRepliesFromD1,
   getReplyForMessageFromD1,
+  getAgentInboxFromD1,
+  getSentIndexFromD1,
+  getRecentInboxEventsFromD1,
   type StatusFilter,
 } from "../d1-reads";
 
@@ -715,6 +718,170 @@ describe("getReplyForMessageFromD1 (Phase 2.5 Step 3.5)", () => {
   });
 });
 
+// ── getAgentInboxFromD1 (Phase 2.5 #746) ─────────────────────────────────────
+
+describe("getAgentInboxFromD1", () => {
+  it("returns null immediately when db is undefined (fail-open)", async () => {
+    const result = await getAgentInboxFromD1(undefined, BTC_ADDRESS);
+    expect(result).toBeNull();
+  });
+
+  it("returns AgentInboxSummary with counts when rows exist", async () => {
+    const summaryRow = { total_count: 5, unread_count: 2, last_message_at: "2026-05-11T15:00:00.000Z" };
+    const db = createMockD1([], summaryRow);
+    const result = await getAgentInboxFromD1(db, BTC_ADDRESS);
+    expect(result).not.toBeNull();
+    expect(result!.totalCount).toBe(5);
+    expect(result!.unreadCount).toBe(2);
+    expect(result!.lastMessageAt).toBe("2026-05-11T15:00:00.000Z");
+  });
+
+  it("returns null when total_count is 0 (no messages — same as KV miss)", async () => {
+    const summaryRow = { total_count: 0, unread_count: 0, last_message_at: null };
+    const db = createMockD1([], summaryRow);
+    const result = await getAgentInboxFromD1(db, BTC_ADDRESS);
+    expect(result).toBeNull();
+  });
+
+  it("returns null when db.first() returns null", async () => {
+    const db = createMockD1([], null);
+    const result = await getAgentInboxFromD1(db, BTC_ADDRESS);
+    expect(result).toBeNull();
+  });
+
+  it("returns null on D1 throw (fail-open)", async () => {
+    const db = {
+      prepare: vi.fn().mockImplementation(() => { throw new Error("D1 unavailable"); }),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+    const result = await getAgentInboxFromD1(db, BTC_ADDRESS);
+    expect(result).toBeNull();
+  });
+
+  it("SQL queries to_btc_address = ? AND is_reply = 0", async () => {
+    const summaryRow = { total_count: 1, unread_count: 0, last_message_at: "2026-05-11T00:00:00.000Z" };
+    const stmtMock = createPreparedStatement([], summaryRow);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    await getAgentInboxFromD1(db, BTC_ADDRESS);
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("WHERE to_btc_address = ?");
+    expect(sql).toContain("AND is_reply = 0");
+    expect(stmtMock.bind.mock.calls[0][0]).toBe(BTC_ADDRESS);
+  });
+});
+
+// ── getSentIndexFromD1 (Phase 2.5 #746) ──────────────────────────────────────
+
+describe("getSentIndexFromD1", () => {
+  it("returns null immediately when db is undefined (fail-open)", async () => {
+    const result = await getSentIndexFromD1(undefined, BTC_ADDRESS);
+    expect(result).toBeNull();
+  });
+
+  it("returns AgentSentSummary with sentCount and lastSentAt when rows exist", async () => {
+    const summaryRow = { sent_count: 39, last_sent_at: "2026-05-10T12:00:00.000Z" };
+    const db = createMockD1([], summaryRow);
+    const result = await getSentIndexFromD1(db, BTC_ADDRESS);
+    expect(result).not.toBeNull();
+    expect(result!.sentCount).toBe(39);
+    expect(result!.lastSentAt).toBe("2026-05-10T12:00:00.000Z");
+  });
+
+  it("returns AgentSentSummary with sentCount=0 when no replies sent", async () => {
+    const summaryRow = { sent_count: 0, last_sent_at: null };
+    const db = createMockD1([], summaryRow);
+    const result = await getSentIndexFromD1(db, BTC_ADDRESS);
+    expect(result).not.toBeNull();
+    expect(result!.sentCount).toBe(0);
+    expect(result!.lastSentAt).toBeNull();
+  });
+
+  it("returns null when db.first() returns null", async () => {
+    const db = createMockD1([], null);
+    const result = await getSentIndexFromD1(db, BTC_ADDRESS);
+    expect(result).toBeNull();
+  });
+
+  it("returns null on D1 throw (fail-open)", async () => {
+    const db = {
+      prepare: vi.fn().mockImplementation(() => { throw new Error("D1 unavailable"); }),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+    const result = await getSentIndexFromD1(db, BTC_ADDRESS);
+    expect(result).toBeNull();
+  });
+
+  it("SQL queries is_reply = 1 AND from_btc_address = ?", async () => {
+    const summaryRow = { sent_count: 5, last_sent_at: "2026-05-11T00:00:00.000Z" };
+    const stmtMock = createPreparedStatement([], summaryRow);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    await getSentIndexFromD1(db, BTC_ADDRESS);
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("is_reply = 1");
+    expect(sql).toContain("AND from_btc_address = ?");
+    expect(stmtMock.bind.mock.calls[0][0]).toBe(BTC_ADDRESS);
+  });
+});
+
+// ── getRecentInboxEventsFromD1 (Phase 2.5 #746) ───────────────────────────────
+
+describe("getRecentInboxEventsFromD1", () => {
+  it("returns empty array immediately when db is undefined (fail-open)", async () => {
+    const result = await getRecentInboxEventsFromD1(undefined, BTC_ADDRESS, 3);
+    expect(result).toEqual([]);
+  });
+
+  it("returns InboxMessage[] for the agent when rows exist", async () => {
+    const db = createMockD1([INBOUND_ROW]);
+    const result = await getRecentInboxEventsFromD1(db, BTC_ADDRESS, 3);
+    expect(result).toHaveLength(1);
+    expect(result[0].messageId).toBe(INBOUND_ROW.message_id);
+    expect(result[0].content).toBe(INBOUND_ROW.content);
+  });
+
+  it("returns empty array when no rows", async () => {
+    const db = createMockD1([]);
+    const result = await getRecentInboxEventsFromD1(db, BTC_ADDRESS, 3);
+    expect(result).toEqual([]);
+  });
+
+  it("returns empty array on D1 throw (fail-open)", async () => {
+    const db = {
+      prepare: vi.fn().mockImplementation(() => { throw new Error("D1 unavailable"); }),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+    const result = await getRecentInboxEventsFromD1(db, BTC_ADDRESS, 3);
+    expect(result).toEqual([]);
+  });
+
+  it("SQL queries to_btc_address = ? AND is_reply = 0 ORDER BY sent_at DESC LIMIT ?", async () => {
+    const stmtMock = createPreparedStatement([INBOUND_ROW]);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    await getRecentInboxEventsFromD1(db, BTC_ADDRESS, 3);
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("WHERE to_btc_address = ?");
+    expect(sql).toContain("AND is_reply = 0");
+    expect(sql).toContain("ORDER BY sent_at DESC");
+    expect(sql).toContain("LIMIT ?");
+
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(BTC_ADDRESS);
+    expect(bindArgs[1]).toBe(3); // limit
+  });
+});
+
 // ── Cache-key invariant: structural verification ──────────────────────────────
 
 describe("cache-key invariants (structural verification)", () => {
@@ -732,6 +899,10 @@ describe("cache-key invariants (structural verification)", () => {
     expect(listOutboxRepliesFromD1.length).toBe(4);  // (db, btcAddress, limit, offset)
     expect(countOutboxRepliesFromD1.length).toBe(2); // (db, btcAddress)
     expect(getReplyForMessageFromD1.length).toBe(3); // (db, parentMessageId, fromBtcAddress)
+    // Phase 2.5 #746 enrichment helpers (db is optional — fail-open when undefined)
+    expect(getAgentInboxFromD1.length).toBe(2);       // (db, btcAddress)
+    expect(getSentIndexFromD1.length).toBe(2);         // (db, btcAddress)
+    expect(getRecentInboxEventsFromD1.length).toBe(3); // (db, btcAddress, limit)
   });
 
   it("Invariant 3: read helpers are called with explicit inputs — no implicit cache-before-auth", async () => {

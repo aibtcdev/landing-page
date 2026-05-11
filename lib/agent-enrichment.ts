@@ -13,7 +13,7 @@ import type { AgentIdentity, ReputationSummary } from "@/lib/identity/types";
 import { getAgentLevel, type AgentLevelInfo } from "@/lib/levels";
 import { getCheckInRecord, type CheckInRecord } from "@/lib/heartbeat";
 import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
-import { getAgentInbox, getSentIndex } from "@/lib/inbox/kv-helpers";
+import { getAgentInboxFromD1, getSentIndexFromD1 } from "@/lib/inbox/d1-reads";
 import { getCAIP19AgentId } from "@/lib/caip19";
 import type { Logger } from "@/lib/logging";
 
@@ -68,6 +68,10 @@ export interface EnrichmentResult {
  *   `claim:{btcAddress}` read when provided). Pass null to indicate "no claim"
  *   (same as a KV miss), or omit / pass undefined to preserve the existing
  *   KV-fetch behavior (backwards-compatible for callers without a D1 claim).
+ * @param db - Optional D1 database binding. When provided, inbox/sent metrics
+ *   are read from D1 (live counts). When undefined, inbox metrics return empty
+ *   defaults (fail-open). Phase 2.5 #746 — replaces the frozen-at-Step-4
+ *   KV inbox reads in agent-enrichment. See lib/inbox/d1-reads.ts.
  * @returns Enrichment result with all derived metrics
  */
 export async function enrichAgentProfile(
@@ -76,7 +80,8 @@ export async function enrichAgentProfile(
   hiroApiKey?: string,
   logPrefix?: string,
   logger?: Logger,
-  prefetchedClaim?: ClaimRecord | ClaimStatus | null
+  prefetchedClaim?: ClaimRecord | ClaimStatus | null,
+  db?: D1Database
 ): Promise<EnrichmentResult> {
   let timeoutId: ReturnType<typeof setTimeout> | undefined;
   const enrichmentTimeout = new Promise<null>((resolve) => {
@@ -99,13 +104,15 @@ export async function enrichAgentProfile(
   // Claim is either passed in (skips KV) or fetched from KV alongside the others.
   // Identity and reputation are combined into a single slot so reputation starts immediately
   // after identity resolves, without blocking the other parallel fetches.
+  // Inbox + sent metrics use D1 reads when `db` is provided (phase 2.5 #746),
+  // returning null/empty to fail-open when the binding is unavailable.
   const enrichmentResult = await Promise.race([
     Promise.all([
       hasPrefetchedClaim ? Promise.resolve(null) : kv.get(`claim:${agent.btcAddress}`),
       getCheckInRecord(kv, agent.btcAddress),
       fetchIdentityAndReputation(agent, hiroApiKey, kv, logger),
-      getAgentInbox(kv, agent.btcAddress),
-      getSentIndex(kv, agent.btcAddress),
+      getAgentInboxFromD1(db, agent.btcAddress),
+      getSentIndexFromD1(db, agent.btcAddress),
     ]).finally(() => clearTimeout(timeoutId)),
     enrichmentTimeout,
   ]);
@@ -115,8 +122,8 @@ export async function enrichAgentProfile(
     claimData,
     checkInRecord,
     identityAndReputation,
-    inboxIndex,
-    sentIndex,
+    inboxSummary,
+    sentSummary,
   ] = enrichmentResult ?? [
     null,
     null,
@@ -160,9 +167,9 @@ export async function enrichAgentProfile(
   const activity: ActivityMetrics = {
     lastActiveAt: agent.lastActiveAt ?? null,
     hasCheckedIn: !!checkInRecord,
-    hasInboxMessages: !!inboxIndex,
-    unreadInboxCount: inboxIndex?.unreadCount ?? 0,
-    sentCount: sentIndex?.messageIds.length ?? 0,
+    hasInboxMessages: !!inboxSummary,
+    unreadInboxCount: inboxSummary?.unreadCount ?? 0,
+    sentCount: sentSummary?.sentCount ?? 0,
   };
 
   const capabilities = deriveCapabilities(levelInfo.level, agent, identity);

@@ -93,6 +93,7 @@ async function fetchHomeData() {
   try {
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
     const { agents, stats } = await getCachedAgentList(kv, (p) =>
       ctx.waitUntil(p)
     );
@@ -115,7 +116,7 @@ async function fetchHomeData() {
     // top-agent events, not an O(N) scan.
     let activityData: ActivityResponse | undefined;
     try {
-      activityData = await buildActivityData(kv);
+      activityData = await buildActivityData(kv, db);
     } catch {
       // Graceful degradation: ActivityFeed will fall back to client-side fetch
     }

@@ -299,13 +299,15 @@ export async function GET(
         // Pass d1Claim so enrichAgentProfile skips the redundant KV read when the
         // agent came from D1 (covers all non-KV-fallback paths). When d1Claim is
         // undefined (KV fallback agents), enrichAgentProfile falls back to KV.
+        // Pass db so inbox/sent metrics are read from live D1 counts (#746).
         const enrichment = await enrichAgentProfile(
           agent,
           kv,
           hiroApiKey,
           `agents/${agent.btcAddress}`,
           logger,
-          d1Claim
+          d1Claim,
+          db
         );
 
         const checkIn = enrichment.checkIn
