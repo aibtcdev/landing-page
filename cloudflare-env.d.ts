@@ -17,4 +17,5 @@ interface CloudflareEnv {
   X402_RELAY_URL?: string; // x402 relay URL for all payment settlement (default: https://x402-relay.aibtc.com)
   X402_RELAY?: import("./lib/inbox/relay-rpc").RelayRPC; // x402 sponsor relay RPC service binding (undefined in local dev)
   INBOX_RECONCILIATION_QUEUE?: Queue<import("./lib/inbox/reconciliation-queue").InboxReconciliationQueueMessage>;
+  CHAINHOOK_SECRET?: string; // HMAC secret for /api/competition/chainhook auth (set via wrangler secret)
 }
