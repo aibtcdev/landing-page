@@ -1292,68 +1292,6 @@ export function GET() {
           },
         },
       },
-      "/api/competition/chainhook": {
-        post: {
-          operationId: "submitCompetitionChainhook",
-          summary: "Receive a chainhook predicate firing (HMAC-authenticated)",
-          description:
-            "Receives Hiro chainhook predicate firings for the trading competition. The handler " +
-            "iterates `apply` and submits each tx to the verifier with `source='chainhook'`. " +
-            "Rollback entries are ignored — see lib/competition/chainhook.ts for the rationale.",
-          parameters: [
-            {
-              name: "X-Chainhook-Signature",
-              in: "header",
-              required: false,
-              description:
-                "Hex HMAC-SHA256(env.CHAINHOOK_SECRET, request_body). Either this header or `Authorization: Bearer {hex}` must be present.",
-              schema: { type: "string" },
-            },
-            {
-              name: "Authorization",
-              in: "header",
-              required: false,
-              description: "`Bearer {hex}` form of the HMAC signature (Hiro controller default).",
-              schema: { type: "string" },
-            },
-          ],
-          requestBody: {
-            required: true,
-            content: {
-              "application/json": {
-                schema: {
-                  type: "object",
-                  description:
-                    "Standard chainhook envelope with `apply` (and optional `rollback`) arrays of tx entries.",
-                },
-              },
-            },
-          },
-          responses: {
-            "200": {
-              description: "Batch processed — body is the ingestion summary",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      processed: { type: "integer" },
-                      inserted: { type: "integer" },
-                      alreadyKnown: { type: "integer" },
-                      rejected: { type: "integer" },
-                      pending: { type: "integer" },
-                    },
-                  },
-                },
-              },
-            },
-            "400": { description: "Malformed JSON or missing `apply` field" },
-            "401": { description: "Missing or invalid signature" },
-            "500": { description: "Server config error (CHAINHOOK_SECRET not set)" },
-            "503": { description: "D1 temporarily unavailable" },
-          },
-        },
-      },
       "/api/competition/cron": {
         post: {
           operationId: "runCompetitionCron",
