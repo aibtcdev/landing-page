@@ -19,9 +19,23 @@ type Agent = AgentRecord & {
   unreadCount?: number;
   reputationScore?: number;
   reputationCount?: number;
+  /** Swaps the agent submitted via the AIBTC MCP (source='agent' in swaps). */
+  mcpTradeCount?: number;
+  /** Sum of amount_in × current USD price across those submissions. */
+  mcpVolumeUsd?: number;
+  /** Latest burn_block_time (unix seconds) across MCP submissions. */
+  mcpLatestTradeAt?: number;
 };
 
-type SortField = "level" | "reputation" | "joined" | "activity" | "messages";
+type SortField =
+  | "level"
+  | "reputation"
+  | "joined"
+  | "activity"
+  | "messages"
+  | "trades"
+  | "volume"
+  | "latestTrade";
 type SortOrder = "asc" | "desc";
 interface AgentListProps {
   agents: Agent[];
@@ -194,6 +208,17 @@ export default function AgentList({ agents }: AgentListProps) {
         comparison = bTime - aTime;
       } else if (sortBy === "messages") {
         comparison = (b.messageCount ?? 0) - (a.messageCount ?? 0);
+      } else if (sortBy === "trades") {
+        // MCP-submitted count primary, USD volume as tiebreak so agents
+        // who happened to move more dollars rank ahead of equal-count peers.
+        comparison = (b.mcpTradeCount ?? 0) - (a.mcpTradeCount ?? 0);
+        if (comparison === 0) {
+          comparison = (b.mcpVolumeUsd ?? 0) - (a.mcpVolumeUsd ?? 0);
+        }
+      } else if (sortBy === "volume") {
+        comparison = (b.mcpVolumeUsd ?? 0) - (a.mcpVolumeUsd ?? 0);
+      } else if (sortBy === "latestTrade") {
+        comparison = (b.mcpLatestTradeAt ?? 0) - (a.mcpLatestTradeAt ?? 0);
       }
 
       return sortOrder === "asc" ? -comparison : comparison;
@@ -358,6 +383,39 @@ export default function AgentList({ agents }: AgentListProps) {
                 </Tooltip>
               </th>
               <th
+                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
+                onClick={() => handleSort("trades")}
+              >
+                <Tooltip text="Swaps this agent submitted via the AIBTC MCP (POST /api/competition/trades).">
+                  <div className="inline-flex items-center gap-1.5">
+                    MCP Trades
+                    <SortIcon active={sortBy === "trades"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
+              <th
+                className="cursor-pointer px-2.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
+                onClick={() => handleSort("volume")}
+              >
+                <Tooltip text="Total USD value moved through MCP-submitted trades (sum of amount_in × current USD price of token_in). Input side only — not a P&L number.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Volume (USD)
+                    <SortIcon active={sortBy === "volume"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
+              <th
+                className="cursor-pointer px-2.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
+                onClick={() => handleSort("latestTrade")}
+              >
+                <Tooltip text="Time since this agent's most recent MCP-submitted swap.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Latest Trade
+                    <SortIcon active={sortBy === "latestTrade"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
+              <th
                 className="cursor-pointer px-2.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("joined")}
               >
@@ -436,6 +494,40 @@ export default function AgentList({ agents }: AgentListProps) {
                         ? agent.messageCount.toLocaleString()
                         : "-"}
                     </span>
+                  </td>
+                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
+                    {(agent.mcpTradeCount ?? 0) > 0 ? (
+                      <span className="text-[13px] font-medium text-[#F7931A]">
+                        {agent.mcpTradeCount}
+                      </span>
+                    ) : (
+                      <span className="text-[13px] text-white/20">&mdash;</span>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-3 text-right whitespace-nowrap">
+                    {(agent.mcpVolumeUsd ?? 0) > 0 ? (
+                      <span className="text-[13px] font-medium text-white/70">
+                        ${(agent.mcpVolumeUsd ?? 0) < 10_000
+                          ? (agent.mcpVolumeUsd ?? 0).toLocaleString("en-US", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                          : (agent.mcpVolumeUsd ?? 0).toLocaleString("en-US", {
+                              maximumFractionDigits: 0,
+                            })}
+                      </span>
+                    ) : (
+                      <span className="text-[13px] text-white/20">&mdash;</span>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-3 text-right whitespace-nowrap">
+                    {(agent.mcpLatestTradeAt ?? 0) > 0 ? (
+                      <span className="text-[13px] text-white/50">
+                        {formatRelativeTime(new Date((agent.mcpLatestTradeAt as number) * 1000).toISOString())}
+                      </span>
+                    ) : (
+                      <span className="text-[13px] text-white/20">&mdash;</span>
+                    )}
                   </td>
                   <td className="px-2.5 py-3 text-right whitespace-nowrap">
                     <span className="text-[13px] text-white/50">{formatShortDate(agent.verifiedAt)}</span>
@@ -523,6 +615,18 @@ export default function AgentList({ agents }: AgentListProps) {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
                         {agent.messageCount}
+                      </span>
+                    )}
+                    {(agent.mcpTradeCount ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-[#F7931A]">
+                        {agent.mcpTradeCount} mcp
+                      </span>
+                    )}
+                    {(agent.mcpVolumeUsd ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-white/60">
+                        ${(agent.mcpVolumeUsd ?? 0) < 10_000
+                          ? (agent.mcpVolumeUsd ?? 0).toLocaleString("en-US", { maximumFractionDigits: 2 })
+                          : (agent.mcpVolumeUsd ?? 0).toLocaleString("en-US", { maximumFractionDigits: 0 })}
                       </span>
                     )}
                   </div>
