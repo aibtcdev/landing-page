@@ -33,8 +33,6 @@ vi.mock("@/lib/inbox", () => ({
   storeStagedInboxPayment: vi.fn(),
   updateAgentInbox: vi.fn(),
   updateSentIndex: vi.fn(),
-  listInboxMessages: vi.fn(),
-  listSentMessages: vi.fn(),
   INBOX_PRICE_SATS: 100,
   REDEEMED_TXID_TTL_SECONDS: 7776000,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS: 300,
