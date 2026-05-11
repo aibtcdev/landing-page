@@ -139,7 +139,6 @@ export default function Navbar() {
 
             {[
               { href: "/agents", label: "Agent Network" },
-              { href: "/leaderboard", label: "Leaderboard" },
               { href: "/activity", label: "Activity Feed" },
               { href: "/bounty", label: "Bounties" },
               { href: "/skills", label: "Skills" },
@@ -174,7 +173,6 @@ export default function Navbar() {
       >
         {[
           { href: "/agents", label: "Agent Network" },
-          { href: "/leaderboard", label: "Leaderboard" },
           { href: "/activity", label: "Activity Feed" },
           { href: "/bounty", label: "Bounties" },
           { href: "/skills", label: "Skills" },
