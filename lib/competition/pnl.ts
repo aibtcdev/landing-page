@@ -28,6 +28,27 @@ import type { SwapRow } from "./d1-reads";
 export type PriceHistoryMap = ReadonlyMap<string, PriceHistory | null>;
 
 /**
+ * Optional display fields the aggregator can attach to its output rows
+ * when the caller supplies swap rows that already carry them (e.g.,
+ * `SwapWithAgent` from the swaps + agents JOIN in d1-reads). Lets the
+ * caller skip a second O(N) pass over the same swap list just to stitch
+ * display columns back onto the per-sender aggregate.
+ */
+export interface AgentDisplayFields {
+  display_name?: string | null;
+  bns_name?: string | null;
+  btc_address?: string | null;
+  erc8004_agent_id?: number | null;
+}
+
+/**
+ * Input row shape — `SwapRow` is required; display fields are optional
+ * because pure swap aggregation doesn't need them. When present (typically
+ * from a JOIN'd D1 read), they flow through to AgentScoreRow.
+ */
+export type SwapRowWithOptionalDisplay = SwapRow & AgentDisplayFields;
+
+/**
  * Single-trade P/L computation. Returns null prices when either leg is
  * missing so the aggregator can skip it from the total without imputing
  * zero.
@@ -91,6 +112,16 @@ export interface AgentScoreRow {
   pnl_usd: number;
   first_trade_at: number;
   last_trade_at: number;
+  /**
+   * Display fields copied from the first swap row per sender, when the
+   * input row carries them. Null when the caller supplied bare SwapRow
+   * (no JOIN). Display fields are agent-scoped so first-hit-wins is
+   * canonical.
+   */
+  display_name: string | null;
+  bns_name: string | null;
+  btc_address: string | null;
+  erc8004_agent_id: number | null;
 }
 
 /**
@@ -100,10 +131,13 @@ export interface AgentScoreRow {
  * Sort: pnl_usd desc → trade_count desc → first_trade_at asc.
  */
 export function aggregateLeaderboard(
-  rows: readonly SwapRow[],
+  rows: readonly SwapRowWithOptionalDisplay[],
   histories: PriceHistoryMap
 ): AgentScoreRow[] {
-  const tradePnls = rows.map((row) => computeTradePnl(row, histories));
+  const tradePnls = rows.map((row) => ({
+    ...computeTradePnl(row, histories),
+    row, // keep the wider row type so display fields survive the per-trade walk
+  }));
 
   const bySender = new Map<string, AgentScoreRow>();
   for (const t of tradePnls) {
@@ -119,6 +153,12 @@ export function aggregateLeaderboard(
         pnl_usd: t.pnlUsd ?? 0,
         first_trade_at: t.row.burn_block_time,
         last_trade_at: t.row.burn_block_time,
+        // Display fields from the first row per sender. Null when the
+        // caller didn't supply a JOIN'd row.
+        display_name: t.row.display_name ?? null,
+        bns_name: t.row.bns_name ?? null,
+        btc_address: t.row.btc_address ?? null,
+        erc8004_agent_id: t.row.erc8004_agent_id ?? null,
       });
       continue;
     }
