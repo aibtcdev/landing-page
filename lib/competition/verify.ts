@@ -265,6 +265,21 @@ export async function verifyAndPersistSwap(
     };
   }
 
+  // Success-only gate per the comp spec (whoabuddy's reframing on the
+  // attribution gist: "assert tx_status == success"). Non-success terminal
+  // statuses — abort_by_response, abort_by_post_condition, dropped_* — are
+  // schema-allowed in `swaps` for future-proofing but do NOT count toward
+  // the competition. Reject before doing any further work (parse, FK check,
+  // DB write); the schema's 8-status CHECK constraint stays so we can opt
+  // in to recording failed attempts later without a migration.
+  if (tx.tx_status !== "success") {
+    return {
+      status: "rejected",
+      code: "tx_failed",
+      reason: `Transaction reached terminal status '${tx.tx_status}' (not success). Failed swaps do not count toward the competition.`,
+    };
+  }
+
   // Sender + allowlist gates. The allowlist check depends on a parsed
   // contract_call — fail fast if the tx isn't a contract call at all.
   if (tx.tx_type !== "contract_call" || !tx.contract_call) {
@@ -300,17 +315,6 @@ export async function verifyAndPersistSwap(
       code: "contract_not_allowlisted",
       reason: `Contract+function ${tx.contract_call.contract_id}::${tx.contract_call.function_name} not on competition allowlist`,
     };
-  }
-
-  // A non-success terminal status (abort_by_*, dropped_*) is allowlisted by
-  // the swaps schema but should be reported back as a soft reject — the row
-  // still gets persisted (it's a real attempted trade) so the comp surface
-  // can show "user tried; failed", but the API caller should know they did
-  // not get credit. We mirror the handoff's tx_failed reason for this.
-  if (tx.tx_status !== "success") {
-    // Even on terminal failure, the parser may not have a meaningful event
-    // pair. Fall through to the parse step — if events are present we'll
-    // persist them; if not we'll classify the row as malformed and 4xx out.
   }
 
   const parseRes = parseSwapFromTx(tx);
