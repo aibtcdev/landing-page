@@ -39,6 +39,68 @@ import {
   type StatusFilter,
 } from "@/lib/inbox/d1-reads";
 
+/**
+ * Detect whether a D1/SQLite error is a UNIQUE constraint violation on `payment_txid`.
+ *
+ * D1 surfaces SQLite errors as thrown Error objects whose message contains the
+ * SQLite error string. When the `idx_inbox_payment_txid` partial UNIQUE index
+ * fires, the message contains "UNIQUE constraint failed: inbox_messages.payment_txid".
+ *
+ * This function matches that substring so callers can distinguish a permanent
+ * UNIQUE violation (idempotent → 409) from a transient D1 error (→ 503).
+ *
+ * **Dependency on D1 error format.** D1 does not expose a structured error code
+ * for SQLite constraint violations — only the wrapped message string. If D1
+ * ever changes how it surfaces these (e.g. introduces a `.code` property), this
+ * matcher will silently fall back to the 503 path. Re-check periodically against
+ * `@cloudflare/workers-types` releases. The full constraint string
+ * "UNIQUE constraint failed: inbox_messages.payment_txid" is matched verbatim
+ * (per Copilot review on #756) to avoid false-positives if future schema
+ * changes introduce other tables/columns whose names contain `payment_txid`.
+ */
+function isPaymentTxidUniqueViolation(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("UNIQUE constraint failed: inbox_messages.payment_txid");
+}
+
+/**
+ * Build the 409 "already_redeemed" response after a UNIQUE(payment_txid) violation.
+ *
+ * Re-queries `checkRedeemedTxidInD1` to surface the canonical existingMessageId.
+ * If the re-check itself fails, still returns 409 with `existingMessageId: null`
+ * — the UNIQUE violation is permanent; only the surfaced id is best-effort.
+ */
+async function resolvePaymentTxidConflict(
+  db: D1Database,
+  paymentTxid: string | undefined,
+  path: "txid_recovery" | "x402_payment",
+  logger: Logger,
+  messageId: string,
+  err: unknown
+): Promise<NextResponse> {
+  logger.warn("inbox.payment_txid_unique_violation", {
+    messageId,
+    path,
+    paymentTxid,
+    error: String(err),
+  });
+  let existingMsgId: string | null = null;
+  try {
+    existingMsgId = paymentTxid
+      ? await checkRedeemedTxidInD1(db, paymentTxid)
+      : null;
+  } catch (reCheckErr) {
+    logger.error("inbox.already_redeemed_recheck_failed", {
+      paymentTxid,
+      error: String(reCheckErr),
+    });
+  }
+  return NextResponse.json(
+    { error: "already_redeemed", existingMessageId: existingMsgId ?? null },
+    { status: 409 }
+  );
+}
+
 /** Maps nonce-related error codes to structured action strings for agents and operators. */
 const NONCE_ACTION_MAP: Record<string, string> = {
   SENDER_NONCE_STALE: "refetch_nonce_and_resign",
@@ -1039,9 +1101,24 @@ export async function POST(
     // The payment_txid UNIQUE index (idx_inbox_payment_txid) provides permanent
     // double-redemption prevention — ON CONFLICT on message_id is belt-and-
     // suspenders for the race where two concurrent requests share the same ID.
+    //
+    // UNIQUE-violation handling (#748): concurrent retries racing between the
+    // SELECT guard and the INSERT can hit idx_inbox_payment_txid. When detected,
+    // re-query the canonical existingMessageId and return 409 (not 503) — this
+    // is a permanent idempotent outcome, not a transient D1 failure.
     try {
       await insertInboundMessageToD1(db, message);
     } catch (err) {
+      if (isPaymentTxidUniqueViolation(err)) {
+        return resolvePaymentTxidConflict(
+          db,
+          message.paymentTxid,
+          "txid_recovery",
+          logger,
+          message.messageId,
+          err
+        );
+      }
       logger.error("inbox.d1_insert_failed", {
         messageId: message.messageId,
         path: "txid_recovery",
@@ -1549,6 +1626,10 @@ export async function POST(
   // D1 is now the sole INSERT path (Phase 2.5 Step 4 — KV writes removed).
   // D1 INSERT is synchronous and failure-propagating: on D1 failure return 503
   // + Retry-After: 5 so the sender retries rather than seeing a phantom 200.
+  //
+  // UNIQUE-violation handling (#748): x402 client retries with the same paymentTxid
+  // but the server generates a new messageId per attempt. The INSERT hits
+  // idx_inbox_payment_txid. Re-query and return 409 (not 503) — permanent outcome.
   if (!db) {
     logger.error("D1 binding unavailable on x402 delivery path", { messageId });
     return NextResponse.json(
@@ -1563,6 +1644,16 @@ export async function POST(
   try {
     await insertInboundMessageToD1(db, message);
   } catch (err) {
+    if (isPaymentTxidUniqueViolation(err)) {
+      return resolvePaymentTxidConflict(
+        db,
+        message.paymentTxid,
+        "x402_payment",
+        logger,
+        message.messageId,
+        err
+      );
+    }
     logger.error("inbox.d1_insert_failed", {
       messageId: message.messageId,
       path: "x402_payment",
