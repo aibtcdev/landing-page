@@ -167,57 +167,27 @@ export async function buildLeaderboardSnapshot(
     logger
   );
 
-  // 5. Aggregate by sender + sort.
+  // 5. Aggregate by sender + sort. `swaps` are SwapWithAgent[] from the
+  //    D1 JOIN, so the aggregator carries display fields onto each output
+  //    row in its single swap walk — no second-pass stitch needed.
   const agentRows = aggregateLeaderboard(swaps, histories);
 
-  // 6. Stitch display columns from the JOINed swap rows back onto the
-  //    per-sender aggregate. Each sender appears multiple times in `swaps`
-  //    but the display fields are agent-scoped, so the first hit per
-  //    sender is canonical.
-  const displayBySender = new Map<
-    string,
-    {
-      btc_address: string | null;
-      display_name: string | null;
-      bns_name: string | null;
-      erc8004_agent_id: number | null;
-    }
-  >();
-  for (const s of swaps) {
-    if (!displayBySender.has(s.sender)) {
-      displayBySender.set(s.sender, {
-        btc_address: s.btc_address,
-        display_name: s.display_name,
-        bns_name: s.bns_name,
-        erc8004_agent_id: s.erc8004_agent_id,
-      });
-    }
-  }
-
-  const rows: LeaderboardRow[] = agentRows.map((a, i) => {
-    const display = displayBySender.get(a.sender) ?? {
-      btc_address: null,
-      display_name: null,
-      bns_name: null,
-      erc8004_agent_id: null,
-    };
-    return {
-      rank: i + 1,
-      stx_address: a.sender,
-      btc_address: display.btc_address,
-      display_name: display.display_name,
-      bns_name: display.bns_name,
-      erc8004_agent_id: display.erc8004_agent_id,
-      trade_count: a.trade_count,
-      priced_trade_count: a.priced_trade_count,
-      unpriced_trade_count: a.unpriced_trade_count,
-      volume_in_usd: a.volume_in_usd,
-      volume_out_usd: a.volume_out_usd,
-      pnl_usd: a.pnl_usd,
-      first_trade_at: a.first_trade_at,
-      last_trade_at: a.last_trade_at,
-    };
-  });
+  const rows: LeaderboardRow[] = agentRows.map((a, i) => ({
+    rank: i + 1,
+    stx_address: a.sender,
+    btc_address: a.btc_address,
+    display_name: a.display_name,
+    bns_name: a.bns_name,
+    erc8004_agent_id: a.erc8004_agent_id,
+    trade_count: a.trade_count,
+    priced_trade_count: a.priced_trade_count,
+    unpriced_trade_count: a.unpriced_trade_count,
+    volume_in_usd: a.volume_in_usd,
+    volume_out_usd: a.volume_out_usd,
+    pnl_usd: a.pnl_usd,
+    first_trade_at: a.first_trade_at,
+    last_trade_at: a.last_trade_at,
+  }));
 
   const pricedCount = rows.reduce((s, r) => s + r.priced_trade_count, 0);
   const unpricedCount = rows.reduce((s, r) => s + r.unpriced_trade_count, 0);
