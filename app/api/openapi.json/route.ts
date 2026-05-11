@@ -1295,11 +1295,13 @@ export function GET() {
       "/api/competition/cron": {
         post: {
           operationId: "runCompetitionCron",
-          summary: "Run the nightly catch-up sweep (shared-secret authenticated)",
+          summary: "Run the 15-min catch-up sweep (shared-secret authenticated)",
           description:
             "Walks registered_wallets, fetches recent Hiro tx history per address, filters by allowlist, " +
-            "and submits each match via the verifier with `source='cron'`. Per-run cap: 100 addresses; " +
-            "resumes across runs via the `comp:cron:cursor` KV key.",
+            "and submits each match via the verifier with `source='cron'`. Pairs with the agent-submit fast " +
+            "path (POST /api/competition/trades) — first writer wins on `(txid)`. Per-run cap: 100 " +
+            "addresses, sized for a 15-min cadence at the current ~430 registered wallets. Resumes across " +
+            "runs via the `comp:cron:cursor` KV key.",
           parameters: [
             {
               name: "X-Cron-Secret",
