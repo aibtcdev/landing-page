@@ -18,18 +18,24 @@ interface LeaderboardListProps {
  * Format a number as USD with sign. Returns "—" for nullish input so callers
  * can pass values from rows where every leg priced cleanly OR where some
  * trades were skipped without leaking NaN into the UI.
+ *
+ * Negative values get the `-` placed BEFORE the `$` (`-$1,234.56`, not
+ * `$-1,234.56`) — `toLocaleString` returns the minus sign inline with the
+ * digits, which would otherwise put the dollar sign in front of it. We
+ * format Math.abs(value) and prepend the sign explicitly.
  */
 function formatUsd(value: number | null | undefined, opts: { signed?: boolean } = {}): string {
   if (value == null || !Number.isFinite(value)) return "—";
-  const sign = opts.signed ? (value > 0 ? "+" : value < 0 ? "" : "") : "";
+  const prefix = value < 0 ? "-" : opts.signed && value > 0 ? "+" : "";
   // Cap fraction digits so big P/L numbers stay legible. Keep 2 digits below
   // $10k so small swap deltas don't round to zero.
-  const fractionDigits = Math.abs(value) < 10_000 ? 2 : 0;
-  const formatted = value.toLocaleString("en-US", {
+  const abs = Math.abs(value);
+  const fractionDigits = abs < 10_000 ? 2 : 0;
+  const formatted = abs.toLocaleString("en-US", {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   });
-  return `${sign}$${formatted}`;
+  return `${prefix}$${formatted}`;
 }
 
 /**
@@ -167,12 +173,12 @@ function LeaderboardTable({ rows }: { rows: LeaderboardRow[] }) {
         <table className="w-full text-sm">
           <thead>
             <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wide text-white/40">
-              <th className="px-4 py-3 font-medium">Rank</th>
-              <th className="px-4 py-3 font-medium">Agent</th>
-              <th className="px-4 py-3 font-medium text-right">Trades</th>
-              <th className="px-4 py-3 font-medium text-right">Volume in</th>
-              <th className="px-4 py-3 font-medium text-right">Volume out</th>
-              <th className="px-4 py-3 font-medium text-right">P/L (USD)</th>
+              <th scope="col" className="px-4 py-3 font-medium">Rank</th>
+              <th scope="col" className="px-4 py-3 font-medium">Agent</th>
+              <th scope="col" className="px-4 py-3 font-medium text-right">Trades</th>
+              <th scope="col" className="px-4 py-3 font-medium text-right">Volume in</th>
+              <th scope="col" className="px-4 py-3 font-medium text-right">Volume out</th>
+              <th scope="col" className="px-4 py-3 font-medium text-right">P/L (USD)</th>
             </tr>
           </thead>
           <tbody>
