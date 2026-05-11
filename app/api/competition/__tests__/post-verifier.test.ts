@@ -7,7 +7,9 @@
  *   - 400 on malformed body / bad txid
  *   - 429 + Retry-After when RATE_LIMIT_MUTATING trips
  *   - 503 + Retry-After when D1 binding is missing
- *   - 202 + Retry-After when KV pending marker exists (short-circuit)
+ *   - 202 when verify returns pending (KV marker is written as observability,
+ *     NOT used as a request-path short-circuit — see secret-mars's PR #738
+ *     finding for the empirical reproduction)
  *   - 202 + KV write when verify returns pending
  *   - 200 + row when verify returns verified
  *   - 422 on verifier rejections (sender/allowlist/parse)
@@ -127,17 +129,42 @@ describe("POST /api/competition/trades — rate limit + binding gates", () => {
 });
 
 describe("POST /api/competition/trades — pending tracker (KV)", () => {
-  it("short-circuits to 202 when comp:pending:{txid} exists in KV (no Hiro fetch)", async () => {
+  // Regression for secret-mars's PR #738 finding (comment 4418003085).
+  // The earlier short-circuit read comp:pending:{txid} and returned 202
+  // without invoking the verifier, creating a 30-min blind window after
+  // a tx confirmed. Re-submits of a now-confirmed tx returned 202 forever
+  // and the row never landed in `swaps`. Verifier is now ALWAYS invoked.
+  it("invokes verifier on every submit even when comp:pending:{txid} exists in KV", async () => {
     const kv = makeKv({ get: vi.fn().mockResolvedValue("1") });
     mockEnv({ kv });
+    (verifyAndPersistSwap as Mock).mockResolvedValue({
+      status: "verified",
+      inserted: true,
+      row: {
+        txid: TXID,
+        sender: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
+        contract_id: "x",
+        function_name: "y",
+        token_in: "stx",
+        amount_in: 1,
+        token_out: "stx",
+        amount_out: 1,
+        burn_block_time: 1,
+        tx_status: "success",
+        source: "agent",
+        scored_value: null,
+        scored_at: null,
+      },
+    });
     const res = await POST(buildRequest({ txid: TXID }));
-    expect(res.status).toBe(202);
-    const body = await res.json();
-    expect(body).toEqual({ accepted: true });
-    expect(verifyAndPersistSwap).not.toHaveBeenCalled();
+    // Verifier ran and returned a confirmed row — not the cached 202.
+    expect(res.status).toBe(200);
+    expect(verifyAndPersistSwap).toHaveBeenCalledTimes(1);
+    // The pending marker is cleared since the tx is now verified.
+    expect(kv.delete).toHaveBeenCalledWith(`comp:pending:${TXID}`);
   });
 
-  it("writes the pending KV marker when verify returns pending", async () => {
+  it("writes the pending KV marker when verify returns pending (observability artifact)", async () => {
     const kv = makeKv();
     mockEnv({ kv });
     (verifyAndPersistSwap as Mock).mockResolvedValue({ status: "pending" });
@@ -147,7 +174,7 @@ describe("POST /api/competition/trades — pending tracker (KV)", () => {
     expect((kv.put as Mock).mock.calls[0][2]).toEqual({ expirationTtl: 30 * 60 });
   });
 
-  it("clears the pending KV marker on a verified result", async () => {
+  it("clears the pending KV marker on a verified result (observability hygiene)", async () => {
     const kv = makeKv();
     mockEnv({ kv });
     (verifyAndPersistSwap as Mock).mockResolvedValue({
@@ -172,6 +199,18 @@ describe("POST /api/competition/trades — pending tracker (KV)", () => {
     const res = await POST(buildRequest({ txid: TXID }));
     expect(res.status).toBe(200);
     expect(kv.delete).toHaveBeenCalledWith(`comp:pending:${TXID}`);
+  });
+
+  it("does NOT read the pending key from the request path (no short-circuit)", async () => {
+    const kv = makeKv({ get: vi.fn().mockResolvedValue("1") });
+    mockEnv({ kv });
+    (verifyAndPersistSwap as Mock).mockResolvedValue({ status: "pending" });
+    await POST(buildRequest({ txid: TXID }));
+    // The route must not gate on the cached marker. We tolerate other KV
+    // reads from unrelated code paths (none exist today) but a positive
+    // hit here would have indicated the bug.
+    const getCalls = (kv.get as Mock).mock.calls;
+    expect(getCalls.length).toBe(0);
   });
 });
 
