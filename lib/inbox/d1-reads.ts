@@ -350,7 +350,7 @@ export async function countOutboxRepliesFromD1(
  * trigger a false-409.
  *
  * SQL shape:
- *   SELECT message_id, reply_to_message_id, from_btc_address, to_btc_address,
+ *   SELECT reply_to_message_id, from_btc_address, to_btc_address,
  *          content, bitcoin_signature, sent_at
  *   FROM inbox_messages
  *   WHERE reply_to_message_id = ? AND from_btc_address = ? AND is_reply = 1
