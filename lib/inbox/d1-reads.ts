@@ -385,5 +385,39 @@ export async function getReplyForMessageFromD1(
   return replyRowToOutboxReply(row);
 }
 
+/**
+ * Check whether a payment txid has already been redeemed (double-redemption guard).
+ *
+ * Phase 2.5 Step 4 — replaces the KV `inbox:redeemed-txid:{txid}` read in the
+ * txid-recovery path. The D1 unique partial index `idx_inbox_payment_txid` on
+ * `payment_txid WHERE payment_txid IS NOT NULL` makes this query index-only.
+ *
+ * Returns the messageId of the existing row on redemption, or null if the txid
+ * has not been used. Callers return 409 on a non-null result.
+ *
+ * SQL shape:
+ *   SELECT message_id FROM inbox_messages
+ *   WHERE payment_txid = ? AND payment_txid IS NOT NULL
+ *   LIMIT 1
+ */
+export async function checkRedeemedTxidInD1(
+  db: D1Database,
+  paymentTxid: string
+): Promise<string | null> {
+  const sql = `
+    SELECT message_id
+    FROM inbox_messages
+    WHERE payment_txid = ? AND payment_txid IS NOT NULL
+    LIMIT 1
+  `;
+
+  const row = await db
+    .prepare(sql)
+    .bind(paymentTxid)
+    .first<{ message_id: string }>();
+
+  return row?.message_id ?? null;
+}
+
 // Re-export the prefix so tests can verify synthesized IDs
 export { REPLY_D1_PK_PREFIX };

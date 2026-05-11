@@ -12,12 +12,8 @@ import {
   validateInboxMessage,
   verifyInboxPayment,
   verifyTxidPayment,
-  storeMessage,
   storeStagedInboxPayment,
-  updateAgentInbox,
-  updateSentIndex,
   INBOX_PRICE_SATS,
-  REDEEMED_TXID_TTL_SECONDS,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
   buildInboxPaymentRequirements,
   buildSenderAuthMessage,
@@ -39,6 +35,7 @@ import {
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
   countOutboxRepliesFromD1,
+  checkRedeemedTxidInD1,
   type StatusFilter,
 } from "@/lib/inbox/d1-reads";
 
@@ -246,10 +243,9 @@ export async function GET(
   // D1-throws fallback policy (declared per #722 dev-council Cycle 26 advisory):
   // If the D1 query layer throws — transient unavailability, network error,
   // schema mismatch — return 503 with a structured retry hint rather than
-  // letting Next.js produce an unstructured 500. Step 3.2/3.3/3.4 will follow
-  // this same pattern so the cutover series has a uniform fallback contract.
-  // KV remains the source of truth (writes still go there per #720); a 503
-  // here means "D1 read transiently unavailable — retry."
+  // letting Next.js produce an unstructured 500.
+  // Phase 2.5 Step 4 (#730): D1 is now the sole source of truth for reads
+  // and writes on this path. A 503 here means "D1 transiently unavailable."
   let receivedMessages: import("@/lib/inbox/types").InboxMessage[];
   let unreadCount: number;
   let totalCount: number;
@@ -563,6 +559,7 @@ export async function POST(
   const { address } = await params;
   const { env, ctx } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+  const db = env.DB as D1Database | undefined;
   const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
   const logger = isLogsRPC(env.LOGS)
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
@@ -833,7 +830,7 @@ export async function POST(
     });
 
     // Rate limit: up to 20 recovery attempts per txid per 60 seconds (RATE_LIMIT_MUTATING window).
-    // Double-redemption is prevented by the inbox:redeemed-txid:{txid} key below regardless of retry count.
+    // Double-redemption is prevented by the D1 idx_inbox_payment_txid UNIQUE index regardless of retry count.
     let txidRecoveryLimited = false;
     try {
       const result = await env.RATE_LIMIT_MUTATING.limit({ key: `txid-recovery:${paymentTxid}` });
@@ -856,16 +853,40 @@ export async function POST(
       );
     }
 
-    // Prevent double-redemption
-    const redeemedKey = `inbox:redeemed-txid:${paymentTxid}`;
-    const existingRedemption = await kv.get(redeemedKey);
-    if (existingRedemption) {
+    // Prevent double-redemption — D1 is now the authoritative idempotency store.
+    // idx_inbox_payment_txid (UNIQUE partial index on payment_txid) makes this
+    // index-only. Replaces the former KV inbox:redeemed-txid:{txid} check.
+    if (!db) {
+      return NextResponse.json(
+        {
+          error: "Database unavailable. Please try again shortly.",
+          retryable: true,
+          retryAfter: 5,
+        },
+        { status: 503, headers: { "Retry-After": "5" } }
+      );
+    }
+    let existingRedemptionMessageId: string | null;
+    try {
+      existingRedemptionMessageId = await checkRedeemedTxidInD1(db, paymentTxid);
+    } catch (e) {
+      logger.error("D1 redeemed-txid check failed", { txid: paymentTxid, error: String(e) });
+      return NextResponse.json(
+        {
+          error: "Database unavailable. Please try again shortly.",
+          retryable: true,
+          retryAfter: 5,
+        },
+        { status: 503, headers: { "Retry-After": "5" } }
+      );
+    }
+    if (existingRedemptionMessageId) {
       logger.warn("Txid already redeemed", { txid: paymentTxid });
       return NextResponse.json(
         {
           error: "This transaction has already been used for a message",
           txid: paymentTxid,
-          existingMessageId: existingRedemption,
+          existingMessageId: existingRedemptionMessageId,
         },
         { status: 409 }
       );
@@ -989,17 +1010,7 @@ export async function POST(
     const fromAddress = txidResult.payerStxAddress || "unknown";
     const messageId = `msg_${Date.now()}_${crypto.randomUUID()}`;
 
-    // Guard against (extremely unlikely) server-generated ID collision
-    const existingMessage = await kv.get(`inbox:message:${messageId}`);
-    if (existingMessage) {
-      logger.warn("Duplicate message ID", { messageId });
-      return NextResponse.json(
-        { error: "Message already exists", messageId },
-        { status: 409 }
-      );
-    }
-
-    // Look up sender agent for BIP-322 verification and sent-index update
+    // Look up sender agent for BIP-322 verification
     const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress) : null;
     const sigResult = verifySenderSignature(senderSignatureInput, content, logger, senderAgent?.btcAddress);
     if (sigResult instanceof NextResponse) return sigResult;
@@ -1022,28 +1033,27 @@ export async function POST(
       ...(replyTo && { replyTo }),
     };
 
-    // Store message, update indexes, and mark txid as redeemed (with TTL)
-    await Promise.all([
-      storeMessage(kv, message),
-      updateAgentInbox(kv, toBtcAddress, messageId, now),
-      kv.put(redeemedKey, messageId, { expirationTtl: REDEEMED_TXID_TTL_SECONDS }),
-      ...(senderAgent
-        ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
-        : []),
-    ]);
-
-    // D1 dual-write (Phase 2.5 Step 1 — reversible scaffolding).
-    // KV is still the source of truth; D1 INSERT is fire-and-forget.
-    // D1 failure is logged-and-swallowed — it must NOT fail the response.
-    if (env.DB) {
-      ctx.waitUntil(
-        insertInboundMessageToD1(env.DB as D1Database, message).catch((err) =>
-          logger.error("inbox.dual_write_d1_failed", {
-            messageId: message.messageId,
-            path: "txid_recovery",
-            error: String(err),
-          })
-        )
+    // D1 is now the sole INSERT path (Phase 2.5 Step 4 — KV writes removed).
+    // D1 INSERT is synchronous and failure-propagating: failure returns 503 +
+    // Retry-After: 5 so the sender retries rather than seeing a phantom 200.
+    // The payment_txid UNIQUE index (idx_inbox_payment_txid) provides permanent
+    // double-redemption prevention — ON CONFLICT on message_id is belt-and-
+    // suspenders for the race where two concurrent requests share the same ID.
+    try {
+      await insertInboundMessageToD1(db, message);
+    } catch (err) {
+      logger.error("inbox.d1_insert_failed", {
+        messageId: message.messageId,
+        path: "txid_recovery",
+        error: String(err),
+      });
+      return NextResponse.json(
+        {
+          error: "Message delivery failed. Please retry shortly.",
+          retryable: true,
+          retryAfter: 5,
+        },
+        { status: 503, headers: { "Retry-After": "5" } }
       );
     }
 
@@ -1417,20 +1427,7 @@ export async function POST(
   const fromAddress = paymentResult.payerStxAddress || "unknown";
   const messageId = `msg_${Date.now()}_${crypto.randomUUID()}`;
 
-  // Guard against (extremely unlikely) server-generated ID collision
-  const existingMessage = await kv.get(`inbox:message:${messageId}`);
-  if (existingMessage) {
-    logger.warn("Duplicate message ID", { messageId });
-    return NextResponse.json(
-      {
-        error: "Message already exists",
-        messageId,
-      },
-      { status: 409 }
-    );
-  }
-
-  // Look up sender agent for BIP-322 verification and sent-index update
+  // Look up sender agent for BIP-322 verification
   const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress) : null;
   const sigResult = verifySenderSignature(senderSignatureInput, content, logger, senderAgent?.btcAddress);
   if (sigResult instanceof NextResponse) return sigResult;
@@ -1549,26 +1546,35 @@ export async function POST(
     }
   }
 
-  await Promise.all([
-    storeMessage(kv, message),
-    updateAgentInbox(kv, toBtcAddress, messageId, now),
-    ...(senderAgent
-      ? [updateSentIndex(kv, senderAgent.btcAddress, messageId, now)]
-      : []),
-  ]);
-
-  // D1 dual-write (Phase 2.5 Step 1 — reversible scaffolding).
-  // KV is still the source of truth; D1 INSERT is fire-and-forget.
-  // D1 failure is logged-and-swallowed — it must NOT fail the response.
-  if (env.DB) {
-    ctx.waitUntil(
-      insertInboundMessageToD1(env.DB as D1Database, message).catch((err) =>
-        logger.error("inbox.dual_write_d1_failed", {
-          messageId: message.messageId,
-          path: "x402_payment",
-          error: String(err),
-        })
-      )
+  // D1 is now the sole INSERT path (Phase 2.5 Step 4 — KV writes removed).
+  // D1 INSERT is synchronous and failure-propagating: on D1 failure return 503
+  // + Retry-After: 5 so the sender retries rather than seeing a phantom 200.
+  if (!db) {
+    logger.error("D1 binding unavailable on x402 delivery path", { messageId });
+    return NextResponse.json(
+      {
+        error: "Message delivery failed. Please retry shortly.",
+        retryable: true,
+        retryAfter: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
+  try {
+    await insertInboundMessageToD1(db, message);
+  } catch (err) {
+    logger.error("inbox.d1_insert_failed", {
+      messageId: message.messageId,
+      path: "x402_payment",
+      error: String(err),
+    });
+    return NextResponse.json(
+      {
+        error: "Message delivery failed. Please retry shortly.",
+        retryable: true,
+        retryAfter: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
     );
   }
 

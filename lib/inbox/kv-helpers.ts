@@ -61,11 +61,6 @@ function buildStagedPaymentKey(paymentId: string): string {
 /**
  * Get an inbox message by ID.
  *
- * @deprecated Read-path usage removed in Phase 2.5 Step 3.5 (#736).
- * All GET and write-path auth reads now use getInboxMessageFromD1 from d1-reads.ts.
- * KV writes (updateMessage) still call this indirectly; Step 4 (#730) will remove
- * those writes and this function once KV is fully sunset.
- *
  * @param kv - Cloudflare KV namespace
  * @param messageId - Message ID
  * @returns InboxMessage or null if not found
@@ -140,12 +135,6 @@ export async function updateMessage(
 
 /**
  * Get an outbox reply by message ID.
- *
- * @deprecated Read-path usage removed in Phase 2.5 Step 3.5 (#736).
- * The duplicate-reply check in POST /api/outbox/[address] now uses
- * getReplyForMessageFromD1 from d1-reads.ts (with tenant-discriminator SQL gate).
- * Step 4 (#730) will remove the KV writes (storeReply) and this function once
- * KV is fully sunset.
  *
  * @param kv - Cloudflare KV namespace
  * @param messageId - Message ID
