@@ -1,18 +1,19 @@
 /**
- * Nightly catch-up cron — walks registered_wallets and re-verifies recent
+ * 15-min catch-up cron — walks registered_wallets and re-verifies recent
  * Hiro tx history. Phase 3.1 PR-D.
  *
- * Each ingestion path converges on the same `swaps` row via INSERT OR IGNORE
- * on `txid`. The cron's job is *defence in depth* against chainhook gaps:
- * if the chainhook controller went down or a predicate missed a firing,
- * the next cron sweep will pick the tx up and persist it.
+ * Pairs with the agent-submit fast path (POST /api/competition/trades):
+ * agent-submit catches everything the agent does (the agent already knows
+ * its own txid); this cron catches everything the fast path missed.
+ * Both converge on the same `swaps` row via INSERT OR IGNORE on `txid` —
+ * first writer wins; second writer is a no-op.
  *
- * Cost shape (handoff caps):
- *   - Max 100 addresses per execution
+ * Cost shape:
+ *   - Max 100 addresses per execution. Tuned for a 15-min cadence: at the
+ *     current ~430 registered wallets, the full list cycles in roughly
+ *     5 runs (~75 min). Single Hiro client, single rate-limit budget.
  *   - Resume from KV cursor `comp:cron:cursor` so subsequent runs continue
- *     where the previous one stopped, walking the whole membership list
- *     across multiple cron firings rather than retrying the same head N
- *     times.
+ *     where the previous one stopped rather than retrying the head N times.
  *
  * Returns a structured summary for the logs:
  *   { scanned, found, inserted, alreadyKnown, rejected, pending, cursor }
