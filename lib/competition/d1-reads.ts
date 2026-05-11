@@ -268,3 +268,48 @@ export async function countSwapsFromD1(
   const row = await db.prepare(sql).bind(stxAddress).first<{ cnt: number }>();
   return row?.cnt ?? 0;
 }
+
+/**
+ * Per-sender breakdown of verified swap counts, split by `source`.
+ *
+ *   - `mcp`: swaps with `source='agent'` — submitted via the AIBTC MCP
+ *     (i.e., POST /api/competition/trades, whose canonical caller is the
+ *     MCP server).
+ *   - `cron`: swaps with `source='cron'` — discovered by the 15-min
+ *     on-chain catch-up sweep that finds trades the agent did but never
+ *     reported through the MCP.
+ *   - `total`: every row in `swaps` for that sender, regardless of source.
+ *
+ * `mcp + cron` may be less than `total` if a future ingestion path (e.g.
+ * chainhook) writes rows with a different source value.
+ *
+ * One round-trip to D1, GROUP BY (sender, source). Used by the /agents
+ * page to render the "MCP Trades" column per agent.
+ */
+export interface TradeCountBreakdown {
+  total: number;
+  mcp: number;
+  cron: number;
+}
+
+interface D1TradeCountRow {
+  sender: string;
+  source: string;
+  cnt: number;
+}
+
+export async function countTradesBySenderAndSource(
+  db: D1Database
+): Promise<Map<string, TradeCountBreakdown>> {
+  const sql = `SELECT sender, source, COUNT(*) AS cnt FROM swaps GROUP BY sender, source`;
+  const result = await db.prepare(sql).all<D1TradeCountRow>();
+  const out = new Map<string, TradeCountBreakdown>();
+  for (const row of result.results ?? []) {
+    const existing = out.get(row.sender) ?? { total: 0, mcp: 0, cron: 0 };
+    existing.total += row.cnt;
+    if (row.source === "agent") existing.mcp += row.cnt;
+    else if (row.source === "cron") existing.cron += row.cnt;
+    out.set(row.sender, existing);
+  }
+  return out;
+}
