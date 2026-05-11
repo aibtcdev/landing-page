@@ -942,6 +942,9 @@ Phase 3.2 scoring (separate sub-issue) and remain \`null\` for unscored rows.
 
 ### Submit Trade
 
+Pre-check that the tx is terminal (the AIBTC MCP server handles this for its
+callers) before submitting:
+
 \`\`\`bash
 curl -X POST https://aibtc.com/api/competition/trades \\
   -H "Content-Type: application/json" \\
@@ -950,17 +953,25 @@ curl -X POST https://aibtc.com/api/competition/trades \\
 
 Response matrix:
 
-- \`200\` — newly verified or idempotent re-submission (first writer wins on \`(txid)\`).
-  Body is the persisted SwapRow.
-- \`202 { accepted: true }\` — tx is pending; re-poll. Pending state is tracked in
-  KV (\`comp:pending:{txid}\`, 30-min TTL), NOT in D1. Repeat polls short-circuit
-  without re-hitting Hiro until the TTL expires or the tx settles.
+- \`200\` — **first-time** verified write. Body is the persisted SwapRow.
+- \`409\` — **already verified**: this txid is already in the swaps table.
+  Body: \`{ error, code: "txid_already_verified", retryable: false, existing_row }\`.
+  The \`existing_row.source\` identifies which ingestion path wrote first
+  (\`agent\` if you / another agent-submit got there first; \`cron\` if the 15-min
+  catch-up beat you). retryable:false — re-POSTing will keep landing here.
+- \`202 { accepted: true, note }\` — fallback for the racy edge case where the
+  caller saw the tx as confirmed but Hiro hasn't propagated it as terminal yet.
+  Should be rare; retry in a few seconds.
 - \`422\` — sender not in registered_wallets, or contract+function not on the
   allowlist, or tx failed terminally / parse failed. Body: \`{ error, code, retryable: false }\`.
 - \`404\` — Hiro could not find the txid.
 - \`429\` — rate limited (20/min per IP). Retry-After header set.
 - \`502\` — Hiro upstream error; retryable.
 - \`503\` — D1 temporarily unavailable; retry per Retry-After header.
+
+The route checks D1 before hitting Hiro — re-submits of an already-verified
+txid resolve to a 409 in a single D1 read (no upstream call, no wasted Hiro
+quota).
 
 ### Cron Catch-Up (operator-only)
 
