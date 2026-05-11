@@ -35,7 +35,6 @@ vi.mock("@/lib/inbox", () => ({
   storeReply: vi.fn(),
   updateMessage: vi.fn(),
   buildReplyMessage: vi.fn(),
-  listInboxMessages: vi.fn(),
   decrementUnreadCount: vi.fn(),
 }));
 
