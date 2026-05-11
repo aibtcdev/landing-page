@@ -14,12 +14,12 @@ import {
   storeReply,
   updateMessage,
   buildReplyMessage,
-  listInboxMessages,
   decrementUnreadCount,
 } from "@/lib/inbox";
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
 import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import { listOutboxRepliesFromD1, countOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -513,20 +513,83 @@ export async function GET(
     );
   }
 
-  // Fetch all messages with replies inline (single call, no N+1)
-  const { replies: replyMap } = await listInboxMessages(
-    kv,
-    agent.btcAddress,
-    100,
-    0,
-    { includeReplies: true }
-  );
+  // ── Phase 2.5 Step 3.3: D1 read flip ──────────────────────────────────────
+  // The GET /api/outbox/[address] path now reads from D1 instead of KV.
+  // KV writes (POST handler) are NOT removed in this PR — that is Step 4.
+  // Security gate: listOutboxRepliesFromD1 filters by from_btc_address = ?
+  // so replies belonging to a different agent are never returned.
+  //
+  // See: https://github.com/aibtcdev/landing-page/issues/728 (Step 3.3 spec)
+  // See: https://github.com/aibtcdev/landing-page/issues/697 (Phase 2.5 umbrella)
 
-  // Collect all replies
-  const validReplies = Array.from(replyMap.values());
+  // Parse query params for pagination.
+  // Validate before binding to D1: non-numeric inputs (e.g. ?limit=abc) must
+  // produce 400, not 503 from a downstream D1 NaN bind throw.
+  const url = new URL(request.url);
+  const limitParam = url.searchParams.get("limit");
+  const offsetParam = url.searchParams.get("offset");
 
-  // If no replies, return self-documenting response
-  if (validReplies.length === 0) {
+  let limit = 20;
+  if (limitParam !== null) {
+    const parsed = Number(limitParam);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+      return NextResponse.json(
+        { error: "invalid_query_param", message: "limit must be an integer between 1 and 100" },
+        { status: 400 }
+      );
+    }
+    limit = parsed;
+  }
+
+  let offset = 0;
+  if (offsetParam !== null) {
+    const parsed = Number(offsetParam);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+      return NextResponse.json(
+        { error: "invalid_query_param", message: "offset must be a non-negative integer" },
+        { status: 400 }
+      );
+    }
+    offset = parsed;
+  }
+
+  const db = env.DB as D1Database | undefined;
+
+  if (!db) {
+    return NextResponse.json(
+      { error: "Database unavailable. Please try again shortly." },
+      { status: 503 }
+    );
+  }
+
+  // D1-throws fallback policy (per #728 / #722 dev-council Cycle 26 advisory):
+  // If D1 throws — transient unavailability, network error, schema mismatch —
+  // return 503 with a structured retry hint rather than an unstructured 500.
+  // totalCount is queried in parallel with the page list so pagination metadata
+  // reflects the full matching row count, not just the current page length.
+  let replies: import("@/lib/inbox/types").OutboxReply[];
+  let totalCount: number;
+  try {
+    [replies, totalCount] = await Promise.all([
+      listOutboxRepliesFromD1(db, agent.btcAddress, limit, offset),
+      countOutboxRepliesFromD1(db, agent.btcAddress),
+    ]);
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Outbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
+
+  // Self-documenting response only when the agent has truly never sent a
+  // reply (totalCount === 0). Out-of-range pages (offset > 0 but the agent
+  // does have history) get the normal envelope with empty `replies` and
+  // accurate pagination so clients can recover.
+  if (totalCount === 0) {
     return NextResponse.json({
       endpoint: "/api/outbox/[address]",
       description: "Replies sent by this agent to incoming inbox messages.",
@@ -537,6 +600,12 @@ export async function GET(
       outbox: {
         replies: [],
         totalCount: 0,
+        pagination: {
+          limit,
+          offset,
+          hasMore: false,
+          nextOffset: null,
+        },
       },
       howToReply: {
         endpoint: `POST /api/outbox/${agent.btcAddress}`,
@@ -555,14 +624,21 @@ export async function GET(
     });
   }
 
+  const hasMore = offset + replies.length < totalCount;
   return NextResponse.json({
     agent: {
       btcAddress: agent.btcAddress,
       displayName: agent.displayName,
     },
     outbox: {
-      replies: validReplies,
-      totalCount: validReplies.length,
+      replies,
+      totalCount,
+      pagination: {
+        limit,
+        offset,
+        hasMore,
+        nextOffset: hasMore ? offset + replies.length : null,
+      },
     },
   });
 }
