@@ -73,18 +73,42 @@ interface TeneroTokenResponse {
 async function fetchTokenPriceUsd(assetId: string): Promise<number | null> {
   const addr = toTeneroAddress(assetId);
   if (!addr) return null;
+  const url = `${TENERO_BASE}/tokens/${encodeURIComponent(addr)}`;
   try {
-    const r = await fetch(`${TENERO_BASE}/tokens/${encodeURIComponent(addr)}`, {
+    const r = await fetch(url, {
       signal: AbortSignal.timeout(FETCH_TIMEOUT_MS),
+      // Tenero accepts unauthenticated requests but seems to gate some
+      // paths on a non-empty User-Agent (their docs site 403s without one
+      // — empirically the API tolerates a default UA, but we set one
+      // explicitly so behaviour is the same regardless of runtime).
+      headers: { "User-Agent": "aibtc-landing-page/1.0 (+https://aibtc.com)" },
     });
-    if (!r.ok) return null;
+    if (!r.ok) {
+      console.warn("competition.volume.tenero_non_ok", {
+        assetId,
+        url,
+        status: r.status,
+      });
+      return null;
+    }
     const body = (await r.json()) as TeneroTokenResponse;
     const raw = body.data?.price_usd;
     const price = typeof raw === "string" ? parseFloat(raw) : raw;
-    return typeof price === "number" && Number.isFinite(price) && price > 0
-      ? price
-      : null;
-  } catch {
+    if (typeof price === "number" && Number.isFinite(price) && price > 0) {
+      return price;
+    }
+    console.warn("competition.volume.tenero_no_price", {
+      assetId,
+      url,
+      raw,
+    });
+    return null;
+  } catch (err) {
+    console.warn("competition.volume.tenero_threw", {
+      assetId,
+      url,
+      error: String(err),
+    });
     return null;
   }
 }
