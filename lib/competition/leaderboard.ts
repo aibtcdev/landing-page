@@ -2,21 +2,26 @@
  * Trading-comp leaderboard snapshot — builder + KV read/write surface.
  *
  * Cron-driven snapshot model (every 30 min):
- *   1. Cron route /api/competition/leaderboard/refresh fires.
- *   2. Refresh prices for every token in TOKEN_DECIMALS (Tenero + CoinGecko).
- *   3. SELECT every success swap from D1 + JOIN agents for display names.
- *   4. Aggregate to per-agent rows: trade_count + USD volume + P/L.
+ *   1. Cron route /api/competition/leaderboard/refresh fires (or the
+ *      Worker's scheduled() handler).
+ *   2. SELECT every success swap from D1 + JOIN agents for display names.
+ *   3. Determine [fromTs, toTs] = [earliest burn_block_time, now] and
+ *      refresh Tenero OHLC histories for every token in REFRESHABLE_ASSET_IDS
+ *      that overlaps with the window.
+ *   4. Aggregate to per-agent rows using historical price-at-burn_block_time
+ *      lookups: trade_count + USD volume + true historical P/L.
  *   5. Sort by pnl_usd desc → trade_count desc → first_trade_at asc.
  *   6. Write the snapshot to `cache:leaderboard:score`.
  *
  * Read path (/api/leaderboard/score):
  *   - 1 KV read for the snapshot. Returns whatever the last cron wrote.
  *   - Empty snapshot (cron hasn't run yet OR returned 0 rows) → `{ rows: [], cachedAt: null }`.
- *   - UI shows the snapshot's `cachedAt` prominently so users know the freshness.
+ *   - UI shows the snapshot's `cachedAt` prominently so users know freshness.
  *
  * Why snapshot vs. per-request compute:
  *   - Predictable read latency (no D1 aggregation per request).
- *   - Predictable Tenero/CoinGecko cost (12 cron ticks/hour × ~10 tokens, not request-scaled).
+ *   - Predictable Tenero OHLC cost (2 cron ticks/hour × ~N tokens, not
+ *     request-scaled).
  *   - Same pattern @whoabuddy approved on PR #651's portfolio snapshot.
  */
 
@@ -26,8 +31,8 @@ import {
   type SwapWithAgent,
 } from "./d1-reads";
 import {
-  refreshAllPrices,
-  getCachedTokenPricesUsd,
+  refreshAllHistories,
+  getCachedHistories,
   type RefreshSummary,
 } from "./prices";
 import { aggregateLeaderboard } from "./pnl";
@@ -50,6 +55,13 @@ export const LEADERBOARD_SNAPSHOT_TTL_SECONDS = 2 * 60 * 60;
  * in sync.
  */
 export const LEADERBOARD_REFRESH_INTERVAL_SECONDS = 30 * 60;
+
+/**
+ * Fallback `fromTs` for the OHLC fetch window when there are no swaps
+ * yet (or the earliest swap is impossibly recent). 30 days back at 1h
+ * candles = 720 candles — comfortably under Tenero's 1000-candle limit.
+ */
+export const PRICE_HISTORY_DEFAULT_LOOKBACK_SECONDS = 30 * 24 * 60 * 60;
 
 /**
  * Per-agent row that goes into the snapshot. Mirrors pnl.ts's
@@ -83,46 +95,59 @@ export interface LeaderboardSnapshot {
     total_agents: number;
     priced_swap_count: number;
     unpriced_swap_count: number;
+    /** Window the OHLC fetch covered, as unix-seconds. */
+    price_window_from: number;
+    price_window_to: number;
     refresh: RefreshSummary;
   };
 }
 
 /**
- * Build the leaderboard snapshot. Called by the cron route — fetches
- * everything needed (prices + swaps), aggregates, and produces a
- * ready-to-serve snapshot.
+ * Build the leaderboard snapshot. Called by the cron path — fetches
+ * everything needed (swaps + per-token OHLC histories), aggregates with
+ * historical-price-at-burn_block_time, and produces a ready-to-serve
+ * snapshot.
  *
- * Does NOT write to KV — callers (the cron route) are responsible for the
+ * Does NOT write to KV — callers (the cron path) are responsible for the
  * write so this function stays pure-ish (only reads + computes).
  */
 export async function buildLeaderboardSnapshot(
   env: { DB: D1Database; VERIFIED_AGENTS: KVNamespace },
   logger?: Logger
 ): Promise<LeaderboardSnapshot> {
-  // 1. Refresh prices (cron path: hits Tenero + CoinGecko, writes KV).
-  //    This happens BEFORE the swap read so by the time we aggregate, the
-  //    cached prices are fresh.
-  const refresh = await refreshAllPrices(env.VERIFIED_AGENTS, logger);
-
-  // 2. Pull every success swap + agent display columns from D1.
+  // 1. Pull every success swap + agent display columns from D1.
   const swaps: SwapWithAgent[] = await listSuccessSwapsWithAgentFromD1(env.DB);
 
-  // 3. Collect every distinct token id and read its (just-refreshed) price.
+  // 2. Compute the OHLC fetch window. Earliest swap → now, with a
+  //    floor of "last 30 days" so the first refresh after deploy still
+  //    has data even when D1 is empty.
+  const nowTs = Math.floor(Date.now() / 1000);
+  const earliestSwapTs = swaps.length > 0
+    ? Math.min(...swaps.map((s) => s.burn_block_time))
+    : nowTs - PRICE_HISTORY_DEFAULT_LOOKBACK_SECONDS;
+  const fromTs = Math.min(earliestSwapTs, nowTs - PRICE_HISTORY_DEFAULT_LOOKBACK_SECONDS);
+
+  // 3. Refresh price histories (cron path: hits Tenero OHLC, writes KV).
+  const refresh = await refreshAllHistories(env.VERIFIED_AGENTS, fromTs, nowTs, logger);
+
+  // 4. Read the refreshed histories back for every distinct token that
+  //    appears in the swaps. We refresh ALL tokens in REFRESHABLE_ASSET_IDS
+  //    (above) so this read is just picking up what's relevant.
   const tokenIds = new Set<string>();
   for (const s of swaps) {
     tokenIds.add(s.token_in);
     tokenIds.add(s.token_out);
   }
-  const prices = await getCachedTokenPricesUsd(
+  const histories = await getCachedHistories(
     env.VERIFIED_AGENTS,
     Array.from(tokenIds),
     logger
   );
 
-  // 4. Aggregate by sender + sort.
-  const agentRows = aggregateLeaderboard(swaps, prices);
+  // 5. Aggregate by sender + sort.
+  const agentRows = aggregateLeaderboard(swaps, histories);
 
-  // 5. Stitch display columns from the JOINed swap rows back onto the
+  // 6. Stitch display columns from the JOINed swap rows back onto the
   //    per-sender aggregate. Each sender appears multiple times in `swaps`
   //    but the display fields are agent-scoped, so the first hit per
   //    sender is canonical.
@@ -182,6 +207,8 @@ export async function buildLeaderboardSnapshot(
       total_agents: rows.length,
       priced_swap_count: pricedCount,
       unpriced_swap_count: unpricedCount,
+      price_window_from: fromTs,
+      price_window_to: nowTs,
       refresh,
     },
   };
