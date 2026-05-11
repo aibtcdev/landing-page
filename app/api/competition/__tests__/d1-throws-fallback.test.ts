@@ -39,7 +39,7 @@ vi.mock("@/lib/competition/d1-reads", () => ({
 // ---- imports after mocks ----------------------------------------------------
 
 import { GET as statusGet } from "../status/route";
-import { GET as tradesGet, POST as tradesPost } from "../trades/route";
+import { GET as tradesGet } from "../trades/route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   getCompetitionStatusFromD1,
@@ -152,15 +152,10 @@ describe("Phase 3.1 PR-A — D1-throws fallback policy (trades)", () => {
   });
 });
 
-describe("Phase 3.1 PR-A — POST /api/competition/trades is reserved (501)", () => {
-  it("returns 501 with a not_implemented body so callers know the verifier ships in PR-B", async () => {
-    const res = await tradesPost();
-    expect(res.status).toBe(501);
-    const body = await res.json();
-    expect(body).toMatchObject({ error: "not_implemented" });
-    expect(body.message).toMatch(/PR-B/);
-  });
-});
+// POST /api/competition/trades is exercised in detail by post-verifier.test.ts
+// (Phase 3.1 PR-B). The fallback-policy guarantee for that POST is asserted
+// there because it has different upstream dependencies (Hiro fetch + D1) than
+// the GET path.
 
 describe("Phase 3.1 PR-A — input validation (400)", () => {
   it("status returns 400 on missing address", async () => {
