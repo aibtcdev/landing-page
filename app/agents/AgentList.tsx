@@ -19,9 +19,24 @@ type Agent = AgentRecord & {
   unreadCount?: number;
   reputationScore?: number;
   reputationCount?: number;
+  /** Total verified swaps for this agent (SSR from D1). */
+  tradeCount?: number;
+  /** Trades submitted via the AIBTC MCP path (source='agent'). */
+  mcpTradeCount?: number;
+  /** Trades discovered by the on-chain catch-up sweep (source='cron'). */
+  cronTradeCount?: number;
+  /** Current USD wallet value from Tenero — populated client-side. */
+  portfolioUsd?: number | null;
 };
 
-type SortField = "level" | "reputation" | "joined" | "activity" | "messages";
+type SortField =
+  | "level"
+  | "reputation"
+  | "joined"
+  | "activity"
+  | "messages"
+  | "trades"
+  | "portfolio";
 type SortOrder = "asc" | "desc";
 interface AgentListProps {
   agents: Agent[];
@@ -94,6 +109,72 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
   return reputationMap;
 }
 
+/**
+ * Fetch each agent's current USD wallet value client-side. Mirrors the
+ * reputation pattern: N parallel fetches with a concurrency cap, results
+ * trickle into the rendered table as they resolve.
+ *
+ * `null` distinguishes "fetched, Tenero says no holdings or upstream
+ * unavailable" (render `—`) from "not yet fetched" (entry not in map).
+ */
+function usePortfolioData(agents: Agent[]): Map<string, number | null> {
+  const [portfolioMap, setPortfolioMap] = useState<Map<string, number | null>>(new Map());
+
+  // Stable identity key over stxAddress list — re-fetch only when the
+  // set of agents actually changes.
+  const stxAddresses = useMemo(
+    () => agents.map((a) => a.stxAddress).sort(),
+    [agents]
+  );
+
+  useEffect(() => {
+    if (stxAddresses.length === 0) return;
+
+    const controller = new AbortController();
+    const MAX_CONCURRENT = 5;
+    const results: { stx: string; portfolioUsd: number | null }[] = [];
+    let cursor = 0;
+
+    async function worker() {
+      while (!controller.signal.aborted) {
+        const i = cursor++;
+        if (i >= stxAddresses.length) break;
+        const stx = stxAddresses[i];
+        try {
+          const r = await fetch(
+            `/api/agents/${encodeURIComponent(stx)}/portfolio`,
+            { signal: controller.signal }
+          );
+          if (!r.ok) continue;
+          const body = (await r.json()) as {
+            portfolio?: { total_value_usd?: number | null };
+          };
+          results.push({
+            stx,
+            portfolioUsd: body.portfolio?.total_value_usd ?? null,
+          });
+        } catch {
+          // Aborts and transient errors both land here; skip.
+        }
+      }
+    }
+
+    const workerCount = Math.min(MAX_CONCURRENT, stxAddresses.length);
+    Promise.all(Array.from({ length: workerCount }, () => worker())).then(() => {
+      if (controller.signal.aborted) return;
+      const map = new Map<string, number | null>();
+      for (const r of results) map.set(r.stx, r.portfolioUsd);
+      setPortfolioMap(map);
+    });
+
+    return () => {
+      controller.abort();
+    };
+  }, [stxAddresses]);
+
+  return portfolioMap;
+}
+
 function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
   if (!active) return null;
   return (
@@ -125,18 +206,25 @@ export default function AgentList({ agents }: AgentListProps) {
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
 
-  // Fetch reputation data client-side to avoid blocking SSR
+  // Fetch reputation + portfolio data client-side to avoid blocking SSR
   const reputationMap = useReputationData(agents);
+  const portfolioMap = usePortfolioData(agents);
 
-  // Merge reputation data into agents
+  // Merge reputation + portfolio data into agents
   const enrichedAgents = useMemo(() => {
-    if (reputationMap.size === 0) return agents;
+    if (reputationMap.size === 0 && portfolioMap.size === 0) return agents;
     return agents.map((agent) => {
       const rep = reputationMap.get(agent.btcAddress);
-      if (!rep) return agent;
-      return { ...agent, reputationScore: rep.score, reputationCount: rep.count };
+      const portfolioUsd = portfolioMap.has(agent.stxAddress)
+        ? portfolioMap.get(agent.stxAddress) ?? null
+        : undefined; // undefined means "not yet fetched"
+      return {
+        ...agent,
+        ...(rep ? { reputationScore: rep.score, reputationCount: rep.count } : {}),
+        ...(portfolioUsd !== undefined ? { portfolioUsd } : {}),
+      };
     });
-  }, [agents, reputationMap]);
+  }, [agents, reputationMap, portfolioMap]);
 
   // Network stats computed from all agents (not filtered)
   const networkStats = useMemo(() => {
@@ -194,6 +282,18 @@ export default function AgentList({ agents }: AgentListProps) {
         comparison = bTime - aTime;
       } else if (sortBy === "messages") {
         comparison = (b.messageCount ?? 0) - (a.messageCount ?? 0);
+      } else if (sortBy === "trades") {
+        // Sort by MCP-submitted trade count primarily; fall back to total
+        // so agents whose trades all came via the catch-up cron still rank
+        // sensibly when MCP counts tie.
+        comparison = (b.mcpTradeCount ?? 0) - (a.mcpTradeCount ?? 0);
+        if (comparison === 0) {
+          comparison = (b.tradeCount ?? 0) - (a.tradeCount ?? 0);
+        }
+      } else if (sortBy === "portfolio") {
+        // null = not yet fetched; treat as 0 so they sink to the bottom
+        // when sorting desc rather than poisoning the comparator.
+        comparison = (b.portfolioUsd ?? 0) - (a.portfolioUsd ?? 0);
       }
 
       return sortOrder === "asc" ? -comparison : comparison;
@@ -358,6 +458,28 @@ export default function AgentList({ agents }: AgentListProps) {
                 </Tooltip>
               </th>
               <th
+                className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
+                onClick={() => handleSort("trades")}
+              >
+                <Tooltip text="Verified swaps. The first number is the count submitted via the AIBTC MCP; the second is the total (MCP + cron-discovered).">
+                  <div className="inline-flex items-center gap-1.5">
+                    MCP Trades
+                    <SortIcon active={sortBy === "trades"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
+              <th
+                className="cursor-pointer px-2.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
+                onClick={() => handleSort("portfolio")}
+              >
+                <Tooltip text="Current USD wallet value from Tenero (native STX + SIP-10 tokens). Loads after the page mounts.">
+                  <div className="inline-flex items-center gap-1.5">
+                    Portfolio
+                    <SortIcon active={sortBy === "portfolio"} order={sortOrder} />
+                  </div>
+                </Tooltip>
+              </th>
+              <th
                 className="cursor-pointer px-2.5 py-3 text-right text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
                 onClick={() => handleSort("joined")}
               >
@@ -436,6 +558,38 @@ export default function AgentList({ agents }: AgentListProps) {
                         ? agent.messageCount.toLocaleString()
                         : "-"}
                     </span>
+                  </td>
+                  <td className="px-2.5 py-3 text-center whitespace-nowrap">
+                    {(agent.tradeCount ?? 0) > 0 ? (
+                      <Tooltip
+                        text={`${agent.mcpTradeCount ?? 0} submitted via MCP, ${agent.cronTradeCount ?? 0} discovered on-chain (${agent.tradeCount} total).`}
+                      >
+                        <span className="text-[13px] font-medium text-white/70">
+                          <span className="text-[#F7931A]">{agent.mcpTradeCount ?? 0}</span>
+                          <span className="text-white/30"> / {agent.tradeCount}</span>
+                        </span>
+                      </Tooltip>
+                    ) : (
+                      <span className="text-[13px] text-white/20">&mdash;</span>
+                    )}
+                  </td>
+                  <td className="px-2.5 py-3 text-right whitespace-nowrap">
+                    {agent.portfolioUsd === undefined ? (
+                      <span className="text-[13px] text-white/20">&hellip;</span>
+                    ) : agent.portfolioUsd != null && agent.portfolioUsd > 0 ? (
+                      <span className="text-[13px] font-medium text-white/70">
+                        ${agent.portfolioUsd < 10_000
+                          ? agent.portfolioUsd.toLocaleString("en-US", {
+                              minimumFractionDigits: 2,
+                              maximumFractionDigits: 2,
+                            })
+                          : agent.portfolioUsd.toLocaleString("en-US", {
+                              maximumFractionDigits: 0,
+                            })}
+                      </span>
+                    ) : (
+                      <span className="text-[13px] text-white/20">&mdash;</span>
+                    )}
                   </td>
                   <td className="px-2.5 py-3 text-right whitespace-nowrap">
                     <span className="text-[13px] text-white/50">{formatShortDate(agent.verifiedAt)}</span>
@@ -523,6 +677,20 @@ export default function AgentList({ agents }: AgentListProps) {
                           <path strokeLinecap="round" strokeLinejoin="round" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z" />
                         </svg>
                         {agent.messageCount}
+                      </span>
+                    )}
+                    {(agent.tradeCount ?? 0) > 0 && (
+                      <span className="inline-flex items-center gap-1 text-white/40">
+                        <span className="text-[#F7931A]">{agent.mcpTradeCount ?? 0}</span>
+                        <span className="text-white/30">/{agent.tradeCount}</span>
+                        <span className="text-white/30">trades</span>
+                      </span>
+                    )}
+                    {agent.portfolioUsd != null && agent.portfolioUsd > 0 && (
+                      <span className="inline-flex items-center gap-1 text-white/60">
+                        ${agent.portfolioUsd < 10_000
+                          ? agent.portfolioUsd.toLocaleString("en-US", { maximumFractionDigits: 2 })
+                          : agent.portfolioUsd.toLocaleString("en-US", { maximumFractionDigits: 0 })}
                       </span>
                     )}
                   </div>
