@@ -178,6 +178,55 @@ describe("verifyAndPersistSwap — pending tx", () => {
   });
 });
 
+describe("verifyAndPersistSwap — success-only gate (whoabuddy's spec)", () => {
+  // Migration 005 allows 8 terminal tx_status values in `swaps`. The comp
+  // only counts `success`; non-success terminals (abort_by_*, dropped_*)
+  // are rejected with `tx_failed` BEFORE we hit the sender / allowlist /
+  // parse stages, so no row is written for failed swaps.
+  it.each([
+    ["abort_by_response"],
+    ["abort_by_post_condition"],
+    ["dropped_replace_by_fee"],
+    ["dropped_replace_across_fork"],
+    ["dropped_too_expensive"],
+    ["dropped_stale_garbage_collect"],
+    ["dropped_problematic"],
+  ])("rejects tx_status=%s with code 'tx_failed' (no row written)", async (status) => {
+    const failedTx = { ...buildHappyTx(), tx_status: status };
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(failedTx));
+    const db = buildD1Mock({ registered: true, insertChanges: 1 });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") return;
+    expect(result.code).toBe("tx_failed");
+    expect(result.reason).toContain(status);
+  });
+
+  it("rejects BEFORE sender/allowlist checks (cheap fail-fast)", async () => {
+    // Even with an unregistered sender + off-allowlist contract, a failed
+    // tx_status should short-circuit to tx_failed first — proves the gate
+    // runs before downstream DB work.
+    const failedTx = {
+      ...buildHappyTx(),
+      tx_status: "abort_by_post_condition",
+      sender_address: "SP000000000000000000",
+      contract_call: {
+        contract_id: "SP00000.not-on-allowlist",
+        function_name: "swap-x",
+        function_args: [],
+      },
+    };
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(failedTx));
+    const db = buildD1Mock({ registered: false });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") return;
+    expect(result.code).toBe("tx_failed");
+    // NOT sender_not_registered or contract_not_allowlisted — tx_failed
+    // wins the race.
+  });
+});
+
 describe("verifyAndPersistSwap — sender + allowlist gates", () => {
   it("rejects with sender_not_registered when sender is missing from registered_wallets", async () => {
     (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(buildHappyTx()));
