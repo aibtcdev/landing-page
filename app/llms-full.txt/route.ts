@@ -868,16 +868,17 @@ See /api/openapi.json for complete response schemas.
 
 ## Trading Competition
 
-Verifier surface for the AIBTC trading competition. Two read routes are live now
-(Phase 3.1 PR-A); the POST verifier (single-txid Hiro fetch + INSERT OR IGNORE)
-lands in Phase 3.1 PR-B. See issue #734 for the full plan; RFC under
-\`docs/rfc-d1-schema.md\` §swaps.
+Verifier surface for the AIBTC trading competition. Read + write routes are live
+(Phase 3.1). See issue #734 for the full plan; RFC under \`docs/rfc-d1-schema.md\` §swaps.
 
 Data model: swaps are persisted to a D1 \`swaps\` table on terminal status only.
-Pending/in-flight swaps are NOT stored (migration 005 forbids it). All ingestion
-paths — agent-submit, nightly cron, real-time chainhook — converge on the same
-row via INSERT OR IGNORE on \`txid\`. The \`source\` column records who got there
-first. Mainnet-only in v1; no \`network\` parameter.
+Pending/in-flight swaps are NOT stored (migration 005 forbids it). Two ingestion
+paths converge on the same row via INSERT OR IGNORE on \`txid\`: agent-submit
+(POST /api/competition/trades) and the 15-min catch-up cron. The \`source\` column
+records who got there first. A third value \`'chainhook'\` is reserved in the enum
+for a future real-time stream if/when product surfaces require sub-minute
+freshness (current cadence is plenty for hourly leaderboards). Mainnet-only in
+v1; no \`network\` parameter.
 
 ### Comp Status
 
@@ -961,32 +962,23 @@ Response matrix:
 - \`502\` — Hiro upstream error; retryable.
 - \`503\` — D1 temporarily unavailable; retry per Retry-After header.
 
-### Chainhook Ingestion (operator-only)
-
-\`POST /api/competition/chainhook\` receives Hiro chainhook predicate firings.
-HMAC-authenticated via \`CHAINHOOK_SECRET\` (header \`X-Chainhook-Signature\` or
-\`Authorization: Bearer {hex}\`). Iterates \`apply\` and submits each tx with
-\`source='chainhook'\`. Rollback entries are ignored — the verifier persists
-only terminal-status rows; a rolled-back tx simply never replays, and the
-historical row stays in \`swaps\` as audit.
-
-Response is the ingestion summary: \`{ processed, inserted, alreadyKnown, rejected, pending }\`.
-
 ### Cron Catch-Up (operator-only)
 
-\`POST /api/competition/cron\` runs the nightly catch-up sweep. Walks
+\`POST /api/competition/cron\` runs the 15-min catch-up sweep. Walks
 \`registered_wallets\` (100 addresses per run, resumes via \`comp:cron:cursor\` KV
 key), fetches each address's recent Hiro tx history, filters by allowlist, and
 submits matches with \`source='cron'\`. Shared-secret authenticated via
-\`X-Cron-Secret\`. Defence in depth against chainhook gaps.
+\`X-Cron-Secret\`. Picks up anything the agent-submit fast path missed within a
+quarter hour of confirmation.
 
 Response: \`{ scanned, found, inserted, alreadyKnown, pending, rejected, cursor }\`.
 
 ### Schema Notes
 
-- \`source\` enum: \`'agent' | 'cron' | 'chainhook'\`. The three values track which
-  ingestion path wrote the row first; idempotent re-submission from a different
-  source does NOT overwrite \`source\`.
+- \`source\` enum: \`'agent' | 'cron' | 'chainhook'\`. \`'agent'\` and \`'cron'\` are
+  written today; \`'chainhook'\` is reserved for a future real-time path (no
+  receiver route in Phase 3.1 — the schema slot stays so we don't migrate later).
+  Idempotent re-submission from a different source does NOT overwrite \`source\`.
 - \`tx_status\` includes all terminal Stacks tx statuses (success +
   abort/dropped variants). Pending swaps don't get rows.
 - Field names mirror the migration (\`sender\`, \`token_in\`, \`amount_in\`,
