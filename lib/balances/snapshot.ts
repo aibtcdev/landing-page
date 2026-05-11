@@ -44,8 +44,23 @@ export interface DashboardSnapshot {
 
 type WaitUntil = (promise: Promise<unknown>) => void;
 
-const COLD_MISS_POLL_MS = 1500;
-const COLD_MISS_POLL_INTERVAL_MS = 150;
+/**
+ * Budget for a cold-miss caller to wait for an in-flight rebuild before
+ * giving up and starting its own.
+ *
+ * Cold rebuilds at ~568 Genesis agents have been measured at ~457s. With a
+ * 1.5s budget, every concurrent cold-miss caller fell through and started a
+ * duplicate rebuild (own nit on PR #651). 30s lets concurrent cold-miss
+ * callers piggyback on the in-flight rebuild for nearly all real-world
+ * arrival patterns — Workers route handlers have a 30s wall-clock budget,
+ * so this is also the maximum a single request can usefully wait.
+ *
+ * The 30s poll only fires on a true cold miss with another rebuild already
+ * in flight; warm/stale paths still return immediately and trigger a
+ * `waitUntil` background rebuild.
+ */
+const COLD_MISS_POLL_MS = 30_000;
+const COLD_MISS_POLL_INTERVAL_MS = 500;
 
 function isFresh(snapshot: DashboardSnapshot): boolean {
   const cachedAt = Date.parse(snapshot.cachedAt);
