@@ -1,45 +1,51 @@
 /**
  * P/L calculation for the trading-comp leaderboard.
  *
- * Pure functions — takes already-fetched swap rows + a price map, produces
- * per-trade P/L and per-agent aggregates. No I/O. The route layer is
- * responsible for fetching prices (lib/competition/prices.ts) and swap rows
+ * Pure functions — takes already-fetched swap rows + a price-history map,
+ * produces per-trade P/L and per-agent aggregates. No I/O. The route
+ * layer fetches histories (lib/competition/prices.ts) and swap rows
  * (lib/competition/d1-reads.ts) before calling this.
  *
- * Current-price model: each trade's P/L is computed against today's USD
- * prices for token_in and token_out, NOT the prices that prevailed at
- * burn_block_time. This is the v1 spec per @secret-mars's PR #651 comment;
- * true historical P/L requires a prices(token_id, captured_at) D1 table
- * (Phase 3.2 territory).
+ * Historical-price model: each trade's P/L is computed against the USD
+ * price that prevailed at the trade's `burn_block_time` (looked up via
+ * the OHLC bucket containing that timestamp). This is the v2 of the
+ * leaderboard — Tenero exposes historical OHLC for free, so we don't
+ * need to settle for "today's prices × historical amounts."
  *
- * Trades with a missing price on either leg are EXCLUDED from the pnl_usd
- * total (skipped, not treated as zero) but still contribute to trade_count.
- * This keeps the leaderboard honest: an unpriced leg is missing data, not
- * a real economic zero. Surfacing both numbers (with + without unpriced
- * trades) lets reviewers spot when coverage matters.
+ * Trades with a missing price on either leg (no OHLC candle for that
+ * bucket, or the token isn't in TOKEN_DECIMALS) are EXCLUDED from the
+ * pnl_usd total but still contribute to trade_count. This keeps the
+ * leaderboard honest: an unpriced leg is missing data, not a real
+ * economic zero. Surfacing both numbers (with + without unpriced trades)
+ * lets reviewers spot when coverage matters.
  */
 
 import { decimalsFor } from "./decimals";
+import { priceAt, type PriceHistory } from "./prices";
 import type { SwapRow } from "./d1-reads";
 
+/** Lookup signature the aggregator uses for per-token price resolution. */
+export type PriceHistoryMap = ReadonlyMap<string, PriceHistory | null>;
+
 /**
- * Single-trade P/L computation. Returns null when either price is missing
- * so the aggregator can skip it from the total without imputing zero.
+ * Single-trade P/L computation. Returns null prices when either leg is
+ * missing so the aggregator can skip it from the total without imputing
+ * zero.
  */
 export interface TradePnl {
-  /** Persisted swap row that this P/L was computed for. */
   row: SwapRow;
-  /** USD value of what the agent put in (amount_in × price_in). */
+  /** USD value of what the agent put in at burn_block_time. */
   inUsd: number | null;
-  /** USD value of what the agent got out (amount_out × price_out). */
+  /** USD value of what the agent got out at burn_block_time. */
   outUsd: number | null;
   /** outUsd − inUsd. Null when either leg is unpriced. */
   pnlUsd: number | null;
 }
 
 /**
- * Convert a raw on-chain integer amount to USD given prices and the
- * known-decimals map. Returns null when the price is null.
+ * Convert a raw on-chain integer amount to USD given the price at that
+ * timestamp and the known-decimals map. Returns null when the price is
+ * null (no candle for that bucket / unknown token).
  */
 function legUsd(rawAmount: number, assetId: string, priceUsd: number | null): number | null {
   if (priceUsd == null) return null;
@@ -49,15 +55,16 @@ function legUsd(rawAmount: number, assetId: string, priceUsd: number | null): nu
 }
 
 /**
- * Compute USD P/L for a single swap. Both legs use TODAY's prices
- * (current-price model). Pricing for a leg may be null — see module docstring.
+ * Compute USD P/L for a single swap. Both legs use the OHLC close for
+ * the bucket containing `burn_block_time` — true historical P/L.
+ * Pricing for a leg may be null — see module docstring.
  */
 export function computeTradePnl(
   row: SwapRow,
-  prices: ReadonlyMap<string, number | null>
+  histories: PriceHistoryMap
 ): TradePnl {
-  const priceIn = prices.get(row.token_in) ?? null;
-  const priceOut = prices.get(row.token_out) ?? null;
+  const priceIn = priceAt(histories.get(row.token_in) ?? null, row.burn_block_time);
+  const priceOut = priceAt(histories.get(row.token_out) ?? null, row.burn_block_time);
   const inUsd = legUsd(row.amount_in, row.token_in, priceIn);
   const outUsd = legUsd(row.amount_out, row.token_out, priceOut);
   const pnlUsd = inUsd != null && outUsd != null ? outUsd - inUsd : null;
@@ -74,11 +81,11 @@ export interface AgentScoreRow {
   trade_count: number;
   /** Trades whose P/L is fully computable (both legs priced). */
   priced_trade_count: number;
-  /** Trades skipped because one or both legs had no price. */
+  /** Trades skipped because one or both legs had no historical price. */
   unpriced_trade_count: number;
-  /** Sum of priced trades' inUsd. */
+  /** Sum of priced trades' inUsd (at burn_block_time). */
   volume_in_usd: number;
-  /** Sum of priced trades' outUsd. */
+  /** Sum of priced trades' outUsd (at burn_block_time). */
   volume_out_usd: number;
   /** outUsd − inUsd summed across priced trades. */
   pnl_usd: number;
@@ -88,17 +95,15 @@ export interface AgentScoreRow {
 
 /**
  * Group success swaps by sender, compute per-trade USD P/L using the
- * provided prices map, and return ranked agent rows.
+ * provided per-token price histories, and return ranked agent rows.
  *
  * Sort: pnl_usd desc → trade_count desc → first_trade_at asc.
  */
 export function aggregateLeaderboard(
   rows: readonly SwapRow[],
-  prices: ReadonlyMap<string, number | null>
+  histories: PriceHistoryMap
 ): AgentScoreRow[] {
-  // Pre-compute per-trade P/L once so the per-agent loop is purely
-  // additive (no double price lookups).
-  const tradePnls = rows.map((row) => computeTradePnl(row, prices));
+  const tradePnls = rows.map((row) => computeTradePnl(row, histories));
 
   const bySender = new Map<string, AgentScoreRow>();
   for (const t of tradePnls) {
