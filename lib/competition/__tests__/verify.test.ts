@@ -58,7 +58,7 @@ function buildHappyTx() {
     events: [
       {
         event_index: 0,
-        event_type: "stx_transfer_event",
+        event_type: "stx_asset",
         asset: { asset_event_type: "transfer", sender: AGENT, recipient: POOL, amount: "1000000" },
       },
       {
