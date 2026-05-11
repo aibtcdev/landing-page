@@ -323,8 +323,8 @@ describe("POST /api/inbox/[address] — D1 sole-source-of-truth (Phase 2.5 Step 
     expect(resp.status).toBe(503);
     expect(resp.headers.get("Retry-After")).toBe("5");
     const body = await resp.json();
-    expect(body.retryable).toBe(true);
-    expect(body.retryAfter).toBe(5);
+    expect(body.error).toBe("transient_d1_unavailable");
+    expect(body.retry_after).toBe(5);
   });
 
   it("missing DB binding returns 503 (D1 is required — no fallback)", async () => {
@@ -485,8 +485,8 @@ describe("POST /api/outbox/[address] — D1 sole-source-of-truth (Phase 2.5 Step
     expect(resp.status).toBe(503);
     expect(resp.headers.get("Retry-After")).toBe("5");
     const body = await resp.json();
-    expect(body.retryable).toBe(true);
-    expect(body.retryAfter).toBe(5);
+    expect(body.error).toBe("transient_d1_unavailable");
+    expect(body.retry_after).toBe(5);
   });
 
   it("D1 INSERT is called with correct reply shape (messageId = parent message ID)", async () => {

@@ -921,9 +921,9 @@ export async function POST(
     if (!db) {
       return NextResponse.json(
         {
-          error: "Database unavailable. Please try again shortly.",
-          retryable: true,
-          retryAfter: 5,
+          error: "transient_d1_unavailable",
+          message: "Inbox database temporarily unavailable. Please retry shortly.",
+          retry_after: 5,
         },
         { status: 503, headers: { "Retry-After": "5" } }
       );
@@ -935,9 +935,9 @@ export async function POST(
       logger.error("D1 redeemed-txid check failed", { txid: paymentTxid, error: String(e) });
       return NextResponse.json(
         {
-          error: "Database unavailable. Please try again shortly.",
-          retryable: true,
-          retryAfter: 5,
+          error: "transient_d1_unavailable",
+          message: "Inbox database temporarily unavailable. Please retry shortly.",
+          retry_after: 5,
         },
         { status: 503, headers: { "Retry-After": "5" } }
       );
@@ -1126,9 +1126,9 @@ export async function POST(
       });
       return NextResponse.json(
         {
-          error: "Message delivery failed. Please retry shortly.",
-          retryable: true,
-          retryAfter: 5,
+          error: "transient_d1_unavailable",
+          message: "Message delivery failed. Please retry shortly.",
+          retry_after: 5,
         },
         { status: 503, headers: { "Retry-After": "5" } }
       );
@@ -1634,9 +1634,9 @@ export async function POST(
     logger.error("D1 binding unavailable on x402 delivery path", { messageId });
     return NextResponse.json(
       {
-        error: "Message delivery failed. Please retry shortly.",
-        retryable: true,
-        retryAfter: 5,
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
       },
       { status: 503, headers: { "Retry-After": "5" } }
     );
@@ -1661,9 +1661,9 @@ export async function POST(
     });
     return NextResponse.json(
       {
-        error: "Message delivery failed. Please retry shortly.",
-        retryable: true,
-        retryAfter: 5,
+        error: "transient_d1_unavailable",
+        message: "Message delivery failed. Please retry shortly.",
+        retry_after: 5,
       },
       { status: 503, headers: { "Retry-After": "5" } }
     );

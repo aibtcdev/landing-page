@@ -307,9 +307,9 @@ export async function PATCH(
     });
     return NextResponse.json(
       {
-        error: "Mark-read failed. Please retry shortly.",
-        retryable: true,
-        retryAfter: 5,
+        error: "transient_d1_unavailable",
+        message: "Mark-read failed. Please retry shortly.",
+        retry_after: 5,
       },
       { status: 503, headers: { "Retry-After": "5" } }
     );
