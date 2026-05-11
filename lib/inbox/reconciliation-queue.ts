@@ -116,6 +116,12 @@ export async function enqueueInboxReconciliation(
 
 export interface InboxQueueProcessorEnv {
   VERIFIED_AGENTS: KVNamespace;
+  /**
+   * D1 binding required for finalizing confirmed payments (#760). Absence
+   * surfaces as an explicit Error so the queue retries rather than silently
+   * dropping the payment via the legacy KV path.
+   */
+  DB?: D1Database;
   X402_RELAY?: RelayRPC;
   INBOX_RECONCILIATION_QUEUE?: Queue<InboxReconciliationQueueMessage>;
 }
@@ -129,6 +135,11 @@ export async function processInboxReconciliationQueue(
   const rpc = env.X402_RELAY;
   if (!rpc) {
     throw new Error("INBOX_RECONCILIATION_QUEUE requires X402_RELAY binding");
+  }
+
+  const db = env.DB;
+  if (!db) {
+    throw new Error("INBOX_RECONCILIATION_QUEUE requires DB binding");
   }
 
   const queue = env.INBOX_RECONCILIATION_QUEUE;
@@ -169,6 +180,7 @@ export async function processInboxReconciliationQueue(
 
     const reconciliation = await reconcileStagedInboxPayment({
       kv: env.VERIFIED_AGENTS,
+      db,
       rpc,
       paymentId: body.paymentId,
       logger,

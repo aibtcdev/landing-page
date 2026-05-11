@@ -64,6 +64,10 @@ vi.mock("@/lib/inbox/d1-dual-write", () => ({
   insertInboundMessageToD1: vi.fn(),
   insertReplyToD1: vi.fn(),
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
+  isPaymentTxidUniqueViolation: (err: unknown): boolean => {
+    const msg = err instanceof Error ? err.message : String(err);
+    return msg.includes("UNIQUE constraint failed: inbox_messages.payment_txid");
+  },
 }));
 
 vi.mock("@/lib/inbox/d1-reads", () => ({

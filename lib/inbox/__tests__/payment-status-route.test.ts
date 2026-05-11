@@ -4,6 +4,73 @@ import { getMessage, getStagedInboxPayment, storeStagedInboxPayment } from "@/li
 import { createMockKV } from "./kv-mock";
 import { GET } from "@/app/api/payment-status/[paymentId]/route";
 
+/**
+ * D1 mock for the payment-status route tests (#760).
+ *
+ * `processInboxReconciliationQueue` / `reconcileStagedInboxPayment` now require
+ * `env.DB`. The mock implements just enough of D1's surface for the finalize
+ * path: in-memory INSERT and message_id SELECT.
+ */
+function createMockD1(): { db: D1Database; rows: Record<string, { messageId: string; toBtc: string; paymentStatus: string | null; paymentTxid: string | null }> } {
+  const rows: Record<string, { messageId: string; toBtc: string; paymentStatus: string | null; paymentTxid: string | null }> = {};
+  const db = {
+    prepare: (sql: string) => {
+      let binds: unknown[] = [];
+      const stmt: any = {
+        bind: (...b: unknown[]) => {
+          binds = b;
+          return stmt;
+        },
+        run: async () => {
+          if (sql.includes("INSERT INTO inbox_messages")) {
+            const [messageId, , , toBtc, , , paymentTxid, , paymentStatus] = binds as [
+              string, string | null, string, string, string | null, string,
+              string | null, number | null, string | null,
+            ];
+            if (!rows[messageId]) {
+              rows[messageId] = { messageId, toBtc, paymentStatus, paymentTxid };
+            }
+            return { success: true, meta: { changes: 1 } };
+          }
+          return { success: true, meta: { changes: 0 } };
+        },
+        first: async () => {
+          if (sql.includes("FROM inbox_messages") && sql.includes("WHERE message_id = ?")) {
+            const [messageId, toBtc] = binds as [string, string];
+            const row = rows[messageId];
+            if (!row || row.toBtc !== toBtc) return null;
+            return {
+              message_id: row.messageId,
+              from_stx_address: null,
+              to_btc_address: row.toBtc,
+              to_stx_address: null,
+              content: "",
+              payment_txid: row.paymentTxid,
+              payment_satoshis: null,
+              payment_status: row.paymentStatus,
+              payment_id: null,
+              receipt_id: null,
+              recovered_via_txid: 0,
+              authenticated: 0,
+              bitcoin_signature: null,
+              sender_btc_address: null,
+              sent_at: new Date().toISOString(),
+              read_at: null,
+              replied_at: null,
+              reply_to_message_id: null,
+            };
+          }
+          return null;
+        },
+        all: async () => ({ results: [], success: true, meta: { changes: 0 } }),
+        raw: async () => [],
+      };
+      return stmt;
+    },
+  } as unknown as D1Database;
+  return { db, rows };
+}
+
 const mocks = vi.hoisted(() => ({
   getCloudflareContext: vi.fn(),
   invalidateAgentListCache: vi.fn(),
@@ -57,9 +124,11 @@ describe("payment-status route", () => {
 
   it("normalizes submitted to queued in caller-facing payloads", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_submitted_case",
@@ -106,9 +175,11 @@ describe("payment-status route", () => {
 
   it("prefers relay-provided checkStatusUrl when the shared contract includes it", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_hint_case",
@@ -137,9 +208,11 @@ describe("payment-status route", () => {
 
   it("prefers relay-provided checkStatusUrl for canonical not_found responses", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_not_found_hint_case",
@@ -170,9 +243,11 @@ describe("payment-status route", () => {
 
   it("falls back to the local payment-status route when relay omits checkStatusUrl", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_local_fallback_case",
@@ -200,6 +275,7 @@ describe("payment-status route", () => {
 
   it("finalizes staged inbox records on confirmed", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     const sentAt = new Date().toISOString();
 
     await storeStagedInboxPayment(kv, {
@@ -222,6 +298,7 @@ describe("payment-status route", () => {
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_finalize_case",
@@ -247,7 +324,9 @@ describe("payment-status route", () => {
       })
     );
     expect(await getStagedInboxPayment(kv, "pay_finalize_case")).toBeNull();
-    expect(await getMessage(kv, "msg_finalize_case")).toEqual(
+    // Post-#760: confirmed messages land in D1, not legacy KV.
+    expect(await getMessage(kv, "msg_finalize_case")).toBeNull();
+    expect(d1Rows["msg_finalize_case"]).toEqual(
       expect.objectContaining({
         messageId: "msg_finalize_case",
         paymentStatus: "confirmed",
@@ -267,6 +346,7 @@ describe("payment-status route", () => {
 
   it("discards staged inbox records on terminal non-success states", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     const sentAt = new Date().toISOString();
 
     await storeStagedInboxPayment(kv, {
@@ -288,6 +368,7 @@ describe("payment-status route", () => {
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_discard_case",
@@ -330,11 +411,13 @@ describe("payment-status route", () => {
 
   it("surfaces sender nonce gap terminal metadata from relay polling", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     await stagePendingPayment(kv, "pay_sender_gap_case", "msg_sender_gap_case");
 
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_sender_gap_case",
@@ -381,9 +464,11 @@ describe("payment-status route", () => {
 
   it("returns HTTP 404 on canonical not_found", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_not_found_status_case",
@@ -405,9 +490,11 @@ describe("payment-status route", () => {
 
   it("returns canonical body fields on not_found", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_not_found_body_case",
@@ -436,11 +523,13 @@ describe("payment-status route", () => {
 
   it("discards staged inbox records on not_found", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     await stagePendingPayment(kv, "pay_not_found_case", "msg_not_found_case");
 
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_not_found_case",
@@ -475,11 +564,13 @@ describe("payment-status route", () => {
 
   it("discards staged inbox records on canonical unknown_payment_identity not_found", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     await stagePendingPayment(kv, "pay_not_found_terminal_case", "msg_not_found_terminal_case");
 
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_not_found_terminal_case",
@@ -523,9 +614,11 @@ describe("payment-status route", () => {
 
   it("logs malformed relay poll payloads before schema parse failure", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_malformed_case",
@@ -554,6 +647,7 @@ describe("payment-status route", () => {
 
   it("finalizes a confirmed staged payment exactly once across repeated polls", async () => {
     const kv = createMockKV();
+    const { db, rows: d1Rows } = createMockD1();
     const sentAt = new Date().toISOString();
 
     await storeStagedInboxPayment(kv, {
@@ -576,6 +670,7 @@ describe("payment-status route", () => {
     mocks.getCloudflareContext.mockResolvedValue({
       env: {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_once_case",
@@ -597,7 +692,8 @@ describe("payment-status route", () => {
     );
 
     expect(await getStagedInboxPayment(kv, "pay_once_case")).toBeNull();
-    expect(await getMessage(kv, "msg_once_case")).toEqual(
+    expect(await getMessage(kv, "msg_once_case")).toBeNull();
+    expect(d1Rows["msg_once_case"]).toEqual(
       expect.objectContaining({
         messageId: "msg_once_case",
         paymentStatus: "confirmed",
