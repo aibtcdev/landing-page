@@ -1228,11 +1228,14 @@ export function GET() {
         },
         post: {
           operationId: "submitCompetitionTrade",
-          summary: "Submit a swap txid for verification (reserved — ships in Phase 3.1 PR-B)",
+          summary: "Submit a swap txid for verification",
           description:
-            "The verifier worker — Hiro fetch, allowlist check, INSERT OR IGNORE — ships in " +
-            "Phase 3.1 PR-B (issue #734). The method is reserved on this route so callers can " +
-            "discover the contract early; until PR-B lands this endpoint returns 501.",
+            "Agent-submit fast path. The server fetches the tx from Hiro, runs sender + " +
+            "allowlist checks, parses the FT/STX transfer events, and persists via " +
+            "INSERT OR IGNORE on (txid). First writer wins across the three ingestion paths " +
+            "(agent / cron / chainhook). Pending txs return 202 and are tracked in KV " +
+            "(comp:pending:{txid}, 30-min TTL) — no row is written for pending. Rate limit: " +
+            "20/min per IP (RATE_LIMIT_MUTATING).",
           requestBody: {
             required: true,
             content: {
@@ -1241,21 +1244,156 @@ export function GET() {
                   type: "object",
                   required: ["txid"],
                   properties: {
-                    txid: { type: "string", description: "Stacks tx hash (0x-prefixed)" },
+                    txid: {
+                      type: "string",
+                      description: "Stacks tx hash, 64 hex chars (0x-prefix accepted).",
+                      pattern: "^(0x)?[0-9a-fA-F]{64}$",
+                    },
                   },
                 },
               },
             },
           },
           responses: {
-            "501": {
-              description: "Not yet implemented — ships in Phase 3.1 PR-B",
-              content: {
-                "application/json": {
-                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+            "200": {
+              description: "Verified — body is the persisted SwapRow",
+              content: { "application/json": { schema: { type: "object" } } },
+            },
+            "202": {
+              description:
+                "Pending — tx not yet confirmed. Body is `{ accepted: true }`. Re-poll later; the pending state is tracked in KV (30-min TTL) so repeats short-circuit without hitting Hiro.",
+              content: { "application/json": { schema: { type: "object" } } },
+            },
+            "400": {
+              description: "Malformed body or txid",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+            },
+            "404": {
+              description: "Hiro could not find the txid",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+            },
+            "422": {
+              description:
+                "Sender not in registered_wallets, contract+function off allowlist, or terminal failure status / parse failure. Body includes `{ error, code, retryable: false }`.",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+            },
+            "429": {
+              description: "Rate limited (per-IP mutating bucket)",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+            },
+            "502": {
+              description: "Hiro upstream error — retryable",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+            },
+            "503": {
+              description: "D1 temporarily unavailable — retry per `Retry-After` header",
+              content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+            },
+          },
+        },
+      },
+      "/api/competition/chainhook": {
+        post: {
+          operationId: "submitCompetitionChainhook",
+          summary: "Receive a chainhook predicate firing (HMAC-authenticated)",
+          description:
+            "Receives Hiro chainhook predicate firings for the trading competition. The handler " +
+            "iterates `apply` and submits each tx to the verifier with `source='chainhook'`. " +
+            "Rollback entries are ignored — see lib/competition/chainhook.ts for the rationale.",
+          parameters: [
+            {
+              name: "X-Chainhook-Signature",
+              in: "header",
+              required: false,
+              description:
+                "Hex HMAC-SHA256(env.CHAINHOOK_SECRET, request_body). Either this header or `Authorization: Bearer {hex}` must be present.",
+              schema: { type: "string" },
+            },
+            {
+              name: "Authorization",
+              in: "header",
+              required: false,
+              description: "`Bearer {hex}` form of the HMAC signature (Hiro controller default).",
+              schema: { type: "string" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  description:
+                    "Standard chainhook envelope with `apply` (and optional `rollback`) arrays of tx entries.",
                 },
               },
             },
+          },
+          responses: {
+            "200": {
+              description: "Batch processed — body is the ingestion summary",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      processed: { type: "integer" },
+                      inserted: { type: "integer" },
+                      alreadyKnown: { type: "integer" },
+                      rejected: { type: "integer" },
+                      pending: { type: "integer" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": { description: "Malformed JSON or missing `apply` field" },
+            "401": { description: "Missing or invalid signature" },
+            "500": { description: "Server config error (CHAINHOOK_SECRET not set)" },
+            "503": { description: "D1 temporarily unavailable" },
+          },
+        },
+      },
+      "/api/competition/cron": {
+        post: {
+          operationId: "runCompetitionCron",
+          summary: "Run the nightly catch-up sweep (shared-secret authenticated)",
+          description:
+            "Walks registered_wallets, fetches recent Hiro tx history per address, filters by allowlist, " +
+            "and submits each match via the verifier with `source='cron'`. Per-run cap: 100 addresses; " +
+            "resumes across runs via the `comp:cron:cursor` KV key.",
+          parameters: [
+            {
+              name: "X-Cron-Secret",
+              in: "header",
+              required: true,
+              description: "Shared secret matching env.CRON_SECRET.",
+              schema: { type: "string" },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Sweep complete — body is the run summary",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      scanned: { type: "integer" },
+                      found: { type: "integer" },
+                      inserted: { type: "integer" },
+                      alreadyKnown: { type: "integer" },
+                      pending: { type: "integer" },
+                      rejected: { type: "integer" },
+                      cursor: { type: ["string", "null"] },
+                    },
+                  },
+                },
+              },
+            },
+            "401": { description: "Missing or invalid X-Cron-Secret" },
+            "500": { description: "Server config error (CRON_SECRET not set)" },
+            "503": { description: "D1 temporarily unavailable" },
           },
         },
       },
