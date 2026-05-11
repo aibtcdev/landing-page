@@ -53,13 +53,14 @@ import {
  * for SQLite constraint violations — only the wrapped message string. If D1
  * ever changes how it surfaces these (e.g. introduces a `.code` property), this
  * matcher will silently fall back to the 503 path. Re-check periodically against
- * `@cloudflare/workers-types` releases. Matching both substrings ("UNIQUE
- * constraint failed" AND "payment_txid") avoids false-matching other UNIQUE
- * indexes in the schema.
+ * `@cloudflare/workers-types` releases. The full constraint string
+ * "UNIQUE constraint failed: inbox_messages.payment_txid" is matched verbatim
+ * (per Copilot review on #756) to avoid false-positives if future schema
+ * changes introduce other tables/columns whose names contain `payment_txid`.
  */
 function isPaymentTxidUniqueViolation(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes("UNIQUE constraint failed") && msg.includes("payment_txid");
+  return msg.includes("UNIQUE constraint failed: inbox_messages.payment_txid");
 }
 
 /**
