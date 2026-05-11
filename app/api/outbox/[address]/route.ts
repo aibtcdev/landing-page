@@ -9,8 +9,6 @@ import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
   validateOutboxReply,
-  getMessage,
-  getReply,
   storeReply,
   updateMessage,
   buildReplyMessage,
@@ -19,7 +17,13 @@ import {
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
 import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
-import { listOutboxRepliesFromD1, countOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
+import {
+  listOutboxRepliesFromD1,
+  countOutboxRepliesFromD1,
+  getInboxMessageFromD1,
+  getReplyForMessageFromD1,
+} from "@/lib/inbox/d1-reads";
+import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -194,8 +198,40 @@ export async function POST(
 
   const { messageId, reply, signature } = validation.data;
 
-  // Fetch original message
-  const message = await getMessage(kv, messageId);
+  // Phase 2.5 Step 3.5 — fetch original message from D1 instead of KV.
+  // Security gate: getInboxMessageFromD1 uses WHERE message_id = ? AND to_btc_address = ?
+  // AND is_reply = 0, so messages addressed to a different agent return null → 404.
+  // This prevents a replier from replying to a message they are not the recipient of.
+  // D1-throws fallback: 503 + Retry-After: 5 per Cycle 26 advisory (PR #732).
+  const db = env.DB as D1Database | undefined;
+  if (!db) {
+    logger.warn("D1 database binding unavailable", { messageId });
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
+
+  // Note: agent.btcAddress is the URL path address (resolved from BTC or STX).
+  // The SQL gate ensures we only fetch messages addressed to this agent.
+  let message: InboxMessage | null;
+  try {
+    message = await getInboxMessageFromD1(db, agent.btcAddress, messageId);
+  } catch (e) {
+    logger.error("D1 message fetch failed", { messageId, error: String(e) });
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
 
   if (!message) {
     logger.warn("Message not found", { messageId });
@@ -314,33 +350,56 @@ export async function POST(
     );
   }
 
-  // Check if reply already exists — with partial-write recovery
-  const existingReply = await getReply(kv, messageId);
+  // Phase 2.5 Step 3.5 — check for duplicate reply via D1 instead of KV.
+  // New helper: getReplyForMessageFromD1 uses WHERE reply_to_message_id = ? AND
+  // from_btc_address = ? AND is_reply = 1. The from_btc_address gate is the
+  // tenant-discriminator: only a prior reply by THIS agent blocks the duplicate
+  // check. A reply from a different agent to the same parent does NOT trigger 409.
+  // D1-throws fallback: 503 + Retry-After: 5 per Cycle 26 advisory.
+  let existingReply: OutboxReply | null;
+  try {
+    existingReply = await getReplyForMessageFromD1(db, messageId, btcResult.address);
+  } catch (e) {
+    logger.error("D1 duplicate-reply check failed", { messageId, error: String(e) });
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
+
   let isRecovery = false;
 
   if (existingReply) {
-    // If the stored reply was from a different signer, reject immediately
-    if (existingReply.fromAddress !== btcResult.address) {
-      logger.warn("Reply exists from different address", {
+    // existingReply.fromAddress will always equal btcResult.address here because
+    // getReplyForMessageFromD1 already gates on from_btc_address = btcResult.address.
+    // The "different address" check from the KV path is now implicit in the SQL gate
+    // (a reply by a different agent simply won't be returned).
+
+    // Re-read the original message from D1 to check if the write completed.
+    // Preserves the partial-write recovery semantic from the KV path:
+    // if repliedAt is set on the message, the full write is confirmed (true duplicate).
+    // Phase 2.5 Step 3.5 — freshMessage re-read uses D1 instead of KV.
+    let freshMessage: InboxMessage | null;
+    try {
+      freshMessage = await getInboxMessageFromD1(db, agent.btcAddress, messageId);
+    } catch (e) {
+      logger.error("D1 fresh-message re-read failed (partial-write recovery)", {
         messageId,
-        existingFrom: existingReply.fromAddress,
-        requestFrom: btcResult.address,
+        error: String(e),
       });
       return NextResponse.json(
         {
-          error: "Reply already exists for this message from a different address",
-          messageId,
-          existingReply: {
-            repliedAt: existingReply.repliedAt,
-            reply: existingReply.reply,
-          },
+          error: "transient_d1_unavailable",
+          message: "Inbox database temporarily unavailable. Please retry shortly.",
+          retry_after: 5,
         },
-        { status: 409 }
+        { status: 503, headers: { "Retry-After": "5" } }
       );
     }
-
-    // Re-read the original message to check if the write completed
-    const freshMessage = await getMessage(kv, messageId);
 
     if (freshMessage?.repliedAt) {
       // All writes completed — true duplicate
@@ -567,7 +626,7 @@ export async function GET(
   // return 503 with a structured retry hint rather than an unstructured 500.
   // totalCount is queried in parallel with the page list so pagination metadata
   // reflects the full matching row count, not just the current page length.
-  let replies: import("@/lib/inbox/types").OutboxReply[];
+  let replies: OutboxReply[];
   let totalCount: number;
   try {
     [replies, totalCount] = await Promise.all([

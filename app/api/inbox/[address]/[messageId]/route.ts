@@ -8,7 +8,6 @@ import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
-  getMessage,
   updateMessage,
   validateMarkRead,
   buildMarkReadMessage,
@@ -104,9 +103,9 @@ export async function GET(
   );
 }
 
-// PATCH (mark-read) intentionally still writes to KV alongside the D1 dual-write
-// from #720. Phase 2.5 Step 4 (#730) removes the KV writes; until then, KV remains
-// authoritative for the write path so a Step 3.x rollback is bounded.
+// PATCH (mark-read) auth read flipped to D1 in Phase 2.5 Step 3.5 (#736).
+// KV writes (updateMessage, decrementUnreadCount) are NOT removed here — that
+// is Step 4 (#730). The D1 read is the new auth gate; KV write still mirrors it.
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ address: string; messageId: string }> }
@@ -199,8 +198,36 @@ export async function PATCH(
     );
   }
 
-  // Fetch message
-  const message = await getMessage(kv, messageId);
+  // Phase 2.5 Step 3.5 — fetch message from D1 instead of KV.
+  // Security gate: getInboxMessageFromD1 uses WHERE message_id = ? AND to_btc_address = ?
+  // AND is_reply = 0, so a mismatched address returns null → 404 (not 403 — avoids
+  // leaking message existence to a non-recipient).
+  // D1-throws fallback: 503 + Retry-After: 5 per Cycle 26 advisory (PR #732).
+  const db = env.DB as D1Database | undefined;
+  if (!db) {
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
+
+  let message: InboxMessage | null;
+  try {
+    message = await getInboxMessageFromD1(db, agent.btcAddress, messageId);
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
 
   if (!message) {
     return NextResponse.json(
@@ -209,17 +236,6 @@ export async function PATCH(
         messageId,
       },
       { status: 404 }
-    );
-  }
-
-  // Verify message belongs to this agent (compare resolved BTC address)
-  if (message.toBtcAddress !== agent.btcAddress) {
-    return NextResponse.json(
-      {
-        error: "Message does not belong to this address",
-        messageId,
-      },
-      { status: 403 }
     );
   }
 

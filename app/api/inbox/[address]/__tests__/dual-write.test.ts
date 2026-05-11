@@ -1,12 +1,16 @@
 /**
  * Regression tests for Phase 2.5 Step 1 — inbox/outbox dual-write to D1.
  *
+ * Updated in Phase 2.5 Step 3.5 (#736): the POST outbox auth reads were flipped
+ * from KV (getMessage, getReply) to D1 (getInboxMessageFromD1, getReplyForMessageFromD1).
+ * Tests updated to mock the D1 helpers instead of the KV helpers.
+ *
  * Key properties verified:
  *  - POST /api/inbox/[address]: after KV write succeeds, ctx.waitUntil schedules D1 INSERT
  *  - D1 INSERT failure does NOT fail the 201 response (logged-and-swallowed)
  *  - POST /api/outbox/[address]: after KV write succeeds, ctx.waitUntil schedules D1 INSERT
  *  - D1 INSERT for reply uses is_reply=1 and synthesized PK via deriveReplyD1Id
- *  - When DB binding is absent (env.DB falsy), dual-write is skipped silently
+ *  - When DB binding is absent, the outbox POST returns 503 (D1 is now the auth gate)
  *
  * These tests exercise the route handlers with mocked downstream functions.
  * They do NOT test the full payment flow — only the dual-write wiring.
@@ -41,8 +45,6 @@ vi.mock("@/lib/inbox", () => ({
   DEFAULT_RELAY_URL: "https://x402-relay.aibtc.com",
   enqueueInboxReconciliation: vi.fn(),
   validateOutboxReply: vi.fn(),
-  getMessage: vi.fn(),
-  getReply: vi.fn(),
   storeReply: vi.fn(),
   updateMessage: vi.fn(),
   buildReplyMessage: vi.fn(),
@@ -58,6 +60,14 @@ vi.mock("@/lib/inbox/d1-dual-write", () => ({
   insertInboundMessageToD1: vi.fn().mockResolvedValue(undefined),
   insertReplyToD1: vi.fn().mockResolvedValue(undefined),
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Phase 2.5 Step 3.5: outbox POST auth reads now use D1 helpers
+vi.mock("@/lib/inbox/d1-reads", () => ({
+  getInboxMessageFromD1: vi.fn(),
+  getReplyForMessageFromD1: vi.fn(),
+  listOutboxRepliesFromD1: vi.fn().mockResolvedValue([]),
+  countOutboxRepliesFromD1: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock("@/lib/bitcoin-verify", () => ({
@@ -114,11 +124,13 @@ import {
   storeReply,
   updateMessage,
   validateOutboxReply,
-  getMessage,
-  getReply,
   buildReplyMessage,
   decrementUnreadCount,
 } from "@/lib/inbox";
+import {
+  getInboxMessageFromD1,
+  getReplyForMessageFromD1,
+} from "@/lib/inbox/d1-reads";
 import { insertInboundMessageToD1, insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { POST as inboxPOST } from "../route";
@@ -369,7 +381,9 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
     (storeReply as Mock).mockResolvedValue(undefined);
     (updateMessage as Mock).mockResolvedValue(undefined);
     (decrementUnreadCount as Mock).mockResolvedValue(undefined);
-    (getReply as Mock).mockResolvedValue(null); // no existing reply
+    // Phase 2.5 Step 3.5: auth reads now use D1 helpers
+    (getInboxMessageFromD1 as Mock).mockResolvedValue(INBOX_MESSAGE); // original message
+    (getReplyForMessageFromD1 as Mock).mockResolvedValue(null); // no existing reply
     (buildReplyMessage as Mock).mockReturnValue("Inbox Reply | msg_123 | hello");
   });
 
@@ -388,15 +402,6 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
 
     (validateOutboxReply as Mock).mockReturnValue({
       data: { messageId: MESSAGE_ID, reply: "hello", signature: "sig123" },
-    });
-
-    (getMessage as Mock).mockResolvedValue({
-      messageId: MESSAGE_ID,
-      toBtcAddress: AGENT.btcAddress,
-      fromAddress: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
-      content: "Hello agent",
-      sentAt: "2026-02-18T02:26:42.598Z",
-      authenticated: false,
     });
 
     (verifyBitcoinSignature as Mock).mockReturnValue({
@@ -449,15 +454,6 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
       data: { messageId: MESSAGE_ID, reply: "hello", signature: "sig123" },
     });
 
-    (getMessage as Mock).mockResolvedValue({
-      messageId: MESSAGE_ID,
-      toBtcAddress: AGENT.btcAddress,
-      fromAddress: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
-      content: "Hello agent",
-      sentAt: "2026-02-18T02:26:42.598Z",
-      authenticated: false,
-    });
-
     (verifyBitcoinSignature as Mock).mockReturnValue({
       valid: true,
       address: AGENT.btcAddress,
@@ -496,15 +492,6 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
       data: { messageId: MESSAGE_ID, reply: "hello", signature: "sig123" },
     });
 
-    (getMessage as Mock).mockResolvedValue({
-      messageId: MESSAGE_ID,
-      toBtcAddress: AGENT.btcAddress,
-      fromAddress: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
-      content: "Hello agent",
-      sentAt: "2026-02-18T02:26:42.598Z",
-      authenticated: false,
-    });
-
     (verifyBitcoinSignature as Mock).mockReturnValue({
       valid: true,
       address: AGENT.btcAddress,
@@ -541,7 +528,8 @@ describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2
     (storeReply as Mock).mockResolvedValue(undefined);
     (updateMessage as Mock).mockResolvedValue(undefined);
     (decrementUnreadCount as Mock).mockResolvedValue(undefined);
-    (getReply as Mock).mockResolvedValue(null); // no existing reply
+    // Phase 2.5 Step 3.5: auth reads now use D1 helpers
+    (getReplyForMessageFromD1 as Mock).mockResolvedValue(null); // no existing reply
     (buildReplyMessage as Mock).mockReturnValue("Inbox Reply | msg_123 | hello");
   });
 
@@ -566,7 +554,7 @@ describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2
     });
 
     // Message is UNREAD (no readAt) — both readAt and repliedAt should be set
-    (getMessage as Mock).mockResolvedValue({
+    (getInboxMessageFromD1 as Mock).mockResolvedValue({
       messageId: MESSAGE_ID,
       toBtcAddress: AGENT.btcAddress,
       fromAddress: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
@@ -632,7 +620,7 @@ describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2
     });
 
     // Message is ALREADY READ — only repliedAt should be set
-    (getMessage as Mock).mockResolvedValue({
+    (getInboxMessageFromD1 as Mock).mockResolvedValue({
       messageId: MESSAGE_ID,
       toBtcAddress: AGENT.btcAddress,
       fromAddress: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
@@ -693,7 +681,7 @@ describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2
       data: { messageId: MESSAGE_ID, reply: "hello", signature: "sig123" },
     });
 
-    (getMessage as Mock).mockResolvedValue({
+    (getInboxMessageFromD1 as Mock).mockResolvedValue({
       messageId: MESSAGE_ID,
       toBtcAddress: AGENT.btcAddress,
       fromAddress: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
