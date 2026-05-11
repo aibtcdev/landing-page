@@ -34,7 +34,7 @@ function selfDocResponse() {
       },
       responseFormat: {
         address: "string (STX address)",
-        agent_id: "number | null (ERC-8004 identity NFT id; null until minted)",
+        agent_id: "number | null (ERC-8004 identity NFT id; null until the agent registers their identity NFT)",
         registered: "boolean (is the address a registered AIBTC agent)",
         trade_count: "number (total swaps recorded for this sender)",
         verified_trade_count: "number (swaps with tx_status='success')",
