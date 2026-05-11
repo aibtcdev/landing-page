@@ -372,6 +372,113 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
     }
   });
 
+  it("partner dedup: transient lookup failure on received-side recovers via resolution pass → direction='both'", async () => {
+    // Edge case from issue #733: agentLookupMap batch fails for the received-side
+    // STX address (transient KV miss), but the second individual lookupAgent call
+    // in the resolution pass succeeds. After dedup the two entries (received keyed
+    // by STX, sent keyed by BTC) should merge into a single 'both' entry.
+    const receivedMsgFromDualPartner = {
+      ...RECEIVED_MESSAGE,
+      fromAddress: REPLY_TARGET_AGENT.stxAddress,
+    };
+    const sentReplyToDualPartner = {
+      ...SENT_REPLY,
+      toBtcAddress: REPLY_TARGET_ADDR,
+    };
+
+    // First call for REPLY_TARGET STX address (batch) returns null (transient miss).
+    // Subsequent calls succeed (recovery). BTC address lookups always succeed.
+    const stxCallCount = new Map<string, number>();
+    (lookupAgent as Mock).mockImplementation((_kv: unknown, addr: string) => {
+      if (addr === AGENT_ADDR) return Promise.resolve(TEST_AGENT);
+      if (addr === REPLY_TARGET_AGENT.stxAddress) {
+        const n = (stxCallCount.get(addr) ?? 0) + 1;
+        stxCallCount.set(addr, n);
+        return n === 1 ? Promise.resolve(null) : Promise.resolve(REPLY_TARGET_AGENT);
+      }
+      if (addr === REPLY_TARGET_ADDR) return Promise.resolve(REPLY_TARGET_AGENT);
+      return Promise.resolve(null);
+    });
+
+    (listInboxMessagesFromD1 as Mock).mockResolvedValue([receivedMsgFromDualPartner]);
+    (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue([sentReplyToDualPartner]);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
+
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?include=partners"),
+      buildContext(AGENT_ADDR)
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.inbox.partners).toBeDefined();
+
+    const dualPartner = body.inbox.partners.find(
+      (p: { btcAddress: string }) => p.btcAddress === REPLY_TARGET_ADDR
+    );
+    expect(dualPartner).toBeDefined();
+    expect(dualPartner.direction).toBe("both");
+    // Should be a single merged entry, not two separate entries
+    expect(body.inbox.partners.length).toBe(1);
+  });
+
+  it("partner dedup: persistent lookup failure preserves received partner instead of dropping it", async () => {
+    // Edge case from issue #733 (consistent failure variant): agentLookupMap batch
+    // AND the resolution pass both return null for the received-side STX address.
+    // Before the fix (key = p.btcAddress; if (!key) continue), the received entry
+    // was silently dropped when btcAddress was empty. After the fix the entry is
+    // preserved under its STX key so the received direction is not lost.
+    const receivedMsgFromDualPartner = {
+      ...RECEIVED_MESSAGE,
+      fromAddress: REPLY_TARGET_AGENT.stxAddress,
+    };
+    const sentReplyToDualPartner = {
+      ...SENT_REPLY,
+      toBtcAddress: REPLY_TARGET_ADDR,
+    };
+
+    // STX lookup always fails; BTC lookup succeeds (sent-side entry resolves fine).
+    (lookupAgent as Mock).mockImplementation((_kv: unknown, addr: string) => {
+      if (addr === AGENT_ADDR) return Promise.resolve(TEST_AGENT);
+      if (addr === REPLY_TARGET_ADDR) return Promise.resolve(REPLY_TARGET_AGENT);
+      return Promise.resolve(null);
+    });
+
+    (listInboxMessagesFromD1 as Mock).mockResolvedValue([receivedMsgFromDualPartner]);
+    (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue([sentReplyToDualPartner]);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
+
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?include=partners"),
+      buildContext(AGENT_ADDR)
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.inbox.partners).toBeDefined();
+
+    // Sent partner must appear with direction='sent' (BTC key, lookup succeeded)
+    const sentPartner = body.inbox.partners.find(
+      (p: { btcAddress: string }) => p.btcAddress === REPLY_TARGET_ADDR
+    );
+    expect(sentPartner).toBeDefined();
+    expect(sentPartner.direction).toBe("sent");
+
+    // Received partner must be preserved (not dropped). With persistent STX lookup
+    // failure btcAddress is empty, so it appears under the STX key. It surfaces as
+    // a separate entry with direction='received'.
+    // Total must be 2 (not 1 — they can't merge without BTC address to link them,
+    // and not 1 — the received entry must not be silently dropped).
+    expect(body.inbox.partners.length).toBe(2);
+    const receivedPartner = body.inbox.partners.find(
+      (p: { direction: string }) => p.direction === "received"
+    );
+    expect(receivedPartner).toBeDefined();
+    expect(receivedPartner.stxAddress).toBe(REPLY_TARGET_AGENT.stxAddress);
+  });
+
   it("partners only from received when no sent replies (received-only path still works)", async () => {
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([RECEIVED_MESSAGE]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
