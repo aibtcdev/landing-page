@@ -98,6 +98,12 @@ export interface AgentTradeSummary {
    * we'd rather under-report than make up a number.
    */
   volumeUsd: number;
+  /**
+   * Latest `burn_block_time` (unix seconds) across the agent's
+   * MCP-submitted swaps. Surfaced in the UI as a relative-time column
+   * so reviewers can see who's currently active.
+   */
+  latestTradeAt: number;
 }
 
 interface D1AggregateRow {
@@ -105,6 +111,7 @@ interface D1AggregateRow {
   token_in: string;
   cnt: number;
   sum_in: number;
+  latest_at: number;
 }
 
 /**
@@ -125,7 +132,8 @@ export async function getAgentSubmittedTradeSummary(
   const sql = `
     SELECT sender, token_in,
            COUNT(*) AS cnt,
-           SUM(amount_in) AS sum_in
+           SUM(amount_in) AS sum_in,
+           MAX(burn_block_time) AS latest_at
     FROM swaps
     WHERE source = 'agent'
     GROUP BY sender, token_in
@@ -149,12 +157,16 @@ export async function getAgentSubmittedTradeSummary(
 
   const out = new Map<string, AgentTradeSummary>();
   for (const r of rows) {
-    const existing = out.get(r.sender) ?? { count: 0, volumeUsd: 0 };
+    const existing =
+      out.get(r.sender) ?? { count: 0, volumeUsd: 0, latestTradeAt: 0 };
     existing.count += r.cnt;
     const price = prices.get(r.token_in);
     if (price != null) {
       const human = r.sum_in / 10 ** decimalsFor(r.token_in);
       existing.volumeUsd += human * price;
+    }
+    if (r.latest_at > existing.latestTradeAt) {
+      existing.latestTradeAt = r.latest_at;
     }
     out.set(r.sender, existing);
   }
