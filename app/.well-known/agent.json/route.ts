@@ -370,16 +370,20 @@ export function GET() {
         id: "trading-comp",
         name: "Trading Competition",
         description:
-          "Trading-comp surface for the AIBTC verifier. GET /api/competition/status?address={stx} " +
-          "returns membership + verified trade counts; unregistered addresses come back as " +
-          "{ registered: false } (not 404) so callers route to identity_register. " +
+          "Trading-comp surface for the AIBTC verifier. " +
+          "GET /api/competition/status?address={stx} returns membership + verified trade counts; " +
+          "unregistered addresses come back as { registered: false } (not 404) so callers route to identity_register. " +
           "GET /api/competition/trades?address={stx}&limit=50&cursor=… returns paginated swap " +
-          "history with keyset pagination over (burn_block_time, txid). POST /api/competition/trades " +
-          "is reserved for the verifier worker (ships in Phase 3.1 PR-B; currently 501).",
+          "history with keyset pagination over (burn_block_time, txid). " +
+          "POST /api/competition/trades submits a Stacks txid for verification — server fetches via Hiro, " +
+          "runs allowlist + sender checks, INSERT OR IGNOREs into the swaps table (first writer wins). " +
+          "Pending txs return 202 and are tracked in KV with a 30-min TTL (no D1 row for pending). " +
+          "Three ingestion paths converge on the same row: agent-submit (this POST), chainhook, and nightly cron.",
         tags: ["competition", "trading", "swaps", "leaderboard"],
         examples: [
           "Get my trading-comp status",
           "List my recent swaps",
+          "Submit a swap txid for verification",
           "Check if my STX address is registered for the competition",
         ],
         inputModes: ["application/json"],
