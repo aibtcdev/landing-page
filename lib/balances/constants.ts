@@ -33,9 +33,17 @@ export const SNAPSHOT_HARD_TTL_SECONDS = 3600;
  * Single-flight sentinel for the snapshot rebuild. While set, no other
  * request will start a duplicate rebuild — they either poll for the
  * fresh snapshot or serve the stale one.
+ *
+ * TTL must outlive the p99 rebuild wall-clock or the sentinel auto-expires
+ * mid-rebuild and a concurrent request claims a fresh sentinel → duplicate
+ * Hiro/mempool fan-out. arc0btc's PR #651 review measured the cold rebuild
+ * at ~457s for ~568 Genesis agents at concurrency 10; 600s gives p99
+ * headroom (worst case after Hiro 429 retry budget exhaustion). The
+ * sentinel is also cleared in `finally`, so this longer TTL only matters
+ * on rebuild crash/abort.
  */
 export const SNAPSHOT_BUILDING_KEY = "cache:dashboard:snapshot:building";
-export const SNAPSHOT_BUILDING_TTL_SECONDS = 120;
+export const SNAPSHOT_BUILDING_TTL_SECONDS = 600;
 
 /**
  * Upstream-failure sentinel prefix.
