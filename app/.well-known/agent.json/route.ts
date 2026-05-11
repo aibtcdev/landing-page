@@ -367,6 +367,25 @@ export function GET() {
         outputModes: ["application/json"],
       },
       {
+        id: "trading-comp",
+        name: "Trading Competition",
+        description:
+          "Trading-comp surface for the AIBTC verifier. GET /api/competition/status?address={stx} " +
+          "returns membership + verified trade counts; unregistered addresses come back as " +
+          "{ registered: false } (not 404) so callers route to identity_register. " +
+          "GET /api/competition/trades?address={stx}&limit=50&cursor=… returns paginated swap " +
+          "history with keyset pagination over (burn_block_time, txid). POST /api/competition/trades " +
+          "is reserved for the verifier worker (ships in Phase 3.1 PR-B; currently 501).",
+        tags: ["competition", "trading", "swaps", "leaderboard"],
+        examples: [
+          "Get my trading-comp status",
+          "List my recent swaps",
+          "Check if my STX address is registered for the competition",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
+      {
         id: "health-check",
         name: "System Health Check",
         description:
