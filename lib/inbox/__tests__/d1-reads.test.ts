@@ -914,6 +914,9 @@ describe("checkRedeemedTxidInD1 (Phase 2.5 Step 4 — double-redemption guard)",
   });
 
   it("SQL includes payment_txid IS NOT NULL predicate (routes through idx_inbox_payment_txid)", async () => {
+    // Contract/regression check on the query *text* — not a query-plan test.
+    // If a refactor drops the partial-index predicate, this catches it; D1
+    // index-usage verification is out of scope at the unit-test layer.
     const stmtMock = createPreparedStatement([], null);
     const db = {
       prepare: vi.fn().mockReturnValue(stmtMock),
