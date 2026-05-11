@@ -14,10 +14,6 @@ import {
 } from "@/lib/competition/d1-reads";
 import { verifyAndPersistSwap } from "@/lib/competition/verify";
 
-/** KV key + TTL for the pending-tx tracker. Migration 005 forbids a 'pending'
- *  row in `swaps`, so the verifier upstream uses KV with a short TTL. */
-const PENDING_KV_PREFIX = "comp:pending:";
-const PENDING_KV_TTL_SECONDS = 30 * 60;
 const TXID_RE = /^(0x)?[0-9a-fA-F]{64}$/;
 
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -80,13 +76,14 @@ function selfDocResponse() {
       },
       post: {
         description:
-          "Submit a Stacks txid for verification. The server fetches the tx from Hiro, runs sender + allowlist checks, parses the swap, and persists via INSERT OR IGNORE.",
+          "Submit a confirmed Stacks txid for verification. Callers (typically the AIBTC MCP server) must pre-check that the tx is terminal before submitting; the route checks D1 first (cheap idempotency gate), then fetches the tx from Hiro, runs sender + allowlist checks, parses the swap, and persists via INSERT OR IGNORE. First writer wins on `(txid)` across all ingestion paths (agent / cron); re-submits of an already-recorded txid return 409.",
         requestBody: { txid: "string — 64-char hex (0x-prefixed accepted)" },
         responses: {
-          "200": "Verified — body is the persisted SwapRow",
-          "202": "Pending — tx not yet confirmed. { accepted: true }; re-poll later. (Pending state is KV-tracked with a 30-min TTL; not in D1.)",
+          "200": "First-time verified — body is the persisted SwapRow",
+          "202": "Pending fallback — should be rare since callers pre-check confirmation. Indicates Hiro has not yet propagated this tx as terminal (block just mined). Body: { accepted: true, note }. Retry in a few seconds.",
           "400": "Malformed txid",
           "404": "Hiro could not find the txid",
+          "409": "Transaction already verified — this txid is already in the swaps table. Body: { error, code: 'txid_already_verified', retryable: false, existing_row }. The existing_row.source identifies which ingestion path wrote first.",
           "422": "Sender not registered, contract not on allowlist, parse failure, or terminal failure status",
           "429": "Rate limited — Retry-After header set",
           "502": "Upstream (Hiro) error — retryable",
@@ -288,40 +285,45 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // KV pending tracker — the `comp:pending:{txid}` key is an observability
-  // artifact (set when verifyAndPersistSwap returns pending, cleared on
-  // verified) so cron/admin tooling can see which txids are mid-flight.
-  // It is NOT a request-path short-circuit: an earlier version of this
-  // route read the key and returned 202 without invoking the verifier,
-  // which created a 30-min blind window after a tx confirmed — re-submits
-  // of a now-confirmed tx returned 202 forever and the row never landed
-  // in `swaps`. Empirically reproduced by @secret-mars on the preview
-  // deploy (PR #738 comment 4418003085). Rate-limit (20/min per IP) is the
-  // actual hammer-protection; the cache adds nothing the rate limit doesn't
-  // already do.
-  const kv = env.VERIFIED_AGENTS as KVNamespace;
-  const pendingKey = `${PENDING_KV_PREFIX}${normalizedTxid}`;
-
   const result = await verifyAndPersistSwap(env, db, normalizedTxid, "agent", logger);
 
+  // Pending fallback: the MCP server pre-checks tx confirmation before
+  // submitting, so this branch should be unreachable on the happy path.
+  // It survives as defense in depth for the racy edge case where the
+  // MCP saw the tx as confirmed but our Hiro fetch hasn't propagated
+  // yet (block just mined). Caller should retry shortly. No D1 row is
+  // written — migration 005 forbids 'pending' rows in `swaps`.
   if (result.status === "pending") {
-    try {
-      await kv.put(pendingKey, "1", { expirationTtl: PENDING_KV_TTL_SECONDS });
-    } catch (err) {
-      logger.warn("Pending-tx KV write failed", { error: String(err) });
-    }
-    return NextResponse.json({ accepted: true }, { status: 202 });
+    return NextResponse.json(
+      {
+        accepted: true,
+        note: "Hiro has not yet propagated this tx as terminal. Retry in a few seconds.",
+      },
+      { status: 202 }
+    );
   }
 
   if (result.status === "verified") {
-    // Clear the pending-tx marker — observability hygiene only; the key has
-    // no behavioural effect on future requests after the read-side
-    // short-circuit was removed.
-    try {
-      await kv.delete(pendingKey);
-    } catch {
-      // best-effort
+    // Idempotent re-submit: the row already existed before this POST hit
+    // the verifier. Return 409 Conflict (not 200) so the caller has an
+    // unambiguous signal that this submit did NOT write the row. The
+    // existing row is included so callers can reconcile (its `source`
+    // identifies which ingestion path wrote first — agent / cron /
+    // chainhook). retryable: false because re-POSTing the same txid will
+    // keep landing here.
+    if (!result.inserted) {
+      return NextResponse.json(
+        {
+          error: "Transaction already verified for this competition",
+          code: "txid_already_verified",
+          retryable: false,
+          existing_row: result.row,
+        },
+        { status: 409 }
+      );
     }
+
+    // First-time successful write. Body is the persisted SwapRow.
     return NextResponse.json(result.row, { status: 200 });
   }
 
