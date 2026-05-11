@@ -13,7 +13,7 @@ export async function GET() {
       endpoint: "/api/competition/cron",
       methods: ["POST"],
       description:
-        "Nightly catch-up sweep for the trading-comp verifier. Walks registered_wallets and re-fetches recent Hiro tx history, filtering by allowlist and submitting each match via verifyAndPersistSwap with source='cron'. Defence in depth against chainhook gaps.",
+        "15-min catch-up sweep for the trading-comp verifier. Walks registered_wallets and re-fetches recent Hiro tx history, filtering by allowlist and submitting each match via verifyAndPersistSwap with source='cron'. Pairs with POST /api/competition/trades (agent-submit fast path) — first writer wins on (txid).",
       auth: {
         scheme: "Shared secret",
         header: "X-Cron-Secret: {env.CRON_SECRET}",
@@ -28,7 +28,8 @@ export async function GET() {
         cursor: "string | null (next stx_address to resume from)",
       },
       notes: [
-        "Per-run cap: 100 addresses (CRON_MAX_ADDRESSES_PER_RUN). The sweep resumes across runs via the comp:cron:cursor KV key.",
+        "Per-run cap: 100 addresses (CRON_MAX_ADDRESSES_PER_RUN). Sized for a 15-min cadence — the full membership cycles in roughly 5 runs at the current scale.",
+        "The sweep resumes across runs via the comp:cron:cursor KV key.",
         "wrangler cron-trigger wiring is tracked as a follow-up; this route is callable today via HTTPS with the shared secret.",
       ],
     },
