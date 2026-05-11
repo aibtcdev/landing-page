@@ -1,6 +1,6 @@
 // CACHE_INVARIANTS:POSTURE=public-only-get
 // See lib/inbox/CACHE_INVARIANTS.md — GET handler is fully public.
-// POST stub returns 501 until PR-B (verifier worker) ships.
+// POST is the agent-submit verifier (Phase 3.1 PR-B).
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -9,10 +9,16 @@ import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
 import {
   listSwapsFromD1,
-  countSwapsFromD1,
   encodeSwapsCursor,
   decodeSwapsCursor,
 } from "@/lib/competition/d1-reads";
+import { verifyAndPersistSwap } from "@/lib/competition/verify";
+
+/** KV key + TTL for the pending-tx tracker. Migration 005 forbids a 'pending'
+ *  row in `swaps`, so the verifier upstream uses KV with a short TTL. */
+const PENDING_KV_PREFIX = "comp:pending:";
+const PENDING_KV_TTL_SECONDS = 30 * 60;
+const TXID_RE = /^(0x)?[0-9a-fA-F]{64}$/;
 
 const RATE_LIMIT_RETRY_AFTER = 60;
 
@@ -73,10 +79,20 @@ function selfDocResponse() {
         },
       },
       post: {
-        status: "501 Not Implemented",
-        shipsIn: "Phase 3.1 PR-B",
         description:
-          "Will accept { txid } and verify against Hiro + insert into swaps. Currently a placeholder so the route is reservation-stable.",
+          "Submit a Stacks txid for verification. The server fetches the tx from Hiro, runs sender + allowlist checks, parses the swap, and persists via INSERT OR IGNORE.",
+        requestBody: { txid: "string — 64-char hex (0x-prefixed accepted)" },
+        responses: {
+          "200": "Verified — body is the persisted SwapRow",
+          "202": "Pending — tx not yet confirmed. { accepted: true }; re-poll later. (Pending state is KV-tracked with a 30-min TTL; not in D1.)",
+          "400": "Malformed txid",
+          "404": "Hiro could not find the txid",
+          "422": "Sender not registered, contract not on allowlist, parse failure, or terminal failure status",
+          "429": "Rate limited — Retry-After header set",
+          "502": "Upstream (Hiro) error — retryable",
+          "503": "D1 temporarily unavailable — retryable",
+        },
+        rateLimit: "20/min per IP (RATE_LIMIT_MUTATING)",
       },
       relatedEndpoints: {
         status: "GET /api/competition/status?address={stx} — membership + counts",
@@ -202,17 +218,152 @@ export async function GET(request: NextRequest) {
   );
 }
 
-export async function POST() {
-  // Phase 3.1 PR-A only ships read routes. The verifier worker — Hiro fetch,
-  // allowlist check, INSERT OR IGNORE — lands in PR-B (#734). Returning 501
-  // (not 405) so callers know the *method* is allocated but not yet wired.
-  return NextResponse.json(
-    {
-      error: "not_implemented",
-      message:
-        "POST /api/competition/trades ships in Phase 3.1 PR-B. The route is reserved; the verifier worker is not yet wired.",
-      docs: "/api/competition/trades?docs=1",
-    },
-    { status: 501 }
-  );
+/**
+ * POST /api/competition/trades — agent-submit verifier (Phase 3.1 PR-B).
+ *
+ * Accepts { txid } and runs the single-tx verifier (see lib/competition/verify.ts).
+ *   - 202 { accepted: true } when the tx is still pending (KV-tracked, 30-min TTL)
+ *   - 200 with the persisted row when verified (newly written OR idempotent re-submission)
+ *   - 422 with { error, code, retryable: false } on sender/allowlist/parse rejections
+ *   - 4xx on malformed input, 429 on rate limit, 503 on D1 unavailability
+ */
+export async function POST(request: NextRequest) {
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
+    : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
+
+  let body: { txid?: unknown };
+  try {
+    body = (await request.json()) as { txid?: unknown };
+  } catch {
+    return NextResponse.json(
+      { error: "Request body must be JSON: { txid: string }" },
+      { status: 400 }
+    );
+  }
+
+  const txid = typeof body.txid === "string" ? body.txid.trim() : "";
+  if (!txid || !TXID_RE.test(txid)) {
+    return NextResponse.json(
+      {
+        error: "Invalid `txid`. Expected a 64-character hex string (optionally 0x-prefixed).",
+        retryable: false,
+      },
+      { status: 400 }
+    );
+  }
+  const normalizedTxid = txid.startsWith("0x") ? txid : `0x${txid}`;
+
+  // Mutating rate limit (20/min per IP). The handoff routes this through the
+  // existing RATE_LIMIT_MUTATING binding — same bucket as inbox/outbox writes.
+  const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
+  let limited = false;
+  try {
+    const result = await env.RATE_LIMIT_MUTATING.limit({ key: `comp-submit:${ip}` });
+    limited = !result.success;
+  } catch (err) {
+    const failClosed = shouldFailClosed(env);
+    logger.warn("Rate limit binding error", { error: String(err), failClosed });
+    if (failClosed) limited = true;
+  }
+  if (limited) {
+    return NextResponse.json(
+      { error: "Too many submissions from this IP. Slow down.", retryAfter: RATE_LIMIT_RETRY_AFTER },
+      { status: 429, headers: { "Retry-After": String(RATE_LIMIT_RETRY_AFTER) } }
+    );
+  }
+
+  const db = env.DB as D1Database | undefined;
+  if (!db) {
+    logger.warn("D1 binding missing on competition/trades POST");
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Competition database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
+
+  // KV pending tracker — if the verifier upstream already queued this txid
+  // we short-circuit and return 202 immediately so the caller doesn't
+  // re-hit Hiro on every retry.
+  const kv = env.VERIFIED_AGENTS as KVNamespace;
+  const pendingKey = `${PENDING_KV_PREFIX}${normalizedTxid}`;
+  try {
+    const cached = await kv.get(pendingKey);
+    if (cached) {
+      return NextResponse.json({ accepted: true }, { status: 202 });
+    }
+  } catch (err) {
+    // KV read failure is non-fatal — the verifier will refetch from Hiro.
+    logger.warn("Pending-tx KV read failed", { error: String(err) });
+  }
+
+  const result = await verifyAndPersistSwap(env, db, normalizedTxid, "agent", logger);
+
+  if (result.status === "pending") {
+    try {
+      await kv.put(pendingKey, "1", { expirationTtl: PENDING_KV_TTL_SECONDS });
+    } catch (err) {
+      logger.warn("Pending-tx KV write failed", { error: String(err) });
+    }
+    return NextResponse.json({ accepted: true }, { status: 202 });
+  }
+
+  if (result.status === "verified") {
+    // Clear the pending-tx marker — once we have a terminal row we don't
+    // want subsequent submissions short-circuiting on the stale flag.
+    try {
+      await kv.delete(pendingKey);
+    } catch {
+      // best-effort
+    }
+    return NextResponse.json(result.row, { status: 200 });
+  }
+
+  // result.status === "rejected"
+  switch (result.code) {
+    case "sender_not_registered":
+    case "contract_not_allowlisted":
+    case "tx_failed":
+    case "invalid_amount":
+    case "incomplete_events":
+    case "malformed_tx":
+      return NextResponse.json(
+        { error: result.reason, code: result.code, retryable: false },
+        { status: 422 }
+      );
+    case "tx_not_found":
+      return NextResponse.json(
+        { error: result.reason, code: result.code, retryable: false },
+        { status: 404 }
+      );
+    case "tx_fetch_failed":
+      return NextResponse.json(
+        { error: result.reason, code: result.code, retryable: true },
+        { status: 502, headers: { "Retry-After": "5" } }
+      );
+    case "db_unavailable":
+      return NextResponse.json(
+        {
+          error: "transient_d1_unavailable",
+          message: "Competition database temporarily unavailable. Please retry shortly.",
+          retry_after: 5,
+        },
+        { status: 503, headers: { "Retry-After": "5" } }
+      );
+    default: {
+      // Exhaustiveness check — compile-time guard if a new code is added.
+      const _exhaustive: never = result.code;
+      void _exhaustive;
+      return NextResponse.json(
+        { error: result.reason, retryable: false },
+        { status: 422 }
+      );
+    }
+  }
 }
