@@ -939,7 +939,7 @@ next page, pass that value back as \`?cursor=…\` — pagination is keyset over
 \`limit\` is 1–200 (default 50). \`scored_value\` / \`scored_at\` are populated by
 Phase 3.2 scoring (separate sub-issue) and remain \`null\` for unscored rows.
 
-### Submit Trade (501 until PR-B)
+### Submit Trade
 
 \`\`\`bash
 curl -X POST https://aibtc.com/api/competition/trades \\
@@ -947,16 +947,40 @@ curl -X POST https://aibtc.com/api/competition/trades \\
   -d '{"txid":"0x46bc5587ae56e5bd4453daa2bf63c2a9e0414953fd21a82eb44f2f926f0ee0e4"}'
 \`\`\`
 
-Currently returns \`501 not_implemented\`. The verifier worker — Hiro fetch,
-allowlist check, FT/STX event parsing, INSERT OR IGNORE — ships in Phase 3.1
-PR-B. The route is reserved so callers can discover the contract early. When
-PR-B lands, behaviour will be:
+Response matrix:
 
-- \`202 { accepted: true }\` — tx is pending; re-poll. Pending state is tracked in
-  KV (\`comp:pending:{txid}\`, 30-min TTL), NOT in D1.
 - \`200\` — newly verified or idempotent re-submission (first writer wins on \`(txid)\`).
+  Body is the persisted SwapRow.
+- \`202 { accepted: true }\` — tx is pending; re-poll. Pending state is tracked in
+  KV (\`comp:pending:{txid}\`, 30-min TTL), NOT in D1. Repeat polls short-circuit
+  without re-hitting Hiro until the TTL expires or the tx settles.
 - \`422\` — sender not in registered_wallets, or contract+function not on the
-  allowlist, or tx failed terminally.
+  allowlist, or tx failed terminally / parse failed. Body: \`{ error, code, retryable: false }\`.
+- \`404\` — Hiro could not find the txid.
+- \`429\` — rate limited (20/min per IP). Retry-After header set.
+- \`502\` — Hiro upstream error; retryable.
+- \`503\` — D1 temporarily unavailable; retry per Retry-After header.
+
+### Chainhook Ingestion (operator-only)
+
+\`POST /api/competition/chainhook\` receives Hiro chainhook predicate firings.
+HMAC-authenticated via \`CHAINHOOK_SECRET\` (header \`X-Chainhook-Signature\` or
+\`Authorization: Bearer {hex}\`). Iterates \`apply\` and submits each tx with
+\`source='chainhook'\`. Rollback entries are ignored — the verifier persists
+only terminal-status rows; a rolled-back tx simply never replays, and the
+historical row stays in \`swaps\` as audit.
+
+Response is the ingestion summary: \`{ processed, inserted, alreadyKnown, rejected, pending }\`.
+
+### Cron Catch-Up (operator-only)
+
+\`POST /api/competition/cron\` runs the nightly catch-up sweep. Walks
+\`registered_wallets\` (100 addresses per run, resumes via \`comp:cron:cursor\` KV
+key), fetches each address's recent Hiro tx history, filters by allowlist, and
+submits matches with \`source='cron'\`. Shared-secret authenticated via
+\`X-Cron-Secret\`. Defence in depth against chainhook gaps.
+
+Response: \`{ scanned, found, inserted, alreadyKnown, pending, rejected, cursor }\`.
 
 ### Schema Notes
 
