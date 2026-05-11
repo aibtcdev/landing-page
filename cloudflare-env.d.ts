@@ -18,4 +18,5 @@ interface CloudflareEnv {
   X402_RELAY?: import("./lib/inbox/relay-rpc").RelayRPC; // x402 sponsor relay RPC service binding (undefined in local dev)
   INBOX_RECONCILIATION_QUEUE?: Queue<import("./lib/inbox/reconciliation-queue").InboxReconciliationQueueMessage>;
   CHAINHOOK_SECRET?: string; // HMAC secret for /api/competition/chainhook auth (set via wrangler secret)
+  CRON_SECRET?: string; // Shared secret for /api/competition/cron auth (set via wrangler secret)
 }
