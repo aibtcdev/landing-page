@@ -7,9 +7,11 @@
  *   - 400 on malformed body / bad txid
  *   - 429 + Retry-After when RATE_LIMIT_MUTATING trips
  *   - 503 + Retry-After when D1 binding is missing
- *   - 202 when verify returns pending (KV marker is written as observability,
- *     NOT used as a request-path short-circuit — see secret-mars's PR #738
- *     finding for the empirical reproduction)
+ *   - 202 fallback when verify returns pending (MCP pre-checks confirmation
+ *     so this should be unreachable on the happy path; covers Hiro
+ *     propagation race only)
+ *   - 409 Conflict on idempotent re-submit (the row already exists in D1)
+ *     — see secret-mars's PR #738 finding (comment 4418003085)
  *   - 202 + KV write when verify returns pending
  *   - 200 + row when verify returns verified
  *   - 422 on verifier rejections (sender/allowlist/parse)
@@ -128,89 +130,114 @@ describe("POST /api/competition/trades — rate limit + binding gates", () => {
   });
 });
 
-describe("POST /api/competition/trades — pending tracker (KV)", () => {
-  // Regression for secret-mars's PR #738 finding (comment 4418003085).
-  // The earlier short-circuit read comp:pending:{txid} and returned 202
-  // without invoking the verifier, creating a 30-min blind window after
-  // a tx confirmed. Re-submits of a now-confirmed tx returned 202 forever
-  // and the row never landed in `swaps`. Verifier is now ALWAYS invoked.
-  it("invokes verifier on every submit even when comp:pending:{txid} exists in KV", async () => {
-    const kv = makeKv({ get: vi.fn().mockResolvedValue("1") });
-    mockEnv({ kv });
-    (verifyAndPersistSwap as Mock).mockResolvedValue({
-      status: "verified",
-      inserted: true,
-      row: {
-        txid: TXID,
-        sender: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
-        contract_id: "x",
-        function_name: "y",
-        token_in: "stx",
-        amount_in: 1,
-        token_out: "stx",
-        amount_out: 1,
-        burn_block_time: 1,
-        tx_status: "success",
-        source: "agent",
-        scored_value: null,
-        scored_at: null,
-      },
-    });
-    const res = await POST(buildRequest({ txid: TXID }));
-    // Verifier ran and returned a confirmed row — not the cached 202.
-    expect(res.status).toBe(200);
-    expect(verifyAndPersistSwap).toHaveBeenCalledTimes(1);
-    // The pending marker is cleared since the tx is now verified.
-    expect(kv.delete).toHaveBeenCalledWith(`comp:pending:${TXID}`);
-  });
-
-  it("writes the pending KV marker when verify returns pending (observability artifact)", async () => {
+describe("POST /api/competition/trades — pending fallback (no KV writes)", () => {
+  it("returns 202 with note when verify returns pending (Hiro propagation race)", async () => {
     const kv = makeKv();
     mockEnv({ kv });
     (verifyAndPersistSwap as Mock).mockResolvedValue({ status: "pending" });
     const res = await POST(buildRequest({ txid: TXID }));
     expect(res.status).toBe(202);
-    expect((kv.put as Mock).mock.calls[0][0]).toBe(`comp:pending:${TXID}`);
-    expect((kv.put as Mock).mock.calls[0][2]).toEqual({ expirationTtl: 30 * 60 });
+    const body = await res.json();
+    expect(body.accepted).toBe(true);
+    expect(body.note).toMatch(/propagated/i);
   });
 
-  it("clears the pending KV marker on a verified result (observability hygiene)", async () => {
+  it("does NOT touch KV on any submit (KV pending machinery was removed)", async () => {
     const kv = makeKv();
-    mockEnv({ kv });
-    (verifyAndPersistSwap as Mock).mockResolvedValue({
-      status: "verified",
-      inserted: true,
-      row: {
-        txid: TXID,
-        sender: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
-        contract_id: "x",
-        function_name: "y",
-        token_in: "stx",
-        amount_in: 1,
-        token_out: "stx",
-        amount_out: 1,
-        burn_block_time: 1,
-        tx_status: "success",
-        source: "agent",
-        scored_value: null,
-        scored_at: null,
-      },
-    });
-    const res = await POST(buildRequest({ txid: TXID }));
-    expect(res.status).toBe(200);
-    expect(kv.delete).toHaveBeenCalledWith(`comp:pending:${TXID}`);
-  });
-
-  it("does NOT read the pending key from the request path (no short-circuit)", async () => {
-    const kv = makeKv({ get: vi.fn().mockResolvedValue("1") });
     mockEnv({ kv });
     (verifyAndPersistSwap as Mock).mockResolvedValue({ status: "pending" });
     await POST(buildRequest({ txid: TXID }));
-    // The route must not gate on the cached marker. We tolerate other KV
-    // reads from unrelated code paths (none exist today) but a positive
-    // hit here would have indicated the bug.
-    const getCalls = (kv.get as Mock).mock.calls;
-    expect(getCalls.length).toBe(0);
+    expect(kv.get).not.toHaveBeenCalled();
+    expect(kv.put).not.toHaveBeenCalled();
+    expect(kv.delete).not.toHaveBeenCalled();
+  });
+});
+
+describe("POST /api/competition/trades — idempotent re-submit → 409", () => {
+  // Regression for secret-mars's PR #738 finding (comment 4418003085).
+  // The previous behaviour returned 200 with a byte-identical body on
+  // re-submit, leaving callers no way to tell "I wrote this" from
+  // "someone wrote this earlier." Re-submits now return 409 with the
+  // existing row in the body so callers can reconcile.
+  const ROW = {
+    txid: TXID,
+    sender: "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE",
+    contract_id: "SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M.stableswap-stx-ststx-v-1-2",
+    function_name: "swap-x-for-y",
+    token_in: "stx",
+    amount_in: 1000000,
+    token_out: "ststx",
+    amount_out: 859839,
+    burn_block_time: 1762547890,
+    tx_status: "success",
+    source: "cron" as const,
+    scored_value: null,
+    scored_at: null,
+  };
+
+  it("returns 409 + existing_row when inserted:false (row already in D1)", async () => {
+    mockEnv();
+    (verifyAndPersistSwap as Mock).mockResolvedValue({
+      status: "verified",
+      inserted: false,
+      row: ROW,
+    });
+    const res = await POST(buildRequest({ txid: TXID }));
+    expect(res.status).toBe(409);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      code: "txid_already_verified",
+      retryable: false,
+    });
+    expect(body.existing_row).toEqual(ROW);
+  });
+
+  it("includes the row.source in existing_row so callers know which ingestion path won", async () => {
+    mockEnv();
+    (verifyAndPersistSwap as Mock).mockResolvedValue({
+      status: "verified",
+      inserted: false,
+      row: ROW,
+    });
+    const res = await POST(buildRequest({ txid: TXID }));
+    const body = await res.json();
+    // ROW.source === "cron" — caller can see cron wrote the row first,
+    // not agent-submit. Useful diagnostic.
+    expect(body.existing_row.source).toBe("cron");
+  });
+
+  it("4-stage lifecycle: pending → pending → verified (200) → re-submit (409)", async () => {
+    mockEnv();
+    const freshRow = { ...ROW, source: "agent" as const };
+    (verifyAndPersistSwap as Mock)
+      .mockResolvedValueOnce({ status: "pending" })
+      .mockResolvedValueOnce({ status: "pending" })
+      .mockResolvedValueOnce({ status: "verified", inserted: true, row: freshRow })
+      .mockResolvedValueOnce({ status: "verified", inserted: false, row: freshRow });
+
+    const res1 = await POST(buildRequest({ txid: TXID }));
+    expect(res1.status).toBe(202);
+
+    const res2 = await POST(buildRequest({ txid: TXID }));
+    expect(res2.status).toBe(202);
+
+    const res3 = await POST(buildRequest({ txid: TXID }));
+    expect(res3.status).toBe(200);
+    const body3 = await res3.json();
+    expect(body3).toEqual(freshRow);
+    // 200 body is the row alone — no error / existing_row fields.
+    expect(body3.error).toBeUndefined();
+    expect(body3.existing_row).toBeUndefined();
+
+    const res4 = await POST(buildRequest({ txid: TXID }));
+    expect(res4.status).toBe(409);
+    const body4 = await res4.json();
+    expect(body4.code).toBe("txid_already_verified");
+    expect(body4.existing_row).toEqual(freshRow);
+
+    // Verifier was invoked exactly 4 times — no request-path short-circuit
+    // skipped any call.
+    expect(verifyAndPersistSwap).toHaveBeenCalledTimes(4);
   });
 });
 
