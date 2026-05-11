@@ -120,6 +120,9 @@ const SHORT_DESC: Record<string, string> = {
   "yield-dashboard": "sBTC yield positions dashboard",
   "yield-hunter": "Autonomous sBTC yield optimization",
   "zest-yield-manager": "autonomous sBTC yield on Zest Protocol",
+  lunarcrush: "LunarCrush social intelligence via x402",
+  "ordinals-marketplace": "BTC ordinals trading via Magic Eden",
+  wot: "Unified Web of Trust with keySource",
 };
 
 /* ─── Helpers ─── */
