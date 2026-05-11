@@ -378,7 +378,8 @@ export function GET() {
           "POST /api/competition/trades submits a Stacks txid for verification — server fetches via Hiro, " +
           "runs allowlist + sender checks, INSERT OR IGNOREs into the swaps table (first writer wins). " +
           "Pending txs return 202 and are tracked in KV with a 30-min TTL (no D1 row for pending). " +
-          "Three ingestion paths converge on the same row: agent-submit (this POST), chainhook, and nightly cron.",
+          "Two ingestion paths today: agent-submit (this POST) and a 15-min catch-up cron. " +
+          "A third 'chainhook' source value is reserved in the schema for a future real-time stream.",
         tags: ["competition", "trading", "swaps", "leaderboard"],
         examples: [
           "Get my trading-comp status",
