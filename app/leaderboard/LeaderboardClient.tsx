@@ -226,23 +226,41 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                     {row.btcAddress ? (
                       <Link
                         href={`/agents/${row.btcAddress}`}
-                        className="group inline-flex flex-col"
+                        className="group inline-flex items-center gap-3"
                       >
-                        <span className="font-medium text-white group-hover:text-[#F7931A]">
-                          {rowDisplayName(row)}
-                        </span>
-                        <span className="text-[11px] text-white/40 font-mono">
-                          {truncateAddress(row.stxAddress)}
+                        {/* eslint-disable-next-line @next/next/no-img-element */}
+                        <img
+                          src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(row.btcAddress)}`}
+                          alt={rowDisplayName(row)}
+                          className="h-9 w-9 shrink-0 rounded-full bg-white/[0.06]"
+                          loading="lazy"
+                          width="36"
+                          height="36"
+                          onError={(e) => { e.currentTarget.style.display = "none"; }}
+                        />
+                        <span className="flex flex-col">
+                          <span className="font-medium text-white group-hover:text-[#F7931A]">
+                            {rowDisplayName(row)}
+                          </span>
+                          <span className="text-[11px] text-white/40 font-mono">
+                            {truncateAddress(row.stxAddress)}
+                          </span>
                         </span>
                       </Link>
                     ) : (
-                      <div className="inline-flex flex-col">
-                        <span className="font-medium text-white">
-                          {rowDisplayName(row)}
-                        </span>
-                        <span className="text-[11px] text-white/40 font-mono">
-                          {truncateAddress(row.stxAddress)}
-                        </span>
+                      <div className="inline-flex items-center gap-3">
+                        <div
+                          className="h-9 w-9 shrink-0 rounded-full bg-white/[0.06]"
+                          aria-hidden="true"
+                        />
+                        <div className="flex flex-col">
+                          <span className="font-medium text-white">
+                            {rowDisplayName(row)}
+                          </span>
+                          <span className="text-[11px] text-white/40 font-mono">
+                            {truncateAddress(row.stxAddress)}
+                          </span>
+                        </div>
                       </div>
                     )}
                   </td>
@@ -279,9 +297,25 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
           const showPending = !allPriced && isLoading;
           const inner = (
             <div className="flex items-start gap-3 px-4 py-3">
-              <span className="mt-0.5 inline-flex size-7 items-center justify-center rounded-full bg-white/[0.05] text-xs font-medium text-white/70">
-                {idx + 1}
-              </span>
+              <div className="relative shrink-0">
+                {row.btcAddress ? (
+                  // eslint-disable-next-line @next/next/no-img-element
+                  <img
+                    src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(row.btcAddress)}`}
+                    alt={rowDisplayName(row)}
+                    className="h-10 w-10 rounded-full bg-white/[0.06]"
+                    loading="lazy"
+                    width="40"
+                    height="40"
+                    onError={(e) => { e.currentTarget.style.display = "none"; }}
+                  />
+                ) : (
+                  <div className="h-10 w-10 rounded-full bg-white/[0.06]" aria-hidden="true" />
+                )}
+                <span className="absolute -bottom-1 -right-1 inline-flex size-5 items-center justify-center rounded-full border border-[rgba(15,15,15,0.95)] bg-white/[0.08] text-[10px] font-medium text-white/70">
+                  {idx + 1}
+                </span>
+              </div>
               <div className="flex-1 min-w-0">
                 <div className="font-medium text-white truncate">{rowDisplayName(row)}</div>
                 <div className="text-[11px] font-mono text-white/40 truncate">
