@@ -111,9 +111,9 @@ async function fetchHomeData() {
     }));
 
     // Build activity data for server-side rendering.
-    // buildActivityData() calls getCachedAgentList() internally — it hits
-    // the already-warm cache, so this is a cache read + ~120 KV reads for
-    // top-agent events, not an O(N) scan.
+    // buildActivityData() reads the warm agent-list cache for the top-agent
+    // set, then fans out to D1 via getRecentInboxEventsFromD1 (one indexed
+    // SELECT per agent on idx_inbox_to_btc_sent_at) — not an O(N) scan.
     let activityData: ActivityResponse | undefined;
     try {
       activityData = await buildActivityData(kv, db);

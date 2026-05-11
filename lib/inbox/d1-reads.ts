@@ -550,8 +550,8 @@ export async function getSentIndexFromD1(
  *   2. kv.get(`inbox:message:${id}`)        → fetch each message
  *
  * This consolidates into a single SELECT … ORDER BY sent_at DESC LIMIT ?.
- * The SQL path hits the `idx_inbox_sent_at` index (ORDER BY sent_at DESC on
- * the compound index or a covering index on to_btc_address, sent_at).
+ * The SQL path hits the `idx_inbox_to_btc_sent_at` partial index
+ * (on `inbox_messages(to_btc_address, sent_at DESC) WHERE is_reply = 0`).
  *
  * Returns empty array when `db` is undefined, no messages exist, or on D1
  * error (fail-open — activity feed gracefully degrades to no events).
