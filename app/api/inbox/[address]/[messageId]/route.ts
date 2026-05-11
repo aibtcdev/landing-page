@@ -9,15 +9,17 @@ import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
   getMessage,
-  getReply,
   updateMessage,
-  getAgentInbox,
   validateMarkRead,
   buildMarkReadMessage,
   decrementUnreadCount,
 } from "@/lib/inbox";
 import { shouldFailClosed } from "@/lib/env";
 import { updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import {
+  getInboxMessageFromD1,
+  fetchRepliesForMessages,
+} from "@/lib/inbox/d1-reads";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -44,35 +46,38 @@ export async function GET(
     );
   }
 
-  // Fetch message and reply in parallel
-  const [message, reply] = await Promise.all([
-    getMessage(kv, messageId),
-    getReply(kv, messageId),
-  ]);
-
-  if (!message) {
+  // Phase 2.5 Step 3.2 — D1 read flip.
+  // getInboxMessageFromD1 binds both messageId AND btcAddress (address-match guard):
+  //   WHERE message_id = ? AND to_btc_address = ?
+  // A mismatched address returns null → 404 (not a disclosure leak).
+  // The AND clause is the load-bearing security gate (issue #725 block-on-merge).
+  let message, repliesMap;
+  try {
+    const db = env.DB as D1Database;
+    message = await getInboxMessageFromD1(db, agent.btcAddress, messageId);
+    if (!message) {
+      return NextResponse.json(
+        {
+          error: "Message not found",
+          messageId,
+          hint: "Check GET /api/inbox/[address] to see available messages",
+        },
+        { status: 404 }
+      );
+    }
+    repliesMap = await fetchRepliesForMessages(db, [messageId]);
+  } catch (e) {
     return NextResponse.json(
       {
-        error: "Message not found",
-        messageId,
-        hint: "Check GET /api/inbox/[address] to see available messages",
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
       },
-      { status: 404 }
+      { status: 503, headers: { "Retry-After": "5" } }
     );
   }
 
-  // Verify message belongs to this agent (compare resolved BTC address)
-  if (message.toBtcAddress !== agent.btcAddress) {
-    return NextResponse.json(
-      {
-        error: "Message does not belong to this address",
-        messageId,
-        expectedAddress: message.toBtcAddress,
-        providedAddress: address,
-      },
-      { status: 400 }
-    );
-  }
+  const reply = repliesMap.get(messageId) ?? null;
 
   // Resolve sender agent info (recipient is already `agent`)
   const senderAddr = message.senderBtcAddress || message.fromAddress;
@@ -83,7 +88,7 @@ export async function GET(
   return NextResponse.json(
     {
       message,
-      reply: reply || null,
+      reply,
       sender: senderAgent
         ? { btcAddress: senderAgent.btcAddress, stxAddress: senderAgent.stxAddress, displayName: senderAgent.displayName }
         : null,
