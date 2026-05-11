@@ -48,10 +48,56 @@ import {
  *
  * This function matches that substring so callers can distinguish a permanent
  * UNIQUE violation (idempotent → 409) from a transient D1 error (→ 503).
+ *
+ * **Dependency on D1 error format.** D1 does not expose a structured error code
+ * for SQLite constraint violations — only the wrapped message string. If D1
+ * ever changes how it surfaces these (e.g. introduces a `.code` property), this
+ * matcher will silently fall back to the 503 path. Re-check periodically against
+ * `@cloudflare/workers-types` releases. Matching both substrings ("UNIQUE
+ * constraint failed" AND "payment_txid") avoids false-matching other UNIQUE
+ * indexes in the schema.
  */
 function isPaymentTxidUniqueViolation(err: unknown): boolean {
   const msg = err instanceof Error ? err.message : String(err);
   return msg.includes("UNIQUE constraint failed") && msg.includes("payment_txid");
+}
+
+/**
+ * Build the 409 "already_redeemed" response after a UNIQUE(payment_txid) violation.
+ *
+ * Re-queries `checkRedeemedTxidInD1` to surface the canonical existingMessageId.
+ * If the re-check itself fails, still returns 409 with `existingMessageId: null`
+ * — the UNIQUE violation is permanent; only the surfaced id is best-effort.
+ */
+async function resolvePaymentTxidConflict(
+  db: D1Database,
+  paymentTxid: string | undefined,
+  path: "txid_recovery" | "x402_payment",
+  logger: Logger,
+  messageId: string,
+  err: unknown
+): Promise<NextResponse> {
+  logger.warn("inbox.payment_txid_unique_violation", {
+    messageId,
+    path,
+    paymentTxid,
+    error: String(err),
+  });
+  let existingMsgId: string | null = null;
+  try {
+    existingMsgId = paymentTxid
+      ? await checkRedeemedTxidInD1(db, paymentTxid)
+      : null;
+  } catch (reCheckErr) {
+    logger.error("inbox.already_redeemed_recheck_failed", {
+      paymentTxid,
+      error: String(reCheckErr),
+    });
+  }
+  return NextResponse.json(
+    { error: "already_redeemed", existingMessageId: existingMsgId ?? null },
+    { status: 409 }
+  );
 }
 
 /** Maps nonce-related error codes to structured action strings for agents and operators. */
@@ -1063,29 +1109,13 @@ export async function POST(
       await insertInboundMessageToD1(db, message);
     } catch (err) {
       if (isPaymentTxidUniqueViolation(err)) {
-        // Race between SELECT guard and INSERT — txid was redeemed concurrently.
-        // Re-query to get the canonical existingMessageId and return 409.
-        logger.warn("inbox.payment_txid_unique_violation", {
-          messageId: message.messageId,
-          path: "txid_recovery",
-          paymentTxid: message.paymentTxid,
-          error: String(err),
-        });
-        let existingMsgId: string | null = null;
-        try {
-          existingMsgId = await checkRedeemedTxidInD1(db, message.paymentTxid!);
-        } catch (reCheckErr) {
-          logger.error("inbox.already_redeemed_recheck_failed", {
-            paymentTxid: message.paymentTxid,
-            error: String(reCheckErr),
-          });
-        }
-        return NextResponse.json(
-          {
-            error: "already_redeemed",
-            existingMessageId: existingMsgId ?? null,
-          },
-          { status: 409 }
+        return resolvePaymentTxidConflict(
+          db,
+          message.paymentTxid,
+          "txid_recovery",
+          logger,
+          message.messageId,
+          err
         );
       }
       logger.error("inbox.d1_insert_failed", {
@@ -1614,30 +1644,13 @@ export async function POST(
     await insertInboundMessageToD1(db, message);
   } catch (err) {
     if (isPaymentTxidUniqueViolation(err)) {
-      // x402 client retry with same paymentTxid — look up canonical existingMessageId.
-      logger.warn("inbox.payment_txid_unique_violation", {
-        messageId: message.messageId,
-        path: "x402_payment",
-        paymentTxid: message.paymentTxid,
-        error: String(err),
-      });
-      let existingMsgId: string | null = null;
-      try {
-        existingMsgId = message.paymentTxid
-          ? await checkRedeemedTxidInD1(db, message.paymentTxid)
-          : null;
-      } catch (reCheckErr) {
-        logger.error("inbox.already_redeemed_recheck_failed", {
-          paymentTxid: message.paymentTxid,
-          error: String(reCheckErr),
-        });
-      }
-      return NextResponse.json(
-        {
-          error: "already_redeemed",
-          existingMessageId: existingMsgId ?? null,
-        },
-        { status: 409 }
+      return resolvePaymentTxidConflict(
+        db,
+        message.paymentTxid,
+        "x402_payment",
+        logger,
+        message.messageId,
+        err
       );
     }
     logger.error("inbox.d1_insert_failed", {
