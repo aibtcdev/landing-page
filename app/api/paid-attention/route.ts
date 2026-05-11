@@ -18,7 +18,6 @@ function retiredPaidAttentionResponse() {
     status: 410,
     headers: {
       "Cache-Control": "no-cache, no-store, must-revalidate",
-      Allow: "GET, POST",
     },
   });
 }

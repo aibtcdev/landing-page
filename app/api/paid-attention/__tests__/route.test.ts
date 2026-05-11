@@ -6,7 +6,7 @@ async function expectRetiredResponse(response: Response) {
   expect(response.headers.get("cache-control")).toBe(
     "no-cache, no-store, must-revalidate"
   );
-  expect(response.headers.get("allow")).toBe("GET, POST");
+  expect(response.headers.has("allow")).toBe(false);
 
   const body = await response.json();
   expect(body).toMatchObject({
