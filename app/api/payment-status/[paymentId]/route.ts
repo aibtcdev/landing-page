@@ -110,10 +110,24 @@ export async function GET(
     );
   }
 
+  const db = env.DB as D1Database | undefined;
+  if (!db) {
+    logger.warn("Payment status DB binding unavailable", { paymentId });
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Inbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
+
   try {
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const { result } = await reconcileStagedInboxPayment({
       kv,
+      db,
       rpc,
       paymentId,
       logger,

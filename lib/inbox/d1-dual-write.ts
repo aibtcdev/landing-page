@@ -32,6 +32,23 @@ import { isStxAddress } from "@/lib/validation/address";
 import type { AgentRecord } from "@/lib/types";
 
 /**
+ * Detect the SQLite UNIQUE-constraint violation on the inbox_messages
+ * payment_txid partial index (idx_inbox_payment_txid).
+ *
+ * @cloudflare/workers-types does not surface SQLite constraint codes — only
+ * the wrapped message string. We match the full constraint string verbatim
+ * (per Copilot review on #756) to avoid false positives if future schema
+ * changes introduce other tables/columns whose names contain `payment_txid`.
+ *
+ * Re-check periodically against `@cloudflare/workers-types` releases — when
+ * D1 introduces structured error codes, switch to those.
+ */
+export function isPaymentTxidUniqueViolation(err: unknown): boolean {
+  const msg = err instanceof Error ? err.message : String(err);
+  return msg.includes("UNIQUE constraint failed: inbox_messages.payment_txid");
+}
+
+/**
  * Resolve the reply recipient's BTC address.
  *
  * OutboxReply.toBtcAddress can be a Stacks address (pre-resolution) because the

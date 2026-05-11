@@ -29,6 +29,13 @@ export type ReconciliationOutcome = "finalized" | "discarded" | "retry" | "noop"
 
 export interface ReconcileStagedPaymentParams {
   kv: KVNamespace;
+  /**
+   * D1 binding required for finalizing confirmed payments (#760 — pending x402
+   * finalize now writes to D1 instead of legacy KV keys). Callers that lack a
+   * binding (typically local dev without `wrangler --remote`) must NOT invoke
+   * the reconciler — the staged record will simply expire via TTL.
+   */
+  db: D1Database;
   rpc: RelayRPC;
   paymentId: string;
   logger: Logger;
@@ -87,6 +94,7 @@ export async function reconcileStagedInboxPayment(
 ): Promise<ReconcileStagedPaymentResult> {
   const {
     kv,
+    db,
     rpc,
     paymentId,
     logger,
@@ -189,7 +197,7 @@ export async function reconcileStagedInboxPayment(
       result.status as keyof typeof paymentStateDefaultDeliveryByState
     ]
   ) {
-    const finalized = await finalizeStagedInboxPayment(kv, result.paymentId, {
+    const finalized = await finalizeStagedInboxPayment(kv, db, result.paymentId, {
       paymentStatus: "confirmed",
       paymentTxid: result.txid ?? staged.message.paymentTxid,
       paymentId: result.paymentId,

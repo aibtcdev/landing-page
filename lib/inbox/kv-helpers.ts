@@ -13,6 +13,8 @@ import type {
   SentMessageIndex,
   StagedInboxMessage,
 } from "./types";
+import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "./d1-dual-write";
+import { getInboxMessageFromD1 } from "./d1-reads";
 
 /**
  * Build KV key for an individual inbox message.
@@ -354,35 +356,49 @@ export async function deleteStagedInboxPayment(
   await kv.delete(buildStagedPaymentKey(paymentId));
 }
 
+/**
+ * Finalize a pending x402 staged inbox payment by writing the confirmed message
+ * to D1 and clearing the staged KV record.
+ *
+ * Closes the post-#745 legacy-KV leak (#760): the synchronous-confirmed branch
+ * of `POST /api/inbox/[address]` already routes through D1, but the pending →
+ * confirmed transition used to call legacy KV writers (`storeMessage`,
+ * `updateAgentInbox`, `updateSentIndex`), bypassing D1.
+ *
+ * Idempotency:
+ *  - If D1 already has the row (queue retry, parallel poll), skip the INSERT
+ *    and return the existing row.
+ *  - If the INSERT races and hits the `idx_inbox_payment_txid` UNIQUE
+ *    partial index, re-query D1 for the canonical row and return it. This
+ *    mirrors the synchronous-confirmed branch's `resolvePaymentTxidConflict`
+ *    behavior — a 409-equivalent outcome that the queue should treat as
+ *    success.
+ *  - The staged KV record is deleted on every success path.
+ *
+ * @returns the finalized message, or null when:
+ *   - the staged KV record has already been cleared (nothing to finalize), or
+ *   - the UNIQUE-violation re-query unexpectedly returned no row (treated as
+ *     permanent outcome — the queue should still ack and move on).
+ */
 export async function finalizeStagedInboxPayment(
   kv: KVNamespace,
+  db: D1Database,
   paymentId: string,
   updates: Partial<InboxMessage> = {}
 ): Promise<InboxMessage | null> {
   const staged = await getStagedInboxPayment(kv, paymentId);
   if (!staged) return null;
 
-  const existingMessage = await getMessage(kv, staged.message.messageId);
+  const existingMessage = await getInboxMessageFromD1(
+    db,
+    staged.message.toBtcAddress,
+    staged.message.messageId
+  );
   if (existingMessage) {
-    // KV doesn't give us cross-key transactions here. If a prior finalize stored the
-    // message but crashed before repairing indexes, rebuild them idempotently now.
-    await Promise.all([
-      updateAgentInbox(
-        kv,
-        existingMessage.toBtcAddress,
-        existingMessage.messageId,
-        existingMessage.sentAt
-      ),
-      ...(staged.senderSentIndexBtcAddress
-        ? [updateSentIndex(kv, staged.senderSentIndexBtcAddress, existingMessage.messageId, existingMessage.sentAt)]
-        : []),
-    ]);
     await deleteStagedInboxPayment(kv, paymentId);
     return existingMessage;
   }
 
-  // This remains best-effort under concurrent polls because Workers KV cannot atomically
-  // read/write the staged record, message body, and both indexes in one transaction.
   const finalizedMessage: InboxMessage = {
     ...staged.message,
     ...updates,
@@ -390,13 +406,22 @@ export async function finalizeStagedInboxPayment(
     paymentId,
   };
 
-  await Promise.all([
-    storeMessage(kv, finalizedMessage),
-    updateAgentInbox(kv, finalizedMessage.toBtcAddress, finalizedMessage.messageId, finalizedMessage.sentAt),
-    ...(staged.senderSentIndexBtcAddress
-      ? [updateSentIndex(kv, staged.senderSentIndexBtcAddress, finalizedMessage.messageId, finalizedMessage.sentAt)]
-      : []),
-  ]);
+  try {
+    await insertInboundMessageToD1(db, finalizedMessage);
+  } catch (err) {
+    if (isPaymentTxidUniqueViolation(err)) {
+      // A parallel finalize already inserted the row under the same payment_txid.
+      // Re-query D1 for the canonical row, clear the staged record, and return it.
+      const canonical = await getInboxMessageFromD1(
+        db,
+        staged.message.toBtcAddress,
+        staged.message.messageId
+      );
+      await deleteStagedInboxPayment(kv, paymentId);
+      return canonical;
+    }
+    throw err;
+  }
 
   await deleteStagedInboxPayment(kv, paymentId);
   return finalizedMessage;

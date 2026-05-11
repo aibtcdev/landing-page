@@ -1,7 +1,92 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
-import { getMessage, getStagedInboxPayment, storeStagedInboxPayment } from "@/lib/inbox";
+import { getStagedInboxPayment, storeStagedInboxPayment } from "@/lib/inbox";
 import { processInboxReconciliationQueue } from "@/lib/inbox/reconciliation-queue";
 import { createMockKV } from "./kv-mock";
+
+/**
+ * In-memory D1 mock that mimics inbox_messages INSERTs and message_id lookups
+ * for the finalize path (#760). Only covers what the reconcile → finalize
+ * code path exercises.
+ */
+function createMockD1(): { db: D1Database; insertedMessageIds: string[] } {
+  const rows: Record<string, { messageId: string; paymentTxid: string | null; paymentStatus: string | null; toBtcAddress: string; sentAt: string }> = {};
+  const insertedMessageIds: string[] = [];
+
+  const db = {
+    prepare: (sql: string) => {
+      let binds: unknown[] = [];
+      const stmt: any = {
+        bind: (...b: unknown[]) => {
+          binds = b;
+          return stmt;
+        },
+        run: async () => {
+          if (sql.includes("INSERT INTO inbox_messages")) {
+            const [messageId, , , toBtcAddress, , , paymentTxid, , paymentStatus, , , , , , , sentAt] = binds as [
+              string,
+              string | null,
+              string,
+              string,
+              string | null,
+              string,
+              string | null,
+              number | null,
+              string | null,
+              string | null,
+              string | null,
+              number,
+              number,
+              string | null,
+              string | null,
+              string,
+            ];
+            if (rows[messageId]) {
+              return { success: true, meta: { changes: 0 } };
+            }
+            rows[messageId] = { messageId, paymentTxid, paymentStatus, toBtcAddress, sentAt };
+            insertedMessageIds.push(messageId);
+            return { success: true, meta: { changes: 1 } };
+          }
+          return { success: true, meta: { changes: 0 } };
+        },
+        first: async () => {
+          if (sql.includes("FROM inbox_messages") && sql.includes("WHERE message_id = ?")) {
+            const [messageId, toBtcAddress] = binds as [string, string];
+            const row = rows[messageId];
+            if (!row || row.toBtcAddress !== toBtcAddress) return null;
+            // Return shape matching D1InboxRow's required columns
+            return {
+              message_id: row.messageId,
+              from_stx_address: null,
+              to_btc_address: row.toBtcAddress,
+              to_stx_address: null,
+              content: "",
+              payment_txid: row.paymentTxid,
+              payment_satoshis: null,
+              payment_status: row.paymentStatus,
+              payment_id: null,
+              receipt_id: null,
+              recovered_via_txid: 0,
+              authenticated: 0,
+              bitcoin_signature: null,
+              sender_btc_address: null,
+              sent_at: row.sentAt,
+              read_at: null,
+              replied_at: null,
+              reply_to_message_id: null,
+            };
+          }
+          return null;
+        },
+        all: async () => ({ results: [], success: true, meta: { changes: 0 } }),
+        raw: async () => [],
+      };
+      return stmt;
+    },
+  } as unknown as D1Database;
+
+  return { db, insertedMessageIds };
+}
 
 const mocks = vi.hoisted(() => ({
   invalidateAgentListCache: vi.fn(),
@@ -25,6 +110,7 @@ describe("inbox reconciliation queue", () => {
 
   it("finalizes a confirmed staged payment and acks the queue message", async () => {
     const kv = createMockKV();
+    const { db, insertedMessageIds } = createMockD1();
     const sentAt = new Date().toISOString();
 
     await storeStagedInboxPayment(kv, {
@@ -71,6 +157,7 @@ describe("inbox reconciliation queue", () => {
       },
       {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           submitPayment: vi.fn(),
           checkPayment: vi.fn().mockResolvedValue({
@@ -92,16 +179,13 @@ describe("inbox reconciliation queue", () => {
     expect(retry).not.toHaveBeenCalled();
     expect(queueSend).not.toHaveBeenCalled();
     expect(await getStagedInboxPayment(kv, "pay_queue_finalize")).toBeNull();
-    expect(await getMessage(kv, "msg_queue_finalize")).toEqual(
-      expect.objectContaining({
-        paymentStatus: "confirmed",
-        paymentTxid: "c".repeat(64),
-      })
-    );
+    // Finalize wrote to D1 (the #760 fix) and not to legacy KV.
+    expect(insertedMessageIds).toEqual(["msg_queue_finalize"]);
   });
 
   it("requeues in-flight payments with delay and acks the current message", async () => {
     const kv = createMockKV();
+    const { db } = createMockD1();
     const sentAt = new Date().toISOString();
 
     await storeStagedInboxPayment(kv, {
@@ -147,6 +231,7 @@ describe("inbox reconciliation queue", () => {
       },
       {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           submitPayment: vi.fn(),
           checkPayment: vi.fn().mockResolvedValue({
@@ -180,6 +265,7 @@ describe("inbox reconciliation queue", () => {
 
   it("acks missing staged records without retrying", async () => {
     const kv = createMockKV();
+    const { db } = createMockD1();
     const ack = vi.fn();
     const retry = vi.fn();
     const queueSend = vi.fn();
@@ -207,6 +293,7 @@ describe("inbox reconciliation queue", () => {
       },
       {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           submitPayment: vi.fn(),
           checkPayment: vi.fn().mockResolvedValue({
@@ -232,6 +319,7 @@ describe("inbox reconciliation queue", () => {
 
   it("retries the current queue message when the requeue binding is unavailable", async () => {
     const kv = createMockKV();
+    const { db } = createMockD1();
     const sentAt = new Date().toISOString();
 
     await storeStagedInboxPayment(kv, {
@@ -276,6 +364,7 @@ describe("inbox reconciliation queue", () => {
       },
       {
         VERIFIED_AGENTS: kv,
+        DB: db,
         X402_RELAY: {
           submitPayment: vi.fn(),
           checkPayment: vi.fn().mockResolvedValue({

@@ -28,7 +28,7 @@ import {
   getPaymentRepoVersion,
   logPaymentEvent,
 } from "@/lib/inbox/payment-logging";
-import { insertInboundMessageToD1 } from "@/lib/inbox/d1-dual-write";
+import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "@/lib/inbox/d1-dual-write";
 import {
   listInboxMessagesFromD1,
   countInboxMessagesFromD1,
@@ -38,30 +38,6 @@ import {
   checkRedeemedTxidInD1,
   type StatusFilter,
 } from "@/lib/inbox/d1-reads";
-
-/**
- * Detect whether a D1/SQLite error is a UNIQUE constraint violation on `payment_txid`.
- *
- * D1 surfaces SQLite errors as thrown Error objects whose message contains the
- * SQLite error string. When the `idx_inbox_payment_txid` partial UNIQUE index
- * fires, the message contains "UNIQUE constraint failed: inbox_messages.payment_txid".
- *
- * This function matches that substring so callers can distinguish a permanent
- * UNIQUE violation (idempotent → 409) from a transient D1 error (→ 503).
- *
- * **Dependency on D1 error format.** D1 does not expose a structured error code
- * for SQLite constraint violations — only the wrapped message string. If D1
- * ever changes how it surfaces these (e.g. introduces a `.code` property), this
- * matcher will silently fall back to the 503 path. Re-check periodically against
- * `@cloudflare/workers-types` releases. The full constraint string
- * "UNIQUE constraint failed: inbox_messages.payment_txid" is matched verbatim
- * (per Copilot review on #756) to avoid false-positives if future schema
- * changes introduce other tables/columns whose names contain `payment_txid`.
- */
-function isPaymentTxidUniqueViolation(err: unknown): boolean {
-  const msg = err instanceof Error ? err.message : String(err);
-  return msg.includes("UNIQUE constraint failed: inbox_messages.payment_txid");
-}
 
 /**
  * Build the 409 "already_redeemed" response after a UNIQUE(payment_txid) violation.
