@@ -253,8 +253,8 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 sole-source-of-truth (Ph
     expect(resp.status).toBe(503);
     expect(resp.headers.get("Retry-After")).toBe("5");
     const body = await resp.json();
-    expect(body.retryable).toBe(true);
-    expect(body.retryAfter).toBe(5);
+    expect(body.error).toBe("transient_d1_unavailable");
+    expect(body.retry_after).toBe(5);
   });
 
   it("returns 503 when DB binding is absent (D1 is now the auth gate, not a fallback)", async () => {

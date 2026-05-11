@@ -330,8 +330,8 @@ describe("POST /api/inbox/[address] — txid-recovery UNIQUE violation → 409 (
 
     expect(resp.status).toBe(503);
     const body = await resp.json();
-    expect(body.retryable).toBe(true);
-    expect(body.retryAfter).toBe(5);
+    expect(body.error).toBe("transient_d1_unavailable");
+    expect(body.retry_after).toBe(5);
     expect(resp.headers.get("Retry-After")).toBe("5");
   });
 });
@@ -436,8 +436,8 @@ describe("POST /api/inbox/[address] — x402 delivery UNIQUE violation → 409 (
 
     expect(resp.status).toBe(503);
     const body = await resp.json();
-    expect(body.retryable).toBe(true);
-    expect(body.retryAfter).toBe(5);
+    expect(body.error).toBe("transient_d1_unavailable");
+    expect(body.retry_after).toBe(5);
     expect(resp.headers.get("Retry-After")).toBe("5");
   });
 });

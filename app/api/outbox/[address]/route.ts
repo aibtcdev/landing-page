@@ -458,10 +458,9 @@ export async function POST(
     });
     return NextResponse.json(
       {
-        error: "Reply delivery failed. Please retry shortly.",
-        retryable: true,
-        retryAfter: 5,
-        messageId,
+        error: "transient_d1_unavailable",
+        message: "Reply delivery failed. Please retry shortly.",
+        retry_after: 5,
       },
       { status: 503, headers: { "Retry-After": "5" } }
     );

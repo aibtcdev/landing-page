@@ -239,6 +239,31 @@ describe("Phase 2.5 Step 3.5 — PATCH mark-read write-path D1 flip", () => {
     expect(res.headers.get("Retry-After")).toBe("5");
   });
 
+  it("D1 UPDATE failure on mark-read write → 503 with canonical transient_d1_unavailable shape (#747)", async () => {
+    // updateMessageStateD1 throws — the D1 write path for PATCH mark-read.
+    // Issue #747: this path previously emitted the ad-hoc shape
+    //   { error: "Mark-read failed...", retryable: true, retryAfter: 5 }
+    // Must now emit the canonical shape with error: "transient_d1_unavailable",
+    // snake_case retry_after, and Retry-After header.
+    const { updateMessageStateD1 } = await import("@/lib/inbox/d1-dual-write");
+    (updateMessageStateD1 as Mock).mockRejectedValue(
+      new Error("D1_ERROR: database is locked")
+    );
+
+    const res = await PATCH(
+      buildPatchRequest(ADDR_A, MSG_ID),
+      buildContext(ADDR_A, MSG_ID)
+    );
+
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe("transient_d1_unavailable");
+    expect(body.retry_after).toBe(5);
+    expect(body).not.toHaveProperty("retryable");
+    expect(body).not.toHaveProperty("retryAfter");
+    expect(res.headers.get("Retry-After")).toBe("5");
+  });
+
   it("DB binding absent → 503 with structured body (D1 is now auth gate)", async () => {
     (getCloudflareContext as Mock).mockReturnValue({
       env: {

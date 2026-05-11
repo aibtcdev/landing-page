@@ -101,6 +101,23 @@ async function resolvePaymentTxidConflict(
   );
 }
 
+/**
+ * Build a canonical 503 response for transient D1 unavailability.
+ *
+ * Per the contract shared with read-fallback paths across these routes:
+ *   { error: "transient_d1_unavailable", message, retry_after: 5 }
+ *   + Retry-After: 5 header
+ *
+ * Centralized so future schema/header changes are a one-liner across all
+ * write-failure sites in this handler (per arc0btc review on #759).
+ */
+function d1TransientResponse(message: string): NextResponse {
+  return NextResponse.json(
+    { error: "transient_d1_unavailable", message, retry_after: 5 },
+    { status: 503, headers: { "Retry-After": "5" } }
+  );
+}
+
 /** Maps nonce-related error codes to structured action strings for agents and operators. */
 const NONCE_ACTION_MAP: Record<string, string> = {
   SENDER_NONCE_STALE: "refetch_nonce_and_resign",
@@ -347,14 +364,7 @@ export async function GET(
         : Promise.resolve([] as import("@/lib/inbox/types").OutboxReply[]),
     ]);
   } catch (e) {
-    return NextResponse.json(
-      {
-        error: "transient_d1_unavailable",
-        message: "Inbox database temporarily unavailable. Please retry shortly.",
-        retry_after: 5,
-      },
-      { status: 503, headers: { "Retry-After": "5" } }
-    );
+    return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
   }
 
   // Build inline replies map for the returned page
@@ -919,28 +929,14 @@ export async function POST(
     // idx_inbox_payment_txid (UNIQUE partial index on payment_txid) makes this
     // index-only. Replaces the former KV inbox:redeemed-txid:{txid} check.
     if (!db) {
-      return NextResponse.json(
-        {
-          error: "Database unavailable. Please try again shortly.",
-          retryable: true,
-          retryAfter: 5,
-        },
-        { status: 503, headers: { "Retry-After": "5" } }
-      );
+      return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
     }
     let existingRedemptionMessageId: string | null;
     try {
       existingRedemptionMessageId = await checkRedeemedTxidInD1(db, paymentTxid);
     } catch (e) {
       logger.error("D1 redeemed-txid check failed", { txid: paymentTxid, error: String(e) });
-      return NextResponse.json(
-        {
-          error: "Database unavailable. Please try again shortly.",
-          retryable: true,
-          retryAfter: 5,
-        },
-        { status: 503, headers: { "Retry-After": "5" } }
-      );
+      return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
     }
     if (existingRedemptionMessageId) {
       logger.warn("Txid already redeemed", { txid: paymentTxid });
@@ -1124,14 +1120,7 @@ export async function POST(
         path: "txid_recovery",
         error: String(err),
       });
-      return NextResponse.json(
-        {
-          error: "Message delivery failed. Please retry shortly.",
-          retryable: true,
-          retryAfter: 5,
-        },
-        { status: 503, headers: { "Retry-After": "5" } }
-      );
+      return d1TransientResponse("Message delivery failed. Please retry shortly.");
     }
 
     logger.info("Message stored via txid recovery", {
@@ -1632,14 +1621,7 @@ export async function POST(
   // idx_inbox_payment_txid. Re-query and return 409 (not 503) — permanent outcome.
   if (!db) {
     logger.error("D1 binding unavailable on x402 delivery path", { messageId });
-    return NextResponse.json(
-      {
-        error: "Message delivery failed. Please retry shortly.",
-        retryable: true,
-        retryAfter: 5,
-      },
-      { status: 503, headers: { "Retry-After": "5" } }
-    );
+    return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
   }
   try {
     await insertInboundMessageToD1(db, message);
@@ -1659,14 +1641,7 @@ export async function POST(
       path: "x402_payment",
       error: String(err),
     });
-    return NextResponse.json(
-      {
-        error: "Message delivery failed. Please retry shortly.",
-        retryable: true,
-        retryAfter: 5,
-      },
-      { status: 503, headers: { "Retry-After": "5" } }
-    );
+    return d1TransientResponse("Message delivery failed. Please retry shortly.");
   }
 
   const deliveredPaymentStatus = message.paymentStatus ?? "confirmed";
