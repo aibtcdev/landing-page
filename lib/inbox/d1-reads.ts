@@ -5,6 +5,9 @@
  * Phase 2.5 Step 3.2 — adds getInboxMessageFromD1 for the single-message GET.
  * Phase 2.5 Step 3.3 — adds listOutboxRepliesFromD1 + countOutboxRepliesFromD1
  *   for the outbox GET flip and sentCount/partners restoration in inbox-list.
+ * Phase 2.5 Step 3.5 — adds getReplyForMessageFromD1 for write-path auth reads
+ *   (POST outbox duplicate-check; PATCH mark-read message fetch now uses
+ *   getInboxMessageFromD1 directly).
  * KV writes are NOT removed here (that is Step 4).
  *
  * These helpers query the inbox_messages table that is being populated by
@@ -333,6 +336,53 @@ export async function countOutboxRepliesFromD1(
     .first<{ cnt: number }>();
 
   return row?.cnt ?? 0;
+}
+
+/**
+ * Fetch a single reply for a parent message, filtered by the replier's BTC address.
+ *
+ * Phase 2.5 Step 3.5 — used by POST /api/outbox/[address] to check for
+ * duplicate replies before storing a new one.
+ *
+ * The `from_btc_address` predicate is the tenant-discriminator gate: it ensures
+ * only a prior reply by THIS agent (identified via Bitcoin signature) blocks the
+ * duplicate check. A reply by a different agent to the same parent does not
+ * trigger a false-409.
+ *
+ * SQL shape:
+ *   SELECT message_id, reply_to_message_id, from_btc_address, to_btc_address,
+ *          content, bitcoin_signature, sent_at
+ *   FROM inbox_messages
+ *   WHERE reply_to_message_id = ? AND from_btc_address = ? AND is_reply = 1
+ *   LIMIT 1
+ *
+ * Returns null when:
+ *   - No reply exists for the given parentMessageId
+ *   - A reply exists but was sent by a different agent (from_btc_address mismatch)
+ *
+ * See: https://github.com/aibtcdev/landing-page/issues/736 (Step 3.5 spec)
+ */
+export async function getReplyForMessageFromD1(
+  db: D1Database,
+  parentMessageId: string,
+  fromBtcAddress: string
+): Promise<OutboxReply | null> {
+  const sql = `
+    SELECT
+      reply_to_message_id, from_btc_address, to_btc_address,
+      content, bitcoin_signature, sent_at
+    FROM inbox_messages
+    WHERE reply_to_message_id = ? AND from_btc_address = ? AND is_reply = 1
+    LIMIT 1
+  `;
+
+  const row = await db
+    .prepare(sql)
+    .bind(parentMessageId, fromBtcAddress)
+    .first<D1ReplyRow>();
+
+  if (!row) return null;
+  return replyRowToOutboxReply(row);
 }
 
 // Re-export the prefix so tests can verify synthesized IDs

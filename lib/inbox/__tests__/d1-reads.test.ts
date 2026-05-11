@@ -2,6 +2,7 @@
  * Tests for lib/inbox/d1-reads.ts
  *
  * Phase 2.5 Step 3.1 — D1 read flip for GET /api/inbox/[address].
+ * Phase 2.5 Step 3.5 — adds getReplyForMessageFromD1 for write-path auth reads.
  *
  * Verifies:
  *   - listInboxMessagesFromD1: correct SQL shape, status filter variants,
@@ -10,6 +11,7 @@
  *     SELECT COUNT(*) that closes aibtc-mcp-server#497
  *   - fetchRepliesForMessages: IN-clause construction, OutboxReply mapping,
  *     empty-input guard
+ *   - getReplyForMessageFromD1: tenant-discriminator gate, hit/miss, SQL shape
  *   - Cache-key invariant documentation (structural): ensures the public
  *     path does not set Cache-Control headers that would leak auth'd state
  *
@@ -18,6 +20,7 @@
  * make live network calls.
  *
  * See: https://github.com/aibtcdev/landing-page/issues/721
+ * See: https://github.com/aibtcdev/landing-page/issues/736 (Step 3.5)
  */
 
 import { describe, it, expect, vi, beforeEach } from "vitest";
@@ -27,6 +30,7 @@ import {
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
   countOutboxRepliesFromD1,
+  getReplyForMessageFromD1,
   type StatusFilter,
 } from "../d1-reads";
 
@@ -614,6 +618,103 @@ describe("countOutboxRepliesFromD1 (Phase 2.5 Step 3.3 — sentCount restoration
   });
 });
 
+// ── getReplyForMessageFromD1 ──────────────────────────────────────────────────
+
+describe("getReplyForMessageFromD1 (Phase 2.5 Step 3.5)", () => {
+  const PARENT_MSG_ID = "msg_1771381602504_30487f5e-1f3a-473a-8068-e040295a76bf";
+  const REPLIER_BTC = "bc1qp66jvxe765wgwpzqk8kcrmgh2mucyxg540mtzv";
+  const OTHER_REPLIER_BTC = "bc1qw0y4ant38zykzjqssgnujqmszruvhkwupvp6dn";
+
+  const REPLY_ROW = {
+    reply_to_message_id: PARENT_MSG_ID,
+    from_btc_address: REPLIER_BTC,
+    to_btc_address: BTC_ADDRESS,
+    content: "Great work — bookmarked.",
+    bitcoin_signature:
+      "Jx52I99dmnoFqmKkJXsLP4ELktANgZ6v1m1CFA7c5kz+Xr9W45m29QnabzGim5ubEzJP1eoynU/GjuRWMjRD9nQ=",
+    sent_at: "2026-02-19T22:14:43.426Z",
+  };
+
+  it("returns OutboxReply when a matching reply row exists", async () => {
+    const stmtMock = createPreparedStatement([], REPLY_ROW);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    const result = await getReplyForMessageFromD1(db, PARENT_MSG_ID, REPLIER_BTC);
+
+    expect(result).not.toBeNull();
+    expect(result?.messageId).toBe(PARENT_MSG_ID);
+    expect(result?.fromAddress).toBe(REPLIER_BTC);
+    expect(result?.reply).toBe(REPLY_ROW.content);
+    expect(result?.signature).toBe(REPLY_ROW.bitcoin_signature);
+    expect(result?.repliedAt).toBe(REPLY_ROW.sent_at);
+  });
+
+  it("returns null when no reply row exists (no match)", async () => {
+    const stmtMock = createPreparedStatement([], null);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    const result = await getReplyForMessageFromD1(db, PARENT_MSG_ID, REPLIER_BTC);
+
+    expect(result).toBeNull();
+  });
+
+  it("tenant-discriminator gate: reply from different from_btc_address is NOT returned", async () => {
+    // If REPLIER_BTC sent a reply, but we query with OTHER_REPLIER_BTC,
+    // D1 returns null (SQL gate: from_btc_address = OTHER_REPLIER_BTC doesn't match).
+    // This prevents false-409 duplicate-reply blocks for other agents replying to same parent.
+    const stmtMock = createPreparedStatement([], null); // D1 returns null — different address
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    const result = await getReplyForMessageFromD1(db, PARENT_MSG_ID, OTHER_REPLIER_BTC);
+
+    expect(result).toBeNull();
+    // Verify query was called with OTHER_REPLIER_BTC (the SQL gate enforces isolation)
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(PARENT_MSG_ID);
+    expect(bindArgs[1]).toBe(OTHER_REPLIER_BTC);
+  });
+
+  it("queries with correct SQL shape: WHERE reply_to_message_id = ? AND from_btc_address = ? AND is_reply = 1", async () => {
+    const stmtMock = createPreparedStatement([], null);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    await getReplyForMessageFromD1(db, PARENT_MSG_ID, REPLIER_BTC);
+
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("FROM inbox_messages");
+    expect(sql).toContain("reply_to_message_id = ?");
+    expect(sql).toContain("from_btc_address = ?");
+    expect(sql).toContain("is_reply = 1");
+    expect(sql).toContain("LIMIT 1");
+  });
+
+  it("binds parentMessageId first, then fromBtcAddress", async () => {
+    const stmtMock = createPreparedStatement([], null);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    await getReplyForMessageFromD1(db, PARENT_MSG_ID, REPLIER_BTC);
+
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(PARENT_MSG_ID);
+    expect(bindArgs[1]).toBe(REPLIER_BTC);
+  });
+});
+
 // ── Cache-key invariant: structural verification ──────────────────────────────
 
 describe("cache-key invariants (structural verification)", () => {
@@ -630,6 +731,7 @@ describe("cache-key invariants (structural verification)", () => {
     expect(fetchRepliesForMessages.length).toBe(2);  // (db, parentMessageIds)
     expect(listOutboxRepliesFromD1.length).toBe(4);  // (db, btcAddress, limit, offset)
     expect(countOutboxRepliesFromD1.length).toBe(2); // (db, btcAddress)
+    expect(getReplyForMessageFromD1.length).toBe(3); // (db, parentMessageId, fromBtcAddress)
   });
 
   it("Invariant 3: read helpers are called with explicit inputs — no implicit cache-before-auth", async () => {

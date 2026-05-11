@@ -1,11 +1,15 @@
 /**
  * Tests for the mark-read PATCH D1 dual-write (Phase 2.5 Step 3 readiness).
  *
+ * Updated in Phase 2.5 Step 3.5 (#736): the PATCH auth read was flipped from
+ * KV (getMessage) to D1 (getInboxMessageFromD1). Tests updated to mock
+ * getInboxMessageFromD1 instead of getMessage.
+ *
  * Verifies:
- *  - After successful KV mark-read, ctx.waitUntil schedules D1 UPDATE
+ *  - After successful D1 read + KV mark-read, ctx.waitUntil schedules D1 UPDATE
  *  - D1 UPDATE is called with the correct messageId and { readAt: now }
  *  - D1 UPDATE failure is swallowed — response is still 200
- *  - When DB binding is absent, dual-write is skipped silently
+ *  - When DB binding is absent, response is 503 (D1 is now auth gate, not fallback)
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
@@ -26,13 +30,16 @@ vi.mock("@/lib/agent-lookup", () => ({
 }));
 
 vi.mock("@/lib/inbox", () => ({
-  getMessage: vi.fn(),
-  getReply: vi.fn(),
   updateMessage: vi.fn(),
   getAgentInbox: vi.fn(),
   validateMarkRead: vi.fn(),
   buildMarkReadMessage: vi.fn(() => "Mark as Read | msg_123"),
   decrementUnreadCount: vi.fn(),
+}));
+
+vi.mock("@/lib/inbox/d1-reads", () => ({
+  getInboxMessageFromD1: vi.fn(),
+  fetchRepliesForMessages: vi.fn(),
 }));
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
@@ -60,11 +67,11 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
-  getMessage,
   validateMarkRead,
   updateMessage,
   decrementUnreadCount,
 } from "@/lib/inbox";
+import { getInboxMessageFromD1 } from "@/lib/inbox/d1-reads";
 import { updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
 import { PATCH } from "../route";
 
@@ -162,7 +169,8 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 dual-write (Phase 2.5 St
     (validateMarkRead as Mock).mockReturnValue({
       data: { messageId: MESSAGE_ID, signature: "sig_abc123" },
     });
-    (getMessage as Mock).mockResolvedValue(INBOX_MESSAGE);
+    // Phase 2.5 Step 3.5: auth read is now D1, not KV
+    (getInboxMessageFromD1 as Mock).mockResolvedValue(INBOX_MESSAGE);
     (verifyBitcoinSignature as Mock).mockReturnValue({
       valid: true,
       address: AGENT.btcAddress,
@@ -231,11 +239,14 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 dual-write (Phase 2.5 St
       params: Promise.resolve({ address: AGENT.btcAddress, messageId: MESSAGE_ID }),
     });
 
-    // Response must still be 200 — D1 failure must NOT propagate
+    // Response must still be 200 — D1 dual-write failure must NOT propagate
     expect(resp.status).toBe(200);
   });
 
-  it("skips D1 UPDATE when DB binding is absent", async () => {
+  it("returns 503 when DB binding is absent (D1 is now the auth gate, not a fallback)", async () => {
+    // Phase 2.5 Step 3.5: D1 is now the auth read source for PATCH.
+    // When env.DB is absent, the handler returns 503 (not 200) because
+    // it cannot perform the auth read without D1.
     const waitUntilFn = vi.fn();
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const kv = createMockKV();
@@ -254,7 +265,13 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 dual-write (Phase 2.5 St
       params: Promise.resolve({ address: AGENT.btcAddress, messageId: MESSAGE_ID }),
     });
 
-    expect(resp.status).toBe(200);
+    // D1 is now required for auth read — no DB → 503 transient unavailable
+    expect(resp.status).toBe(503);
+    const body = await resp.json();
+    expect(body.error).toBe("transient_d1_unavailable");
+    expect(body.retry_after).toBe(5);
+    expect(resp.headers.get("Retry-After")).toBe("5");
+    // ctx.waitUntil should NOT have been called — request rejected early
     expect(waitUntilFn).not.toHaveBeenCalled();
     expect(updateMessageStateD1).not.toHaveBeenCalled();
   });
