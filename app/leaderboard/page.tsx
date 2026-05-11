@@ -55,7 +55,7 @@ export default async function LeaderboardPage() {
         <div className="relative mx-auto max-w-[1200px] px-12 pb-16 pt-32 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-12">
           <div className="mb-8 max-md:mb-6">
             <div className="mb-3 inline-flex items-center gap-2 rounded-full border border-white/[0.08] bg-white/[0.03] px-3 py-1.5">
-              <span className="relative flex size-2">
+              <span aria-hidden="true" className="relative flex size-2">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-[#F7931A] opacity-75" />
                 <span className="relative inline-flex size-2 rounded-full bg-[#F7931A]" />
               </span>
