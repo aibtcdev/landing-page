@@ -242,6 +242,7 @@ export async function GET(
 
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
     const hiroApiKey = env.HIRO_API_KEY;
 
     const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
@@ -429,12 +430,16 @@ export async function GET(
     // Enrich agent data (parallel fetches with timeout guard)
     // -----------------------------------------------------------------------
 
+    // Pass db so inbox/sent metrics are read from live D1 counts (#746).
+    // db is undefined on misconfigured environments — enrichAgentProfile fails open.
     const enrichment = await enrichAgentProfile(
       agent,
       kv,
       hiroApiKey,
       `resolve/${agent.btcAddress}`,
-      logger
+      logger,
+      undefined,
+      db
     );
 
     // -----------------------------------------------------------------------

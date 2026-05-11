@@ -421,3 +421,172 @@ export async function checkRedeemedTxidInD1(
 
 // Re-export the prefix so tests can verify synthesized IDs
 export { REPLY_D1_PK_PREFIX };
+
+// ---------------------------------------------------------------------------
+// Agent-enrichment helpers (replaces getAgentInbox + getSentIndex KV reads)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch per-agent inbox summary from D1 for use in agent-enrichment.ts.
+ *
+ * Phase 2.5 #746 — replaces `getAgentInbox(kv, btcAddress)` which reads the
+ * stale KV `inbox:agent:{btcAddress}` index (frozen at Step 4 merge, 14:24Z
+ * 2026-05-11). Returns a live count directly from inbox_messages via
+ * SELECT COUNT(*)s that hit the existing partial index
+ * `idx_inbox_unread` (WHERE read_at IS NULL).
+ *
+ * Returns null when `db` is undefined (binding not available) or on D1 error.
+ * Callers treat null identically to a KV miss — fail-open, matching the
+ * heartbeat `fetchUnreadCount` pattern from #745.
+ *
+ * Return shape is compatible with the InboxAgentIndex fields read by
+ * agent-enrichment.ts:
+ *   inboxIndex?.unreadCount  → unreadCount
+ *   !!inboxIndex             → hasInboxMessages (totalCount > 0)
+ *
+ * SQL:
+ *   SELECT
+ *     COUNT(*) AS total_count,
+ *     COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread_count,
+ *     MAX(sent_at) AS last_message_at
+ *   FROM inbox_messages
+ *   WHERE to_btc_address = ? AND is_reply = 0
+ */
+export interface AgentInboxSummary {
+  totalCount: number;
+  unreadCount: number;
+  lastMessageAt: string | null;
+}
+
+export async function getAgentInboxFromD1(
+  db: D1Database | undefined,
+  btcAddress: string
+): Promise<AgentInboxSummary | null> {
+  if (!db) return null;
+  try {
+    const row = await db
+      .prepare(`
+        SELECT
+          COUNT(*) AS total_count,
+          COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread_count,
+          MAX(sent_at) AS last_message_at
+        FROM inbox_messages
+        WHERE to_btc_address = ? AND is_reply = 0
+      `)
+      .bind(btcAddress)
+      .first<{ total_count: number; unread_count: number; last_message_at: string | null }>();
+    if (!row) return null;
+    // A row with total_count=0 means no messages — return null so callers
+    // treat this agent as having no inbox (same as a KV miss).
+    if (row.total_count === 0) return null;
+    return {
+      totalCount: row.total_count,
+      unreadCount: row.unread_count,
+      lastMessageAt: row.last_message_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Fetch per-agent sent-message summary from D1 for use in agent-enrichment.ts.
+ *
+ * Phase 2.5 #746 — replaces `getSentIndex(kv, btcAddress)` which reads the
+ * stale KV `inbox:sent:{btcAddress}` index. Returns a live count from
+ * inbox_messages WHERE is_reply=1 AND from_btc_address=?.
+ *
+ * Returns null when `db` is undefined or on D1 error (fail-open).
+ *
+ * Return shape is compatible with the SentMessageIndex field read by
+ * agent-enrichment.ts:
+ *   sentIndex?.messageIds.length → sentCount
+ *
+ * SQL:
+ *   SELECT COUNT(*) AS sent_count, MAX(sent_at) AS last_sent_at
+ *   FROM inbox_messages
+ *   WHERE is_reply = 1 AND from_btc_address = ?
+ */
+export interface AgentSentSummary {
+  sentCount: number;
+  lastSentAt: string | null;
+}
+
+export async function getSentIndexFromD1(
+  db: D1Database | undefined,
+  btcAddress: string
+): Promise<AgentSentSummary | null> {
+  if (!db) return null;
+  try {
+    const row = await db
+      .prepare(`
+        SELECT
+          COUNT(*) AS sent_count,
+          MAX(sent_at) AS last_sent_at
+        FROM inbox_messages
+        WHERE is_reply = 1 AND from_btc_address = ?
+      `)
+      .bind(btcAddress)
+      .first<{ sent_count: number; last_sent_at: string | null }>();
+    if (!row) return null;
+    return {
+      sentCount: row.sent_count,
+      lastSentAt: row.last_sent_at,
+    };
+  } catch {
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Activity feed helpers (replaces inbox:agent:* / inbox:message:* KV reads)
+// ---------------------------------------------------------------------------
+
+/**
+ * Fetch the N most recent inbound messages for an agent from D1.
+ *
+ * Phase 2.5 #746 — replaces the two-step KV pattern in lib/activity.ts:
+ *   1. kv.get(`inbox:agent:${btcAddress}`)  → get messageIds array
+ *   2. kv.get(`inbox:message:${id}`)        → fetch each message
+ *
+ * This consolidates into a single SELECT … ORDER BY sent_at DESC LIMIT ?.
+ * The SQL path hits the `idx_inbox_to_btc_sent_at` partial index
+ * (on `inbox_messages(to_btc_address, sent_at DESC) WHERE is_reply = 0`).
+ *
+ * Returns empty array when `db` is undefined, no messages exist, or on D1
+ * error (fail-open — activity feed gracefully degrades to no events).
+ *
+ * SQL:
+ *   SELECT … FROM inbox_messages
+ *   WHERE to_btc_address = ? AND is_reply = 0
+ *   ORDER BY sent_at DESC
+ *   LIMIT ?
+ */
+export async function getRecentInboxEventsFromD1(
+  db: D1Database | undefined,
+  btcAddress: string,
+  limit: number
+): Promise<InboxMessage[]> {
+  if (!db) return [];
+  try {
+    const sql = `
+      SELECT
+        message_id, from_stx_address, to_btc_address, to_stx_address,
+        content, payment_txid, payment_satoshis, payment_status,
+        payment_id, receipt_id, recovered_via_txid, authenticated,
+        bitcoin_signature, sender_btc_address,
+        sent_at, read_at, replied_at, reply_to_message_id
+      FROM inbox_messages
+      WHERE to_btc_address = ? AND is_reply = 0
+      ORDER BY sent_at DESC
+      LIMIT ?
+    `;
+    const result = await db
+      .prepare(sql)
+      .bind(btcAddress, limit)
+      .all<D1InboxRow>();
+    return (result.results ?? []).map(rowToInboxMessage);
+  } catch {
+    return [];
+  }
+}

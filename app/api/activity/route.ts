@@ -92,6 +92,7 @@ export async function GET(request: NextRequest) {
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     // Check cache first
     const cached = await kv.get<CachedActivity>(CACHE_KEY, "json");
@@ -143,7 +144,7 @@ export async function GET(request: NextRequest) {
 
     let response: ActivityResponse;
     try {
-      response = await buildActivityData(kv);
+      response = await buildActivityData(kv, db);
 
       // Cache the response
       const cacheData: CachedActivity = {

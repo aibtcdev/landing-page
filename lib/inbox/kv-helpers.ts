@@ -183,6 +183,11 @@ export async function storeReply(
 /**
  * Get the agent inbox index.
  *
+ * @deprecated reads stale data after #730 Step 4 — use lib/inbox/d1-reads.ts equivalents.
+ *   KV writes for `inbox:agent:{btcAddress}` stopped at 2026-05-11T14:24Z (PR #745).
+ *   Newly delivered messages are not reflected. Use `getAgentInboxFromD1` instead.
+ *   Callers migrated in #746.
+ *
  * @param kv - Cloudflare KV namespace
  * @param btcAddress - Bitcoin address
  * @returns InboxAgentIndex or null if not found
@@ -255,6 +260,11 @@ export async function updateAgentInbox(
 
 /**
  * Get the agent sent message index.
+ *
+ * @deprecated reads stale data after #730 Step 4 — use lib/inbox/d1-reads.ts equivalents.
+ *   KV writes for `inbox:sent:{btcAddress}` stopped at 2026-05-11T14:24Z (PR #745).
+ *   Newly delivered replies are not reflected. Use `getSentIndexFromD1` instead.
+ *   Callers migrated in #746.
  *
  * @param kv - Cloudflare KV namespace
  * @param btcAddress - Bitcoin address
