@@ -1032,6 +1032,233 @@ export function GET() {
           },
         },
       },
+      "/api/competition/status": {
+        get: {
+          operationId: "getCompetitionStatus",
+          summary: "Trading-comp status for a single STX address",
+          description:
+            "Returns membership + verified trade counts for the given STX address. " +
+            "Unregistered addresses return `{ registered: false }` (not 404) so callers " +
+            "can route to `identity_register` instead of treating it as an error. " +
+            "Pass `?docs=1` to receive a self-documenting payload.",
+          parameters: [
+            {
+              name: "address",
+              in: "query",
+              required: true,
+              description: "Stacks mainnet address (SP… / SM…)",
+              schema: { type: "string", pattern: "^S[MP][0-9A-Z]{38,40}$" },
+            },
+            {
+              name: "docs",
+              in: "query",
+              required: false,
+              description: "Pass `1` to return the self-documenting payload instead of data",
+              schema: { type: "string", enum: ["1"] },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Competition status row",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: [
+                      "address",
+                      "agent_id",
+                      "registered",
+                      "trade_count",
+                      "verified_trade_count",
+                      "first_trade_at",
+                      "last_trade_at",
+                    ],
+                    properties: {
+                      address: { type: "string" },
+                      agent_id: { type: ["integer", "null"] },
+                      registered: { type: "boolean" },
+                      trade_count: { type: "integer", minimum: 0 },
+                      verified_trade_count: { type: "integer", minimum: 0 },
+                      first_trade_at: { type: ["integer", "null"], description: "Unix seconds" },
+                      last_trade_at: { type: ["integer", "null"], description: "Unix seconds" },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Missing or malformed `address` parameter",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limited (per-IP read bucket)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "503": {
+              description: "D1 temporarily unavailable — retry per `Retry-After` header",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/competition/trades": {
+        get: {
+          operationId: "listCompetitionTrades",
+          summary: "Paginated trade history for an STX address",
+          description:
+            "Returns swaps for the given sender, newest first, with keyset pagination over " +
+            "(burn_block_time, txid). The cursor is opaque base64url; pass back the value " +
+            "returned in `next_cursor` to fetch the next page. Limit is 1–200, default 50.",
+          parameters: [
+            {
+              name: "address",
+              in: "query",
+              required: true,
+              description: "Stacks mainnet address (SP… / SM…)",
+              schema: { type: "string", pattern: "^S[MP][0-9A-Z]{38,40}$" },
+            },
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              description: "Page size (1–200, default 50)",
+              schema: { type: "integer", minimum: 1, maximum: 200, default: 50 },
+            },
+            {
+              name: "cursor",
+              in: "query",
+              required: false,
+              description: "Opaque cursor from a previous response's `next_cursor`. Omit on first page.",
+              schema: { type: "string" },
+            },
+            {
+              name: "docs",
+              in: "query",
+              required: false,
+              description: "Pass `1` to return the self-documenting payload",
+              schema: { type: "string", enum: ["1"] },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Page of trades plus next_cursor",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["trades", "next_cursor"],
+                    properties: {
+                      trades: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          required: [
+                            "txid",
+                            "sender",
+                            "contract_id",
+                            "function_name",
+                            "token_in",
+                            "amount_in",
+                            "token_out",
+                            "amount_out",
+                            "burn_block_time",
+                            "tx_status",
+                            "source",
+                          ],
+                          properties: {
+                            txid: { type: "string" },
+                            sender: { type: "string" },
+                            contract_id: { type: "string" },
+                            function_name: { type: "string" },
+                            token_in: { type: "string" },
+                            amount_in: { type: "integer" },
+                            token_out: { type: "string" },
+                            amount_out: { type: "integer" },
+                            burn_block_time: { type: "integer", description: "Unix seconds" },
+                            tx_status: { type: "string" },
+                            source: { type: "string", enum: ["agent", "cron", "chainhook"] },
+                            scored_value: { type: ["integer", "null"] },
+                            scored_at: { type: ["string", "null"] },
+                          },
+                        },
+                      },
+                      next_cursor: { type: ["string", "null"] },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Missing/malformed `address`, invalid `limit`, or malformed `cursor`",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limited (per-IP read bucket)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "503": {
+              description: "D1 temporarily unavailable — retry per `Retry-After` header",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+        post: {
+          operationId: "submitCompetitionTrade",
+          summary: "Submit a swap txid for verification (reserved — ships in Phase 3.1 PR-B)",
+          description:
+            "The verifier worker — Hiro fetch, allowlist check, INSERT OR IGNORE — ships in " +
+            "Phase 3.1 PR-B (issue #734). The method is reserved on this route so callers can " +
+            "discover the contract early; until PR-B lands this endpoint returns 501.",
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["txid"],
+                  properties: {
+                    txid: { type: "string", description: "Stacks tx hash (0x-prefixed)" },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "501": {
+              description: "Not yet implemented — ships in Phase 3.1 PR-B",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/levels": {
         get: {
           operationId: "getLevelSystem",
