@@ -19,7 +19,7 @@ import {
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
 import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
-import { listOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
+import { listOutboxRepliesFromD1, countOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -522,14 +522,36 @@ export async function GET(
   // See: https://github.com/aibtcdev/landing-page/issues/728 (Step 3.3 spec)
   // See: https://github.com/aibtcdev/landing-page/issues/697 (Phase 2.5 umbrella)
 
-  // Parse query params for pagination
+  // Parse query params for pagination.
+  // Validate before binding to D1: non-numeric inputs (e.g. ?limit=abc) must
+  // produce 400, not 503 from a downstream D1 NaN bind throw.
   const url = new URL(request.url);
   const limitParam = url.searchParams.get("limit");
   const offsetParam = url.searchParams.get("offset");
-  const limit = limitParam
-    ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100)
-    : 20;
-  const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
+
+  let limit = 20;
+  if (limitParam !== null) {
+    const parsed = Number(limitParam);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 1 || parsed > 100) {
+      return NextResponse.json(
+        { error: "invalid_query_param", message: "limit must be an integer between 1 and 100" },
+        { status: 400 }
+      );
+    }
+    limit = parsed;
+  }
+
+  let offset = 0;
+  if (offsetParam !== null) {
+    const parsed = Number(offsetParam);
+    if (!Number.isFinite(parsed) || !Number.isInteger(parsed) || parsed < 0) {
+      return NextResponse.json(
+        { error: "invalid_query_param", message: "offset must be a non-negative integer" },
+        { status: 400 }
+      );
+    }
+    offset = parsed;
+  }
 
   const db = env.DB as D1Database | undefined;
 
@@ -543,9 +565,15 @@ export async function GET(
   // D1-throws fallback policy (per #728 / #722 dev-council Cycle 26 advisory):
   // If D1 throws — transient unavailability, network error, schema mismatch —
   // return 503 with a structured retry hint rather than an unstructured 500.
+  // totalCount is queried in parallel with the page list so pagination metadata
+  // reflects the full matching row count, not just the current page length.
   let replies: import("@/lib/inbox/types").OutboxReply[];
+  let totalCount: number;
   try {
-    replies = await listOutboxRepliesFromD1(db, agent.btcAddress, limit, offset);
+    [replies, totalCount] = await Promise.all([
+      listOutboxRepliesFromD1(db, agent.btcAddress, limit, offset),
+      countOutboxRepliesFromD1(db, agent.btcAddress),
+    ]);
   } catch (e) {
     return NextResponse.json(
       {
@@ -557,8 +585,11 @@ export async function GET(
     );
   }
 
-  // If no replies, return self-documenting response
-  if (replies.length === 0) {
+  // Self-documenting response only when the agent has truly never sent a
+  // reply (totalCount === 0). Out-of-range pages (offset > 0 but the agent
+  // does have history) get the normal envelope with empty `replies` and
+  // accurate pagination so clients can recover.
+  if (totalCount === 0) {
     return NextResponse.json({
       endpoint: "/api/outbox/[address]",
       description: "Replies sent by this agent to incoming inbox messages.",
@@ -593,6 +624,7 @@ export async function GET(
     });
   }
 
+  const hasMore = offset + replies.length < totalCount;
   return NextResponse.json({
     agent: {
       btcAddress: agent.btcAddress,
@@ -600,12 +632,12 @@ export async function GET(
     },
     outbox: {
       replies,
-      totalCount: replies.length,
+      totalCount,
       pagination: {
         limit,
         offset,
-        hasMore: replies.length === limit,
-        nextOffset: replies.length === limit ? offset + limit : null,
+        hasMore,
+        nextOffset: hasMore ? offset + replies.length : null,
       },
     },
   });

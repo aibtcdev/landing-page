@@ -464,8 +464,11 @@ export async function GET(
     partners = dedupedPartners.slice(0, 10);
   }
 
-  // If no messages, return self-documenting response
-  if (totalCount === 0) {
+  // If the agent has truly never had any inbox activity (no received messages
+  // AND no sent replies), return the self-documenting response. An agent that
+  // has only sent replies (sentCount > 0, totalCount === 0) falls through to
+  // the normal envelope so sentCount/economics/partners are exposed.
+  if (totalCount === 0 && sentCount === 0) {
     return NextResponse.json({
       endpoint: "/api/inbox/[address]",
       description:

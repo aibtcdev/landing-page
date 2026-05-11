@@ -205,8 +205,8 @@ describe("Phase 2.5 Step 3.3 — sentCount restoration in inbox-list GET", () =>
   });
 
   it("sentCount is included in the empty-inbox self-documenting response", async () => {
-    // When totalCount === 0, the route returns early with a self-doc body.
-    // sentCount must still be 0 (not undefined) in that case.
+    // When both totalCount === 0 AND sentCount === 0, the route returns the
+    // self-doc body. sentCount must still be 0 (not undefined) in that case.
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
     (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
@@ -216,6 +216,56 @@ describe("Phase 2.5 Step 3.3 — sentCount restoration in inbox-list GET", () =>
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.inbox.sentCount).toBe(0);
+  });
+
+  it("sent-only inbox (totalCount===0 but sentCount>0) returns sentCount in normal envelope, not self-doc", async () => {
+    // Regression fix: agent has sent replies but has never received a message.
+    // Before the fix, the totalCount===0 early-return hardcoded sentCount:0
+    // and partners:[], so the sent-only path was unreachable. After the fix,
+    // the self-doc path requires both totalCount===0 AND sentCount===0.
+    (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
+    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(3);
+
+    const res = await GET(buildGetRequest(AGENT_ADDR), buildContext(AGENT_ADDR));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.inbox.sentCount).toBe(3);
+    expect(body.inbox.totalCount).toBe(0);
+    expect(body.inbox.economics.satsSent).toBe(3 * 100);
+    // Must NOT be the self-doc shape
+    expect(body.endpoint).toBeUndefined();
+    expect(body.howToSend).toBeDefined(); // howToSend is in both shapes; check via other markers
+  });
+
+  it("sent-only inbox with partners requested exposes sent-direction partners", async () => {
+    // Regression check for the partners-with-sent path in the sent-only case.
+    (lookupAgent as Mock).mockImplementation((kv: unknown, addr: string) => {
+      if (addr === AGENT_ADDR) return Promise.resolve(TEST_AGENT);
+      if (addr === REPLY_TARGET_ADDR) return Promise.resolve(REPLY_TARGET_AGENT);
+      return Promise.resolve(null);
+    });
+    (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
+    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue([SENT_REPLY]);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
+
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?include=partners"),
+      buildContext(AGENT_ADDR)
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.inbox.sentCount).toBe(1);
+    expect(Array.isArray(body.inbox.partners)).toBe(true);
+    expect(body.inbox.partners.length).toBeGreaterThan(0);
+    const target = body.inbox.partners.find(
+      (p: { btcAddress: string }) => p.btcAddress === REPLY_TARGET_ADDR
+    );
+    expect(target).toBeDefined();
+    expect(target.direction).toBe("sent");
   });
 });
 

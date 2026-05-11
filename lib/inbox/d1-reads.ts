@@ -62,7 +62,6 @@ interface D1InboxRow {
  * A single reply row (is_reply=1) joined or fetched for inline enrichment.
  */
 interface D1ReplyRow {
-  message_id: string;
   reply_to_message_id: string;
   from_btc_address: string | null;
   to_btc_address: string;
@@ -207,7 +206,7 @@ export async function fetchRepliesForMessages(
   const placeholders = parentMessageIds.map(() => "?").join(", ");
   const sql = `
     SELECT
-      message_id, reply_to_message_id, from_btc_address, to_btc_address,
+      reply_to_message_id, from_btc_address, to_btc_address,
       content, bitcoin_signature, sent_at
     FROM inbox_messages
     WHERE is_reply = 1
@@ -292,7 +291,7 @@ export async function listOutboxRepliesFromD1(
 ): Promise<OutboxReply[]> {
   const sql = `
     SELECT
-      message_id, reply_to_message_id, from_btc_address, to_btc_address,
+      reply_to_message_id, from_btc_address, to_btc_address,
       content, bitcoin_signature, sent_at
     FROM inbox_messages
     WHERE is_reply = 1 AND from_btc_address = ?

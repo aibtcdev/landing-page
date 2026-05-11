@@ -1,17 +1,22 @@
 /**
  * Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 read flip.
  *
+ * Scope: outbox-route assertions only. The inbox-list sentCount restoration
+ * and partners-with-sent coverage live in
+ * `app/api/inbox/[address]/__tests__/d1-sentcount-partners.test.ts`.
+ *
  * Covers:
  *  1. 200 — replies exist, returned correctly from D1
- *  2. Empty outbox — self-documenting response (no error)
+ *  2. Empty outbox — self-documenting response only when totalCount === 0
  *  3. 404 — agent not found
  *  4. Tenant-discriminator security gate: reply written by addr_A MUST NOT appear
  *       in GET /api/outbox/addr_B — SQL WHERE from_btc_address=? enforces this.
  *       The route returns empty (not a leaked reply) when address doesn't match.
  *  5. 503 — D1 throws → structured fallback (not unhandled 500)
- *  6. sentCount restoration: inbox-list GET returns sentCount > 0 when D1 reports replies
- *  7. partners-with-sent: partner graph merges both received (inbound senders) and
- *       sent (reply targets) into the partner map
+ *  6. Pagination metadata: totalCount comes from COUNT(*), not page length;
+ *       hasMore/nextOffset derived from offset + replies.length < totalCount
+ *  7. Out-of-range offset returns normal envelope with empty replies, not self-doc
+ *  8. NaN guard: non-numeric ?limit / ?offset returns 400, not 503
  *
  * See: https://github.com/aibtcdev/landing-page/issues/728 (Step 3.3 spec)
  */
@@ -31,6 +36,7 @@ vi.mock("@/lib/agent-lookup", () => ({
 
 vi.mock("@/lib/inbox/d1-reads", () => ({
   listOutboxRepliesFromD1: vi.fn(),
+  countOutboxRepliesFromD1: vi.fn(),
 }));
 
 vi.mock("@/lib/inbox", () => ({
@@ -71,7 +77,7 @@ vi.mock("@/lib/validation/address", () => ({
 import { GET } from "../route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
-import { listOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
+import { listOutboxRepliesFromD1, countOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
 
 // ---- shared fixtures --------------------------------------------------------
 
@@ -140,10 +146,18 @@ beforeEach(() => {
 
 // ---- tests ------------------------------------------------------------------
 
+function buildGetRequestWithQuery(address: string, query: string): NextRequest {
+  return new NextRequest(
+    `https://aibtc.com/api/outbox/${address}${query}`,
+    { method: "GET" }
+  );
+}
+
 describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
   it("returns 200 with outbox shape when replies exist in D1", async () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([REPLY_FROM_A]);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
@@ -160,9 +174,10 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
     expect(body.agent.btcAddress).toBe(ADDR_A);
   });
 
-  it("returns self-documenting empty response when no replies found", async () => {
+  it("returns self-documenting empty response when totalCount === 0", async () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
@@ -192,6 +207,7 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_B);
     // D1 returns empty because ADDR_B has not sent any replies
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
 
     const res = await GET(buildGetRequest(ADDR_B), buildContext(ADDR_B));
 
@@ -201,17 +217,21 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
     expect(body.outbox.replies).toHaveLength(0);
     expect(body.outbox.totalCount).toBe(0);
 
-    // Verify the D1 query was called with ADDR_B (not ADDR_A)
+    // Verify both D1 queries were called with ADDR_B (not ADDR_A)
     expect(listOutboxRepliesFromD1).toHaveBeenCalledOnce();
-    const [, calledAddress] = (listOutboxRepliesFromD1 as Mock).mock.calls[0];
-    expect(calledAddress).toBe(ADDR_B);
+    const [, listCalledAddress] = (listOutboxRepliesFromD1 as Mock).mock.calls[0];
+    expect(listCalledAddress).toBe(ADDR_B);
+    expect(countOutboxRepliesFromD1).toHaveBeenCalledOnce();
+    const [, countCalledAddress] = (countOutboxRepliesFromD1 as Mock).mock.calls[0];
+    expect(countCalledAddress).toBe(ADDR_B);
   });
 
-  it("returns 503 with structured body when D1 throws — not unhandled 500", async () => {
+  it("returns 503 with structured body when listOutboxRepliesFromD1 throws — not unhandled 500", async () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockRejectedValue(
       new Error("D1_ERROR: connection reset")
     );
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
@@ -226,9 +246,24 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
     expect(res.headers.get("Retry-After")).toBe("5");
   });
 
+  it("returns 503 with structured body when countOutboxRepliesFromD1 throws", async () => {
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue([REPLY_FROM_A]);
+    (countOutboxRepliesFromD1 as Mock).mockRejectedValue(
+      new Error("D1_ERROR: count query failed")
+    );
+
+    const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
+
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe("transient_d1_unavailable");
+  });
+
   it("includes pagination shape in response", async () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([REPLY_FROM_A]);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
@@ -239,5 +274,152 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
       limit: 20,
       offset: 0,
     });
+  });
+});
+
+describe("Phase 2.5 Step 3.3 — pagination metadata correctness", () => {
+  it("totalCount reflects COUNT(*) result, not the current page length", async () => {
+    // Agent has 50 lifetime replies but the page returns only 20 (default limit).
+    // totalCount must be 50, not 20.
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+    const pageReplies = Array.from({ length: 20 }, (_, i) => ({
+      ...REPLY_FROM_A,
+      messageId: `msg_${i}_parent`,
+    }));
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue(pageReplies);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(50);
+
+    const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.outbox.totalCount).toBe(50);
+    expect(body.outbox.replies).toHaveLength(20);
+    expect(body.outbox.pagination.hasMore).toBe(true);
+    expect(body.outbox.pagination.nextOffset).toBe(20);
+  });
+
+  it("hasMore is false on the final full page (replies.length === limit but no remaining rows)", async () => {
+    // Edge case: page exactly fills (limit=20) but there are no more rows.
+    // Pre-fix this reported hasMore: true incorrectly.
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+    const pageReplies = Array.from({ length: 20 }, (_, i) => ({
+      ...REPLY_FROM_A,
+      messageId: `msg_${i}_parent`,
+    }));
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue(pageReplies);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(20);
+
+    const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.outbox.pagination.hasMore).toBe(false);
+    expect(body.outbox.pagination.nextOffset).toBeNull();
+  });
+
+  it("out-of-range offset returns normal envelope with empty replies, not self-doc", async () => {
+    // Agent has 5 replies; caller requests offset=100. D1 returns empty page,
+    // but totalCount=5 means the agent does have history. Response should be
+    // the normal envelope with accurate pagination, NOT the self-doc.
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(5);
+
+    const res = await GET(
+      buildGetRequestWithQuery(ADDR_A, "?offset=100"),
+      buildContext(ADDR_A)
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.outbox.replies).toHaveLength(0);
+    expect(body.outbox.totalCount).toBe(5);
+    expect(body.outbox.pagination.offset).toBe(100);
+    expect(body.outbox.pagination.hasMore).toBe(false);
+    // Must NOT be the self-doc shape
+    expect(body.howToReply).toBeUndefined();
+    expect(body.endpoint).toBeUndefined();
+  });
+});
+
+describe("Phase 2.5 Step 3.3 — query param validation (NaN guard)", () => {
+  it("rejects non-numeric ?limit with 400, not 503", async () => {
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+
+    const res = await GET(
+      buildGetRequestWithQuery(ADDR_A, "?limit=abc"),
+      buildContext(ADDR_A)
+    );
+
+    expect(res.status).toBe(400);
+    expect(res.status).not.toBe(503);
+    const body = await res.json();
+    expect(body.error).toBe("invalid_query_param");
+    // D1 helpers must never be invoked for invalid input
+    expect(listOutboxRepliesFromD1).not.toHaveBeenCalled();
+    expect(countOutboxRepliesFromD1).not.toHaveBeenCalled();
+  });
+
+  it("rejects out-of-range ?limit=0 with 400", async () => {
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+
+    const res = await GET(
+      buildGetRequestWithQuery(ADDR_A, "?limit=0"),
+      buildContext(ADDR_A)
+    );
+
+    expect(res.status).toBe(400);
+    const body = await res.json();
+    expect(body.error).toBe("invalid_query_param");
+  });
+
+  it("rejects ?limit=101 with 400 (max 100)", async () => {
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+
+    const res = await GET(
+      buildGetRequestWithQuery(ADDR_A, "?limit=101"),
+      buildContext(ADDR_A)
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects negative ?offset with 400", async () => {
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+
+    const res = await GET(
+      buildGetRequestWithQuery(ADDR_A, "?offset=-1"),
+      buildContext(ADDR_A)
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("rejects non-integer ?limit=1.5 with 400", async () => {
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+
+    const res = await GET(
+      buildGetRequestWithQuery(ADDR_A, "?limit=1.5"),
+      buildContext(ADDR_A)
+    );
+
+    expect(res.status).toBe(400);
+  });
+
+  it("accepts ?limit=100 and ?offset=0 (boundary)", async () => {
+    (lookupAgent as Mock).mockResolvedValue(AGENT_A);
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue([REPLY_FROM_A]);
+    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
+
+    const res = await GET(
+      buildGetRequestWithQuery(ADDR_A, "?limit=100&offset=0"),
+      buildContext(ADDR_A)
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.outbox.pagination.limit).toBe(100);
+    expect(body.outbox.pagination.offset).toBe(0);
   });
 });
