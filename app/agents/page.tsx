@@ -1,7 +1,6 @@
 import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCachedAgentList } from "@/lib/cache";
-import { getAgentSubmittedTradeSummary } from "@/lib/competition/volume";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import AgentList from "./AgentList";
@@ -24,41 +23,28 @@ async function fetchAgents() {
   const kv = env.VERIFIED_AGENTS as KVNamespace;
   const { agents } = await getCachedAgentList(kv);
 
-  // MCP trade summary at SSR — one D1 GROUP BY + parallel Tenero
-  // current-price fetches. Empty map if D1 is unavailable or the query
-  // fails so the page still renders the rest of the agent data.
-  const tradeSummary = env.DB
-    ? await getAgentSubmittedTradeSummary(env.DB)
-    : new Map<string, { count: number; volumeUsd: number; latestTradeAt: number }>();
-
   // Reputation data is fetched client-side in AgentList to avoid blocking SSR
   // on external Stacks API calls (which can timeout under rate limits).
-  return agents.map((agent) => {
-    const summary = tradeSummary.get(agent.stxAddress);
-    return {
-      stxAddress: agent.stxAddress,
-      btcAddress: agent.btcAddress,
-      stxPublicKey: agent.stxPublicKey,
-      btcPublicKey: agent.btcPublicKey,
-      taprootAddress: agent.taprootAddress ?? undefined,
-      displayName: agent.displayName ?? undefined,
-      description: agent.description ?? undefined,
-      bnsName: agent.bnsName ?? undefined,
-      owner: agent.owner ?? undefined,
-      verifiedAt: agent.verifiedAt,
-      lastActiveAt: agent.lastActiveAt ?? undefined,
-      erc8004AgentId: agent.erc8004AgentId ?? undefined,
-      nostrPublicKey: agent.nostrPublicKey ?? undefined,
-      referredBy: agent.referredBy ?? undefined,
-      level: agent.level,
-      levelName: agent.levelName,
-      messageCount: agent.messageCount,
-      unreadCount: agent.unreadCount,
-      mcpTradeCount: summary?.count ?? 0,
-      mcpVolumeUsd: summary?.volumeUsd ?? 0,
-      mcpLatestTradeAt: summary?.latestTradeAt ?? 0,
-    };
-  });
+  return agents.map((agent) => ({
+    stxAddress: agent.stxAddress,
+    btcAddress: agent.btcAddress,
+    stxPublicKey: agent.stxPublicKey,
+    btcPublicKey: agent.btcPublicKey,
+    taprootAddress: agent.taprootAddress ?? undefined,
+    displayName: agent.displayName ?? undefined,
+    description: agent.description ?? undefined,
+    bnsName: agent.bnsName ?? undefined,
+    owner: agent.owner ?? undefined,
+    verifiedAt: agent.verifiedAt,
+    lastActiveAt: agent.lastActiveAt ?? undefined,
+    erc8004AgentId: agent.erc8004AgentId ?? undefined,
+    nostrPublicKey: agent.nostrPublicKey ?? undefined,
+    referredBy: agent.referredBy ?? undefined,
+    level: agent.level,
+    levelName: agent.levelName,
+    messageCount: agent.messageCount,
+    unreadCount: agent.unreadCount,
+  }));
 }
 
 export default async function AgentsPage() {
