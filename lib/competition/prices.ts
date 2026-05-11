@@ -244,10 +244,16 @@ function buildHistory(
  * if the window is sparse — the read path treats missing buckets as
  * "unpriced" naturally.
  *
- * On hard failure (network error, 5xx, no candles) we DO NOT write —
- * leaves the previous history intact so the next cron tick can try
- * again. The KV TTL of 24h gives us 48 cron ticks of slack at 30-min
- * cadence.
+ * On hard failure (network error, 5xx, no candles, FETCH_TIMEOUT_MS hit)
+ * we DO NOT write — leaves the previous history intact so the next cron
+ * tick can try again. The KV TTL of 24h gives us 48 cron ticks of slack
+ * at 30-min cadence.
+ *
+ * **First-run gap**: on a fresh deploy with no cached history, an
+ * 8-second Tenero timeout means the token stays unpriced until the next
+ * successful tick lands data. The leaderboard surfaces this via
+ * unpriced_trade_count in the row stats and the "N priced" callout in
+ * the UI — trades aren't lost, they're just not counted in pnl_usd.
  */
 export async function refreshTokenHistory(
   kv: KVNamespace,
@@ -290,6 +296,13 @@ export interface RefreshSummary {
  * over a single [fromTs, toTs] window. The cron determines the window
  * based on the earliest verified swap (so the comp's whole history is
  * priced) and `now`.
+ *
+ * Error accounting: `refreshTokenHistory` already handles per-token
+ * upstream failures internally (timeout, non-2xx, missing candles) and
+ * returns null without throwing — those land in `summary.unpriced`. The
+ * outer try/catch in this function therefore only fires for genuine
+ * coding bugs (e.g., a thrown TypeError inside the helper). Both paths
+ * keep counts honest; the split is intentional.
  */
 export async function refreshAllHistories(
   kv: KVNamespace,
