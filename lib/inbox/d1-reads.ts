@@ -3,6 +3,8 @@
  *
  * Phase 2.5 Step 3.1 — flip inbox-list GET from KV reads to D1 SELECTs.
  * Phase 2.5 Step 3.2 — adds getInboxMessageFromD1 for the single-message GET.
+ * Phase 2.5 Step 3.3 — adds listOutboxRepliesFromD1 + countOutboxRepliesFromD1
+ *   for the outbox GET flip and sentCount/partners restoration in inbox-list.
  * KV writes are NOT removed here (that is Step 4).
  *
  * These helpers query the inbox_messages table that is being populated by
@@ -21,6 +23,7 @@
  *
  * See: https://github.com/aibtcdev/landing-page/issues/721 (Step 3.1 spec)
  * See: https://github.com/aibtcdev/landing-page/issues/725 (Step 3.2 spec)
+ * See: https://github.com/aibtcdev/landing-page/issues/728 (Step 3.3 spec)
  * See: https://github.com/aibtcdev/landing-page/issues/697 (Phase 2.5 umbrella)
  * See: https://github.com/aibtcdev/landing-page/issues/723 (cache-invariant extraction)
  */
@@ -263,6 +266,74 @@ export async function getInboxMessageFromD1(
 
   if (!row) return null;
   return rowToInboxMessage(row);
+}
+
+/**
+ * Fetch a page of outbox replies sent by an agent from D1.
+ *
+ * Security gate: SQL WHERE clause filters by `from_btc_address = ?` so replies
+ * belonging to a different address are never returned, even if the caller
+ * supplies a mismatched URL address.
+ *
+ * SQL shape (refs #728 Step 3.3 spec):
+ *   SELECT … FROM inbox_messages
+ *   WHERE is_reply = 1 AND from_btc_address = ?
+ *   ORDER BY sent_at DESC
+ *   LIMIT ? OFFSET ?
+ *
+ * Used by GET /api/outbox/[address] and by the sentCount/partners restoration
+ * in GET /api/inbox/[address].
+ */
+export async function listOutboxRepliesFromD1(
+  db: D1Database,
+  btcAddress: string,
+  limit: number,
+  offset: number
+): Promise<OutboxReply[]> {
+  const sql = `
+    SELECT
+      message_id, reply_to_message_id, from_btc_address, to_btc_address,
+      content, bitcoin_signature, sent_at
+    FROM inbox_messages
+    WHERE is_reply = 1 AND from_btc_address = ?
+    ORDER BY sent_at DESC
+    LIMIT ? OFFSET ?
+  `;
+
+  const result = await db
+    .prepare(sql)
+    .bind(btcAddress, limit, offset)
+    .all<D1ReplyRow>();
+
+  return (result.results ?? []).map(replyRowToOutboxReply);
+}
+
+/**
+ * Count outbox replies sent by an agent from D1.
+ *
+ * Used to restore the `sentCount` dimension in GET /api/inbox/[address] that
+ * was stubbed to 0 in Step 3.1.
+ *
+ * SQL shape:
+ *   SELECT COUNT(*) FROM inbox_messages
+ *   WHERE is_reply = 1 AND from_btc_address = ?
+ */
+export async function countOutboxRepliesFromD1(
+  db: D1Database,
+  btcAddress: string
+): Promise<number> {
+  const sql = `
+    SELECT COUNT(*) AS cnt
+    FROM inbox_messages
+    WHERE is_reply = 1 AND from_btc_address = ?
+  `;
+
+  const row = await db
+    .prepare(sql)
+    .bind(btcAddress)
+    .first<{ cnt: number }>();
+
+  return row?.cnt ?? 0;
 }
 
 // Re-export the prefix so tests can verify synthesized IDs

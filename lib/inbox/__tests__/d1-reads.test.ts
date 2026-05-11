@@ -25,6 +25,8 @@ import {
   listInboxMessagesFromD1,
   countInboxMessagesFromD1,
   fetchRepliesForMessages,
+  listOutboxRepliesFromD1,
+  countOutboxRepliesFromD1,
   type StatusFilter,
 } from "../d1-reads";
 
@@ -462,6 +464,156 @@ describe("fetchRepliesForMessages", () => {
   });
 });
 
+// ── listOutboxRepliesFromD1 ───────────────────────────────────────────────────
+
+describe("listOutboxRepliesFromD1 (Phase 2.5 Step 3.3)", () => {
+  const REPLIER_BTC = "bc1qp66jvxe765wgwpzqk8kcrmgh2mucyxg540mtzv";
+  const SENT_REPLY_ROW = {
+    message_id: "reply_msg_1771381602504_test",
+    reply_to_message_id: "msg_1771381602504_test",
+    from_btc_address: REPLIER_BTC,
+    to_btc_address: BTC_ADDRESS,
+    content: "Great work — bookmarked.",
+    bitcoin_signature:
+      "Jx52I99dmnoFqmKkJXsLP4ELktANgZ6v1m1CFA7c5kz+Xr9W45m29QnabzGim5ubEzJP1eoynU/GjuRWMjRD9nQ=",
+    sent_at: "2026-02-19T22:14:43.426Z",
+  };
+
+  it("queries WHERE is_reply=1 AND from_btc_address=? with ORDER BY sent_at DESC", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement([]);
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await listOutboxRepliesFromD1(db, REPLIER_BTC, 20, 0);
+
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("FROM inbox_messages");
+    expect(sql).toContain("WHERE is_reply = 1 AND from_btc_address = ?");
+    expect(sql).toContain("ORDER BY sent_at DESC");
+    expect(sql).toContain("LIMIT ? OFFSET ?");
+  });
+
+  it("binds from_btc_address, limit, offset in order", async () => {
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement([]);
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await listOutboxRepliesFromD1(db, REPLIER_BTC, 50, 10);
+
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(REPLIER_BTC);
+    expect(bindArgs[1]).toBe(50);  // limit
+    expect(bindArgs[2]).toBe(10);  // offset
+  });
+
+  it("maps D1 reply row to OutboxReply shape", async () => {
+    const stmtMock = createPreparedStatement([SENT_REPLY_ROW]);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    const results = await listOutboxRepliesFromD1(db, REPLIER_BTC, 20, 0);
+
+    expect(results).toHaveLength(1);
+    const reply = results[0];
+    // replyRowToOutboxReply: messageId = reply_to_message_id (parent ID)
+    expect(reply.messageId).toBe(SENT_REPLY_ROW.reply_to_message_id);
+    expect(reply.fromAddress).toBe(SENT_REPLY_ROW.from_btc_address);
+    expect(reply.toBtcAddress).toBe(SENT_REPLY_ROW.to_btc_address);
+    expect(reply.reply).toBe(SENT_REPLY_ROW.content);
+    expect(reply.signature).toBe(SENT_REPLY_ROW.bitcoin_signature);
+    expect(reply.repliedAt).toBe(SENT_REPLY_ROW.sent_at);
+  });
+
+  it("returns empty array when no rows", async () => {
+    const db = createMockD1([]);
+    const result = await listOutboxRepliesFromD1(db, REPLIER_BTC, 20, 0);
+    expect(result).toHaveLength(0);
+  });
+
+  it("tenant-discriminator security gate: SQL WHERE from_btc_address=? enforces address isolation", async () => {
+    // This test documents the security property: a reply written by REPLIER_BTC
+    // will NOT be returned when the query uses a different address.
+    // The SQL gate (WHERE is_reply = 1 AND from_btc_address = ?) enforces this at the DB level.
+    const db = createMockD1();
+    const stmtMock = createPreparedStatement([]); // D1 returns empty for non-matching address
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    // Query with ADDR_B (not the replier)
+    const ADDR_B = "bc1qw0y4ant38zykzjqssgnujqmszruvhkwupvp6dn";
+    const results = await listOutboxRepliesFromD1(db, ADDR_B, 100, 0);
+
+    // Must be empty — the SQL WHERE clause prevents cross-agent leakage
+    expect(results).toHaveLength(0);
+
+    // Verify the query was called with ADDR_B — the guard happens in SQL
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(ADDR_B);
+  });
+});
+
+// ── countOutboxRepliesFromD1 ──────────────────────────────────────────────────
+
+describe("countOutboxRepliesFromD1 (Phase 2.5 Step 3.3 — sentCount restoration)", () => {
+  const REPLIER_BTC = "bc1qp66jvxe765wgwpzqk8kcrmgh2mucyxg540mtzv";
+
+  it("queries SELECT COUNT(*) WHERE is_reply=1 AND from_btc_address=?", async () => {
+    const stmtMock = createPreparedStatement([], { cnt: 3 });
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    const count = await countOutboxRepliesFromD1(db, REPLIER_BTC);
+
+    expect(count).toBe(3);
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("SELECT COUNT(*)");
+    expect(sql).toContain("FROM inbox_messages");
+    expect(sql).toContain("is_reply = 1");
+    expect(sql).toContain("from_btc_address = ?");
+  });
+
+  it("returns 0 when db.first() returns null", async () => {
+    const stmtMock = createPreparedStatement([], null);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    const count = await countOutboxRepliesFromD1(db, REPLIER_BTC);
+    expect(count).toBe(0);
+  });
+
+  it("sentCount restoration: returns > 0 for known-replier address (Step 3.3 acceptance signal)", async () => {
+    // This test represents the acceptance signal for Step 3.3:
+    // POST-flip, countOutboxRepliesFromD1 must return > 0 for an address that has sent replies.
+    // Was stubbed to 0 in Step 3.1 ("const sentCount = 0;").
+    const stmtMock = createPreparedStatement([], { cnt: 5 });
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    const count = await countOutboxRepliesFromD1(db, REPLIER_BTC);
+    expect(count).toBeGreaterThan(0); // Step 3.3 acceptance signal: sentCount > 0
+  });
+
+  it("binds from_btc_address as the first positional param", async () => {
+    const stmtMock = createPreparedStatement([], { cnt: 0 });
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    await countOutboxRepliesFromD1(db, REPLIER_BTC);
+
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(REPLIER_BTC);
+  });
+});
+
 // ── Cache-key invariant: structural verification ──────────────────────────────
 
 describe("cache-key invariants (structural verification)", () => {
@@ -476,6 +628,8 @@ describe("cache-key invariants (structural verification)", () => {
     expect(listInboxMessagesFromD1.length).toBe(5); // (db, btcAddress, limit, offset, status)
     expect(countInboxMessagesFromD1.length).toBe(3); // (db, btcAddress, status)
     expect(fetchRepliesForMessages.length).toBe(2);  // (db, parentMessageIds)
+    expect(listOutboxRepliesFromD1.length).toBe(4);  // (db, btcAddress, limit, offset)
+    expect(countOutboxRepliesFromD1.length).toBe(2); // (db, btcAddress)
   });
 
   it("Invariant 3: read helpers are called with explicit inputs — no implicit cache-before-auth", async () => {

@@ -37,6 +37,8 @@ import {
   listInboxMessagesFromD1,
   countInboxMessagesFromD1,
   fetchRepliesForMessages,
+  listOutboxRepliesFromD1,
+  countOutboxRepliesFromD1,
   type StatusFilter,
 } from "@/lib/inbox/d1-reads";
 
@@ -252,14 +254,18 @@ export async function GET(
   let unreadCount: number;
   let totalCount: number;
   let receivedCount: number;
+  let sentCount: number;
+  let sentMessages: import("@/lib/inbox/types").OutboxReply[];
   try {
     // D1 query: received messages with status filter and pagination.
-    // All four queries run in parallel to minimise latency:
+    // All six queries run in parallel to minimise latency:
     //   [0] paginated message list (the page the caller asked for)
     //   [1] unreadCount — live SELECT COUNT(*) WHERE read_at IS NULL (closes aibtc-mcp-server#497)
     //   [2] totalCount — total matching the status filter (drives hasMore / pagination)
     //   [3] receivedCount — total inbound messages regardless of filter (for economics)
-    [receivedMessages, unreadCount, totalCount, receivedCount] = await Promise.all([
+    //   [4] sentCount — total outbox replies sent by this agent (Phase 2.5 Step 3.3)
+    //   [5] sentMessages — outbox replies for partner graph (only when includePartners)
+    [receivedMessages, unreadCount, totalCount, receivedCount, sentCount, sentMessages] = await Promise.all([
       includeReceived
         ? listInboxMessagesFromD1(db, agent.btcAddress, limit, offset, statusFilter)
         : Promise.resolve([] as import("@/lib/inbox/types").InboxMessage[]),
@@ -275,6 +281,12 @@ export async function GET(
       includeReceived
         ? countInboxMessagesFromD1(db, agent.btcAddress, "all")
         : Promise.resolve(0),
+      // sentCount: total outbox replies sent — restores the dimension stubbed in Step 3.1
+      countOutboxRepliesFromD1(db, agent.btcAddress),
+      // sentMessages: outbox replies for partner graph computation (only when includePartners)
+      includePartners
+        ? listOutboxRepliesFromD1(db, agent.btcAddress, 100, 0)
+        : Promise.resolve([] as import("@/lib/inbox/types").OutboxReply[]),
     ]);
   } catch (e) {
     return NextResponse.json(
@@ -286,8 +298,6 @@ export async function GET(
       { status: 503, headers: { "Retry-After": "5" } }
     );
   }
-
-  const sentCount = 0; // Step 3.3: outbox flip not yet done
 
   // Build inline replies map for the returned page
   const visibleMessageIds = receivedMessages.map((m) => m.messageId);
@@ -330,10 +340,11 @@ export async function GET(
   });
 
   // Compute partner summary if requested.
-  // For now partners are computed from the received messages only (Step 3.3 will add sent).
+  // Step 3.3 restores the full partner graph: both received (inbound senders)
+  // and sent (outbox reply targets) directions are merged into the partner map.
   let partners: import("@/lib/inbox/types").InboxPartner[] | undefined;
-  if (includePartners && totalCount > 0) {
-    // Group received messages by partner (sender) address
+  if (includePartners && (totalCount > 0 || sentMessages.length > 0)) {
+    // Group messages by partner address — covers both directions
     const partnerMap = new Map<string, {
       btcAddress: string;
       stxAddress?: string;
@@ -342,8 +353,8 @@ export async function GET(
       directions: Set<"sent" | "received">;
     }>();
 
+    // Received messages: partner is the sender (fromAddress = STX address)
     for (const msg of receivedMessages) {
-      // For received messages, partner is the sender (fromAddress = STX address)
       const partnerStxAddress = msg.fromAddress;
       const partnerBtcAddress = agentLookupMap.get(partnerStxAddress)?.btcAddress;
       const partnerKey = partnerBtcAddress || partnerStxAddress;
@@ -366,6 +377,31 @@ export async function GET(
       }
     }
 
+    // Sent messages (outbox replies): partner is the reply target (toBtcAddress)
+    // This is always a BTC address (resolved at write time by insertReplyToD1).
+    for (const reply of sentMessages) {
+      const partnerBtcAddress = reply.toBtcAddress;
+      if (!partnerBtcAddress) continue;
+      const partnerKey = partnerBtcAddress;
+
+      const existing = partnerMap.get(partnerKey);
+      if (existing) {
+        existing.messageCount++;
+        existing.directions.add("sent");
+        if (new Date(reply.repliedAt).getTime() > new Date(existing.lastInteractionAt).getTime()) {
+          existing.lastInteractionAt = reply.repliedAt;
+        }
+      } else {
+        partnerMap.set(partnerKey, {
+          btcAddress: partnerBtcAddress,
+          stxAddress: undefined,
+          messageCount: 1,
+          lastInteractionAt: reply.repliedAt,
+          directions: new Set(["sent"]),
+        });
+      }
+    }
+
     // Resolve partner addresses to agent records for display names
     const partnerEntries = Array.from(partnerMap.entries());
     const resolvedPartners = await Promise.all(
@@ -373,7 +409,7 @@ export async function GET(
         const lookupAddress = data.stxAddress || data.btcAddress;
         const partnerAgent = lookupAddress ? await lookupAgent(kv, lookupAddress) : null;
 
-        // Determine final direction — all received-only for now (Step 3.3 adds sent)
+        // Determine final direction from the merged set
         let finalDirection: "sent" | "received" | "both";
         if (data.directions.has("sent") && data.directions.has("received")) {
           finalDirection = "both";

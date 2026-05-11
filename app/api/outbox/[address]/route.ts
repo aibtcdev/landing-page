@@ -14,12 +14,12 @@ import {
   storeReply,
   updateMessage,
   buildReplyMessage,
-  listInboxMessages,
   decrementUnreadCount,
 } from "@/lib/inbox";
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
 import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import { listOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -513,20 +513,52 @@ export async function GET(
     );
   }
 
-  // Fetch all messages with replies inline (single call, no N+1)
-  const { replies: replyMap } = await listInboxMessages(
-    kv,
-    agent.btcAddress,
-    100,
-    0,
-    { includeReplies: true }
-  );
+  // ── Phase 2.5 Step 3.3: D1 read flip ──────────────────────────────────────
+  // The GET /api/outbox/[address] path now reads from D1 instead of KV.
+  // KV writes (POST handler) are NOT removed in this PR — that is Step 4.
+  // Security gate: listOutboxRepliesFromD1 filters by from_btc_address = ?
+  // so replies belonging to a different agent are never returned.
+  //
+  // See: https://github.com/aibtcdev/landing-page/issues/728 (Step 3.3 spec)
+  // See: https://github.com/aibtcdev/landing-page/issues/697 (Phase 2.5 umbrella)
 
-  // Collect all replies
-  const validReplies = Array.from(replyMap.values());
+  // Parse query params for pagination
+  const url = new URL(request.url);
+  const limitParam = url.searchParams.get("limit");
+  const offsetParam = url.searchParams.get("offset");
+  const limit = limitParam
+    ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100)
+    : 20;
+  const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
+
+  const db = env.DB as D1Database | undefined;
+
+  if (!db) {
+    return NextResponse.json(
+      { error: "Database unavailable. Please try again shortly." },
+      { status: 503 }
+    );
+  }
+
+  // D1-throws fallback policy (per #728 / #722 dev-council Cycle 26 advisory):
+  // If D1 throws — transient unavailability, network error, schema mismatch —
+  // return 503 with a structured retry hint rather than an unstructured 500.
+  let replies: import("@/lib/inbox/types").OutboxReply[];
+  try {
+    replies = await listOutboxRepliesFromD1(db, agent.btcAddress, limit, offset);
+  } catch (e) {
+    return NextResponse.json(
+      {
+        error: "transient_d1_unavailable",
+        message: "Outbox database temporarily unavailable. Please retry shortly.",
+        retry_after: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
 
   // If no replies, return self-documenting response
-  if (validReplies.length === 0) {
+  if (replies.length === 0) {
     return NextResponse.json({
       endpoint: "/api/outbox/[address]",
       description: "Replies sent by this agent to incoming inbox messages.",
@@ -537,6 +569,12 @@ export async function GET(
       outbox: {
         replies: [],
         totalCount: 0,
+        pagination: {
+          limit,
+          offset,
+          hasMore: false,
+          nextOffset: null,
+        },
       },
       howToReply: {
         endpoint: `POST /api/outbox/${agent.btcAddress}`,
@@ -561,8 +599,14 @@ export async function GET(
       displayName: agent.displayName,
     },
     outbox: {
-      replies: validReplies,
-      totalCount: validReplies.length,
+      replies,
+      totalCount: replies.length,
+      pagination: {
+        limit,
+        offset,
+        hasMore: replies.length === limit,
+        nextOffset: replies.length === limit ? offset + limit : null,
+      },
     },
   });
 }
