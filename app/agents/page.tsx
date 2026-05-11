@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCachedAgentList } from "@/lib/cache";
+import { countTradesBySenderAndSource } from "@/lib/competition/d1-reads";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import AgentList from "./AgentList";
@@ -23,28 +24,51 @@ async function fetchAgents() {
   const kv = env.VERIFIED_AGENTS as KVNamespace;
   const { agents } = await getCachedAgentList(kv);
 
-  // Reputation data is fetched client-side in AgentList to avoid blocking SSR
-  // on external Stacks API calls (which can timeout under rate limits).
-  return agents.map((agent) => ({
-    stxAddress: agent.stxAddress,
-    btcAddress: agent.btcAddress,
-    stxPublicKey: agent.stxPublicKey,
-    btcPublicKey: agent.btcPublicKey,
-    taprootAddress: agent.taprootAddress ?? undefined,
-    displayName: agent.displayName ?? undefined,
-    description: agent.description ?? undefined,
-    bnsName: agent.bnsName ?? undefined,
-    owner: agent.owner ?? undefined,
-    verifiedAt: agent.verifiedAt,
-    lastActiveAt: agent.lastActiveAt ?? undefined,
-    erc8004AgentId: agent.erc8004AgentId ?? undefined,
-    nostrPublicKey: agent.nostrPublicKey ?? undefined,
-    referredBy: agent.referredBy ?? undefined,
-    level: agent.level,
-    levelName: agent.levelName,
-    messageCount: agent.messageCount,
-    unreadCount: agent.unreadCount,
-  }));
+  // One D1 round-trip for every agent's verified-trade breakdown
+  // (total / MCP-submitted / cron-discovered). Costs the same as
+  // countSwapsFromD1 since it's a single GROUP BY — preferable to N
+  // queries from the client. Falls back to an empty map if D1 is
+  // unavailable so the page still renders.
+  let tradeCounts = new Map<string, { total: number; mcp: number; cron: number }>();
+  if (env.DB) {
+    try {
+      tradeCounts = await countTradesBySenderAndSource(env.DB);
+    } catch {
+      // D1 unavailable / not yet provisioned in this env — leave the
+      // map empty so the MCP-trades column renders zeros instead of
+      // breaking the page.
+    }
+  }
+
+  // Reputation + portfolio data are fetched client-side in AgentList to
+  // avoid blocking SSR on external Stacks API / Tenero calls (which can
+  // timeout under rate limits).
+  return agents.map((agent) => {
+    const counts = tradeCounts.get(agent.stxAddress) ?? { total: 0, mcp: 0, cron: 0 };
+    return {
+      stxAddress: agent.stxAddress,
+      btcAddress: agent.btcAddress,
+      stxPublicKey: agent.stxPublicKey,
+      btcPublicKey: agent.btcPublicKey,
+      taprootAddress: agent.taprootAddress ?? undefined,
+      displayName: agent.displayName ?? undefined,
+      description: agent.description ?? undefined,
+      bnsName: agent.bnsName ?? undefined,
+      owner: agent.owner ?? undefined,
+      verifiedAt: agent.verifiedAt,
+      lastActiveAt: agent.lastActiveAt ?? undefined,
+      erc8004AgentId: agent.erc8004AgentId ?? undefined,
+      nostrPublicKey: agent.nostrPublicKey ?? undefined,
+      referredBy: agent.referredBy ?? undefined,
+      level: agent.level,
+      levelName: agent.levelName,
+      messageCount: agent.messageCount,
+      unreadCount: agent.unreadCount,
+      tradeCount: counts.total,
+      mcpTradeCount: counts.mcp,
+      cronTradeCount: counts.cron,
+    };
+  });
 }
 
 export default async function AgentsPage() {
