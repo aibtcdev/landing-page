@@ -9,10 +9,7 @@ import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
   validateOutboxReply,
-  storeReply,
-  updateMessage,
   buildReplyMessage,
-  decrementUnreadCount,
 } from "@/lib/inbox";
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
@@ -439,60 +436,52 @@ export async function POST(
     repliedAt: now,
   };
 
-  // Check if message is already read (to know if we need to decrement unread)
-  const wasUnread = !message.readAt;
-
-  // Store reply and update message (also mark as read) in parallel
-  // On recovery, storeReply overwrites the existing partial record with a fresh timestamp
-  await Promise.all([
-    storeReply(kv, outboxReply),
-    updateMessage(kv, messageId, {
-      repliedAt: now,
-      ...(!message.readAt && { readAt: now }),
-    }),
-  ]);
-
-  // Decrement unreadCount if message was unread
-  if (wasUnread) {
-    await decrementUnreadCount(kv, message.toBtcAddress);
-  }
-
-  // D1 dual-write (Phase 2.5 Step 1 — reversible scaffolding).
-  // KV is still the source of truth; D1 INSERT is fire-and-forget.
-  // D1 failure is logged-and-swallowed — it must NOT fail the response.
+  // D1 is now the sole write path (Phase 2.5 Step 4 — KV writes removed).
+  // unreadCount is now a live SELECT COUNT(*) so no KV decrement is needed.
+  //
+  // insertReplyToD1 is synchronous + failure-propagating: failure returns 503
+  // + Retry-After: 5 so the sender retries rather than losing the reply.
   // Note: insertReplyToD1 resolves outboxReply.toBtcAddress (may be STX) to BTC
-  // via KV lookup before inserting. If resolution fails, it throws and the catch
-  // logs it as a dual-write failure.
-  if (env.DB) {
-    ctx.waitUntil(
-      insertReplyToD1(env.DB as D1Database, kv, outboxReply).catch((err) =>
-        logger.error("outbox.dual_write_d1_failed", {
-          messageId: outboxReply.messageId,
-          path: "kv_reply",
-          error: String(err),
-        })
-      )
-    );
-
-    // D1 dual-write for the PARENT message's read_at / replied_at state
-    // (Phase 2.5 Step 3 readiness — closes the updateMessage dual-write gap).
-    // The outbox POST updates the parent message in KV (sets repliedAt + possibly readAt).
-    // We mirror that here. Target is the parent's message_id directly — no derivation.
-    // wasUnread reflects whether readAt is being set for the first time.
-    const parentUpdates: { readAt?: string; repliedAt?: string } = {
-      repliedAt: now,
-      ...(wasUnread && { readAt: now }),
-    };
-    ctx.waitUntil(
-      updateMessageStateD1(env.DB as D1Database, messageId, parentUpdates).catch((err) =>
-        logger.error("outbox.dual_write_d1_parent_state_failed", {
-          messageId,
-          path: "kv_reply_parent_state",
-          error: String(err),
-        })
-      )
+  // via KV lookup before inserting.
+  //
+  // updateMessageStateD1 sets replied_at (and read_at if unread) on the parent
+  // message row. Failure here is logged-and-swallowed: the reply row already
+  // committed, so the parent state update is best-effort metadata (the reply
+  // content itself is durable). This matches the prior fire-and-forget pattern
+  // for the parent state update.
+  try {
+    await insertReplyToD1(db, kv, outboxReply);
+  } catch (err) {
+    logger.error("outbox.d1_insert_failed", {
+      messageId: outboxReply.messageId,
+      error: String(err),
+    });
+    return NextResponse.json(
+      {
+        error: "Reply delivery failed. Please retry shortly.",
+        retryable: true,
+        retryAfter: 5,
+        messageId,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
     );
   }
+
+  // Best-effort: update parent message's replied_at (and read_at if unread).
+  // The reply row is already committed; this is metadata only.
+  const wasUnread = !message.readAt;
+  const parentUpdates: { readAt?: string; repliedAt?: string } = {
+    repliedAt: now,
+    ...(wasUnread && { readAt: now }),
+  };
+  ctx.waitUntil(
+    updateMessageStateD1(db, messageId, parentUpdates).catch((err) =>
+      logger.error("outbox.d1_parent_state_failed", {
+        messageId,
+        error: String(err),
+      })
+    )
+  );
 
   // Generate reputationPayload (ERC-8004 feedbackHash) using Web Crypto API
   const hashData = new TextEncoder().encode(`${messageId}${reply}${signature}`);

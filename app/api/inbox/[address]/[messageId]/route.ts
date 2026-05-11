@@ -8,10 +8,8 @@ import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
-  updateMessage,
   validateMarkRead,
   buildMarkReadMessage,
-  decrementUnreadCount,
 } from "@/lib/inbox";
 import { shouldFailClosed } from "@/lib/env";
 import { updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
@@ -104,8 +102,8 @@ export async function GET(
 }
 
 // PATCH (mark-read) auth read flipped to D1 in Phase 2.5 Step 3.5 (#736).
-// KV writes (updateMessage, decrementUnreadCount) are NOT removed here — that
-// is Step 4 (#730). The D1 read is the new auth gate; KV write still mirrors it.
+// KV writes (updateMessage, decrementUnreadCount) removed in Phase 2.5 Step 4 (#730).
+// D1 is now the sole write path; unreadCount served by live SELECT COUNT(*).
 export async function PATCH(
   request: NextRequest,
   { params }: { params: Promise<{ address: string; messageId: string }> }
@@ -293,32 +291,27 @@ export async function PATCH(
     );
   }
 
-  // Update message with readAt timestamp
+  // D1 is now the sole write path (Phase 2.5 Step 4 — KV writes removed).
+  // unreadCount is now a live SELECT COUNT(*) so no KV decrement is needed.
+  //
+  // D1 UPDATE is synchronous and failure-propagating: failure returns 503
+  // + Retry-After: 5 so the caller can retry rather than seeing a phantom 200.
   const now = new Date().toISOString();
-  const updatedMessage = await updateMessage(kv, messageId, { readAt: now });
-
-  if (!updatedMessage) {
+  try {
+    await updateMessageStateD1(db, messageId, { readAt: now });
+  } catch (err) {
+    logger.error("mark_read.d1_update_failed", {
+      messageId,
+      path: "mark_read",
+      error: String(err),
+    });
     return NextResponse.json(
-      { error: "Failed to update message" },
-      { status: 500 }
-    );
-  }
-
-  // Decrement unreadCount on the agent inbox index (clamped to 0)
-  await decrementUnreadCount(kv, message.toBtcAddress);
-
-  // D1 dual-write (Phase 2.5 Step 3 readiness).
-  // KV is still the source of truth; D1 UPDATE is fire-and-forget.
-  // D1 failure is logged-and-swallowed — it must NOT fail the response.
-  if (env.DB) {
-    ctx.waitUntil(
-      updateMessageStateD1(env.DB as D1Database, messageId, { readAt: now }).catch((err) =>
-        logger.error("mark_read.dual_write_d1_failed", {
-          messageId,
-          path: "mark_read",
-          error: String(err),
-        })
-      )
+      {
+        error: "Mark-read failed. Please retry shortly.",
+        retryable: true,
+        retryAfter: 5,
+      },
+      { status: 503, headers: { "Retry-After": "5" } }
     );
   }
 

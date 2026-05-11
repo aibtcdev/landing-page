@@ -7,7 +7,7 @@ import { X_HANDLE } from "@/lib/constants";
 import { ACTIVE_BEATS_LIST } from "@/lib/news-beats";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
-import type { InboxAgentIndex } from "@/lib/inbox/types";
+import { countInboxMessagesFromD1 } from "@/lib/inbox/d1-reads";
 import {
   CHECK_IN_MESSAGE_FORMAT,
   buildCheckInMessage,
@@ -103,13 +103,20 @@ function getNextAction(
 }
 
 /**
- * Parse inbox index data to extract unread count.
+ * Fetch live unread count from D1.
+ *
+ * Phase 2.5 Step 4 — replaces the KV inbox:agent:{btcAddress} read that served
+ * the cached unreadCount. The D1 live SELECT COUNT(*) WHERE read_at IS NULL is
+ * served by idx_inbox_unread and closes the +1 stale-counter drift tracked in
+ * aibtc-mcp-server#497.
+ *
+ * Fails open (returns 0) on D1 unavailability so heartbeat orientation is never
+ * blocked by a transient D1 error.
  */
-function parseUnreadCount(inboxIndexData: string | null): number {
-  if (!inboxIndexData) return 0;
+async function fetchUnreadCount(db: D1Database | undefined, btcAddress: string): Promise<number> {
+  if (!db) return 0;
   try {
-    const inboxIndex = JSON.parse(inboxIndexData) as InboxAgentIndex;
-    return inboxIndex.unreadCount || 0;
+    return await countInboxMessagesFromD1(db, btcAddress, "unread");
   } catch {
     return 0;
   }
@@ -134,9 +141,11 @@ export async function GET(request: NextRequest) {
 
     const { agent, claim } = result;
 
-    // Fetch inbox index in parallel (claim already fetched by lookupAgent)
-    const inboxIndexData = await kv.get(`inbox:agent:${agent.btcAddress}`);
-    const unreadCount = parseUnreadCount(inboxIndexData);
+    // Phase 2.5 Step 4 — unreadCount now served from D1 live SELECT COUNT(*).
+    // Replaces the KV inbox:agent:{btcAddress} read that served a stale cached
+    // counter. Closes aibtc-mcp-server#497 for the heartbeat orientation path.
+    const db = env.DB as D1Database | undefined;
+    const unreadCount = await fetchUnreadCount(db, agent.btcAddress);
 
     const orientation = getOrientation(agent, claim, unreadCount);
 
@@ -368,17 +377,17 @@ export async function POST(request: NextRequest) {
       lastActiveAt: timestamp,
     };
 
-    // Write updates to both btc: and stx: keys, fetch inbox in parallel.
+    // Write updates to both btc: and stx: keys in parallel; fetch D1 unread count.
     // Pure timestamp updates are tolerated as stale for up to the 2-min cache
     // TTL — no need to invalidate the cached agent list on every check-in.
-    const [, , inboxIndexData] = await Promise.all([
+    // Phase 2.5 Step 4 — unreadCount now served from D1 live SELECT COUNT(*);
+    // KV inbox:agent:{btcAddress} read removed.
+    const db = env.DB as D1Database | undefined;
+    const [, , unreadCount] = await Promise.all([
       kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
       kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent)),
-      kv.get(`inbox:agent:${btcAddress}`),
+      fetchUnreadCount(db, btcAddress),
     ]);
-
-    // Build orientation and level info (single getAgentLevel call inside getOrientation)
-    const unreadCount = parseUnreadCount(inboxIndexData);
     const orientation = getOrientation(updatedAgent, claim, unreadCount);
     const nextLevel = getNextLevel(orientation.level);
 

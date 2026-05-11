@@ -1,15 +1,18 @@
 /**
- * Tests for the mark-read PATCH D1 dual-write (Phase 2.5 Step 3 readiness).
+ * Tests for the mark-read PATCH D1 sole-source-of-truth (Phase 2.5 Step 4).
  *
- * Updated in Phase 2.5 Step 3.5 (#736): the PATCH auth read was flipped from
- * KV (getMessage) to D1 (getInboxMessageFromD1). Tests updated to mock
- * getInboxMessageFromD1 instead of getMessage.
+ * Updated in Phase 2.5 Step 4 (#730): KV writes (updateMessage,
+ * decrementUnreadCount) are removed; D1 is now the sole write path.
+ * The D1 UPDATE is synchronous and failure-propagating.
  *
- * Verifies:
- *  - After successful D1 read + KV mark-read, ctx.waitUntil schedules D1 UPDATE
- *  - D1 UPDATE is called with the correct messageId and { readAt: now }
- *  - D1 UPDATE failure is swallowed — response is still 200
- *  - When DB binding is absent, response is 503 (D1 is now auth gate, not fallback)
+ * Previously (Steps 1-3): D1 UPDATE was scheduled via ctx.waitUntil (best-effort)
+ * and failure did NOT fail the 200 response. That contract is REVERSED in Step 4.
+ *
+ * Verifies (Step 4 contract):
+ *  - After D1 auth read succeeds, updateMessageStateD1 is called synchronously
+ *  - D1 UPDATE success → 200 response with readAt
+ *  - D1 UPDATE failure → 503 + Retry-After: 5 (failure propagates)
+ *  - When DB binding is absent → 503 (D1 is required auth gate, not a fallback)
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
@@ -162,7 +165,7 @@ function buildPatchRequest(address: string, messageId: string) {
 
 // ---- tests ------------------------------------------------------------------
 
-describe("PATCH /api/inbox/[address]/[messageId] — D1 dual-write (Phase 2.5 Step 3 readiness)", () => {
+describe("PATCH /api/inbox/[address]/[messageId] — D1 sole-source-of-truth (Phase 2.5 Step 4)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (lookupAgent as Mock).mockResolvedValue(AGENT);
@@ -177,10 +180,14 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 dual-write (Phase 2.5 St
     });
     (updateMessage as Mock).mockResolvedValue({ ...INBOX_MESSAGE, readAt: "2026-05-10T12:00:00.000Z" });
     (decrementUnreadCount as Mock).mockResolvedValue(undefined);
+    // Re-apply resolved values cleared by clearAllMocks
+    (updateMessageStateD1 as Mock).mockResolvedValue(undefined);
   });
 
-  it("schedules D1 UPDATE via ctx.waitUntil after successful KV mark-read", async () => {
-    const waitUntilFn = vi.fn(async (p: Promise<unknown>) => { await p; });
+  it("D1 UPDATE is synchronous — returns 200 and updateMessageStateD1 was called directly", async () => {
+    // Step 4 contract: updateMessageStateD1 is called synchronously (not via
+    // ctx.waitUntil). Success → 200 with readAt in the response.
+    const waitUntilFn = vi.fn();
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
     const kv = createMockKV();
@@ -200,8 +207,10 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 dual-write (Phase 2.5 St
     });
 
     expect(resp.status).toBe(200);
-    expect(waitUntilFn).toHaveBeenCalled();
+    // D1 UPDATE must have been called synchronously
     expect(updateMessageStateD1).toHaveBeenCalledOnce();
+    // ctx.waitUntil must NOT have been called — D1 UPDATE is no longer fire-and-forget
+    expect(waitUntilFn).not.toHaveBeenCalled();
 
     // Verify called with correct messageId and readAt field
     const [calledDb, calledMessageId, calledUpdates] = (
@@ -214,13 +223,14 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 dual-write (Phase 2.5 St
     expect(calledUpdates).not.toHaveProperty("repliedAt");
   });
 
-  it("D1 UPDATE failure does NOT fail the 200 response", async () => {
+  it("D1 UPDATE failure returns 503 with Retry-After: 5 (Step 4 reversed contract)", async () => {
+    // Step 4 contract: D1 UPDATE failure PROPAGATES — 503 + Retry-After: 5.
+    // The old Step-1/2 contract ("D1 UPDATE failure does NOT fail the 200 response")
+    // is REVERSED: D1 is now the sole write path, so failure must propagate.
     const d1Error = new Error("D1 constraint violation");
     (updateMessageStateD1 as Mock).mockRejectedValue(d1Error);
 
-    const waitUntilFn = vi.fn(async (p: Promise<unknown>) => {
-      try { await p; } catch { /* swallow — simulates Worker swallowing the error */ }
-    });
+    const waitUntilFn = vi.fn();
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
     const kv = createMockKV();
@@ -239,8 +249,12 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 dual-write (Phase 2.5 St
       params: Promise.resolve({ address: AGENT.btcAddress, messageId: MESSAGE_ID }),
     });
 
-    // Response must still be 200 — D1 dual-write failure must NOT propagate
-    expect(resp.status).toBe(200);
+    // D1 failure must propagate — caller retries rather than getting a phantom 200
+    expect(resp.status).toBe(503);
+    expect(resp.headers.get("Retry-After")).toBe("5");
+    const body = await resp.json();
+    expect(body.retryable).toBe(true);
+    expect(body.retryAfter).toBe(5);
   });
 
   it("returns 503 when DB binding is absent (D1 is now the auth gate, not a fallback)", async () => {

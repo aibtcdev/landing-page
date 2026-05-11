@@ -1,19 +1,19 @@
 /**
- * Regression tests for Phase 2.5 Step 1 — inbox/outbox dual-write to D1.
+ * Regression tests for Phase 2.5 Step 4 — D1 as sole source of truth.
  *
- * Updated in Phase 2.5 Step 3.5 (#736): the POST outbox auth reads were flipped
- * from KV (getMessage, getReply) to D1 (getInboxMessageFromD1, getReplyForMessageFromD1).
- * Tests updated to mock the D1 helpers instead of the KV helpers.
+ * Updated in Phase 2.5 Step 4 (#730): KV writes removed; D1 is now the
+ * authoritative and only write path. Tests updated to match the new contract:
  *
- * Key properties verified:
- *  - POST /api/inbox/[address]: after KV write succeeds, ctx.waitUntil schedules D1 INSERT
- *  - D1 INSERT failure does NOT fail the 201 response (logged-and-swallowed)
- *  - POST /api/outbox/[address]: after KV write succeeds, ctx.waitUntil schedules D1 INSERT
- *  - D1 INSERT for reply uses is_reply=1 and synthesized PK via deriveReplyD1Id
- *  - When DB binding is absent, the outbox POST returns 503 (D1 is now the auth gate)
+ *  - POST /api/inbox/[address]: D1 INSERT is synchronous (not fire-and-forget).
+ *    D1 failure propagates → 503 + Retry-After: 5.
+ *    Missing DB binding → 503 + Retry-After: 5.
+ *  - POST /api/outbox/[address]: same — D1 INSERT is synchronous.
+ *    D1 failure propagates → 503 + Retry-After: 5.
+ *    Parent message state update (replied_at / read_at) is still best-effort
+ *    via ctx.waitUntil — failure there does NOT fail the 201.
  *
  * These tests exercise the route handlers with mocked downstream functions.
- * They do NOT test the full payment flow — only the dual-write wiring.
+ * They do NOT test the full payment flow — only the D1 write-path wiring.
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
@@ -117,7 +117,6 @@ vi.mock("@/lib/env", () => ({
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
-  storeMessage,
   updateAgentInbox,
   validateInboxMessage,
   verifyInboxPayment,
@@ -208,18 +207,21 @@ function createRateLimitMock(success = true): RateLimit {
   } as unknown as RateLimit;
 }
 
-// ---- inbox POST dual-write tests -------------------------------------------
+// ---- inbox POST D1 sole-source-of-truth tests (Phase 2.5 Step 4) -----------
 
-describe("POST /api/inbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () => {
+describe("POST /api/inbox/[address] — D1 sole-source-of-truth (Phase 2.5 Step 4)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (lookupAgent as Mock).mockResolvedValue(AGENT);
-    (storeMessage as Mock).mockResolvedValue(undefined);
     (updateAgentInbox as Mock).mockResolvedValue(undefined);
+    // Re-apply resolved values cleared by clearAllMocks
+    (insertInboundMessageToD1 as Mock).mockResolvedValue(undefined);
   });
 
-  it("schedules D1 INSERT via ctx.waitUntil after successful x402 KV write", async () => {
-    const waitUntilFn = vi.fn(async (p: Promise<unknown>) => { await p; });
+  it("D1 INSERT is synchronous — returns 201 and insertInboundMessageToD1 was called directly", async () => {
+    // Step 4 contract: insertInboundMessageToD1 is called synchronously (not
+    // fire-and-forget). A successful insert returns 201.
+    const waitUntilFn = vi.fn();
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
     const kv = createMockKV();
@@ -262,22 +264,20 @@ describe("POST /api/inbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =>
     const resp = await inboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
     expect(resp.status).toBe(201);
-    // ctx.waitUntil must have been called (D1 INSERT scheduled)
-    expect(waitUntilFn).toHaveBeenCalled();
-    // insertInboundMessageToD1 must have been called (inside waitUntil promise)
+    // D1 INSERT must have been called (synchronous, not in waitUntil)
     expect(insertInboundMessageToD1).toHaveBeenCalledOnce();
-    // Verify DB is passed
+    // Verify DB is passed as first arg
     const [calledDb] = (insertInboundMessageToD1 as Mock).mock.calls[0];
     expect(calledDb).toBe(db);
   });
 
-  it("D1 INSERT failure does NOT fail the 201 response", async () => {
+  it("D1 INSERT failure returns 503 with Retry-After: 5 (Step 4 reversed contract)", async () => {
+    // Step 4 contract: D1 failure PROPAGATES — 503 + Retry-After: 5.
+    // The old Step-1/2 contract (best-effort, swallow errors) is reversed here.
     const d1Error = new Error("D1 unavailable");
     (insertInboundMessageToD1 as Mock).mockRejectedValue(d1Error);
 
-    const waitUntilFn = vi.fn(async (p: Promise<unknown>) => {
-      try { await p; } catch { /* swallow — simulates Worker swallowing the error */ }
-    });
+    const waitUntilFn = vi.fn();
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
     const kv = createMockKV();
@@ -319,18 +319,24 @@ describe("POST /api/inbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =>
 
     const resp = await inboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
-    // Response must still be 201 — D1 failure must NOT propagate
-    expect(resp.status).toBe(201);
+    // D1 failure must propagate — sender retries rather than losing the message
+    expect(resp.status).toBe(503);
+    expect(resp.headers.get("Retry-After")).toBe("5");
+    const body = await resp.json();
+    expect(body.retryable).toBe(true);
+    expect(body.retryAfter).toBe(5);
   });
 
-  it("skips D1 INSERT when DB binding is absent (no env.DB)", async () => {
+  it("missing DB binding returns 503 (D1 is required — no fallback)", async () => {
+    // Step 4 contract: DB binding is required for delivery. Missing binding → 503.
+    // Old Step-1 behavior (skip D1, return 201 anyway) is reversed.
     const waitUntilFn = vi.fn();
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const kv = createMockKV();
 
     mockCloudflareContext({
       VERIFIED_AGENTS: kv,
-      // DB is intentionally absent
+      // DB intentionally absent
       RATE_LIMIT_MUTATING: createRateLimitMock(true),
     }, ctx);
 
@@ -365,16 +371,17 @@ describe("POST /api/inbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =>
 
     const resp = await inboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
-    expect(resp.status).toBe(201);
-    // ctx.waitUntil should NOT have been called — no DB binding
-    expect(waitUntilFn).not.toHaveBeenCalled();
+    // D1 is required — no DB → 503 (not 201 as in the old skip-D1 behavior)
+    expect(resp.status).toBe(503);
+    expect(resp.headers.get("Retry-After")).toBe("5");
+    // D1 insert must NOT have been called — rejected before reaching insert
     expect(insertInboundMessageToD1).not.toHaveBeenCalled();
   });
 });
 
-// ---- outbox POST dual-write tests ------------------------------------------
+// ---- outbox POST D1 sole-source-of-truth tests (Phase 2.5 Step 4) ----------
 
-describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () => {
+describe("POST /api/outbox/[address] — D1 sole-source-of-truth (Phase 2.5 Step 4)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (lookupAgent as Mock).mockResolvedValue(AGENT);
@@ -385,9 +392,14 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
     (getInboxMessageFromD1 as Mock).mockResolvedValue(INBOX_MESSAGE); // original message
     (getReplyForMessageFromD1 as Mock).mockResolvedValue(null); // no existing reply
     (buildReplyMessage as Mock).mockReturnValue("Inbox Reply | msg_123 | hello");
+    // Re-apply resolved values cleared by clearAllMocks
+    (insertReplyToD1 as Mock).mockResolvedValue(undefined);
+    (updateMessageStateD1 as Mock).mockResolvedValue(undefined);
   });
 
-  it("schedules D1 INSERT via ctx.waitUntil after successful KV reply write", async () => {
+  it("D1 INSERT is synchronous — returns 201 and insertReplyToD1 was called directly", async () => {
+    // Step 4: insertReplyToD1 is called synchronously; success → 201.
+    // ctx.waitUntil is called only for the best-effort parent state update.
     const waitUntilFn = vi.fn(async (p: Promise<unknown>) => { await p; });
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
@@ -422,9 +434,7 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
     const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
     expect(resp.status).toBe(201);
-    // ctx.waitUntil must have been called (D1 INSERT scheduled)
-    expect(waitUntilFn).toHaveBeenCalled();
-    // insertReplyToD1 must have been called
+    // insertReplyToD1 must have been called synchronously
     expect(insertReplyToD1).toHaveBeenCalledOnce();
     // Verify DB and KV are passed
     const [calledDb, calledKv] = (insertReplyToD1 as Mock).mock.calls[0];
@@ -432,13 +442,13 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
     expect(calledKv).toBe(kv);
   });
 
-  it("D1 INSERT failure does NOT fail the 201 response", async () => {
+  it("D1 INSERT failure returns 503 with Retry-After: 5 (Step 4 reversed contract)", async () => {
+    // Step 4 contract: D1 INSERT failure PROPAGATES — 503 + Retry-After: 5.
+    // The old best-effort / swallow-errors contract is reversed.
     const d1Error = new Error("D1 constraint violation");
     (insertReplyToD1 as Mock).mockRejectedValue(d1Error);
 
-    const waitUntilFn = vi.fn(async (p: Promise<unknown>) => {
-      try { await p; } catch { /* swallow — simulates Worker swallowing the error */ }
-    });
+    const waitUntilFn = vi.fn();
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
     const kv = createMockKV();
@@ -471,11 +481,15 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
 
     const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
-    // Response must still be 201 — D1 failure must NOT propagate
-    expect(resp.status).toBe(201);
+    // D1 failure must propagate — replier retries rather than losing the reply
+    expect(resp.status).toBe(503);
+    expect(resp.headers.get("Retry-After")).toBe("5");
+    const body = await resp.json();
+    expect(body.retryable).toBe(true);
+    expect(body.retryAfter).toBe(5);
   });
 
-  it("D1 INSERT is called with is_reply=1 semantics (reply shape with synthesized PK)", async () => {
+  it("D1 INSERT is called with correct reply shape (messageId = parent message ID)", async () => {
     const waitUntilFn = vi.fn(async (p: Promise<unknown>) => { await p; });
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
@@ -519,9 +533,9 @@ describe("POST /api/outbox/[address] — D1 dual-write (Phase 2.5 Step 1)", () =
   });
 });
 
-// ── outbox POST parent-state dual-write tests ─────────────────────────────
+// ── outbox POST parent-state D1 tests (still best-effort via ctx.waitUntil) ──
 
-describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2.5 Step 3 readiness)", () => {
+describe("POST /api/outbox/[address] — parent message D1 state update (still best-effort)", () => {
   beforeEach(() => {
     vi.clearAllMocks();
     (lookupAgent as Mock).mockResolvedValue(AGENT);
@@ -531,6 +545,9 @@ describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2
     // Phase 2.5 Step 3.5: auth reads now use D1 helpers
     (getReplyForMessageFromD1 as Mock).mockResolvedValue(null); // no existing reply
     (buildReplyMessage as Mock).mockReturnValue("Inbox Reply | msg_123 | hello");
+    // Re-apply resolved values cleared by clearAllMocks
+    (insertReplyToD1 as Mock).mockResolvedValue(undefined);
+    (updateMessageStateD1 as Mock).mockResolvedValue(undefined);
   });
 
   it("schedules D1 parent-state UPDATE via ctx.waitUntil after reply write (unread message)", async () => {
@@ -582,8 +599,8 @@ describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2
     const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
     expect(resp.status).toBe(201);
-    // waitUntil called at least twice: once for insertReplyToD1, once for updateMessageStateD1
-    expect(waitUntilFn).toHaveBeenCalledTimes(2);
+    // waitUntil called once: for the best-effort parent-state updateMessageStateD1
+    expect(waitUntilFn).toHaveBeenCalledTimes(1);
     expect(updateMessageStateD1).toHaveBeenCalledOnce();
 
     const [calledDb, calledMessageId, calledUpdates] = (
@@ -656,12 +673,15 @@ describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2
     expect(calledUpdates).not.toHaveProperty("readAt");
   });
 
-  it("D1 parent-state UPDATE failure does NOT fail the 201 response", async () => {
+  it("D1 parent-state UPDATE failure does NOT fail the 201 response (best-effort path)", async () => {
+    // The parent-state update (replied_at / read_at on the parent message row)
+    // is best-effort via ctx.waitUntil. Its failure must NOT propagate to the
+    // caller — the reply row itself is already committed.
     const d1Error = new Error("D1 update failed");
     (updateMessageStateD1 as Mock).mockRejectedValue(d1Error);
 
     const waitUntilFn = vi.fn(async (p: Promise<unknown>) => {
-      try { await p; } catch { /* swallow */ }
+      try { await p; } catch { /* swallow — simulates Worker swallowing the error */ }
     });
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
@@ -707,7 +727,7 @@ describe("POST /api/outbox/[address] — parent message D1 state update (Phase 2
 
     const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
-    // D1 failure must NOT propagate to the user response
+    // Parent-state update failure must NOT propagate — reply is already stored
     expect(resp.status).toBe(201);
   });
 });
