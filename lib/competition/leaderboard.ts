@@ -37,8 +37,21 @@ import {
 } from "./prices";
 import { aggregateLeaderboard } from "./pnl";
 
-/** KV key for the persisted leaderboard snapshot. */
-export const LEADERBOARD_SNAPSHOT_KEY = "cache:leaderboard:score";
+/**
+ * KV key for the persisted leaderboard snapshot.
+ *
+ * The `:v1` suffix is a schema version, not a release tag — bump it
+ * (`:v2`, etc.) on any breaking change to `LeaderboardSnapshot`'s shape.
+ * Stale-version reads return null naturally (JSON parse still works but
+ * the snapshot is from a different key), so the UI degrades to the
+ * empty-snapshot fallback until the cron re-fills the new key.
+ *
+ * Why this matters: preview and production share this KV namespace (per
+ * wrangler.jsonc) so a preview cron running ahead-of-version code would
+ * otherwise be able to write a malformed snapshot into the slot that
+ * production reads. Per @arc0btc review on PR #742.
+ */
+export const LEADERBOARD_SNAPSHOT_KEY = "cache:leaderboard:score:v1";
 
 /**
  * KV TTL for the snapshot. 2 hours = 4 cron ticks of slack. After 4
