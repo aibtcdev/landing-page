@@ -300,7 +300,8 @@ export async function GET(
         // agent came from D1 (covers all non-KV-fallback paths). When d1Claim is
         // undefined (KV fallback agents), enrichAgentProfile falls back to KV.
         //
-        // `db` threads through for inbox/sent count reads from D1 (post-#730 Step 4).
+        // `db` threads through for inbox/sent count reads from D1 (Phase 2.5
+        // Step 4 cutover landed in PR #745; umbrella quest #697).
         const enrichment = await enrichAgentProfile(
           agent,
           kv,

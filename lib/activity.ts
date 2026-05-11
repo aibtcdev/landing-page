@@ -65,6 +65,14 @@ export async function buildActivityData(
   // --- 4. Collect events from top active agents ---
   // One D1 query/agent (LIMIT 3 ORDER BY sent_at DESC) replaces the prior
   // 4 KV reads/agent (inbox:agent index + 3 inbox:message lookups).
+  if (!db) {
+    // Surface configuration drift in CF preview deploys before it reaches prod.
+    // Without the D1 binding the activity feed silently drops all message
+    // events — registration events still surface but the feed is half-empty.
+    console.warn(
+      "activity.build_data: D1 binding missing — message events skipped, registration events only"
+    );
+  }
   const eventPromises = sortedAgents.map(async (agent) => {
     const agentEvents: ActivityEvent[] = [];
 

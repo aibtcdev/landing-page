@@ -316,9 +316,12 @@ describe("enrichAgentProfile", () => {
       const agent = makeAgent();
       const db = makeMockDb();
 
-      vi.mocked(countInboxMessagesFromD1)
-        .mockResolvedValueOnce(7) // total
-        .mockResolvedValueOnce(3); // unread
+      // Argument-matched mock (not call-order-dependent) — if the Promise.all
+      // array order ever changes, this assertion still maps "all" → total and
+      // "unread" → unread correctly.
+      vi.mocked(countInboxMessagesFromD1).mockImplementation(
+        async (_db, _btc, status) => (status === "unread" ? 3 : 7)
+      );
       vi.mocked(countOutboxRepliesFromD1).mockResolvedValueOnce(5);
 
       const result = await enrichAgentProfile(
@@ -347,9 +350,7 @@ describe("enrichAgentProfile", () => {
       const agent = makeAgent();
       const db = makeMockDb();
 
-      vi.mocked(countInboxMessagesFromD1)
-        .mockResolvedValueOnce(0) // total
-        .mockResolvedValueOnce(0); // unread
+      vi.mocked(countInboxMessagesFromD1).mockResolvedValue(0);
       vi.mocked(countOutboxRepliesFromD1).mockResolvedValueOnce(0);
 
       const result = await enrichAgentProfile(
