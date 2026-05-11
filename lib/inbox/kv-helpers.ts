@@ -183,6 +183,11 @@ export async function storeReply(
 /**
  * Get the agent inbox index.
  *
+ * @deprecated reads stale data after #730 Step 4 — KV inbox writes were
+ *   removed in PR #745, so this returns frozen-at-cutover data for newly
+ *   delivered messages. Migrate callers to lib/inbox/d1-reads.ts equivalents
+ *   (`listInboxMessagesFromD1` / `countInboxMessagesFromD1`). Tracked in #746.
+ *
  * @param kv - Cloudflare KV namespace
  * @param btcAddress - Bitcoin address
  * @returns InboxAgentIndex or null if not found
@@ -255,6 +260,11 @@ export async function updateAgentInbox(
 
 /**
  * Get the agent sent message index.
+ *
+ * @deprecated reads stale data after #730 Step 4 — KV sent-index writes were
+ *   removed in PR #745, so this returns frozen-at-cutover data for newly
+ *   sent messages. Migrate callers to lib/inbox/d1-reads.ts equivalents
+ *   (`listOutboxRepliesFromD1` / `countOutboxRepliesFromD1`). Tracked in #746.
  *
  * @param kv - Cloudflare KV namespace
  * @param btcAddress - Bitcoin address
