@@ -34,6 +34,7 @@ import {
   getAgentInboxFromD1,
   getSentIndexFromD1,
   getRecentInboxEventsFromD1,
+  checkRedeemedTxidInD1,
   type StatusFilter,
 } from "../d1-reads";
 
@@ -882,6 +883,53 @@ describe("getRecentInboxEventsFromD1", () => {
   });
 });
 
+// ── checkRedeemedTxidInD1 ─────────────────────────────────────────────────────
+
+describe("checkRedeemedTxidInD1 (Phase 2.5 Step 4 — double-redemption guard)", () => {
+  const PAYMENT_TXID = "602f097b3de853e05546015af6ac9c32e858efcc9fd5ff92edb860d5cadc8c21";
+  const MESSAGE_ID = "msg_1771381602504_30487f5e-1f3a-473a-8068-e040295a76bf";
+
+  it("returns messageId when a matching payment_txid row exists (hit case)", async () => {
+    const stmtMock = createPreparedStatement([], { message_id: MESSAGE_ID });
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    const result = await checkRedeemedTxidInD1(db, PAYMENT_TXID);
+
+    expect(result).toBe(MESSAGE_ID);
+  });
+
+  it("returns null when no matching payment_txid row exists (null case)", async () => {
+    const stmtMock = createPreparedStatement([], null);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    const result = await checkRedeemedTxidInD1(db, PAYMENT_TXID);
+
+    expect(result).toBeNull();
+  });
+
+  it("SQL includes payment_txid IS NOT NULL predicate (routes through idx_inbox_payment_txid)", async () => {
+    const stmtMock = createPreparedStatement([], null);
+    const db = {
+      prepare: vi.fn().mockReturnValue(stmtMock),
+      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
+    } as unknown as D1Database;
+
+    await checkRedeemedTxidInD1(db, PAYMENT_TXID);
+
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("FROM inbox_messages");
+    expect(sql).toContain("payment_txid = ?");
+    expect(sql).toContain("payment_txid IS NOT NULL");
+    expect(sql).toContain("LIMIT 1");
+  });
+});
+
 // ── Cache-key invariant: structural verification ──────────────────────────────
 
 describe("cache-key invariants (structural verification)", () => {
@@ -903,6 +951,8 @@ describe("cache-key invariants (structural verification)", () => {
     expect(getAgentInboxFromD1.length).toBe(2);       // (db, btcAddress)
     expect(getSentIndexFromD1.length).toBe(2);         // (db, btcAddress)
     expect(getRecentInboxEventsFromD1.length).toBe(3); // (db, btcAddress, limit)
+    // Phase 2.5 Step 4 double-redemption guard
+    expect(checkRedeemedTxidInD1.length).toBe(2);      // (db, paymentTxid)
   });
 
   it("Invariant 3: read helpers are called with explicit inputs — no implicit cache-before-auth", async () => {
