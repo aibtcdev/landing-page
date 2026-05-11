@@ -29,7 +29,7 @@ async function fetchAgents() {
   // fails so the page still renders the rest of the agent data.
   const tradeSummary = env.DB
     ? await getAgentSubmittedTradeSummary(env.DB)
-    : new Map<string, { count: number; volumeUsd: number }>();
+    : new Map<string, { count: number; volumeUsd: number; latestTradeAt: number }>();
 
   // Reputation data is fetched client-side in AgentList to avoid blocking SSR
   // on external Stacks API calls (which can timeout under rate limits).
@@ -56,6 +56,7 @@ async function fetchAgents() {
       unreadCount: agent.unreadCount,
       mcpTradeCount: summary?.count ?? 0,
       mcpVolumeUsd: summary?.volumeUsd ?? 0,
+      mcpLatestTradeAt: summary?.latestTradeAt ?? 0,
     };
   });
 }
