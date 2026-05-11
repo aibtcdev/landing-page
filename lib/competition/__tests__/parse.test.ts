@@ -45,7 +45,7 @@ describe("parseSwapFromTx — stableswap (simple two-leg)", () => {
       events: [
         {
           event_index: 0,
-          event_type: "stx_transfer_event",
+          event_type: "stx_asset",
           asset: {
             asset_event_type: "transfer",
             sender: AGENT,
@@ -96,7 +96,7 @@ describe("parseSwapFromTx — stableswap (simple two-leg)", () => {
           },
         },
         {
-          event_type: "stx_transfer_event",
+          event_type: "stx_asset",
           asset: {
             asset_event_type: "transfer",
             sender: POOL,
@@ -130,7 +130,7 @@ describe("parseSwapFromTx — xyk multi-hop", () => {
       events: [
         // Agent sends STX to hop1
         {
-          event_type: "stx_transfer_event",
+          event_type: "stx_asset",
           asset: { asset_event_type: "transfer", sender: AGENT, recipient: POOL, amount: "1000000" },
         },
         // Intermediate hop ALEX → agent (small amount, should NOT be picked)
@@ -178,7 +178,7 @@ describe("parseSwapFromTx — PR-E provider attribution", () => {
       },
       events: [
         {
-          event_type: "stx_transfer_event",
+          event_type: "stx_asset",
           asset: { asset_event_type: "transfer", sender: AGENT, recipient: POOL, amount: "1000000" },
         },
         {
@@ -206,7 +206,7 @@ describe("parseSwapFromTx — PR-E provider attribution", () => {
       },
       events: [
         {
-          event_type: "stx_transfer_event",
+          event_type: "stx_asset",
           asset: { asset_event_type: "transfer", sender: AGENT, recipient: POOL, amount: "1000000" },
         },
         {
@@ -244,7 +244,7 @@ describe("parseSwapFromTx — rejection paths", () => {
     const tx = baseTx({
       events: [
         {
-          event_type: "stx_transfer_event",
+          event_type: "stx_asset",
           asset: { asset_event_type: "transfer", sender: AGENT, recipient: POOL, amount: "1000000" },
         },
       ],
@@ -259,7 +259,7 @@ describe("parseSwapFromTx — rejection paths", () => {
     const tx = baseTx({
       events: [
         {
-          event_type: "stx_transfer_event",
+          event_type: "stx_asset",
           asset: { asset_event_type: "transfer", sender: AGENT, recipient: POOL, amount: "not-a-number" },
         },
       ],
@@ -271,12 +271,42 @@ describe("parseSwapFromTx — rejection paths", () => {
   });
 });
 
+describe("parseSwapFromTx — STX event_type variants (Hiro vocabulary)", () => {
+  // Regression for the bug @secret-mars caught in PR #738 review: the Hiro
+  // mainnet /extended/v1/tx/{txid} endpoint returns `stx_asset`, but older
+  // tooling uses `stx_transfer_event` / `stx_transfer`. All three must
+  // resolve to token_in = STX_ASSET_ID (not `unknown`).
+  it.each([
+    ["stx_asset"],          // Hiro mainnet /extended/v1
+    ["stx_transfer_event"], // older blockchain-api emissions
+    ["stx_transfer"],       // some downstream tooling
+  ])("recognizes event_type=%s as native STX", (eventType) => {
+    const tx = baseTx({
+      events: [
+        {
+          event_type: eventType,
+          asset: { asset_event_type: "transfer", sender: AGENT, recipient: POOL, amount: "1000000" },
+        },
+        {
+          event_type: "ft_transfer_event",
+          asset: { asset_event_type: "transfer", sender: POOL, recipient: AGENT, amount: "859839", asset_id: STSTX },
+        },
+      ],
+    });
+    const result = parseSwapFromTx(tx);
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    expect(result.swap.token_in).toBe(STX_ASSET_ID);
+    expect(result.swap.amount_in).toBe(1000000);
+  });
+});
+
 describe("parseSwapFromTx — audit blob shape", () => {
   it("records both legs in raw_event_json so a reviewer can trace amounts back to events", () => {
     const tx = baseTx({
       events: [
         {
-          event_type: "stx_transfer_event",
+          event_type: "stx_asset",
           asset: { asset_event_type: "transfer", sender: AGENT, recipient: POOL, amount: "1000000" },
         },
         {
