@@ -288,20 +288,19 @@ export async function POST(request: NextRequest) {
     );
   }
 
-  // KV pending tracker — if the verifier upstream already queued this txid
-  // we short-circuit and return 202 immediately so the caller doesn't
-  // re-hit Hiro on every retry.
+  // KV pending tracker — the `comp:pending:{txid}` key is an observability
+  // artifact (set when verifyAndPersistSwap returns pending, cleared on
+  // verified) so cron/admin tooling can see which txids are mid-flight.
+  // It is NOT a request-path short-circuit: an earlier version of this
+  // route read the key and returned 202 without invoking the verifier,
+  // which created a 30-min blind window after a tx confirmed — re-submits
+  // of a now-confirmed tx returned 202 forever and the row never landed
+  // in `swaps`. Empirically reproduced by @secret-mars on the preview
+  // deploy (PR #738 comment 4418003085). Rate-limit (20/min per IP) is the
+  // actual hammer-protection; the cache adds nothing the rate limit doesn't
+  // already do.
   const kv = env.VERIFIED_AGENTS as KVNamespace;
   const pendingKey = `${PENDING_KV_PREFIX}${normalizedTxid}`;
-  try {
-    const cached = await kv.get(pendingKey);
-    if (cached) {
-      return NextResponse.json({ accepted: true }, { status: 202 });
-    }
-  } catch (err) {
-    // KV read failure is non-fatal — the verifier will refetch from Hiro.
-    logger.warn("Pending-tx KV read failed", { error: String(err) });
-  }
 
   const result = await verifyAndPersistSwap(env, db, normalizedTxid, "agent", logger);
 
@@ -315,8 +314,9 @@ export async function POST(request: NextRequest) {
   }
 
   if (result.status === "verified") {
-    // Clear the pending-tx marker — once we have a terminal row we don't
-    // want subsequent submissions short-circuiting on the stale flag.
+    // Clear the pending-tx marker — observability hygiene only; the key has
+    // no behavioural effect on future requests after the read-side
+    // short-circuit was removed.
     try {
       await kv.delete(pendingKey);
     } catch {
