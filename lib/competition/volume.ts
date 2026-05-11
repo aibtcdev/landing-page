@@ -24,6 +24,8 @@
  * value.
  */
 
+import { createConsoleLogger, type Logger } from "@/lib/logging";
+
 const TENERO_BASE = "https://api.tenero.io/v1/stacks";
 const FETCH_TIMEOUT_MS = 5_000;
 
@@ -70,7 +72,10 @@ interface TeneroTokenResponse {
  * Unpriced tokens land as null and the volume aggregator treats them
  * as "skip from sum" rather than "impute zero."
  */
-async function fetchTokenPriceUsd(assetId: string): Promise<number | null> {
+async function fetchTokenPriceUsd(
+  assetId: string,
+  logger: Logger
+): Promise<number | null> {
   const addr = toTeneroAddress(assetId);
   if (!addr) return null;
   const url = `${TENERO_BASE}/tokens/${encodeURIComponent(addr)}`;
@@ -84,7 +89,7 @@ async function fetchTokenPriceUsd(assetId: string): Promise<number | null> {
       headers: { "User-Agent": "aibtc-landing-page/1.0 (+https://aibtc.com)" },
     });
     if (!r.ok) {
-      console.warn("competition.volume.tenero_non_ok", {
+      logger.warn("competition.volume.tenero_non_ok", {
         assetId,
         url,
         status: r.status,
@@ -97,14 +102,14 @@ async function fetchTokenPriceUsd(assetId: string): Promise<number | null> {
     if (typeof price === "number" && Number.isFinite(price) && price > 0) {
       return price;
     }
-    console.warn("competition.volume.tenero_no_price", {
+    logger.warn("competition.volume.tenero_no_price", {
       assetId,
       url,
       raw,
     });
     return null;
   } catch (err) {
-    console.warn("competition.volume.tenero_threw", {
+    logger.warn("competition.volume.tenero_threw", {
       assetId,
       url,
       error: String(err),
@@ -151,7 +156,8 @@ interface D1AggregateRow {
  * caller (the /agents page) can render unaffected.
  */
 export async function getAgentSubmittedTradeSummary(
-  db: D1Database
+  db: D1Database,
+  logger: Logger = createConsoleLogger({ scope: "competition.volume" })
 ): Promise<Map<string, AgentTradeSummary>> {
   const sql = `
     SELECT sender, token_in,
@@ -166,7 +172,8 @@ export async function getAgentSubmittedTradeSummary(
   try {
     const result = await db.prepare(sql).all<D1AggregateRow>();
     rows = result.results ?? [];
-  } catch {
+  } catch (err) {
+    logger.warn("competition.volume.d1_query_failed", { error: String(err) });
     return new Map();
   }
   if (rows.length === 0) return new Map();
@@ -175,7 +182,7 @@ export async function getAgentSubmittedTradeSummary(
   // token regardless of how many senders use it.
   const tokens = Array.from(new Set(rows.map((r) => r.token_in)));
   const priceEntries = await Promise.all(
-    tokens.map(async (t) => [t, await fetchTokenPriceUsd(t)] as const)
+    tokens.map(async (t) => [t, await fetchTokenPriceUsd(t, logger)] as const)
   );
   const prices = new Map(priceEntries);
 
