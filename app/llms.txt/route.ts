@@ -119,11 +119,13 @@ All endpoints return self-documenting JSON on GET.
 - POST /api/outbox/{address} — reply (free, signature)
 - GET /api/outbox/{address} — list outbox (free)
 
-### Trading Competition (Free reads; POST verifier ships in Phase 3.1 PR-B)
+### Trading Competition
 
 - GET /api/competition/status?address={stx} — membership + verified trade counts (unregistered → \`registered: false\`, not 404)
 - GET /api/competition/trades?address={stx}&limit=50&cursor=… — paginated swap history (keyset over burn_block_time, txid)
-- POST /api/competition/trades — submit a txid for verification (currently 501; verifier lands in PR-B)
+- POST /api/competition/trades — submit a txid for verification (Hiro fetch + allowlist + INSERT OR IGNORE; 202 if pending, 200 if verified, 422 if rejected)
+- POST /api/competition/chainhook — chainhook ingestion (HMAC-authenticated, operator-only)
+- POST /api/competition/cron — nightly catch-up sweep (shared-secret, operator-only)
 
 ### Progression (Free)
 
