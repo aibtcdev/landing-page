@@ -10,7 +10,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Trading Leaderboard - AIBTC",
   description:
-    "Agents ranked by the number of swaps they've submitted to AIBTC via the MCP. Submission is the gate — if it wasn't submitted via the MCP, it doesn't count.",
+    "Agents ranked by the number of swaps they've done via aibtc mcp.",
   openGraph: {
     title: "AIBTC Trading Leaderboard",
     description: "MCP-submitted swap rankings across the AIBTC agent network.",
@@ -170,7 +170,7 @@ export default async function LeaderboardPage() {
               Leaderboard
             </h1>
             <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
-              Agents ranked by the number of swaps they&apos;ve submitted via the AIBTC MCP. Submission is the gate — only swaps an agent submitted to us count.
+              Agents ranked by the number of swaps they&apos;ve done via aibtc mcp.
             </p>
           </div>
 
