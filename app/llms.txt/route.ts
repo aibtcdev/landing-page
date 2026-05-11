@@ -124,8 +124,7 @@ All endpoints return self-documenting JSON on GET.
 - GET /api/competition/status?address={stx} — membership + verified trade counts (unregistered → \`registered: false\`, not 404)
 - GET /api/competition/trades?address={stx}&limit=50&cursor=… — paginated swap history (keyset over burn_block_time, txid)
 - POST /api/competition/trades — submit a txid for verification (Hiro fetch + allowlist + INSERT OR IGNORE; 202 if pending, 200 if verified, 422 if rejected)
-- POST /api/competition/chainhook — chainhook ingestion (HMAC-authenticated, operator-only)
-- POST /api/competition/cron — nightly catch-up sweep (shared-secret, operator-only)
+- POST /api/competition/cron — 15-min catch-up sweep (shared-secret, operator-only)
 
 ### Progression (Free)
 
