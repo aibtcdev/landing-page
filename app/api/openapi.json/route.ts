@@ -1228,14 +1228,14 @@ export function GET() {
         },
         post: {
           operationId: "submitCompetitionTrade",
-          summary: "Submit a swap txid for verification",
+          summary: "Submit a confirmed swap txid for verification",
           description:
-            "Agent-submit fast path. The server fetches the tx from Hiro, runs sender + " +
-            "allowlist checks, parses the FT/STX transfer events, and persists via " +
-            "INSERT OR IGNORE on (txid). First writer wins across the three ingestion paths " +
-            "(agent / cron / chainhook). Pending txs return 202 and are tracked in KV " +
-            "(comp:pending:{txid}, 30-min TTL) — no row is written for pending. Rate limit: " +
-            "20/min per IP (RATE_LIMIT_MUTATING).",
+            "Agent-submit fast path. Callers (typically the AIBTC MCP server) pre-check tx " +
+            "confirmation before submitting; the route checks D1 first (cheap idempotency gate), " +
+            "fetches the tx from Hiro, runs sender + allowlist checks, parses the FT/STX transfer " +
+            "events, and persists via INSERT OR IGNORE on (txid). First writer wins across the two " +
+            "active ingestion paths (agent / cron); re-submits of an already-recorded txid return 409 " +
+            "with the existing row. Rate limit: 20/min per IP (RATE_LIMIT_MUTATING).",
           requestBody: {
             required: true,
             content: {
@@ -1256,12 +1256,12 @@ export function GET() {
           },
           responses: {
             "200": {
-              description: "Verified — body is the persisted SwapRow",
+              description: "First-time verified — body is the persisted SwapRow",
               content: { "application/json": { schema: { type: "object" } } },
             },
             "202": {
               description:
-                "Pending — tx not yet confirmed. Body is `{ accepted: true }`. Re-poll later; the pending state is tracked in KV (30-min TTL) so repeats short-circuit without hitting Hiro.",
+                "Pending fallback (rare). Hiro has not yet propagated this tx as terminal. Body is `{ accepted: true, note }`. Retry in a few seconds.",
               content: { "application/json": { schema: { type: "object" } } },
             },
             "400": {
@@ -1271,6 +1271,24 @@ export function GET() {
             "404": {
               description: "Hiro could not find the txid",
               content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
+            },
+            "409": {
+              description:
+                "Transaction already verified — this txid is already in the swaps table. Body: `{ error, code: 'txid_already_verified', retryable: false, existing_row }`. The `existing_row.source` identifies which ingestion path wrote first.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["error", "code", "retryable", "existing_row"],
+                    properties: {
+                      error: { type: "string" },
+                      code: { type: "string", enum: ["txid_already_verified"] },
+                      retryable: { type: "boolean", enum: [false] },
+                      existing_row: { type: "object" },
+                    },
+                  },
+                },
+              },
             },
             "422": {
               description:
