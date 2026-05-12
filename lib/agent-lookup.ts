@@ -1,26 +1,35 @@
 /**
  * Shared agent lookup utilities.
  *
- * Looks up AgentRecords by BTC or STX address from KV storage.
+ * Looks up AgentRecords by BTC or STX address.
+ * BTC lookups remain in KV; STX lookups have been migrated to D1
+ * (Phase 4.0d — fail-closed, no KV fallback).
  * Used by inbox, outbox, heartbeat, and other API routes.
  */
 
 import { computeLevel } from "@/lib/levels";
+import {
+  lookupProfileByStxAddress,
+  mapRowToAgentRecord,
+} from "@/lib/cache/agent-profile";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 
 /**
  * Look up an agent by BTC, STX, or taproot address.
  * For taproot (bc1p) addresses, uses the taproot: reverse index to find
  * the canonical btcAddress, then looks up the full record.
- * For other addresses, tries both btc: and stx: prefixes in parallel.
+ * For BTC addresses, uses KV (btc: key — pending P4.3 migration).
+ * For STX addresses, uses D1 via lookupProfileByStxAddress (Phase 4.0d).
  *
- * @param kv - Cloudflare KV namespace
+ * @param kv - Cloudflare KV namespace (used for BTC and taproot paths)
  * @param address - BTC, STX, or taproot address to look up
+ * @param db - D1Database binding (optional; fail-closed on missing or error)
  * @returns AgentRecord or null if not found
  */
 export async function lookupAgent(
   kv: KVNamespace,
-  address: string
+  address: string,
+  db?: D1Database
 ): Promise<AgentRecord | null> {
   // Taproot addresses (bc1p...) use a reverse index
   if (address.startsWith("bc1p")) {
@@ -36,16 +45,32 @@ export async function lookupAgent(
     }
   }
 
-  const [btcData, stxData] = await Promise.all([
-    kv.get(`btc:${address}`),
-    kv.get(`stx:${address}`),
-  ]);
+  // STX addresses (SP..., SM...): D1 lookup — fail-closed on error or missing binding.
+  if (address.startsWith("SP") || address.startsWith("SM")) {
+    try {
+      if (!db) {
+        console.error(
+          "lookupAgent: D1 binding (DB) unavailable for STX lookup; returning null (fail-closed)",
+          { stxAddress: address }
+        );
+        return null;
+      }
+      const row = await lookupProfileByStxAddress(db, address);
+      return row ? mapRowToAgentRecord(row) : null;
+    } catch (d1Err) {
+      console.error("lookupAgent: D1 STX lookup failed; returning null (fail-closed)", {
+        stxAddress: address,
+        error: String(d1Err),
+      });
+      return null;
+    }
+  }
 
-  const data = btcData || stxData;
-  if (!data) return null;
-
+  // BTC addresses (bc1q..., bc1...) — KV lookup (P4.3 pending).
+  const btcData = await kv.get(`btc:${address}`);
+  if (!btcData) return null;
   try {
-    return JSON.parse(data) as AgentRecord;
+    return JSON.parse(btcData) as AgentRecord;
   } catch (e) {
     console.error(`Failed to parse agent record for address ${address}:`, e);
     return null;
@@ -78,13 +103,21 @@ interface LookupWithLevelError {
  * Look up an agent by address, fetch claim data, and enforce a minimum level.
  *
  * Supports BTC (bc1...) and STX (SP...) addresses. Fetches agent + claim in
- * parallel when possible to minimize KV latency. Returns agent data with
- * claim and level, or an error with HTTP status code.
+ * parallel when possible to minimize latency.
+ *
+ * STX path: uses D1 via lookupProfileByStxAddress (Phase 4.0d — fail-closed).
+ * BTC path: uses KV (pending P4.3 migration).
+ *
+ * @param kv - Cloudflare KV namespace (used for BTC path and claim lookup)
+ * @param address - BTC or STX address to look up
+ * @param minLevel - Minimum required level (default 0 = any)
+ * @param db - D1Database binding for STX lookups (optional; fail-closed on missing or error)
  */
 export async function lookupAgentWithLevel(
   kv: KVNamespace,
   address: string,
-  minLevel: number = 0
+  minLevel: number = 0,
+  db?: D1Database
 ): Promise<LookupWithLevelSuccess | LookupWithLevelError> {
   // Determine address prefix
   const prefix = address.startsWith("SP") || address.startsWith("SM")
@@ -101,42 +134,55 @@ export async function lookupAgentWithLevel(
     };
   }
 
-  // For btc addresses, fetch agent + claim in parallel
-  // For stx addresses, fetch agent first to get btcAddress for claim lookup
-  let agentData: string | null;
+  // For btc addresses, fetch agent + claim in parallel (KV — pending P4.3).
+  // For stx addresses, use D1 (Phase 4.0d — fail-closed), then fetch claim from KV.
+  let agent: AgentRecord | null = null;
   let claimData: string | null;
 
   if (prefix === "btc") {
-    [agentData, claimData] = await Promise.all([
+    const [agentData, claimRaw] = await Promise.all([
       kv.get(`btc:${address}`),
       kv.get(`claim:${address}`),
     ]);
-  } else {
-    agentData = await kv.get(`stx:${address}`);
+    claimData = claimRaw;
     if (!agentData) {
       return notFoundError();
     }
-    let agent: AgentRecord;
     try {
       agent = JSON.parse(agentData) as AgentRecord;
     } catch {
       return { error: "Failed to parse stored agent data.", status: 500 };
     }
+  } else {
+    // STX path: D1 lookup — fail-closed on D1 error or missing binding.
+    try {
+      if (!db) {
+        console.error(
+          "lookupAgentWithLevel: D1 binding (DB) unavailable for STX lookup; returning not-found (fail-closed)",
+          { stxAddress: address }
+        );
+        return notFoundError();
+      }
+      const row = await lookupProfileByStxAddress(db, address);
+      if (!row) {
+        return notFoundError();
+      }
+      agent = mapRowToAgentRecord(row);
+    } catch (d1Err) {
+      console.error(
+        "lookupAgentWithLevel: D1 STX lookup failed; returning not-found (fail-closed)",
+        { stxAddress: address, error: String(d1Err) }
+      );
+      return notFoundError();
+    }
     claimData = await kv.get(`claim:${agent.btcAddress}`);
   }
 
-  if (!agentData) {
-    return notFoundError();
-  }
+  // Both branches above either set agent to a non-null AgentRecord or return early.
+  // TypeScript cannot narrow through the if/else here, so we assert non-null.
+  const resolvedAgent = agent!;
 
-  let agent: AgentRecord;
-  try {
-    agent = JSON.parse(agentData) as AgentRecord;
-  } catch {
-    return { error: "Failed to parse stored agent data.", status: 500 };
-  }
-
-  if (!agent.stxAddress) {
+  if (!resolvedAgent.stxAddress) {
     return {
       error:
         "Full registration required. Complete registration with both Bitcoin and Stacks signatures.",
@@ -161,7 +207,7 @@ export async function lookupAgentWithLevel(
     }
   }
 
-  const level = computeLevel(agent, claim);
+  const level = computeLevel(resolvedAgent, claim);
 
   if (level < minLevel) {
     if (minLevel <= 1) {
@@ -198,7 +244,7 @@ export async function lookupAgentWithLevel(
     }
   }
 
-  return { agent, claim, level };
+  return { agent: resolvedAgent, claim, level };
 }
 
 function notFoundError(): LookupWithLevelError {
