@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
+import { getCachedTokenPrices } from "@/lib/external/tenero/kv-cache";
 
 // 60s ISR window — the verifier cron cadence is 15 min, so a minute of
 // staleness on the leaderboard renders is fine. Lets the framework serve
@@ -30,9 +31,12 @@ export const metadata: Metadata = {
  * first and confirming a 200 with a non-null price_usd — silently
  * shipping the wrong contract id makes that token render as $0 forever.
  *
+ * Keep in sync with `STATIC_TOKEN_IDS` in `lib/scheduler/scheduler-do.ts`
+ * so the scheduler refreshes every token the leaderboard knows how to value.
+ *
  * The unknown-token default is 6 (SIP-10 convention). Volume from
- * those legs stays $0 (no client-side price), which is the honest read
- * — we'd rather under-report than impute a number.
+ * those legs stays $0 (no price in KV), which is the honest read — we'd
+ * rather under-report than impute a number.
  */
 const TOKEN_DECIMALS: Readonly<Record<string, number>> = {
   stx: 6,
@@ -58,6 +62,7 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   // function and only the async-mode form works there.
   const { env } = await getCloudflareContext({ async: true });
   const db = env.DB as D1Database | undefined;
+  const kv = env.VERIFIED_AGENTS as KVNamespace | undefined;
 
   if (!db) return [];
 
@@ -130,17 +135,42 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     bySender.set(r.sender, existing);
   }
 
+  // Read every distinct tokenId from KV in parallel. SchedulerDO writes
+  // these on its 5-min alarm tick; SSR is a pure consumer here. Missing
+  // entries (cold start, scheduler paused) render as "—" downstream.
+  const distinctTokenIds = new Set<string>();
+  for (const agg of bySender.values()) {
+    for (const t of agg.tokens) distinctTokenIds.add(t.tokenId);
+  }
+  const priceMap = kv
+    ? await getCachedTokenPrices(kv, Array.from(distinctTokenIds))
+    : new Map();
+
   const ranked: LeaderboardRow[] = Array.from(bySender.entries())
-    .map(([sender, agg]) => ({
-      stxAddress: sender,
-      btcAddress: agg.display.btcAddress,
-      displayName: agg.display.displayName,
-      bnsName: agg.display.bnsName,
-      erc8004AgentId: agg.display.erc8004AgentId,
-      tradeCount: agg.count,
-      latestTradeAt: agg.latestAt,
-      tokens: agg.tokens,
-    }))
+    .map(([sender, agg]) => {
+      let volumeUsd = 0;
+      let allPriced = true;
+      for (const t of agg.tokens) {
+        const cached = priceMap.get(t.tokenId);
+        const price = cached?.priceUsd ?? null;
+        if (price == null) {
+          allPriced = false;
+          continue;
+        }
+        volumeUsd += (t.sumAmountIn / 10 ** t.decimals) * price;
+      }
+      return {
+        stxAddress: sender,
+        btcAddress: agg.display.btcAddress,
+        displayName: agg.display.displayName,
+        bnsName: agg.display.bnsName,
+        erc8004AgentId: agg.display.erc8004AgentId,
+        tradeCount: agg.count,
+        latestTradeAt: agg.latestAt,
+        volumeUsd,
+        allPriced,
+      };
+    })
     .sort((a, b) => {
       // Primary: count desc. Tiebreak: latest trade desc.
       if (b.tradeCount !== a.tradeCount) return b.tradeCount - a.tradeCount;
