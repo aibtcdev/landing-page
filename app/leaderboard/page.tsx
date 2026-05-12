@@ -1,6 +1,5 @@
 import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { getCachedAgentList } from "@/lib/cache";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
@@ -47,7 +46,6 @@ interface D1AggregateRow {
 
 async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   const { env } = await getCloudflareContext();
-  const kv = env.VERIFIED_AGENTS as KVNamespace;
   const db = env.DB as D1Database | undefined;
 
   if (!db) return [];
@@ -101,21 +99,49 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     bySender.set(r.sender, existing);
   }
 
-  // Look up display data from the KV agent index. Only agents the
-  // registry knows about land in the leaderboard; senders without a
-  // record render with a generated name (handled client-side).
-  const { agents } = await getCachedAgentList(kv);
-  const displayByStx = new Map(
-    agents.map((a) => [
-      a.stxAddress,
-      {
-        btcAddress: a.btcAddress,
-        displayName: a.displayName ?? null,
-        bnsName: a.bnsName ?? null,
-        erc8004AgentId: a.erc8004AgentId ?? null,
-      },
-    ])
-  );
+  // Look up display data straight from D1 — only the senders that
+  // actually appear in `swaps`, scoped to the four fields the row
+  // needs. Bounded N (agents who've made an MCP swap), comfortably
+  // under any plausible IN-clause limit.
+  const stxAddresses = Array.from(bySender.keys());
+  const displayByStx = new Map<
+    string,
+    {
+      btcAddress: string;
+      displayName: string | null;
+      bnsName: string | null;
+      erc8004AgentId: number | null;
+    }
+  >();
+  if (stxAddresses.length > 0) {
+    const placeholders = stxAddresses.map((_, i) => `?${i + 1}`).join(",");
+    try {
+      const displayResult = await db
+        .prepare(
+          `SELECT stx_address, btc_address, display_name, bns_name, erc8004_agent_id
+           FROM agents
+           WHERE stx_address IN (${placeholders})`
+        )
+        .bind(...stxAddresses)
+        .all<{
+          stx_address: string;
+          btc_address: string;
+          display_name: string | null;
+          bns_name: string | null;
+          erc8004_agent_id: number | null;
+        }>();
+      for (const r of displayResult.results ?? []) {
+        displayByStx.set(r.stx_address, {
+          btcAddress: r.btc_address,
+          displayName: r.display_name,
+          bnsName: r.bns_name,
+          erc8004AgentId: r.erc8004_agent_id,
+        });
+      }
+    } catch {
+      // Display lookup failure degrades to client-side generated names.
+    }
+  }
 
   const ranked: LeaderboardRow[] = Array.from(bySender.entries())
     .map(([sender, agg]) => {
