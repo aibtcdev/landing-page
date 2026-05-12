@@ -42,7 +42,15 @@ export interface TeneroTaskOutcome {
    * DO-storage `nextRunAfter.tenero` for adaptive backoff.
    */
   rateLimited: boolean;
+  /**
+   * Suggested scheduler backoff. Monthly quota exhaustion needs a much
+   * longer pause than minute-level throttling.
+   */
+  rateLimitBackoffMs?: number;
 }
+
+export const TENERO_MINUTE_QUOTA_BACKOFF_MS = 5 * 60 * 1000;
+export const TENERO_MONTH_QUOTA_BACKOFF_MS = 24 * 60 * 60 * 1000;
 
 export async function runTeneroTask(
   deps: TeneroTaskDeps
@@ -58,6 +66,7 @@ export async function runTeneroTask(
   let lastMinuteRemaining: number | null = null;
   let lastMonthRemaining: number | null = null;
   let rateLimited = false;
+  let rateLimitBackoffMs: number | undefined;
 
   for (const tokenId of tokenIds) {
     const r = await fetchTokenPriceUsd(tokenId, logger, apiKey);
@@ -90,10 +99,25 @@ export async function runTeneroTask(
     }
 
     if (
+      r.rateLimit.monthRemaining !== null &&
+      r.rateLimit.monthRemaining <= 0
+    ) {
+      rateLimited = true;
+      rateLimitBackoffMs = TENERO_MONTH_QUOTA_BACKOFF_MS;
+      logger.warn("tenero.month_quota_exhausted_mid_run", {
+        rlMonthRemaining: r.rateLimit.monthRemaining,
+        processed: succeeded + failed,
+        remaining: tokenIds.length - (succeeded + failed),
+      });
+      break;
+    }
+
+    if (
       r.rateLimit.minuteRemaining !== null &&
       r.rateLimit.minuteRemaining <= 0
     ) {
       rateLimited = true;
+      rateLimitBackoffMs ??= TENERO_MINUTE_QUOTA_BACKOFF_MS;
       logger.warn("tenero.minute_quota_exhausted_mid_run", {
         rlMinuteRemaining: r.rateLimit.minuteRemaining,
         processed: succeeded + failed,
@@ -122,5 +146,5 @@ export async function runTeneroTask(
     rateLimited,
   });
 
-  return { result, rateLimited };
+  return { result, rateLimited, rateLimitBackoffMs };
 }

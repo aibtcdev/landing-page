@@ -6,7 +6,10 @@ import {
   beforeEach,
   afterEach,
 } from "vitest";
-import { runTeneroTask } from "../tenero-task";
+import {
+  runTeneroTask,
+  TENERO_MONTH_QUOTA_BACKOFF_MS,
+} from "../tenero-task";
 
 /** Minimal logger double — captures events without console noise. */
 function createCapturingLogger() {
@@ -178,7 +181,7 @@ describe("runTeneroTask", () => {
       })
     ) as unknown as typeof fetch;
 
-    const { result, rateLimited } = await runTeneroTask({
+    const { result, rateLimited, rateLimitBackoffMs } = await runTeneroTask({
       logger,
       kv,
       tokenIds: [
@@ -189,6 +192,7 @@ describe("runTeneroTask", () => {
     });
 
     expect(rateLimited).toBe(true);
+    expect(rateLimitBackoffMs).toBe(5 * 60 * 1000);
     // First token wrote successfully before the break.
     expect(result.succeeded).toBe(1);
     expect(puts).toHaveLength(1);
@@ -196,6 +200,38 @@ describe("runTeneroTask", () => {
     expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(1);
     expect(
       events.some((e) => e.msg === "tenero.minute_quota_exhausted_mid_run")
+    ).toBe(true);
+  });
+
+  it("monthRemaining <= 0: flags rateLimited and backs off for a day", async () => {
+    const { logger, events } = createCapturingLogger();
+    const { kv, puts } = createFakeKv();
+
+    globalThis.fetch = vi.fn(async () =>
+      teneroResponse(429, {
+        minuteRemaining: 80,
+        monthRemaining: 0,
+      })
+    ) as unknown as typeof fetch;
+
+    const { result, rateLimited, rateLimitBackoffMs } = await runTeneroTask({
+      logger,
+      kv,
+      tokenIds: [
+        "stx",
+        "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc",
+      ],
+    });
+
+    expect(rateLimited).toBe(true);
+    expect(rateLimitBackoffMs).toBe(TENERO_MONTH_QUOTA_BACKOFF_MS);
+    expect(result.succeeded).toBe(0);
+    expect(result.failed).toBe(1);
+    expect(result.monthRemaining).toBe(0);
+    expect(puts).toHaveLength(0);
+    expect((globalThis.fetch as ReturnType<typeof vi.fn>).mock.calls).toHaveLength(3);
+    expect(
+      events.some((e) => e.msg === "tenero.month_quota_exhausted_mid_run")
     ).toBe(true);
   });
 });

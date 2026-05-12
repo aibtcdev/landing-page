@@ -16,6 +16,7 @@ import { STATIC_TOKEN_IDS } from "./lib/external/tenero";
 import {
   runTeneroTask,
   type TeneroRunResult,
+  TENERO_MINUTE_QUOTA_BACKOFF_MS,
 } from "./lib/scheduler/tenero-task";
 
 // ─────────────────────────── SchedulerDO ───────────────────────────
@@ -42,7 +43,6 @@ import {
 
 const TENERO_INTERVAL_MS = 5 * 60 * 1000;
 const ALARM_TICK_MS = TENERO_INTERVAL_MS;
-const TENERO_RATELIMIT_BACKOFF_MS = 5 * 60 * 1000;
 
 export interface SchedulerStatus {
   now: number;
@@ -172,14 +172,14 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
       ? parentLogger.child({ task: "tenero" })
       : parentLogger;
 
-    const { result, rateLimited } = await runTeneroTask({
+    const { result, rateLimited, rateLimitBackoffMs } = await runTeneroTask({
       logger,
       kv: this.env.VERIFIED_AGENTS,
       tokenIds: STATIC_TOKEN_IDS,
       apiKey: this.lookupTeneroApiKey(),
     });
 
-    await this.persistTeneroResult(result, { rateLimited });
+    await this.persistTeneroResult(result, { rateLimited, rateLimitBackoffMs });
     return result;
   }
 
@@ -217,7 +217,7 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
 
   private async persistTeneroResult(
     result: TeneroRunResult,
-    opts: { rateLimited: boolean }
+    opts: { rateLimited: boolean; rateLimitBackoffMs?: number }
   ): Promise<void> {
     await this.ctx.storage.put("lastTeneroRunAt", Date.now());
     await this.ctx.storage.put("lastTeneroResult", result);
@@ -239,7 +239,8 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
       const nextRunAfter = ((await this.ctx.storage.get<{ tenero?: number }>(
         "nextRunAfter"
       )) ?? {}) as { tenero?: number };
-      nextRunAfter.tenero = Date.now() + TENERO_RATELIMIT_BACKOFF_MS;
+      nextRunAfter.tenero =
+        Date.now() + (opts.rateLimitBackoffMs ?? TENERO_MINUTE_QUOTA_BACKOFF_MS);
       await this.ctx.storage.put("nextRunAfter", nextRunAfter);
     }
   }
