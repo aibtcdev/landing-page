@@ -9,6 +9,8 @@ import { getCachedTokenPrices } from "@/lib/external/tenero/kv-cache";
 // Next's build-time prerender never needs a Wrangler platform proxy.
 export const dynamic = "force-dynamic";
 
+const SCHEDULER_INSTANCE_NAME = "v2";
+
 export const metadata: Metadata = {
   title: "Trading Leaderboard - AIBTC",
   description:
@@ -101,7 +103,7 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   try {
     if (env.SCHEDULER) {
       ctx.waitUntil(
-        env.SCHEDULER.get(env.SCHEDULER.idFromName("v1"))
+        env.SCHEDULER.get(env.SCHEDULER.idFromName(SCHEDULER_INSTANCE_NAME))
           .status()
           .then(() => undefined)
           .catch(() => undefined)
