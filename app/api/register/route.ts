@@ -753,7 +753,7 @@ export async function POST(request: NextRequest) {
       }
     } catch (d1Err) {
       // D1 error (transient unavailability, schema mismatch, etc.) — fail closed.
-      log.error(`D1 STX duplicate check failed for ${stxResult.address}: ${d1Err}; treating as taken (fail-closed)`);
+      log.error("D1 STX duplicate check failed; treating as taken (fail-closed)", { stxAddress: stxResult.address, error: String(d1Err) });
       stxAlreadyExists = true;
     }
 

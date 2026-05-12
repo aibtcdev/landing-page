@@ -1,13 +1,14 @@
 /**
  * Phase 4.0b — STX duplicate check via D1 (replaces kv.get('stx:...')).
  *
- * Covers three cases:
+ * Covers four cases:
  *  (a) D1 returns a row → address exists → 409 STX_ADDRESS_TAKEN
  *  (b) D1 returns null  → address free  → registration proceeds past the check
  *  (c) D1 throws        → fail-closed   → 409 STX_ADDRESS_TAKEN
+ *  (d) DB binding undefined → fail-closed → 409 STX_ADDRESS_TAKEN
  *
  * The test hooks in at the POST handler level, mocking every layer that runs
- * before the D1 check so the three interesting D1 outcomes can be isolated.
+ * before the D1 check so the four interesting D1 outcomes can be isolated.
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
