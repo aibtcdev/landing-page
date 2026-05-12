@@ -6,8 +6,9 @@ import openNextWorker, {
 import { createConsoleLogger, createLogger, isLogsRPC } from "./lib/logging";
 import { getPaymentRepoVersion } from "./lib/inbox/payment-logging";
 import { processInboxReconciliationQueue } from "./lib/inbox/reconciliation-queue";
+import { SchedulerDO } from "./lib/scheduler/scheduler-do";
 
-export { BucketCachePurge, DOQueueHandler, DOShardedTagCache };
+export { BucketCachePurge, DOQueueHandler, DOShardedTagCache, SchedulerDO };
 
 export default {
   async fetch(request: Request, env: CloudflareEnv, ctx: ExecutionContext) {
