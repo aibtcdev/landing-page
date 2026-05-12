@@ -1,0 +1,126 @@
+/**
+ * Tenero refresh task — pure orchestration of fetch + KV writes for the
+ * scheduler's per-tick price refresh.
+ *
+ * Extracted out of `SchedulerDO` (in `worker.ts`) so it can be tested
+ * without spinning up a Durable Object harness. The DO method becomes
+ * a thin wrapper that wires the dependencies and persists the result
+ * to DO storage; the actual fetch/cache/rate-limit logic lives here.
+ *
+ * Pattern follows `x402-sponsor-relay`'s split between durable-object
+ * orchestration and pure task functions.
+ */
+
+import { fetchTokenPriceUsd } from "../external/tenero";
+import { setCachedTokenPrice } from "../external/tenero/kv-cache";
+import type { Logger } from "../logging";
+
+export interface TeneroRunResult {
+  startedAt: number;
+  durationMs: number;
+  tokensAttempted: number;
+  succeeded: number;
+  failed: number;
+  minuteRemaining: number | null;
+  monthRemaining: number | null;
+}
+
+export interface TeneroTaskDeps {
+  logger: Logger;
+  kv: KVNamespace;
+  tokenIds: readonly string[];
+  apiKey?: string;
+  /** Test injection point. Defaults to `Date.now`. */
+  now?: () => number;
+}
+
+export interface TeneroTaskOutcome {
+  result: TeneroRunResult;
+  /**
+   * True when Tenero signalled rate-limiting during the run (HTTP 429 OR
+   * `x-ratelimit-minute-remaining <= 0`). Caller writes this to
+   * DO-storage `nextRunAfter.tenero` for adaptive backoff.
+   */
+  rateLimited: boolean;
+}
+
+export async function runTeneroTask(
+  deps: TeneroTaskDeps
+): Promise<TeneroTaskOutcome> {
+  const { logger, kv, tokenIds, apiKey } = deps;
+  const now = deps.now ?? Date.now;
+  const startedAt = now();
+
+  logger.info("tenero.refresh_started", { tokenCount: tokenIds.length });
+
+  let succeeded = 0;
+  let failed = 0;
+  let lastMinuteRemaining: number | null = null;
+  let lastMonthRemaining: number | null = null;
+  let rateLimited = false;
+
+  for (const tokenId of tokenIds) {
+    const r = await fetchTokenPriceUsd(tokenId, logger, apiKey);
+    lastMinuteRemaining = r.rateLimit.minuteRemaining ?? lastMinuteRemaining;
+    lastMonthRemaining = r.rateLimit.monthRemaining ?? lastMonthRemaining;
+
+    if (r.status === 0 || r.status >= 500) {
+      failed++;
+    } else if (r.status === 429) {
+      failed++;
+      rateLimited = true;
+    } else if (r.status === 200) {
+      try {
+        await setCachedTokenPrice(kv, tokenId, {
+          priceUsd: r.priceUsd,
+          fetchedAt: now(),
+          minuteRemaining: r.rateLimit.minuteRemaining,
+          monthRemaining: r.rateLimit.monthRemaining,
+        });
+        succeeded++;
+      } catch (error) {
+        logger.warn("tenero.kv_write_failed", {
+          tokenId,
+          error: String(error),
+        });
+        failed++;
+      }
+    } else {
+      failed++;
+    }
+
+    if (
+      r.rateLimit.minuteRemaining !== null &&
+      r.rateLimit.minuteRemaining <= 0
+    ) {
+      rateLimited = true;
+      logger.warn("tenero.minute_quota_exhausted_mid_run", {
+        rlMinuteRemaining: r.rateLimit.minuteRemaining,
+        processed: succeeded + failed,
+        remaining: tokenIds.length - (succeeded + failed),
+      });
+      break;
+    }
+  }
+
+  const result: TeneroRunResult = {
+    startedAt,
+    durationMs: now() - startedAt,
+    tokensAttempted: tokenIds.length,
+    succeeded,
+    failed,
+    minuteRemaining: lastMinuteRemaining,
+    monthRemaining: lastMonthRemaining,
+  };
+
+  logger.info("tenero.refresh_completed", {
+    succeeded,
+    failed,
+    durationMs: result.durationMs,
+    rlMinuteRemaining: lastMinuteRemaining,
+    rlMonthRemaining: lastMonthRemaining,
+    rateLimited,
+  });
+
+  return { result, rateLimited };
+}

@@ -18,4 +18,31 @@ interface CloudflareEnv {
   X402_RELAY_URL?: string; // x402 relay URL for all payment settlement (default: https://x402-relay.aibtc.com)
   X402_RELAY?: import("./lib/inbox/relay-rpc").RelayRPC; // x402 sponsor relay RPC service binding (undefined in local dev)
   INBOX_RECONCILIATION_QUEUE?: Queue<import("./lib/inbox/reconciliation-queue").InboxReconciliationQueueMessage>;
+  // Inline stub interface (not `import("./worker").SchedulerDO`) so this
+  // d.ts doesn't pull worker.ts into Next.js's type-check pass, where
+  // `./.open-next/worker.js` doesn't resolve until after OpenNext runs.
+  //
+  // The `Rpc.DurableObjectBranded` intersection is load-bearing:
+  // `DurableObjectNamespace<T>` requires T to extend that brand for the
+  // stub returned from `.get(id)` to surface T's RPC methods (per
+  // @cloudflare/workers-types — DurableObjectStub<T> = Fetcher<T> which
+  // only expands T's methods when T is branded). Without it, callers
+  // see `.fetch()` / `.connect()` only, never `.status()` / etc.
+  //
+  // Keep these method signatures in sync with the SchedulerDO class in
+  // worker.ts.
+  // Returns are typed as `Promise<void>` not `Promise<unknown>` because the
+  // RPC `Result<R>` type only accepts Serializable returns — `unknown`
+  // falls through to `never` and the call site can't even chain `.then()`.
+  // Callers that need richer return types should tighten these here when
+  // they wire up real consumers.
+  SCHEDULER: DurableObjectNamespace<
+    Rpc.DurableObjectBranded & {
+      status(): Promise<void>;
+      refreshNow(task: "tenero" | "all"): Promise<void>;
+      pauseUntil(timestamp: number): Promise<void>;
+      resume(): Promise<void>;
+    }
+  >;
+  TENERO_API_KEY?: string; // Optional Tenero API key (x-api-key header); raises rate limits above the shared web-ui-ip tier
 }

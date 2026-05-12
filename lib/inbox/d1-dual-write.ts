@@ -36,9 +36,18 @@ import type { AgentRecord } from "@/lib/types";
  * payment_txid partial index (idx_inbox_payment_txid).
  *
  * @cloudflare/workers-types does not surface SQLite constraint codes — only
- * the wrapped message string. We match the full constraint string verbatim
- * (per Copilot review on #756) to avoid false positives if future schema
- * changes introduce other tables/columns whose names contain `payment_txid`.
+ * the wrapped message string. We substring-match the fully-qualified
+ * `<table>.<column>` identifier inside the SQLite error message, which
+ * narrows to the exact constraint without requiring the surrounding
+ * wrapper text to stay byte-identical across runtime versions.
+ *
+ * False-positive risk: another error whose message coincidentally contains
+ * the literal `UNIQUE constraint failed: inbox_messages.payment_txid` would
+ * match. In practice SQLite only emits that phrasing for this specific
+ * constraint, so the risk is bounded by SQLite's own behavior — schema
+ * changes can't introduce a collision unless they reuse the
+ * `inbox_messages.payment_txid` column name. The Copilot review on #756
+ * raised the concern; the substring approach is the deliberate trade-off.
  *
  * Re-check periodically against `@cloudflare/workers-types` releases — when
  * D1 introduces structured error codes, switch to those.

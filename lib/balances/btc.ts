@@ -20,15 +20,45 @@ export interface BtcBalance {
 
 const SBTC_ASSET_ID = `${SBTC_CONTRACTS.mainnet.address}.${SBTC_CONTRACTS.mainnet.name}::${SBTC_CONTRACTS.mainnet.name}`;
 
+/**
+ * Parse a satoshi string (Stacks `/balances` returns decimal strings) into
+ * a JS number safely. BigInt round-trip preserves precision exactly within
+ * `Number.MAX_SAFE_INTEGER` (≈9.007e15) and clamps above it.
+ *
+ * Both sBTC and L1 BTC are bounded by ~21M BTC × 1e8 ≈ 2.1e15 sats — well
+ * inside safe-int range — so the clamp is purely defensive against
+ * malformed upstream responses.
+ */
+function parseSatsString(raw: string): number {
+  let big: bigint;
+  try {
+    big = BigInt(raw);
+  } catch {
+    return 0;
+  }
+  // Use `BigInt(0)` rather than `0n` — tsconfig target is below ES2020.
+  if (big <= BigInt(0)) return 0;
+  const ceiling = BigInt(Number.MAX_SAFE_INTEGER);
+  return big > ceiling ? Number.MAX_SAFE_INTEGER : Number(big);
+}
+
 async function fetchL1Sats(btcAddress: string): Promise<number> {
   const url = `https://mempool.space/api/address/${btcAddress}`;
   const res = await fetch(url, { headers: { Accept: "application/json" } });
   if (!res.ok) return 0;
+  // mempool.space returns funded_txo_sum / spent_txo_sum as JSON numbers.
+  // JSON.parse loses precision past 2^53 silently, so re-narrow with BigInt
+  // via String(...) — preserves the parsed value when within safe range and
+  // signals overflow (returns 0 via the catch) for malformed responses.
   const body = (await res.json()) as {
     chain_stats?: { funded_txo_sum?: number; spent_txo_sum?: number };
   };
-  const funded = body.chain_stats?.funded_txo_sum ?? 0;
-  const spent = body.chain_stats?.spent_txo_sum ?? 0;
+  const fundedRaw = body.chain_stats?.funded_txo_sum;
+  const spentRaw = body.chain_stats?.spent_txo_sum;
+  const funded =
+    typeof fundedRaw === "number" && Number.isFinite(fundedRaw) ? fundedRaw : 0;
+  const spent =
+    typeof spentRaw === "number" && Number.isFinite(spentRaw) ? spentRaw : 0;
   return Math.max(0, funded - spent);
 }
 
@@ -42,8 +72,7 @@ async function fetchL2Sats(stxAddress: string, hiroApiKey?: string): Promise<num
     fungible_tokens?: Record<string, { balance?: string }>;
   };
   const raw = body.fungible_tokens?.[SBTC_ASSET_ID]?.balance ?? "0";
-  const parsed = Number(raw);
-  return Number.isFinite(parsed) ? parsed : 0;
+  return parseSatsString(raw);
 }
 
 export async function fetchBtcBalance(
