@@ -4,7 +4,11 @@ import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
 
-export const dynamic = "force-dynamic";
+// 60s ISR window — the verifier cron cadence is 15 min, so a minute of
+// staleness on the leaderboard renders is fine. Lets the framework serve
+// the first request's SSR result to every other viewer in that window
+// without re-running both D1 queries on every hit.
+export const revalidate = 60;
 
 export const metadata: Metadata = {
   title: "Trading Leaderboard - AIBTC",
@@ -36,12 +40,16 @@ const TOKEN_DECIMALS: Readonly<Record<string, number>> = {
   "SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.ststx-token::ststx": 6,
 };
 
-interface D1AggregateRow {
+interface LeaderboardJoinedRow {
   sender: string;
   token_in: string;
   cnt: number;
   sum_in: number;
   latest_at: number;
+  btc_address: string | null;
+  display_name: string | null;
+  bns_name: string | null;
+  erc8004_agent_id: number | null;
 }
 
 async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
@@ -50,18 +58,24 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
 
   if (!db) return [];
 
-  let rows: D1AggregateRow[] = [];
+  // Single round-trip: aggregate `swaps` per (sender, token_in) and
+  // LEFT JOIN the four display fields from `agents`. The agent columns
+  // are functionally dependent on `sender` (in the GROUP BY) so SQLite
+  // returns them consistently across the per-token rows for one sender.
+  let rows: LeaderboardJoinedRow[] = [];
   try {
     const sql = `
-      SELECT sender, token_in,
-             COUNT(*) AS cnt,
-             SUM(amount_in) AS sum_in,
-             MAX(burn_block_time) AS latest_at
-      FROM swaps
-      WHERE source = 'agent'
-      GROUP BY sender, token_in
+      SELECT s.sender, s.token_in,
+             COUNT(*)             AS cnt,
+             SUM(s.amount_in)     AS sum_in,
+             MAX(s.burn_block_time) AS latest_at,
+             a.btc_address, a.display_name, a.bns_name, a.erc8004_agent_id
+      FROM swaps s
+      LEFT JOIN agents a ON a.stx_address = s.sender
+      WHERE s.source = 'agent'
+      GROUP BY s.sender, s.token_in
     `;
-    const result = await db.prepare(sql).all<D1AggregateRow>();
+    const result = await db.prepare(sql).all<LeaderboardJoinedRow>();
     rows = result.results ?? [];
   } catch {
     return [];
@@ -70,13 +84,21 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   if (rows.length === 0) return [];
 
   // Aggregate per sender — sum count, keep max(latest_at), preserve
-  // per-token breakdown for the client-side volume calculation.
+  // per-token breakdown for the client-side volume calculation, and
+  // capture display fields once (they're identical across per-token
+  // rows of the same sender).
   const bySender = new Map<
     string,
     {
       count: number;
       latestAt: number;
       tokens: Array<{ tokenId: string; sumAmountIn: number; decimals: number }>;
+      display: {
+        btcAddress: string | null;
+        displayName: string | null;
+        bnsName: string | null;
+        erc8004AgentId: number | null;
+      };
     }
   >();
   for (const r of rows) {
@@ -88,6 +110,12 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
         sumAmountIn: number;
         decimals: number;
       }>,
+      display: {
+        btcAddress: r.btc_address,
+        displayName: r.display_name,
+        bnsName: r.bns_name,
+        erc8004AgentId: r.erc8004_agent_id,
+      },
     };
     existing.count += r.cnt;
     if (r.latest_at > existing.latestAt) existing.latestAt = r.latest_at;
@@ -99,64 +127,17 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     bySender.set(r.sender, existing);
   }
 
-  // Look up display data straight from D1 — only the senders that
-  // actually appear in `swaps`, scoped to the four fields the row
-  // needs. Bounded N (agents who've made an MCP swap), comfortably
-  // under any plausible IN-clause limit.
-  const stxAddresses = Array.from(bySender.keys());
-  const displayByStx = new Map<
-    string,
-    {
-      btcAddress: string;
-      displayName: string | null;
-      bnsName: string | null;
-      erc8004AgentId: number | null;
-    }
-  >();
-  if (stxAddresses.length > 0) {
-    const placeholders = stxAddresses.map((_, i) => `?${i + 1}`).join(",");
-    try {
-      const displayResult = await db
-        .prepare(
-          `SELECT stx_address, btc_address, display_name, bns_name, erc8004_agent_id
-           FROM agents
-           WHERE stx_address IN (${placeholders})`
-        )
-        .bind(...stxAddresses)
-        .all<{
-          stx_address: string;
-          btc_address: string;
-          display_name: string | null;
-          bns_name: string | null;
-          erc8004_agent_id: number | null;
-        }>();
-      for (const r of displayResult.results ?? []) {
-        displayByStx.set(r.stx_address, {
-          btcAddress: r.btc_address,
-          displayName: r.display_name,
-          bnsName: r.bns_name,
-          erc8004AgentId: r.erc8004_agent_id,
-        });
-      }
-    } catch {
-      // Display lookup failure degrades to client-side generated names.
-    }
-  }
-
   const ranked: LeaderboardRow[] = Array.from(bySender.entries())
-    .map(([sender, agg]) => {
-      const display = displayByStx.get(sender);
-      return {
-        stxAddress: sender,
-        btcAddress: display?.btcAddress ?? null,
-        displayName: display?.displayName ?? null,
-        bnsName: display?.bnsName ?? null,
-        erc8004AgentId: display?.erc8004AgentId ?? null,
-        tradeCount: agg.count,
-        latestTradeAt: agg.latestAt,
-        tokens: agg.tokens,
-      };
-    })
+    .map(([sender, agg]) => ({
+      stxAddress: sender,
+      btcAddress: agg.display.btcAddress,
+      displayName: agg.display.displayName,
+      bnsName: agg.display.bnsName,
+      erc8004AgentId: agg.display.erc8004AgentId,
+      tradeCount: agg.count,
+      latestTradeAt: agg.latestAt,
+      tokens: agg.tokens,
+    }))
     .sort((a, b) => {
       // Primary: count desc. Tiebreak: latest trade desc.
       if (b.tradeCount !== a.tradeCount) return b.tradeCount - a.tradeCount;
