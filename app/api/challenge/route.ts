@@ -24,6 +24,9 @@ import { bytesToHex } from "@stacks/common";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { getAgentLevel } from "@/lib/levels";
 
+/** Retry-After value (seconds) to return on 429s — matches the 60s RATE_LIMIT_STRICT binding window. */
+const RATE_LIMIT_RETRY_AFTER = 60;
+
 /**
  * Determine the address type from the format.
  */
@@ -106,8 +109,8 @@ export async function GET(request: NextRequest) {
       ],
       availableActions: getAvailableActions(),
       rateLimit: {
-        requests: 6,
-        window: "10 minutes",
+        requests: 1,
+        window: "60 seconds",
         scope: "per IP address",
       },
       challengeTTL: "30 minutes",
@@ -179,13 +182,8 @@ export async function GET(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Rate limiting via first-party `ratelimits` binding (RATE_LIMIT_STRICT: 1 req / 60s per key).
-    // Replaces prior KV-RMW pattern (lib/challenge.ts checkRateLimit/recordRequest on
-    // rate:challenge:{ip}, which was 6 req / 10 min). The new semantics tighten burst
-    // tolerance (no 6-request burst) but raise the per-hour ceiling. The 6/10min window
-    // is not implementable in the binding (period ∈ {10,60}); follow-up zone Rate Limit
-    // Rule can layer back the 10-min window if traffic data shows it's needed.
-    // Mirrors the fail-open/fail-closed convention from app/api/inbox/[address]/route.ts:835.
+    // Rate limiting via RATE_LIMIT_STRICT binding (1 req / 60s). Mirrors inbox fail-open/fail-closed.
+    // Semantics change from prior 6/10min KV-RMW documented in PR #769.
     const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
     let rateLimited = false;
     try {
@@ -206,12 +204,12 @@ export async function GET(request: NextRequest) {
       return NextResponse.json(
         {
           error: "Rate limit exceeded. Maximum 1 challenge request per minute per IP.",
-          retryAfter: 60,
+          retryAfter: RATE_LIMIT_RETRY_AFTER,
         },
         {
           status: 429,
           headers: {
-            "Retry-After": "60",
+            "Retry-After": String(RATE_LIMIT_RETRY_AFTER),
           },
         }
       );
