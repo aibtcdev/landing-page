@@ -256,3 +256,39 @@ export async function lookupProfileByAgentId(
   const result = await db.prepare(sql).bind(agentId).first<AgentProfileRow>();
   return result ?? null;
 }
+
+/**
+ * Decide whether to fall back to a KV `claim:{btcAddress}` read after a D1
+ * LEFT JOIN reported `claim_status = null` (-> `d1Claim = null`).
+ *
+ * Background: agents predating the Phase 2.5 dual-write (#705 merged
+ * 2026-05-10T10:42Z) may have claim records in KV but not yet in D1's
+ * `claims` table (covered by #691 backfill). For those agents,
+ * `mapRowToClaimRecord` returns `null` from the LEFT JOIN miss, which
+ * `enrichAgentProfile` interprets as "caller confirmed no claim" — skipping
+ * the KV path and returning Level 1 incorrectly.
+ *
+ * Heuristic: `agent.erc8004AgentId !== null` signals on-chain Genesis
+ * registration, which is a strong prior that a claim SHOULD exist. When a
+ * D1 LEFT JOIN miss coincides with an erc8004 agent-id, the most likely
+ * cause is the backfill gap; recover by re-signaling KV fallback. Bounded
+ * to the Genesis subset (no extra KV read for the Level-1 majority).
+ *
+ * Returns `true` when the caller should set `d1Claim = undefined` to let
+ * `enrichAgentProfile` perform the `kv.get('claim:{btcAddress}')` fallback.
+ */
+export function shouldFallBackToKVClaim(
+  agent: AgentRecord | null,
+  d1Claim: ClaimRecord | null | undefined
+): agent is AgentRecord {
+  // Narrowing predicate: when this returns true, the caller can treat
+  // `agent` as non-null (the function guarantees agent !== null). Useful
+  // for the recovery-log call site that needs agent.btcAddress and
+  // agent.erc8004AgentId without a non-null assertion.
+  return (
+    agent !== null &&
+    d1Claim === null &&
+    agent.erc8004AgentId !== null &&
+    agent.erc8004AgentId !== undefined
+  );
+}

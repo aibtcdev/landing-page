@@ -18,8 +18,10 @@ import {
   mapRowToAgentRecord,
   mapRowToClaimRecord,
   computeProfileLevel,
+  shouldFallBackToKVClaim,
 } from "@/lib/cache/agent-profile";
 import type { AgentProfileRow } from "@/lib/cache/agent-profile";
+import type { AgentRecord, ClaimRecord } from "@/lib/types";
 
 // ---------------------------------------------------------------------------
 // Fixtures
@@ -454,5 +456,75 @@ describe("BNS resolver: classifyAddress", () => {
   it("*.btc suffix → 'bns' branch", () => {
     expect(classifyAddress("arc0.btc")).toBe("bns");
     expect(classifyAddress("my-agent-007.btc")).toBe("bns");
+  });
+});
+
+// ---------------------------------------------------------------------------
+// shouldFallBackToKVClaim — #771 dual-write-gap recovery heuristic
+// ---------------------------------------------------------------------------
+
+describe("shouldFallBackToKVClaim", () => {
+  function makeAgent(overrides: Partial<AgentRecord> = {}): AgentRecord {
+    return {
+      btcAddress: "bc1qagent1test",
+      stxAddress: "SP1AGENT1TEST",
+      stxPublicKey: "02abc",
+      btcPublicKey: "03def",
+      taprootAddress: null,
+      displayName: null,
+      description: null,
+      bnsName: null,
+      owner: null,
+      verifiedAt: "2026-01-01T00:00:00.000Z",
+      lastActiveAt: null,
+      erc8004AgentId: null,
+      nostrPublicKey: null,
+      ...overrides,
+    } as AgentRecord;
+  }
+
+  function makeClaim(): ClaimRecord {
+    return {
+      btcAddress: "bc1qagent1test",
+      displayName: "",
+      tweetUrl: "",
+      tweetAuthor: null,
+      claimedAt: "2026-01-02T00:00:00.000Z",
+      rewardSatoshis: 0,
+      rewardTxid: null,
+      status: "verified",
+    } as ClaimRecord;
+  }
+
+  it("returns false when agent is null (no D1 hit)", () => {
+    expect(shouldFallBackToKVClaim(null, null)).toBe(false);
+    expect(shouldFallBackToKVClaim(null, undefined)).toBe(false);
+  });
+
+  it("returns false when d1Claim is undefined (already KV-fallback path)", () => {
+    const agent = makeAgent({ erc8004AgentId: 319 });
+    expect(shouldFallBackToKVClaim(agent, undefined)).toBe(false);
+  });
+
+  it("returns false when d1Claim is set (D1 hit on claims)", () => {
+    const agent = makeAgent({ erc8004AgentId: 319 });
+    expect(shouldFallBackToKVClaim(agent, makeClaim())).toBe(false);
+  });
+
+  it("returns false when agent has no erc8004AgentId (true Level-1)", () => {
+    const agent = makeAgent({ erc8004AgentId: null });
+    expect(shouldFallBackToKVClaim(agent, null)).toBe(false);
+  });
+
+  it("returns true when agent has erc8004AgentId AND d1Claim is null (#771 dual-write gap)", () => {
+    const agent = makeAgent({ erc8004AgentId: 319 });
+    expect(shouldFallBackToKVClaim(agent, null)).toBe(true);
+  });
+
+  it("returns true when erc8004AgentId is 0 (edge: valid id) and d1Claim is null", () => {
+    // Defensive: agent-id 0 is a valid uint per the registry; truthy-check
+    // alone would skip it. Implementation uses explicit null/undefined checks.
+    const agent = makeAgent({ erc8004AgentId: 0 });
+    expect(shouldFallBackToKVClaim(agent, null)).toBe(true);
   });
 });
