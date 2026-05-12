@@ -16,6 +16,7 @@ import { generateName } from "@/lib/name-generator";
 import { computeLevel, getNextLevel } from "@/lib/levels";
 import { verifyBitcoinSignature, bip322VerifyP2TR } from "@/lib/bitcoin-verify";
 import { lookupBnsName } from "@/lib/bns";
+import { lookupProfileByStxAddress } from "@/lib/cache/agent-profile";
 import { generateClaimCode } from "@/lib/claim-code";
 import { isPartialAgentRecord } from "@/lib/types";
 import { X_HANDLE } from "@/lib/constants";
@@ -734,14 +735,29 @@ export async function POST(request: NextRequest) {
     }
 
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
-    // Phase 1: KV duplicate check (fast, avoids unnecessary relay calls on 409)
-    const [existingStx, existingBtc] = await Promise.all([
-      kv.get(`stx:${stxResult.address}`),
-      kv.get(`btc:${btcResult.address}`),
-    ]);
+    // STX duplicate check via D1 (fail-closed: D1 error or missing binding → treat as taken).
+    // This replaces the previous kv.get(`stx:${addr}`) lookup; D1 is the authoritative store.
+    // Fail-closed rationale: D1 UNIQUE constraint would reject the INSERT anyway, but surfacing
+    // a clear 409 here gives better UX and avoids a wasted relay call.
+    let stxAlreadyExists: boolean;
+    try {
+      if (!db) {
+        // D1 binding unavailable (local dev without wrangler) — fail closed.
+        log.error("D1 binding (DB) unavailable for STX duplicate check; treating as taken (fail-closed)");
+        stxAlreadyExists = true;
+      } else {
+        const existingStxRow = await lookupProfileByStxAddress(db, stxResult.address);
+        stxAlreadyExists = existingStxRow !== null;
+      }
+    } catch (d1Err) {
+      // D1 error (transient unavailability, schema mismatch, etc.) — fail closed.
+      log.error(`D1 STX duplicate check failed for ${stxResult.address}: ${d1Err}; treating as taken (fail-closed)`);
+      stxAlreadyExists = true;
+    }
 
-    if (existingStx) {
+    if (stxAlreadyExists) {
       return registrationError(
         "Stacks address already registered. Each address can only be registered once.",
         "STX_ADDRESS_TAKEN",
@@ -749,6 +765,9 @@ export async function POST(request: NextRequest) {
         409
       );
     }
+
+    // BTC duplicate check: KV (btc: key) remains unchanged pending P4.3 migration.
+    const existingBtc = await kv.get(`btc:${btcResult.address}`);
 
     if (existingBtc) {
       let existingRecord;
