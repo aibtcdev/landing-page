@@ -32,6 +32,7 @@ export async function POST(
   const { address } = await params;
   const { env, ctx } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+  const db = env.DB as D1Database | undefined;
   const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
   const logger = isLogsRPC(env.LOGS)
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
@@ -80,7 +81,7 @@ export async function POST(
   }
 
   // Look up agent — rate limit unregistered addresses after IP check passes.
-  const agent = await lookupAgent(kv, address);
+  const agent = await lookupAgent(kv, address, db);
 
   if (!agent) {
     let unregLimited = false;
@@ -200,7 +201,6 @@ export async function POST(
   // AND is_reply = 0, so messages addressed to a different agent return null → 404.
   // This prevents a replier from replying to a message they are not the recipient of.
   // D1-throws fallback: 503 + Retry-After: 5 per Cycle 26 advisory (PR #732).
-  const db = env.DB as D1Database | undefined;
   if (!db) {
     logger.warn("D1 database binding unavailable", { messageId });
     return NextResponse.json(
@@ -540,9 +540,10 @@ export async function GET(
   const { address } = await params;
   const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+  const db = env.DB as D1Database | undefined;
 
   // Look up agent
-  const agent = await lookupAgent(kv, address);
+  const agent = await lookupAgent(kv, address, db);
 
   if (!agent) {
     return NextResponse.json(
@@ -599,8 +600,6 @@ export async function GET(
     }
     offset = parsed;
   }
-
-  const db = env.DB as D1Database | undefined;
 
   if (!db) {
     return NextResponse.json(

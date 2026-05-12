@@ -29,9 +29,10 @@ export async function GET(
   const { address, messageId } = await params;
   const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+  const db = env.DB as D1Database | undefined;
 
   // Resolve address (BTC or STX) to agent record
-  const agent = await lookupAgent(kv, address);
+  const agent = await lookupAgent(kv, address, db);
 
   if (!agent) {
     return NextResponse.json(
@@ -76,7 +77,7 @@ export async function GET(
 
   // Resolve sender agent info (recipient is already `agent`)
   const senderAddr = message.senderBtcAddress || message.fromAddress;
-  const senderAgent = await lookupAgent(kv, senderAddr);
+  const senderAgent = await lookupAgent(kv, senderAddr, db);
 
   // Return message with reply and resolved peer info
   // Messages are immutable after delivery — cache aggressively
@@ -111,6 +112,7 @@ export async function PATCH(
   const { address, messageId } = await params;
   const { env, ctx } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+  const db = env.DB as D1Database | undefined;
 
   const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
   const logger = isLogsRPC(env.LOGS)
@@ -145,7 +147,7 @@ export async function PATCH(
   }
 
   // Resolve address (BTC or STX) to agent record
-  const agent = await lookupAgent(kv, address);
+  const agent = await lookupAgent(kv, address, db);
 
   if (!agent) {
     return NextResponse.json(
@@ -201,7 +203,6 @@ export async function PATCH(
   // AND is_reply = 0, so a mismatched address returns null → 404 (not 403 — avoids
   // leaking message existence to a non-recipient).
   // D1-throws fallback: 503 + Retry-After: 5 per Cycle 26 advisory (PR #732).
-  const db = env.DB as D1Database | undefined;
   if (!db) {
     return NextResponse.json(
       {

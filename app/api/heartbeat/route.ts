@@ -130,8 +130,9 @@ export async function GET(request: NextRequest) {
   if (address) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
-    const result = await lookupAgentWithLevel(kv, address);
+    const result = await lookupAgentWithLevel(kv, address, 0, db);
     if ("error" in result) {
       return NextResponse.json(
         { error: result.error },
@@ -144,7 +145,6 @@ export async function GET(request: NextRequest) {
     // Phase 2.5 Step 4 — unreadCount now served from D1 live SELECT COUNT(*).
     // Replaces the KV inbox:agent:{btcAddress} read that served a stale cached
     // counter. Closes aibtc-mcp-server#497 for the heartbeat orientation path.
-    const db = env.DB as D1Database | undefined;
     const unreadCount = await fetchUnreadCount(db, agent.btcAddress);
 
     const orientation = getOrientation(agent, claim, unreadCount);

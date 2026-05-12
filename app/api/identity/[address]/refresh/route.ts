@@ -82,12 +82,13 @@ export async function POST(
   try {
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     if (isLogsRPC(env.LOGS)) {
       logger = createLogger(env.LOGS, ctx, baseCtx);
     }
 
-    const agent = await lookupAgent(kv, address);
+    const agent = await lookupAgent(kv, address, db);
     if (!agent) {
       return NextResponse.json(
         { error: "Agent not found", address },

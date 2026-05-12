@@ -137,9 +137,10 @@ export async function DELETE(request: NextRequest) {
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     // Resolve address to AgentRecord
-    const agent = await lookupAgent(kv, address);
+    const agent = await lookupAgent(kv, address, db);
     if (!agent) {
       return NextResponse.json(
         {

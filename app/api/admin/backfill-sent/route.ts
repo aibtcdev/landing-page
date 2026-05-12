@@ -36,6 +36,7 @@ export async function POST(request: NextRequest) {
 
   const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+  const db = env.DB as D1Database | undefined;
 
   // Parse optional body
   let dryRun = false;
@@ -110,7 +111,7 @@ export async function POST(request: NextRequest) {
   let unresolvedCount = 0;
 
   for (const [stxAddress, messages] of senderMessages) {
-    const agent = await lookupAgent(kv, stxAddress);
+    const agent = await lookupAgent(kv, stxAddress, db);
     if (!agent) {
       unresolvedCount++;
       continue;

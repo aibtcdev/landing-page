@@ -187,9 +187,10 @@ export async function GET(
   const { address } = await params;
   const { env } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
+  const db = env.DB as D1Database | undefined;
 
   // Look up agent
-  const agent = await lookupAgent(kv, address);
+  const agent = await lookupAgent(kv, address, db);
 
   if (!agent) {
     return NextResponse.json(
@@ -279,8 +280,6 @@ export async function GET(
   // The sent-outbox flip will be handled in Step 3.3.
 
   // Fetch the paginated message list from D1
-  const db = env.DB as D1Database | undefined;
-
   if (!db) {
     // D1 binding not available — this should not happen in production but
     // guards against misconfigured environments. Log and return 503.
@@ -366,7 +365,7 @@ export async function GET(
   const agentLookupMap = new Map<string, import("@/lib/types").AgentRecord>();
   await Promise.all(
     Array.from(addressSet).map(async (addr) => {
-      const found = await lookupAgent(kv, addr);
+      const found = await lookupAgent(kv, addr, db);
       if (found) agentLookupMap.set(addr, found);
     })
   );
@@ -451,7 +450,7 @@ export async function GET(
     const resolvedPartners = await Promise.all(
       partnerEntries.map(async ([_key, data]) => {
         const lookupAddress = data.stxAddress || data.btcAddress;
-        const partnerAgent = lookupAddress ? await lookupAgent(kv, lookupAddress) : null;
+        const partnerAgent = lookupAddress ? await lookupAgent(kv, lookupAddress, db) : null;
 
         // Determine final direction from the merged set
         let finalDirection: "sent" | "received" | "both";
@@ -622,7 +621,7 @@ export async function POST(
   logger.info("Inbox message submission", { address });
 
   // Look up recipient agent
-  const agent = await lookupAgent(kv, address);
+  const agent = await lookupAgent(kv, address, db);
 
   if (!agent) {
     logger.warn("Agent not found", { address });
@@ -1045,7 +1044,7 @@ export async function POST(
     const messageId = `msg_${Date.now()}_${crypto.randomUUID()}`;
 
     // Look up sender agent for BIP-322 verification
-    const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress) : null;
+    const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress, db) : null;
     const sigResult = verifySenderSignature(senderSignatureInput, content, logger, senderAgent?.btcAddress);
     if (sigResult instanceof NextResponse) return sigResult;
     const { authenticated, senderBtcAddress } = sigResult;
@@ -1470,7 +1469,7 @@ export async function POST(
   const messageId = `msg_${Date.now()}_${crypto.randomUUID()}`;
 
   // Look up sender agent for BIP-322 verification
-  const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress) : null;
+  const senderAgent = fromAddress !== "unknown" ? await lookupAgent(kv, fromAddress, db) : null;
   const sigResult = verifySenderSignature(senderSignatureInput, content, logger, senderAgent?.btcAddress);
   if (sigResult instanceof NextResponse) return sigResult;
   const { authenticated, senderBtcAddress } = sigResult;

@@ -64,6 +64,7 @@ export async function GET(
   try {
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
     const baseCtx = { rayId, path: request.nextUrl.pathname };
@@ -71,7 +72,7 @@ export async function GET(
       ? createLogger(env.LOGS, ctx, baseCtx)
       : createConsoleLogger(baseCtx);
 
-    const agent = await lookupAgent(kv, address);
+    const agent = await lookupAgent(kv, address, db);
 
     if (!agent) {
       return NextResponse.json(
