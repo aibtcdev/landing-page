@@ -212,9 +212,10 @@ export async function POST(request: NextRequest) {
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     // Look up the agent by whichever address was provided
-    const agent = await lookupAgent(kv, lookupAddress);
+    const agent = await lookupAgent(kv, lookupAddress, db);
     if (!agent) {
       return NextResponse.json(
         {

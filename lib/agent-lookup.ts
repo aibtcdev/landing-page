@@ -45,8 +45,8 @@ export async function lookupAgent(
     }
   }
 
-  // STX addresses (SP..., SM...): D1 lookup — fail-closed on error or missing binding.
-  if (address.startsWith("SP") || address.startsWith("SM")) {
+  // STX addresses (SP..., SM..., ST...): D1 lookup — fail-closed on error or missing binding.
+  if (address.startsWith("SP") || address.startsWith("SM") || address.startsWith("ST")) {
     try {
       if (!db) {
         console.error(
@@ -120,16 +120,17 @@ export async function lookupAgentWithLevel(
   db?: D1Database
 ): Promise<LookupWithLevelSuccess | LookupWithLevelError> {
   // Determine address prefix
-  const prefix = address.startsWith("SP") || address.startsWith("SM")
-    ? "stx"
-    : address.startsWith("bc1")
-      ? "btc"
-      : null;
+  const prefix =
+    address.startsWith("SP") || address.startsWith("SM") || address.startsWith("ST")
+      ? "stx"
+      : address.startsWith("bc1")
+        ? "btc"
+        : null;
 
   if (!prefix) {
     return {
       error:
-        "Invalid address format. Must be a Bitcoin (bc1...) or Stacks (SP...) address.",
+        "Invalid address format. Must be a Bitcoin (bc1...) or Stacks (SP/SM/ST...) address.",
       status: 400,
     };
   }

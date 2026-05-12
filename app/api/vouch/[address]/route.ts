@@ -7,7 +7,12 @@ import { getVouchIndex, MAX_REFERRALS } from "@/lib/vouch";
 /** Lightweight address format check — must look like a BTC or STX address. */
 function isValidAddressFormat(address: string): boolean {
   if (address.length < 10 || address.length > 100) return false;
-  return address.startsWith("bc1") || address.startsWith("SP") || address.startsWith("SM");
+  return (
+    address.startsWith("bc1") ||
+    address.startsWith("SP") ||
+    address.startsWith("SM") ||
+    address.startsWith("ST")
+  );
 }
 
 export async function GET(
@@ -38,8 +43,9 @@ export async function GET(
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
-    const agent = await lookupAgent(kv, normalizedAddress);
+    const agent = await lookupAgent(kv, normalizedAddress, db);
     if (!agent) {
       return NextResponse.json(
         {
@@ -54,7 +60,7 @@ export async function GET(
     let vouchedByInfo: { btcAddress: string; displayName: string } | null =
       null;
     if (agent.referredBy) {
-      const referrer = await lookupAgent(kv, agent.referredBy);
+      const referrer = await lookupAgent(kv, agent.referredBy, db);
       if (referrer) {
         vouchedByInfo = {
           btcAddress: referrer.btcAddress,

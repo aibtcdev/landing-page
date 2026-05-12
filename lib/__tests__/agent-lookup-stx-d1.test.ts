@@ -1,7 +1,7 @@
 /**
  * Phase 4.0d — STX lookup in agent-lookup.ts via D1 (replaces kv.get('stx:...')).
  *
- * Covers six cases across both functions:
+ * Covers eight cases across both functions:
  *  lookupAgent:
  *   (a) D1 returns a row    → AgentRecord returned
  *   (b) D1 returns null     → null returned (not found)
