@@ -82,18 +82,27 @@
     ]
   },
 
-  // Durable Object migration history.
-  //
-  // v1 was applied to the `landing-page` worker out-of-band during PR
-  // #743 experimentation (2026-05-12). Main does not reference the
-  // SchedulerDO class — so v2 deletes it, restoring the worker to a
-  // clean no-DO state. Both tags must be declared so wrangler can
-  // diff against CF's current migration history. Once v2 lands, do
-  // not remove these entries: future deploys still need to see the
-  // full history to deploy successfully.
+  // SchedulerDO: single instance coordinating periodic background work.
+  // Initial scope: Tenero price refresh (every ~5 min) writing to
+  // VERIFIED_AGENTS KV under `tenero:price:{tokenId}`. Competition Hiro
+  // sweep + balance snapshots land in follow-up PRs. See issue #768.
+  // Singleton resolved via env.SCHEDULER.idFromName("v1") — the instance
+  // name is independent of the migration tag, so it stays "v1" even
+  // though the migration history is up to v3.
+  "durable_objects": {
+    "bindings": [
+      { "name": "SCHEDULER", "class_name": "SchedulerDO" }
+    ]
+  },
+  // Migration history reflects what's been applied to CF, not just what
+  // this PR introduces. v1 + v2 happened during the original #743
+  // experimentation (registered, then deleted via hotfix #772). v3
+  // reintroduces the class cleanly. Keep all three declared — wrangler
+  // needs the full history to deploy without errors.
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
-    { "tag": "v2", "deleted_classes": ["SchedulerDO"] }
+    { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
+    { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
   ],
 
   /**
@@ -181,9 +190,15 @@
         ]
       },
 
+      "durable_objects": {
+        "bindings": [
+          { "name": "SCHEDULER", "class_name": "SchedulerDO" }
+        ]
+      },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
-        { "tag": "v2", "deleted_classes": ["SchedulerDO"] }
+        { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
+        { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
       ]
     },
 
@@ -266,9 +281,15 @@
         ]
       },
 
+      "durable_objects": {
+        "bindings": [
+          { "name": "SCHEDULER", "class_name": "SchedulerDO" }
+        ]
+      },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
-        { "tag": "v2", "deleted_classes": ["SchedulerDO"] }
+        { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
+        { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
       ]
     }
   }
