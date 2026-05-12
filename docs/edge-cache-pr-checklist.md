@@ -1,6 +1,6 @@
 # Edge-Cache PR Checklist
 
-Closes #782. Land this doc reference alongside any PR that touches the edge-cache layer (Workers `caches.default` API, `lib/edge-cache.ts` helpers, or write-path invalidation).
+Land this doc reference alongside any PR that touches the edge-cache layer (Workers `caches.default` API, `lib/edge-cache.ts` helpers, or write-path invalidation).
 
 The fields below were distilled from the steel-yeti Council Cycle 3/4/7/8 advisories during the P3.2/P3.3 campaign (PRs #774, #775). Each field corresponds to a finding that recurred across sibling PRs until the campaign converged on a shared shape. Filling out this checklist in the PR description means the next P3 sibling doesn't re-discover the same six concerns ad-hoc.
 
@@ -21,11 +21,12 @@ If you're only changing rate-limit bindings, KV-only paths, or D1-only paths wit
 
 Which Workers cache namespace does this PR touch? In practice this is one of:
 
-- `caches.default` — global per-zone Workers cache (see `lib/edge-cache.ts:withEdgeCache`)
-- `caches.default` — middleware OG cache, keyed under the `middleware:og:` prefix (see `lib/edge-cache.ts:buildMiddlewareOgCacheKey`)
+- `caches.default` — used in two distinct ways in this codebase:
+  - **Global per-zone Workers cache** for `/api/*` route surfaces (see `lib/edge-cache.ts:withEdgeCache`)
+  - **Middleware OG cache** keyed under the `middleware:og:` prefix for crawler-agent HTML (see `lib/edge-cache.ts:buildMiddlewareOgCacheKey`)
 - A KV binding (`VERIFIED_AGENTS`, etc.) — note this is NOT the Workers cache layer; KV reads/writes have different semantics
 
-State the binding name explicitly. If the PR is multi-layer (cache + KV), list each.
+State the binding name explicitly. If the PR uses both `caches.default` flavors (e.g. a write path that invalidates both the route-level cache AND the middleware OG cache), name each. If the PR is multi-layer (cache + KV), list each.
 
 ### 2. Canonical key builder
 
