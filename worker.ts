@@ -12,8 +12,11 @@ import {
 } from "./lib/logging";
 import { getPaymentRepoVersion } from "./lib/inbox/payment-logging";
 import { processInboxReconciliationQueue } from "./lib/inbox/reconciliation-queue";
-import { fetchTokenPriceUsd } from "./lib/external/tenero";
-import { setCachedTokenPrice } from "./lib/external/tenero/kv-cache";
+import { STATIC_TOKEN_IDS } from "./lib/external/tenero";
+import {
+  runTeneroTask,
+  type TeneroRunResult,
+} from "./lib/scheduler/tenero-task";
 
 // ─────────────────────────── SchedulerDO ───────────────────────────
 //
@@ -39,14 +42,7 @@ import { setCachedTokenPrice } from "./lib/external/tenero/kv-cache";
 
 const TENERO_INTERVAL_MS = 5 * 60 * 1000;
 const ALARM_TICK_MS = TENERO_INTERVAL_MS;
-const MAX_TOKENS_PER_TICK = 30;
 const TENERO_RATELIMIT_BACKOFF_MS = 5 * 60 * 1000;
-
-const STATIC_TOKEN_IDS: readonly string[] = [
-  "stx",
-  "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc",
-  "SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.ststx-token::ststx",
-];
 
 export interface SchedulerStatus {
   now: number;
@@ -56,16 +52,6 @@ export interface SchedulerStatus {
   consecutiveFailures: { tenero: number };
   nextRunAfter: { tenero: number | null };
   nextAlarmAt: number | null;
-}
-
-export interface TeneroRunResult {
-  startedAt: number;
-  durationMs: number;
-  tokensAttempted: number;
-  succeeded: number;
-  failed: number;
-  minuteRemaining: number | null;
-  monthRemaining: number | null;
 }
 
 type StoredScheduler = {
@@ -138,6 +124,12 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
         return;
       }
 
+      // TODO(#768 follow-up): once a second task lands (competition Hiro
+      // sweep, then balance snapshots), this branching shape becomes a
+      // copy-paste smell. Refactor to a task registry:
+      //   for (const task of TASKS) if (task.isDue(stored, tickStartedAt))
+      //     await task.run(logger, this.ctx);
+      // Each task owns its own cadence, persist helper, and failure key.
       const teneroNextRunAfter = stored.nextRunAfter?.tenero ?? 0;
       const teneroDue =
         teneroNextRunAfter <= tickStartedAt &&
@@ -165,142 +157,62 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
     }
   }
 
+  // TODO(#768 follow-up): when the balance task ships, give each task a
+  // bounded slice of the tick (e.g. AbortSignal.timeout(30_000) per
+  // task) so a slow Hiro response can't starve Tenero refresh and vice
+  // versa. Today Tenero is the only task and the static token set
+  // bounds it implicitly; revisit when there's contention.
+  //
+  // The orchestration body is `runTeneroTask` in
+  // `lib/scheduler/tenero-task.ts` — kept testable without a DO harness.
+  // This wrapper only wires DO-scoped dependencies and persists the run
+  // result + failure counters / backoff to DO storage.
   private async runTenero(parentLogger: Logger): Promise<TeneroRunResult> {
-    const startedAt = Date.now();
     const logger = parentLogger.child
       ? parentLogger.child({ task: "tenero" })
       : parentLogger;
 
-    let tokenIds: string[];
-    try {
-      tokenIds = await this.resolveActiveTokenSet();
-    } catch (error) {
-      logger.error("tenero.resolve_token_set_failed", { error: String(error) });
-      await this.bumpFailures("tenero");
-      const result: TeneroRunResult = {
-        startedAt,
-        durationMs: Date.now() - startedAt,
-        tokensAttempted: 0,
-        succeeded: 0,
-        failed: 0,
-        minuteRemaining: null,
-        monthRemaining: null,
-      };
-      await this.persistTeneroResult(result, { rateLimited: false });
-      return result;
-    }
-
-    logger.info("tenero.refresh_started", { tokenCount: tokenIds.length });
-
-    const apiKey = this.lookupTeneroApiKey();
-    const kv = this.env.VERIFIED_AGENTS;
-
-    let succeeded = 0;
-    let failed = 0;
-    let lastMinuteRemaining: number | null = null;
-    let lastMonthRemaining: number | null = null;
-    let rateLimited = false;
-
-    for (const tokenId of tokenIds) {
-      const r = await fetchTokenPriceUsd(tokenId, logger, apiKey);
-      lastMinuteRemaining = r.rateLimit.minuteRemaining ?? lastMinuteRemaining;
-      lastMonthRemaining = r.rateLimit.monthRemaining ?? lastMonthRemaining;
-
-      if (r.status === 0 || r.status >= 500) {
-        failed++;
-      } else if (r.status === 429) {
-        failed++;
-        rateLimited = true;
-      } else if (r.status === 200) {
-        try {
-          await setCachedTokenPrice(kv, tokenId, {
-            priceUsd: r.priceUsd,
-            fetchedAt: Date.now(),
-            minuteRemaining: r.rateLimit.minuteRemaining,
-            monthRemaining: r.rateLimit.monthRemaining,
-          });
-          succeeded++;
-        } catch (error) {
-          logger.warn("tenero.kv_write_failed", {
-            tokenId,
-            error: String(error),
-          });
-          failed++;
-        }
-      } else {
-        failed++;
-      }
-
-      if (
-        r.rateLimit.minuteRemaining !== null &&
-        r.rateLimit.minuteRemaining <= 0
-      ) {
-        rateLimited = true;
-        logger.warn("tenero.minute_quota_exhausted_mid_run", {
-          rlMinuteRemaining: r.rateLimit.minuteRemaining,
-          processed: succeeded + failed,
-          remaining: tokenIds.length - (succeeded + failed),
-        });
-        break;
-      }
-    }
-
-    const result: TeneroRunResult = {
-      startedAt,
-      durationMs: Date.now() - startedAt,
-      tokensAttempted: tokenIds.length,
-      succeeded,
-      failed,
-      minuteRemaining: lastMinuteRemaining,
-      monthRemaining: lastMonthRemaining,
-    };
-
-    await this.persistTeneroResult(result, { rateLimited });
-
-    logger.info("tenero.refresh_completed", {
-      succeeded,
-      failed,
-      durationMs: result.durationMs,
-      rlMinuteRemaining: lastMinuteRemaining,
-      rlMonthRemaining: lastMonthRemaining,
-      rateLimited,
+    const { result, rateLimited } = await runTeneroTask({
+      logger,
+      kv: this.env.VERIFIED_AGENTS,
+      tokenIds: STATIC_TOKEN_IDS,
+      apiKey: this.lookupTeneroApiKey(),
     });
 
+    await this.persistTeneroResult(result, { rateLimited });
     return result;
   }
 
-  private async resolveActiveTokenSet(): Promise<string[]> {
-    const set = new Set<string>(STATIC_TOKEN_IDS);
-    const db = this.env.DB;
-    if (db) {
-      const rows = await db
-        .prepare(
-          `SELECT DISTINCT token_in FROM swaps WHERE source = 'agent' LIMIT ?`
-        )
-        .bind(MAX_TOKENS_PER_TICK)
-        .all<{ token_in: string }>();
-      for (const r of rows.results ?? []) {
-        if (typeof r.token_in === "string" && r.token_in.length > 0) {
-          set.add(r.token_in);
-        }
-      }
-    }
-    return Array.from(set).slice(0, MAX_TOKENS_PER_TICK);
-  }
-
+  /**
+   * Read the DO's bookkeeping in a single parallel batch of targeted gets.
+   * `storage.list({ prefix: "" })` scans every stored key — fine at today's
+   * 5 keys, but the *point* of this DO is to grow more tasks (each with
+   * its own cursors and `lastResult`), so targeted `get<T>` calls keep
+   * read cost bounded by the schema, not the storage size.
+   *
+   * Pattern mirrors `x402-sponsor-relay/src/durable-objects/nonce-do.ts`.
+   */
   private async readStored(): Promise<StoredScheduler> {
-    const entries = (await this.ctx.storage.list({
-      prefix: "",
-    })) as Map<string, unknown>;
-    const out: StoredScheduler = {};
-    for (const [k, v] of entries) {
-      if (k === "lastTeneroRunAt" && typeof v === "number") out.lastTeneroRunAt = v;
-      else if (k === "lastTeneroResult") out.lastTeneroResult = v as TeneroRunResult;
-      else if (k === "consecutiveFailures") out.consecutiveFailures = v as { tenero: number };
-      else if (k === "pausedUntil" && typeof v === "number") out.pausedUntil = v;
-      else if (k === "nextRunAfter") out.nextRunAfter = v as { tenero?: number };
-    }
-    return out;
+    const [
+      lastTeneroRunAt,
+      lastTeneroResult,
+      consecutiveFailures,
+      pausedUntil,
+      nextRunAfter,
+    ] = await Promise.all([
+      this.ctx.storage.get<number>("lastTeneroRunAt"),
+      this.ctx.storage.get<TeneroRunResult>("lastTeneroResult"),
+      this.ctx.storage.get<{ tenero: number }>("consecutiveFailures"),
+      this.ctx.storage.get<number>("pausedUntil"),
+      this.ctx.storage.get<{ tenero?: number }>("nextRunAfter"),
+    ]);
+    return {
+      ...(typeof lastTeneroRunAt === "number" ? { lastTeneroRunAt } : {}),
+      ...(lastTeneroResult ? { lastTeneroResult } : {}),
+      ...(consecutiveFailures ? { consecutiveFailures } : {}),
+      ...(typeof pausedUntil === "number" ? { pausedUntil } : {}),
+      ...(nextRunAfter ? { nextRunAfter } : {}),
+    };
   }
 
   private async persistTeneroResult(
