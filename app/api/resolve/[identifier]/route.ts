@@ -7,7 +7,8 @@
  * - Numeric agent-id (e.g. "42") — looks up ERC-8004 NFT owner on-chain
  * - Taproot address (bc1p...) — resolves via taproot: reverse index
  * - Bitcoin address (bc1q..., 1..., 3...) — direct KV lookup
- * - Stacks address (SP..., SM...) — direct KV lookup
+ * - Stacks address (SP..., SM...) — resolved via D1 (lookupProfileByStxAddress);
+ *   the legacy stx: KV secondary index was removed in PR #787 / phase P4.0c.
  * - BNS name (*.btc) — scans agents and matches bnsName field
  * - Display name (any other string) — scans agents and matches displayName field
  *
@@ -32,6 +33,11 @@ import {
   lookupBtcAddressByBnsName,
   syncBnsLookup,
 } from "@/lib/bns-reverse-index";
+import {
+  lookupProfileByStxAddress,
+  mapRowToAgentRecord,
+  type AgentProfileRow,
+} from "@/lib/cache/agent-profile";
 import {
   createLogger,
   createConsoleLogger,
@@ -224,6 +230,37 @@ function buildUsageResponse() {
 }
 
 // ---------------------------------------------------------------------------
+// Shared 404 response for STX-addressed agents that have an on-chain identity
+// but are not registered on the AIBTC platform.
+// ---------------------------------------------------------------------------
+
+function buildStxNotRegisteredResponse(
+  identifier: string,
+  identifierType: string,
+  stxAddress: string,
+  agentId?: number
+): NextResponse {
+  const qualifier =
+    agentId !== undefined
+      ? `Agent ID ${agentId} is minted on-chain (owner: ${stxAddress}) but this address is`
+      : `${stxAddress} is`;
+  return NextResponse.json(
+    {
+      found: false,
+      identifier,
+      identifierType,
+      error: `${qualifier} not registered on the AIBTC platform.`,
+      nextSteps: {
+        action: "Register as a new agent",
+        endpoint: "POST /api/register",
+        documentation: "https://aibtc.com/llms-full.txt",
+      },
+    },
+    { status: 404 }
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
 
@@ -287,37 +324,28 @@ export async function GET(
         );
       }
 
-      // Look up agent record by STX address
-      const data = await kv.get(`stx:${stxAddress}`);
-      if (data) {
-        try {
-          agent = JSON.parse(data) as AgentRecord;
-          // Ensure the stored erc8004AgentId matches what we found on-chain
-          if (agent.erc8004AgentId == null) {
-            agent.erc8004AgentId = agentId;
-          }
-        } catch {
-          return NextResponse.json(
-            { error: "Failed to parse agent record." },
-            { status: 500 }
-          );
+      // Look up agent record by STX address via D1 (fail-closed).
+      // D1 is the authoritative store; KV stx: was a secondary index.
+      let stxRow: AgentProfileRow | null = null;
+      try {
+        if (!db) {
+          logger.error("resolve.agent_id_d1_unavailable", { stxAddress, agentId });
+          return buildStxNotRegisteredResponse(identifier, identifierType, stxAddress, agentId);
         }
+        stxRow = await lookupProfileByStxAddress(db, stxAddress);
+      } catch (d1Err) {
+        logger.error("resolve.agent_id_d1_failed", { stxAddress, agentId, error: String(d1Err) });
+        return buildStxNotRegisteredResponse(identifier, identifierType, stxAddress, agentId);
+      }
+      if (stxRow) {
+        agent = mapRowToAgentRecord(stxRow);
+        // Always set erc8004AgentId to the authoritative on-chain value, overriding
+        // any stale non-null value that may have been stored in D1. The on-chain
+        // agentId is the source of truth in the agent-id lookup path.
+        agent.erc8004AgentId = agentId;
       } else {
         // On-chain identity exists but agent not registered on platform
-        return NextResponse.json(
-          {
-            found: false,
-            identifier,
-            identifierType,
-            error: `Agent ID ${agentId} is minted on-chain (owner: ${stxAddress}) but this address is not registered on the AIBTC platform.`,
-            nextSteps: {
-              action: "Register as a new agent",
-              endpoint: "POST /api/register",
-              documentation: "https://aibtc.com/llms-full.txt",
-            },
-          },
-          { status: 404 }
-        );
+        return buildStxNotRegisteredResponse(identifier, identifierType, stxAddress, agentId);
       }
     } else if (identifierType === "taproot") {
       // Taproot: resolve via taproot: reverse index
@@ -348,16 +376,22 @@ export async function GET(
         }
       }
     } else if (identifierType === "stx") {
-      const data = await kv.get(`stx:${identifier}`);
-      if (data) {
-        try {
-          agent = JSON.parse(data) as AgentRecord;
-        } catch {
-          return NextResponse.json(
-            { error: "Failed to parse agent record." },
-            { status: 500 }
-          );
+      // Direct STX address lookup via D1 (fail-closed).
+      // D1 is the authoritative store; KV stx: was a secondary index.
+      try {
+        if (!db) {
+          logger.error("resolve.stx_d1_unavailable", { identifier });
+          // agent stays null → falls through to 404 below (same as prior KV null path)
+        } else {
+          const stxRow = await lookupProfileByStxAddress(db, identifier);
+          if (stxRow) {
+            agent = mapRowToAgentRecord(stxRow);
+          }
+          // stxRow === null → agent stays null → falls through to 404 below
         }
+      } catch (d1Err) {
+        logger.error("resolve.stx_d1_failed", { identifier, error: String(d1Err) });
+        // agent stays null → falls through to 404 below (fail-closed)
       }
     } else if (identifierType === "bns") {
       // BNS routes hit the dedicated reverse index — 2 KV reads
