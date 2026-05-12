@@ -126,3 +126,35 @@ export async function invalidateEdgeCache(
     }),
   );
 }
+
+/**
+ * Build the canonical middleware OG cache URL for a given address.
+ * Uses a separate synthetic host (`internal.cache`) to avoid
+ * collisions with the `cache.aibtc.local` namespace used by API
+ * routes. Address is lowercased for case-insensitive matching.
+ */
+export function buildMiddlewareOgCacheKey(address: string): string {
+  return `https://internal.cache/middleware:og:${encodeURIComponent(address.toLowerCase())}`;
+}
+
+/**
+ * Purge the middleware OG cache entry for a given address.
+ *
+ * Called from write paths (challenge profile update, identity
+ * refresh) so a crawler re-hitting the page after a profile change
+ * sees fresh HTML instead of the 5-minute cached version.
+ *
+ * Best-effort: swallows errors so cache purge failures never block
+ * the write path. No-op outside a Workers runtime.
+ */
+export async function purgeMiddlewareOgCache(address: string): Promise<void> {
+  const cache = getDefaultCache();
+  if (!cache) return;
+  try {
+    await cache.delete(
+      new Request(buildMiddlewareOgCacheKey(address), { method: "GET" }),
+    );
+  } catch {
+    // Best-effort — TTL expiry will heal naturally.
+  }
+}

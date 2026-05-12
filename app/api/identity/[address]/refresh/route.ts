@@ -12,6 +12,7 @@ import {
 import {
   buildEdgeCacheKey,
   invalidateEdgeCache,
+  purgeMiddlewareOgCache,
 } from "@/lib/edge-cache";
 import {
   createLogger,
@@ -240,6 +241,14 @@ export async function POST(
       urlsToInvalidate.push(buildEdgeCacheKey("/api/og", addr));
     }
     await invalidateEdgeCache(...urlsToInvalidate);
+
+    // Purge middleware OG cache for all address forms — profile data changed
+    // (bnsName, erc8004AgentId) and crawlers must see fresh OG HTML immediately.
+    const middlewarePurges: Promise<void>[] = [];
+    for (const addr of cachedAddresses) {
+      middlewarePurges.push(purgeMiddlewareOgCache(addr));
+    }
+    await Promise.all(middlewarePurges);
 
     return NextResponse.json({
       stxAddress,
