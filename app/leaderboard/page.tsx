@@ -53,7 +53,10 @@ interface LeaderboardJoinedRow {
 }
 
 async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
-  const { env } = await getCloudflareContext();
+  // {async: true} is required when the page isn't `force-dynamic` —
+  // build-time prerender (now enabled by `revalidate = 60`) calls this
+  // function and only the async-mode form works there.
+  const { env } = await getCloudflareContext({ async: true });
   const db = env.DB as D1Database | undefined;
 
   if (!db) return [];
