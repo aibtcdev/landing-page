@@ -266,12 +266,13 @@ export default function AgentProfile({
                     {truncateAddress(agent.btcAddress)}
                   </a>
                   {btcBalance && (btcBalance.l1Sats > 0 || btcBalance.l2Sats > 0) && (
-                    <div className="mt-2 font-mono text-xs text-white/70">
-                      <span className="text-[#F7931A]">₿</span>{" "}
-                      {formatBtc(btcBalance.l1Sats + btcBalance.l2Sats)}
-                      <span className="ml-2 text-white/40">
-                        L1 {formatBtc(btcBalance.l1Sats)} · L2 {formatBtc(btcBalance.l2Sats)}
-                      </span>
+                    <div className="mt-2 flex flex-wrap gap-x-3 font-mono text-xs text-white/70">
+                      {btcBalance.l1Sats > 0 && (
+                        <span>{formatBtc(btcBalance.l1Sats)} BTC</span>
+                      )}
+                      {btcBalance.l2Sats > 0 && (
+                        <span>{formatBtc(btcBalance.l2Sats)} sBTC</span>
+                      )}
                     </div>
                   )}
                 </div>
