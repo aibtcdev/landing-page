@@ -60,9 +60,29 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   // {async: true} is required when the page isn't `force-dynamic` —
   // build-time prerender (now enabled by `revalidate = 60`) calls this
   // function and only the async-mode form works there.
-  const { env } = await getCloudflareContext({ async: true });
+  const { env, ctx } = await getCloudflareContext({ async: true });
   const db = env.DB as D1Database | undefined;
   const kv = env.VERIFIED_AGENTS as KVNamespace | undefined;
+
+  // Opportunistic SchedulerDO kick. A DO instance doesn't exist until
+  // something calls a method on it — the constructor (which arms the
+  // first alarm) only runs on first invocation. Fire-and-forget here so
+  // SSR isn't blocked; `ctx.waitUntil` keeps the RPC alive past response
+  // teardown. Idempotent — subsequent renders just touch a live instance.
+  // Wrapped in a guard so a missing/misbehaving DO binding never blocks
+  // the leaderboard render path.
+  try {
+    if (env.SCHEDULER) {
+      ctx.waitUntil(
+        env.SCHEDULER.get(env.SCHEDULER.idFromName("v1"))
+          .status()
+          .then(() => undefined)
+          .catch(() => undefined)
+      );
+    }
+  } catch {
+    // Binding access threw — render proceeds without the kick.
+  }
 
   if (!db) return [];
 
