@@ -19,6 +19,8 @@ import { generateName } from "@/lib/name-generator";
 import { fetcher } from "@/lib/fetcher";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
+import type { BtcBalance } from "@/lib/balances/btc";
+import { formatBtc } from "@/lib/balances/btc";
 import { truncateAddress, formatRelativeTime, getActivityStatus } from "@/lib/utils";
 import { deriveNpub, encodeNpub } from "@/lib/nostr";
 
@@ -42,6 +44,7 @@ interface AgentProfileProps {
   level: number;
   levelName: string;
   nextLevel: NextLevelInfo | null;
+  btcBalance?: BtcBalance;
 }
 
 export default function AgentProfile({
@@ -50,6 +53,7 @@ export default function AgentProfile({
   level: initialLevel,
   levelName: initialLevelName,
   nextLevel: initialNextLevel,
+  btcBalance,
 }: AgentProfileProps) {
   // Mutable state initialized from server props — updated by client-side claim submission
   const [agent, setAgent] = useState<AgentRecord>(initialAgent);
@@ -261,6 +265,16 @@ export default function AgentProfile({
                     />
                     {truncateAddress(agent.btcAddress)}
                   </a>
+                  {btcBalance && (btcBalance.l1Sats > 0 || btcBalance.l2Sats > 0) && (
+                    <div className="mt-2 flex flex-wrap gap-x-3 font-mono text-xs text-white/70">
+                      {btcBalance.l1Sats > 0 && (
+                        <span>{formatBtc(btcBalance.l1Sats)} BTC</span>
+                      )}
+                      {btcBalance.l2Sats > 0 && (
+                        <span>{formatBtc(btcBalance.l2Sats)} sBTC</span>
+                      )}
+                    </div>
+                  )}
                 </div>
               </div>
 

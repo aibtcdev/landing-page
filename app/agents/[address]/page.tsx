@@ -16,6 +16,7 @@ import {
   setCachedIdentityLookupFailed,
 } from "@/lib/identity/kv-cache";
 import type { AgentIdentity } from "@/lib/identity/types";
+import { fetchBtcBalance } from "@/lib/balances/btc";
 import { getAgentsIndex } from "@/lib/agents-index";
 import {
   lookupBtcAddressByBnsName,
@@ -326,6 +327,14 @@ export default async function AgentProfilePage({
         }
       : null;
 
+    // BTC balance (L1 native + L2 sBTC). Best-effort — degrades to 0/0 on
+    // upstream failure rather than blocking the page.
+    const btcBalance = await fetchBtcBalance(
+      agentWithIdentity.btcAddress,
+      agentWithIdentity.stxAddress,
+      env.HIRO_API_KEY
+    );
+
     return (
       <AgentProfile
         agent={agentWithIdentity}
@@ -333,6 +342,7 @@ export default async function AgentProfilePage({
         level={levelInfo.level}
         levelName={levelInfo.levelName}
         nextLevel={levelInfo.nextLevel}
+        btcBalance={btcBalance}
       />
     );
   } catch {
