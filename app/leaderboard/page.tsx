@@ -31,8 +31,9 @@ export const metadata: Metadata = {
  * first and confirming a 200 with a non-null price_usd — silently
  * shipping the wrong contract id makes that token render as $0 forever.
  *
- * Keep in sync with `STATIC_TOKEN_IDS` in `lib/scheduler/scheduler-do.ts`
- * so the scheduler refreshes every token the leaderboard knows how to value.
+ * Keep in sync with `STATIC_TOKEN_IDS` in `lib/external/tenero/tokens.ts`
+ * (consumed by `SchedulerDO` in `worker.ts`) so the scheduler refreshes
+ * every token the leaderboard knows how to value.
  *
  * The unknown-token default is 6 (SIP-10 convention). Volume from
  * those legs stays $0 (no price in KV), which is the honest read — we'd
@@ -48,12 +49,43 @@ interface LeaderboardJoinedRow {
   sender: string;
   token_in: string;
   cnt: number;
-  sum_in: number;
+  // D1 returns SUM of an INTEGER column as a JS number, but the runtime
+  // boundary isn't tightly typed — Cloudflare's docs leave room for
+  // string returns on very large aggregates. Type defensively here.
+  sum_in: number | string | null;
   latest_at: number;
   btc_address: string | null;
   display_name: string | null;
   bns_name: string | null;
   erc8004_agent_id: number | null;
+}
+
+/**
+ * Parse a D1 aggregate into a safe JS number. Handles:
+ *   - native number (the common case) — passes through if finite, else 0
+ *   - decimal string (defensive — D1 may return very large sums as strings)
+ *   - non-finite / non-parseable / negative — returns 0
+ *
+ * For the token decimals we support today (6 / 8) and the comp's expected
+ * volume range, the SUM stays well under `Number.MAX_SAFE_INTEGER` (sBTC
+ * caps at ~21M * 1e8 ≈ 2.1e15; safe-int boundary ≈ 9e15). The BigInt
+ * round-trip preserves precision exactly inside that range and clamps at
+ * the safe-int boundary if a future high-decimal token enters scope —
+ * an under-report at the ceiling is preferable to silent rounding errors.
+ */
+function safeAggregateNumber(raw: number | string | null | undefined): number {
+  if (typeof raw === "number") return Number.isFinite(raw) && raw > 0 ? raw : 0;
+  if (typeof raw !== "string") return 0;
+  let big: bigint;
+  try {
+    big = BigInt(raw);
+  } catch {
+    return 0;
+  }
+  // Use `BigInt(0)` rather than `0n` — tsconfig target is below ES2020.
+  if (big <= BigInt(0)) return 0;
+  const ceiling = BigInt(Number.MAX_SAFE_INTEGER);
+  return big > ceiling ? Number.MAX_SAFE_INTEGER : Number(big);
 }
 
 async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
@@ -149,7 +181,7 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     if (r.latest_at > existing.latestAt) existing.latestAt = r.latest_at;
     existing.tokens.push({
       tokenId: r.token_in,
-      sumAmountIn: r.sum_in,
+      sumAmountIn: safeAggregateNumber(r.sum_in),
       decimals: TOKEN_DECIMALS[r.token_in] ?? 6,
     });
     bySender.set(r.sender, existing);
