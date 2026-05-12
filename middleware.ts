@@ -83,6 +83,24 @@ async function handleCrawlerAgentPage(
     return NextResponse.next();
   }
 
+  // Edge-cache check: amortize D1 read + HTML build across crawler hits.
+  // Cache API is a Cloudflare Workers extension — absent in Node / next dev.
+  // Key on address (lowercased) so repeated crawler probes for the same
+  // agent collapse to one slot. On hit, return immediately. On miss or
+  // cache error, fall through to the live render path.
+  const edgeCacheKey = `https://internal.cache/middleware:og:${encodeURIComponent(address.toLowerCase())}`;
+  const cacheStore = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default ?? null;
+  if (cacheStore) {
+    try {
+      const cached = await cacheStore.match(new Request(edgeCacheKey));
+      if (cached) {
+        return new NextResponse(cached.body, cached);
+      }
+    } catch {
+      // Cache read failed — fall through to live render (cache is an optimization only).
+    }
+  }
+
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
@@ -193,7 +211,7 @@ async function handleCrawlerAgentPage(
 <body></body>
 </html>`;
 
-    return new NextResponse(html, {
+    const response = new NextResponse(html, {
       status: 200,
       headers: {
         "Content-Type": "text/html; charset=utf-8",
@@ -201,6 +219,27 @@ async function handleCrawlerAgentPage(
         Vary: "User-Agent",
       },
     });
+
+    // Cache the rendered HTML in caches.default for 5 minutes to amortize
+    // D1 read + HTML build across repeated crawler hits for the same agent.
+    // The cached clone strips Vary so the shared-cache slot is shared across
+    // all crawler UA variants (we're keying by address, not UA). On put
+    // failure we still return the live response — cache is never a hard dep.
+    if (cacheStore) {
+      try {
+        const cachedClone = new Response(response.clone().body, {
+          status: response.status,
+          headers: response.headers,
+        });
+        cachedClone.headers.set("Cache-Control", "public, max-age=300");
+        cachedClone.headers.delete("Vary");
+        await cacheStore.put(new Request(edgeCacheKey), cachedClone);
+      } catch {
+        // Best-effort — TTL expiry will heal naturally.
+      }
+    }
+
+    return response;
   } catch {
     return NextResponse.next();
   }

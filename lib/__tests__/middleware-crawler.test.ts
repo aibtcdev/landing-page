@@ -1,9 +1,14 @@
 /**
  * Tests for Phase 2.3: D1-backed middleware crawler-bot OG handler.
+ * Tests for P3.2: caches.default edge-cache wrap in handleCrawlerAgentPage.
  *
  * handleCrawlerAgentPage now does a single D1 SELECT + LEFT JOIN claims
  * for btc:/stx: address shapes, with a KV fallback for validation-excluded
  * agents (the ~708 records not yet in D1, tracked at #691).
+ *
+ * P3.2 adds a caches.default check+put (5min TTL) keyed on
+ * `https://internal.cache/middleware:og:{address}` so repeated crawler hits
+ * for the same agent don't pay the full D1 read + HTML build cost.
  *
  * Covers:
  *  1. Crawler UA + D1 hit (btc address) → returns 200 OG HTML
@@ -14,9 +19,13 @@
  *  6. D1 query throws → falls through (existing try/catch behavior)
  *  7. Crawler UA + agent in D1 with claim → Genesis level in OG title
  *  8. Crawler UA + address is taproot/numeric → falls through (out of scope)
+ *  9. Edge-cache hit → returns cached response without touching D1/KV
+ * 10. Edge-cache miss → falls through to D1, puts result in cache
+ * 11. cache.match throws → falls through to live render (no crash)
+ * 12. cache.put throws → still returns the live response (no crash)
  */
 
-import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from "vitest";
 import { NextRequest } from "next/server";
 
 // ── Module mocks ─────────────────────────────────────────────────────────────
@@ -126,10 +135,53 @@ function makeRequest(address: string, userAgent: string): NextRequest {
   });
 }
 
+// ── Cache mock helpers ────────────────────────────────────────────────────────
+
+/** Build a mock caches.default store. `storedResponse` is returned by match() if set. */
+function buildCacheMock(storedResponse: Response | null = null): {
+  match: Mock;
+  put: Mock;
+  delete: Mock;
+} {
+  return {
+    match: vi.fn(async () => storedResponse),
+    put: vi.fn(async () => undefined),
+    delete: vi.fn(async () => false),
+  };
+}
+
+/** Install a mock `caches.default` on globalThis and return a cleanup fn. */
+function installCacheMock(cacheMock: ReturnType<typeof buildCacheMock>): () => void {
+  const prev = (globalThis as unknown as Record<string, unknown>).caches;
+  (globalThis as unknown as Record<string, unknown>).caches = { default: cacheMock };
+  return () => {
+    if (prev === undefined) {
+      delete (globalThis as unknown as Record<string, unknown>).caches;
+    } else {
+      (globalThis as unknown as Record<string, unknown>).caches = prev;
+    }
+  };
+}
+
 // ── Setup ─────────────────────────────────────────────────────────────────────
+
+let restoreCaches: (() => void) | null = null;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // By default remove caches.default so existing tests run without a cache mock
+  // (mirrors Node / next dev runtime where caches is absent).
+  restoreCaches = installCacheMock(buildCacheMock(null));
+  // Immediately undo the install so the default state is "no cache".
+  restoreCaches();
+  restoreCaches = null;
+});
+
+afterEach(() => {
+  if (restoreCaches) {
+    restoreCaches();
+    restoreCaches = null;
+  }
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -422,5 +474,158 @@ describe("middleware handleCrawlerAgentPage — Phase 2.3 D1 flip", () => {
       expect(body).toContain("A fancy test bot");
       expect(body).toContain(`https://aibtc.com/api/og/${SAMPLE_BTC_ADDRESS}`);
     });
+  });
+
+  // ── P3.2: caches.default edge-cache wrap ─────────────────────────────────
+
+  describe("P3.2 — caches.default edge-cache wrap", () => {
+
+    describe("cache hit → returns cached response without touching D1/KV", () => {
+      it("returns the cached response body directly on cache hit", async () => {
+        const cachedHtml = `<!DOCTYPE html><html><head><title>Cached OG</title></head><body></body></html>`;
+        const cachedResponse = new Response(cachedHtml, {
+          status: 200,
+          headers: {
+            "Content-Type": "text/html; charset=utf-8",
+            "Cache-Control": "public, max-age=300",
+          },
+        });
+
+        const cacheMock = buildCacheMock(cachedResponse);
+        restoreCaches = installCacheMock(cacheMock);
+
+        const req = makeRequest(SAMPLE_BTC_ADDRESS, CRAWLER_UA);
+        const res = await middleware(req);
+
+        // Should return the cached response
+        expect(res.status).toBe(200);
+        const body = await res.text();
+        expect(body).toBe(cachedHtml);
+
+        // Cache was checked with the correct key
+        expect(cacheMock.match).toHaveBeenCalledOnce();
+        const matchArg = (cacheMock.match as Mock).mock.calls[0][0] as Request;
+        expect(matchArg.url).toBe(
+          `https://internal.cache/middleware:og:${encodeURIComponent(SAMPLE_BTC_ADDRESS.toLowerCase())}`
+        );
+
+        // D1 and KV should NOT have been called (cache hit skips live render)
+        expect(getCloudflareContext).not.toHaveBeenCalled();
+        expect(lookupProfileByBtcAddress).not.toHaveBeenCalled();
+      });
+    });
+
+    describe("cache miss → falls through to D1, puts rendered HTML in cache", () => {
+      it("calls D1 on cache miss and stores the result in caches.default", async () => {
+        const row = makeProfileRow();
+        (lookupProfileByBtcAddress as Mock).mockResolvedValue(row);
+
+        const kv = buildKvMock({});
+        const db = buildD1Mock();
+        (getCloudflareContext as Mock).mockResolvedValue({
+          env: { VERIFIED_AGENTS: kv, DB: db },
+        });
+
+        // Cache returns null (miss)
+        const cacheMock = buildCacheMock(null);
+        restoreCaches = installCacheMock(cacheMock);
+
+        const req = makeRequest(SAMPLE_BTC_ADDRESS, CRAWLER_UA);
+        const res = await middleware(req);
+
+        // Live render path executed
+        expect(res.status).toBe(200);
+        expect(res.headers.get("content-type")).toContain("text/html");
+        expect(lookupProfileByBtcAddress).toHaveBeenCalledWith(db, SAMPLE_BTC_ADDRESS);
+
+        // Result stored in cache
+        expect(cacheMock.put).toHaveBeenCalledOnce();
+        const [putKey, putResponse] = (cacheMock.put as Mock).mock.calls[0] as [Request, Response];
+        expect(putKey.url).toBe(
+          `https://internal.cache/middleware:og:${encodeURIComponent(SAMPLE_BTC_ADDRESS.toLowerCase())}`
+        );
+        // Cached clone should have 5min TTL and no Vary header
+        expect(putResponse.headers.get("Cache-Control")).toBe("public, max-age=300");
+        expect(putResponse.headers.get("Vary")).toBeNull();
+      });
+    });
+
+    describe("cache.match throws → falls through to live render (no crash)", () => {
+      it("swallows cache.match error and returns live response", async () => {
+        const row = makeProfileRow();
+        (lookupProfileByBtcAddress as Mock).mockResolvedValue(row);
+
+        const kv = buildKvMock({});
+        const db = buildD1Mock();
+        (getCloudflareContext as Mock).mockResolvedValue({
+          env: { VERIFIED_AGENTS: kv, DB: db },
+        });
+
+        const cacheMock = buildCacheMock(null);
+        cacheMock.match = vi.fn(async () => { throw new Error("Cache read failed"); });
+        restoreCaches = installCacheMock(cacheMock);
+
+        const req = makeRequest(SAMPLE_BTC_ADDRESS, CRAWLER_UA);
+        // Should not throw
+        const res = await middleware(req);
+
+        // Falls through to live render
+        expect(res.status).toBe(200);
+        expect(res.headers.get("content-type")).toContain("text/html");
+        expect(lookupProfileByBtcAddress).toHaveBeenCalled();
+      });
+    });
+
+    describe("cache.put throws → still returns the live response (no crash)", () => {
+      it("swallows cache.put error and returns live response", async () => {
+        const row = makeProfileRow();
+        (lookupProfileByBtcAddress as Mock).mockResolvedValue(row);
+
+        const kv = buildKvMock({});
+        const db = buildD1Mock();
+        (getCloudflareContext as Mock).mockResolvedValue({
+          env: { VERIFIED_AGENTS: kv, DB: db },
+        });
+
+        const cacheMock = buildCacheMock(null);
+        cacheMock.put = vi.fn(async () => { throw new Error("Cache write failed"); });
+        restoreCaches = installCacheMock(cacheMock);
+
+        const req = makeRequest(SAMPLE_BTC_ADDRESS, CRAWLER_UA);
+        // Should not throw
+        const res = await middleware(req);
+
+        // Live response returned despite put failure
+        expect(res.status).toBe(200);
+        expect(res.headers.get("content-type")).toContain("text/html");
+        const body = await res.text();
+        expect(body).toContain('<meta property="og:title"');
+      });
+    });
+
+    describe("no caches.default (Node / next dev) → falls through to live render", () => {
+      it("renders live without any cache interaction when globalThis.caches is absent", async () => {
+        // Ensure caches is absent (already the default in beforeEach, but be explicit)
+        const g = globalThis as unknown as Record<string, unknown>;
+        delete g.caches;
+
+        const row = makeProfileRow();
+        (lookupProfileByBtcAddress as Mock).mockResolvedValue(row);
+
+        const kv = buildKvMock({});
+        const db = buildD1Mock();
+        (getCloudflareContext as Mock).mockResolvedValue({
+          env: { VERIFIED_AGENTS: kv, DB: db },
+        });
+
+        const req = makeRequest(SAMPLE_BTC_ADDRESS, CRAWLER_UA);
+        const res = await middleware(req);
+
+        // Live render path
+        expect(res.status).toBe(200);
+        expect(lookupProfileByBtcAddress).toHaveBeenCalled();
+      });
+    });
+
   });
 });
