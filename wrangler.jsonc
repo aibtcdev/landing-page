@@ -82,6 +82,20 @@
     ]
   },
 
+  // Durable Object migration history.
+  //
+  // v1 was applied to the `landing-page` worker out-of-band during PR
+  // #743 experimentation (2026-05-12). Main does not reference the
+  // SchedulerDO class — so v2 deletes it, restoring the worker to a
+  // clean no-DO state. Both tags must be declared so wrangler can
+  // diff against CF's current migration history. Once v2 lands, do
+  // not remove these entries: future deploys still need to see the
+  // full history to deploy successfully.
+  "migrations": [
+    { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
+    { "tag": "v2", "deleted_classes": ["SchedulerDO"] }
+  ],
+
   /**
    * Named environments — Wrangler does NOT merge top-level config into named envs.
    * Every binding that the Worker needs must be re-declared in each env block.
@@ -165,7 +179,12 @@
             "max_retries": 5
           }
         ]
-      }
+      },
+
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
+        { "tag": "v2", "deleted_classes": ["SchedulerDO"] }
+      ]
     },
 
     "preview": {
@@ -245,7 +264,12 @@
             "max_retries": 5
           }
         ]
-      }
+      },
+
+      "migrations": [
+        { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
+        { "tag": "v2", "deleted_classes": ["SchedulerDO"] }
+      ]
     }
   }
 }
