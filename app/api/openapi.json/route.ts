@@ -1188,7 +1188,11 @@ export function GET() {
                             amount_out: { type: "integer" },
                             burn_block_time: { type: "integer", description: "Unix seconds" },
                             tx_status: { type: "string" },
-                            source: { type: "string", enum: ["agent", "cron", "chainhook"] },
+                            source: {
+                              type: "string",
+                              enum: ["agent", "cron", "chainhook"],
+                              description: "`cron` is the legacy schema label for SchedulerDO catch-up.",
+                            },
                             scored_value: { type: ["integer", "null"] },
                             scored_at: { type: ["string", "null"] },
                           },
@@ -1234,7 +1238,7 @@ export function GET() {
             "confirmation before submitting; the route checks D1 first (cheap idempotency gate), " +
             "fetches the tx from Hiro, runs sender + allowlist checks, parses the FT/STX transfer " +
             "events, and persists via INSERT OR IGNORE on (txid). First writer wins across the two " +
-            "active ingestion paths (agent / cron); re-submits of an already-recorded txid return 409 " +
+            "active ingestion paths (agent / scheduler); re-submits of an already-recorded txid return 409 " +
             "with the existing row. Rate limit: 20/min per IP (RATE_LIMIT_MUTATING).",
           requestBody: {
             required: true,
@@ -1307,51 +1311,6 @@ export function GET() {
               description: "D1 temporarily unavailable — retry per `Retry-After` header",
               content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
             },
-          },
-        },
-      },
-      "/api/competition/cron": {
-        post: {
-          operationId: "runCompetitionCron",
-          summary: "Run the 15-min catch-up sweep (shared-secret authenticated)",
-          description:
-            "Walks registered_wallets, fetches recent Hiro tx history per address, filters by allowlist, " +
-            "and submits each match via the verifier with `source='cron'`. Pairs with the agent-submit fast " +
-            "path (POST /api/competition/trades) — first writer wins on `(txid)`. Per-run cap: 100 " +
-            "addresses, sized for a 15-min cadence at the current ~430 registered wallets. Resumes across " +
-            "runs via the `comp:cron:cursor` KV key.",
-          parameters: [
-            {
-              name: "X-Cron-Secret",
-              in: "header",
-              required: true,
-              description: "Shared secret matching env.CRON_SECRET.",
-              schema: { type: "string" },
-            },
-          ],
-          responses: {
-            "200": {
-              description: "Sweep complete — body is the run summary",
-              content: {
-                "application/json": {
-                  schema: {
-                    type: "object",
-                    properties: {
-                      scanned: { type: "integer" },
-                      found: { type: "integer" },
-                      inserted: { type: "integer" },
-                      alreadyKnown: { type: "integer" },
-                      pending: { type: "integer" },
-                      rejected: { type: "integer" },
-                      cursor: { type: ["string", "null"] },
-                    },
-                  },
-                },
-              },
-            },
-            "401": { description: "Missing or invalid X-Cron-Secret" },
-            "500": { description: "Server config error (CRON_SECRET not set)" },
-            "503": { description: "D1 temporarily unavailable" },
           },
         },
       },

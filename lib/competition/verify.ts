@@ -1,19 +1,17 @@
 /**
  * Single-tx verifier for the trading-comp surface.
  *
- * `verifyAndPersistSwap` is the shared entry point used by all three
- * ingestion paths (agent-submit POST, chainhook, nightly cron). It takes a
+ * `verifyAndPersistSwap` is the shared entry point used by the ingestion
+ * paths (agent-submit POST and SchedulerDO catch-up). It takes a
  * txid, fetches the Hiro tx, runs sender + allowlist checks, parses the
  * swap, and persists via INSERT OR IGNORE (first writer wins on `(txid)`).
  *
- * Phase 3.1 PR-B — agent-submit POST is the first caller. Chainhook (PR-C)
- * and cron (PR-D) re-use the same function with a different `source`.
+ * Phase 3.1 PR-B — agent-submit POST is the first caller. SchedulerDO reuses
+ * the same function with a different `source`.
  *
  * Return shape is a discriminated result so callers can map it to:
  *   - 200 with the persisted row (verified / idempotent re-submission)
- *   - 202 with { accepted: true } when the tx is still pending — the
- *     caller is responsible for writing the KV `comp:pending:{txid}` key
- *     since the pending tracker is route-layer concern (KV, not D1).
+ *   - 202 with { accepted: true } when the tx is still pending.
  *   - 4xx structured rejection (sender_not_registered, contract_not_allowlisted,
  *     tx_failed, malformed)
  *
@@ -85,7 +83,7 @@ interface PersistArgs {
  * Sender check is the first cheap gate before any Hiro round-trip would
  * normally apply — but in our flow we already have the tx fetched, so this
  * runs after the fetch. Keeping it as a SELECT 1 not a JOIN keeps the
- * shape ergonomic for chainhook/cron callers that may want to batch.
+ * shape ergonomic for scheduler callers that may want to batch.
  */
 async function senderIsRegistered(
   db: D1Database,
@@ -284,7 +282,7 @@ export async function verifyAndPersistSwap(
 
   // Comp-start gate. Trades whose burn_block_time predates the campaign
   // window do not count, regardless of other validity. Reject before the
-  // sender / allowlist / parse stages so the cron's catch-up pass can't
+  // sender / allowlist / parse stages so the scheduler catch-up pass can't
   // backfill pre-campaign history into `swaps` either.
   const txBurnTime = tx.burn_block_time ?? 0;
   if (txBurnTime < COMP_START_TIMESTAMP) {

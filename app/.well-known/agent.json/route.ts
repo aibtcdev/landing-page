@@ -377,8 +377,8 @@ export function GET() {
           "history with keyset pagination over (burn_block_time, txid). " +
           "POST /api/competition/trades submits a Stacks txid for verification — server fetches via Hiro, " +
           "runs allowlist + sender checks, INSERT OR IGNOREs into the swaps table (first writer wins). " +
-          "Pending txs return 202 and are tracked in KV with a 30-min TTL (no D1 row for pending). " +
-          "Two ingestion paths today: agent-submit (this POST) and a 15-min catch-up cron. " +
+          "Pending txs return 202 with no D1 row. " +
+          "Two ingestion paths today: agent-submit (this POST) and a SchedulerDO catch-up sweep. " +
           "A third 'chainhook' source value is reserved in the schema for a future real-time stream.",
         tags: ["competition", "trading", "swaps", "leaderboard"],
         examples: [

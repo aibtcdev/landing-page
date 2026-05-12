@@ -1,7 +1,7 @@
 /**
- * Tests for lib/competition/cron.ts
+ * Tests for lib/competition/scheduler.ts
  *
- * Phase 3.1 PR-D — exercises the catch-up sweep's walk + dispatch
+ * Phase 3.1 PR-D — exercises the scheduler sweep's walk + dispatch
  * + cursor-persistence logic. Hiro fetch is injected; verify is mocked.
  */
 
@@ -12,9 +12,9 @@ vi.mock("../verify", () => ({
 }));
 
 import {
-  runCompetitionCron,
-  CRON_MAX_ADDRESSES_PER_RUN,
-} from "../cron";
+  runCompetitionScheduler,
+  COMPETITION_SCHEDULER_MAX_ADDRESSES_PER_RUN,
+} from "../scheduler";
 import { verifyAndPersistSwap } from "../verify";
 import type { Mock } from "vitest";
 
@@ -94,7 +94,7 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 
-describe("runCompetitionCron — walk + dispatch", () => {
+describe("runCompetitionScheduler — walk + dispatch", () => {
   it("walks the address page, finds allowlisted txs, and submits them with source='cron'", async () => {
     const { db } = makeDb(["SP_ADDR_001"]);
     (verifyAndPersistSwap as Mock).mockResolvedValue({
@@ -111,7 +111,7 @@ describe("runCompetitionCron — walk + dispatch", () => {
       },
     ]);
 
-    const summary = await runCompetitionCron(
+    const summary = await runCompetitionScheduler(
       { DB: db, HIRO_API_KEY: undefined },
       undefined,
       { fetchAddressTxsImpl }
@@ -139,7 +139,7 @@ describe("runCompetitionCron — walk + dispatch", () => {
       },
     ]);
 
-    const summary = await runCompetitionCron(
+    const summary = await runCompetitionScheduler(
       { DB: db },
       undefined,
       { fetchAddressTxsImpl }
@@ -155,7 +155,7 @@ describe("runCompetitionCron — walk + dispatch", () => {
       { tx_id: "0xaaa", tx_type: "token_transfer" },
     ]);
 
-    const summary = await runCompetitionCron(
+    const summary = await runCompetitionScheduler(
       { DB: db },
       undefined,
       { fetchAddressTxsImpl }
@@ -179,7 +179,7 @@ describe("runCompetitionCron — walk + dispatch", () => {
       { tx_id: "0xddd", tx_type: "contract_call", contract_call: { contract_id: ALLOWED_CONTRACT, function_name: ALLOWED_FN } },
     ]);
 
-    const summary = await runCompetitionCron(
+    const summary = await runCompetitionScheduler(
       { DB: db },
       undefined,
       { fetchAddressTxsImpl }
@@ -196,16 +196,16 @@ describe("runCompetitionCron — walk + dispatch", () => {
   });
 });
 
-describe("runCompetitionCron — cursor persistence", () => {
+describe("runCompetitionScheduler — cursor persistence", () => {
   it("persists the next cursor when the page is full (more addresses to walk)", async () => {
     const fullPage: string[] = Array.from(
-      { length: CRON_MAX_ADDRESSES_PER_RUN },
+      { length: COMPETITION_SCHEDULER_MAX_ADDRESSES_PER_RUN },
       (_, i) => `SP_ADDR_${String(i).padStart(3, "0")}`
     );
     const { db, cursorOps } = makeDb(fullPage);
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([]);
 
-    const summary = await runCompetitionCron(
+    const summary = await runCompetitionScheduler(
       { DB: db },
       undefined,
       { fetchAddressTxsImpl }
@@ -223,7 +223,7 @@ describe("runCompetitionCron — cursor persistence", () => {
     );
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([]);
 
-    const summary = await runCompetitionCron(
+    const summary = await runCompetitionScheduler(
       { DB: db },
       undefined,
       { fetchAddressTxsImpl }
@@ -238,7 +238,7 @@ describe("runCompetitionCron — cursor persistence", () => {
     const { db } = makeDb([], { initialCursor: "SP_LAST_RUN" });
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([]);
 
-    await runCompetitionCron(
+    await runCompetitionScheduler(
       { DB: db },
       undefined,
       { fetchAddressTxsImpl }
@@ -252,7 +252,7 @@ describe("runCompetitionCron — cursor persistence", () => {
     const { db } = makeDb([]);
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([]);
 
-    await runCompetitionCron(
+    await runCompetitionScheduler(
       { DB: db },
       undefined,
       { fetchAddressTxsImpl }
@@ -264,7 +264,7 @@ describe("runCompetitionCron — cursor persistence", () => {
   });
 });
 
-describe("runCompetitionCron — fault tolerance", () => {
+describe("runCompetitionScheduler — fault tolerance", () => {
   it("counts a verify throw as rejected and continues the sweep", async () => {
     const { db } = makeDb(["SP_ADDR_001"]);
     (verifyAndPersistSwap as Mock).mockRejectedValueOnce(new Error("boom"));
@@ -273,7 +273,7 @@ describe("runCompetitionCron — fault tolerance", () => {
       { tx_id: "0xaaa", tx_type: "contract_call", contract_call: { contract_id: ALLOWED_CONTRACT, function_name: ALLOWED_FN } },
     ]);
 
-    const summary = await runCompetitionCron(
+    const summary = await runCompetitionScheduler(
       { DB: db },
       undefined,
       { fetchAddressTxsImpl }

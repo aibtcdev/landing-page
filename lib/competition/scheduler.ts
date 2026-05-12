@@ -1,10 +1,10 @@
 /**
- * 15-min catch-up cron — walks registered_wallets and re-verifies recent
- * Hiro tx history. Phase 3.1 PR-D.
+ * Competition scheduler catch-up sweep — walks registered_wallets and
+ * re-verifies recent Hiro tx history. Phase 3.1 PR-D.
  *
  * Pairs with the agent-submit fast path (POST /api/competition/trades):
  * agent-submit catches everything the agent does (the agent already knows
- * its own txid); this cron catches everything the fast path missed.
+ * its own txid); this scheduler catches everything the fast path missed.
  * Both converge on the same `swaps` row via INSERT OR IGNORE on `txid` —
  * first writer wins; second writer is a no-op.
  *
@@ -12,7 +12,7 @@
  *   - Max 100 addresses per execution. Tuned for a 15-min cadence: at the
  *     current ~430 registered wallets, the full list cycles in roughly
  *     5 runs (~75 min). Single Hiro client, single rate-limit budget.
- *   - Resume from D1 cursor (`competition_state.cron_cursor`) so subsequent
+ *   - Resume from D1 cursor (`competition_state.competition_scheduler_cursor`) so subsequent
  *     runs continue where the previous one stopped. Moved from KV to D1
  *     per @whoabuddy's #738 review note that cursor state belongs alongside
  *     the data it gates.
@@ -20,10 +20,8 @@
  * Returns a structured summary for the logs:
  *   { scanned, found, inserted, alreadyKnown, rejected, pending, cursor }
  *
- * The wrangler scheduled trigger registration (and the bridge from the
- * Worker's scheduled() entrypoint to this code) is infrastructure wiring
- * tracked as a follow-up — the route is callable directly via HTTPS with
- * a shared-secret header for now.
+ * SchedulerDO owns cadence and manual refresh. No public operator endpoint
+ * or shared-secret route is required.
  */
 
 import type { Logger } from "@/lib/logging";
@@ -31,15 +29,19 @@ import { stacksApiFetch } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE } from "@/lib/identity/constants";
 import { verifyAndPersistSwap } from "./verify";
 import { isAllowedSwap } from "./allowlist";
-import { getCronCursor, setCronCursor, clearCronCursor } from "./state";
+import {
+  clearCompetitionSchedulerCursor,
+  getCompetitionSchedulerCursor,
+  setCompetitionSchedulerCursor,
+} from "./state";
 
-/** Per-run cap on addresses scanned. Cron resumes from the D1 cursor next run. */
-export const CRON_MAX_ADDRESSES_PER_RUN = 100;
+/** Per-run cap on addresses scanned. Scheduler resumes from the D1 cursor next run. */
+export const COMPETITION_SCHEDULER_MAX_ADDRESSES_PER_RUN = 100;
 
 /** Per-address tx history page size. */
 const HIRO_TX_PAGE_LIMIT = 25;
 
-export interface CronSummary {
+export interface CompetitionSchedulerSummary {
   scanned: number;
   found: number;
   inserted: number;
@@ -71,7 +73,7 @@ async function fetchAddressTxs(
   try {
     const response = await stacksApiFetch(url, { method: "GET", headers }, { logger });
     if (!response.ok) {
-      logger?.warn?.("competition.cron.hiro_non_ok", {
+      logger?.warn?.("competition.scheduler.hiro_non_ok", {
         stxAddress,
         status: response.status,
       });
@@ -80,7 +82,7 @@ async function fetchAddressTxs(
     const body = (await response.json()) as { results?: AddressTxEntry[] };
     return body.results ?? [];
   } catch (err) {
-    logger?.warn?.("competition.cron.hiro_threw", {
+    logger?.warn?.("competition.scheduler.hiro_threw", {
       stxAddress,
       error: String(err),
     });
@@ -90,7 +92,7 @@ async function fetchAddressTxs(
 
 /**
  * Page through registered_wallets starting from the cursor. Returns up to
- * CRON_MAX_ADDRESSES_PER_RUN rows ordered by stx_address ASC so the cursor
+ * COMPETITION_SCHEDULER_MAX_ADDRESSES_PER_RUN rows ordered by stx_address ASC so the cursor
  * is monotonic. When the walk wraps (no more rows after cursor), the next
  * call returns the head of the list and the cursor resets to null.
  */
@@ -102,41 +104,41 @@ async function fetchAddressPage(
     ? `SELECT stx_address FROM registered_wallets WHERE stx_address > ?1 ORDER BY stx_address ASC LIMIT ?2`
     : `SELECT stx_address FROM registered_wallets ORDER BY stx_address ASC LIMIT ?1`;
   const stmt = cursor
-    ? db.prepare(sql).bind(cursor, CRON_MAX_ADDRESSES_PER_RUN)
-    : db.prepare(sql).bind(CRON_MAX_ADDRESSES_PER_RUN);
+    ? db.prepare(sql).bind(cursor, COMPETITION_SCHEDULER_MAX_ADDRESSES_PER_RUN)
+    : db.prepare(sql).bind(COMPETITION_SCHEDULER_MAX_ADDRESSES_PER_RUN);
   const result = await stmt.all<{ stx_address: string }>();
   const rows = result.results ?? [];
   let nextCursor: string | null = null;
-  if (rows.length === CRON_MAX_ADDRESSES_PER_RUN) {
+  if (rows.length === COMPETITION_SCHEDULER_MAX_ADDRESSES_PER_RUN) {
     nextCursor = rows[rows.length - 1].stx_address;
   }
   return { rows, nextCursor };
 }
 
-export interface RunCronOptions {
+export interface RunCompetitionSchedulerOptions {
   /** Inject a custom address-history fetcher (for tests). */
   fetchAddressTxsImpl?: typeof fetchAddressTxs;
 }
 
 /**
- * Execute one cron sweep.
+ * Execute one scheduler sweep.
  *
  * The handoff: walk registered_wallets, fetch recent Hiro history per
  * address, filter by allowlist, submit each match via verifyAndPersistSwap
- * with source='cron'. The KV cursor lets the sweep resume across runs
+ * with source='cron'. The D1 cursor lets the sweep resume across runs
  * rather than always starting at the head.
  */
-export async function runCompetitionCron(
+export async function runCompetitionScheduler(
   env: { DB: D1Database; HIRO_API_KEY?: string },
   logger?: Logger,
-  options: RunCronOptions = {}
-): Promise<CronSummary> {
+  options: RunCompetitionSchedulerOptions = {}
+): Promise<CompetitionSchedulerSummary> {
   const txsFetcher = options.fetchAddressTxsImpl ?? fetchAddressTxs;
 
-  const cursor = await getCronCursor(env.DB);
+  const cursor = await getCompetitionSchedulerCursor(env.DB);
   const { rows, nextCursor } = await fetchAddressPage(env.DB, cursor);
 
-  const summary: CronSummary = {
+  const summary: CompetitionSchedulerSummary = {
     scanned: rows.length,
     found: 0,
     inserted: 0,
@@ -166,7 +168,7 @@ export async function runCompetitionCron(
         }
       } catch (err) {
         summary.rejected++;
-        logger?.warn?.("competition.cron.verify_threw", {
+        logger?.warn?.("competition.scheduler.verify_threw", {
           stxAddress: stx_address,
           txid: tx.tx_id,
           error: String(err),
@@ -178,11 +180,11 @@ export async function runCompetitionCron(
   // Persist next cursor. When nextCursor is null (we walked the tail),
   // clear the row so the next run starts fresh at the head.
   if (nextCursor) {
-    await setCronCursor(env.DB, nextCursor);
+    await setCompetitionSchedulerCursor(env.DB, nextCursor);
   } else {
-    await clearCronCursor(env.DB);
+    await clearCompetitionSchedulerCursor(env.DB);
   }
 
-  logger?.info?.("competition.cron.summary", { ...summary });
+  logger?.info?.("competition.scheduler.summary", { ...summary });
   return summary;
 }

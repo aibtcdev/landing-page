@@ -28,7 +28,7 @@ function selfDocResponse() {
       endpoint: "/api/competition/trades",
       methods: ["GET", "POST"],
       description:
-        "Trading-comp swap history. GET returns paginated trades; POST verifies a swap by txid (ships in Phase 3.1 PR-B; currently 501 Not Implemented).",
+        "Trading-comp swap history. GET returns paginated trades; POST verifies a swap by txid.",
       get: {
         queryParameters: {
           docs: {
@@ -66,7 +66,7 @@ function selfDocResponse() {
               amount_out: "number (raw on-chain units)",
               burn_block_time: "number (unix seconds)",
               tx_status: "string (success | abort_by_response | …)",
-              source: "string ('agent' | 'cron' | 'chainhook')",
+              source: "string ('agent' | 'cron' | 'chainhook'; 'cron' is SchedulerDO catch-up)",
               scored_value: "number | null",
               scored_at: "string | null (ISO-8601)",
             },
@@ -76,7 +76,7 @@ function selfDocResponse() {
       },
       post: {
         description:
-          "Submit a confirmed Stacks txid for verification. Callers (typically the AIBTC MCP server) must pre-check that the tx is terminal before submitting; the route checks D1 first (cheap idempotency gate), then fetches the tx from Hiro, runs sender + allowlist checks, parses the swap, and persists via INSERT OR IGNORE. First writer wins on `(txid)` across all ingestion paths (agent / cron); re-submits of an already-recorded txid return 409.",
+          "Submit a confirmed Stacks txid for verification. Callers (typically the AIBTC MCP server) must pre-check that the tx is terminal before submitting; the route checks D1 first (cheap idempotency gate), then fetches the tx from Hiro, runs sender + allowlist checks, parses the swap, and persists via INSERT OR IGNORE. First writer wins on `(txid)` across all ingestion paths (agent / scheduler); re-submits of an already-recorded txid return 409.",
         requestBody: { txid: "string — 64-char hex (0x-prefixed accepted)" },
         responses: {
           "200": "First-time verified — body is the persisted SwapRow",
@@ -219,8 +219,9 @@ export async function GET(request: NextRequest) {
  * POST /api/competition/trades — agent-submit verifier (Phase 3.1 PR-B).
  *
  * Accepts { txid } and runs the single-tx verifier (see lib/competition/verify.ts).
- *   - 202 { accepted: true } when the tx is still pending (KV-tracked, 30-min TTL)
- *   - 200 with the persisted row when verified (newly written OR idempotent re-submission)
+ *   - 202 { accepted: true } when Hiro has not propagated terminal status yet
+ *   - 200 with the persisted row when verified (newly written)
+ *   - 409 with the existing row on idempotent re-submission
  *   - 422 with { error, code, retryable: false } on sender/allowlist/parse rejections
  *   - 4xx on malformed input, 429 on rate limit, 503 on D1 unavailability
  */
@@ -308,7 +309,7 @@ export async function POST(request: NextRequest) {
     // the verifier. Return 409 Conflict (not 200) so the caller has an
     // unambiguous signal that this submit did NOT write the row. The
     // existing row is included so callers can reconcile (its `source`
-    // identifies which ingestion path wrote first — agent / cron /
+    // identifies which ingestion path wrote first — agent / scheduler /
     // chainhook). retryable: false because re-POSTing the same txid will
     // keep landing here.
     if (!result.inserted) {

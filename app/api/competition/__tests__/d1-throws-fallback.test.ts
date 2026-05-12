@@ -90,7 +90,7 @@ describe("Phase 3.1 PR-A — D1-throws fallback policy (status)", () => {
     const res = await statusGet(buildStatusRequest());
 
     expect(res.status).toBe(503);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body).toMatchObject({
       error: "transient_d1_unavailable",
       retry_after: 5,
@@ -125,7 +125,7 @@ describe("Phase 3.1 PR-A — D1-throws fallback policy (trades)", () => {
     const res = await tradesGet(buildTradesRequest());
 
     expect(res.status).toBe(503);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body).toMatchObject({
       error: "transient_d1_unavailable",
       retry_after: 5,
@@ -203,7 +203,7 @@ describe("Phase 3.1 PR-A — self-doc (?docs=1)", () => {
     );
     expect(res.status).toBe(200);
     expect(getCompetitionStatusFromD1).not.toHaveBeenCalled();
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.endpoint).toBe("/api/competition/status");
   });
 
@@ -213,7 +213,7 @@ describe("Phase 3.1 PR-A — self-doc (?docs=1)", () => {
     );
     expect(res.status).toBe(200);
     expect(listSwapsFromD1).not.toHaveBeenCalled();
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.endpoint).toBe("/api/competition/trades");
   });
 });

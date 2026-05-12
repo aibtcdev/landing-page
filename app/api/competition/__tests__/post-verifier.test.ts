@@ -12,7 +12,7 @@
  *     propagation race only)
  *   - 409 Conflict on idempotent re-submit (the row already exists in D1)
  *     — see secret-mars's PR #738 finding (comment 4418003085)
- *   - 202 + KV write when verify returns pending
+ *   - no KV writes when verify returns pending
  *   - 200 + row when verify returns verified
  *   - 422 on verifier rejections (sender/allowlist/parse)
  *   - 404 on tx_not_found
@@ -137,7 +137,7 @@ describe("POST /api/competition/trades — pending fallback (no KV writes)", () 
     (verifyAndPersistSwap as Mock).mockResolvedValue({ status: "pending" });
     const res = await POST(buildRequest({ txid: TXID }));
     expect(res.status).toBe(202);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.accepted).toBe(true);
     expect(body.note).toMatch(/propagated/i);
   });
@@ -184,7 +184,7 @@ describe("POST /api/competition/trades — idempotent re-submit → 409", () => 
     });
     const res = await POST(buildRequest({ txid: TXID }));
     expect(res.status).toBe(409);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body).toMatchObject({
       code: "txid_already_verified",
       retryable: false,
@@ -200,7 +200,7 @@ describe("POST /api/competition/trades — idempotent re-submit → 409", () => 
       row: ROW,
     });
     const res = await POST(buildRequest({ txid: TXID }));
-    const body = await res.json();
+    const body = (await res.json()) as any;
     // ROW.source === "cron" — caller can see cron wrote the row first,
     // not agent-submit. Useful diagnostic.
     expect(body.existing_row.source).toBe("cron");
@@ -223,7 +223,7 @@ describe("POST /api/competition/trades — idempotent re-submit → 409", () => 
 
     const res3 = await POST(buildRequest({ txid: TXID }));
     expect(res3.status).toBe(200);
-    const body3 = await res3.json();
+    const body3 = (await res3.json()) as any;
     expect(body3).toEqual(freshRow);
     // 200 body is the row alone — no error / existing_row fields.
     expect(body3.error).toBeUndefined();
@@ -231,7 +231,7 @@ describe("POST /api/competition/trades — idempotent re-submit → 409", () => 
 
     const res4 = await POST(buildRequest({ txid: TXID }));
     expect(res4.status).toBe(409);
-    const body4 = await res4.json();
+    const body4 = (await res4.json()) as any;
     expect(body4.code).toBe("txid_already_verified");
     expect(body4.existing_row).toEqual(freshRow);
 
@@ -262,7 +262,7 @@ describe("POST /api/competition/trades — verify result → HTTP mapping", () =
     (verifyAndPersistSwap as Mock).mockResolvedValue({ status: "verified", inserted: true, row });
     const res = await POST(buildRequest({ txid: TXID }));
     expect(res.status).toBe(200);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body).toEqual(row);
   });
 
@@ -275,7 +275,7 @@ describe("POST /api/competition/trades — verify result → HTTP mapping", () =
     });
     const res = await POST(buildRequest({ txid: TXID }));
     expect(res.status).toBe(422);
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.code).toBe("sender_not_registered");
     expect(body.retryable).toBe(false);
   });
@@ -312,7 +312,7 @@ describe("POST /api/competition/trades — verify result → HTTP mapping", () =
     const res = await POST(buildRequest({ txid: TXID }));
     expect(res.status).toBe(502);
     expect(res.headers.get("Retry-After")).toBe("5");
-    const body = await res.json();
+    const body = (await res.json()) as any;
     expect(body.retryable).toBe(true);
   });
 

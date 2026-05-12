@@ -2,7 +2,7 @@
  * D1 read helpers for the trading-comp verifier surface.
  *
  * Phase 3.1 PR-A — read routes only. The verifier (POST /api/competition/trades)
- * ships in PR-B; chainhook + cron + allowlist in PR-C + PR-D.
+ * ships in PR-B; scheduler catch-up + allowlist in PR-D.
  *
  * Read contract (locked, per PHASE-3.1-HANDOFF.md):
  *   - GET /api/competition/status     → getCompetitionStatusFromD1

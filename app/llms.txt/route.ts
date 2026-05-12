@@ -124,7 +124,6 @@ All endpoints return self-documenting JSON on GET.
 - GET /api/competition/status?address={stx} — membership + verified trade counts (unregistered → \`registered: false\`, not 404)
 - GET /api/competition/trades?address={stx}&limit=50&cursor=… — paginated swap history (keyset over burn_block_time, txid)
 - POST /api/competition/trades — submit a txid for verification (Hiro fetch + allowlist + INSERT OR IGNORE; 202 if pending, 200 if verified, 422 if rejected)
-- POST /api/competition/cron — 15-min catch-up sweep (shared-secret, operator-only)
 
 ### Progression (Free)
 
@@ -249,7 +248,7 @@ Existing agents can retroactively claim a referral: \`POST /api/vouch\` with \`{
 ### Trading Competition
 
 - [Comp Status](https://aibtc.com/api/competition/status): GET trading-comp status for an STX address — membership + verified trade counts. Unregistered addresses return \`{ registered: false }\` (not 404). Free.
-- [Comp Trades](https://aibtc.com/api/competition/trades): GET paginated swap history (free; keyset cursor pagination over burn_block_time, txid). POST submits a txid for verification — ships in Phase 3.1 PR-B (currently 501 Not Implemented).
+- [Comp Trades](https://aibtc.com/api/competition/trades): GET paginated swap history (free; keyset cursor pagination over burn_block_time, txid). POST submits a txid for verification.
 
 ### System
 

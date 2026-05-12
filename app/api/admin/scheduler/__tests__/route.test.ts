@@ -15,7 +15,10 @@ import { GET, POST } from "../route";
 
 const schedulerStub = {
   status: vi.fn().mockResolvedValue({ now: 123 }),
-  refreshNow: vi.fn().mockResolvedValue({ tenero: { succeeded: 1 } }),
+  refreshNow: vi.fn().mockResolvedValue({
+    tenero: { succeeded: 1 },
+    competition: { scanned: 1 },
+  }),
   pauseUntil: vi.fn().mockResolvedValue(undefined),
   resume: vi.fn().mockResolvedValue(undefined),
 };
@@ -56,7 +59,7 @@ describe("GET /api/admin/scheduler", () => {
 
   it("returns scheduler status with no-store/noindex headers", async () => {
     const response = await GET(request("/api/admin/scheduler"));
-    const body = await response.json();
+    const body = (await response.json()) as any;
 
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
@@ -67,7 +70,7 @@ describe("GET /api/admin/scheduler", () => {
 
   it("rejects unknown scheduler names before touching a stub", async () => {
     const response = await GET(request("/api/admin/scheduler?name=typo"));
-    const body = await response.json();
+    const body = (await response.json()) as any;
 
     expect(response.status).toBe(400);
     expect(body.error).toContain("Unsupported scheduler name");
@@ -80,7 +83,7 @@ describe("POST /api/admin/scheduler", () => {
     const response = await POST(
       request("/api/admin/scheduler?action=pause", "POST")
     );
-    const body = await response.json();
+    const body = (await response.json()) as any;
 
     expect(response.status).toBe(400);
     expect(body.error).toContain("Missing `until`");
@@ -91,7 +94,7 @@ describe("POST /api/admin/scheduler", () => {
     const response = await POST(
       request("/api/admin/scheduler?action=refresh&task=prices", "POST")
     );
-    const body = await response.json();
+    const body = (await response.json()) as any;
 
     expect(response.status).toBe(400);
     expect(body.error).toContain("Unsupported task");
@@ -102,7 +105,7 @@ describe("POST /api/admin/scheduler", () => {
     const response = await POST(
       request("/api/admin/scheduler?name=v3&action=refresh&task=all", "POST")
     );
-    const body = await response.json();
+    const body = (await response.json()) as any;
 
     expect(response.status).toBe(200);
     expect(schedulerNamespace.idFromName).toHaveBeenCalledWith("v3");
@@ -110,7 +113,18 @@ describe("POST /api/admin/scheduler", () => {
     expect(body).toEqual({
       name: "v3",
       task: "all",
-      result: { tenero: { succeeded: 1 } },
+      result: { tenero: { succeeded: 1 }, competition: { scanned: 1 } },
     });
+  });
+
+  it("refreshes the competition scheduler task", async () => {
+    const response = await POST(
+      request("/api/admin/scheduler?action=refresh&task=competition", "POST")
+    );
+    const body = (await response.json()) as any;
+
+    expect(response.status).toBe(200);
+    expect(schedulerStub.refreshNow).toHaveBeenCalledWith("competition");
+    expect(body.task).toBe("competition");
   });
 });
