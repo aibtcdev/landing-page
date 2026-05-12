@@ -110,7 +110,7 @@ async function writeIndex(
 }
 
 /**
- * D1 row shape for the agents SELECT used in buildIndexFromScan.
+ * D1 row shape for the agents SELECT used in buildIndexFromD1.
  * Only the columns needed for AgentIndexEntry are selected.
  */
 interface AgentIndexRow {
@@ -166,12 +166,16 @@ async function buildIndexFromD1(
     }));
 
     if (entries.length < MIN_EXPECTED_D1_ROWS) {
-      // D1 backfill (#691) may be incomplete. Log so operators can track.
+      // D1 backfill (#691) may be incomplete. Treat as "not ready" and
+      // return null so the caller falls back to the KV-scan safety net.
+      // A partial index must never be cached — callers would serve stale
+      // incomplete results until the next cold-miss rebuild.
       logger?.warn("agents_index.d1_low_row_count", {
         count: entries.length,
         threshold: MIN_EXPECTED_D1_ROWS,
-        note: "D1 backfill (#691) may be in progress",
+        note: "D1 backfill (#691) may be in progress — falling back to KV scan",
       });
+      return null;
     }
 
     return entries;
