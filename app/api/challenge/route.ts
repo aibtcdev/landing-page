@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
+import { buildEdgeCacheKey, invalidateEdgeCache } from "@/lib/edge-cache";
 import {
   generateChallenge,
   storeChallenge,
@@ -419,9 +420,15 @@ export async function POST(request: NextRequest) {
 
     // Invalidate cached agent list and agents:index (profile fields
     // changed). Both rebuild from source state on next read.
+    // Also bust the OG image edge-cache for both BTC and STX addresses —
+    // display name / description changes should surface immediately in unfurls.
     await Promise.all([
       invalidateAgentListCache(kv),
       invalidateAgentsIndex(kv),
+      invalidateEdgeCache(
+        buildEdgeCacheKey("/api/og", updatedAgent.btcAddress),
+        buildEdgeCacheKey("/api/og", updatedAgent.stxAddress),
+      ),
     ]);
 
     return NextResponse.json({
