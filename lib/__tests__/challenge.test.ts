@@ -5,8 +5,6 @@ import {
   storeChallenge,
   getChallenge,
   deleteChallenge,
-  checkRateLimit,
-  recordRequest,
   executeAction,
   getAvailableActions,
   validateTaprootAddress,
@@ -274,173 +272,13 @@ describe("deleteChallenge", () => {
   });
 });
 
-describe("checkRateLimit", () => {
-  it("allows request when no previous requests", async () => {
-    const kv = createMockKV();
-    const result = await checkRateLimit(kv, "192.168.1.1");
-    expect(result.allowed).toBe(true);
-    expect(result.retryAfter).toBeUndefined();
-  });
-
-  it("allows requests below limit", async () => {
-    const kv = createMockKV();
-    const ip = "192.168.1.1";
-
-    // Record 5 requests (limit is 6)
-    for (let i = 0; i < 5; i++) {
-      await recordRequest(kv, ip);
-    }
-
-    const result = await checkRateLimit(kv, ip);
-    expect(result.allowed).toBe(true);
-  });
-
-  it("blocks requests at limit", async () => {
-    const kv = createMockKV();
-    const ip = "192.168.1.1";
-
-    // Record 6 requests (at limit)
-    for (let i = 0; i < 6; i++) {
-      await recordRequest(kv, ip);
-    }
-
-    const result = await checkRateLimit(kv, ip);
-    expect(result.allowed).toBe(false);
-    expect(result.retryAfter).toBeDefined();
-  });
-
-  it("provides retryAfter when rate limited", async () => {
-    const kv = createMockKV();
-    const ip = "192.168.1.1";
-
-    for (let i = 0; i < 6; i++) {
-      await recordRequest(kv, ip);
-    }
-
-    const result = await checkRateLimit(kv, ip);
-    expect(result.retryAfter).toBeGreaterThan(0);
-    expect(result.retryAfter).toBeLessThanOrEqual(600); // 10 minutes max
-  });
-
-  it("filters out old timestamps", async () => {
-    const kv = createMockKV();
-    const ip = "192.168.1.1";
-
-    // Manually set old timestamps (11 minutes ago)
-    const oldTimestamps = [Date.now() - 11 * 60 * 1000];
-    await kv.put(`rate:challenge:${ip}`, JSON.stringify(oldTimestamps));
-
-    const result = await checkRateLimit(kv, ip);
-    expect(result.allowed).toBe(true);
-  });
-
-  it("uses correct key format", async () => {
-    const kv = createMockKV();
-    await checkRateLimit(kv, "192.168.1.1");
-    expect(kv.get).toHaveBeenCalledWith("rate:challenge:192.168.1.1");
-  });
-
-  it("handles corrupted rate limit data", async () => {
-    const kv = createMockKV();
-    (kv.get as any).mockResolvedValue("invalid json");
-
-    const result = await checkRateLimit(kv, "192.168.1.1");
-    expect(result.allowed).toBe(true);
-  });
-});
-
-describe("recordRequest", () => {
-  it("records first request", async () => {
-    const kv = createMockKV();
-    await recordRequest(kv, "192.168.1.1");
-
-    expect(kv.put).toHaveBeenCalledWith(
-      "rate:challenge:192.168.1.1",
-      expect.any(String),
-      expect.objectContaining({ expirationTtl: expect.any(Number) })
-    );
-  });
-
-  it("appends to existing requests", async () => {
-    const kv = createMockKV();
-    const ip = "192.168.1.1";
-
-    await recordRequest(kv, ip);
-    await recordRequest(kv, ip);
-
-    const storedValue = (kv.put as any).mock.calls[1][1];
-    const timestamps = JSON.parse(storedValue);
-    expect(timestamps).toHaveLength(2);
-  });
-
-  it("filters out old timestamps when recording", async () => {
-    const kv = createMockKV();
-    const ip = "192.168.1.1";
-
-    // Manually set old timestamps
-    const oldTimestamps = [Date.now() - 11 * 60 * 1000];
-    await kv.put(`rate:challenge:${ip}`, JSON.stringify(oldTimestamps));
-
-    await recordRequest(kv, ip);
-
-    const storedValue = (kv.put as any).mock.calls[1][1];
-    const timestamps = JSON.parse(storedValue);
-    expect(timestamps).toHaveLength(1); // Only new one
-  });
-
-  it("stores TTL slightly longer than window", async () => {
-    const kv = createMockKV();
-    await recordRequest(kv, "192.168.1.1");
-
-    expect(kv.put).toHaveBeenCalledWith(
-      expect.any(String),
-      expect.any(String),
-      { expirationTtl: 660 } // 10 minutes + 60 seconds
-    );
-  });
-
-  it("handles corrupted existing data", async () => {
-    const kv = createMockKV();
-    (kv.get as any).mockResolvedValue("invalid json");
-
-    await recordRequest(kv, "192.168.1.1");
-
-    const storedValue = (kv.put as any).mock.calls[0][1];
-    const timestamps = JSON.parse(storedValue);
-    expect(timestamps).toHaveLength(1);
-  });
-});
-
-describe("rate limiting integration", () => {
-  it("allows 6 requests then blocks the 7th", async () => {
-    const kv = createMockKV();
-    const ip = "192.168.1.1";
-
-    // Make 6 requests
-    for (let i = 0; i < 6; i++) {
-      const result = await checkRateLimit(kv, ip);
-      expect(result.allowed).toBe(true);
-      await recordRequest(kv, ip);
-    }
-
-    // 7th request should be blocked
-    const result = await checkRateLimit(kv, ip);
-    expect(result.allowed).toBe(false);
-  });
-
-  it("different IPs have independent rate limits", async () => {
-    const kv = createMockKV();
-
-    // Max out IP 1
-    for (let i = 0; i < 6; i++) {
-      await recordRequest(kv, "192.168.1.1");
-    }
-
-    // IP 2 should still be allowed
-    const result = await checkRateLimit(kv, "192.168.1.2");
-    expect(result.allowed).toBe(true);
-  });
-});
+// Rate-limiting helpers (checkRateLimit / recordRequest) previously lived in
+// lib/challenge.ts and were tested here. They have been replaced by the
+// first-party Cloudflare `ratelimits` binding (RATE_LIMIT_STRICT) at the
+// route layer (app/api/challenge/route.ts). The binding's behavior is
+// exercised at Cloudflare's edge and is not unit-testable from this
+// process, so the unit tests for the old KV-RMW implementation are removed
+// rather than ported.
 
 describe("validateTaprootAddress", () => {
   it("accepts valid taproot address (bc1p)", () => {

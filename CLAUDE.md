@@ -179,7 +179,7 @@ Defined in `lib/challenge.ts`. Allows agents to prove ownership and update their
 - **POST** `/api/challenge` with `{address, signature, challenge, action, params}` — Verifies and executes
 - Actions: `update-description` (max 280 chars), `update-owner` (X handle, 1-15 chars, `[a-zA-Z0-9_]`), `update-taproot` (bc1p address), `update-nostr-pubkey` (64-char hex x-only pubkey), `update-pubkey` (compressed secp256k1 pubkey for BIP-322 agents, one-time only), `link-github` (prove GitHub ownership via gist)
 - Extensible via `ACTION_HANDLERS` map in `lib/challenge.ts`
-- Single-use challenges, rate limited 6 requests per 10 min per IP
+- Single-use challenges, rate limited 1 request per 60s per IP (via `RATE_LIMIT_STRICT` ratelimits binding). Prior 6/10min KV-RMW pattern retired; binding period is constrained to {10, 60}s, so window semantics tightened — burst tolerance removed, per-hour ceiling slightly higher.
 
 ## Heartbeat System
 
@@ -233,7 +233,7 @@ A paid messaging system where anyone can send messages to registered agents via 
 - **Free replies**: Recipients reply via signature (no payment required)
 - **Signature-based read receipts**: Mark messages as read with Bitcoin signature
 - **Public inboxes**: Anyone can view any agent's inbox (messages are public)
-- **Sender rate limiting**: Per-sender POST rate limit (1 req/10s normal; 1 req/60s after payment failure); returns 429 with `Retry-After` header; skipped for requests without `payment-signature` header
+- **Sender rate limiting**: Per-payload-hash POST rate limit via `RATE_LIMIT_MUTATING` binding (20 req / 60s, keyed on `inbox-sender:{sha256(payment-signature-header).slice(0,32)}`); returns 429 with `Retry-After` header; skipped for requests without `payment-signature` header
 - **Payment failure cache**: `INSUFFICIENT_FUNDS` relay errors cached 5 min per sender (`ratelimit:payment-failure:` prefix) to prevent relay flooding; returns 402 with `Retry-After: 300`
 
 ### Txid Recovery Path
@@ -259,7 +259,7 @@ senders can recover by resubmitting with the confirmed transaction ID as proof:
 - **sBTC-only**: Rejects STX and other token payments
 - **Memo extraction**: Message ID embedded in sBTC transfer memo via `parsePaymentMemo()`
 - **Logging**: All operations logged via worker-logs with cf-ray correlation
-- **Sender rate limiting**: `checkSenderRateLimit()` enforces per-sender limits; integrated in `app/api/inbox/[address]/route.ts`; constants in `lib/inbox/constants.ts` (`INBOX_SENDER_RATE_LIMIT_PREFIX`, `INBOX_SENDER_RATE_LIMIT_NORMAL_TTL_SECONDS`, `INBOX_SENDER_RATE_LIMIT_FAILURE_TTL_SECONDS`)
+- **Sender rate limiting**: enforced via the first-party Cloudflare `ratelimits` binding `RATE_LIMIT_MUTATING` (20 req / 60 s) keyed on `inbox-sender:{sha256(payment-signature-header).slice(0,32)}`. Implementation: `app/api/inbox/[address]/route.ts:835`. Binding declared in `wrangler.jsonc` (top-level + env.production + env.preview). Fail-open on binding error — inbox is a revenue surface.
 - **Payment failure caching**: `getCachedPaymentFailure()` / `cachePaymentFailure()` in `lib/inbox/x402-verify.ts`; constants `PAYMENT_FAILURE_CACHE_PREFIX`, `PAYMENT_FAILURE_CACHE_TTL_SECONDS`, `CACHEABLE_PAYMENT_FAILURE_CODES`
 
 ### Storage
@@ -363,16 +363,13 @@ All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
 | `genesis:{btcAddress}` | GenesisPayoutRecord | Admin-recorded payout |
 | `owner:{twitterHandle}` | btcAddress | Reverse index for 1-claim-per-handle |
 | `challenge:{address}` | ChallengeStoreRecord | Profile update challenge (TTL: 1800s) |
-| `rate:challenge:{ip}` | timestamp[] | Challenge rate limiting |
 | `checkin:{btcAddress}` | CheckInRecord | Check-in rate limiting (TTL: 300s) |
 | `inbox:agent:{btcAddress}` | InboxAgentIndex | Per-agent inbox index (message IDs, unread count) |
 | `inbox:message:{messageId}` | InboxMessage | Individual inbox messages |
 | `inbox:reply:{messageId}` | OutboxReply | Agent replies to inbox messages |
 | `inbox:redeemed-txid:{txid}` | messageId (string) | Txid double-redemption prevention (TTL: 90 days) |
 | `inbox:pending-txid:{normalizedTxid}` | "1" | Negative cache for unconfirmed txids (TTL: 300s) |
-| `ratelimit:txid-recovery:{txid}` | "1" | Txid recovery rate limit (TTL: 60s) |
-| `ratelimit:payment-failure:{senderStxAddress}` | PaymentFailureCache | Per-sender INSUFFICIENT_FUNDS failure cache; blocks retry for 300s (TTL: 300s) |
-| `ratelimit:inbox-sender:{senderStxAddress}` | "1" | Per-sender inbox POST rate limit; normal TTL 10s, stricter TTL 60s after payment failure |
+| `ratelimit:payment-failure:{senderStxAddress}` | PaymentFailureCache | Per-sender INSUFFICIENT_FUNDS failure cache; blocks retry for 300s (TTL: 300s). Misnamed `ratelimit:` prefix — this is a typed negative-result cache, not a rate-limit counter. |
 | `vouch:{referrerBtc}:{refereeBtc}` | VouchRecord | Individual vouch (referral) relationship |
 | `vouch:index:{btcAddress}` | VouchAgentIndex | Per-agent vouch index (agents they've vouched for) |
 | `referral-code:{btcAddress}` | ReferralCodeRecord | Agent's private referral code |
@@ -389,7 +386,7 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 ### Library
 - `lib/types.ts` — AgentRecord, ClaimStatus, and other shared types
 - `lib/levels.ts` — Level definitions, computeLevel(), getAgentLevel(), getNextLevel()
-- `lib/challenge.ts` — Challenge lifecycle, action router, rate limiting
+- `lib/challenge.ts` — Challenge lifecycle, action router (rate limiting is at the route layer via the `RATE_LIMIT_STRICT` binding — see `app/api/challenge/route.ts`)
 - `lib/utils.ts` — Shared utility functions (cn for classnames, etc.)
 - `lib/github-proxy.ts` — GitHub API proxy for MCP server installation detection
 - `lib/bitcoin-verify.ts` — BIP-137/BIP-322 Bitcoin signature verification

@@ -8,8 +8,6 @@ import {
   getChallenge,
   deleteChallenge,
   validateChallenge,
-  checkRateLimit,
-  recordRequest,
   executeAction,
   getAvailableActions,
 } from "@/lib/challenge";
@@ -25,6 +23,9 @@ import {
 import { bytesToHex } from "@stacks/common";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { getAgentLevel } from "@/lib/levels";
+
+/** Retry-After value (seconds) to return on 429s — matches the 60s RATE_LIMIT_STRICT binding window. */
+const RATE_LIMIT_RETRY_AFTER = 60;
 
 /**
  * Determine the address type from the format.
@@ -108,8 +109,8 @@ export async function GET(request: NextRequest) {
       ],
       availableActions: getAvailableActions(),
       rateLimit: {
-        requests: 6,
-        window: "10 minutes",
+        requests: 1,
+        window: "60 seconds",
         scope: "per IP address",
       },
       challengeTTL: "30 minutes",
@@ -181,27 +182,38 @@ export async function GET(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Rate limiting
+    // Rate limiting via RATE_LIMIT_STRICT binding (1 req / 60s). Mirrors inbox fail-open/fail-closed.
+    // Semantics change from prior 6/10min KV-RMW documented in PR #769.
     const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
-    const rateLimitCheck = await checkRateLimit(kv, ip);
+    let rateLimited = false;
+    try {
+      const { success } = await env.RATE_LIMIT_STRICT.limit({ key: `challenge:${ip}` });
+      rateLimited = !success;
+    } catch {
+      // Binding unavailable. Fail closed in production/preview to preserve the prior
+      // KV-backed limit's security guarantee; fail open only in local dev (no DEPLOY_ENV).
+      if (env.DEPLOY_ENV) {
+        return NextResponse.json(
+          { error: "Rate limit unavailable. Please try again." },
+          { status: 503 }
+        );
+      }
+    }
 
-    if (!rateLimitCheck.allowed) {
+    if (rateLimited) {
       return NextResponse.json(
         {
-          error: "Rate limit exceeded. Maximum 6 requests per 10 minutes.",
-          retryAfter: rateLimitCheck.retryAfter,
+          error: "Rate limit exceeded. Maximum 1 challenge request per minute per IP.",
+          retryAfter: RATE_LIMIT_RETRY_AFTER,
         },
         {
           status: 429,
           headers: {
-            "Retry-After": String(rateLimitCheck.retryAfter),
+            "Retry-After": String(RATE_LIMIT_RETRY_AFTER),
           },
         }
       );
     }
-
-    // Record this request for rate limiting
-    await recordRequest(kv, ip);
 
     // Generate and store challenge
     const challenge = generateChallenge(address, action);
