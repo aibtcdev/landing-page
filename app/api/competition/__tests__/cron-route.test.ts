@@ -31,7 +31,6 @@ function mockEnv(opts: { omitDb?: boolean; omitSecret?: boolean } = {}) {
   (getCloudflareContext as Mock).mockReturnValue({
     env: {
       DB: db,
-      VERIFIED_AGENTS: { get: vi.fn(), put: vi.fn(), delete: vi.fn() } as unknown as KVNamespace,
       HIRO_API_KEY: undefined,
       LOGS: undefined,
       ...(opts.omitSecret ? {} : { CRON_SECRET: SECRET }),

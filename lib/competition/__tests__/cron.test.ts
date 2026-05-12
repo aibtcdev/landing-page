@@ -22,34 +22,72 @@ const POOL = "SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M";
 const ALLOWED_CONTRACT = `${POOL}.stableswap-stx-ststx-v-1-2`;
 const ALLOWED_FN = "swap-x-for-y";
 
-function makeKv(initialCursor: string | null = null) {
-  const store = new Map<string, string>();
-  if (initialCursor) store.set("comp:cron:cursor", initialCursor);
-  return {
-    get: vi.fn(async (k: string) => store.get(k) ?? null),
-    put: vi.fn(async (k: string, v: string) => {
-      store.set(k, v);
-    }),
-    delete: vi.fn(async (k: string) => {
-      store.delete(k);
-    }),
-    _store: store,
-  } as unknown as KVNamespace & { _store: Map<string, string> };
-}
+/**
+ * D1 mock that handles both the registered_wallets page query and the
+ * competition_state cursor get/set/delete operations. Cursor writes are
+ * captured for assertion via the returned `cursorOps` object.
+ */
+function makeDb(
+  rows: string[],
+  opts: { initialCursor?: string | null } = {}
+) {
+  const cursorStore: { value: string | null } = {
+    value: opts.initialCursor ?? null,
+  };
+  const cursorOps = {
+    set: vi.fn<(cursor: string) => void>(),
+    clear: vi.fn<() => void>(),
+  };
 
-function makeDb(rows: string[]) {
   const prepare = vi.fn((sql: string) => {
-    const usesCursor = sql.includes("stx_address > ?1");
+    const trimmed = sql.trim();
+
+    // cursor SELECT
+    if (trimmed.startsWith("SELECT value FROM competition_state")) {
+      return {
+        bind: vi.fn().mockReturnValue({
+          first: vi.fn().mockResolvedValue(
+            cursorStore.value !== null ? { value: cursorStore.value } : null
+          ),
+        }),
+      };
+    }
+    // cursor UPSERT
+    if (trimmed.startsWith("INSERT INTO competition_state")) {
+      return {
+        bind: vi.fn((_key: string, value: string) => ({
+          run: vi.fn().mockImplementation(() => {
+            cursorStore.value = value;
+            cursorOps.set(value);
+            return Promise.resolve({ meta: { changes: 1 } });
+          }),
+        })),
+      };
+    }
+    // cursor DELETE
+    if (trimmed.startsWith("DELETE FROM competition_state")) {
+      return {
+        bind: vi.fn().mockReturnValue({
+          run: vi.fn().mockImplementation(() => {
+            cursorStore.value = null;
+            cursorOps.clear();
+            return Promise.resolve({ meta: { changes: 1 } });
+          }),
+        }),
+      };
+    }
+    // registered_wallets page query
     return {
       bind: vi.fn().mockReturnValue({
         all: vi.fn().mockResolvedValue({
           results: rows.map((stx_address) => ({ stx_address })),
         }),
       }),
-      _usesCursor: usesCursor,
     };
   });
-  return { prepare } as unknown as D1Database;
+
+  const db = { prepare } as unknown as D1Database;
+  return { db, cursorOps };
 }
 
 beforeEach(() => {
@@ -58,8 +96,7 @@ beforeEach(() => {
 
 describe("runCompetitionCron — walk + dispatch", () => {
   it("walks the address page, finds allowlisted txs, and submits them with source='cron'", async () => {
-    const kv = makeKv();
-    const db = makeDb(["SP_ADDR_001"]);
+    const { db } = makeDb(["SP_ADDR_001"]);
     (verifyAndPersistSwap as Mock).mockResolvedValue({
       status: "verified",
       inserted: true,
@@ -75,7 +112,7 @@ describe("runCompetitionCron — walk + dispatch", () => {
     ]);
 
     const summary = await runCompetitionCron(
-      { DB: db, VERIFIED_AGENTS: kv, HIRO_API_KEY: undefined },
+      { DB: db, HIRO_API_KEY: undefined },
       undefined,
       { fetchAddressTxsImpl }
     );
@@ -93,8 +130,7 @@ describe("runCompetitionCron — walk + dispatch", () => {
   });
 
   it("skips off-allowlist contract calls without invoking verify (saves Hiro cost)", async () => {
-    const kv = makeKv();
-    const db = makeDb(["SP_ADDR_001"]);
+    const { db } = makeDb(["SP_ADDR_001"]);
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([
       {
         tx_id: "0xaaa",
@@ -104,7 +140,7 @@ describe("runCompetitionCron — walk + dispatch", () => {
     ]);
 
     const summary = await runCompetitionCron(
-      { DB: db, VERIFIED_AGENTS: kv },
+      { DB: db },
       undefined,
       { fetchAddressTxsImpl }
     );
@@ -114,14 +150,13 @@ describe("runCompetitionCron — walk + dispatch", () => {
   });
 
   it("skips non-contract_call txs without dispatch", async () => {
-    const kv = makeKv();
-    const db = makeDb(["SP_ADDR_001"]);
+    const { db } = makeDb(["SP_ADDR_001"]);
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([
       { tx_id: "0xaaa", tx_type: "token_transfer" },
     ]);
 
     const summary = await runCompetitionCron(
-      { DB: db, VERIFIED_AGENTS: kv },
+      { DB: db },
       undefined,
       { fetchAddressTxsImpl }
     );
@@ -130,8 +165,7 @@ describe("runCompetitionCron — walk + dispatch", () => {
   });
 
   it("tallies inserted vs alreadyKnown vs pending vs rejected", async () => {
-    const kv = makeKv();
-    const db = makeDb(["SP_ADDR_001"]);
+    const { db } = makeDb(["SP_ADDR_001"]);
     (verifyAndPersistSwap as Mock)
       .mockResolvedValueOnce({ status: "verified", inserted: true, row: {} })
       .mockResolvedValueOnce({ status: "verified", inserted: false, row: {} })
@@ -146,7 +180,7 @@ describe("runCompetitionCron — walk + dispatch", () => {
     ]);
 
     const summary = await runCompetitionCron(
-      { DB: db, VERIFIED_AGENTS: kv },
+      { DB: db },
       undefined,
       { fetchAddressTxsImpl }
     );
@@ -164,74 +198,75 @@ describe("runCompetitionCron — walk + dispatch", () => {
 
 describe("runCompetitionCron — cursor persistence", () => {
   it("persists the next cursor when the page is full (more addresses to walk)", async () => {
-    const kv = makeKv();
     const fullPage: string[] = Array.from(
       { length: CRON_MAX_ADDRESSES_PER_RUN },
       (_, i) => `SP_ADDR_${String(i).padStart(3, "0")}`
     );
-    const db = makeDb(fullPage);
+    const { db, cursorOps } = makeDb(fullPage);
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([]);
 
     const summary = await runCompetitionCron(
-      { DB: db, VERIFIED_AGENTS: kv },
+      { DB: db },
       undefined,
       { fetchAddressTxsImpl }
     );
 
     expect(summary.cursor).toBe(fullPage[fullPage.length - 1]);
-    expect(kv.put).toHaveBeenCalledWith("comp:cron:cursor", fullPage[fullPage.length - 1]);
+    expect(cursorOps.set).toHaveBeenCalledWith(fullPage[fullPage.length - 1]);
+    expect(cursorOps.clear).not.toHaveBeenCalled();
   });
 
   it("deletes the cursor when the page is partial (walk wrapped)", async () => {
-    const kv = makeKv("SP_PRIOR_CURSOR");
-    const db = makeDb(["SP_ADDR_001", "SP_ADDR_002"]);
+    const { db, cursorOps } = makeDb(
+      ["SP_ADDR_001", "SP_ADDR_002"],
+      { initialCursor: "SP_PRIOR_CURSOR" }
+    );
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([]);
 
     const summary = await runCompetitionCron(
-      { DB: db, VERIFIED_AGENTS: kv },
+      { DB: db },
       undefined,
       { fetchAddressTxsImpl }
     );
 
     expect(summary.cursor).toBeNull();
-    expect(kv.delete).toHaveBeenCalledWith("comp:cron:cursor");
+    expect(cursorOps.clear).toHaveBeenCalled();
+    expect(cursorOps.set).not.toHaveBeenCalled();
   });
 
   it("uses the cursor query branch when a cursor is present", async () => {
-    const kv = makeKv("SP_LAST_RUN");
-    const db = makeDb([]);
+    const { db } = makeDb([], { initialCursor: "SP_LAST_RUN" });
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([]);
 
     await runCompetitionCron(
-      { DB: db, VERIFIED_AGENTS: kv },
+      { DB: db },
       undefined,
       { fetchAddressTxsImpl }
     );
 
-    const prepareCalls = (db.prepare as Mock).mock.calls;
-    expect(prepareCalls[0][0]).toContain("stx_address > ?1");
+    const prepareCalls = (db.prepare as Mock).mock.calls.map((c) => c[0] as string);
+    expect(prepareCalls.some((sql) => sql.includes("stx_address > ?1"))).toBe(true);
   });
 
   it("uses the head-of-list query branch when no cursor is present", async () => {
-    const kv = makeKv();
-    const db = makeDb([]);
+    const { db } = makeDb([]);
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([]);
 
     await runCompetitionCron(
-      { DB: db, VERIFIED_AGENTS: kv },
+      { DB: db },
       undefined,
       { fetchAddressTxsImpl }
     );
 
-    const sql = (db.prepare as Mock).mock.calls[0][0] as string;
-    expect(sql).not.toContain("stx_address > ?");
+    const prepareCalls = (db.prepare as Mock).mock.calls.map((c) => c[0] as string);
+    const pageQueries = prepareCalls.filter((sql) => sql.includes("registered_wallets"));
+    expect(pageQueries.every((sql) => !sql.includes("stx_address > ?"))).toBe(true);
   });
 });
 
 describe("runCompetitionCron — fault tolerance", () => {
   it("counts a verify throw as rejected and continues the sweep", async () => {
-    const kv = makeKv();
-    const db = makeDb(["SP_ADDR_001"]);
+    const { db } = makeDb(["SP_ADDR_001"]);
     (verifyAndPersistSwap as Mock).mockRejectedValueOnce(new Error("boom"));
 
     const fetchAddressTxsImpl = vi.fn().mockResolvedValue([
@@ -239,7 +274,7 @@ describe("runCompetitionCron — fault tolerance", () => {
     ]);
 
     const summary = await runCompetitionCron(
-      { DB: db, VERIFIED_AGENTS: kv },
+      { DB: db },
       undefined,
       { fetchAddressTxsImpl }
     );

@@ -29,7 +29,7 @@ export async function GET() {
       },
       notes: [
         "Per-run cap: 100 addresses (CRON_MAX_ADDRESSES_PER_RUN). Sized for a 15-min cadence — the full membership cycles in roughly 5 runs at the current scale.",
-        "The sweep resumes across runs via the comp:cron:cursor KV key.",
+        "The sweep resumes across runs via D1 (competition_state.cron_cursor).",
         "wrangler cron-trigger wiring is tracked as a follow-up; this route is callable today via HTTPS with the shared secret.",
       ],
     },
@@ -75,7 +75,7 @@ export async function POST(request: NextRequest) {
   }
 
   const summary = await runCompetitionCron(
-    { DB: db, VERIFIED_AGENTS: env.VERIFIED_AGENTS, HIRO_API_KEY: env.HIRO_API_KEY },
+    { DB: db, HIRO_API_KEY: env.HIRO_API_KEY },
     logger
   );
 

@@ -12,8 +12,10 @@
  *   - Max 100 addresses per execution. Tuned for a 15-min cadence: at the
  *     current ~430 registered wallets, the full list cycles in roughly
  *     5 runs (~75 min). Single Hiro client, single rate-limit budget.
- *   - Resume from KV cursor `comp:cron:cursor` so subsequent runs continue
- *     where the previous one stopped rather than retrying the head N times.
+ *   - Resume from D1 cursor (`competition_state.cron_cursor`) so subsequent
+ *     runs continue where the previous one stopped. Moved from KV to D1
+ *     per @whoabuddy's #738 review note that cursor state belongs alongside
+ *     the data it gates.
  *
  * Returns a structured summary for the logs:
  *   { scanned, found, inserted, alreadyKnown, rejected, pending, cursor }
@@ -29,10 +31,10 @@ import { stacksApiFetch } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE } from "@/lib/identity/constants";
 import { verifyAndPersistSwap } from "./verify";
 import { isAllowedSwap } from "./allowlist";
+import { getCronCursor, setCronCursor, clearCronCursor } from "./state";
 
-/** Per-run cap on addresses scanned. Cron resumes from the KV cursor next run. */
+/** Per-run cap on addresses scanned. Cron resumes from the D1 cursor next run. */
 export const CRON_MAX_ADDRESSES_PER_RUN = 100;
-export const CRON_CURSOR_KV_KEY = "comp:cron:cursor";
 
 /** Per-address tx history page size. */
 const HIRO_TX_PAGE_LIMIT = 25;
@@ -112,8 +114,6 @@ async function fetchAddressPage(
 }
 
 export interface RunCronOptions {
-  /** Override the KV cursor key. Used by tests for isolation. */
-  cursorKey?: string;
   /** Inject a custom address-history fetcher (for tests). */
   fetchAddressTxsImpl?: typeof fetchAddressTxs;
 }
@@ -127,14 +127,13 @@ export interface RunCronOptions {
  * rather than always starting at the head.
  */
 export async function runCompetitionCron(
-  env: { DB: D1Database; VERIFIED_AGENTS: KVNamespace; HIRO_API_KEY?: string },
+  env: { DB: D1Database; HIRO_API_KEY?: string },
   logger?: Logger,
   options: RunCronOptions = {}
 ): Promise<CronSummary> {
-  const cursorKey = options.cursorKey ?? CRON_CURSOR_KV_KEY;
   const txsFetcher = options.fetchAddressTxsImpl ?? fetchAddressTxs;
 
-  const cursor = (await env.VERIFIED_AGENTS.get(cursorKey)) ?? null;
+  const cursor = await getCronCursor(env.DB);
   const { rows, nextCursor } = await fetchAddressPage(env.DB, cursor);
 
   const summary: CronSummary = {
@@ -177,11 +176,11 @@ export async function runCompetitionCron(
   }
 
   // Persist next cursor. When nextCursor is null (we walked the tail),
-  // delete the key so the next run starts fresh at the head.
+  // clear the row so the next run starts fresh at the head.
   if (nextCursor) {
-    await env.VERIFIED_AGENTS.put(cursorKey, nextCursor);
+    await setCronCursor(env.DB, nextCursor);
   } else {
-    await env.VERIFIED_AGENTS.delete(cursorKey);
+    await clearCronCursor(env.DB);
   }
 
   logger?.info?.("competition.cron.summary", { ...summary });
