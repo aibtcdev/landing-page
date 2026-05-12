@@ -25,6 +25,7 @@ import { stacksApiFetch } from "@/lib/stacks-api-fetch";
 import type { Logger } from "@/lib/logging";
 import { STACKS_API_BASE } from "@/lib/identity/constants";
 import { isAllowedSwap } from "./allowlist";
+import { COMP_START_TIMESTAMP } from "./constants";
 import { parseSwapFromTx, type HiroTxForSwap } from "./parse";
 import type { SwapRow } from "./d1-reads";
 
@@ -49,6 +50,7 @@ export type VerifyFailureCode =
   | "tx_not_found"
   | "tx_fetch_failed"
   | "tx_failed"
+  | "before_comp_start"
   | "malformed_tx"
   | "invalid_amount"
   | "incomplete_events"
@@ -277,6 +279,19 @@ export async function verifyAndPersistSwap(
       status: "rejected",
       code: "tx_failed",
       reason: `Transaction reached terminal status '${tx.tx_status}' (not success). Failed swaps do not count toward the competition.`,
+    };
+  }
+
+  // Comp-start gate. Trades whose burn_block_time predates the campaign
+  // window do not count, regardless of other validity. Reject before the
+  // sender / allowlist / parse stages so the cron's catch-up pass can't
+  // backfill pre-campaign history into `swaps` either.
+  const txBurnTime = tx.burn_block_time ?? 0;
+  if (txBurnTime < COMP_START_TIMESTAMP) {
+    return {
+      status: "rejected",
+      code: "before_comp_start",
+      reason: `Trade burn_block_time ${txBurnTime} is before competition start ${COMP_START_TIMESTAMP}.`,
     };
   }
 

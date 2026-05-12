@@ -332,6 +332,7 @@ export async function POST(request: NextRequest) {
     case "sender_not_registered":
     case "contract_not_allowlisted":
     case "tx_failed":
+    case "before_comp_start":
     case "invalid_amount":
     case "incomplete_events":
     case "malformed_tx":

@@ -26,6 +26,7 @@ vi.mock("@/lib/stacks-api-fetch", () => ({
 }));
 
 import { verifyAndPersistSwap } from "../verify";
+import { COMP_START_TIMESTAMP } from "../constants";
 import { stacksApiFetch } from "@/lib/stacks-api-fetch";
 import type { Mock } from "vitest";
 
@@ -35,6 +36,11 @@ const POOL = "SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M";
 
 const STX_ASSET = "stx";
 const STSTX = "SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.ststx-token::ststx";
+
+// Post-comp-start fixture value used by the happy-path tx. The comp-start
+// gate (see `verifyAndPersistSwap — comp-start gate`) covers the pre-start
+// case explicitly; every other test wants to be past the gate by default.
+const POST_START_BURN_TIME = COMP_START_TIMESTAMP + 86400; // start + 1 day
 
 function mockHiroResponse(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
@@ -49,7 +55,7 @@ function buildHappyTx() {
     tx_status: "success",
     sender_address: AGENT,
     tx_type: "contract_call",
-    burn_block_time: 1762547890,
+    burn_block_time: POST_START_BURN_TIME,
     contract_call: {
       contract_id: `${POOL}.stableswap-stx-ststx-v-1-2`,
       function_name: "swap-x-for-y",
@@ -224,6 +230,66 @@ describe("verifyAndPersistSwap — success-only gate (whoabuddy's spec)", () => 
     expect(result.code).toBe("tx_failed");
     // NOT sender_not_registered or contract_not_allowlisted — tx_failed
     // wins the race.
+  });
+});
+
+describe("verifyAndPersistSwap — comp-start gate", () => {
+  it("rejects a tx whose burn_block_time predates COMP_START_TIMESTAMP", async () => {
+    const preStartTx = { ...buildHappyTx(), burn_block_time: COMP_START_TIMESTAMP - 1 };
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(preStartTx));
+    const db = buildD1Mock({ registered: true, insertChanges: 1 });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") return;
+    expect(result.code).toBe("before_comp_start");
+    expect(result.reason).toContain(String(COMP_START_TIMESTAMP));
+  });
+
+  it("accepts a tx whose burn_block_time equals COMP_START_TIMESTAMP exactly (boundary)", async () => {
+    const boundaryTx = { ...buildHappyTx(), burn_block_time: COMP_START_TIMESTAMP };
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(boundaryTx));
+    const db = buildD1Mock({ registered: true, insertChanges: 1 });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("verified");
+    if (result.status !== "verified") return;
+    expect(result.row.burn_block_time).toBe(COMP_START_TIMESTAMP);
+  });
+
+  it("lets tx_failed win when a pre-start tx is also failed (cheap fail-fast)", async () => {
+    // Pre-start AND non-success terminal: tx_failed gate runs first, so
+    // before_comp_start should NOT be the rejection code. Proves ordering.
+    const preStartFailed = {
+      ...buildHappyTx(),
+      burn_block_time: COMP_START_TIMESTAMP - 1,
+      tx_status: "abort_by_post_condition",
+    };
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(preStartFailed));
+    const db = buildD1Mock({ registered: true });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") return;
+    expect(result.code).toBe("tx_failed");
+  });
+
+  it("rejects pre-start BEFORE sender/allowlist checks", async () => {
+    // Pre-start + unregistered sender + off-allowlist contract: before_comp_start
+    // should win the race, proving the gate runs before downstream DB work.
+    const preStartUnregistered = {
+      ...buildHappyTx(),
+      burn_block_time: COMP_START_TIMESTAMP - 1,
+      sender_address: "SP000000000000000000",
+      contract_call: {
+        contract_id: "SP00000.not-on-allowlist",
+        function_name: "swap-x",
+        function_args: [],
+      },
+    };
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(preStartUnregistered));
+    const db = buildD1Mock({ registered: false });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") return;
+    expect(result.code).toBe("before_comp_start");
   });
 });
 
