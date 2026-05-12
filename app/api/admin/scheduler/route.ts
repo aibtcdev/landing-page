@@ -1,20 +1,43 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin/auth";
+import type { SchedulerRpc, SchedulerTask } from "@/lib/scheduler/rpc-types";
 
-type SchedulerStub = {
-  status(): Promise<unknown>;
-  refreshNow(task: "tenero" | "all"): Promise<unknown>;
-  pauseUntil(timestamp: number): Promise<void>;
-  resume(): Promise<void>;
-};
+const DEFAULT_SCHEDULER_INSTANCE = "v2";
+const ALLOWED_SCHEDULER_INSTANCES = new Set(["v1", "v2", "v3"]);
+const ALLOWED_TASKS = new Set<SchedulerTask>(["tenero", "all"]);
 
-function schedulerStub(env: CloudflareEnv, name: string): SchedulerStub {
-  const ns = env.SCHEDULER as unknown as {
-    idFromName(name: string): DurableObjectId;
-    get(id: DurableObjectId): SchedulerStub;
-  };
-  return ns.get(ns.idFromName(name));
+function json(body: unknown, init: ResponseInit = {}) {
+  const headers = new Headers(init.headers);
+  headers.set("Cache-Control", "no-store");
+  headers.set("X-Robots-Tag", "noindex");
+  return NextResponse.json(body, { ...init, headers });
+}
+
+function schedulerName(url: URL): string | NextResponse {
+  const name = url.searchParams.get("name") || DEFAULT_SCHEDULER_INSTANCE;
+  if (!ALLOWED_SCHEDULER_INSTANCES.has(name)) {
+    return json(
+      { error: "Unsupported scheduler name. Use v1, v2, or v3." },
+      { status: 400 }
+    );
+  }
+  return name;
+}
+
+function schedulerStub(env: CloudflareEnv, name: string): SchedulerRpc {
+  return env.SCHEDULER.get(env.SCHEDULER.idFromName(name));
+}
+
+function schedulerTask(url: URL): SchedulerTask | NextResponse {
+  const task = url.searchParams.get("task") || "tenero";
+  if (!ALLOWED_TASKS.has(task as SchedulerTask)) {
+    return json(
+      { error: "Unsupported task. Use tenero or all." },
+      { status: 400 }
+    );
+  }
+  return task as SchedulerTask;
 }
 
 export async function GET(request: NextRequest) {
@@ -23,9 +46,11 @@ export async function GET(request: NextRequest) {
 
   const { env } = await getCloudflareContext();
   const url = new URL(request.url);
-  const name = url.searchParams.get("name") || "v2";
+  const name = schedulerName(url);
+  if (typeof name !== "string") return name;
+
   const status = await schedulerStub(env, name).status();
-  return NextResponse.json({ name, status });
+  return json({ name, status });
 }
 
 export async function POST(request: NextRequest) {
@@ -34,34 +59,46 @@ export async function POST(request: NextRequest) {
 
   const { env } = await getCloudflareContext();
   const url = new URL(request.url);
-  const name = url.searchParams.get("name") || "v2";
+  const name = schedulerName(url);
+  if (typeof name !== "string") return name;
+
   const action = url.searchParams.get("action");
   const stub = schedulerStub(env, name);
 
   if (action === "pause") {
-    const until = Number(url.searchParams.get("until") || 0);
+    const rawUntil = url.searchParams.get("until");
+    if (!rawUntil) {
+      return json(
+        { error: "Missing `until`; provide a future unix-millis value." },
+        { status: 400 }
+      );
+    }
+
+    const until = Number(rawUntil);
     if (!Number.isFinite(until) || until <= Date.now()) {
-      return NextResponse.json(
+      return json(
         { error: "Provide a future unix-millis `until` value." },
         { status: 400 }
       );
     }
     await stub.pauseUntil(until);
-    return NextResponse.json({ name, pausedUntil: until });
+    return json({ name, pausedUntil: until });
   }
 
   if (action === "resume") {
     await stub.resume();
-    return NextResponse.json({ name, resumed: true });
+    return json({ name, resumed: true });
   }
 
   if (action === "refresh") {
-    const task = url.searchParams.get("task") === "all" ? "all" : "tenero";
+    const task = schedulerTask(url);
+    if (typeof task !== "string") return task;
+
     const result = await stub.refreshNow(task);
-    return NextResponse.json({ name, task, result });
+    return json({ name, task, result });
   }
 
-  return NextResponse.json(
+  return json(
     { error: "Unsupported action. Use pause, resume, or refresh." },
     { status: 400 }
   );
