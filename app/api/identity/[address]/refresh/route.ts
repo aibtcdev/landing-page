@@ -235,6 +235,9 @@ export async function POST(
       urlsToInvalidate.push(
         buildEdgeCacheKey("/api/identity", addr, "/reputation?type=feedback"),
       );
+      // Bust OG image cache — display name / BNS name changes should
+      // surface in unfurls immediately after a forced refresh.
+      urlsToInvalidate.push(buildEdgeCacheKey("/api/og", addr));
     }
     await invalidateEdgeCache(...urlsToInvalidate);
 

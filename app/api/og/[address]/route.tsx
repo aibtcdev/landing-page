@@ -12,7 +12,11 @@ import {
   mapRowToClaimRecord,
   claimRecordToStatus,
 } from "@/lib/cache/agent-profile";
+import { buildEdgeCacheKey, withEdgeCache } from "@/lib/edge-cache";
 import { BG_PATTERN_DATA_URI } from "../bg-pattern";
+
+/** TTL for OG image cache entries: 24 hours. */
+const OG_CACHE_TTL_SECONDS = 86400;
 
 const levelColors: Record<number, string> = {
   0: "rgba(255,255,255,0.3)",
@@ -49,6 +53,15 @@ export async function GET(
 ) {
   const { address } = await params;
 
+  // Early-exit for address shapes that are out of scope (numeric IDs, BNS
+  // names) — no point hitting the cache for a known-404 path.
+  const earlyBranch = classifyAddress(address);
+  if (earlyBranch !== "btc" && earlyBranch !== "stx" && earlyBranch !== "taproot") {
+    return new Response("Agent not found", { status: 404 });
+  }
+
+  const cacheKeyUrl = buildEdgeCacheKey("/api/og", address);
+  return withEdgeCache(cacheKeyUrl, OG_CACHE_TTL_SECONDS, async () => {
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
@@ -59,13 +72,10 @@ export async function GET(
     // are all handled from the first commit (no early-return on non-btc/non-stx).
     // For validation-excluded agents (~708 records, #691) not yet in D1,
     // fall back to KV btc:/stx: key to preserve 200 image responses.
-    const branch = classifyAddress(address);
-
-    // Numeric (erc8004 ID) and BNS names are out of scope for OG URLs —
-    // OG endpoints receive canonical addresses, not IDs or BNS names.
-    if (branch !== "btc" && branch !== "stx" && branch !== "taproot") {
-      return new Response("Agent not found", { status: 404 });
-    }
+    //
+    // Note: address shape is already validated by the early-exit above
+    // (classifyAddress is deterministic — no need to re-check here).
+    const branch = earlyBranch;
 
     let agent: AgentRecord | null = null;
     let claim: ClaimStatus | null = null;
@@ -342,4 +352,5 @@ export async function GET(
   } catch {
     return new Response("Failed to generate image", { status: 500 });
   }
+  }); // end withEdgeCache
 }

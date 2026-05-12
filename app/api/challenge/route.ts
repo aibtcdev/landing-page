@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
+import { buildEdgeCacheKey, invalidateEdgeCache } from "@/lib/edge-cache";
 import {
   generateChallenge,
   storeChallenge,
@@ -419,9 +420,27 @@ export async function POST(request: NextRequest) {
 
     // Invalidate cached agent list and agents:index (profile fields
     // changed). Both rebuild from source state on next read.
+    // Bust the OG image edge-cache for BTC, STX, and taproot (if set).
+    // Taproot is served by /api/og/[address] via the `taproot:` KV reverse-
+    // lookup, so a stale taproot key would serve the old image for up to 24h.
+    // Also bust the *previous* taproot if update-taproot changed the address
+    // (agent.taprootAddress is the pre-action value, available in scope).
+    const ogAddressesToBust = new Set<string>([
+      updatedAgent.btcAddress,
+      updatedAgent.stxAddress,
+    ]);
+    if (updatedAgent.taprootAddress) ogAddressesToBust.add(updatedAgent.taprootAddress);
+    // Bust previous taproot when it differs from the updated one (covers
+    // the case where update-taproot changed or cleared the address).
+    if (agent.taprootAddress && agent.taprootAddress !== updatedAgent.taprootAddress) {
+      ogAddressesToBust.add(agent.taprootAddress);
+    }
     await Promise.all([
       invalidateAgentListCache(kv),
       invalidateAgentsIndex(kv),
+      invalidateEdgeCache(
+        ...[...ogAddressesToBust].map((a) => buildEdgeCacheKey("/api/og", a)),
+      ),
     ]);
 
     return NextResponse.json({
