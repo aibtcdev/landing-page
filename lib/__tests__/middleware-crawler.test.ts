@@ -544,9 +544,10 @@ describe("middleware handleCrawlerAgentPage — Phase 2.3 D1 flip", () => {
         expect(putKey.url).toBe(
           `https://internal.cache/middleware:og:${encodeURIComponent(SAMPLE_BTC_ADDRESS.toLowerCase())}`
         );
-        // Cached clone should have 5min TTL and no Vary header
+        // Cached clone should have 5min TTL and preserve Vary: User-Agent
+        // so downstream shared caches still gate on UA (Copilot #774 fix).
         expect(putResponse.headers.get("Cache-Control")).toBe("public, max-age=300");
-        expect(putResponse.headers.get("Vary")).toBeNull();
+        expect(putResponse.headers.get("Vary")).toBe("User-Agent");
       });
     });
 
@@ -627,5 +628,57 @@ describe("middleware handleCrawlerAgentPage — Phase 2.3 D1 flip", () => {
       });
     });
 
+  });
+
+  // ── CodeQL XSS fix: HTML escaping in OG template (PR #774) ──────────────
+
+  describe("XSS escaping — dynamic interpolations in OG HTML are escaped", () => {
+    it("agent displayName with HTML special chars is escaped in <title> and meta content", async () => {
+      const row = makeProfileRow({
+        display_name: "<script>alert(1)</script>",
+      });
+      (lookupProfileByBtcAddress as Mock).mockResolvedValue(row);
+
+      const kv = buildKvMock({});
+      const db = buildD1Mock();
+      (getCloudflareContext as Mock).mockResolvedValue({
+        env: { VERIFIED_AGENTS: kv, DB: db },
+      });
+
+      const req = makeRequest(SAMPLE_BTC_ADDRESS, CRAWLER_UA);
+      const res = await middleware(req);
+
+      expect(res.status).toBe(200);
+      const body = await res.text();
+
+      // Raw <script> tag must NOT appear in output
+      expect(body).not.toContain("<script>");
+      expect(body).not.toContain("</script>");
+      // Escaped form must appear
+      expect(body).toContain("&lt;script&gt;alert(1)&lt;/script&gt;");
+    });
+
+    it("agent description with double-quote is escaped in meta content attribute", async () => {
+      const row = makeProfileRow({
+        description: 'A "dangerous" description',
+      });
+      (lookupProfileByBtcAddress as Mock).mockResolvedValue(row);
+
+      const kv = buildKvMock({});
+      const db = buildD1Mock();
+      (getCloudflareContext as Mock).mockResolvedValue({
+        env: { VERIFIED_AGENTS: kv, DB: db },
+      });
+
+      const req = makeRequest(SAMPLE_BTC_ADDRESS, CRAWLER_UA);
+      const res = await middleware(req);
+
+      expect(res.status).toBe(200);
+      const body = await res.text();
+
+      // Raw unescaped double-quote inside attribute value would break HTML;
+      // escaped form must appear in the content="..." attribute.
+      expect(body).toContain("&quot;dangerous&quot;");
+    });
   });
 });

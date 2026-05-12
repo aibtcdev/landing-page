@@ -5,6 +5,7 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { computeLevel, formatLevelTitleSuffix } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
 import { X_HANDLE } from "@/lib/constants";
+import { buildMiddlewareOgCacheKey } from "@/lib/edge-cache";
 import {
   classifyAddress,
   lookupProfileByBtcAddress,
@@ -88,7 +89,7 @@ async function handleCrawlerAgentPage(
   // Key on address (lowercased) so repeated crawler probes for the same
   // agent collapse to one slot. On hit, return immediately. On miss or
   // cache error, fall through to the live render path.
-  const edgeCacheKey = `https://internal.cache/middleware:og:${encodeURIComponent(address.toLowerCase())}`;
+  const edgeCacheKey = buildMiddlewareOgCacheKey(address);
   const cacheStore = (globalThis as unknown as { caches?: { default?: Cache } }).caches?.default ?? null;
   if (cacheStore) {
     try {
@@ -102,7 +103,7 @@ async function handleCrawlerAgentPage(
   }
 
   try {
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const db = env.DB as D1Database;
 
@@ -184,8 +185,8 @@ async function handleCrawlerAgentPage(
 
     const level = computeLevel(agent, claim);
     const ogTitle = `${displayName} — ${formatLevelTitleSuffix(level)}`;
-    const ogImage = `https://aibtc.com/api/og/${agent.btcAddress}`;
-    const canonicalUrl = `https://aibtc.com/agents/${address}`;
+    const ogImage = `https://aibtc.com/api/og/${encodeURIComponent(agent.btcAddress)}`;
+    const canonicalUrl = `https://aibtc.com/agents/${encodeURIComponent(address)}`;
 
     const html = `<!DOCTYPE html>
 <html>
@@ -195,8 +196,8 @@ async function handleCrawlerAgentPage(
 <meta property="og:title" content="${escapeAttr(ogTitle)}">
 <meta property="og:description" content="${escapeAttr(description)}">
 <meta property="og:type" content="profile">
-<meta property="og:url" content="${canonicalUrl}">
-<meta property="og:image" content="${ogImage}">
+<meta property="og:url" content="${escapeAttr(canonicalUrl)}">
+<meta property="og:image" content="${escapeAttr(ogImage)}">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta property="og:image:type" content="image/png">
@@ -205,8 +206,8 @@ async function handleCrawlerAgentPage(
 <meta name="twitter:site" content="${X_HANDLE}">
 <meta name="twitter:title" content="${escapeAttr(ogTitle)}">
 <meta name="twitter:description" content="${escapeAttr(description)}">
-<meta name="twitter:image" content="${ogImage}">
-<link rel="canonical" href="${canonicalUrl}">
+<meta name="twitter:image" content="${escapeAttr(ogImage)}">
+<link rel="canonical" href="${escapeAttr(canonicalUrl)}">
 </head>
 <body></body>
 </html>`;
@@ -222,18 +223,31 @@ async function handleCrawlerAgentPage(
 
     // Cache the rendered HTML in caches.default for 5 minutes to amortize
     // D1 read + HTML build across repeated crawler hits for the same agent.
-    // The cached clone strips Vary so the shared-cache slot is shared across
-    // all crawler UA variants (we're keying by address, not UA). On put
-    // failure we still return the live response — cache is never a hard dep.
+    // The cached clone keeps Vary: User-Agent so downstream shared caches
+    // still respect the User-Agent gate on cache hits — removing Vary from
+    // the stored entry would allow shared caches to serve the crawler-only
+    // HTML to non-crawler clients. Cache-Control is tightened to max-age=300
+    // (5 min internal TTL) for the stored entry; the live response retains
+    // the broader s-maxage=3600 directive for zone-level CDN caches.
+    // The put is non-blocking via ctx.waitUntil so the client sees the
+    // response immediately without waiting for the cache write to complete.
+    // On put failure we still return the live response — cache is never a
+    // hard dep.
     if (cacheStore) {
       try {
         const cachedClone = new Response(response.clone().body, {
           status: response.status,
-          headers: response.headers,
+          headers: new Headers(response.headers),
         });
         cachedClone.headers.set("Cache-Control", "public, max-age=300");
-        cachedClone.headers.delete("Vary");
-        await cacheStore.put(new Request(edgeCacheKey), cachedClone);
+        const stash = cacheStore.put(new Request(edgeCacheKey), cachedClone);
+        if (ctx) {
+          ctx.waitUntil(stash);
+        } else {
+          void stash.catch(() => {
+            // Best-effort — TTL expiry will heal naturally.
+          });
+        }
       } catch {
         // Best-effort — TTL expiry will heal naturally.
       }
@@ -249,11 +263,15 @@ function escapeHtml(str: string): string {
   return str
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;");
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#x27;");
 }
 
 function escapeAttr(str: string): string {
-  return escapeHtml(str).replace(/"/g, "&quot;");
+  // escapeHtml already covers &, <, >, ", ' — all characters that can break
+  // out of a double-quoted attribute value.
+  return escapeHtml(str);
 }
 
 export async function middleware(request: NextRequest) {

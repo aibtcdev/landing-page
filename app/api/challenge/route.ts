@@ -424,9 +424,9 @@ export async function POST(request: NextRequest) {
 
     // Invalidate cached agent list, agents:index, and edge caches for
     // BTC + STX + taproot (current + previous when update-taproot
-    // changed/cleared it). Both /api/og (24h TTL) and the middleware OG
-    // cache (5min TTL) key off the same address shapes, so a single Set
-    // drives both invalidations.
+    // changed/cleared it). Both /api/og (24h TTL, withEdgeCache) and the
+    // middleware crawler OG cache (5min TTL, caches.default) key off the
+    // same address shapes, so a single Set drives both invalidations.
     const addressesToBust = new Set<string>([
       updatedAgent.btcAddress,
       updatedAgent.stxAddress,
