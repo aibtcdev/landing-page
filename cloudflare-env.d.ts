@@ -29,20 +29,10 @@ interface CloudflareEnv {
   // only expands T's methods when T is branded). Without it, callers
   // see `.fetch()` / `.connect()` only, never `.status()` / etc.
   //
-  // Keep these method signatures in sync with the SchedulerDO class in
-  // worker.ts.
-  // Returns are typed as `Promise<void>` not `Promise<unknown>` because the
-  // RPC `Result<R>` type only accepts Serializable returns — `unknown`
-  // falls through to `never` and the call site can't even chain `.then()`.
-  // Callers that need richer return types should tighten these here when
-  // they wire up real consumers.
+  // Keep these method signatures in sync with SchedulerRpc in
+  // lib/scheduler/rpc-types.ts and SchedulerDO in worker.ts.
   SCHEDULER: DurableObjectNamespace<
-    Rpc.DurableObjectBranded & {
-      status(): Promise<void>;
-      refreshNow(task: "tenero" | "all"): Promise<void>;
-      pauseUntil(timestamp: number): Promise<void>;
-      resume(): Promise<void>;
-    }
+    Rpc.DurableObjectBranded & import("./lib/scheduler/rpc-types").SchedulerRpc
   >;
   TENERO_API_KEY?: string; // Optional Tenero API key (x-api-key header); raises rate limits above the shared web-ui-ip tier
 }

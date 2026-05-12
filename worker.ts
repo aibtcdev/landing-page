@@ -18,6 +18,11 @@ import {
   type TeneroRunResult,
   TENERO_MINUTE_QUOTA_BACKOFF_MS,
 } from "./lib/scheduler/tenero-task";
+import type {
+  SchedulerRefreshResult,
+  SchedulerStatus,
+  SchedulerTask,
+} from "./lib/scheduler/rpc-types";
 
 // ─────────────────────────── SchedulerDO ───────────────────────────
 //
@@ -43,16 +48,6 @@ import {
 
 const TENERO_INTERVAL_MS = 5 * 60 * 1000;
 const ALARM_TICK_MS = TENERO_INTERVAL_MS;
-
-export interface SchedulerStatus {
-  now: number;
-  pausedUntil: number | null;
-  lastTeneroRunAt: number | null;
-  lastTeneroResult: TeneroRunResult | null;
-  consecutiveFailures: { tenero: number };
-  nextRunAfter: { tenero: number | null };
-  nextAlarmAt: number | null;
-}
 
 type StoredScheduler = {
   lastTeneroRunAt?: number;
@@ -89,7 +84,7 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
     };
   }
 
-  async refreshNow(task: "tenero" | "all"): Promise<{ tenero?: TeneroRunResult }> {
+  async refreshNow(task: SchedulerTask): Promise<SchedulerRefreshResult> {
     const logger = this.makeLogger({ trigger: "refreshNow", task });
     const out: { tenero?: TeneroRunResult } = {};
     if (task === "tenero" || task === "all") {
