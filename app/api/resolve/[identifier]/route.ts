@@ -7,7 +7,8 @@
  * - Numeric agent-id (e.g. "42") — looks up ERC-8004 NFT owner on-chain
  * - Taproot address (bc1p...) — resolves via taproot: reverse index
  * - Bitcoin address (bc1q..., 1..., 3...) — direct KV lookup
- * - Stacks address (SP..., SM...) — direct KV lookup
+ * - Stacks address (SP..., SM...) — resolved via D1 (lookupProfileByStxAddress);
+ *   the legacy stx: KV secondary index was removed in PR #787 / phase P4.0c.
  * - BNS name (*.btc) — scans agents and matches bnsName field
  * - Display name (any other string) — scans agents and matches displayName field
  *
@@ -229,6 +230,37 @@ function buildUsageResponse() {
 }
 
 // ---------------------------------------------------------------------------
+// Shared 404 response for STX-addressed agents that have an on-chain identity
+// but are not registered on the AIBTC platform.
+// ---------------------------------------------------------------------------
+
+function buildStxNotRegisteredResponse(
+  identifier: string,
+  identifierType: string,
+  stxAddress: string,
+  agentId?: number
+): NextResponse {
+  const qualifier =
+    agentId !== undefined
+      ? `Agent ID ${agentId} is minted on-chain (owner: ${stxAddress}) but this address is`
+      : `${stxAddress} is`;
+  return NextResponse.json(
+    {
+      found: false,
+      identifier,
+      identifierType,
+      error: `${qualifier} not registered on the AIBTC platform.`,
+      nextSteps: {
+        action: "Register as a new agent",
+        endpoint: "POST /api/register",
+        documentation: "https://aibtc.com/llms-full.txt",
+      },
+    },
+    { status: 404 }
+  );
+}
+
+// ---------------------------------------------------------------------------
 // Main handler
 // ---------------------------------------------------------------------------
 
@@ -298,61 +330,22 @@ export async function GET(
       try {
         if (!db) {
           logger.error("resolve.agent_id_d1_unavailable", { stxAddress, agentId });
-          return NextResponse.json(
-            {
-              found: false,
-              identifier,
-              identifierType,
-              error: `Agent ID ${agentId} is minted on-chain (owner: ${stxAddress}) but this address is not registered on the AIBTC platform.`,
-              nextSteps: {
-                action: "Register as a new agent",
-                endpoint: "POST /api/register",
-                documentation: "https://aibtc.com/llms-full.txt",
-              },
-            },
-            { status: 404 }
-          );
+          return buildStxNotRegisteredResponse(identifier, identifierType, stxAddress, agentId);
         }
         stxRow = await lookupProfileByStxAddress(db, stxAddress);
       } catch (d1Err) {
         logger.error("resolve.agent_id_d1_failed", { stxAddress, agentId, error: String(d1Err) });
-        return NextResponse.json(
-          {
-            found: false,
-            identifier,
-            identifierType,
-            error: `Agent ID ${agentId} is minted on-chain (owner: ${stxAddress}) but this address is not registered on the AIBTC platform.`,
-            nextSteps: {
-              action: "Register as a new agent",
-              endpoint: "POST /api/register",
-              documentation: "https://aibtc.com/llms-full.txt",
-            },
-          },
-          { status: 404 }
-        );
+        return buildStxNotRegisteredResponse(identifier, identifierType, stxAddress, agentId);
       }
       if (stxRow) {
         agent = mapRowToAgentRecord(stxRow);
-        // Ensure the erc8004AgentId matches what we found on-chain
-        if (agent.erc8004AgentId == null) {
-          agent.erc8004AgentId = agentId;
-        }
+        // Always set erc8004AgentId to the authoritative on-chain value, overriding
+        // any stale non-null value that may have been stored in D1. The on-chain
+        // agentId is the source of truth in the agent-id lookup path.
+        agent.erc8004AgentId = agentId;
       } else {
         // On-chain identity exists but agent not registered on platform
-        return NextResponse.json(
-          {
-            found: false,
-            identifier,
-            identifierType,
-            error: `Agent ID ${agentId} is minted on-chain (owner: ${stxAddress}) but this address is not registered on the AIBTC platform.`,
-            nextSteps: {
-              action: "Register as a new agent",
-              endpoint: "POST /api/register",
-              documentation: "https://aibtc.com/llms-full.txt",
-            },
-          },
-          { status: 404 }
-        );
+        return buildStxNotRegisteredResponse(identifier, identifierType, stxAddress, agentId);
       }
     } else if (identifierType === "taproot") {
       // Taproot: resolve via taproot: reverse index

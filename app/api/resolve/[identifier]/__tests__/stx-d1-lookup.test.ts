@@ -275,7 +275,7 @@ describe("Path A — direct STX address lookup: D1 throws → fail-closed → 40
 // ============================================================================
 
 describe("Path B — agent-id lookup: D1 returns row → 200 with erc8004AgentId set", () => {
-  it("returns 200 with mapped identity body and erc8004AgentId filled in", async () => {
+  it("fills in erc8004AgentId and passes the enriched agent to enrichAgentProfile", async () => {
     const mockDb = buildMockD1();
     const mockKv = buildMockKv();
 
@@ -293,6 +293,15 @@ describe("Path B — agent-id lookup: D1 returns row → 200 with erc8004AgentId
     const record = makeAgentRecord({ erc8004AgentId: null });
     (mapRowToAgentRecord as Mock).mockReturnValue(record);
 
+    // Capture the agent arg passed to enrichAgentProfile so we can assert fill-in
+    let capturedAgent: AgentRecord | undefined;
+    (enrichAgentProfile as Mock).mockImplementation(
+      async (agent: AgentRecord, ...rest: unknown[]) => {
+        capturedAgent = { ...agent };
+        return makeEnrichmentResult();
+      }
+    );
+
     const res = await GET(
       buildAgentIdRequest(TEST_AGENT_ID),
       { params: Promise.resolve({ identifier: String(TEST_AGENT_ID) }) }
@@ -303,6 +312,51 @@ describe("Path B — agent-id lookup: D1 returns row → 200 with erc8004AgentId
     expect(body.found).toBe(true);
     expect(body.identifierType).toBe("agent-id");
     expect(lookupProfileByStxAddress as Mock).toHaveBeenCalledWith(mockDb, TEST_STX_ADDRESS);
+    // Assert that the agent passed to enrichAgentProfile has erc8004AgentId set to the on-chain value
+    expect(capturedAgent).toBeDefined();
+    expect(capturedAgent!.erc8004AgentId).toBe(TEST_AGENT_ID);
+  });
+
+  it("overrides a stale stored erc8004AgentId with the authoritative on-chain value", async () => {
+    const mockDb = buildMockD1();
+    const mockKv = buildMockKv();
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: { DB: mockDb, VERIFIED_AGENTS: mockKv, HIRO_API_KEY: undefined, LOGS: undefined },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    // On-chain resolution: agentId → stxAddress
+    (callReadOnly as Mock).mockResolvedValue({ result: "0x00" });
+    (parseClarityValue as Mock).mockReturnValue(TEST_STX_ADDRESS);
+
+    const STALE_AGENT_ID = 999; // incorrect stored value
+    const row = makeProfileRow({ erc8004_agent_id: STALE_AGENT_ID });
+    (lookupProfileByStxAddress as Mock).mockResolvedValue(row);
+    // mapRowToAgentRecord returns the stale value as stored in D1
+    const record = makeAgentRecord({ erc8004AgentId: STALE_AGENT_ID });
+    (mapRowToAgentRecord as Mock).mockReturnValue(record);
+
+    let capturedAgent: AgentRecord | undefined;
+    (enrichAgentProfile as Mock).mockImplementation(
+      async (agent: AgentRecord, ...rest: unknown[]) => {
+        capturedAgent = { ...agent };
+        return makeEnrichmentResult();
+      }
+    );
+
+    const res = await GET(
+      buildAgentIdRequest(TEST_AGENT_ID),
+      { params: Promise.resolve({ identifier: String(TEST_AGENT_ID) }) }
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json() as Record<string, unknown>;
+    expect(body.found).toBe(true);
+    // The on-chain TEST_AGENT_ID must override the stale stored STALE_AGENT_ID
+    expect(capturedAgent).toBeDefined();
+    expect(capturedAgent!.erc8004AgentId).toBe(TEST_AGENT_ID);
+    expect(capturedAgent!.erc8004AgentId).not.toBe(STALE_AGENT_ID);
   });
 });
 
