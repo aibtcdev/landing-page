@@ -5,11 +5,9 @@ import AnimatedBackground from "../components/AnimatedBackground";
 import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
 import { getCachedTokenPrices } from "@/lib/external/tenero/kv-cache";
 
-// 60s ISR window — the verifier cron cadence is 15 min, so a minute of
-// staleness on the leaderboard renders is fine. Lets the framework serve
-// the first request's SSR result to every other viewer in that window
-// without re-running both D1 queries on every hit.
-export const revalidate = 60;
+// Reads live Cloudflare bindings (D1, KV, SchedulerDO). Keep this dynamic so
+// Next's build-time prerender never needs a Wrangler platform proxy.
+export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Trading Leaderboard - AIBTC",
@@ -89,10 +87,7 @@ function safeAggregateNumber(raw: number | string | null | undefined): number {
 }
 
 async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
-  // {async: true} is required when the page isn't `force-dynamic` —
-  // build-time prerender (now enabled by `revalidate = 60`) calls this
-  // function and only the async-mode form works there.
-  const { env, ctx } = await getCloudflareContext({ async: true });
+  const { env, ctx } = await getCloudflareContext();
   const db = env.DB as D1Database | undefined;
   const kv = env.VERIFIED_AGENTS as KVNamespace | undefined;
 
