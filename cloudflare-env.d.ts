@@ -5,6 +5,7 @@ interface CloudflareEnv {
   RATE_LIMIT_READ: RateLimit;
   RATE_LIMIT_MUTATING: RateLimit;
   RATE_LIMIT_AUTHENTICATED: RateLimit;
+  RATE_LIMIT_STRICT: RateLimit;
   DEPLOY_ENV?: "production" | "preview"; // Set via wrangler vars per env; undefined in local dev → fail-open
   ARC_ADMIN_API_KEY: string; // Admin API key for /api/admin/* endpoints
   HIRO_API_KEY?: string; // Hiro API key for authenticated Stacks API requests (set via wrangler secret)

@@ -49,7 +49,9 @@
     // RATE_LIMIT_READ: reserved for Phase 1 read endpoints (no callers yet).
     { "name": "RATE_LIMIT_READ",          "namespace_id": "2026050801", "simple": { "limit": 300, "period": 60 } },
     { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050802", "simple": { "limit":  20, "period": 60 } },
-    { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050803", "simple": { "limit": 200, "period": 60 } }
+    { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050803", "simple": { "limit": 200, "period": 60 } },
+    // RATE_LIMIT_STRICT: 1 req / 60s per key. Used by /api/challenge — tightens burst tolerance vs the prior lib/challenge.ts 6/10min KV-RMW; trade-off documented in PR.
+    { "name": "RATE_LIMIT_STRICT",        "namespace_id": "2026050804", "simple": { "limit":   1, "period":  60 } }
   ],
   // Service bindings: worker-logs RPC and x402 sponsor relay RPC
   "services": [
@@ -126,12 +128,14 @@
         }
       ],
 
-      // Production ratelimit namespace_ids: 2026050801–03 (preserved from #662 so
+      // Production ratelimit namespace_ids: 2026050801–04 (preserved from #662 so
       // production counters are not reset by this PR).
       "ratelimits": [
         { "name": "RATE_LIMIT_READ",          "namespace_id": "2026050801", "simple": { "limit": 300, "period": 60 } },
         { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050802", "simple": { "limit":  20, "period": 60 } },
-        { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050803", "simple": { "limit": 200, "period": 60 } }
+        { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050803", "simple": { "limit": 200, "period": 60 } },
+        // RATE_LIMIT_STRICT: 1 req / 60s per key. Used by /api/challenge — tightens burst tolerance vs the prior lib/challenge.ts 6/10min KV-RMW; trade-off documented in PR.
+        { "name": "RATE_LIMIT_STRICT",        "namespace_id": "2026050804", "simple": { "limit":   1, "period":  60 } }
       ],
 
       "services": [
@@ -197,12 +201,14 @@
         }
       ],
 
-      // Preview ratelimit namespace_ids: 2026050811–13 — distinct from production
+      // Preview ratelimit namespace_ids: 2026050811–14 — distinct from production
       // so branch preview traffic cannot consume production rate-limit counters.
       "ratelimits": [
         { "name": "RATE_LIMIT_READ",          "namespace_id": "2026050811", "simple": { "limit": 300, "period": 60 } },
         { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050812", "simple": { "limit":  20, "period": 60 } },
-        { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050813", "simple": { "limit": 200, "period": 60 } }
+        { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050813", "simple": { "limit": 200, "period": 60 } },
+        // RATE_LIMIT_STRICT: 1 req / 60s per key. Used by /api/challenge — tightens burst tolerance vs the prior lib/challenge.ts 6/10min KV-RMW; trade-off documented in PR.
+        { "name": "RATE_LIMIT_STRICT",        "namespace_id": "2026050814", "simple": { "limit":   1, "period":  60 } }
       ],
 
       // Service bindings — preview INTENTIONALLY shares production logging + relay services.

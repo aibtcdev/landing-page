@@ -8,8 +8,6 @@ import {
   getChallenge,
   deleteChallenge,
   validateChallenge,
-  checkRateLimit,
-  recordRequest,
   executeAction,
   getAvailableActions,
 } from "@/lib/challenge";
@@ -181,27 +179,43 @@ export async function GET(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Rate limiting
+    // Rate limiting via first-party `ratelimits` binding (RATE_LIMIT_STRICT: 1 req / 60s per key).
+    // Replaces prior KV-RMW pattern (lib/challenge.ts checkRateLimit/recordRequest on
+    // rate:challenge:{ip}, which was 6 req / 10 min). The new semantics tighten burst
+    // tolerance (no 6-request burst) but raise the per-hour ceiling. The 6/10min window
+    // is not implementable in the binding (period ∈ {10,60}); follow-up zone Rate Limit
+    // Rule can layer back the 10-min window if traffic data shows it's needed.
+    // Mirrors the fail-open/fail-closed convention from app/api/inbox/[address]/route.ts:835.
     const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
-    const rateLimitCheck = await checkRateLimit(kv, ip);
+    let rateLimited = false;
+    try {
+      const { success } = await env.RATE_LIMIT_STRICT.limit({ key: `challenge:${ip}` });
+      rateLimited = !success;
+    } catch {
+      // Binding unavailable. Fail closed in production/preview to preserve the prior
+      // KV-backed limit's security guarantee; fail open only in local dev (no DEPLOY_ENV).
+      if (env.DEPLOY_ENV) {
+        return NextResponse.json(
+          { error: "Rate limit unavailable. Please try again." },
+          { status: 503 }
+        );
+      }
+    }
 
-    if (!rateLimitCheck.allowed) {
+    if (rateLimited) {
       return NextResponse.json(
         {
-          error: "Rate limit exceeded. Maximum 6 requests per 10 minutes.",
-          retryAfter: rateLimitCheck.retryAfter,
+          error: "Rate limit exceeded. Maximum 1 challenge request per minute per IP.",
+          retryAfter: 60,
         },
         {
           status: 429,
           headers: {
-            "Retry-After": String(rateLimitCheck.retryAfter),
+            "Retry-After": "60",
           },
         }
       );
     }
-
-    // Record this request for rate limiting
-    await recordRequest(kv, ip);
 
     // Generate and store challenge
     const challenge = generateChallenge(address, action);
