@@ -197,7 +197,7 @@ export async function GET(
           if (!btcAddress) {
             // Cold-start fallback: pre-B6.2 agents without a reverse-index entry.
             // Find via agents:index and self-heal.
-            const index = await getAgentsIndex(kv);
+            const index = await getAgentsIndex(kv, db);
             const entry = index.agents.find(
               (a) => a.bnsName && a.bnsName.toLowerCase() === target
             );

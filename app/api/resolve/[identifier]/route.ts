@@ -128,10 +128,11 @@ async function resolveAgentIdToStxAddress(
  */
 async function findAgentByIndex(
   kv: KVNamespace,
+  db: D1Database | undefined,
   predicate: (entry: AgentIndexEntry) => boolean,
   validate: (record: AgentRecord) => boolean
 ): Promise<AgentRecord | null> {
-  const index = await getAgentsIndex(kv);
+  const index = await getAgentsIndex(kv, db);
   const entry = index.agents.find(predicate);
   if (!entry) return null;
 
@@ -368,7 +369,7 @@ export async function GET(
       const target = identifier.toLowerCase();
       let btcAddress = await lookupBtcAddressByBnsName(kv, target);
       if (!btcAddress) {
-        const index = await getAgentsIndex(kv);
+        const index = await getAgentsIndex(kv, db);
         const entry = index.agents.find(
           (a) => a.bnsName && a.bnsName.toLowerCase() === target,
         );
@@ -400,6 +401,7 @@ export async function GET(
       const target = identifier.toLowerCase();
       agent = await findAgentByIndex(
         kv,
+        db,
         (e) => !!e.displayName && e.displayName.toLowerCase() === target,
         (r) => !!r.displayName && r.displayName.toLowerCase() === target,
       );

@@ -93,7 +93,7 @@ async function resolveAgentAndClaim(
     const target = address.toLowerCase();
     let btcAddress = await lookupBtcAddressByBnsName(kv, target);
     if (!btcAddress) {
-      const index = await getAgentsIndex(kv);
+      const index = await getAgentsIndex(kv, db);
       const entry = index.agents.find(
         (a) => a.bnsName && a.bnsName.toLowerCase() === target,
       );

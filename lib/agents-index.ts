@@ -110,10 +110,82 @@ async function writeIndex(
 }
 
 /**
- * Rebuild the index by scanning all `stx:` keys. One-shot recovery
- * path used on cold miss; this is the SAME work the hot paths used
- * to do every request, so we want it to fire at most once per
- * deployment / index-loss event.
+ * D1 row shape for the agents SELECT used in buildIndexFromScan.
+ * Only the columns needed for AgentIndexEntry are selected.
+ */
+interface AgentIndexRow {
+  btc_address: string;
+  stx_address: string;
+  taproot_address: string | null;
+  bns_name: string | null;
+  display_name: string | null;
+  capabilities_json: string | null;
+  verified_at: string;
+}
+
+/**
+ * Rebuild the index from D1 via a single SELECT. Returns all rows
+ * as AgentIndexEntry[].
+ *
+ * Returns null if the D1 query fails (caller falls back to KV scan).
+ * Logs a warning if fewer than MIN_EXPECTED_D1_ROWS rows are returned
+ * as a signal that D1 may not yet be fully backfilled (see #691).
+ */
+const MIN_EXPECTED_D1_ROWS = 100;
+
+async function buildIndexFromD1(
+  db: D1Database,
+  logger?: Logger,
+): Promise<AgentIndexEntry[] | null> {
+  try {
+    const result = await db
+      .prepare(
+        `SELECT btc_address, stx_address, taproot_address, bns_name,
+                display_name, capabilities_json, verified_at
+         FROM agents
+         ORDER BY verified_at ASC`,
+      )
+      .all<AgentIndexRow>();
+
+    const entries: AgentIndexEntry[] = result.results.map((row) => ({
+      btcAddress: row.btc_address,
+      stxAddress: row.stx_address,
+      taprootAddress: row.taproot_address ?? null,
+      bnsName: row.bns_name ?? null,
+      displayName: row.display_name ?? null,
+      capabilities: row.capabilities_json
+        ? (() => {
+            try {
+              return JSON.parse(row.capabilities_json!) as string[];
+            } catch {
+              return null;
+            }
+          })()
+        : null,
+      verifiedAt: row.verified_at,
+    }));
+
+    if (entries.length < MIN_EXPECTED_D1_ROWS) {
+      // D1 backfill (#691) may be incomplete. Log so operators can track.
+      logger?.warn("agents_index.d1_low_row_count", {
+        count: entries.length,
+        threshold: MIN_EXPECTED_D1_ROWS,
+        note: "D1 backfill (#691) may be in progress",
+      });
+    }
+
+    return entries;
+  } catch (e) {
+    logger?.warn("agents_index.d1_query_error", { error: String(e) });
+    return null;
+  }
+}
+
+/**
+ * Rebuild the index by scanning all `stx:` keys. Fallback path used
+ * when D1 is unavailable or returns an unexpected result. This is the
+ * same work hot paths used to do on every request before B6 — kept as
+ * a safety net while D1 backfill (#691) is in progress.
  */
 async function buildIndexFromScan(
   kv: KVNamespace,
@@ -157,14 +229,19 @@ async function buildIndexFromScan(
 }
 
 /**
- * Get the agents index. On cold miss, performs a one-shot scan-
- * based backfill, gating concurrent rebuilds with a 60s sentinel.
- * Loser requests poll briefly for the winner's result before
- * falling through to their own scan (so a stuck sentinel never
- * blocks the read).
+ * Get the agents index. On cold miss, rebuilds from D1 (single SELECT)
+ * when a D1Database is provided, falling back to the KV scan if D1 is
+ * unavailable or returns null. Concurrent rebuilds are gated with a
+ * 60s sentinel; loser requests poll briefly before falling through.
+ *
+ * @param kv - KV namespace for index storage and fallback scan.
+ * @param db - Optional D1 binding (env.DB). When provided, cold-miss
+ *   rebuilds use a single D1 SELECT instead of kv.list + N kv.get.
+ * @param logger - Optional structured logger.
  */
 export async function getAgentsIndex(
   kv: KVNamespace,
+  db?: D1Database,
   logger?: Logger,
 ): Promise<AgentsIndex> {
   const cached = await readIndex(kv);
@@ -192,9 +269,30 @@ export async function getAgentsIndex(
   }
 
   try {
-    const entries = await buildIndexFromScan(kv, logger);
+    // Prefer D1 SELECT (single query, ~5 ms) over KV scan (~431 reads).
+    // Falls back to KV scan if db is absent or the query fails — ensures
+    // the index is always populated even if D1 backfill (#691) is
+    // incomplete.
+    let entries: AgentIndexEntry[] | null = null;
+    if (db) {
+      entries = await buildIndexFromD1(db, logger);
+      if (entries !== null) {
+        logger?.info("agents_index.backfilled_from_d1", {
+          count: entries.length,
+        });
+      }
+    }
+    if (entries === null) {
+      logger?.warn("agents_index.falling_back_to_kv_scan", {
+        reason: db ? "d1_query_failed" : "no_d1_binding",
+      });
+      entries = await buildIndexFromScan(kv, logger);
+      logger?.info("agents_index.backfilled_from_kv", {
+        count: entries.length,
+      });
+    }
+
     const index = await writeIndex(kv, entries);
-    logger?.info("agents_index.backfilled", { count: entries.length });
     return index;
   } finally {
     await kv.delete(BACKFILL_LOCK_KEY).catch(() => {});
