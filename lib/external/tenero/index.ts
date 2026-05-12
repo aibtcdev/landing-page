@@ -3,6 +3,7 @@ export {
   tokenIdToTeneroAddress,
   type TeneroPriceResult,
 } from "./prices";
+export { STATIC_TOKEN_IDS } from "./tokens";
 export {
   getCachedTokenPrice,
   getCachedTokenPrices,
