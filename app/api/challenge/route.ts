@@ -420,14 +420,26 @@ export async function POST(request: NextRequest) {
 
     // Invalidate cached agent list and agents:index (profile fields
     // changed). Both rebuild from source state on next read.
-    // Also bust the OG image edge-cache for both BTC and STX addresses —
-    // display name / description changes should surface immediately in unfurls.
+    // Bust the OG image edge-cache for BTC, STX, and taproot (if set).
+    // Taproot is served by /api/og/[address] via the `taproot:` KV reverse-
+    // lookup, so a stale taproot key would serve the old image for up to 24h.
+    // Also bust the *previous* taproot if update-taproot changed the address
+    // (agent.taprootAddress is the pre-action value, available in scope).
+    const ogAddressesToBust = new Set<string>([
+      updatedAgent.btcAddress,
+      updatedAgent.stxAddress,
+    ]);
+    if (updatedAgent.taprootAddress) ogAddressesToBust.add(updatedAgent.taprootAddress);
+    // Bust previous taproot when it differs from the updated one (covers
+    // the case where update-taproot changed or cleared the address).
+    if (agent.taprootAddress && agent.taprootAddress !== updatedAgent.taprootAddress) {
+      ogAddressesToBust.add(agent.taprootAddress);
+    }
     await Promise.all([
       invalidateAgentListCache(kv),
       invalidateAgentsIndex(kv),
       invalidateEdgeCache(
-        buildEdgeCacheKey("/api/og", updatedAgent.btcAddress),
-        buildEdgeCacheKey("/api/og", updatedAgent.stxAddress),
+        ...[...ogAddressesToBust].map((a) => buildEdgeCacheKey("/api/og", a)),
       ),
     ]);
 
