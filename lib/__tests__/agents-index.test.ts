@@ -232,6 +232,123 @@ describe("invalidateAgentsIndex", () => {
   });
 });
 
+// ---------------------------------------------------------------------------
+// D1 path
+// ---------------------------------------------------------------------------
+
+interface MockD1Row {
+  btc_address: string;
+  stx_address: string;
+  taproot_address: string | null;
+  bns_name: string | null;
+  display_name: string | null;
+  capabilities_json: string | null;
+  verified_at: string;
+}
+
+function makeD1Row(seed: string, overrides: Partial<MockD1Row> = {}): MockD1Row {
+  return {
+    btc_address: `bc1q${seed}`,
+    stx_address: `SP${seed.toUpperCase()}`,
+    taproot_address: null,
+    bns_name: `${seed}.btc`,
+    display_name: `Agent ${seed}`,
+    capabilities_json: null,
+    verified_at: "2026-05-05T00:00:00Z",
+    ...overrides,
+  };
+}
+
+function makeD1(rows: MockD1Row[]): D1Database {
+  return {
+    prepare: () => ({
+      all: async () => ({ results: rows }),
+    }),
+  } as unknown as D1Database;
+}
+
+function make100D1Rows(): MockD1Row[] {
+  return Array.from({ length: 100 }, (_, i) => makeD1Row(`row${i}`));
+}
+
+describe("getAgentsIndex — D1 path", () => {
+  let kv: MockKV;
+
+  beforeEach(() => {
+    kv = createMockKv();
+  });
+
+  it("builds index from D1 when SELECT returns >= 100 rows", async () => {
+    const rows = make100D1Rows();
+    const db = makeD1(rows);
+
+    const index = await getAgentsIndex(kv.asKv(), db);
+
+    expect(index.v).toBe(1);
+    expect(index.agents).toHaveLength(100);
+    expect(index.agents[0].btcAddress).toBe("bc1qrow0");
+    // Index was cached in KV
+    expect(kv.store.has("agents:index")).toBe(true);
+    // KV scan list should NOT have been called (D1 path used)
+    expect(kv.stats.lists).toBe(0);
+  });
+
+  it("falls back to KV scan when D1 returns fewer than 100 rows", async () => {
+    // Seed 3 agents in KV so the fallback scan produces a real index.
+    seedAgents(kv, [makeAgent("a"), makeAgent("b"), makeAgent("c")]);
+
+    const db = makeD1([makeD1Row("only1"), makeD1Row("only2")]);
+
+    const index = await getAgentsIndex(kv.asKv(), db);
+
+    // Should have fallen back to KV scan (3 agents).
+    expect(index.agents).toHaveLength(3);
+    // KV list must have fired (scan path active).
+    expect(kv.stats.lists).toBeGreaterThan(0);
+  });
+
+  it("falls back to KV scan when D1 throws", async () => {
+    seedAgents(kv, [makeAgent("x")]);
+
+    const db = {
+      prepare: () => ({
+        all: async () => {
+          throw new Error("D1 unavailable");
+        },
+      }),
+    } as unknown as D1Database;
+
+    const index = await getAgentsIndex(kv.asKv(), db);
+
+    expect(index.agents).toHaveLength(1);
+    expect(index.agents[0].btcAddress).toBe("bc1qx");
+    expect(kv.stats.lists).toBeGreaterThan(0);
+  });
+
+  it("sets capabilities to null when capabilities_json is malformed", async () => {
+    const rows = [
+      ...make100D1Rows().slice(0, 99),
+      makeD1Row("bad", { capabilities_json: "{ not valid json" }),
+    ];
+    const db = makeD1(rows);
+
+    const index = await getAgentsIndex(kv.asKv(), db);
+
+    const badEntry = index.agents.find((e) => e.btcAddress === "bc1qbad");
+    expect(badEntry).toBeDefined();
+    expect(badEntry!.capabilities).toBeNull();
+  });
+
+  it("uses KV scan path when db is undefined (no D1 binding)", async () => {
+    seedAgents(kv, [makeAgent("a")]);
+
+    const index = await getAgentsIndex(kv.asKv(), undefined);
+
+    expect(index.agents).toHaveLength(1);
+    expect(kv.stats.lists).toBeGreaterThan(0);
+  });
+});
+
 describe("AgentsIndex schema (round-trip)", () => {
   it("stable JSON round-trip preserves the schema", async () => {
     const kv = createMockKv();

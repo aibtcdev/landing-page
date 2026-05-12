@@ -33,6 +33,7 @@ export async function GET(request: NextRequest) {
   try {
     const { env } = await getCloudflareContext({ async: true });
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database;
 
     const capability = searchParams.get("capability");
     const limit = Math.min(parseInt(searchParams.get("limit") || "50", 10), 100);
@@ -41,7 +42,7 @@ export async function GET(request: NextRequest) {
     // Source capabilities + addresses from the maintained agents:index
     // (single KV read), then only fetch full AgentRecords for the
     // paginated slice that's actually returned.
-    const index = await getAgentsIndex(kv);
+    const index = await getAgentsIndex(kv, db);
     const indexed: AgentIndexEntry[] = index.agents.filter(
       (e) => Array.isArray(e.capabilities) && e.capabilities.length > 0,
     );
