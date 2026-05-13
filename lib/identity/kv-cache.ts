@@ -64,6 +64,12 @@ const IDENTITY_CONFIRMED_NEGATIVE_CACHE_TTL = 7 * 24 * 60 * 60; // 7 days
  */
 const IDENTITY_LOOKUP_FAILED_CACHE_TTL = 60; // 60 seconds
 const REPUTATION_CACHE_TTL = 60 * 60; // 1 hour (raised from 5 minutes)
+/**
+ * "Lookup failed" for reputation — same semantics as BNS / identity failure TTL.
+ * Stops a polling-storm from sustaining live Hiro pressure when the upstream
+ * contract call is in timeout / 5xx.
+ */
+const REPUTATION_LOOKUP_FAILED_CACHE_TTL = 60; // 60 seconds
 const TX_CACHE_TTL = 30 * 60; // 30 minutes (raised from 5 minutes)
 
 /** Result from a cache lookup: distinguishes miss ({hit:false}) from cached null ({hit:true,value:null}). */
@@ -472,6 +478,36 @@ export function setCachedReputation(
     `cache:reputation:${key}`,
     JSON.stringify(data),
     REPUTATION_CACHE_TTL,
+    "reputation",
+    logger
+  );
+}
+
+/**
+ * Cache a reputation lookup failure (Hiro TimeoutError, 5xx, malformed
+ * response) for a short TTL ({@link REPUTATION_LOOKUP_FAILED_CACHE_TTL}).
+ * Mirrors the BNS / identity lookup-failed pattern — stops a polling-storm
+ * from sustaining live Hiro pressure when the upstream contract call is
+ * already in timeout/error state.
+ *
+ * Writes NONE_SENTINEL so {@link getCachedReputation} returns
+ * `{hit: true, value: null}` on the next call within the failure window,
+ * which callers treat the same as "no data" without re-hitting Hiro. This
+ * matches the BNS/identity helpers' behavioral conflation of confirmed-
+ * negative and lookup-failed (both surface as `null` to callers); the only
+ * distinguishing signal is the shorter TTL, which guarantees Hiro retries
+ * resume within a minute of recovery.
+ */
+export function setCachedReputationLookupFailed(
+  key: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<void> {
+  return kvPut(
+    kv,
+    `cache:reputation:${key}`,
+    NONE_SENTINEL,
+    REPUTATION_LOOKUP_FAILED_CACHE_TTL,
     "reputation",
     logger
   );

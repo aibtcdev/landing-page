@@ -5,7 +5,7 @@
 import { uintCV, noneCV, falseCV, someCV } from "@stacks/transactions";
 import { REPUTATION_REGISTRY_CONTRACT } from "./constants";
 import { callReadOnly, parseClarityValue } from "./stacks-api";
-import { getCachedReputation, setCachedReputation } from "./kv-cache";
+import { getCachedReputation, setCachedReputation, setCachedReputationLookupFailed } from "./kv-cache";
 import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback } from "./types";
 import type { Logger } from "../logging";
 
@@ -63,7 +63,15 @@ export async function getReputationSummary(
       agentId,
       error: String(error),
     });
-    throw error;
+    // Mirrors the setCachedBnsLookupFailed / setCachedIdentityLookupFailed
+    // pattern from kv-cache.ts: write a 60s negative cache and return null
+    // silently. Throwing here would create an asymmetry — the first request
+    // within the failure window returns 500, subsequent requests within 60s
+    // return the cached null as 200 — surfacing inconsistent behavior to
+    // the same polling client. Returning null on both calls matches the
+    // BNS/identity helpers' behavior and bounds Hiro retries to 1/60s.
+    await setCachedReputationLookupFailed(cacheKey, kv, logger);
+    return null;
   }
 }
 
@@ -124,6 +132,12 @@ export async function getReputationFeedback(
       cursor: cursor ?? null,
       error: String(error),
     });
-    throw error;
+    // Same 60s negative-cache treatment as getReputationSummary: break the
+    // polling-storm amplification on transient Hiro errors (TimeoutError,
+    // 5xx). Returns an empty feedback page silently — matches BNS/identity
+    // behavior where lookup-failed and confirmed-negative both surface as
+    // null/empty to callers, distinguished only by TTL.
+    await setCachedReputationLookupFailed(cacheKey, kv, logger);
+    return { items: [], cursor: null };
   }
 }
