@@ -44,7 +44,7 @@ import type {
 // - lastTeneroRunAt        — unix millis when the Tenero task last completed
 // - lastTeneroResult       — { succeeded, failed, minuteRemaining, monthRemaining }
 // - lastCompetitionRunAt   — unix millis when the competition sweep last completed
-// - lastCompetitionResult  — { scanned, found, inserted, alreadyKnown, pending, rejected, cursor }
+// - lastCompetitionResult  — { scanned, found, inserted, alreadyKnown, pending, rejected, rejectionReasons, cursor }
 // - consecutiveFailures    — { tenero: number, competition: number }
 // - pausedUntil            — unix millis; alarm() is a no-op until this passes
 // - nextRunAfter           — adaptive backoff per task
