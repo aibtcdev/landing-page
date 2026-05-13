@@ -3,9 +3,14 @@
  * competition verifier. Only swaps against these contract/function pairs are
  * persisted to D1; everything else is rejected with `contract_not_allowlisted`.
  *
- * Phase 3.1 — Bitflow seed list per PHASE-3.1-HANDOFF.md and the
- * comp-attribution research gist:
- *   https://gist.github.com/biwasxyz/54213c1d25b9cacb9a79f0e005cf3260
+ * Source of truth for contracts: Bitflow's published mainnet contracts page
+ *   https://docs.bitflow.finance/bitflow-documentation/developers/deployed-contracts/stacks#mainnet-contracts
+ * Source of truth for function names: each contract's on-chain ABI fetched
+ * via Hiro `/v2/contracts/interface/{addr}/{name}` and cross-verified through
+ * the AIBTC MCP `get_contract_info` tool. Only `access: "public"` functions
+ * whose name contains "swap" are included — admin (`add-admin`,
+ * `set-swap-status`, `change-swap-fee`, etc.) and read-only quote
+ * (`get-quote-*`) functions are intentionally excluded.
  *
  * ALEX + Zest are tracked separately and will be added as follow-ups once
  * their contract lists firm up.
@@ -29,28 +34,60 @@ export interface AllowlistEntry {
 export const AIBTC_PROVIDER_ADDRESS =
   "SP1M8KHCJXB3SBRQRDBCG3J3859AA1CN0AWDHN17B";
 
+/** Bitflow's primary mainnet deployer (stableswap pools + cross-DEX routers). */
+const BITFLOW_DEPLOYER = "SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M";
+/** Bitflow XYK deployer (core + swap helper). Separate principal from above. */
+const BITFLOW_XYK_DEPLOYER = "SM1793C4R5PZ4NS4VQ4WMP7SKKYVH8JZEWSZ9HCCR";
+/** Bitflow DLMM deployer. */
+const BITFLOW_DLMM_DEPLOYER = "SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD";
+
+/** Stableswap pools — all expose the same `swap-x-for-y` / `swap-y-for-x` pair. */
+const STABLESWAP_FUNCTIONS = ["swap-x-for-y", "swap-y-for-x"] as const;
+
+/** Cross-DEX routers (the common case — 2 swap helpers, plus admin we drop). */
+const ROUTER_HELPER_AB = ["swap-helper-a", "swap-helper-b"] as const;
+
 /**
  * Bitflow allowlist. Each tuple is one allowed (contract, function) call.
  * The verifier accepts a swap only when both columns match.
  */
 export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
-  // Stableswap (seed pool — handoff references 6 total; remaining 5 pulled
-  // from the comp-attribution gist as a follow-up commit on this branch).
+  // -- Stableswap pools (6 pools) --
   {
-    contract_id:
-      "SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M.stableswap-stx-ststx-v-1-2",
+    contract_id: `${BITFLOW_DEPLOYER}.stableswap-stx-ststx-v-1-2`,
+    functions: STABLESWAP_FUNCTIONS,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.stableswap-usda-susdt-v-1-2`,
+    functions: STABLESWAP_FUNCTIONS,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.stableswap-aeusdc-susdt-v-1-2`,
+    functions: STABLESWAP_FUNCTIONS,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.stableswap-usda-aeusdc-v-1-2`,
+    functions: STABLESWAP_FUNCTIONS,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.stableswap-usda-aeusdc-v-1-4`,
+    functions: STABLESWAP_FUNCTIONS,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.stableswap-abtc-xbtc-v-1-2`,
+    functions: STABLESWAP_FUNCTIONS,
+  },
+
+  // -- XYK --
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.xyk-core-v-1-1`,
     functions: ["swap-x-for-y", "swap-y-for-x"],
   },
-  // XYK core
+  // XYK swap helper — where the optional `provider` clarity arg lives
+  // (Bitflow attribution path). Functions a..e are the multi-hop variants.
+  // Not on the Bitflow docs page but live on-chain and called by the MCP.
   {
-    contract_id:
-      "SM1793C4R5PZ4NS4VQ4WMP7SKKYVH8JZEWSZ9HCCR.xyk-core-v-1-1",
-    functions: ["swap-x-for-y", "swap-y-for-x"],
-  },
-  // XYK swap helper — the contract that takes the `provider` arg (PR-E).
-  {
-    contract_id:
-      "SM1793C4R5PZ4NS4VQ4WMP7SKKYVH8JZEWSZ9HCCR.xyk-swap-helper-v-1-3",
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.xyk-swap-helper-v-1-3`,
     functions: [
       "swap-helper-a",
       "swap-helper-b",
@@ -59,14 +96,113 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
       "swap-helper-e",
     ],
   },
-  // DLMM
+
+  // -- DLMM router (8 swap variants per on-chain ABI) --
+  // Previous seed only included `swap-simple-multi`, causing the other 7
+  // variants to be rejected as `contract_not_allowlisted`.
   {
-    contract_id:
-      "SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD.dlmm-swap-router-v-1-1",
-    functions: ["swap-simple-multi"],
+    contract_id: `${BITFLOW_DLMM_DEPLOYER}.dlmm-swap-router-v-1-1`,
+    functions: [
+      "swap-multi",
+      "swap-simple-multi",
+      "swap-x-for-y-same-multi",
+      "swap-x-for-y-simple-multi",
+      "swap-x-for-y-simple-range-multi",
+      "swap-y-for-x-same-multi",
+      "swap-y-for-x-simple-multi",
+      "swap-y-for-x-simple-range-multi",
+    ],
   },
-  // Cross-DEX router-* (handoff references all 12 contracts at SPQC38…;
-  // remaining router contracts pulled from the gist as a follow-up).
+
+  // -- Cross-DEX routers (13 contracts) --
+  // Most expose only `swap-helper-a` and `swap-helper-b`. Two velar-alex
+  // versions expose `swap-helper-a..p` (16 helpers each).
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-stx-ststx-bitflow-arkadiko-v-1-1`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-stx-ststx-bitflow-velar-v-1-2`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-stx-ststx-bitflow-alex-v-1-1`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-stx-ststx-bitflow-alex-v-1-2`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-stx-ststx-bitflow-alex-v-2-1`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-stx-ststx-bitflow-xyk-v-1-1`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-stx-usda-arkadiko-alex-v-1-1`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-xyk-arkadiko-v-1-1`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-xyk-velar-v-1-1`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-xyk-alex-v-1-1`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-xyk-alex-v-1-2`,
+    functions: ROUTER_HELPER_AB,
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-velar-alex-v-1-1`,
+    functions: [
+      "swap-helper-a",
+      "swap-helper-b",
+      "swap-helper-c",
+      "swap-helper-d",
+      "swap-helper-e",
+      "swap-helper-f",
+      "swap-helper-g",
+      "swap-helper-h",
+      "swap-helper-i",
+      "swap-helper-j",
+      "swap-helper-k",
+      "swap-helper-l",
+      "swap-helper-m",
+      "swap-helper-n",
+      "swap-helper-o",
+      "swap-helper-p",
+    ],
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-velar-alex-v-1-2`,
+    functions: [
+      "swap-helper-a",
+      "swap-helper-b",
+      "swap-helper-c",
+      "swap-helper-d",
+      "swap-helper-e",
+      "swap-helper-f",
+      "swap-helper-g",
+      "swap-helper-h",
+      "swap-helper-i",
+      "swap-helper-j",
+      "swap-helper-k",
+      "swap-helper-l",
+      "swap-helper-m",
+      "swap-helper-n",
+      "swap-helper-o",
+      "swap-helper-p",
+    ],
+  },
 ] as const;
 
 /** Convenience: all entries across protocols. Currently Bitflow-only. */
@@ -96,5 +232,5 @@ export function isAllowedSwap(
  * Used by PR-E to decide whether to extract `provider` from function args.
  */
 export const PROVIDER_ATTRIBUTION_CONTRACTS = new Set<string>([
-  "SM1793C4R5PZ4NS4VQ4WMP7SKKYVH8JZEWSZ9HCCR.xyk-swap-helper-v-1-3",
+  `${BITFLOW_XYK_DEPLOYER}.xyk-swap-helper-v-1-3`,
 ]);
