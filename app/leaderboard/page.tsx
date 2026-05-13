@@ -71,6 +71,54 @@ function safeAggregateNumber(raw: number | string | null | undefined): number {
   return big > ceiling ? Number.MAX_SAFE_INTEGER : Number(big);
 }
 
+/**
+ * Single round-trip: aggregate `swaps` per (sender, token_in, token_out)
+ * and INNER JOIN the display fields from `agents`. The wider GROUP BY lets
+ * the client compute both:
+ *   - Volume USD = Σ(amount_in × price[token_in])           ("notional spent")
+ *   - P&L USD    = Σ(amount_out × price[token_out]
+ *                   − amount_in × price[token_in])          ("net at end prices")
+ *
+ * Filter rationale:
+ *   - `tx_status = 'success'` — only successful swaps move tokens. Failed /
+ *     aborted txs are recorded in `swaps` for audit but shouldn't count
+ *     toward volume or P&L.
+ *   - `source IN ('agent', 'cron', 'chainhook')` — explicit allowlist
+ *     aligned with the `migrations/005_swaps.sql` CHECK constraint so a
+ *     future ingestion source opts in here deliberately. (The CHECK
+ *     constraint already enforces the set at the row level; the WHERE
+ *     restates it as documented intent.)
+ *   - `INNER JOIN agents` + `EXISTS … claims … status IN ('verified',
+ *     'rewarded')` — mirrors `senderEligibilityTier` in
+ *     `lib/competition/verify.ts:106-127` (the predicate used by #814's
+ *     `sender_not_genesis` rejection). The leaderboard now renders the same
+ *     sender tier the verifier accepts today: Verified Agent + Genesis
+ *     claim. Pre-#814 catch-up cron rows from Level-1-only senders persist
+ *     in `swaps` per the no-retroactive-purge policy but stop appearing on
+ *     the leaderboard.
+ *
+ * Exported so a unit test can pin the predicate shape — see
+ * `lib/competition/__tests__/leaderboard-aggregate.test.ts`.
+ */
+export const LEADERBOARD_AGGREGATE_SQL = `
+  SELECT s.sender, s.token_in, s.token_out,
+         COUNT(*)             AS cnt,
+         SUM(s.amount_in)     AS sum_in,
+         SUM(s.amount_out)    AS sum_out,
+         MAX(s.burn_block_time) AS latest_at,
+         a.btc_address, a.display_name, a.bns_name, a.erc8004_agent_id
+  FROM swaps s
+  INNER JOIN agents a ON a.stx_address = s.sender
+  WHERE s.tx_status = 'success'
+    AND s.source IN ('agent', 'cron', 'chainhook')
+    AND EXISTS (
+      SELECT 1 FROM claims c
+      WHERE c.btc_address = a.btc_address
+        AND c.status IN ('verified', 'rewarded')
+    )
+  GROUP BY s.sender, s.token_in, s.token_out
+`;
+
 async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   const { env, ctx } = await getCloudflareContext();
   const db = env.DB as D1Database | undefined;
@@ -97,34 +145,11 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
 
   if (!db) return [];
 
-  // Single round-trip: aggregate `swaps` per (sender, token_in, token_out)
-  // and LEFT JOIN the four display fields from `agents`. The wider GROUP BY
-  // lets the client compute both:
-  //   - Volume USD = Σ(amount_in × price[token_in])           ("notional spent")
-  //   - P&L USD    = Σ(amount_out × price[token_out]
-  //                   − amount_in × price[token_in])          ("net at end prices")
-  //
-  // `tx_status = 'success'` filter: only successful swaps move tokens.
-  // Failed / aborted txs are recorded in the table for audit but shouldn't
-  // count toward volume or P&L. Keep the explicit source allowlist aligned
-  // with migrations/005_swaps.sql so future ingestion sources opt in here
-  // deliberately.
   let rows: LeaderboardJoinedRow[] = [];
   try {
-    const sql = `
-      SELECT s.sender, s.token_in, s.token_out,
-             COUNT(*)             AS cnt,
-             SUM(s.amount_in)     AS sum_in,
-             SUM(s.amount_out)    AS sum_out,
-             MAX(s.burn_block_time) AS latest_at,
-             a.btc_address, a.display_name, a.bns_name, a.erc8004_agent_id
-      FROM swaps s
-      LEFT JOIN agents a ON a.stx_address = s.sender
-      WHERE s.tx_status = 'success'
-        AND s.source IN ('agent', 'cron', 'chainhook')
-      GROUP BY s.sender, s.token_in, s.token_out
-    `;
-    const result = await db.prepare(sql).all<LeaderboardJoinedRow>();
+    const result = await db
+      .prepare(LEADERBOARD_AGGREGATE_SQL)
+      .all<LeaderboardJoinedRow>();
     rows = result.results ?? [];
   } catch {
     return [];
@@ -137,9 +162,9 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   //   - count (one row per pair contributes COUNT(*))
   //   - tokensSpent[token_in]    += sum_in
   //   - tokensReceived[token_out] += sum_out
-  // Display fields are functionally dependent on `sender` (LEFT JOIN against
-  // a row keyed by stx_address) so they're identical across all pair-rows
-  // for one sender — capture once on first sight.
+  // Display fields are functionally dependent on `sender` (INNER JOIN on a
+  // row keyed by stx_address) so they're identical across all pair-rows for
+  // one sender — capture once on first sight.
   const bySender = new Map<
     string,
     {
