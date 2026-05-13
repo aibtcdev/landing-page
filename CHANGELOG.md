@@ -1,5 +1,88 @@
 # Changelog
 
+## [1.41.0](https://github.com/aibtcdev/landing-page/compare/v1.40.2...v1.41.0) (2026-05-13)
+
+
+### Features
+
+* **762b:** edge-cache /api/og/[address] (caches.default, 24h TTL) ([#775](https://github.com/aibtcdev/landing-page/issues/775)) ([96c36c3](https://github.com/aibtcdev/landing-page/commit/96c36c3bec81d98d4a74f88125974fa1e308674d))
+* **762b:** edge-cache crawler OG render in middleware (caches.default, 5min TTL) ([#774](https://github.com/aibtcdev/landing-page/issues/774)) ([aa1540b](https://github.com/aibtcdev/landing-page/commit/aa1540b66cf1ed2427079f009846c16c4e688434))
+* **762c:** agent-lookup stx → D1 (fail-closed) ([#788](https://github.com/aibtcdev/landing-page/issues/788)) ([1a69cff](https://github.com/aibtcdev/landing-page/commit/1a69cff52ffa9bfa0f6002146a21c039d973f7e0))
+* **762c:** rebuild agents:index from D1 SELECT (retain KV scan fallback) ([#773](https://github.com/aibtcdev/landing-page/issues/773)) ([3721ac6](https://github.com/aibtcdev/landing-page/commit/3721ac67f6bf1cc199b20028a308ebb7860bf57f))
+* **762c:** replace KV stx: dupcheck with D1 query, fail-closed ([#776](https://github.com/aibtcdev/landing-page/issues/776)) ([d60e7e9](https://github.com/aibtcdev/landing-page/commit/d60e7e9cbb6f7819f64ea6367f837e2586e87f86))
+* **762c:** resolve/[identifier] stx → D1 (fail-closed) ([#787](https://github.com/aibtcdev/landing-page/issues/787)) ([c9553ba](https://github.com/aibtcdev/landing-page/commit/c9553baa6ec32df7939f5a673637c7e24d5e58a2))
+* **admin:** include stx-twin btcPublicKey check in invalid-agents audit (refs [#691](https://github.com/aibtcdev/landing-page/issues/691)) ([#711](https://github.com/aibtcdev/landing-page/issues/711)) ([d43c111](https://github.com/aibtcdev/landing-page/commit/d43c111b59ac25b6d2d0833534d67d681ba63dd9))
+* **admin:** inventory route for invalid-agent records (Step 1 of [#691](https://github.com/aibtcdev/landing-page/issues/691)) ([#710](https://github.com/aibtcdev/landing-page/issues/710)) ([44a9beb](https://github.com/aibtcdev/landing-page/commit/44a9beb6df59b585afaa595c4be97e75be9f1007))
+* **agents:** flip agent-enrichment + activity inbox reads to D1 — closes post-[#745](https://github.com/aibtcdev/landing-page/issues/745) data freshness gap ([#746](https://github.com/aibtcdev/landing-page/issues/746)) ([81c3b49](https://github.com/aibtcdev/landing-page/commit/81c3b49b4b3133d68094c095b5046a0b5ff03c52))
+* **bitcoin-verify:** opportunistic btcPublicKey capture from BIP-322 witness (refs [#691](https://github.com/aibtcdev/landing-page/issues/691)) ([#712](https://github.com/aibtcdev/landing-page/issues/712)) ([098f1eb](https://github.com/aibtcdev/landing-page/commit/098f1eb661952eb200f65459b905f5dc814e94f0))
+* **competition:** Phase 3.1 verifier + read routes + allowlist + scheduler ([#738](https://github.com/aibtcdev/landing-page/issues/738)) ([a5aaa4b](https://github.com/aibtcdev/landing-page/commit/a5aaa4b0904970302f62cc2a5f8995664460bb2d))
+* **d1:** dual-write for updateMessage + backfill read_at/replied_at (refs [#697](https://github.com/aibtcdev/landing-page/issues/697), Phase 2.5 Step 3 readiness) ([#720](https://github.com/aibtcdev/landing-page/issues/720)) ([c2c65a3](https://github.com/aibtcdev/landing-page/commit/c2c65a3fe29c24ee7818171c14906da0e52d6b24))
+* **d1:** flip /api/agents/[address] profile route to D1 SELECT (Phase 2.2, [#689](https://github.com/aibtcdev/landing-page/issues/689)) ([35c538a](https://github.com/aibtcdev/landing-page/commit/35c538aa2658e6cea5ab8d6aea88394f64f1ed0a))
+* **d1:** flip /api/og/[address] to D1 SELECT (Phase 2.4, [#695](https://github.com/aibtcdev/landing-page/issues/695)) ([2ac8167](https://github.com/aibtcdev/landing-page/commit/2ac8167766a2fab4da56ae32a249824b9d79ce72))
+* **d1:** flip middleware crawler-bot OG handler to D1 (Phase 2.3, [#693](https://github.com/aibtcdev/landing-page/issues/693)) ([f4f46cd](https://github.com/aibtcdev/landing-page/commit/f4f46cd93d0408650bd9e2d2afc4220164c2d697))
+* **d1:** flip rebuildAgentListCache to D1 SELECT (Phase 2.1, [#687](https://github.com/aibtcdev/landing-page/issues/687)) ([3d7078e](https://github.com/aibtcdev/landing-page/commit/3d7078edf4419272b936c2ca3f6217dde3657119))
+* **d1:** inbox/outbox dual-write to D1 (Phase 2.5 Step 1, reversible scaffolding, refs [#697](https://github.com/aibtcdev/landing-page/issues/697)) ([a8aa7b9](https://github.com/aibtcdev/landing-page/commit/a8aa7b949b35106441cf1c10d71af96d79311f1f))
+* **d1:** KV→D1 backfill route — admin-gated hydrator for 4 tables ([#672](https://github.com/aibtcdev/landing-page/issues/672)) ([332078b](https://github.com/aibtcdev/landing-page/commit/332078bac91cf53dd94b889271023e7b7f3afd0b))
+* **d1:** NULLable btc_public_key + backfill 708 BIP-322-only registrations (refs [#691](https://github.com/aibtcdev/landing-page/issues/691), [#697](https://github.com/aibtcdev/landing-page/issues/697)) ([#713](https://github.com/aibtcdev/landing-page/issues/713)) ([67b03b4](https://github.com/aibtcdev/landing-page/commit/67b03b4b7b89d6283114755bf695f9b935db4cb6))
+* **d1:** provision landing-page D1 (us-west) + migrations 001-007 ([#668](https://github.com/aibtcdev/landing-page/issues/668)) ([dd001e8](https://github.com/aibtcdev/landing-page/commit/dd001e80b388b85c2d58a91b6b63a42e5f68d0e8))
+* **d1:** reconciliation route — KV↔D1 count check + unreadCount drift gate ([#675](https://github.com/aibtcdev/landing-page/issues/675)) ([911cdd4](https://github.com/aibtcdev/landing-page/commit/911cdd4744f80f2ad246bc1f1bd5d935016e0d02))
+* **inbox:** flip GET /api/inbox/[address] to D1 reads ([#722](https://github.com/aibtcdev/landing-page/issues/722)) ([46f3d8d](https://github.com/aibtcdev/landing-page/commit/46f3d8d081edb23ed30ed44273960724fbd0cf74))
+* **inbox:** flip GET /api/inbox/[address]/[messageId] to D1 reads ([#731](https://github.com/aibtcdev/landing-page/issues/731)) ([04cf05d](https://github.com/aibtcdev/landing-page/commit/04cf05d805b76becc58560c48f2ad4de5fa947f0))
+* **inbox:** flip write-path KV auth reads to D1 ([#739](https://github.com/aibtcdev/landing-page/issues/739)) ([3a99da4](https://github.com/aibtcdev/landing-page/commit/3a99da4d404f61aadecec788e89b3fed5e603601))
+* **leaderboard:** /leaderboard page ranked by MCP-submitted trade count + USD volume ([#743](https://github.com/aibtcdev/landing-page/issues/743)) ([db908af](https://github.com/aibtcdev/landing-page/commit/db908aff128fd7d5bda3ebcac5a8aa2ef8e729c6))
+* **outbox:** flip GET /api/outbox/[address] to D1 reads + restore sentCount/partners in inbox-list ([#732](https://github.com/aibtcdev/landing-page/issues/732)) ([40014d3](https://github.com/aibtcdev/landing-page/commit/40014d315faf48d69499054074e79d30cd80213a))
+* **profile:** show agent's L1 + L2 BTC balance under the wallet address ([#766](https://github.com/aibtcdev/landing-page/issues/766)) ([60622b2](https://github.com/aibtcdev/landing-page/commit/60622b2f4619cc9b7234a46aa2aff8bf23d7e1cf))
+* **rate-limit:** migrate challenge endpoint from KV-RMW to RATE_LIMIT_STRICT binding ([#769](https://github.com/aibtcdev/landing-page/issues/769)) ([45e70f9](https://github.com/aibtcdev/landing-page/commit/45e70f94f839491d8193afdebb0c9817dfa016f6))
+* **reconcile:** orphan_recipient explained category for dead-letter inbox messages (closes [#718](https://github.com/aibtcdev/landing-page/issues/718)) ([7371b0e](https://github.com/aibtcdev/landing-page/commit/7371b0e22d80e7996f0f0a6ac7c9cffc0f92791e))
+* **reconcile:** paginate inbox reconcile to fit Workers subrequest cap (Phase 1.4 path A, [#684](https://github.com/aibtcdev/landing-page/issues/684)) ([c5f2a8e](https://github.com/aibtcdev/landing-page/commit/c5f2a8eef8e430bb5c135715dd6d237b429ebb71))
+
+
+### Bug Fixes
+
+* **backfill:** classify PartialAgentRecord exclusions as skipped_partial (closes [#677](https://github.com/aibtcdev/landing-page/issues/677)) ([#709](https://github.com/aibtcdev/landing-page/issues/709)) ([cb879d1](https://github.com/aibtcdev/landing-page/commit/cb879d1218dd1033422e20bbbf27e23ca8243587))
+* **cache-invariants-test:** match headers.set() form + strip string literals + single-source-of-truth refactor ([#727](https://github.com/aibtcdev/landing-page/issues/727)) ([01c9a2f](https://github.com/aibtcdev/landing-page/commit/01c9a2f9a3e78531c36bc3603e409a97a382eaf9))
+* **cache:** optimistic re-check + corrupt-entry delete in invalidateAgentListCache ([#658](https://github.com/aibtcdev/landing-page/issues/658)) ([f14377d](https://github.com/aibtcdev/landing-page/commit/f14377d6c733105dc38baa729693d38f77c75630))
+* **claims:** allow claim-code regen for legacy P2WPKH agents w/ empty stored pubkey ([#716](https://github.com/aibtcdev/landing-page/issues/716)) ([f8c7542](https://github.com/aibtcdev/landing-page/commit/f8c75427739fb20fb1b6d252f48cf05ef66ac401))
+* **d1:** migration 008 full child-table rebuild dance for D1 SQLite FK constraints ([#715](https://github.com/aibtcdev/landing-page/issues/715)) ([33226e9](https://github.com/aibtcdev/landing-page/commit/33226e971d9f112121e5bab24c2c21867fb3f640))
+* **d1:** migration 008 two-step copy to satisfy self-FK during table rebuild ([#714](https://github.com/aibtcdev/landing-page/issues/714)) ([b297d75](https://github.com/aibtcdev/landing-page/commit/b297d75431afee5593103506226a9c5fa1f95af6))
+* **inbox:** convert UNIQUE(payment_txid) violations from 503 to 409 idempotent ([#748](https://github.com/aibtcdev/landing-page/issues/748)) ([fb34238](https://github.com/aibtcdev/landing-page/commit/fb342389b621394f580080987165fbe93083e314))
+* **inbox:** route pending x402 finalize to D1, close legacy KV leak ([#760](https://github.com/aibtcdev/landing-page/issues/760)) ([#761](https://github.com/aibtcdev/landing-page/issues/761)) ([3dc8994](https://github.com/aibtcdev/landing-page/commit/3dc8994d9d8b974ce099d1543439cc98fb7903c6))
+* **og-title:** avoid doubled 'Agent' word for level=1 agents ([#704](https://github.com/aibtcdev/landing-page/issues/704)) ([197a5f7](https://github.com/aibtcdev/landing-page/commit/197a5f7fcc9708ca62b9c2dd0dea90d4a413fa03))
+* **profile:** proper BNS reverse-lookup helper + enrichAgentProfile claim passthrough (closes [#692](https://github.com/aibtcdev/landing-page/issues/692)) ([823ac9f](https://github.com/aibtcdev/landing-page/commit/823ac9f1988c86bc79a67dff9982d3575871ac39))
+* **rate-limit:** env separation + DEPLOY_ENV + bucket rename + test handler exercise ([#666](https://github.com/aibtcdev/landing-page/issues/666)) ([5fe362d](https://github.com/aibtcdev/landing-page/commit/5fe362d9f5a4592b08373329edf7fbcaf321271f))
+* **reconcile:** align full-agent criteria with backfill + parallelize inbox scan ([9caa337](https://github.com/aibtcdev/landing-page/commit/9caa337c97f05984565d06473163b30488814f72))
+* **reconcile:** inbox classification — BTC replyTo, null-txid skip, STX resolver split ([6393c20](https://github.com/aibtcdev/landing-page/commit/6393c205bdd2611594a11e91311aa0d5500768cc))
+* **reconcile:** read OutboxReply.toBtcAddress (not replyTo) for cascade detection ([96fbc6e](https://github.com/aibtcdev/landing-page/commit/96fbc6eeee15431a641a9e8162311000cec87537))
+* reduce landing-page log noise + cache transient achievement-verify timeouts ([#644](https://github.com/aibtcdev/landing-page/issues/644)) ([cc93e36](https://github.com/aibtcdev/landing-page/commit/cc93e3676cc38c8b3aa70063bbaea9b8c5d64534))
+* **scheduler:** back off on Tenero monthly quota exhaustion ([5ce2434](https://github.com/aibtcdev/landing-page/commit/5ce2434234aa60b25a42191f74c0d5a1f3677aa6))
+* **scheduler:** move to v2 instance with admin controls ([0862463](https://github.com/aibtcdev/landing-page/commit/08624630915e6c3b1253bfa6be7e8153ce2844a2))
+* **test:** unblock bitcoin-verify.test.ts; skip stale assertions ([#648](https://github.com/aibtcdev/landing-page/issues/648)) ([e9ab1d2](https://github.com/aibtcdev/landing-page/commit/e9ab1d232d8db9065c761dd2b312d0ade19238be))
+* **wrangler:** add v2 deleted_classes migration for SchedulerDO ([#772](https://github.com/aibtcdev/landing-page/issues/772)) ([a0b1676](https://github.com/aibtcdev/landing-page/commit/a0b167686b7606b1318f1a7af1e847889d545944))
+
+
+### Performance Improvements
+
+* bns-lookup reverse index for direct .btc routing ([#649](https://github.com/aibtcdev/landing-page/issues/649)) ([3797a9d](https://github.com/aibtcdev/landing-page/commit/3797a9dc6c023a3b603f0ff58810de1af64b8136))
+* **cache:** mark-stale invalidateAgentListCache ([#656](https://github.com/aibtcdev/landing-page/issues/656)) ([1d2468e](https://github.com/aibtcdev/landing-page/commit/1d2468e78ffa795194c3ff45ec18b26bee54004a))
+* caches.default edge layer for stable identity GETs (B6.3) ([#650](https://github.com/aibtcdev/landing-page/issues/650)) ([d9535f2](https://github.com/aibtcdev/landing-page/commit/d9535f2efbb044c35a3ef5a0be7db3e275cc31a5))
+* maintain agents:index to eliminate hot-path KV scans ([#646](https://github.com/aibtcdev/landing-page/issues/646)) ([df08a44](https://github.com/aibtcdev/landing-page/commit/df08a4447f02b939f3bf8c67de28046aaa68b0e3))
+* **rate-limit:** cut over outbox + inbox to Cloudflare ratelimits binding ([#662](https://github.com/aibtcdev/landing-page/issues/662)) ([cf26219](https://github.com/aibtcdev/landing-page/commit/cf26219b204a9f6ac235dc55cc5fa997d37eef5c))
+* **rate-limit:** IP-bucket on inbox mark-read PATCH ([#664](https://github.com/aibtcdev/landing-page/issues/664)) ([7e23541](https://github.com/aibtcdev/landing-page/commit/7e2354183170fcbb30ea822a7585b9e96c94d1bb))
+* **reconcile:** reservoir sampling, full-agent spot-check, countKvKeys consolidation (closes [#679](https://github.com/aibtcdev/landing-page/issues/679)) ([#708](https://github.com/aibtcdev/landing-page/issues/708)) ([c55bf10](https://github.com/aibtcdev/landing-page/commit/c55bf1037e0a8f1543ed0e7588e82517f3aa3789))
+* **reconcile:** switch txidCounts to Set&lt;string&gt; for ~50% cursor size reduction (closes [#703](https://github.com/aibtcdev/landing-page/issues/703)) ([cfc6407](https://github.com/aibtcdev/landing-page/commit/cfc6407f545161432011cccc8a0beae79b4c7396))
+
+
+### Documentation
+
+* **CLAUDE.md:** sample real KV records before locking specs ([c15bdc0](https://github.com/aibtcdev/landing-page/commit/c15bdc0271d5873639fe2058042fafa009bb6086))
+* **d1:** Phase 1.4 reconciliation baseline — diff report ([54dfa77](https://github.com/aibtcdev/landing-page/commit/54dfa7717d64926c15e1e135ee04cd1784c8cbd5))
+* RFC for landing-page D1 schema (Phase 1.1, [#665](https://github.com/aibtcdev/landing-page/issues/665)) ([6c2c921](https://github.com/aibtcdev/landing-page/commit/6c2c92130f8c1883d5925a9be82a143812da3759))
+
+
+### Code Refactoring
+
+* **rate-limit:** DRY fail-closed helper + remove void pattern ([#670](https://github.com/aibtcdev/landing-page/issues/670)) ([8d851a2](https://github.com/aibtcdev/landing-page/commit/8d851a2d334c7ba522f1739c20ca91c710cece25))
+
 ## [1.40.2](https://github.com/aibtcdev/landing-page/compare/v1.40.1...v1.40.2) (2026-04-30)
 
 
