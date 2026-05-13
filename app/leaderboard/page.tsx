@@ -106,7 +106,9 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   //
   // `tx_status = 'success'` filter: only successful swaps move tokens.
   // Failed / aborted txs are recorded in the table for audit but shouldn't
-  // count toward volume or P&L.
+  // count toward volume or P&L. Keep the explicit source allowlist aligned
+  // with migrations/005_swaps.sql so future ingestion sources opt in here
+  // deliberately.
   let rows: LeaderboardJoinedRow[] = [];
   try {
     const sql = `
