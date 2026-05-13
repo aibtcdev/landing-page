@@ -41,7 +41,7 @@ vi.mock("@/lib/heartbeat", () => ({
   CHECK_IN_RATE_LIMIT_MS: 3600000,
   getCheckInRecord: vi.fn().mockResolvedValue(null),
   updateCheckInRecord: vi.fn().mockResolvedValue({}),
-  validateCheckInBody: vi.fn().mockReturnValue({ success: true, data: {} }),
+  validateCheckInBody: vi.fn().mockReturnValue({ data: {} }),
 }));
 
 vi.mock("@/lib/news-beats", () => ({
@@ -52,11 +52,18 @@ vi.mock("@/lib/constants", () => ({
   X_HANDLE: "@aibtcdev",
 }));
 
+vi.mock("@/lib/bitcoin-verify", () => ({
+  verifyBitcoinSignature: vi.fn(),
+  persistBtcPubkeyIfMissing: vi.fn().mockResolvedValue(undefined),
+}));
+
 // ---- imports after mocks ----------------------------------------------------
 
-import { GET } from "../route";
+import { GET, POST } from "../route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
+import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { validateCheckInBody } from "@/lib/heartbeat";
 
 // ---- fixtures ---------------------------------------------------------------
 
@@ -164,5 +171,67 @@ describe("heartbeat GET — STX address db threading (PR #788)", () => {
     expect(body.endpoint).toBe("/api/heartbeat");
     // lookupAgentWithLevel should NOT be called without an address
     expect(lookupAgentWithLevel).not.toHaveBeenCalled();
+  });
+});
+
+// ---- P4.2: heartbeat POST drops stx: dual-write ------------------------------
+
+describe("heartbeat POST — P4.2 stx: write removed", () => {
+  it("writes btc: key but NOT stx: key on successful check-in", async () => {
+    const mockKv = buildMockKv();
+    const mockDb = buildMockDb();
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: mockKv,
+        DB: mockDb,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    // validateCheckInBody needs to return signature + timestamp
+    // Real shape: { data } on success or { errors } on failure (no `success` field).
+    (validateCheckInBody as Mock).mockReturnValue({
+      data: {
+        signature: "mock-signature",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      },
+    });
+
+    // verifyBitcoinSignature resolves the BTC address
+    (verifyBitcoinSignature as Mock).mockReturnValue({
+      valid: true,
+      address: TEST_BTC,
+      publicKey: undefined,
+    });
+
+    // lookupAgentWithLevel returns a registered agent (level 1 minimum required for POST)
+    (lookupAgentWithLevel as Mock).mockResolvedValue(makeSuccessResult());
+
+    const request = new NextRequest("http://localhost/api/heartbeat", {
+      method: "POST",
+      body: JSON.stringify({
+        signature: "mock-signature",
+        timestamp: "2026-01-01T00:00:00.000Z",
+      }),
+      headers: { "Content-Type": "application/json" },
+    });
+
+    const response = await POST(request);
+
+    expect(response.status).toBe(200);
+
+    // btc: key MUST be written
+    expect(mockKv.put).toHaveBeenCalledWith(
+      `btc:${TEST_BTC}`,
+      expect.any(String)
+    );
+
+    // stx: key MUST NOT be written by heartbeat (P4.2 drop)
+    const putCalls = (mockKv.put as Mock).mock.calls;
+    const stxPutCall = putCalls.find(
+      (call: unknown[]) => typeof call[0] === "string" && call[0].startsWith("stx:")
+    );
+    expect(stxPutCall).toBeUndefined();
   });
 });
