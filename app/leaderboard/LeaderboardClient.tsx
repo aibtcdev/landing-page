@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime } from "@/lib/utils";
+import Tooltip from "../components/Tooltip";
 
 /**
  * Single-key sort. Clicking the active chip flips direction; clicking a
@@ -215,12 +216,20 @@ function formatUsd(value: number | null): string {
 function formatUsdPrecise(value: number | null): string {
   if (value == null || !Number.isFinite(value)) return "—";
   const abs = Math.abs(value);
-  const fractionDigits = abs >= 100 ? 2 : abs >= 1 ? 4 : 6;
+  const sign = value < 0 ? "-" : "";
+  if (abs === 0) return `${sign}$0.00`;
+  // For ultra-small magnitudes, pick enough digits to show ~3 sig figs so
+  // a value like 1.21e-8 renders "$0.0000000121" instead of being rounded
+  // away. `toLocaleString` caps at 20 fraction digits, so we cap there too.
+  const fractionDigits =
+    abs >= 100 ? 2 :
+    abs >= 1 ? 4 :
+    abs >= 0.0001 ? 6 :
+    Math.min(20, Math.max(6, 2 - Math.floor(Math.log10(abs))));
   const formatted = abs.toLocaleString("en-US", {
     minimumFractionDigits: fractionDigits,
     maximumFractionDigits: fractionDigits,
   });
-  const sign = value < 0 ? "-" : "";
   return `${sign}$${formatted}`;
 }
 
@@ -278,21 +287,21 @@ function renderPnlCell(
   const color = positive ? "text-[#4dcd5e]" : "text-[#f06464]";
   const pctLabel = `${positive ? "+" : ""}${stats.pnlPercent.toFixed(2)}%`;
   // Tooltip carries the full-precision USD value so a tiny percentage
-  // like `-0.03%` still has the underlying magnitude (`-$0.001300`)
-  // available on hover. The 2-decimal `formatUsd` truncates anything
-  // smaller than a cent to `$0.00` which makes the cell look broken;
-  // showing only the percentage in the cell plus full $ on hover keeps
-  // both signals legible at any trade size.
+  // like `-0.03%` still has the underlying magnitude available on hover.
+  // The portal-based Tooltip shows instantly (no native ~1s title-attr
+  // delay) and survives table-cell clipping.
   const usdDetail = `${positive ? "+" : ""}${formatUsdPrecise(stats.pnlUsd)}`;
   const title = stats.allPriced
     ? usdDetail
     : `${usdDetail} (partial — some tokens couldn't be priced and were excluded)`;
 
   return (
-    <span className={`font-medium ${color}`} title={title}>
-      {pctLabel}
-      {!stats.allPriced && "*"}
-    </span>
+    <Tooltip text={title}>
+      <span className={`font-medium cursor-pointer ${color}`}>
+        {pctLabel}
+        {!stats.allPriced && "*"}
+      </span>
+    </Tooltip>
   );
 }
 
@@ -623,9 +632,15 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                   <span>·</span>
                   <span>{volumeLabel}</span>
                   <span>·</span>
-                  <span className={pnlColor} title={pnlTitle}>
-                    {pnlLabel}
-                  </span>
+                  {pnlTitle ? (
+                    <Tooltip text={pnlTitle}>
+                      <span className={`cursor-pointer ${pnlColor}`}>
+                        {pnlLabel}
+                      </span>
+                    </Tooltip>
+                  ) : (
+                    <span className={pnlColor}>{pnlLabel}</span>
+                  )}
                   <span>·</span>
                   <span>
                     {row.latestTradeAt > 0

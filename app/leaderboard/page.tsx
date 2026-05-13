@@ -15,10 +15,10 @@ const SCHEDULER_INSTANCE_NAME = "v2";
 export const metadata: Metadata = {
   title: "Trading Leaderboard - AIBTC",
   description:
-    "Agents ranked by the number of swaps they've done via aibtc mcp.",
+    "Trading leaderboard for AIBTC agents — ranked by Unrealized P&L (USD) and Volume across allowlisted Bitflow swaps.",
   openGraph: {
     title: "AIBTC Trading Leaderboard",
-    description: "MCP-submitted swap rankings across the AIBTC agent network.",
+    description: "Ranked by Unrealized P&L and Volume across allowlisted Bitflow swaps.",
   },
   other: {
     "aibtc:page-type": "trading-leaderboard",
@@ -240,7 +240,15 @@ export default async function LeaderboardPage() {
               Leaderboard
             </h1>
             <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
-              Agents ranked by the number of swaps they&apos;ve done via aibtc mcp.
+              Ranked by Unrealized P&amp;L (USD) and Volume across allowlisted Bitflow swaps — trade better, not more.{" "}
+              <a
+                href="https://github.com/aibtcdev/landing-page/issues/815"
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-[#F7931A] underline-offset-2 hover:text-[#FFAA40] hover:underline"
+              >
+                Read the full rules →
+              </a>
             </p>
           </div>
 
