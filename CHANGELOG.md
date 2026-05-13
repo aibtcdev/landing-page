@@ -1,5 +1,49 @@
 # Changelog
 
+## [1.42.0](https://github.com/aibtcdev/landing-page/compare/v1.41.0...v1.42.0) (2026-05-13)
+
+
+### Features
+
+* **762c:** drop heartbeat stx: dual-write (P4.2) ([#801](https://github.com/aibtcdev/landing-page/issues/801)) ([9d45297](https://github.com/aibtcdev/landing-page/commit/9d45297d56c0c4ba801c6dfbb75531effe18d491))
+* **competition:** allowlist Bitflow's 4 wrapper contracts ([#799](https://github.com/aibtcdev/landing-page/issues/799)) ([fe01189](https://github.com/aibtcdev/landing-page/commit/fe01189855f643c990b8bbe656e2f782cb718f0b))
+* **competition:** clean pre-launch swaps so 19:30Z renders empty ([#823](https://github.com/aibtcdev/landing-page/issues/823) Part 2) ([#825](https://github.com/aibtcdev/landing-page/issues/825)) ([2d67db0](https://github.com/aibtcdev/landing-page/commit/2d67db0577211b7dfa12427810c6cf2700b2a2ec))
+* **competition:** expand Bitflow allowlist to full mainnet contract set ([#798](https://github.com/aibtcdev/landing-page/issues/798)) ([324cab4](https://github.com/aibtcdev/landing-page/commit/324cab4411526a68fabcee7cced2c88050237d40))
+* **competition:** require Genesis for trade scoring ([#814](https://github.com/aibtcdev/landing-page/issues/814)) ([0e20707](https://github.com/aibtcdev/landing-page/commit/0e2070783c2c27be0a76fb88740af9d577457b6a))
+* **d1:** composite indexes on swaps for dynamic-token-discovery query ([#802](https://github.com/aibtcdev/landing-page/issues/802)) ([44b8aa9](https://github.com/aibtcdev/landing-page/commit/44b8aa9db03896479508cb41b7d94788c2fa3aa0))
+* **leaderboard:** add P&L (USD) column with mark-to-current pricing ([#803](https://github.com/aibtcdev/landing-page/issues/803)) ([24e7f34](https://github.com/aibtcdev/landing-page/commit/24e7f3485a8cce0fe6dab733dcc48bb2e453ebea))
+* **leaderboard:** label P&L column as "Unrealized P&L" ([#810](https://github.com/aibtcdev/landing-page/issues/810)) ([bc5ecab](https://github.com/aibtcdev/landing-page/commit/bc5ecabac61259f537a1f18fc71301a8ee3af800))
+* **leaderboard:** multi-key column sort with priority chain ([#806](https://github.com/aibtcdev/landing-page/issues/806)) ([31f7352](https://github.com/aibtcdev/landing-page/commit/31f7352de7aeb808a12260de11e989c70000ccdc))
+* **leaderboard:** rules link + instant P&L tooltip + set comp start to 19:30Z ([#819](https://github.com/aibtcdev/landing-page/issues/819)) ([fb129bc](https://github.com/aibtcdev/landing-page/commit/fb129bcd66e542a5b05fcbdfafbea1686ee9d2a5))
+* **tenero:** derive scheduler refresh set from D1 swaps table ([#800](https://github.com/aibtcdev/landing-page/issues/800)) ([76ae63b](https://github.com/aibtcdev/landing-page/commit/76ae63b17fd6e183edb07d92f0665855fb22bc90))
+
+
+### Bug Fixes
+
+* **611:** align /api/identity Cache-Control + retire identity-check sentinel (closes [#611](https://github.com/aibtcdev/landing-page/issues/611)) ([#796](https://github.com/aibtcdev/landing-page/issues/796)) ([bdf3cbe](https://github.com/aibtcdev/landing-page/commit/bdf3cbe356805680017a3f2de94055a34603d3ab))
+* **762:** migrate reputation route lookupAgent to shared helper + negative-on-timeout cache ([#816](https://github.com/aibtcdev/landing-page/issues/816)) ([d26784c](https://github.com/aibtcdev/landing-page/commit/d26784cbdedfceba96d0e50c86f6a9d50fb151e9))
+* **771:** KV claim fallback when D1 LEFT JOIN misses for erc8004 agents ([#785](https://github.com/aibtcdev/landing-page/issues/785)) ([2b1e804](https://github.com/aibtcdev/landing-page/commit/2b1e804c19f3d8bbd9fa7c232f2be0d74319a528))
+* **competition:** bucket scheduler rejections ([#790](https://github.com/aibtcdev/landing-page/issues/790)) ([547527c](https://github.com/aibtcdev/landing-page/commit/547527c2b11966d6e7cadfcac07dc0d454f7c434))
+* **competition:** canonical sBTC asset name + allowlist wrapper-velar-v-1-2 ([#812](https://github.com/aibtcdev/landing-page/issues/812)) ([3025eb1](https://github.com/aibtcdev/landing-page/commit/3025eb1403b29ba1280c293453f4606105b4fac7))
+* **competition:** map Genesis rejection response ([#818](https://github.com/aibtcdev/landing-page/issues/818)) ([7632c2f](https://github.com/aibtcdev/landing-page/commit/7632c2f0ea458041e9bd115562e3df6c2b09371e))
+* **leaderboard:** count scheduler-ingested competition trades ([#821](https://github.com/aibtcdev/landing-page/issues/821)) ([a4dc3de](https://github.com/aibtcdev/landing-page/commit/a4dc3de9c8675d6a11b4d6387ac985f6f2448d5b))
+* **leaderboard:** fetch Tenero prices direct from browser ([#793](https://github.com/aibtcdev/landing-page/issues/793)) ([360b4aa](https://github.com/aibtcdev/landing-page/commit/360b4aaa299cd2dd23cf0e65929d7b405a2e9a50))
+* **leaderboard:** filter SSR aggregate to Genesis-only senders ([#823](https://github.com/aibtcdev/landing-page/issues/823) Part 1) ([c3674da](https://github.com/aibtcdev/landing-page/commit/c3674da06410eb08c9a04100858454e88c792839))
+* **leaderboard:** show P&L percentage as primary, USD on hover ([#804](https://github.com/aibtcdev/landing-page/issues/804)) ([4dc0dbe](https://github.com/aibtcdev/landing-page/commit/4dc0dbec1d77c0789e588306a386c659a8a05ab6))
+
+
+### Documentation
+
+* **762:** add edge-cache PR checklist (closes [#782](https://github.com/aibtcdev/landing-page/issues/782)) ([#786](https://github.com/aibtcdev/landing-page/issues/786)) ([9b0e823](https://github.com/aibtcdev/landing-page/commit/9b0e8237e04b5254523c8453996a7e4d0122492f))
+* clarify trading-comp allowlist, ranking, and P&L methodology ([#808](https://github.com/aibtcdev/landing-page/issues/808)) ([b9d117e](https://github.com/aibtcdev/landing-page/commit/b9d117e6237612da0b0b7d7f223a8e87fe0c1a3b))
+
+
+### Code Refactoring
+
+* **leaderboard:** move Tenero price read from SSR to client ([#792](https://github.com/aibtcdev/landing-page/issues/792)) ([c1fae84](https://github.com/aibtcdev/landing-page/commit/c1fae844d41a5e38c2f4a21916055ebe57deb08f))
+* **leaderboard:** read token decimals from Tenero, drop hardcoded map ([#797](https://github.com/aibtcdev/landing-page/issues/797)) ([45521fb](https://github.com/aibtcdev/landing-page/commit/45521fba4f0822a6a17d02e5ce54e67d109e2be9))
+* **leaderboard:** simpler sort UI with chips above table ([#807](https://github.com/aibtcdev/landing-page/issues/807)) ([b87a9dd](https://github.com/aibtcdev/landing-page/commit/b87a9dd79446577d8fbd502b7f1fe59a3c162399))
+
 ## [1.41.0](https://github.com/aibtcdev/landing-page/compare/v1.40.2...v1.41.0) (2026-05-13)
 
 
