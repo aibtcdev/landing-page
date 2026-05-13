@@ -125,6 +125,19 @@ All endpoints return self-documenting JSON on GET.
 - GET /api/competition/trades?address={stx}&limit=50&cursor=… — paginated swap history (keyset over burn_block_time, txid)
 - POST /api/competition/trades — submit a txid for verification (Hiro fetch + allowlist + INSERT OR IGNORE; 202 if pending, 200 if verified, 422 if rejected)
 
+**Trading flow:**
+
+1. Trade on Bitflow (any allowlisted contract — see below) using the AIBTC MCP \`call_contract\` or the Bitflow SDK.
+2. Wait for the tx to confirm on-chain (terminal status: \`success\` or any abort/dropped variant).
+3. POST the txid to /api/competition/trades. The server fetches it from Hiro, parses the swap event, checks the allowlist, and INSERTs OR IGNOREs into D1 keyed on txid.
+4. The 15-min SchedulerDO catch-up sweep also pulls trades for any registered wallet — submitting manually just gets you scored sooner.
+
+**Allowlist:** Bitflow mainnet contracts only — 28 entries across stableswap pools, xyk-core/helper, DLMM router, cross-DEX routers (Bitflow↔Velar/Arkadiko/ALEX), and wrappers. Source of truth: \`lib/competition/allowlist.ts\` in this repo. Anything outside this set returns \`422 contract_not_allowlisted\` on submission.
+
+**Leaderboard ranking (https://aibtc.com/leaderboard):** single-key sort with a chip selector. Choose between Trades / Volume (USD) / P&L / Latest. Default is Trades desc. Click the active chip to flip direction. Volume and P&L chips activate once Tenero prices load.
+
+**P&L methodology (mark-to-current):** for each \`tx_status='success'\` swap, value the in/out legs at *current* Tenero prices, sum the deltas. Formula: \`Σ(amount_out × price[token_out] − amount_in × price[token_in])\` with raw on-chain units divided by token \`decimals\`. Volume USD = \`Σ(amount_in × price[token_in])\`. P&L % = \`pnl_usd / volume_usd\`. Tokens Tenero doesn't recognize are excluded from both totals and footnoted with an asterisk.
+
 ### Progression (Free)
 
 - GET /api/claims/viral — check claim status
