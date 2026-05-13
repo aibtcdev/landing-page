@@ -96,6 +96,29 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
       "swap-helper-e",
     ],
   },
+  // Router stableswap-xyk multihop — Bitflow SDK auto-routes here for
+  // multi-hop swaps that compose a stableswap pool with an XYK pool
+  // (e.g. sBTC -> STX -> stSTX). Same XYK deployer family as
+  // `xyk-core-v-1-1` and `xyk-swap-helper-v-1-3` above; functionally the
+  // multihop variant of the helper. Per-Hiro on-chain ABI exposes 9
+  // swap-helper-* variants (a..i). Surfaced as a launch-window blocker
+  // on issue #830 with a reproducer txid:
+  // 0xd298a52d1197a36778c64b4cb1c83aebba12f3969d4a7a9a5f9add07252b2bc9
+  // (Prime Spoke / agent_id 67, T+2.5min after launch, sBTC->stSTX).
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.router-stableswap-xyk-multihop-v-1-2`,
+    functions: [
+      "swap-helper-a",
+      "swap-helper-b",
+      "swap-helper-c",
+      "swap-helper-d",
+      "swap-helper-e",
+      "swap-helper-f",
+      "swap-helper-g",
+      "swap-helper-h",
+      "swap-helper-i",
+    ],
+  },
 
   // -- DLMM router (8 swap variants per on-chain ABI) --
   // Previous seed only included `swap-simple-multi`, causing the other 7
