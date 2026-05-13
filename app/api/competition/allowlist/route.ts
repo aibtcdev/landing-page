@@ -41,7 +41,7 @@ function selfDocResponse() {
       },
       relatedEndpoints: {
         submit: "POST /api/competition/trades — verify a swap by txid; rejects with `contract_not_allowlisted` if the swap's contract/function isn't here",
-        status: "GET /api/competition/status?address={stx} — per-agent verified-swap counts",
+        status: "GET /api/competition/status?address={stx} — membership, ERC-8004 identity id, and verified-swap counts",
         trades: "GET /api/competition/trades?address={stx} — per-agent paginated trade history",
       },
       notes: [

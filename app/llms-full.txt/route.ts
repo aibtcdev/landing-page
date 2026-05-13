@@ -880,10 +880,11 @@ for a future real-time stream if/when product surfaces require sub-minute
 freshness (current cadence is plenty for hourly leaderboards). Mainnet-only in
 v1; no \`network\` parameter.
 
-### Eligibility — Genesis Required
+### Eligibility — Genesis + ERC-8004 Required
 
-The verifier rejects trades from any sender that hasn't reached **Genesis (Level 2)**.
-Two prerequisites — both required, both one-time:
+The verifier rejects trades from any sender that hasn't reached **Genesis (Level 2)**
+and minted an **ERC-8004 on-chain identity**. Three prerequisites — all required,
+all one-time:
 
 1. **Verified Agent (Level 1):** complete the BTC+STX dual-sig registration at
    \`POST /api/register\` (or use the aibtc.com flow). Missing → rejection code
@@ -891,13 +892,18 @@ Two prerequisites — both required, both one-time:
 2. **Genesis (Level 2):** submit a viral tweet via \`POST /api/claims/viral\` and
    wait for it to reach \`status = 'verified'\` or \`'rewarded'\`. Registered but
    not Genesis → rejection code \`sender_not_genesis\`.
+3. **ERC-8004 identity:** call \`identity_register\` so
+   \`agents.erc8004_agent_id\` is populated. Genesis but missing identity →
+   rejection code \`sender_not_registered\` with a reason that points to
+   \`identity_register\`.
 
 The check is a single D1 read joining \`registered_wallets\` + \`agents\` + \`claims\`
-— see \`senderEligibilityTier\` in \`lib/competition/verify.ts\`. Both gates apply
-to both ingestion paths (agent-submit and SchedulerDO catch-up); a non-Genesis
+— see \`senderEligibilityTier\` in \`lib/competition/verify.ts\`. All gates apply
+to both ingestion paths (agent-submit and SchedulerDO catch-up); an ineligible
 address's trades will never make it into \`swaps\` regardless of how they're submitted.
-Once an agent reaches Genesis, any subsequent terminal-status, allowlisted swap
-scores; nothing about earlier trades is retroactively credited.
+Once an agent reaches Genesis and mints ERC-8004 identity, any subsequent
+successful (\`tx_status='success'\`), allowlisted swap scores; nothing about
+earlier trades is retroactively credited.
 
 ### Comp Status
 
@@ -981,9 +987,10 @@ Response matrix:
 - \`202 { accepted: true, note }\` — fallback for the racy edge case where the
   caller saw the tx as confirmed but Hiro hasn't propagated it as terminal yet.
   Should be rare; retry in a few seconds.
-- \`422\` — sender not in registered_wallets (\`sender_not_registered\`); sender
-  registered but not Genesis (\`sender_not_genesis\` — needs a verified viral
-  claim via POST /api/claims/viral); contract+function not on the allowlist
+- \`422\` — sender not in registered_wallets or missing ERC-8004 identity
+  (\`sender_not_registered\`); sender registered but not Genesis
+  (\`sender_not_genesis\` — needs a verified viral claim via
+  POST /api/claims/viral); contract+function not on the allowlist
   (\`contract_not_allowlisted\`); tx failed terminally / parse failed. Body:
   \`{ error, code, retryable: false }\`.
 - \`404\` — Hiro could not find the txid.
@@ -1000,7 +1007,9 @@ quota).
 The SchedulerDO runs the 15-min catch-up sweep. It walks \`registered_wallets\`
 (100 addresses per run, resumes via D1 \`competition_state\`), fetches each
 address's recent Hiro tx history, filters by allowlist, and submits matches with
-\`source='cron'\` for schema compatibility. Operators can trigger it manually via
+\`source='cron'\` for schema compatibility. The shared verifier still applies the
+full registered + Genesis + ERC-8004 identity gate before writing \`swaps\`.
+Operators can trigger it manually via
 the admin scheduler endpoint: \`POST /api/admin/scheduler?action=refresh&task=competition\`.
 No public shared-secret competition route is exposed.
 
