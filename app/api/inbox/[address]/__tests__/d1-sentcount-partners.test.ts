@@ -1,16 +1,18 @@
 /**
  * Phase 2.5 Step 3.3 — sentCount restoration + partners-with-sent tests.
  *
+ * Updated by perf/d1-inbox-count-4to2: sentCount is now derived from
+ * sentMessages.length (listOutboxRepliesFromD1 result) rather than from
+ * countOutboxRepliesFromD1. This removes one COUNT(*) per request.
+ *
  * Covers:
- *  1. sentCount restoration: inbox-list GET returns sentCount > 0 when
- *       countOutboxRepliesFromD1 returns a positive value
- *       (was "const sentCount = 0" in Step 3.1)
+ *  1. sentCount derivation: inbox-list GET returns sentCount > 0 when
+ *       listOutboxRepliesFromD1 returns reply objects (sentCount = replies.length)
  *  2. partners-with-sent: partner graph includes both inbound senders (received)
  *       AND addresses this agent has replied to (sent)
  *  3. partners-received-only: when no sent replies exist, partners still computed
  *       from received messages
- *  4. D1-throws fallback: even with the extra countOutboxRepliesFromD1 in
- *       Promise.all, D1 throws still produce 503 + Retry-After: 5
+ *  4. D1-throws fallback: D1 throws still produce 503 + Retry-After: 5
  *
  * See: https://github.com/aibtcdev/landing-page/issues/728 (Step 3.3 spec)
  */
@@ -33,7 +35,6 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
   countInboxMessagesFromD1: vi.fn(),
   fetchRepliesForMessages: vi.fn(),
   listOutboxRepliesFromD1: vi.fn(),
-  countOutboxRepliesFromD1: vi.fn(),
 }));
 
 vi.mock("@/lib/cache", () => ({
@@ -90,7 +91,6 @@ import {
   countInboxMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
-  countOutboxRepliesFromD1,
 } from "@/lib/inbox/d1-reads";
 
 // ---- shared fixtures --------------------------------------------------------
@@ -162,7 +162,7 @@ function setupDefaultMocks() {
   (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
   (fetchRepliesForMessages as Mock).mockResolvedValue(new Map());
   (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
-  (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
+  // countOutboxRepliesFromD1 is no longer called (perf/d1-inbox-count-4to2)
 }
 
 beforeEach(() => {
@@ -170,26 +170,31 @@ beforeEach(() => {
   setupDefaultMocks();
 });
 
-// ---- sentCount restoration tests --------------------------------------------
+// ---- sentCount derivation tests (perf/d1-inbox-count-4to2) ------------------
+// sentCount is now derived from sentMessages.length (listOutboxRepliesFromD1),
+// not from a separate countOutboxRepliesFromD1 call.
 
-describe("Phase 2.5 Step 3.3 — sentCount restoration in inbox-list GET", () => {
-  it("returns sentCount > 0 when countOutboxRepliesFromD1 returns positive count", async () => {
-    // Step 3.3 acceptance signal: inbox-list GET must now return real sentCount.
-    // Was stubbed to 0 in Step 3.1 (const sentCount = 0).
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(3);
+describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => {
+  it("returns sentCount > 0 when listOutboxRepliesFromD1 returns reply objects", async () => {
+    // sentCount is now sentMessages.length — requires ?include=partners to get replies.
+    // Without include=partners, listOutboxRepliesFromD1 returns [] so sentCount=0.
+    const replies = [SENT_REPLY, { ...SENT_REPLY, messageId: "msg_2" }, { ...SENT_REPLY, messageId: "msg_3" }];
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue(replies);
 
-    const res = await GET(buildGetRequest(AGENT_ADDR), buildContext(AGENT_ADDR));
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?include=partners"),
+      buildContext(AGENT_ADDR)
+    );
 
     expect(res.status).toBe(200);
     const body = await res.json();
-    // sentCount must come from D1 countOutboxRepliesFromD1, not 0 stub
+    // sentCount comes from sentMessages.length, not countOutboxRepliesFromD1
     expect(body.inbox.sentCount).toBe(3);
     expect(body.inbox.sentCount).toBeGreaterThan(0);
   });
 
   it("returns sentCount = 0 when agent has sent no replies", async () => {
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
-
+    // listOutboxRepliesFromD1 returns [] in setupDefaultMocks — sentCount = 0
     const res = await GET(buildGetRequest(AGENT_ADDR), buildContext(AGENT_ADDR));
 
     expect(res.status).toBe(200);
@@ -198,9 +203,13 @@ describe("Phase 2.5 Step 3.3 — sentCount restoration in inbox-list GET", () =>
   });
 
   it("includes sentCount in economics.satsSent calculation", async () => {
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(2);
+    const replies = [SENT_REPLY, { ...SENT_REPLY, messageId: "msg_2" }];
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue(replies);
 
-    const res = await GET(buildGetRequest(AGENT_ADDR), buildContext(AGENT_ADDR));
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?include=partners"),
+      buildContext(AGENT_ADDR)
+    );
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -213,7 +222,7 @@ describe("Phase 2.5 Step 3.3 — sentCount restoration in inbox-list GET", () =>
     // self-doc body. sentCount must still be 0 (not undefined) in that case.
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
+    // listOutboxRepliesFromD1 already returns [] via setupDefaultMocks
 
     const res = await GET(buildGetRequest(AGENT_ADDR), buildContext(AGENT_ADDR));
 
@@ -224,14 +233,16 @@ describe("Phase 2.5 Step 3.3 — sentCount restoration in inbox-list GET", () =>
 
   it("sent-only inbox (totalCount===0 but sentCount>0) returns sentCount in normal envelope, not self-doc", async () => {
     // Regression fix: agent has sent replies but has never received a message.
-    // Before the fix, the totalCount===0 early-return hardcoded sentCount:0
-    // and partners:[], so the sent-only path was unreachable. After the fix,
-    // the self-doc path requires both totalCount===0 AND sentCount===0.
+    // sentCount comes from listOutboxRepliesFromD1 (via include=partners).
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(3);
+    const replies = [SENT_REPLY, { ...SENT_REPLY, messageId: "msg_2" }, { ...SENT_REPLY, messageId: "msg_3" }];
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue(replies);
 
-    const res = await GET(buildGetRequest(AGENT_ADDR), buildContext(AGENT_ADDR));
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?include=partners"),
+      buildContext(AGENT_ADDR)
+    );
 
     expect(res.status).toBe(200);
     const body = await res.json();
@@ -253,7 +264,6 @@ describe("Phase 2.5 Step 3.3 — sentCount restoration in inbox-list GET", () =>
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([SENT_REPLY]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
 
     const res = await GET(
       buildGetRequest(AGENT_ADDR, "?include=partners"),
@@ -295,9 +305,8 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
     // Mock received messages (partner = sender)
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([RECEIVED_MESSAGE]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
-    // Mock sent replies (partner = toBtcAddress)
+    // Mock sent replies (partner = toBtcAddress) — sentCount derives from this list
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([SENT_REPLY]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
 
     const res = await GET(
       buildGetRequest(AGENT_ADDR, "?include=partners"),
@@ -317,11 +326,10 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
   });
 
   it("partners from sent-only direction have direction='sent'", async () => {
-    // Only sent replies, no received messages
+    // Only sent replies, no received messages — sentCount=1 derived from this list
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([SENT_REPLY]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
 
     const res = await GET(
       buildGetRequest(AGENT_ADDR, "?include=partners"),
@@ -356,7 +364,6 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([receivedMsgFromDualPartner]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([sentReplyToDualPartner]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
 
     const res = await GET(
       buildGetRequest(AGENT_ADDR, "?include=partners"),
@@ -379,8 +386,7 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
   it("partners only from received when no sent replies (received-only path still works)", async () => {
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([RECEIVED_MESSAGE]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
-    (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]); // no sent replies
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]); // no sent replies — sentCount=0
 
     const res = await GET(
       buildGetRequest(AGENT_ADDR, "?include=partners"),
@@ -401,14 +407,15 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
   });
 });
 
-// ---- D1-throws fallback with new parallel queries ---------------------------
+// ---- D1-throws fallback (perf/d1-inbox-count-4to2) --------------------------
+// countOutboxRepliesFromD1 is no longer in Promise.all; the 4 remaining queries
+// are: listInboxMessagesFromD1, countInboxMessagesFromD1 (×2), listOutboxRepliesFromD1.
 
-describe("Phase 2.5 Step 3.3 — D1-throws fallback still works with added parallel queries", () => {
-  it("returns 503 when countOutboxRepliesFromD1 throws", async () => {
+describe("D1-throws fallback still works after COUNT reduction", () => {
+  it("returns 503 when countInboxMessagesFromD1 throws", async () => {
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
-    (countOutboxRepliesFromD1 as Mock).mockRejectedValue(
-      new Error("D1_ERROR: outbox table unavailable")
+    (countInboxMessagesFromD1 as Mock).mockRejectedValue(
+      new Error("D1_ERROR: inbox_messages unavailable")
     );
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
 
@@ -424,7 +431,6 @@ describe("Phase 2.5 Step 3.3 — D1-throws fallback still works with added paral
   it("returns 503 when listOutboxRepliesFromD1 throws (partners requested)", async () => {
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
     (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
     (listOutboxRepliesFromD1 as Mock).mockRejectedValue(
       new Error("D1_ERROR: schema mismatch")
     );

@@ -34,7 +34,6 @@ import {
   countInboxMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
-  countOutboxRepliesFromD1,
   checkRedeemedTxidInD1,
   type StatusFilter,
 } from "@/lib/inbox/d1-reads";
@@ -302,20 +301,18 @@ export async function GET(
   // and writes on this path. A 503 here means "D1 transiently unavailable."
   let receivedMessages: import("@/lib/inbox/types").InboxMessage[];
   let unreadCount: number;
-  let totalCount: number;
   let receivedCount: number;
-  let sentCount: number;
   let sentMessages: import("@/lib/inbox/types").OutboxReply[];
   try {
     // D1 query: received messages with status filter and pagination.
-    // All six queries run in parallel to minimise latency:
+    // Four queries run in parallel to minimise latency (reduced from 6 — perf/d1-inbox-count-4to2):
     //   [0] paginated message list (the page the caller asked for)
     //   [1] unreadCount — live SELECT COUNT(*) WHERE read_at IS NULL (closes aibtc-mcp-server#497)
-    //   [2] totalCount — total matching the status filter (drives hasMore / pagination)
-    //   [3] receivedCount — total inbound messages regardless of filter (for economics)
-    //   [4] sentCount — total outbox replies sent by this agent (Phase 2.5 Step 3.3)
-    //   [5] sentMessages — outbox replies for partner graph (only when includePartners)
-    [receivedMessages, unreadCount, totalCount, receivedCount, sentCount, sentMessages] = await Promise.all([
+    //   [2] receivedCount — total inbound messages regardless of filter (for economics + pagination)
+    //   [3] sentMessages — outbox replies for partner graph (only when includePartners)
+    //
+    // totalCount and sentCount are derived below to avoid two extra COUNT(*) scans per request.
+    [receivedMessages, unreadCount, receivedCount, sentMessages] = await Promise.all([
       includeReceived
         ? listInboxMessagesFromD1(db, agent.btcAddress, limit, offset, statusFilter)
         : Promise.resolve([] as import("@/lib/inbox/types").InboxMessage[]),
@@ -323,16 +320,10 @@ export async function GET(
       includeReceived
         ? countInboxMessagesFromD1(db, agent.btcAddress, "unread")
         : Promise.resolve(0),
-      // totalCount: total for the current status filter (used for hasMore)
-      includeReceived
-        ? countInboxMessagesFromD1(db, agent.btcAddress, statusFilter)
-        : Promise.resolve(0),
-      // receivedCount: total inbound messages regardless of status filter (for economics)
+      // receivedCount: total inbound messages regardless of status filter (for economics + pagination)
       includeReceived
         ? countInboxMessagesFromD1(db, agent.btcAddress, "all")
         : Promise.resolve(0),
-      // sentCount: total outbox replies sent — restores the dimension stubbed in Step 3.1
-      countOutboxRepliesFromD1(db, agent.btcAddress),
       // sentMessages: outbox replies for partner graph computation (only when includePartners)
       includePartners
         ? listOutboxRepliesFromD1(db, agent.btcAddress, 100, 0)
@@ -341,6 +332,23 @@ export async function GET(
   } catch (e) {
     return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
   }
+
+  // Derive totalCount from already-fetched counts — no extra COUNT(*) needed.
+  // statusFilter="all"   → totalCount equals receivedCount (same predicate)
+  // statusFilter="unread" → totalCount equals unreadCount (same predicate)
+  // statusFilter="read"   → totalCount equals received minus unread
+  const totalCount: number =
+    statusFilter === "unread"
+      ? unreadCount
+      : statusFilter === "read"
+        ? Math.max(0, receivedCount - unreadCount)
+        : receivedCount; // "all"
+
+  // Derive sentCount from the sentMessages list already fetched for the partner graph.
+  // When includePartners=false, sentMessages is [] so sentCount=0 (no outbox fetch happens).
+  // The primary consumer (InboxActivity) always requests ?include=partners, so this is
+  // accurate in practice. Avoids a separate COUNT(outbox_replies) scan.
+  const sentCount = sentMessages.length;
 
   // Build inline replies map for the returned page
   const visibleMessageIds = receivedMessages.map((m) => m.messageId);
