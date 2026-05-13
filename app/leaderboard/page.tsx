@@ -106,7 +106,9 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   //
   // `tx_status = 'success'` filter: only successful swaps move tokens.
   // Failed / aborted txs are recorded in the table for audit but shouldn't
-  // count toward volume or P&L.
+  // count toward volume or P&L. Keep the explicit source allowlist aligned
+  // with migrations/005_swaps.sql so future ingestion sources opt in here
+  // deliberately.
   let rows: LeaderboardJoinedRow[] = [];
   try {
     const sql = `
@@ -118,7 +120,8 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
              a.btc_address, a.display_name, a.bns_name, a.erc8004_agent_id
       FROM swaps s
       LEFT JOIN agents a ON a.stx_address = s.sender
-      WHERE s.source = 'agent' AND s.tx_status = 'success'
+      WHERE s.tx_status = 'success'
+        AND s.source IN ('agent', 'cron', 'chainhook')
       GROUP BY s.sender, s.token_in, s.token_out
     `;
     const result = await db.prepare(sql).all<LeaderboardJoinedRow>();
