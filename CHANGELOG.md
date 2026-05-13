@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.43.0](https://github.com/aibtcdev/landing-page/compare/v1.42.0...v1.43.0) (2026-05-13)
+
+
+### Features
+
+* **leaderboard:** add competition countdown ([#829](https://github.com/aibtcdev/landing-page/issues/829)) ([3ed93aa](https://github.com/aibtcdev/landing-page/commit/3ed93aa6fbd8dffdb1cf2f95c812b9ea761eda80))
+
+
+### Bug Fixes
+
+* **competition:** require ERC-8004 identity for scoring ([#827](https://github.com/aibtcdev/landing-page/issues/827)) ([2bf9718](https://github.com/aibtcdev/landing-page/commit/2bf971831a4e0478446d31f46b993678ecc76306))
+
 ## [1.42.0](https://github.com/aibtcdev/landing-page/compare/v1.41.0...v1.42.0) (2026-05-13)
 
 
