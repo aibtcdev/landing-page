@@ -552,7 +552,7 @@ describe("referral code generation", () => {
 
     // KV put should have been called for both referral-code: and referral-lookup: keys
     const kvPutMock = kv.put as Mock;
-    const putCalls = kvPutMock.mock.calls.map(([key]: [string]) => key);
+    const putCalls = kvPutMock.mock.calls.map((call) => call[0] as string);
 
     const hasReferralCodeKey = putCalls.some((k: string) =>
       k.startsWith("referral-code:bc1qagent1")
@@ -760,6 +760,46 @@ describe("GET self-documentation", () => {
 // ── claims backfill tests ────────────────────────────────────────────────
 
 describe("claims backfill", () => {
+  it("upserts existing claims when force=resync is set", async () => {
+    const kv = buildKvMock({ "claim:bc1qagent1": CLAIM_1 });
+    const { db, prepareMock, bindMock } = buildD1Mock({ changesSequence: [1] });
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        ARC_ADMIN_API_KEY: "test-admin-key",
+        VERIFIED_AGENTS: kv,
+        DB: db,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const req = buildPostRequest({ table: "claims", force: "resync" });
+    const resp = await POST(req);
+    const body = await resp.json() as {
+      inserted: number;
+      skipped_idempotent: number;
+      forceResync: boolean;
+      failed: { key: string; reason: string }[];
+    };
+
+    expect(resp.status).toBe(200);
+    expect(body.forceResync).toBe(true);
+    expect(body.inserted).toBe(1);
+    expect(body.skipped_idempotent).toBe(0);
+    expect(body.failed).toHaveLength(0);
+    expect(String(prepareMock.mock.calls[0][0])).toContain("DO UPDATE SET");
+    expect(bindMock).toHaveBeenCalledWith(
+      "bc1qagent1",
+      "Agent One",
+      "https://x.com/agent1/status/123",
+      "agent1",
+      "2026-01-01T01:00:00Z",
+      50000,
+      null,
+      "verified"
+    );
+  });
+
   it("skips rows with invalid status values and records them in failed[]", async () => {
     const badClaim = JSON.stringify({
       btcAddress: "bc1qbad",

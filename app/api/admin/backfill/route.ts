@@ -9,6 +9,7 @@ import { deriveReplyD1Id } from "@/lib/inbox/d1-pk";
 import { generateClaimCode } from "@/lib/claim-code";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { isStxAddress } from "@/lib/validation/address";
+import { mirrorClaimToD1 } from "@/lib/claims/d1-mirror";
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -17,6 +18,7 @@ type TableTarget = "agents" | "claims" | "inbox_messages" | "vouches" | "all";
 interface BackfillResult {
   table: TableTarget;
   dryRun: boolean;
+  forceResync: boolean;
   batchSize: number;
   inserted: number;
   inserted_null_btcpubkey: number;
@@ -343,7 +345,8 @@ async function backfillClaims(
   db: D1Database,
   batchSize: number,
   cursor: string | null,
-  dryRun: boolean
+  dryRun: boolean,
+  forceResync: boolean
 ): Promise<AccumulatedCounts & { nextCursor: string | null }> {
   const counts: AccumulatedCounts = {
     inserted: 0,
@@ -391,25 +394,27 @@ async function backfillClaims(
     }
 
     try {
-        const result = await db
-          .prepare(
-            `INSERT INTO claims (
-            btc_address, display_name, tweet_url, tweet_author,
-            claimed_at, reward_satoshis, reward_txid, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(btc_address) DO NOTHING`
-          )
-        .bind(
-          claim.btcAddress,
-          claim.displayName,
-          claim.tweetUrl,
-          claim.tweetAuthor ?? null,
-          claim.claimedAt,
-          claim.rewardSatoshis,
-          claim.rewardTxid ?? null,
-          claim.status
-        )
-        .run();
+      const result = forceResync
+        ? await mirrorClaimToD1(db, claim).then(() => ({ meta: { changes: 1 } }))
+        : await db
+            .prepare(
+              `INSERT INTO claims (
+              btc_address, display_name, tweet_url, tweet_author,
+              claimed_at, reward_satoshis, reward_txid, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(btc_address) DO NOTHING`
+            )
+            .bind(
+              claim.btcAddress,
+              claim.displayName,
+              claim.tweetUrl,
+              claim.tweetAuthor ?? null,
+              claim.claimedAt,
+              claim.rewardSatoshis,
+              claim.rewardTxid ?? null,
+              claim.status
+            )
+            .run();
 
       if (result.meta.changes === 1) {
         counts.inserted++;
@@ -782,12 +787,14 @@ export async function GET(request: NextRequest) {
       batchSize: "KV scan page size: 10–500 (default: 100)",
       cursor: "Resume cursor from previous response. For inbox_messages: encoded as 'inbound:<kv-cursor>' or 'reply:<kv-cursor>'.",
       dryRun: "If 'true', counts rows without writing to D1 or KV. Default: false.",
+      forceResync: "If 'true' with table=claims, upserts claim rows so D1 status/reward fields match KV. Default: false.",
     },
     warning:
       "table=all is one-shot with no cursor; use per-table + cursor loop for large datasets to avoid request timeout.",
     response: {
       table: "Table targeted",
       dryRun: "Whether this was a dry run",
+      forceResync: "Whether claims used upsert/resync mode",
       batchSize: "Effective batch size used",
       inserted: "Rows newly inserted",
       inserted_null_btcpubkey: "Subset of inserted with btc_public_key = NULL (BIP-322 bc1q agents; expected ~708 on first full backfill)",
@@ -841,6 +848,7 @@ export async function POST(request: NextRequest) {
   const batchSize = parseBatchSize(searchParams.get("batchSize"));
   const cursor = searchParams.get("cursor") ?? null;
   const dryRun = searchParams.get("dryRun") === "true";
+  const forceResync = searchParams.get("forceResync") === "true" || searchParams.get("force") === "resync";
 
   const validTables: TableTarget[] = ["agents", "claims", "inbox_messages", "vouches", "all"];
   if (!validTables.includes(rawTable as TableTarget)) {
@@ -851,7 +859,7 @@ export async function POST(request: NextRequest) {
   }
   const table = rawTable as TableTarget;
 
-  logger.info("backfill.start", { table, batchSize, dryRun });
+  logger.info("backfill.start", { table, batchSize, dryRun, forceResync });
 
   try {
     // ── table=all: one-shot, no cursor support ──────────────────────────────
@@ -886,7 +894,7 @@ export async function POST(request: NextRequest) {
       // Claims
       let claimCursor: string | null = null;
       do {
-        const res = await backfillClaims(kv, db, batchSize, claimCursor, dryRun);
+        const res = await backfillClaims(kv, db, batchSize, claimCursor, dryRun, forceResync);
         totals.inserted += res.inserted;
         totals.skipped_idempotent += res.skipped_idempotent;
         totals.failed.push(...res.failed);
@@ -945,6 +953,7 @@ export async function POST(request: NextRequest) {
       const result: BackfillResult = {
         table: "all",
         dryRun,
+        forceResync,
         batchSize,
         inserted: totals.inserted,
         inserted_null_btcpubkey: totals.inserted_null_btcpubkey,
@@ -965,7 +974,7 @@ export async function POST(request: NextRequest) {
         res = await backfillAgents(kv, db, batchSize, cursor, dryRun);
         break;
       case "claims":
-        res = await backfillClaims(kv, db, batchSize, cursor, dryRun);
+        res = await backfillClaims(kv, db, batchSize, cursor, dryRun, forceResync);
         break;
       case "inbox_messages":
         res = await backfillInboxMessages(kv, db, batchSize, cursor, dryRun);
@@ -1011,6 +1020,7 @@ export async function POST(request: NextRequest) {
     const result: BackfillResult = {
       table,
       dryRun,
+      forceResync,
       batchSize,
       inserted: res.inserted,
       inserted_null_btcpubkey: res.inserted_null_btcpubkey,
