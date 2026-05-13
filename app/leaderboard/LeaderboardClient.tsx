@@ -1,47 +1,34 @@
 "use client";
 
-import {
-  useCallback,
-  useEffect,
-  useMemo,
-  useState,
-  type ReactNode,
-} from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime } from "@/lib/utils";
 
 /**
- * Multi-key sort state. The order of entries is the sort priority — the
- * first clause is primary, the rest are tiebreakers. Click a column
- * header to add/cycle/remove its clause:
- *   off  → click → desc (appended at lowest priority)
- *   desc → click → asc  (same position)
- *   asc  → click → off  (removed from chain)
- *
- * Reset returns the chain to `[{ key: "trades", dir: "desc" }]`, which
- * matches the server-side initial sort in `app/leaderboard/page.tsx` so
- * the first render and the reset state look identical.
+ * Single-key sort. Clicking the active chip flips direction; clicking a
+ * different chip switches the key and resets direction to `desc`.
+ * Default mirrors the server-side order in `app/leaderboard/page.tsx`.
  */
 type SortKey = "trades" | "volume" | "pnl" | "latest";
 type SortDir = "asc" | "desc";
-interface SortClause {
+interface SortState {
   key: SortKey;
   dir: SortDir;
 }
 
-const DEFAULT_SORT: readonly SortClause[] = [{ key: "trades", dir: "desc" }];
+const DEFAULT_SORT: SortState = { key: "trades", dir: "desc" };
 
-const SORT_KEY_LABELS: Record<SortKey, string> = {
-  trades: "Trades",
-  volume: "Volume",
-  pnl: "P&L",
-  latest: "Latest",
-};
+const SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
+  { key: "trades", label: "Trades" },
+  { key: "volume", label: "Volume" },
+  { key: "pnl", label: "P&L" },
+  { key: "latest", label: "Latest" },
+];
 
 /**
  * Columns whose values come from `stats` (the client-side Tenero compute)
- * rather than the server-rendered row. We disable toggling them until
+ * rather than the server-rendered row. Chips for these are disabled until
  * `stats !== null` so users can't sort by a column that's still "…".
  */
 const STATS_DEPENDENT_KEYS: ReadonlySet<SortKey> = new Set(["volume", "pnl"]);
@@ -359,36 +346,22 @@ function computeStats(
 
 export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) {
   const [stats, setStats] = useState<Map<string, RowStats> | null>(null);
-  const [sortKeys, setSortKeys] = useState<SortClause[]>(() => [...DEFAULT_SORT]);
+  const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
 
-  /**
-   * Cycle a column through off → desc → asc → off. Position in the chain
-   * is decided by activation order — the first column you click is
-   * primary, subsequent clicks append as tiebreakers. Means a user who
-   * wants "P&L desc, then Volume desc" just clicks P&L then Volume.
-   */
-  const toggleSort = useCallback((key: SortKey) => {
-    setSortKeys((prev) => {
-      const idx = prev.findIndex((s) => s.key === key);
-      if (idx === -1) return [...prev, { key, dir: "desc" }];
-      const cur = prev[idx];
-      if (cur.dir === "desc") {
-        const next = prev.slice();
-        next[idx] = { key, dir: "asc" };
-        return next;
-      }
-      return prev.filter((_, i) => i !== idx);
-    });
+  const cycleSort = useCallback((key: SortKey) => {
+    setSort((prev) =>
+      prev.key === key
+        ? { key, dir: prev.dir === "desc" ? "asc" : "desc" }
+        : { key, dir: "desc" }
+    );
   }, []);
-
-  const resetSort = useCallback(() => setSortKeys([...DEFAULT_SORT]), []);
 
   /**
    * Treat missing stats as `-Infinity` so unpriced rows fall to the bottom
-   * of any `desc` sort (and to the top of `asc`, which is the expected
-   * "show me the worst/missing data" intent). For P&L we also require
+   * of `desc` sorts (and to the top of `asc`, which is the expected
+   * "show me the missing/worst data" intent). For P&L we also require
    * volume > 0 — a row with no priced legs has `pnlUsd = 0` mathematically
-   * but isn't actually "neutral," it's "unknown."
+   * but isn't "neutral," it's "unknown."
    */
   const valueOf = useCallback(
     (row: LeaderboardRow, key: SortKey): number => {
@@ -411,32 +384,17 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
   );
 
   const sortedRows = useMemo(() => {
-    if (sortKeys.length === 0) return rows;
     const copy = rows.slice();
     copy.sort((a, b) => {
-      for (const { key, dir } of sortKeys) {
-        const av = valueOf(a, key);
-        const bv = valueOf(b, key);
-        if (av !== bv) return dir === "desc" ? bv - av : av - bv;
-      }
-      return 0;
+      const av = valueOf(a, sort.key);
+      const bv = valueOf(b, sort.key);
+      if (av !== bv) return sort.dir === "desc" ? bv - av : av - bv;
+      // Stable tiebreak: latest activity, then address for determinism.
+      if (a.latestTradeAt !== b.latestTradeAt) return b.latestTradeAt - a.latestTradeAt;
+      return a.stxAddress.localeCompare(b.stxAddress);
     });
     return copy;
-  }, [rows, sortKeys, valueOf]);
-
-  const sortLookup = useMemo(() => {
-    const m = new Map<SortKey, { clause: SortClause; position: number }>();
-    sortKeys.forEach((c, i) => m.set(c.key, { clause: c, position: i + 1 }));
-    return m;
-  }, [sortKeys]);
-
-  const showResetButton = useMemo(() => {
-    if (sortKeys.length !== DEFAULT_SORT.length) return true;
-    return sortKeys.some(
-      (c, i) =>
-        c.key !== DEFAULT_SORT[i].key || c.dir !== DEFAULT_SORT[i].dir
-    );
-  }, [sortKeys]);
+  }, [rows, sort, valueOf]);
 
   const statsReady = stats !== null;
 
@@ -485,112 +443,58 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
     );
   }
 
-  /**
-   * Header button: shows direction arrow + priority number (only when 2+
-   * clauses are active, so single-sort stays visually clean). Disabled
-   * for stats-dependent columns until the Tenero compute resolves.
-   */
-  const renderHeaderButton = (key: SortKey, label: ReactNode) => {
-    const entry = sortLookup.get(key);
-    const dependent = STATS_DEPENDENT_KEYS.has(key);
-    const disabled = dependent && !statsReady;
-    const showPosition = sortKeys.length > 1 && entry !== undefined;
-    const dirArrow =
-      entry?.clause.dir === "asc" ? "↑" : entry?.clause.dir === "desc" ? "↓" : null;
-    return (
-      <button
-        type="button"
-        onClick={() => toggleSort(key)}
-        disabled={disabled}
-        aria-sort={
-          entry?.clause.dir === "asc"
-            ? "ascending"
-            : entry?.clause.dir === "desc"
-              ? "descending"
-              : "none"
-        }
-        title={
-          disabled
-            ? "Loading prices… sort available once volume/P&L resolve"
-            : entry
-              ? `Sort priority ${entry.position} — click to flip or remove`
-              : "Click to sort by this column"
-        }
-        className={`inline-flex items-center gap-1 font-medium uppercase tracking-wide transition-colors ${
-          disabled
-            ? "cursor-not-allowed text-white/20"
-            : entry
-              ? "text-white"
-              : "text-white/40 hover:text-white/70"
-        }`}
-      >
-        <span>{label}</span>
-        {dirArrow && <span aria-hidden="true">{dirArrow}</span>}
-        {showPosition && (
-          <span className="text-[10px] font-mono text-white/60">
-            {entry.position}
-          </span>
-        )}
-      </button>
-    );
-  };
-
   return (
-    <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]">
-      {showResetButton && (
-        <div className="flex items-center justify-between gap-2 border-b border-white/[0.06] bg-white/[0.02] px-4 py-2 text-[11px]">
-          <span className="text-white/40">
-            Custom sort active —{" "}
-            {sortKeys.length === 0
-              ? "no clauses"
-              : sortKeys
-                  .map(
-                    (c, i) =>
-                      `${i + 1}. ${SORT_KEY_LABELS[c.key]} ${c.dir === "desc" ? "↓" : "↑"}`
-                  )
-                  .join("  ")}
-          </span>
-          <button
-            type="button"
-            onClick={resetSort}
-            className="text-[#F7931A] hover:underline"
-          >
-            Reset to default
-          </button>
-        </div>
-      )}
-
-      {/* Mobile sort bar (no <th> on the mobile list path) */}
-      <div className="md:hidden border-b border-white/[0.06] px-4 py-2">
-        <div className="flex flex-wrap items-center gap-2 text-[11px]">
-          <span className="text-white/40">Sort:</span>
-          {(["trades", "volume", "pnl", "latest"] as const).map((key) => (
-            <span key={key}>{renderHeaderButton(key, SORT_KEY_LABELS[key])}</span>
-          ))}
-        </div>
+    <>
+      {/* Sort chips — outside the table card, horizontally scrollable on mobile. */}
+      <div className="mb-4 -mx-2 flex items-center gap-2 overflow-x-auto px-2 pb-1">
+        <span className="shrink-0 text-[11px] uppercase tracking-wide text-white/40">
+          Sort by
+        </span>
+        {SORT_OPTIONS.map(({ key, label }) => {
+          const active = sort.key === key;
+          const disabled = STATS_DEPENDENT_KEYS.has(key) && !statsReady;
+          return (
+            <button
+              key={key}
+              type="button"
+              onClick={() => cycleSort(key)}
+              disabled={disabled}
+              title={
+                disabled
+                  ? "Loading prices…"
+                  : active
+                    ? "Click to flip direction"
+                    : `Sort by ${label}`
+              }
+              className={`shrink-0 inline-flex items-center gap-1 rounded-full border px-3 py-1 text-xs transition-colors ${
+                active
+                  ? "border-[#F7931A]/40 bg-[#F7931A]/10 text-[#F7931A]"
+                  : "border-white/[0.08] bg-white/[0.02] text-white/60 hover:border-white/20 hover:text-white"
+              } ${disabled ? "cursor-not-allowed opacity-40 hover:border-white/[0.08] hover:text-white/60" : ""}`}
+            >
+              <span>{label}</span>
+              {active && (
+                <span aria-hidden="true">{sort.dir === "desc" ? "↓" : "↑"}</span>
+              )}
+            </button>
+          );
+        })}
       </div>
 
-      {/* Desktop / tablet table */}
-      <div className="overflow-x-auto max-md:hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wide text-white/40">
-              <th scope="col" className="px-4 py-3 font-medium">Rank</th>
-              <th scope="col" className="px-4 py-3 font-medium">Agent</th>
-              <th scope="col" className="px-4 py-3 font-medium text-right">
-                {renderHeaderButton("trades", "Trades")}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-right">
-                {renderHeaderButton("volume", "Volume (USD)")}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-right">
-                {renderHeaderButton("pnl", <>P&amp;L (USD)</>)}
-              </th>
-              <th scope="col" className="px-4 py-3 font-medium text-right">
-                {renderHeaderButton("latest", "Latest Trade")}
-              </th>
-            </tr>
-          </thead>
+      <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]">
+        {/* Desktop / tablet table */}
+        <div className="overflow-x-auto max-md:hidden">
+          <table className="w-full text-sm">
+            <thead>
+              <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wide text-white/40">
+                <th scope="col" className="px-4 py-3 font-medium">Rank</th>
+                <th scope="col" className="px-4 py-3 font-medium">Agent</th>
+                <th scope="col" className="px-4 py-3 font-medium text-right">Trades</th>
+                <th scope="col" className="px-4 py-3 font-medium text-right">Volume (USD)</th>
+                <th scope="col" className="px-4 py-3 font-medium text-right">P&amp;L (USD)</th>
+                <th scope="col" className="px-4 py-3 font-medium text-right">Latest Trade</th>
+              </tr>
+            </thead>
           <tbody>
             {sortedRows.map((row, idx) => (
               <tr
@@ -743,6 +647,7 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
           );
         })}
       </ul>
-    </div>
+      </div>
+    </>
   );
 }
