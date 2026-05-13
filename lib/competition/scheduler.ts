@@ -18,7 +18,7 @@
  *     the data it gates.
  *
  * Returns a structured summary for the logs:
- *   { scanned, found, inserted, alreadyKnown, rejected, pending, cursor }
+ *   { scanned, found, inserted, alreadyKnown, rejected, rejectionReasons, pending, cursor }
  *
  * SchedulerDO owns cadence and manual refresh. No public operator endpoint
  * or shared-secret route is required.
@@ -27,7 +27,7 @@
 import type { Logger } from "@/lib/logging";
 import { stacksApiFetch } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE } from "@/lib/identity/constants";
-import { verifyAndPersistSwap } from "./verify";
+import { verifyAndPersistSwap, type VerifyFailureCode } from "./verify";
 import { isAllowedSwap } from "./allowlist";
 import {
   clearCompetitionSchedulerCursor,
@@ -41,12 +41,27 @@ export const COMPETITION_SCHEDULER_MAX_ADDRESSES_PER_RUN = 100;
 /** Per-address tx history page size. */
 const HIRO_TX_PAGE_LIMIT = 25;
 
+export interface CompetitionSchedulerRejectionReasons {
+  sender_not_registered: number;
+  contract_not_allowlisted: number;
+  tx_not_found: number;
+  tx_fetch_failed: number;
+  tx_failed: number;
+  before_comp_start: number;
+  malformed_tx: number;
+  invalid_amount: number;
+  incomplete_events: number;
+  db_unavailable: number;
+  verify_threw: number;
+}
+
 export interface CompetitionSchedulerSummary {
   scanned: number;
   found: number;
   inserted: number;
   alreadyKnown: number;
   rejected: number;
+  rejectionReasons: CompetitionSchedulerRejectionReasons;
   pending: number;
   /** Next address (stx_address) to resume from, or null if the walk wrapped. */
   cursor: string | null;
@@ -59,6 +74,30 @@ interface AddressTxEntry {
     contract_id?: string;
     function_name?: string;
   };
+}
+
+function emptyRejectionReasons(): CompetitionSchedulerRejectionReasons {
+  return {
+    sender_not_registered: 0,
+    contract_not_allowlisted: 0,
+    tx_not_found: 0,
+    tx_fetch_failed: 0,
+    tx_failed: 0,
+    before_comp_start: 0,
+    malformed_tx: 0,
+    invalid_amount: 0,
+    incomplete_events: 0,
+    db_unavailable: 0,
+    verify_threw: 0,
+  };
+}
+
+function recordRejection(
+  summary: CompetitionSchedulerSummary,
+  reason: VerifyFailureCode | "verify_threw"
+) {
+  summary.rejected++;
+  summary.rejectionReasons[reason]++;
 }
 
 async function fetchAddressTxs(
@@ -125,7 +164,8 @@ export interface RunCompetitionSchedulerOptions {
  *
  * The handoff: walk registered_wallets, fetch recent Hiro history per
  * address, filter by allowlist, submit each match via verifyAndPersistSwap
- * with source='cron'. The D1 cursor lets the sweep resume across runs
+ * with source='cron'. The source label is retained for DB compatibility;
+ * SchedulerDO owns cadence. The D1 cursor lets the sweep resume across runs
  * rather than always starting at the head.
  */
 export async function runCompetitionScheduler(
@@ -144,6 +184,7 @@ export async function runCompetitionScheduler(
     inserted: 0,
     alreadyKnown: 0,
     rejected: 0,
+    rejectionReasons: emptyRejectionReasons(),
     pending: 0,
     cursor: nextCursor,
   };
@@ -164,10 +205,10 @@ export async function runCompetitionScheduler(
         } else if (result.status === "pending") {
           summary.pending++;
         } else {
-          summary.rejected++;
+          recordRejection(summary, result.code);
         }
       } catch (err) {
-        summary.rejected++;
+        recordRejection(summary, "verify_threw");
         logger?.warn?.("competition.scheduler.verify_threw", {
           stxAddress: stx_address,
           txid: tx.tx_id,

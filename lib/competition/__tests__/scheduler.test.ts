@@ -123,6 +123,19 @@ describe("runCompetitionScheduler — walk + dispatch", () => {
       inserted: 1,
       alreadyKnown: 0,
       rejected: 0,
+      rejectionReasons: {
+        sender_not_registered: 0,
+        contract_not_allowlisted: 0,
+        tx_not_found: 0,
+        tx_fetch_failed: 0,
+        tx_failed: 0,
+        before_comp_start: 0,
+        malformed_tx: 0,
+        invalid_amount: 0,
+        incomplete_events: 0,
+        db_unavailable: 0,
+        verify_threw: 0,
+      },
       pending: 0,
     });
     expect(verifyAndPersistSwap).toHaveBeenCalledTimes(1);
@@ -192,7 +205,33 @@ describe("runCompetitionScheduler — walk + dispatch", () => {
       alreadyKnown: 1,
       pending: 1,
       rejected: 1,
+      rejectionReasons: expect.objectContaining({
+        sender_not_registered: 1,
+      }),
     });
+  });
+
+  it("buckets rejected verifier results by reason", async () => {
+    const { db } = makeDb(["SP_ADDR_001"]);
+    (verifyAndPersistSwap as Mock)
+      .mockResolvedValueOnce({ status: "rejected", code: "before_comp_start", reason: "x" })
+      .mockResolvedValueOnce({ status: "rejected", code: "tx_failed", reason: "x" });
+
+    const fetchAddressTxsImpl = vi.fn().mockResolvedValue([
+      { tx_id: "0xaaa", tx_type: "contract_call", contract_call: { contract_id: ALLOWED_CONTRACT, function_name: ALLOWED_FN } },
+      { tx_id: "0xbbb", tx_type: "contract_call", contract_call: { contract_id: ALLOWED_CONTRACT, function_name: ALLOWED_FN } },
+    ]);
+
+    const summary = await runCompetitionScheduler(
+      { DB: db },
+      undefined,
+      { fetchAddressTxsImpl }
+    );
+
+    expect(summary.rejected).toBe(2);
+    expect(summary.rejectionReasons.before_comp_start).toBe(1);
+    expect(summary.rejectionReasons.tx_failed).toBe(1);
+    expect(summary.rejectionReasons.sender_not_registered).toBe(0);
   });
 });
 
@@ -280,6 +319,7 @@ describe("runCompetitionScheduler — fault tolerance", () => {
     );
 
     expect(summary.rejected).toBe(1);
+    expect(summary.rejectionReasons.verify_threw).toBe(1);
     expect(summary.inserted).toBe(0);
   });
 });
