@@ -3,12 +3,11 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
-import { TOKEN_DECIMALS, DEFAULT_TOKEN_DECIMALS } from "./tokens";
 
 // Reads live Cloudflare bindings (D1, SchedulerDO). Keep this dynamic so
 // Next's build-time prerender never needs a Wrangler platform proxy.
-// USD prices are fetched client-side from `/api/prices` — the KV-cached
-// Tenero price read no longer happens on this path.
+// USD prices + token decimals are fetched client-side from Tenero — this
+// path no longer hardcodes a decimals map or reads the KV price cache.
 export const dynamic = "force-dynamic";
 
 const SCHEDULER_INSTANCE_NAME = "v2";
@@ -130,7 +129,7 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     {
       count: number;
       latestAt: number;
-      tokens: Array<{ tokenId: string; sumAmountIn: number; decimals: number }>;
+      tokens: Array<{ tokenId: string; sumAmountIn: number }>;
       display: {
         btcAddress: string | null;
         displayName: string | null;
@@ -143,11 +142,7 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     const existing = bySender.get(r.sender) ?? {
       count: 0,
       latestAt: 0,
-      tokens: [] as Array<{
-        tokenId: string;
-        sumAmountIn: number;
-        decimals: number;
-      }>,
+      tokens: [] as Array<{ tokenId: string; sumAmountIn: number }>,
       display: {
         btcAddress: r.btc_address,
         displayName: r.display_name,
@@ -160,15 +155,14 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     existing.tokens.push({
       tokenId: r.token_in,
       sumAmountIn: safeAggregateNumber(r.sum_in),
-      decimals: TOKEN_DECIMALS[r.token_in] ?? DEFAULT_TOKEN_DECIMALS,
     });
     bySender.set(r.sender, existing);
   }
 
-  // Per-token breakdowns ride along to the client, which fetches
-  // `/api/prices` and computes USD volume in-browser. SSR stays out of
-  // the KV read path for prices — see #TBD for the rationale on moving
-  // the Tenero-cached price read off the server render.
+  // Per-token breakdowns ride along to the client, which calls Tenero
+  // directly per distinct token id and reads both `price_usd` and
+  // `decimals` from the response — no hardcoded decimals table, no KV
+  // price-cache dependency on this path.
   const ranked: LeaderboardRow[] = Array.from(bySender.entries())
     .map(([sender, agg]) => ({
       stxAddress: sender,

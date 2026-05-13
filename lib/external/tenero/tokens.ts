@@ -1,15 +1,13 @@
 /**
- * Active token set for Tenero price refresh. Locked to this static list
- * (not dynamically discovered from `swaps.token_in`) because the
- * leaderboard's `TOKEN_DECIMALS` table is the authority on what's
- * priceable — discovering a token here that the leaderboard doesn't know
- * the decimals for would fall back to `?? 6` and silently render the
- * wrong USD figure with `allPriced: true`.
+ * Active token set for the SchedulerDO's Tenero price-refresh task. The
+ * leaderboard no longer reads this cache — it calls Tenero directly from
+ * the browser and reads `decimals` straight from the response — so this
+ * list is now only consumed by `/api/prices` and any other future server
+ * consumer of `tenero:price:*` KV entries.
  *
- * Adding a new priceable token is a deliberate two-step edit: add to
- * this list AND to `TOKEN_DECIMALS` in `app/leaderboard/page.tsx`, plus
- * a Tenero probe to confirm `/v1/stacks/tokens/{contract_id}` returns
- * 200 with a non-null `price_usd`.
+ * Adding a new priceable token: probe Tenero's
+ * `/v1/stacks/tokens/{contract_id}` first to confirm a 200 with a
+ * non-null `price_usd`, then add the id here so the scheduler refreshes it.
  *
  * Future work (per #768 review): if this grows past ~30 tokens, consider
  * splitting Tenero refresh into per-tick chunks so a slow run can't blow

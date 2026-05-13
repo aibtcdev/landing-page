@@ -8,7 +8,6 @@ import { truncateAddress, formatRelativeTime } from "@/lib/utils";
 export interface LeaderboardTokenAggregate {
   tokenId: string;
   sumAmountIn: number;
-  decimals: number;
 }
 
 export interface LeaderboardRow {
@@ -21,9 +20,9 @@ export interface LeaderboardRow {
   latestTradeAt: number;
   /**
    * Per-token aggregates from D1. USD volume is computed client-side
-   * by calling Tenero directly (`api.tenero.io/v1/stacks/tokens/{id}`)
-   * so SSR doesn't block on the price layer and the KV cache isn't a
-   * dependency of this page.
+   * by calling Tenero directly (`api.tenero.io/v1/stacks/tokens/{id}`),
+   * which returns `decimals` alongside `price_usd` — no hardcoded
+   * decimals map and no dependency on the KV price cache.
    */
   tokens: LeaderboardTokenAggregate[];
 }
@@ -33,12 +32,18 @@ interface RowVolume {
   allPriced: boolean;
 }
 
+interface TokenPrice {
+  priceUsd: number;
+  decimals: number;
+}
+
 const TENERO_API_BASE = "https://api.tenero.io/v1/stacks";
 const PRICE_CACHE_PREFIX = "aibtc:tenero-price:";
 const PRICE_CACHE_TTL_MS = 5 * 60 * 1000;
 
 interface CachedPrice {
   priceUsd: number | null;
+  decimals: number | null;
   fetchedAt: number;
 }
 
@@ -55,10 +60,10 @@ function tokenIdToTeneroAddress(tokenId: string): string {
 }
 
 /**
- * Read a fresh cached price from `localStorage`. Returns null on miss,
- * stale, parse error, or storage unavailable (private mode / SSR). Cached
- * `priceUsd: null` is a real value — it means Tenero confirmed no price —
- * so it's returned as-is when fresh rather than retried.
+ * Read a fresh cached price + decimals from `localStorage`. Returns null
+ * on miss, stale, parse error, or storage unavailable (private mode / SSR).
+ * Cached `priceUsd: null` is a real value — Tenero confirmed no published
+ * price — and is returned as-is when fresh rather than retried.
  */
 function readCachedPrice(tokenId: string): CachedPrice | null {
   if (typeof window === "undefined") return null;
@@ -68,31 +73,46 @@ function readCachedPrice(tokenId: string): CachedPrice | null {
     const parsed = JSON.parse(raw) as Partial<CachedPrice>;
     if (typeof parsed.fetchedAt !== "number") return null;
     if (Date.now() - parsed.fetchedAt > PRICE_CACHE_TTL_MS) return null;
-    const price =
+    const priceUsd =
       typeof parsed.priceUsd === "number" && Number.isFinite(parsed.priceUsd)
         ? parsed.priceUsd
         : null;
-    return { priceUsd: price, fetchedAt: parsed.fetchedAt };
+    const decimals =
+      typeof parsed.decimals === "number" &&
+      Number.isFinite(parsed.decimals) &&
+      parsed.decimals >= 0
+        ? parsed.decimals
+        : null;
+    return { priceUsd, decimals, fetchedAt: parsed.fetchedAt };
   } catch {
     return null;
   }
 }
 
-function writeCachedPrice(tokenId: string, priceUsd: number | null): void {
+function writeCachedPrice(
+  tokenId: string,
+  priceUsd: number | null,
+  decimals: number | null
+): void {
   if (typeof window === "undefined") return;
   try {
     window.localStorage.setItem(
       `${PRICE_CACHE_PREFIX}${tokenId}`,
-      JSON.stringify({ priceUsd, fetchedAt: Date.now() })
+      JSON.stringify({ priceUsd, decimals, fetchedAt: Date.now() })
     );
   } catch {
     // Quota / disabled storage — fine to skip, next render just refetches.
   }
 }
 
-async function fetchTokenPriceUsd(tokenId: string): Promise<number | null> {
+async function fetchTokenPrice(tokenId: string): Promise<TokenPrice | null> {
   const cached = readCachedPrice(tokenId);
-  if (cached) return cached.priceUsd;
+  if (cached) {
+    if (cached.priceUsd != null && cached.decimals != null) {
+      return { priceUsd: cached.priceUsd, decimals: cached.decimals };
+    }
+    return null;
+  }
 
   const addr = tokenIdToTeneroAddress(tokenId);
   try {
@@ -100,18 +120,40 @@ async function fetchTokenPriceUsd(tokenId: string): Promise<number | null> {
       `${TENERO_API_BASE}/tokens/${encodeURIComponent(addr)}`,
       { headers: { Accept: "application/json" } }
     );
-    if (!res.ok) return null;
+    if (!res.ok) {
+      writeCachedPrice(tokenId, null, null);
+      return null;
+    }
     const body = (await res.json()) as {
-      data?: { price_usd?: number | string | null };
+      data?: {
+        price_usd?: number | string | null;
+        decimals?: number | string | null;
+      };
     };
-    const raw = body.data?.price_usd;
-    const parsed = typeof raw === "string" ? parseFloat(raw) : raw;
+    const rawPrice = body.data?.price_usd;
+    const parsedPrice =
+      typeof rawPrice === "string" ? parseFloat(rawPrice) : rawPrice;
     const priceUsd =
-      typeof parsed === "number" && Number.isFinite(parsed) && parsed > 0
-        ? parsed
+      typeof parsedPrice === "number" &&
+      Number.isFinite(parsedPrice) &&
+      parsedPrice > 0
+        ? parsedPrice
         : null;
-    writeCachedPrice(tokenId, priceUsd);
-    return priceUsd;
+
+    const rawDecimals = body.data?.decimals;
+    const parsedDecimals =
+      typeof rawDecimals === "string" ? parseInt(rawDecimals, 10) : rawDecimals;
+    const decimals =
+      typeof parsedDecimals === "number" &&
+      Number.isFinite(parsedDecimals) &&
+      parsedDecimals >= 0
+        ? parsedDecimals
+        : null;
+
+    writeCachedPrice(tokenId, priceUsd, decimals);
+    return priceUsd != null && decimals != null
+      ? { priceUsd, decimals }
+      : null;
   } catch {
     return null;
   }
@@ -166,19 +208,19 @@ function renderVolumeCell(
 
 function computeVolumes(
   rows: LeaderboardRow[],
-  prices: Record<string, number | null>
+  prices: Record<string, TokenPrice | null>
 ): Map<string, RowVolume> {
   const out = new Map<string, RowVolume>();
   for (const row of rows) {
     let volumeUsd = 0;
     let allPriced = true;
     for (const t of row.tokens) {
-      const price = prices[t.tokenId];
-      if (price == null) {
+      const entry = prices[t.tokenId];
+      if (!entry) {
         allPriced = false;
         continue;
       }
-      volumeUsd += (t.sumAmountIn / 10 ** t.decimals) * price;
+      volumeUsd += (t.sumAmountIn / 10 ** entry.decimals) * entry.priceUsd;
     }
     out.set(row.stxAddress, { volumeUsd, allPriced });
   }
@@ -200,11 +242,11 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
       );
       const priced = await Promise.all(
         distinctTokenIds.map(
-          async (id) => [id, await fetchTokenPriceUsd(id)] as const
+          async (id) => [id, await fetchTokenPrice(id)] as const
         )
       );
-      const priceLookup: Record<string, number | null> = {};
-      for (const [id, price] of priced) priceLookup[id] = price;
+      const priceLookup: Record<string, TokenPrice | null> = {};
+      for (const [id, entry] of priced) priceLookup[id] = entry;
       if (!cancelled) setVolumes(computeVolumes(rows, priceLookup));
     })();
     return () => {
