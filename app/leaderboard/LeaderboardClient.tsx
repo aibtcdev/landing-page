@@ -178,6 +178,24 @@ function formatUsd(value: number | null): string {
   return `${sign}$${formatted}`;
 }
 
+/**
+ * USD formatter that keeps small amounts legible — at a few-cent trade
+ * the standard 2-decimal `formatUsd` truncates "-$0.0013" to "-$0.00",
+ * which is misleading. Used for the P&L hover so the full magnitude is
+ * always visible even when the cell shows just the percentage.
+ */
+function formatUsdPrecise(value: number | null): string {
+  if (value == null || !Number.isFinite(value)) return "—";
+  const abs = Math.abs(value);
+  const fractionDigits = abs >= 100 ? 2 : abs >= 1 ? 4 : 6;
+  const formatted = abs.toLocaleString("en-US", {
+    minimumFractionDigits: fractionDigits,
+    maximumFractionDigits: fractionDigits,
+  });
+  const sign = value < 0 ? "-" : "";
+  return `${sign}$${formatted}`;
+}
+
 function rowDisplayName(row: LeaderboardRow): string {
   return (
     row.displayName?.trim() ||
@@ -224,28 +242,27 @@ function renderPnlCell(
       </span>
     );
   }
-  if (stats.volumeUsd <= 0) return <span className="text-white/20">—</span>;
+  if (stats.volumeUsd <= 0 || stats.pnlPercent == null) {
+    return <span className="text-white/20">—</span>;
+  }
 
   const positive = stats.pnlUsd >= 0;
   const color = positive ? "text-[#4dcd5e]" : "text-[#f06464]";
-  const usdLabel = formatUsd(stats.pnlUsd);
-  const pctLabel =
-    stats.pnlPercent != null
-      ? `${positive ? "+" : ""}${stats.pnlPercent.toFixed(2)}%`
-      : null;
+  const pctLabel = `${positive ? "+" : ""}${stats.pnlPercent.toFixed(2)}%`;
+  // Tooltip carries the full-precision USD value so a tiny percentage
+  // like `-0.03%` still has the underlying magnitude (`-$0.001300`)
+  // available on hover. The 2-decimal `formatUsd` truncates anything
+  // smaller than a cent to `$0.00` which makes the cell look broken;
+  // showing only the percentage in the cell plus full $ on hover keeps
+  // both signals legible at any trade size.
+  const usdDetail = `${positive ? "+" : ""}${formatUsdPrecise(stats.pnlUsd)}`;
   const title = stats.allPriced
-    ? undefined
-    : "Partial — some tokens couldn't be priced and were excluded from this total";
+    ? usdDetail
+    : `${usdDetail} (partial — some tokens couldn't be priced and were excluded)`;
 
   return (
     <span className={`font-medium ${color}`} title={title}>
-      {positive ? "+" : ""}
-      {usdLabel}
-      {pctLabel && (
-        <span className="ml-1 text-[11px] text-white/40 font-normal">
-          ({pctLabel})
-        </span>
-      )}
+      {pctLabel}
       {!stats.allPriced && "*"}
     </span>
   );
@@ -441,11 +458,18 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
               ? `${formatUsd(rowStats.volumeUsd)}${rowStats.allPriced ? "" : "*"}`
               : "—";
           const pnlPositive = rowStats ? rowStats.pnlUsd >= 0 : false;
+          // Mobile cell: percentage only (matches desktop posture); the
+          // precise USD goes in the `title` so tap-and-hold or assistive
+          // tooling can surface it.
           const pnlLabel = !rowStats
             ? "…"
-            : rowStats.volumeUsd <= 0
+            : rowStats.volumeUsd <= 0 || rowStats.pnlPercent == null
               ? "—"
-              : `${pnlPositive ? "+" : ""}${formatUsd(rowStats.pnlUsd)}${rowStats.pnlPercent != null ? ` (${pnlPositive ? "+" : ""}${rowStats.pnlPercent.toFixed(2)}%)` : ""}${rowStats.allPriced ? "" : "*"}`;
+              : `${pnlPositive ? "+" : ""}${rowStats.pnlPercent.toFixed(2)}%${rowStats.allPriced ? "" : "*"}`;
+          const pnlTitle =
+            !rowStats || rowStats.volumeUsd <= 0
+              ? undefined
+              : `${pnlPositive ? "+" : ""}${formatUsdPrecise(rowStats.pnlUsd)}${rowStats.allPriced ? "" : " (partial)"}`;
           const pnlColor =
             !rowStats || rowStats.volumeUsd <= 0
               ? "text-white/40"
@@ -483,7 +507,9 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                   <span>·</span>
                   <span>{volumeLabel}</span>
                   <span>·</span>
-                  <span className={pnlColor}>{pnlLabel}</span>
+                  <span className={pnlColor} title={pnlTitle}>
+                    {pnlLabel}
+                  </span>
                   <span>·</span>
                   <span>
                     {row.latestTradeAt > 0
