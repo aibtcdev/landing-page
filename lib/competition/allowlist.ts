@@ -203,6 +203,36 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
       "swap-helper-p",
     ],
   },
+
+  // -- Wrappers (4 contracts) --
+  // Bitflow-deployed adapters around external DEX protocols (Velar, ALEX,
+  // Arkadiko). All four expose top-level public `swap-*` entry points and
+  // can be called directly by the Bitflow SDK when it picks them over a
+  // router for a given route. Excluded from earlier seed lists by oversight
+  // (handoff text referenced "routers" only); legitimate Bitflow-routed
+  // swaps were being rejected with `contract_not_allowlisted` when the SDK
+  // chose this path.
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.wrapper-velar-v-1-1`,
+    functions: ["swap-helper-a", "swap-helper-b"],
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.wrapper-velar-multihop-v-1-1`,
+    functions: ["swap-3", "swap-4", "swap-5"],
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.wrapper-alex-v-2-1`,
+    functions: [
+      "swap-helper",
+      "swap-helper-a",
+      "swap-helper-b",
+      "swap-helper-c",
+    ],
+  },
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.wrapper-arkadiko-v-1-1`,
+    functions: ["swap-x-for-y", "swap-y-for-x"],
+  },
 ] as const;
 
 /** Convenience: all entries across protocols. Currently Bitflow-only. */
