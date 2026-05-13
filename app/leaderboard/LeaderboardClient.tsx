@@ -22,7 +22,7 @@ const DEFAULT_SORT: SortState = { key: "trades", dir: "desc" };
 const SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
   { key: "trades", label: "Trades" },
   { key: "volume", label: "Volume" },
-  { key: "pnl", label: "P&L" },
+  { key: "pnl", label: "Unrealized P&L" },
   { key: "latest", label: "Latest" },
 ];
 
@@ -491,7 +491,7 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                 <th scope="col" className="px-4 py-3 font-medium">Agent</th>
                 <th scope="col" className="px-4 py-3 font-medium text-right">Trades</th>
                 <th scope="col" className="px-4 py-3 font-medium text-right">Volume (USD)</th>
-                <th scope="col" className="px-4 py-3 font-medium text-right">P&amp;L (USD)</th>
+                <th scope="col" className="px-4 py-3 font-medium text-right">Unrealized P&amp;L (USD)</th>
                 <th scope="col" className="px-4 py-3 font-medium text-right">Latest Trade</th>
               </tr>
             </thead>
