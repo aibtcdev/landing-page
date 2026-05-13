@@ -1,8 +1,15 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import Link from "next/link";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime } from "@/lib/utils";
+
+export interface LeaderboardTokenAggregate {
+  tokenId: string;
+  sumAmountIn: number;
+  decimals: number;
+}
 
 export interface LeaderboardRow {
   stxAddress: string;
@@ -13,16 +20,18 @@ export interface LeaderboardRow {
   tradeCount: number;
   latestTradeAt: number;
   /**
-   * USD volume computed server-side from KV-cached Tenero prices. Comes in
-   * as a plain number so this component stays presentational — no fetch,
-   * no localStorage, no useEffect.
+   * Per-token aggregates from D1. USD volume is computed client-side
+   * from `/api/prices` so SSR doesn't block on the KV price cache.
    */
+  tokens: LeaderboardTokenAggregate[];
+}
+
+interface PricesResponse {
+  prices?: Record<string, { priceUsd: number | null; fetchedAt: number }>;
+}
+
+interface RowVolume {
   volumeUsd: number;
-  /**
-   * False if any token in the agent's volume couldn't be priced from KV
-   * (cold scheduler, paused, or token has no published price). Lets the UI
-   * footnote the row instead of misleadingly under-reporting.
-   */
   allPriced: boolean;
 }
 
@@ -46,10 +55,20 @@ function rowDisplayName(row: LeaderboardRow): string {
   );
 }
 
-function renderVolumeCell(row: LeaderboardRow): React.ReactNode {
-  if (row.volumeUsd > 0) {
-    const label = formatUsd(row.volumeUsd);
-    return row.allPriced ? (
+function renderVolumeCell(
+  row: LeaderboardRow,
+  volume: RowVolume | undefined
+): React.ReactNode {
+  if (!volume) {
+    return (
+      <span className="text-white/30" aria-label="Loading USD volume">
+        …
+      </span>
+    );
+  }
+  if (volume.volumeUsd > 0) {
+    const label = formatUsd(volume.volumeUsd);
+    return volume.allPriced ? (
       <span className="font-medium text-white/80">{label}</span>
     ) : (
       <span
@@ -63,7 +82,60 @@ function renderVolumeCell(row: LeaderboardRow): React.ReactNode {
   return <span className="text-white/20">—</span>;
 }
 
+function computeVolumes(
+  rows: LeaderboardRow[],
+  prices: Record<string, number | null>
+): Map<string, RowVolume> {
+  const out = new Map<string, RowVolume>();
+  for (const row of rows) {
+    let volumeUsd = 0;
+    let allPriced = true;
+    for (const t of row.tokens) {
+      const price = prices[t.tokenId];
+      if (price == null) {
+        allPriced = false;
+        continue;
+      }
+      volumeUsd += (t.sumAmountIn / 10 ** t.decimals) * price;
+    }
+    out.set(row.stxAddress, { volumeUsd, allPriced });
+  }
+  return out;
+}
+
 export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) {
+  const [volumes, setVolumes] = useState<Map<string, RowVolume> | null>(null);
+
+  useEffect(() => {
+    if (rows.length === 0) {
+      setVolumes(new Map());
+      return;
+    }
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/prices", {
+          headers: { Accept: "application/json" },
+        });
+        if (!res.ok) {
+          if (!cancelled) setVolumes(new Map());
+          return;
+        }
+        const body = (await res.json()) as PricesResponse;
+        const priceLookup: Record<string, number | null> = {};
+        for (const [tokenId, entry] of Object.entries(body.prices ?? {})) {
+          priceLookup[tokenId] = entry?.priceUsd ?? null;
+        }
+        if (!cancelled) setVolumes(computeVolumes(rows, priceLookup));
+      } catch {
+        if (!cancelled) setVolumes(new Map());
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [rows]);
+
   if (rows.length === 0) {
     return (
       <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-6 py-12 text-center">
@@ -142,7 +214,9 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                 <td className="px-4 py-3 text-right font-medium text-[#F7931A]">
                   {row.tradeCount}
                 </td>
-                <td className="px-4 py-3 text-right">{renderVolumeCell(row)}</td>
+                <td className="px-4 py-3 text-right">
+                  {renderVolumeCell(row, volumes?.get(row.stxAddress))}
+                </td>
                 <td className="px-4 py-3 text-right text-white/50">
                   {row.latestTradeAt > 0
                     ? formatRelativeTime(new Date(row.latestTradeAt * 1000).toISOString())
@@ -157,9 +231,11 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
       {/* Mobile list */}
       <ul className="md:hidden divide-y divide-white/[0.04]">
         {rows.map((row, idx) => {
-          const volumeLabel =
-            row.volumeUsd > 0
-              ? `${formatUsd(row.volumeUsd)}${row.allPriced ? "" : "*"}`
+          const volume = volumes?.get(row.stxAddress);
+          const volumeLabel = !volume
+            ? "…"
+            : volume.volumeUsd > 0
+              ? `${formatUsd(volume.volumeUsd)}${volume.allPriced ? "" : "*"}`
               : "—";
           const inner = (
             <div className="flex items-start gap-3 px-4 py-3">

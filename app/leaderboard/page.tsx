@@ -3,10 +3,12 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
-import { getCachedTokenPrices } from "@/lib/external/tenero/kv-cache";
+import { TOKEN_DECIMALS, DEFAULT_TOKEN_DECIMALS } from "./tokens";
 
-// Reads live Cloudflare bindings (D1, KV, SchedulerDO). Keep this dynamic so
+// Reads live Cloudflare bindings (D1, SchedulerDO). Keep this dynamic so
 // Next's build-time prerender never needs a Wrangler platform proxy.
+// USD prices are fetched client-side from `/api/prices` — the KV-cached
+// Tenero price read no longer happens on this path.
 export const dynamic = "force-dynamic";
 
 const SCHEDULER_INSTANCE_NAME = "v2";
@@ -23,26 +25,6 @@ export const metadata: Metadata = {
     "aibtc:page-type": "trading-leaderboard",
     "aibtc:api-endpoint": "/api/competition/trades",
   },
-};
-
-/**
- * Stacks-canonical decimals for tokens we know how to value. Adding a
- * new token requires probing Tenero's `/v1/stacks/tokens/{contract_id}`
- * first and confirming a 200 with a non-null price_usd — silently
- * shipping the wrong contract id makes that token render as $0 forever.
- *
- * Keep in sync with `STATIC_TOKEN_IDS` in `lib/external/tenero/tokens.ts`
- * (consumed by `SchedulerDO` in `worker.ts`) so the scheduler refreshes
- * every token the leaderboard knows how to value.
- *
- * The unknown-token default is 6 (SIP-10 convention). Volume from
- * those legs stays $0 (no price in KV), which is the honest read — we'd
- * rather under-report than impute a number.
- */
-const TOKEN_DECIMALS: Readonly<Record<string, number>> = {
-  stx: 6,
-  "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc": 8,
-  "SP4SZE494VC2YC5JYG7AYFQ44F5Q4PYV7DVMDPBG.ststx-token::ststx": 6,
 };
 
 interface LeaderboardJoinedRow {
@@ -91,7 +73,6 @@ function safeAggregateNumber(raw: number | string | null | undefined): number {
 async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   const { env, ctx } = await getCloudflareContext();
   const db = env.DB as D1Database | undefined;
-  const kv = env.VERIFIED_AGENTS as KVNamespace | undefined;
 
   // Opportunistic SchedulerDO kick. A DO instance doesn't exist until
   // something calls a method on it — the constructor (which arms the
@@ -179,47 +160,26 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     existing.tokens.push({
       tokenId: r.token_in,
       sumAmountIn: safeAggregateNumber(r.sum_in),
-      decimals: TOKEN_DECIMALS[r.token_in] ?? 6,
+      decimals: TOKEN_DECIMALS[r.token_in] ?? DEFAULT_TOKEN_DECIMALS,
     });
     bySender.set(r.sender, existing);
   }
 
-  // Read every distinct tokenId from KV in parallel. SchedulerDO writes
-  // these on its 5-min alarm tick; SSR is a pure consumer here. Missing
-  // entries (cold start, scheduler paused) render as "—" downstream.
-  const distinctTokenIds = new Set<string>();
-  for (const agg of bySender.values()) {
-    for (const t of agg.tokens) distinctTokenIds.add(t.tokenId);
-  }
-  const priceMap = kv
-    ? await getCachedTokenPrices(kv, Array.from(distinctTokenIds))
-    : new Map();
-
+  // Per-token breakdowns ride along to the client, which fetches
+  // `/api/prices` and computes USD volume in-browser. SSR stays out of
+  // the KV read path for prices — see #TBD for the rationale on moving
+  // the Tenero-cached price read off the server render.
   const ranked: LeaderboardRow[] = Array.from(bySender.entries())
-    .map(([sender, agg]) => {
-      let volumeUsd = 0;
-      let allPriced = true;
-      for (const t of agg.tokens) {
-        const cached = priceMap.get(t.tokenId);
-        const price = cached?.priceUsd ?? null;
-        if (price == null) {
-          allPriced = false;
-          continue;
-        }
-        volumeUsd += (t.sumAmountIn / 10 ** t.decimals) * price;
-      }
-      return {
-        stxAddress: sender,
-        btcAddress: agg.display.btcAddress,
-        displayName: agg.display.displayName,
-        bnsName: agg.display.bnsName,
-        erc8004AgentId: agg.display.erc8004AgentId,
-        tradeCount: agg.count,
-        latestTradeAt: agg.latestAt,
-        volumeUsd,
-        allPriced,
-      };
-    })
+    .map(([sender, agg]) => ({
+      stxAddress: sender,
+      btcAddress: agg.display.btcAddress,
+      displayName: agg.display.displayName,
+      bnsName: agg.display.bnsName,
+      erc8004AgentId: agg.display.erc8004AgentId,
+      tradeCount: agg.count,
+      latestTradeAt: agg.latestAt,
+      tokens: agg.tokens,
+    }))
     .sort((a, b) => {
       // Primary: count desc. Tiebreak: latest trade desc.
       if (b.tradeCount !== a.tradeCount) return b.tradeCount - a.tradeCount;
