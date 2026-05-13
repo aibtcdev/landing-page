@@ -84,6 +84,14 @@ function buildHappyTx() {
  */
 function buildD1Mock(opts: {
   registered?: boolean;
+  /**
+   * Genesis-level (Level 2) eligibility — requires the agent has a verified
+   * or rewarded viral claim per `lib/levels.ts:67-87`. Defaults to `true`
+   * when `registered: true` so happy-path tests written before the Genesis
+   * gate landed continue to pass without modification. Set explicitly to
+   * `false` to exercise the `sender_not_genesis` rejection path.
+   */
+  genesis?: boolean;
   existingRow?: Record<string, unknown> | null;
   insertChanges?: number;
   afterInsertRow?: Record<string, unknown> | null;
@@ -106,14 +114,26 @@ function buildD1Mock(opts: {
       };
     }
 
-    if (trimmed.startsWith("SELECT 1 AS ok FROM registered_wallets")) {
+    if (
+      trimmed.startsWith("SELECT") &&
+      trimmed.includes("FROM registered_wallets") &&
+      trimmed.includes("genesis")
+    ) {
       return {
         bind: () => ({
           first: () => {
             if (opts.throwOn === "sender-check") {
               return Promise.reject(new Error("sender check blew up"));
             }
-            return Promise.resolve(opts.registered ? { ok: 1 } : null);
+            if (!opts.registered) return Promise.resolve(null);
+            // Default `genesis` to true when registered is true — happy-path
+            // tests written before the Genesis gate landed assume verification
+            // succeeds. Tests exercising the gate set `genesis: false` explicitly.
+            const genesis = opts.genesis ?? true;
+            return Promise.resolve({
+              registered: 1,
+              genesis: genesis ? 1 : 0,
+            });
           },
         }),
       };
@@ -301,6 +321,31 @@ describe("verifyAndPersistSwap — sender + allowlist gates", () => {
     expect(result.status).toBe("rejected");
     if (result.status !== "rejected") return;
     expect(result.code).toBe("sender_not_registered");
+  });
+
+  it("rejects with sender_not_genesis when sender is registered (Level 1) but has no verified claim (Level 2)", async () => {
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(buildHappyTx()));
+    const db = buildD1Mock({ registered: true, genesis: false });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") return;
+    expect(result.code).toBe("sender_not_genesis");
+    expect(result.reason).toMatch(/Genesis/);
+  });
+
+  it("uses an aggregated Genesis lookup so multiple claim rows cannot downgrade a verified agent", async () => {
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(buildHappyTx()));
+    const db = buildD1Mock({ registered: true, insertChanges: 1 });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("verified");
+
+    const prepare = db.prepare as unknown as Mock;
+    const eligibilitySql = prepare.mock.calls
+      .map(([sql]) => String(sql))
+      .find((sql) => sql.includes("FROM registered_wallets"));
+    expect(eligibilitySql).toContain("MAX(CASE WHEN c.status IN ('verified', 'rewarded')");
+    expect(eligibilitySql).toContain("LEFT JOIN agents");
+    expect(eligibilitySql).toContain("GROUP BY rw.stx_address");
   });
 
   it("rejects with contract_not_allowlisted for an off-allowlist contract", async () => {

@@ -43,6 +43,7 @@ const HIRO_TX_PAGE_LIMIT = 25;
 
 export interface CompetitionSchedulerRejectionReasons {
   sender_not_registered: number;
+  sender_not_genesis: number;
   contract_not_allowlisted: number;
   tx_not_found: number;
   tx_fetch_failed: number;
@@ -79,6 +80,7 @@ interface AddressTxEntry {
 function emptyRejectionReasons(): CompetitionSchedulerRejectionReasons {
   return {
     sender_not_registered: 0,
+    sender_not_genesis: 0,
     contract_not_allowlisted: 0,
     tx_not_found: 0,
     tx_fetch_failed: 0,
