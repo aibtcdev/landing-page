@@ -84,11 +84,12 @@ export async function withEdgeCache(
 
   // Don't overwrite a Cache-Control already set by the loader —
   // routes set their own client-facing directives (e.g.
-  // s-maxage, stale-while-revalidate). The TTL we care about is
-  // the one written into `caches.default`, which we apply only
-  // to the cached clone via a fresh Response.
+  // s-maxage, stale-while-revalidate). The clone is stored verbatim
+  // so cache hits return the full header the loader intended.
+  // caches.default honors s-maxage for its own TTL per standard
+  // HTTP cache semantics, so ttlSeconds is advisory only for
+  // loaders that do set s-maxage (all current callers do).
   const cachedClone = new Response(response.clone().body, response);
-  cachedClone.headers.set("Cache-Control", `public, max-age=${ttlSeconds}`);
 
   const stash = cache.put(cacheKey, cachedClone);
   const { ctx } = await getCloudflareContext();

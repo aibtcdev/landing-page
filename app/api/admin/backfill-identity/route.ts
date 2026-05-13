@@ -4,7 +4,7 @@ import { requireAdmin } from "@/lib/admin/auth";
 import type { AgentRecord } from "@/lib/types";
 import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "@/lib/identity/constants";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
-import { setCachedIdentity, setCachedIdentityNegative } from "@/lib/identity/kv-cache";
+import { getCachedIdentity, setCachedIdentity, setCachedIdentityNegative } from "@/lib/identity/kv-cache";
 import {
   createLogger,
   createConsoleLogger,
@@ -24,9 +24,9 @@ const BACKFILL_INTER_CALL_DELAY_MS = 200;
  * have not been checked recently. Iterates KV records under the btc: prefix,
  * fetches Hiro NFT holdings for unchecked agents, and persists results.
  *
- * Uses KV sentinel key `identity-check:{stxAddress}` (5-min TTL) to avoid
- * re-checking recently-checked negative results. Respects the same rate-limit
- * sentinel that the heartbeat and identity endpoints use.
+ * Uses the three-state typed identity cache (`getCachedIdentity`) to skip
+ * recently-checked addresses: confirmed-negative (7d TTL) and lookup-failed
+ * (60s TTL) hits are both skipped without hitting Hiro.
  *
  * Requires X-Admin-Key header.
  *
@@ -62,7 +62,7 @@ export async function GET(request: NextRequest) {
     let processed = 0;
     let updated = 0;
     let skippedAlreadySet = 0;
-    let skippedSentinel = 0;
+    let skippedTypedCache = 0;
     let errors = 0;
     const updatedAgents: string[] = [];
 
@@ -100,11 +100,11 @@ export async function GET(request: NextRequest) {
 
         processed++;
 
-        // Check KV sentinel — recently checked and found null
-        const sentinelKey = `identity-check:${agent.stxAddress}`;
-        const recentlyChecked = await kv.get(sentinelKey);
-        if (recentlyChecked) {
-          skippedSentinel++;
+        // Check typed identity cache — skip addresses with a recent confirmed-negative
+        // (7d TTL) or lookup-failed (60s TTL) result to avoid redundant Hiro calls.
+        const typedCached = await getCachedIdentity(agent.stxAddress, kv);
+        if (typedCached.hit && !typedCached.value) {
+          skippedTypedCache++;
           continue;
         }
 
@@ -151,14 +151,10 @@ export async function GET(request: NextRequest) {
               updated++;
               updatedAgents.push(`${agent.btcAddress} → agentId ${agentId}`);
             } else {
-              // Negative result — set rate-limit sentinel to avoid re-checking
-              // from this admin route (5-min TTL) AND record confirmed-negative
-              // in the three-state identity cache (7d TTL) so other paths also
-              // skip the Hiro round-trip.
-              await Promise.all([
-                kv.put(sentinelKey, "1", { expirationTtl: 300 }),
-                setCachedIdentityNegative(agent.stxAddress, kv, logger),
-              ]);
+              // Negative result — record confirmed-negative in the three-state
+              // identity cache (7d TTL) so this and other paths skip the Hiro
+              // round-trip on subsequent calls.
+              await setCachedIdentityNegative(agent.stxAddress, kv, logger);
             }
           } else if (agentId != null) {
             updated++;
@@ -188,7 +184,7 @@ export async function GET(request: NextRequest) {
       processed,
       updated,
       skippedAlreadySet,
-      skippedSentinel,
+      skippedTypedCache,
       errors,
       updatedAgents,
     });
