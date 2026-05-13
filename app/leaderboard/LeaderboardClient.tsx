@@ -21,18 +21,100 @@ export interface LeaderboardRow {
   latestTradeAt: number;
   /**
    * Per-token aggregates from D1. USD volume is computed client-side
-   * from `/api/prices` so SSR doesn't block on the KV price cache.
+   * by calling Tenero directly (`api.tenero.io/v1/stacks/tokens/{id}`)
+   * so SSR doesn't block on the price layer and the KV cache isn't a
+   * dependency of this page.
    */
   tokens: LeaderboardTokenAggregate[];
-}
-
-interface PricesResponse {
-  prices?: Record<string, { priceUsd: number | null; fetchedAt: number }>;
 }
 
 interface RowVolume {
   volumeUsd: number;
   allPriced: boolean;
+}
+
+const TENERO_API_BASE = "https://api.tenero.io/v1/stacks";
+const PRICE_CACHE_PREFIX = "aibtc:tenero-price:";
+const PRICE_CACHE_TTL_MS = 5 * 60 * 1000;
+
+interface CachedPrice {
+  priceUsd: number | null;
+  fetchedAt: number;
+}
+
+/**
+ * Tenero's `/tokens/{contract_id}` route uses the contract id without the
+ * `::asset` suffix; native STX is the literal `"stx"`. Mirrors
+ * `tokenIdToTeneroAddress` in `lib/external/tenero/prices.ts` — kept inline
+ * here because this component is the only client-side caller.
+ */
+function tokenIdToTeneroAddress(tokenId: string): string {
+  if (tokenId === "stx") return "stx";
+  const idx = tokenId.indexOf("::");
+  return idx >= 0 ? tokenId.slice(0, idx) : tokenId;
+}
+
+/**
+ * Read a fresh cached price from `localStorage`. Returns null on miss,
+ * stale, parse error, or storage unavailable (private mode / SSR). Cached
+ * `priceUsd: null` is a real value — it means Tenero confirmed no price —
+ * so it's returned as-is when fresh rather than retried.
+ */
+function readCachedPrice(tokenId: string): CachedPrice | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const raw = window.localStorage.getItem(`${PRICE_CACHE_PREFIX}${tokenId}`);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as Partial<CachedPrice>;
+    if (typeof parsed.fetchedAt !== "number") return null;
+    if (Date.now() - parsed.fetchedAt > PRICE_CACHE_TTL_MS) return null;
+    const price =
+      typeof parsed.priceUsd === "number" && Number.isFinite(parsed.priceUsd)
+        ? parsed.priceUsd
+        : null;
+    return { priceUsd: price, fetchedAt: parsed.fetchedAt };
+  } catch {
+    return null;
+  }
+}
+
+function writeCachedPrice(tokenId: string, priceUsd: number | null): void {
+  if (typeof window === "undefined") return;
+  try {
+    window.localStorage.setItem(
+      `${PRICE_CACHE_PREFIX}${tokenId}`,
+      JSON.stringify({ priceUsd, fetchedAt: Date.now() })
+    );
+  } catch {
+    // Quota / disabled storage — fine to skip, next render just refetches.
+  }
+}
+
+async function fetchTokenPriceUsd(tokenId: string): Promise<number | null> {
+  const cached = readCachedPrice(tokenId);
+  if (cached) return cached.priceUsd;
+
+  const addr = tokenIdToTeneroAddress(tokenId);
+  try {
+    const res = await fetch(
+      `${TENERO_API_BASE}/tokens/${encodeURIComponent(addr)}`,
+      { headers: { Accept: "application/json" } }
+    );
+    if (!res.ok) return null;
+    const body = (await res.json()) as {
+      data?: { price_usd?: number | string | null };
+    };
+    const raw = body.data?.price_usd;
+    const parsed = typeof raw === "string" ? parseFloat(raw) : raw;
+    const priceUsd =
+      typeof parsed === "number" && Number.isFinite(parsed) && parsed > 0
+        ? parsed
+        : null;
+    writeCachedPrice(tokenId, priceUsd);
+    return priceUsd;
+  } catch {
+    return null;
+  }
 }
 
 function formatUsd(value: number | null): string {
@@ -113,23 +195,17 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
     }
     let cancelled = false;
     (async () => {
-      try {
-        const res = await fetch("/api/prices", {
-          headers: { Accept: "application/json" },
-        });
-        if (!res.ok) {
-          if (!cancelled) setVolumes(new Map());
-          return;
-        }
-        const body = (await res.json()) as PricesResponse;
-        const priceLookup: Record<string, number | null> = {};
-        for (const [tokenId, entry] of Object.entries(body.prices ?? {})) {
-          priceLookup[tokenId] = entry?.priceUsd ?? null;
-        }
-        if (!cancelled) setVolumes(computeVolumes(rows, priceLookup));
-      } catch {
-        if (!cancelled) setVolumes(new Map());
-      }
+      const distinctTokenIds = Array.from(
+        new Set(rows.flatMap((r) => r.tokens.map((t) => t.tokenId)))
+      );
+      const priced = await Promise.all(
+        distinctTokenIds.map(
+          async (id) => [id, await fetchTokenPriceUsd(id)] as const
+        )
+      );
+      const priceLookup: Record<string, number | null> = {};
+      for (const [id, price] of priced) priceLookup[id] = price;
+      if (!cancelled) setVolumes(computeVolumes(rows, priceLookup));
     })();
     return () => {
       cancelled = true;
