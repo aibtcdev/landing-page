@@ -8,7 +8,7 @@ describe("tokenIdToTeneroAddress", () => {
 
   it("strips the ::asset suffix from a fully-qualified asset id", () => {
     const sbtc =
-      "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc";
+      "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc-token";
     expect(tokenIdToTeneroAddress(sbtc)).toBe(
       "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token"
     );
