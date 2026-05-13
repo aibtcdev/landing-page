@@ -118,7 +118,8 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
              a.btc_address, a.display_name, a.bns_name, a.erc8004_agent_id
       FROM swaps s
       LEFT JOIN agents a ON a.stx_address = s.sender
-      WHERE s.source = 'agent' AND s.tx_status = 'success'
+      WHERE s.tx_status = 'success'
+        AND s.source IN ('agent', 'cron', 'chainhook')
       GROUP BY s.sender, s.token_in, s.token_out
     `;
     const result = await db.prepare(sql).all<LeaderboardJoinedRow>();
