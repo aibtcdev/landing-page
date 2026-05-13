@@ -16,6 +16,7 @@ import {
   lookupProfileByAgentId,
   mapRowToAgentRecord,
   mapRowToClaimRecord,
+  shouldFallBackToKVClaim,
 } from "@/lib/cache/agent-profile";
 import {
   createLogger,
@@ -296,9 +297,23 @@ export async function GET(
           }).catch(() => {});
         }
 
+        // #771 unblock: recover KV-fallback for agents whose claim records
+        // predate the Phase 2.5 dual-write (#705 merged 2026-05-10T10:42Z).
+        // See `shouldFallBackToKVClaim` in `lib/cache/agent-profile.ts` for
+        // the heuristic and the dual-write-gap backfill context (#691).
+        if (shouldFallBackToKVClaim(agent, d1Claim)) {
+          // `agent` narrowed to AgentRecord by the type-guard predicate.
+          logger.info("profile.d1_claim_miss_with_erc8004", {
+            btc: agent.btcAddress,
+            erc8004AgentId: agent.erc8004AgentId,
+          });
+          d1Claim = undefined;
+        }
+
         // Pass d1Claim so enrichAgentProfile skips the redundant KV read when the
         // agent came from D1 (covers all non-KV-fallback paths). When d1Claim is
-        // undefined (KV fallback agents), enrichAgentProfile falls back to KV.
+        // undefined (KV fallback agents OR the #771-unblock recovery above),
+        // enrichAgentProfile falls back to KV.
         // Pass db so inbox/sent metrics are read from live D1 counts (#746).
         const enrichment = await enrichAgentProfile(
           agent,

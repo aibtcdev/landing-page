@@ -256,3 +256,22 @@ export async function lookupProfileByAgentId(
   const result = await db.prepare(sql).bind(agentId).first<AgentProfileRow>();
   return result ?? null;
 }
+
+/**
+ * #771 dual-write-gap recovery: when D1 LEFT JOIN claim_status is null but the
+ * agent has an on-chain Genesis registration (erc8004AgentId set), fall back
+ * to `kv.get('claim:{btcAddress}')`. Bounded to the Genesis subset — see
+ * #691 backfill for the retirement gate.
+ *
+ * Returns a type-guard predicate so the recovery call site can use
+ * `agent.btcAddress` / `agent.erc8004AgentId` without a non-null assertion.
+ */
+export function shouldFallBackToKVClaim(
+  agent: AgentRecord | null,
+  d1Claim: ClaimRecord | null | undefined
+): agent is AgentRecord {
+  // `!= null` covers both null and undefined for erc8004AgentId in a single
+  // expression. agent-id 0 is a valid uint per the on-chain registry, so
+  // truthy-check would incorrectly skip it.
+  return agent !== null && d1Claim === null && agent.erc8004AgentId != null;
+}
