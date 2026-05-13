@@ -24,7 +24,6 @@ import type { Logger } from "@/lib/logging";
 /**
  * Per-address rate-limit for manual refresh. Each refresh call:
  *   - deletes two `cache:*` entries (bypassing the 7d confirmed-negative TTL),
- *   - deletes the `identity-check:*` rate-limit sentinel,
  *   - issues two fresh Hiro API calls (BNS + identity).
  *
  * Without this guard an unauthenticated caller could amplify upstream traffic
@@ -45,10 +44,6 @@ const REFRESH_RATE_LIMIT_SECONDS = 60;
  *   1. Delete `cache:bns:{stxAddress}` and `cache:identity:{stxAddress}`.
  *   2. Re-run both lookups and return the fresh values.
  *
- * Rate-limit keys (`identity-check:{stxAddress}`) are also cleared so the
- * next request from `/api/identity/:address` isn't suppressed by a stale
- * sentinel.
- *
  * Accepts any registered agent address (BTC / STX / taproot) — resolves to
  * the same AgentRecord and invalidates against its `stxAddress`.
  *
@@ -60,7 +55,7 @@ const REFRESH_RATE_LIMIT_SECONDS = 60;
  *     stxAddress: string,
  *     bnsName: string | null,     // fresh value after re-lookup
  *     agentId: number | null,     // fresh value after re-lookup
- *     cachesCleared: ["cache:bns", "cache:identity", "identity-check"]
+ *     cachesCleared: ["cache:bns", "cache:identity"]
  *   }
  */
 export async function POST(
@@ -119,24 +114,12 @@ export async function POST(
       expirationTtl: REFRESH_RATE_LIMIT_SECONDS,
     });
 
-    // Invalidate caches. The `identity-check:{stx}` sentinel is deleted via
-    // best-effort try/catch — a KV hiccup on that key shouldn't fail the
-    // whole refresh (the typed cache invalidations are the load-bearing bust).
-    const invalidations: Promise<void>[] = [
+    // Invalidate typed caches — the load-bearing bust that allows fresh Hiro
+    // lookups to proceed past the 7d confirmed-negative TTL.
+    await Promise.all([
       invalidateBnsCache(stxAddress, kv, logger),
       invalidateIdentityCache(stxAddress, kv, logger),
-      (async () => {
-        try {
-          await kv.delete(`identity-check:${stxAddress}`);
-        } catch (err) {
-          logger.warn("identity.refresh_identity_check_delete_failed", {
-            stxAddress,
-            error: String(err),
-          });
-        }
-      })(),
-    ];
-    await Promise.all(invalidations);
+    ]);
 
     logger.info("identity.refresh_requested", { stxAddress });
 
@@ -258,7 +241,7 @@ export async function POST(
       agentId: nextAgentId,
       bnsOutcome: bnsOutcome.state,
       idOutcome: idOutcome.state,
-      cachesCleared: ["cache:bns", "cache:identity", "identity-check"],
+      cachesCleared: ["cache:bns", "cache:identity"],
     });
   } catch (e) {
     logger.error("identity.refresh_error", {

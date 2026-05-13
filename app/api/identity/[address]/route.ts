@@ -16,7 +16,8 @@ import {
 } from "@/lib/logging";
 import { buildEdgeCacheKey, withEdgeCache } from "@/lib/edge-cache";
 
-const IDENTITY_CACHE_TTL_SECONDS = 300;
+const IDENTITY_CACHE_TTL_SECONDS = 3600;
+const IDENTITY_CACHE_HEADER = "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600";
 
 /**
  * GET /api/identity/:address — Detect on-chain ERC-8004 identity for an agent.
@@ -86,36 +87,25 @@ export async function GET(
     if (agent.erc8004AgentId != null) {
       return NextResponse.json(
         { agentId: agent.erc8004AgentId },
-        { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600" } }
+        { headers: { "Cache-Control": IDENTITY_CACHE_HEADER } }
       );
     }
 
     // Consult the typed identity cache before hitting Hiro. This covers both
     // confirmed-negative (7d TTL) and lookup-failed (60s TTL) hits, so the
-    // concurrent-badge-render hammer is suppressed — not just by this route's
-    // own 5-min `identity-check:` sentinel but by failures recorded from
-    // other entry points (SSR, backfill, refresh endpoint).
+    // concurrent-badge-render hammer is suppressed by failures recorded from
+    // any entry point (SSR, backfill, refresh endpoint).
     const typedCached = await getCachedIdentity(agent.stxAddress, kv);
     if (typedCached.hit) {
       if (typedCached.value) {
         return NextResponse.json(
           { agentId: typedCached.value.agentId },
-          { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600" } }
+          { headers: { "Cache-Control": IDENTITY_CACHE_HEADER } }
         );
       }
       return NextResponse.json(
         { agentId: null },
-        { headers: { "Cache-Control": "public, max-age=300, s-maxage=300" } }
-      );
-    }
-
-    // For null/undefined, rate-limit Hiro calls via a short-lived KV key (5 min TTL)
-    const rateLimitKey = `identity-check:${agent.stxAddress}`;
-    const recentlyChecked = await kv.get(rateLimitKey);
-    if (recentlyChecked) {
-      return NextResponse.json(
-        { agentId: null },
-        { headers: { "Cache-Control": "public, max-age=300, s-maxage=300" } }
+        { headers: { "Cache-Control": IDENTITY_CACHE_HEADER } }
       );
     }
 
@@ -170,21 +160,13 @@ export async function GET(
       );
     } else {
       // Confirmed no identity NFT for this address — 7d cache per three-state
-      // model. Also set the short rate-limit sentinel to avoid re-hitting
-      // Hiro from this endpoint specifically.
-      await Promise.all([
-        kv.put(rateLimitKey, "1", { expirationTtl: 300 }),
-        setCachedIdentityNegative(agent.stxAddress, kv, logger),
-      ]);
+      // model.
+      await setCachedIdentityNegative(agent.stxAddress, kv, logger);
     }
-
-    const cacheHeader = agentId != null
-      ? "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600"
-      : "public, max-age=300, s-maxage=300";
 
     return NextResponse.json(
       { agentId },
-      { headers: { "Cache-Control": cacheHeader } }
+      { headers: { "Cache-Control": IDENTITY_CACHE_HEADER } }
     );
   } catch (e) {
     return NextResponse.json(
