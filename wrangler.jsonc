@@ -83,9 +83,10 @@
   },
 
   // SchedulerDO: single instance coordinating periodic background work.
-  // Initial scope: Tenero price refresh (every ~5 min) writing to
-  // VERIFIED_AGENTS KV under `tenero:price:{tokenId}`. Competition Hiro
-  // sweep + balance snapshots land in follow-up PRs. See issue #768.
+  // Current scope: Tenero price refresh (every ~5 min) writing to
+  // VERIFIED_AGENTS KV under `tenero:price:{tokenId}`, plus the trading
+  // competition Hiro catch-up sweep (every ~15 min). Balance snapshots
+  // land in a follow-up PR. See issue #768.
   // Singleton resolved via env.SCHEDULER.idFromName("v1") — the instance
   // name is independent of the migration tag, so it stays "v1" even
   // though the migration history is up to v3.

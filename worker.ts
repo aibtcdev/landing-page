@@ -18,6 +18,10 @@ import {
   type TeneroRunResult,
   TENERO_MINUTE_QUOTA_BACKOFF_MS,
 } from "./lib/scheduler/tenero-task";
+import {
+  runCompetitionScheduler,
+  type CompetitionSchedulerSummary,
+} from "./lib/competition/scheduler";
 import type {
   SchedulerRefreshResult,
   SchedulerStatus,
@@ -37,24 +41,31 @@ import type {
 // failures with this adapter.
 //
 // Storage layout (this.ctx.storage):
-// - lastTeneroRunAt     — unix millis when the Tenero task last completed
-// - lastTeneroResult    — { succeeded, failed, minuteRemaining, monthRemaining }
-// - consecutiveFailures — { tenero: number }
-// - pausedUntil         — unix millis; alarm() is a no-op until this passes
-// - nextRunAfter        — { tenero?: number }; adaptive backoff per task
+// - lastTeneroRunAt        — unix millis when the Tenero task last completed
+// - lastTeneroResult       — { succeeded, failed, minuteRemaining, monthRemaining }
+// - lastCompetitionRunAt   — unix millis when the competition sweep last completed
+// - lastCompetitionResult  — { scanned, found, inserted, alreadyKnown, pending, rejected, cursor }
+// - consecutiveFailures    — { tenero: number, competition: number }
+// - pausedUntil            — unix millis; alarm() is a no-op until this passes
+// - nextRunAfter           — adaptive backoff per task
 //
 // Long-lived cursors stay in D1 per issue #768 — the DO holds only its
 // own bookkeeping.
 
 const TENERO_INTERVAL_MS = 5 * 60 * 1000;
+const COMPETITION_INTERVAL_MS = 15 * 60 * 1000;
 const ALARM_TICK_MS = TENERO_INTERVAL_MS;
+
+type SchedulerFailureTask = "tenero" | "competition";
 
 type StoredScheduler = {
   lastTeneroRunAt?: number;
   lastTeneroResult?: TeneroRunResult;
-  consecutiveFailures?: { tenero: number };
+  lastCompetitionRunAt?: number;
+  lastCompetitionResult?: CompetitionSchedulerSummary;
+  consecutiveFailures?: Partial<Record<SchedulerFailureTask, number>>;
   pausedUntil?: number;
-  nextRunAfter?: { tenero?: number };
+  nextRunAfter?: Partial<Record<SchedulerFailureTask, number>>;
 };
 
 export class SchedulerDO extends DurableObject<CloudflareEnv> {
@@ -78,17 +89,28 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
       pausedUntil: s.pausedUntil ?? null,
       lastTeneroRunAt: s.lastTeneroRunAt ?? null,
       lastTeneroResult: s.lastTeneroResult ?? null,
-      consecutiveFailures: { tenero: s.consecutiveFailures?.tenero ?? 0 },
-      nextRunAfter: { tenero: s.nextRunAfter?.tenero ?? null },
+      lastCompetitionRunAt: s.lastCompetitionRunAt ?? null,
+      lastCompetitionResult: s.lastCompetitionResult ?? null,
+      consecutiveFailures: {
+        tenero: s.consecutiveFailures?.tenero ?? 0,
+        competition: s.consecutiveFailures?.competition ?? 0,
+      },
+      nextRunAfter: {
+        tenero: s.nextRunAfter?.tenero ?? null,
+        competition: s.nextRunAfter?.competition ?? null,
+      },
       nextAlarmAt,
     };
   }
 
   async refreshNow(task: SchedulerTask): Promise<SchedulerRefreshResult> {
     const logger = this.makeLogger({ trigger: "refreshNow", task });
-    const out: { tenero?: TeneroRunResult } = {};
+    const out: SchedulerRefreshResult = {};
     if (task === "tenero" || task === "all") {
       out.tenero = await this.runTenero(logger);
+    }
+    if (task === "competition" || task === "all") {
+      out.competition = await this.runCompetition(logger);
     }
     return out;
   }
@@ -119,9 +141,8 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
         return;
       }
 
-      // TODO(#768 follow-up): once a second task lands (competition Hiro
-      // sweep, then balance snapshots), this branching shape becomes a
-      // copy-paste smell. Refactor to a task registry:
+      // TODO(#768 follow-up): once balance snapshots land, this branching
+      // shape becomes a copy-paste smell. Refactor to a task registry:
       //   for (const task of TASKS) if (task.isDue(stored, tickStartedAt))
       //     await task.run(logger, this.ctx);
       // Each task owns its own cadence, persist helper, and failure key.
@@ -147,16 +168,38 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
           nextRunAfter: teneroNextRunAfter || null,
         });
       }
+
+      const competitionNextRunAfter = stored.nextRunAfter?.competition ?? 0;
+      const competitionDue =
+        competitionNextRunAfter <= tickStartedAt &&
+        (stored.lastCompetitionRunAt ?? 0) + COMPETITION_INTERVAL_MS <=
+          tickStartedAt + 1_000;
+
+      if (competitionDue) {
+        try {
+          await this.runCompetition(logger);
+        } catch (error) {
+          logger.error("scheduler.competition_unexpected_error", {
+            error: String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          });
+          await this.bumpFailures("competition");
+          await this.deferTask("competition", COMPETITION_INTERVAL_MS);
+        }
+      } else {
+        logger.debug("scheduler.competition_not_due", {
+          lastRunAt: stored.lastCompetitionRunAt ?? null,
+          nextRunAfter: competitionNextRunAfter || null,
+        });
+      }
     } finally {
       await this.ctx.storage.setAlarm(Date.now() + ALARM_TICK_MS);
     }
   }
 
   // TODO(#768 follow-up): when the balance task ships, give each task a
-  // bounded slice of the tick (e.g. AbortSignal.timeout(30_000) per
-  // task) so a slow Hiro response can't starve Tenero refresh and vice
-  // versa. Today Tenero is the only task and the static token set
-  // bounds it implicitly; revisit when there's contention.
+  // bounded slice of the tick (e.g. AbortSignal.timeout(30_000) per task)
+  // so a slow Hiro response can't starve other scheduler work.
   //
   // The orchestration body is `runTeneroTask` in
   // `lib/scheduler/tenero-task.ts` — kept testable without a DO harness.
@@ -178,6 +221,20 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
     return result;
   }
 
+  private async runCompetition(parentLogger: Logger): Promise<CompetitionSchedulerSummary> {
+    const logger = parentLogger.child
+      ? parentLogger.child({ task: "competition" })
+      : parentLogger;
+
+    const result = await runCompetitionScheduler(
+      { DB: this.env.DB, HIRO_API_KEY: this.env.HIRO_API_KEY },
+      logger
+    );
+
+    await this.persistCompetitionResult(result);
+    return result;
+  }
+
   /**
    * Read the DO's bookkeeping in a single parallel batch of targeted gets.
    * `storage.list({ prefix: "" })` scans every stored key — fine at today's
@@ -191,19 +248,29 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
     const [
       lastTeneroRunAt,
       lastTeneroResult,
+      lastCompetitionRunAt,
+      lastCompetitionResult,
       consecutiveFailures,
       pausedUntil,
       nextRunAfter,
     ] = await Promise.all([
       this.ctx.storage.get<number>("lastTeneroRunAt"),
       this.ctx.storage.get<TeneroRunResult>("lastTeneroResult"),
-      this.ctx.storage.get<{ tenero: number }>("consecutiveFailures"),
+      this.ctx.storage.get<number>("lastCompetitionRunAt"),
+      this.ctx.storage.get<CompetitionSchedulerSummary>("lastCompetitionResult"),
+      this.ctx.storage.get<Partial<Record<SchedulerFailureTask, number>>>(
+        "consecutiveFailures"
+      ),
       this.ctx.storage.get<number>("pausedUntil"),
-      this.ctx.storage.get<{ tenero?: number }>("nextRunAfter"),
+      this.ctx.storage.get<Partial<Record<SchedulerFailureTask, number>>>(
+        "nextRunAfter"
+      ),
     ]);
     return {
       ...(typeof lastTeneroRunAt === "number" ? { lastTeneroRunAt } : {}),
       ...(lastTeneroResult ? { lastTeneroResult } : {}),
+      ...(typeof lastCompetitionRunAt === "number" ? { lastCompetitionRunAt } : {}),
+      ...(lastCompetitionResult ? { lastCompetitionResult } : {}),
       ...(consecutiveFailures ? { consecutiveFailures } : {}),
       ...(typeof pausedUntil === "number" ? { pausedUntil } : {}),
       ...(nextRunAfter ? { nextRunAfter } : {}),
@@ -219,9 +286,7 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
 
     if (result.succeeded > 0 && result.failed === 0 && !opts.rateLimited) {
       await this.clearFailures("tenero");
-      const nextRunAfter = ((await this.ctx.storage.get<{ tenero?: number }>(
-        "nextRunAfter"
-      )) ?? {}) as { tenero?: number };
+      const nextRunAfter = await this.readNextRunAfter();
       if (nextRunAfter.tenero) {
         delete nextRunAfter.tenero;
         await this.ctx.storage.put("nextRunAfter", nextRunAfter);
@@ -231,30 +296,62 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
     }
 
     if (opts.rateLimited) {
-      const nextRunAfter = ((await this.ctx.storage.get<{ tenero?: number }>(
-        "nextRunAfter"
-      )) ?? {}) as { tenero?: number };
+      const nextRunAfter = await this.readNextRunAfter();
       nextRunAfter.tenero =
         Date.now() + (opts.rateLimitBackoffMs ?? TENERO_MINUTE_QUOTA_BACKOFF_MS);
       await this.ctx.storage.put("nextRunAfter", nextRunAfter);
     }
   }
 
-  private async bumpFailures(task: "tenero"): Promise<void> {
-    const cur = ((await this.ctx.storage.get<{ tenero: number }>(
-      "consecutiveFailures"
-    )) ?? { tenero: 0 }) as { tenero: number };
+  private async persistCompetitionResult(
+    result: CompetitionSchedulerSummary
+  ): Promise<void> {
+    await this.ctx.storage.put("lastCompetitionRunAt", Date.now());
+    await this.ctx.storage.put("lastCompetitionResult", result);
+    await this.clearFailures("competition");
+    const nextRunAfter = await this.readNextRunAfter();
+    if (nextRunAfter.competition) {
+      delete nextRunAfter.competition;
+      await this.ctx.storage.put("nextRunAfter", nextRunAfter);
+    }
+  }
+
+  private async bumpFailures(task: SchedulerFailureTask): Promise<void> {
+    const cur =
+      ((await this.ctx.storage.get<Partial<Record<SchedulerFailureTask, number>>>(
+        "consecutiveFailures"
+      )) ?? {}) as Partial<Record<SchedulerFailureTask, number>>;
     cur[task] = (cur[task] ?? 0) + 1;
     await this.ctx.storage.put("consecutiveFailures", cur);
   }
 
-  private async clearFailures(task: "tenero"): Promise<void> {
-    const cur = ((await this.ctx.storage.get<{ tenero: number }>(
-      "consecutiveFailures"
-    )) ?? { tenero: 0 }) as { tenero: number };
-    if (cur[task] === 0) return;
+  private async clearFailures(task: SchedulerFailureTask): Promise<void> {
+    const cur =
+      ((await this.ctx.storage.get<Partial<Record<SchedulerFailureTask, number>>>(
+        "consecutiveFailures"
+      )) ?? {}) as Partial<Record<SchedulerFailureTask, number>>;
+    if ((cur[task] ?? 0) === 0) return;
     cur[task] = 0;
     await this.ctx.storage.put("consecutiveFailures", cur);
+  }
+
+  private async deferTask(
+    task: SchedulerFailureTask,
+    delayMs: number
+  ): Promise<void> {
+    const nextRunAfter = await this.readNextRunAfter();
+    nextRunAfter[task] = Date.now() + delayMs;
+    await this.ctx.storage.put("nextRunAfter", nextRunAfter);
+  }
+
+  private async readNextRunAfter(): Promise<
+    Partial<Record<SchedulerFailureTask, number>>
+  > {
+    return (
+      (await this.ctx.storage.get<Partial<Record<SchedulerFailureTask, number>>>(
+        "nextRunAfter"
+      )) ?? {}
+    );
   }
 
   private makeLogger(extra: Record<string, unknown>): Logger {

@@ -5,7 +5,7 @@ import type { SchedulerRpc, SchedulerTask } from "@/lib/scheduler/rpc-types";
 
 const DEFAULT_SCHEDULER_INSTANCE = "v2";
 const ALLOWED_SCHEDULER_INSTANCES = new Set(["v1", "v2", "v3"]);
-const ALLOWED_TASKS = new Set<SchedulerTask>(["tenero", "all"]);
+const ALLOWED_TASKS = new Set<SchedulerTask>(["tenero", "competition", "all"]);
 
 function json(body: unknown, init: ResponseInit = {}) {
   const headers = new Headers(init.headers);
@@ -33,7 +33,7 @@ function schedulerTask(url: URL): SchedulerTask | NextResponse {
   const task = url.searchParams.get("task") || "tenero";
   if (!ALLOWED_TASKS.has(task as SchedulerTask)) {
     return json(
-      { error: "Unsupported task. Use tenero or all." },
+      { error: "Unsupported task. Use tenero, competition, or all." },
       { status: 400 }
     );
   }
