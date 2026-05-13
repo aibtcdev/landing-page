@@ -63,13 +63,15 @@ export async function getReputationSummary(
       agentId,
       error: String(error),
     });
-    // Write a 60s negative cache before rethrowing so that concurrent and
-    // subsequent polls within the transient-error window hit the cache
-    // instead of piling onto a Hiro endpoint that's already in timeout/5xx.
     // Mirrors the setCachedBnsLookupFailed / setCachedIdentityLookupFailed
-    // pattern from kv-cache.ts (60s TTL, NONE_SENTINEL value).
+    // pattern from kv-cache.ts: write a 60s negative cache and return null
+    // silently. Throwing here would create an asymmetry — the first request
+    // within the failure window returns 500, subsequent requests within 60s
+    // return the cached null as 200 — surfacing inconsistent behavior to
+    // the same polling client. Returning null on both calls matches the
+    // BNS/identity helpers' behavior and bounds Hiro retries to 1/60s.
     await setCachedReputationLookupFailed(cacheKey, kv, logger);
-    throw error;
+    return null;
   }
 }
 
@@ -132,8 +134,10 @@ export async function getReputationFeedback(
     });
     // Same 60s negative-cache treatment as getReputationSummary: break the
     // polling-storm amplification on transient Hiro errors (TimeoutError,
-    // 5xx). Rethrow preserved — route still returns 500 to the caller.
+    // 5xx). Returns an empty feedback page silently — matches BNS/identity
+    // behavior where lookup-failed and confirmed-negative both surface as
+    // null/empty to callers, distinguished only by TTL.
     await setCachedReputationLookupFailed(cacheKey, kv, logger);
-    throw error;
+    return { items: [], cursor: null };
   }
 }

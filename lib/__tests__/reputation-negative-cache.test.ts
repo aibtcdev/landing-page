@@ -2,13 +2,19 @@
  * Tests for the 60s negative-cache-on-timeout behavior added to
  * getReputationSummary and getReputationFeedback (issue #795).
  *
+ * Behavior matches the BNS / identity lookup-failed pattern: on transient
+ * upstream error (TimeoutError / 5xx), write a 60s negative cache and
+ * return null/empty silently. Throwing here would create an asymmetry
+ * between the first request (500) and subsequent requests within the 60s
+ * window (200 from cached null) for the same polling client.
+ *
  * Covers:
  *  (a) getReputationSummary: callReadOnly throws → setCachedReputationLookupFailed
- *      called with the correct key, then rethrows.
- *  (b) getReputationSummary: second call within 60s returns cached null without
- *      hitting callReadOnly again.
+ *      called with the correct key, returns null silently (no rethrow).
+ *  (b) getReputationSummary: second call within 60s returns cached null
+ *      without hitting callReadOnly again.
  *  (c) getReputationFeedback: callReadOnly throws → setCachedReputationLookupFailed
- *      called with the correct key, then rethrows.
+ *      called with the correct key, returns empty page silently (no rethrow).
  *  (d) getReputationFeedback: second call within 60s returns cached empty response
  *      without hitting callReadOnly again.
  */
@@ -31,7 +37,7 @@ vi.mock("@/lib/identity/kv-cache", () => ({
 // ---- imports ----------------------------------------------------------------
 
 import { getReputationSummary, getReputationFeedback } from "@/lib/identity/reputation";
-import { callReadOnly, parseClarityValue } from "@/lib/identity/stacks-api";
+import { callReadOnly } from "@/lib/identity/stacks-api";
 import { getCachedReputation, setCachedReputationLookupFailed } from "@/lib/identity/kv-cache";
 
 // ---- helpers ----------------------------------------------------------------
@@ -66,17 +72,15 @@ beforeEach(() => {
 
 // ---- getReputationSummary ---------------------------------------------------
 
-describe("getReputationSummary: TimeoutError → negative cache + rethrow", () => {
-  it("(a) calls setCachedReputationLookupFailed and rethrows on callReadOnly timeout", async () => {
+describe("getReputationSummary: TimeoutError → negative cache + silent null", () => {
+  it("(a) calls setCachedReputationLookupFailed and returns null on callReadOnly timeout", async () => {
     const kv = buildMockKv();
     mockCacheMiss();
     (callReadOnly as Mock).mockRejectedValue(TIMEOUT_ERROR);
 
-    await expect(getReputationSummary(42, undefined, kv)).rejects.toThrow(
-      "TimeoutError"
-    );
+    const result = await getReputationSummary(42, undefined, kv);
 
-    // The negative cache helper must be called with the right cache key
+    expect(result).toBeNull();
     expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
     expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledWith(
       "summary:42",
@@ -103,16 +107,15 @@ describe("getReputationSummary: cached negative prevents second Hiro call", () =
 
 // ---- getReputationFeedback --------------------------------------------------
 
-describe("getReputationFeedback: TimeoutError → negative cache + rethrow", () => {
-  it("(c) calls setCachedReputationLookupFailed and rethrows on callReadOnly timeout", async () => {
+describe("getReputationFeedback: TimeoutError → negative cache + silent empty", () => {
+  it("(c) calls setCachedReputationLookupFailed and returns empty page on callReadOnly timeout", async () => {
     const kv = buildMockKv();
     mockCacheMiss();
     (callReadOnly as Mock).mockRejectedValue(TIMEOUT_ERROR);
 
-    await expect(getReputationFeedback(42, undefined, undefined, kv)).rejects.toThrow(
-      "TimeoutError"
-    );
+    const result = await getReputationFeedback(42, undefined, undefined, kv);
 
+    expect(result).toEqual({ items: [], cursor: null });
     expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
     expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledWith(
       "feedback:42:0",
