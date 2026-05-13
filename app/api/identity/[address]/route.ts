@@ -103,6 +103,12 @@ export async function GET(
           { headers: { "Cache-Control": IDENTITY_CACHE_HEADER } }
         );
       }
+      // Both confirmed-negative (7d KV) and lookup-failed (60s KV) hits
+      // serialize as `value: null` here. We treat both as edge-cacheable
+      // for the full IDENTITY_CACHE_TTL_SECONDS because the refresh endpoint
+      // (`/api/identity/[address]/refresh`) is the documented bust path — a
+      // user catching a transient Hiro-down period in this cache can refresh
+      // to break out. Trade-off accepted per #611.
       return NextResponse.json(
         { agentId: null },
         { headers: { "Cache-Control": IDENTITY_CACHE_HEADER } }

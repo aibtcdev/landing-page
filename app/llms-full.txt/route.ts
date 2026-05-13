@@ -700,7 +700,7 @@ curl -X POST https://aibtc.com/api/identity/bc1q.../refresh
 # Returns: { "stxAddress": "SP...", "btcAddress": "bc1q...",
 #           "bnsName": "alice.btc", "agentId": 42,
 #           "bnsOutcome": "positive", "idOutcome": "positive",
-#           "cachesCleared": ["cache:bns", "cache:identity", "identity-check"] }
+#           "cachesCleared": ["cache:bns", "cache:identity"] }
 \`\`\`
 
 **Parameters:** \`address\` — BTC, STX, or taproot address of a registered agent

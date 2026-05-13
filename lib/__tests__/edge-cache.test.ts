@@ -129,21 +129,30 @@ describe("withEdgeCache", () => {
     expect(cache.store.has(key)).toBe(true);
   });
 
-  it("sets Cache-Control on the cached clone (not on the live response)", async () => {
+  it("preserves the loader's Cache-Control on the cached clone (no overwrite)", async () => {
     const key = "https://cache.aibtc.local/api/agents/bc1qa";
-    const loader = async () => new Response("fresh", { status: 200 });
+    // Loader sets a full directive with s-maxage + SWR so caches.default
+    // can use s-maxage for its own TTL per standard HTTP cache semantics.
+    const loader = async () =>
+      new Response("fresh", {
+        status: 200,
+        headers: {
+          "Cache-Control":
+            "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600",
+        },
+      });
 
-    const result = await withEdgeCache(key, 600, loader);
+    const result = await withEdgeCache(key, 86400, loader);
 
-    // Live response is untouched — caller controls client-facing
-    // directives.
-    expect(result.headers.get("Cache-Control")).toBeNull();
+    // Live response is untouched — caller controls client-facing directives.
+    expect(result.headers.get("Cache-Control")).toBe(
+      "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600",
+    );
 
-    // Cached entry carries the internal max-age so the Workers
-    // cache layer expires it on schedule.
+    // Cached clone preserves the loader's full header verbatim — no overwrite.
     const stored = cache.store.get(key);
     expect(stored?.headers.get("Cache-Control")).toBe(
-      "public, max-age=600",
+      "public, max-age=3600, s-maxage=86400, stale-while-revalidate=3600",
     );
   });
 
@@ -174,7 +183,7 @@ describe("withEdgeCache", () => {
     expect(loader).toHaveBeenCalledTimes(2);
   });
 
-  it("preserves a Cache-Control already set by the loader on the live response", async () => {
+  it("preserves a Cache-Control already set by the loader on both the live response and the cached clone", async () => {
     const key = "https://cache.aibtc.local/api/agents/bc1qa";
     const loader = async () =>
       new Response("fresh", {
@@ -186,9 +195,14 @@ describe("withEdgeCache", () => {
 
     const result = await withEdgeCache(key, 600, loader);
 
-    // Live response keeps the loader's directives — only the cached
-    // clone gets our internal max-age.
+    // Live response keeps the loader's directives.
     expect(result.headers.get("Cache-Control")).toBe(
+      "public, max-age=60, s-maxage=300, stale-while-revalidate=120",
+    );
+
+    // Cached clone also preserves the loader's directives — no overwrite.
+    const stored = cache.store.get(key);
+    expect(stored?.headers.get("Cache-Control")).toBe(
       "public, max-age=60, s-maxage=300, stale-while-revalidate=120",
     );
   });
