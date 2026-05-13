@@ -91,11 +91,11 @@ function safeAggregateNumber(raw: number | string | null | undefined): number {
  *   - `INNER JOIN agents` + `EXISTS … claims … status IN ('verified',
  *     'rewarded')` — mirrors `senderEligibilityTier` in
  *     `lib/competition/verify.ts:106-127` (the predicate used by #814's
- *     `sender_not_genesis` rejection). The leaderboard now renders exactly
- *     the senders the verifier would accept: Verified Agent + Genesis
- *     claim + ERC-8004 NFT (the `agents` row exists). Pre-#814 catch-up
- *     cron rows from Level-1-only senders persist in `swaps` per the
- *     no-retroactive-purge policy but stop appearing on the leaderboard.
+ *     `sender_not_genesis` rejection). The leaderboard now renders the same
+ *     sender tier the verifier accepts today: Verified Agent + Genesis
+ *     claim. Pre-#814 catch-up cron rows from Level-1-only senders persist
+ *     in `swaps` per the no-retroactive-purge policy but stop appearing on
+ *     the leaderboard.
  *
  * Exported so a unit test can pin the predicate shape — see
  * `lib/competition/__tests__/leaderboard-aggregate.test.ts`.
