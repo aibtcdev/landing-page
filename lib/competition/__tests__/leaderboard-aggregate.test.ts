@@ -1,12 +1,12 @@
 import { describe, it, expect } from "vitest";
-import { LEADERBOARD_AGGREGATE_SQL } from "../../../app/leaderboard/page";
+import { LEADERBOARD_AGGREGATE_SQL } from "../leaderboard-query";
 
 /**
  * Pin the leaderboard aggregate SQL's predicate shape.
  *
  * The leaderboard's eligibility predicate must match `senderEligibilityTier`
- * in `lib/competition/verify.ts:106-127` — the same predicate that #814
- * uses to reject trades with `sender_not_genesis`. If they drift, agents
+ * in `lib/competition/verify.ts` — the same predicate used by trade
+ * ingestion. If they drift, agents
  * appear on the leaderboard whose trades the verifier would reject (or
  * vice-versa), and the rules in #815 §1 stop matching reality.
  *
@@ -18,14 +18,16 @@ import { LEADERBOARD_AGGREGATE_SQL } from "../../../app/leaderboard/page";
  *     senders without a verified viral claim)
  *   - someone widens `claims.status IN (...)` to include `pending`
  *     (silently lowers the bar from Genesis to "claim submitted")
+ *   - someone removes the ERC-8004 identity predicate (silently re-admits
+ *     Genesis senders who have not minted their on-chain identity)
  *   - someone widens `source IN (...)` to include a value not in
  *     `migrations/005_swaps.sql`'s CHECK constraint (no-op at runtime
  *     today, but documents drift between SQL + schema)
  *
- * A behavioral test would require extracting `fetchLeaderboard` to a
+ * A fuller behavioral test would require extracting `fetchLeaderboard` to a
  * server-only module first; tracked as a follow-up.
  */
-describe("LEADERBOARD_AGGREGATE_SQL — Genesis-only predicate shape", () => {
+describe("LEADERBOARD_AGGREGATE_SQL — competition eligibility predicate shape", () => {
   it("uses INNER JOIN against agents (not LEFT JOIN — would re-admit Level-1-only senders)", () => {
     expect(LEADERBOARD_AGGREGATE_SQL).toContain("INNER JOIN agents");
     expect(LEADERBOARD_AGGREGATE_SQL).not.toMatch(
@@ -47,6 +49,12 @@ describe("LEADERBOARD_AGGREGATE_SQL — Genesis-only predicate shape", () => {
     // Defensive: 'pending' must not be in the allow set — would lower
     // the bar from Genesis (Level 2) to "claim submitted" (no level).
     expect(LEADERBOARD_AGGREGATE_SQL).not.toMatch(/'pending'/);
+  });
+
+  it("requires an ERC-8004 identity id", () => {
+    expect(LEADERBOARD_AGGREGATE_SQL).toMatch(
+      /a\.erc8004_agent_id\s+IS\s+NOT\s+NULL/i
+    );
   });
 
   it("filters tx_status to 'success' only (preserves audit-vs-counted split)", () => {

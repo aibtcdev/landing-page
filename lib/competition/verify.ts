@@ -86,22 +86,24 @@ interface PersistArgs {
  *   "registered"     → in `registered_wallets` but no verified/rewarded claim
  *                       (Level 1 — Verified Agent in `lib/levels.ts`)
  *   "genesis"        → in `registered_wallets` AND has a verified/rewarded
- *                       viral claim (Level 2 — Genesis)
+ *                       viral claim (Level 2 — Genesis), but no ERC-8004
+ *                       on-chain identity yet
+ *   "eligible"       → Genesis AND has an ERC-8004 identity
  *
- * Genesis predicate matches `computeLevel()` in `lib/levels.ts:67-87`:
- * Level 2 requires the agent row exists AND `claims.status` is one of
- * `'verified'` or `'rewarded'`. The JOIN path is:
+ * Genesis predicate matches `computeLevel()` in `lib/levels.ts:67-87`.
+ * The competition adds one more gate from #815: an ERC-8004 identity
+ * (`agents.erc8004_agent_id IS NOT NULL`). The JOIN path is:
  *
  *   registered_wallets.stx_address
  *     → agents.stx_address (UNIQUE)
  *     → claims.btc_address (= agents.btc_address)
  *
- * Single round-trip with aggregation — campaign verifier needs to know both
- * "registered?" and "Genesis?" to produce the right rejection code. Claims
- * are not assumed unique per BTC address, so the query collapses any number
- * of claim rows into one tier decision.
+ * Single round-trip with aggregation — campaign verifier needs to know
+ * "registered?", "Genesis?", and "identity minted?" to produce the right
+ * rejection code. Claims are not assumed unique per BTC address, so the
+ * query collapses any number of claim rows into one tier decision.
  */
-type SenderTier = "not_registered" | "registered" | "genesis";
+type SenderTier = "not_registered" | "registered" | "genesis" | "eligible";
 
 async function senderEligibilityTier(
   db: D1Database,
@@ -112,7 +114,8 @@ async function senderEligibilityTier(
       `
       SELECT
         1 AS registered,
-        MAX(CASE WHEN c.status IN ('verified', 'rewarded') THEN 1 ELSE 0 END) AS genesis
+        MAX(CASE WHEN c.status IN ('verified', 'rewarded') THEN 1 ELSE 0 END) AS genesis,
+        MAX(CASE WHEN a.erc8004_agent_id IS NOT NULL THEN 1 ELSE 0 END) AS has_identity
       FROM registered_wallets rw
       LEFT JOIN agents a ON a.stx_address = rw.stx_address
       LEFT JOIN claims c ON c.btc_address = a.btc_address
@@ -121,9 +124,10 @@ async function senderEligibilityTier(
       `
     )
     .bind(stxAddress)
-    .first<{ registered: number; genesis: number }>();
+    .first<{ registered: number; genesis: number; has_identity: number }>();
   if (!row) return "not_registered";
-  return row.genesis === 1 ? "genesis" : "registered";
+  if (row.genesis !== 1) return "registered";
+  return row.has_identity === 1 ? "eligible" : "genesis";
 }
 
 async function insertSwap(
@@ -358,6 +362,15 @@ export async function verifyAndPersistSwap(
       status: "rejected",
       code: "sender_not_genesis",
       reason: `Sender ${sender} is registered but has not reached Genesis (Level 2). Submit a verified viral claim via POST /api/claims/viral first.`,
+    };
+  }
+  if (tier === "genesis") {
+    // #815 §1 maps Genesis-but-no-identity to sender_not_registered.
+    // Keep the public code stable while the reason points to identity_register.
+    return {
+      status: "rejected",
+      code: "sender_not_registered",
+      reason: `Sender ${sender} is Genesis but has not minted an ERC-8004 on-chain identity. Run identity_register before submitting competition trades.`,
     };
   }
 

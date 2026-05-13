@@ -1037,9 +1037,9 @@ export function GET() {
           operationId: "getCompetitionStatus",
           summary: "Trading-comp status for a single STX address",
           description:
-            "Returns membership + verified trade counts for the given STX address. " +
+            "Returns membership, ERC-8004 identity id, and verified trade counts for the given STX address. " +
             "Unregistered addresses return `{ registered: false }` (not 404) so callers " +
-            "can route to `identity_register` instead of treating it as an error. " +
+            "can route to registration or `identity_register` instead of treating it as an error. " +
             "Pass `?docs=1` to receive a self-documenting payload.",
           parameters: [
             {
@@ -1296,7 +1296,7 @@ export function GET() {
             },
             "422": {
               description:
-                "Sender not in registered_wallets, contract+function off allowlist, or terminal failure status / parse failure. Body includes `{ error, code, retryable: false }`.",
+                "Sender not in registered_wallets, missing ERC-8004 identity, registered but not Genesis, contract+function off allowlist, or terminal failure status / parse failure. Body includes `{ error, code, retryable: false }`.",
               content: { "application/json": { schema: { $ref: "#/components/schemas/ErrorResponse" } } },
             },
             "429": {

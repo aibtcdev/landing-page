@@ -92,6 +92,12 @@ function buildD1Mock(opts: {
    * `false` to exercise the `sender_not_genesis` rejection path.
    */
   genesis?: boolean;
+  /**
+   * ERC-8004 on-chain identity requirement for competition eligibility.
+   * Defaults to `true` for registered happy paths. Set explicitly to `false`
+   * to exercise the identity_register requirement from #815.
+   */
+  hasIdentity?: boolean;
   existingRow?: Record<string, unknown> | null;
   insertChanges?: number;
   afterInsertRow?: Record<string, unknown> | null;
@@ -130,9 +136,11 @@ function buildD1Mock(opts: {
             // tests written before the Genesis gate landed assume verification
             // succeeds. Tests exercising the gate set `genesis: false` explicitly.
             const genesis = opts.genesis ?? true;
+            const hasIdentity = opts.hasIdentity ?? true;
             return Promise.resolve({
               registered: 1,
               genesis: genesis ? 1 : 0,
+              has_identity: hasIdentity ? 1 : 0,
             });
           },
         }),
@@ -333,6 +341,17 @@ describe("verifyAndPersistSwap — sender + allowlist gates", () => {
     expect(result.reason).toMatch(/Genesis/);
   });
 
+  it("rejects with sender_not_registered when sender is Genesis but has no ERC-8004 identity", async () => {
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(buildHappyTx()));
+    const db = buildD1Mock({ registered: true, genesis: true, hasIdentity: false });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("rejected");
+    if (result.status !== "rejected") return;
+    expect(result.code).toBe("sender_not_registered");
+    expect(result.reason).toMatch(/ERC-8004/);
+    expect(result.reason).toMatch(/identity_register/);
+  });
+
   it("uses an aggregated Genesis lookup so multiple claim rows cannot downgrade a verified agent", async () => {
     (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(buildHappyTx()));
     const db = buildD1Mock({ registered: true, insertChanges: 1 });
@@ -344,6 +363,7 @@ describe("verifyAndPersistSwap — sender + allowlist gates", () => {
       .map(([sql]) => String(sql))
       .find((sql) => sql.includes("FROM registered_wallets"));
     expect(eligibilitySql).toContain("MAX(CASE WHEN c.status IN ('verified', 'rewarded')");
+    expect(eligibilitySql).toContain("a.erc8004_agent_id IS NOT NULL");
     expect(eligibilitySql).toContain("LEFT JOIN agents");
     expect(eligibilitySql).toContain("GROUP BY rw.stx_address");
   });

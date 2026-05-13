@@ -1,6 +1,8 @@
 /**
  * Competition scheduler catch-up sweep — walks registered_wallets and
- * re-verifies recent Hiro tx history. Phase 3.1 PR-D.
+ * re-verifies recent Hiro tx history. `verifyAndPersistSwap` applies the
+ * full competition eligibility gate: registered + Genesis + ERC-8004
+ * identity. Phase 3.1 PR-D.
  *
  * Pairs with the agent-submit fast path (POST /api/competition/trades):
  * agent-submit catches everything the agent does (the agent already knows

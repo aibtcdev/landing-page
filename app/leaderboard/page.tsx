@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
+import { LEADERBOARD_AGGREGATE_SQL } from "@/lib/competition/leaderboard-query";
 
 // Reads live Cloudflare bindings (D1, SchedulerDO). Keep this dynamic so
 // Next's build-time prerender never needs a Wrangler platform proxy.
@@ -70,54 +71,6 @@ function safeAggregateNumber(raw: number | string | null | undefined): number {
   const ceiling = BigInt(Number.MAX_SAFE_INTEGER);
   return big > ceiling ? Number.MAX_SAFE_INTEGER : Number(big);
 }
-
-/**
- * Single round-trip: aggregate `swaps` per (sender, token_in, token_out)
- * and INNER JOIN the display fields from `agents`. The wider GROUP BY lets
- * the client compute both:
- *   - Volume USD = Σ(amount_in × price[token_in])           ("notional spent")
- *   - P&L USD    = Σ(amount_out × price[token_out]
- *                   − amount_in × price[token_in])          ("net at end prices")
- *
- * Filter rationale:
- *   - `tx_status = 'success'` — only successful swaps move tokens. Failed /
- *     aborted txs are recorded in `swaps` for audit but shouldn't count
- *     toward volume or P&L.
- *   - `source IN ('agent', 'cron', 'chainhook')` — explicit allowlist
- *     aligned with the `migrations/005_swaps.sql` CHECK constraint so a
- *     future ingestion source opts in here deliberately. (The CHECK
- *     constraint already enforces the set at the row level; the WHERE
- *     restates it as documented intent.)
- *   - `INNER JOIN agents` + `EXISTS … claims … status IN ('verified',
- *     'rewarded')` — mirrors `senderEligibilityTier` in
- *     `lib/competition/verify.ts:106-127` (the predicate used by #814's
- *     `sender_not_genesis` rejection). The leaderboard now renders the same
- *     sender tier the verifier accepts today: Verified Agent + Genesis
- *     claim. Pre-#814 catch-up cron rows from Level-1-only senders persist
- *     in `swaps` per the no-retroactive-purge policy but stop appearing on
- *     the leaderboard.
- *
- * Exported so a unit test can pin the predicate shape — see
- * `lib/competition/__tests__/leaderboard-aggregate.test.ts`.
- */
-export const LEADERBOARD_AGGREGATE_SQL = `
-  SELECT s.sender, s.token_in, s.token_out,
-         COUNT(*)             AS cnt,
-         SUM(s.amount_in)     AS sum_in,
-         SUM(s.amount_out)    AS sum_out,
-         MAX(s.burn_block_time) AS latest_at,
-         a.btc_address, a.display_name, a.bns_name, a.erc8004_agent_id
-  FROM swaps s
-  INNER JOIN agents a ON a.stx_address = s.sender
-  WHERE s.tx_status = 'success'
-    AND s.source IN ('agent', 'cron', 'chainhook')
-    AND EXISTS (
-      SELECT 1 FROM claims c
-      WHERE c.btc_address = a.btc_address
-        AND c.status IN ('verified', 'rewarded')
-    )
-  GROUP BY s.sender, s.token_in, s.token_out
-`;
 
 async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   const { env, ctx } = await getCloudflareContext();

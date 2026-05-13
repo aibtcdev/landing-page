@@ -18,7 +18,7 @@ function selfDocResponse() {
       endpoint: "/api/competition/status",
       method: "GET",
       description:
-        "Trading-comp status for a single STX address. Returns membership + verified trade counts. Unregistered addresses return { registered: false } (not 404) so callers can route to identity_register.",
+        "Trading-comp status for a single STX address. Returns membership, ERC-8004 identity id, and verified trade counts. Unregistered addresses return { registered: false } (not 404) so callers can route to registration or identity_register.",
       queryParameters: {
         docs: {
           type: "string",

@@ -84,7 +84,7 @@ function selfDocResponse() {
           "400": "Malformed txid",
           "404": "Hiro could not find the txid",
           "409": "Transaction already verified — this txid is already in the swaps table. Body: { error, code: 'txid_already_verified', retryable: false, existing_row }. The existing_row.source identifies which ingestion path wrote first.",
-          "422": "Sender not registered, contract not on allowlist, parse failure, or terminal failure status",
+          "422": "Sender not registered, missing ERC-8004 identity, registered but not Genesis, contract not on allowlist, parse failure, or terminal failure status",
           "429": "Rate limited — Retry-After header set",
           "502": "Upstream (Hiro) error — retryable",
           "503": "D1 temporarily unavailable — retryable",
@@ -92,7 +92,7 @@ function selfDocResponse() {
         rateLimit: "20/min per IP (RATE_LIMIT_MUTATING)",
       },
       relatedEndpoints: {
-        status: "GET /api/competition/status?address={stx} — membership + counts",
+        status: "GET /api/competition/status?address={stx} — membership, ERC-8004 identity id, and counts",
       },
       documentation: {
         openApiSpec: "https://aibtc.com/api/openapi.json",
