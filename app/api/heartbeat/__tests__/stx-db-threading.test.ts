@@ -41,7 +41,7 @@ vi.mock("@/lib/heartbeat", () => ({
   CHECK_IN_RATE_LIMIT_MS: 3600000,
   getCheckInRecord: vi.fn().mockResolvedValue(null),
   updateCheckInRecord: vi.fn().mockResolvedValue({}),
-  validateCheckInBody: vi.fn().mockReturnValue({ success: true, data: {} }),
+  validateCheckInBody: vi.fn().mockReturnValue({ data: {} }),
 }));
 
 vi.mock("@/lib/news-beats", () => ({
@@ -190,8 +190,8 @@ describe("heartbeat POST — P4.2 stx: write removed", () => {
     });
 
     // validateCheckInBody needs to return signature + timestamp
+    // Real shape: { data } on success or { errors } on failure (no `success` field).
     (validateCheckInBody as Mock).mockReturnValue({
-      success: true,
       data: {
         signature: "mock-signature",
         timestamp: "2026-01-01T00:00:00.000Z",
