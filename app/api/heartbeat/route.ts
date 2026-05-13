@@ -377,15 +377,16 @@ export async function POST(request: NextRequest) {
       lastActiveAt: timestamp,
     };
 
-    // Write updates to both btc: and stx: keys in parallel; fetch D1 unread count.
-    // Pure timestamp updates are tolerated as stale for up to the 2-min cache
-    // TTL — no need to invalidate the cached agent list on every check-in.
-    // Phase 2.5 Step 4 — unreadCount now served from D1 live SELECT COUNT(*);
-    // KV inbox:agent:{btcAddress} read removed.
+    // Write canonical btc: key only; stx: secondary index is no longer
+    // refreshed by heartbeat (P4.2 — drops ~30–40K KV writes/day).
+    // Other writers (vouch / register / identity / challenge / verify) still
+    // refresh stx:, so the secondary index does not stop being updated — just
+    // not on every 5-min check-in. Identical JSON across both sides per
+    // inventory, so this is data-lossless.
+    // Phase 2.5 Step 4 — unreadCount served from D1 live SELECT COUNT(*).
     const db = env.DB as D1Database | undefined;
-    const [, , unreadCount] = await Promise.all([
+    const [, unreadCount] = await Promise.all([
       kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
-      kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent)),
       fetchUnreadCount(db, btcAddress),
     ]);
     const orientation = getOrientation(updatedAgent, claim, unreadCount);
