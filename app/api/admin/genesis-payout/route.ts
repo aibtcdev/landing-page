@@ -3,6 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin/auth";
 import { validateGenesisPayoutBody } from "@/lib/admin/validation";
 import { GenesisPayoutRecord } from "@/lib/admin/types";
+import type { ClaimRecord } from "@/lib/types";
+import { mirrorClaimToD1 } from "@/lib/claims/d1-mirror";
 
 /**
  * GET /api/admin/genesis-payout
@@ -198,11 +200,19 @@ export async function POST(request: NextRequest) {
     let claimRecordUpdated = false;
     if (existingClaimData) {
       try {
-        const claimRecord = JSON.parse(existingClaimData);
+        const claimRecord = JSON.parse(existingClaimData) as ClaimRecord;
         claimRecord.status = "rewarded";
         claimRecord.rewardTxid = rewardTxid;
         claimRecord.rewardSatoshis = rewardSatoshis;
         await kv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
+        try {
+          await mirrorClaimToD1(env.DB as D1Database | undefined, claimRecord);
+        } catch (e) {
+          console.warn("genesis-payout D1 mirror write failed", {
+            btcAddress,
+            error: e instanceof Error ? e.message : String(e),
+          });
+        }
         claimRecordUpdated = true;
       } catch (e) {
         console.error("Failed to update claim record:", e);

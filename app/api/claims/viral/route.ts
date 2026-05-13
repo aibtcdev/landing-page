@@ -5,6 +5,7 @@ import { generateName } from "@/lib/name-generator";
 import { getNextLevel } from "@/lib/levels";
 import { X_HANDLE } from "@/lib/constants";
 import type { ClaimRecord } from "@/lib/types";
+import { mirrorClaimToD1 } from "@/lib/claims/d1-mirror";
 
 const MIN_REWARD_SATS = 5000;
 const MAX_REWARD_SATS = 10000;
@@ -234,6 +235,14 @@ export async function POST(request: NextRequest) {
     };
 
     await agentsKv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
+    try {
+      await mirrorClaimToD1(env.DB as D1Database | undefined, claimRecord);
+    } catch (e) {
+      console.warn("claims/viral D1 mirror write failed", {
+        btcAddress,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
 
     // Update agent record with owner (X handle) and create reverse index
     const updatedAgent = { ...agent, owner: ownerHandle };
