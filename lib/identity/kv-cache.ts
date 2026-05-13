@@ -477,6 +477,31 @@ export function setCachedReputation(
   );
 }
 
+/**
+ * Cache a reputation lookup failure (Hiro TimeoutError, 5xx, malformed
+ * response) for a short TTL (60s). Mirrors the BNS / identity lookup-failed
+ * pattern — stops a polling-storm from sustaining live Hiro pressure when
+ * the upstream contract call is already in timeout/error state.
+ *
+ * Writes NONE_SENTINEL so {@link getCachedReputation} returns
+ * `{hit: true, value: null}` on the next call within the 60s window,
+ * which callers treat the same as "no data" without re-hitting Hiro.
+ */
+export function setCachedReputationLookupFailed(
+  key: string,
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<void> {
+  return kvPut(
+    kv,
+    `cache:reputation:${key}`,
+    NONE_SENTINEL,
+    60,
+    "reputation",
+    logger
+  );
+}
+
 export function getCachedTransaction(
   txid: string,
   kv?: KVNamespace,

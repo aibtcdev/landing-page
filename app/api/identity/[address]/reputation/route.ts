@@ -12,36 +12,9 @@ import {
   type Logger,
 } from "@/lib/logging";
 import { buildEdgeCacheKey, withEdgeCache } from "@/lib/edge-cache";
+import { lookupAgent } from "@/lib/agent-lookup";
 
 const REPUTATION_CACHE_TTL_SECONDS = 300;
-
-/**
- * Look up an agent by BTC or STX address.
- * Try both keys in parallel for efficiency.
- */
-async function lookupAgent(
-  kv: KVNamespace,
-  address: string,
-  logger: Logger
-): Promise<AgentRecord | null> {
-  const [btcData, stxData] = await Promise.all([
-    kv.get(`btc:${address}`),
-    kv.get(`stx:${address}`),
-  ]);
-
-  const data = btcData || stxData;
-  if (!data) return null;
-
-  try {
-    return JSON.parse(data) as AgentRecord;
-  } catch (e) {
-    logger.error("reputation.parse_agent_failed", {
-      address,
-      error: String(e),
-    });
-    return null;
-  }
-}
 
 /**
  * GET /api/identity/:address/reputation — Fetch on-chain reputation data.
@@ -119,12 +92,13 @@ export async function GET(
   try {
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
     const hiroApiKey = env.HIRO_API_KEY;
     if (isLogsRPC(env.LOGS)) {
       logger = createLogger(env.LOGS, ctx, baseCtx);
     }
 
-    const agent = await lookupAgent(kv, address, logger);
+    const agent = await lookupAgent(kv, address, db);
 
     if (!agent) {
       return NextResponse.json(
@@ -176,7 +150,7 @@ export async function GET(
     const clientAgents = new Map<string, AgentRecord>();
     await Promise.all(
       clientAddresses.map(async (addr) => {
-        const clientAgent = await lookupAgent(kv, addr, logger);
+        const clientAgent = await lookupAgent(kv, addr, db);
         if (clientAgent) clientAgents.set(addr, clientAgent);
       })
     );

@@ -5,7 +5,7 @@
 import { uintCV, noneCV, falseCV, someCV } from "@stacks/transactions";
 import { REPUTATION_REGISTRY_CONTRACT } from "./constants";
 import { callReadOnly, parseClarityValue } from "./stacks-api";
-import { getCachedReputation, setCachedReputation } from "./kv-cache";
+import { getCachedReputation, setCachedReputation, setCachedReputationLookupFailed } from "./kv-cache";
 import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback } from "./types";
 import type { Logger } from "../logging";
 
@@ -63,6 +63,12 @@ export async function getReputationSummary(
       agentId,
       error: String(error),
     });
+    // Write a 60s negative cache before rethrowing so that concurrent and
+    // subsequent polls within the transient-error window hit the cache
+    // instead of piling onto a Hiro endpoint that's already in timeout/5xx.
+    // Mirrors the setCachedBnsLookupFailed / setCachedIdentityLookupFailed
+    // pattern from kv-cache.ts (60s TTL, NONE_SENTINEL value).
+    await setCachedReputationLookupFailed(cacheKey, kv, logger);
     throw error;
   }
 }
@@ -124,6 +130,10 @@ export async function getReputationFeedback(
       cursor: cursor ?? null,
       error: String(error),
     });
+    // Same 60s negative-cache treatment as getReputationSummary: break the
+    // polling-storm amplification on transient Hiro errors (TimeoutError,
+    // 5xx). Rethrow preserved — route still returns 500 to the caller.
+    await setCachedReputationLookupFailed(cacheKey, kv, logger);
     throw error;
   }
 }
