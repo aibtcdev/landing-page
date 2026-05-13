@@ -216,6 +216,15 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
     contract_id: `${BITFLOW_DEPLOYER}.wrapper-velar-v-1-1`,
     functions: ["swap-helper-a", "swap-helper-b"],
   },
+  // v-1-2 was deployed under the XYK principal (not the main BITFLOW_DEPLOYER
+  // like v-1-1). Same `swap-helper-a` / `swap-helper-b` ABI. The Bitflow SDK
+  // routes STX↔VELAR through this address; without this entry the verifier
+  // rejects the swap as `contract_not_allowlisted` even though the trade is
+  // a legitimate Bitflow-mediated execution.
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.wrapper-velar-v-1-2`,
+    functions: ["swap-helper-a", "swap-helper-b"],
+  },
   {
     contract_id: `${BITFLOW_DEPLOYER}.wrapper-velar-multihop-v-1-1`,
     functions: ["swap-3", "swap-4", "swap-5"],

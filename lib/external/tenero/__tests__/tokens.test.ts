@@ -43,7 +43,7 @@ describe("isValidTokenId", () => {
   it("accepts SM-prefixed contract ids", () => {
     expect(
       isValidTokenId(
-        "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc"
+        "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc-token"
       )
     ).toBe(true);
   });
@@ -111,7 +111,7 @@ describe("getActiveTokenIds", () => {
     const db = createFakeDb({
       rows: [
         { id: "stx", cnt: 100 },
-        { id: "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc", cnt: 50 },
+        { id: "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token::sbtc-token", cnt: 50 },
       ],
     });
     const result = await getActiveTokenIds(db);
