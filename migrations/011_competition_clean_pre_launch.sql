@@ -1,0 +1,44 @@
+-- Migration 011: Clean pre-launch swaps so 19:30Z renders empty.
+--
+-- The trading competition campaign starts at COMP_START_TIMESTAMP = 1778700600
+-- (2026-05-13T19:30:00Z), defined in `lib/competition/constants.ts:16`.
+--
+-- Going forward the verifier rejects any swap with `burn_block_time <
+-- COMP_START_TIMESTAMP` as `before_comp_start` (`lib/competition/verify.ts:
+-- 318-323`). However, `swaps` already contains pre-launch rows ingested by
+-- the catch-up cron during the development window, including:
+--
+--   - rows from Level-1-only senders that pre-date #814's Genesis gate
+--     (deployed 2026-05-13T14:25Z) and were preserved by the
+--     no-retroactive-purge policy
+--   - rows from Genesis-tier senders' development-period trades that the
+--     campaign should not retroactively count
+--
+-- Per #823 Part 2: clean these so the leaderboard renders empty at
+-- COMP_START_TIMESTAMP and accumulates only fresh post-launch trades.
+--
+-- The DELETE preserves rows whose `burn_block_time >= COMP_START_TIMESTAMP`
+-- as a safety boundary against accidentally cleaning a row that landed
+-- exactly at start (matches the `>=` boundary in `verify.ts:318` and the
+-- vitest "boundary accepted" assertion at `verify.test.ts:268-275`).
+--
+-- This migration is **forward-only**. There is no rollback for deleted
+-- audit rows. Any pre-launch swap data that downstream consumers want to
+-- retain (e.g. per-agent trade-history endpoints, debugging) must be
+-- exported BEFORE this migration runs. Same trade-off as #818's "no
+-- retroactive purge" choice, inverted — here we explicitly purge so the
+-- competition window is the canonical scoring window from launch.
+--
+-- Idempotent: re-running on an already-clean table is a no-op DELETE.
+--
+-- References:
+--   - #823 Part 2 (this migration)
+--   - #815 §6 (frozen-snapshot scoring at campaign close)
+--   - #819 (set COMP_START_TIMESTAMP = 19:30Z, merged 2026-05-13T16:33Z)
+--   - #814 (Genesis gate, merged 2026-05-13T14:25Z)
+--   - #821 (source filter widening, merged 2026-05-13T16:54Z — surfaced
+--     the pre-launch rows on the leaderboard)
+--   - secret-mars/drx4 → daemon/comp-participants-2034v320c.json (snapshot
+--     showing 22 distinct senders with pre-launch trades, 17:03Z)
+
+DELETE FROM swaps WHERE burn_block_time < 1778700600;
