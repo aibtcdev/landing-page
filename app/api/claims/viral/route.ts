@@ -94,6 +94,7 @@ export async function POST(request: NextRequest) {
 
     const { env } = await getCloudflareContext();
     const agentsKv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     // Check agent and existing claim in parallel
     const [agentData, existingClaim] = await Promise.all([
@@ -234,6 +235,45 @@ export async function POST(request: NextRequest) {
     };
 
     await agentsKv.put(`claim:${btcAddress}`, JSON.stringify(claimRecord));
+
+    // Best-effort dual-write to D1 claims table so the competition verifier
+    // (which JOINs claims in lib/competition/verify.ts) sees Genesis tier
+    // immediately, without waiting for the next admin backfill run.
+    // Failures are logged but do not break the KV-canonical flow — KV is
+    // source of truth, D1 is mirror. FK to agents(btc_address) means an
+    // agent row must exist in D1 first; if it doesn't (rare drift case),
+    // the INSERT errors and backfill will reconcile later.
+    if (db) {
+      try {
+        await db
+          .prepare(
+            `INSERT INTO claims (
+              btc_address, display_name, tweet_url, tweet_author,
+              claimed_at, reward_satoshis, reward_txid, status
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+             ON CONFLICT(btc_address) DO UPDATE SET
+               display_name = excluded.display_name,
+               tweet_url = excluded.tweet_url,
+               tweet_author = excluded.tweet_author,
+               claimed_at = excluded.claimed_at,
+               reward_satoshis = excluded.reward_satoshis,
+               status = excluded.status`
+          )
+          .bind(
+            claimRecord.btcAddress,
+            claimRecord.displayName,
+            claimRecord.tweetUrl,
+            claimRecord.tweetAuthor ?? null,
+            claimRecord.claimedAt,
+            claimRecord.rewardSatoshis,
+            claimRecord.rewardTxid ?? null,
+            claimRecord.status
+          )
+          .run();
+      } catch (e) {
+        console.error("Failed to dual-write claim to D1:", e);
+      }
+    }
 
     // Update agent record with owner (X handle) and create reverse index
     const updatedAgent = { ...agent, owner: ownerHandle };

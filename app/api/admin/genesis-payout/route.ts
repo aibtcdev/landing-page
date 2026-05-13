@@ -163,6 +163,7 @@ export async function POST(request: NextRequest) {
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     // Check for existing genesis payout and claim record in parallel
     const [existingGenesis, existingClaimData] = await Promise.all([
@@ -206,6 +207,26 @@ export async function POST(request: NextRequest) {
         claimRecordUpdated = true;
       } catch (e) {
         console.error("Failed to update claim record:", e);
+      }
+    }
+
+    // Best-effort dual-update to D1 claims so leaderboard / verifier surfaces
+    // see status="rewarded" without waiting for backfill. KV is canonical;
+    // D1 is mirror. Skipped silently when no D1 binding is present.
+    if (db) {
+      try {
+        await db
+          .prepare(
+            `UPDATE claims
+             SET status = 'rewarded',
+                 reward_txid = ?,
+                 reward_satoshis = ?
+             WHERE btc_address = ?`
+          )
+          .bind(rewardTxid, rewardSatoshis, btcAddress)
+          .run();
+      } catch (e) {
+        console.error("Failed to dual-update claim status to rewarded in D1:", e);
       }
     }
 

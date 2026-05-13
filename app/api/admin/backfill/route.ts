@@ -22,6 +22,7 @@ interface BackfillResult {
   inserted_null_btcpubkey: number;
   skipped_idempotent: number;
   skipped_partial: number;
+  updated?: number;
   failed: { key: string; reason: string }[];
   cursor: string | null;
   duration_ms: number;
@@ -32,6 +33,14 @@ interface AccumulatedCounts {
   inserted_null_btcpubkey: number;
   skipped_idempotent: number;
   skipped_partial: number;
+  /**
+   * Rows that existed in D1 and were updated in place (claims-only, only
+   * relevant when force=resync is set). Conflict-target row was matched
+   * and its mutable columns (status, reward_txid, reward_satoshis,
+   * tweet_url, tweet_author, claimed_at, display_name) were overwritten
+   * from the KV source.
+   */
+  updated?: number;
   failed: { key: string; reason: string }[];
 }
 
@@ -337,19 +346,29 @@ async function backfillAgents(
  * Note: skips `claim-code:` keys which share the `claim:` prefix in a broader
  * sense but are under a distinct `claim-code:` prefix. KV list with prefix
  * `claim:` (no trailing colon variation) will NOT match `claim-code:` keys.
+ *
+ * When forceResync is true, conflicts on btc_address upsert mutable columns
+ * (status, reward_satoshis, reward_txid, display_name, tweet_url,
+ * tweet_author, claimed_at) instead of being skipped. Use this to reconcile
+ * D1 rows that were inserted before the per-write dual-write landed (KV
+ * advanced status from "verified"→"rewarded" but D1 stayed at the older
+ * value). Without forceResync the legacy DO NOTHING behavior is preserved
+ * for cheap idempotent re-runs.
  */
 async function backfillClaims(
   kv: KVNamespace,
   db: D1Database,
   batchSize: number,
   cursor: string | null,
-  dryRun: boolean
+  dryRun: boolean,
+  forceResync: boolean
 ): Promise<AccumulatedCounts & { nextCursor: string | null }> {
   const counts: AccumulatedCounts = {
     inserted: 0,
     inserted_null_btcpubkey: 0,
     skipped_idempotent: 0,
     skipped_partial: 0,
+    updated: 0,
     failed: [],
   };
 
@@ -391,14 +410,40 @@ async function backfillClaims(
     }
 
     try {
-        const result = await db
-          .prepare(
-            `INSERT INTO claims (
-            btc_address, display_name, tweet_url, tweet_author,
-            claimed_at, reward_satoshis, reward_txid, status
-          ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-           ON CONFLICT(btc_address) DO NOTHING`
-          )
+      // ON CONFLICT branch differs by mode:
+      //   default (forceResync=false) → DO NOTHING (legacy idempotent)
+      //   force=resync                → DO UPDATE SET ... (reconcile stale rows)
+      // We track inserts vs updates by reading meta.changes and probing the
+      // pre-existing row only on conflict; doing a single statement keeps the
+      // batch fast.
+      const sql = forceResync
+        ? `INSERT INTO claims (
+             btc_address, display_name, tweet_url, tweet_author,
+             claimed_at, reward_satoshis, reward_txid, status
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(btc_address) DO UPDATE SET
+              display_name = excluded.display_name,
+              tweet_url = excluded.tweet_url,
+              tweet_author = excluded.tweet_author,
+              claimed_at = excluded.claimed_at,
+              reward_satoshis = excluded.reward_satoshis,
+              reward_txid = excluded.reward_txid,
+              status = excluded.status
+            WHERE claims.status IS NOT excluded.status
+               OR claims.reward_satoshis IS NOT excluded.reward_satoshis
+               OR claims.reward_txid IS NOT excluded.reward_txid
+               OR claims.display_name IS NOT excluded.display_name
+               OR claims.tweet_url IS NOT excluded.tweet_url
+               OR claims.tweet_author IS NOT excluded.tweet_author
+               OR claims.claimed_at IS NOT excluded.claimed_at`
+        : `INSERT INTO claims (
+             btc_address, display_name, tweet_url, tweet_author,
+             claimed_at, reward_satoshis, reward_txid, status
+           ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            ON CONFLICT(btc_address) DO NOTHING`;
+
+      const result = await db
+        .prepare(sql)
         .bind(
           claim.btcAddress,
           claim.displayName,
@@ -412,8 +457,29 @@ async function backfillClaims(
         .run();
 
       if (result.meta.changes === 1) {
-        counts.inserted++;
+        // changes=1 in DO NOTHING mode → INSERT happened
+        // changes=1 in DO UPDATE mode → either INSERT or UPDATE; probe to disambiguate
+        if (forceResync) {
+          // Cheap probe: meta.last_row_id is set only on INSERT (D1 SQLite
+          // semantics); on UPDATE it's unchanged from the prior statement.
+          // Rather than rely on that across drivers, do an explicit lookup
+          // via meta.changes alone: in WHERE-guarded UPDATE we already know
+          // changes=1 means a write happened, but to split insert vs update
+          // we'd need a SELECT. To keep the batch fast we attribute all
+          // change=1 in resync mode as `updated` UNLESS the row was newly
+          // created — and detection of that requires an extra SELECT. We
+          // accept conservative attribution: treat as `updated` in
+          // forceResync mode. New rows in a resync pass should be rare
+          // (they imply KV grew between backfill runs). If precise
+          // discrimination becomes important, add a pre-SELECT.
+          counts.updated = (counts.updated ?? 0) + 1;
+        } else {
+          counts.inserted++;
+        }
       } else {
+        // changes=0 → DO NOTHING fired (legacy mode) OR WHERE guard
+        // suppressed UPDATE because all mutable columns already match
+        // (resync mode, idempotent re-run).
         counts.skipped_idempotent++;
       }
     } catch (e) {
@@ -782,6 +848,7 @@ export async function GET(request: NextRequest) {
       batchSize: "KV scan page size: 10–500 (default: 100)",
       cursor: "Resume cursor from previous response. For inbox_messages: encoded as 'inbound:<kv-cursor>' or 'reply:<kv-cursor>'.",
       dryRun: "If 'true', counts rows without writing to D1 or KV. Default: false.",
+      force: "Claims table only. 'resync' upgrades the conflict clause from DO NOTHING to DO UPDATE, reconciling existing D1 rows whose status/reward fields lag KV. Default: legacy INSERT OR IGNORE semantics. Ignored for non-claims tables.",
     },
     warning:
       "table=all is one-shot with no cursor; use per-table + cursor loop for large datasets to avoid request timeout.",
@@ -791,8 +858,9 @@ export async function GET(request: NextRequest) {
       batchSize: "Effective batch size used",
       inserted: "Rows newly inserted",
       inserted_null_btcpubkey: "Subset of inserted with btc_public_key = NULL (BIP-322 bc1q agents; expected ~708 on first full backfill)",
-      skipped_idempotent: "Rows skipped due to existing D1 row (INSERT OR IGNORE)",
+      skipped_idempotent: "Rows skipped due to existing D1 row (INSERT OR IGNORE) or unchanged mutable columns under force=resync",
       skipped_partial: "PartialAgentRecord rows skipped (agents table only)",
+      updated: "Claims-only, present under force=resync. Existing D1 rows whose mutable columns (status, reward_satoshis, reward_txid, display_name, tweet_url, tweet_author, claimed_at) were reconciled from KV.",
       failed: "Array of { key, reason } for rows that errored (missing verifiedAt or D1 error)",
       cursor: "Opaque resume cursor; null when scan complete",
       duration_ms: "Wall-clock milliseconds for this request",
@@ -841,6 +909,11 @@ export async function POST(request: NextRequest) {
   const batchSize = parseBatchSize(searchParams.get("batchSize"));
   const cursor = searchParams.get("cursor") ?? null;
   const dryRun = searchParams.get("dryRun") === "true";
+  // claims-only: when "resync", existing D1 rows are upserted from KV
+  // (display_name, tweet_url, tweet_author, claimed_at, reward_satoshis,
+  // reward_txid, status). Default behavior (force=null) preserves the
+  // legacy INSERT OR IGNORE semantics. Ignored for non-claims tables.
+  const forceResync = searchParams.get("force") === "resync";
 
   const validTables: TableTarget[] = ["agents", "claims", "inbox_messages", "vouches", "all"];
   if (!validTables.includes(rawTable as TableTarget)) {
@@ -886,9 +959,10 @@ export async function POST(request: NextRequest) {
       // Claims
       let claimCursor: string | null = null;
       do {
-        const res = await backfillClaims(kv, db, batchSize, claimCursor, dryRun);
+        const res = await backfillClaims(kv, db, batchSize, claimCursor, dryRun, forceResync);
         totals.inserted += res.inserted;
         totals.skipped_idempotent += res.skipped_idempotent;
+        totals.updated = (totals.updated ?? 0) + (res.updated ?? 0);
         totals.failed.push(...res.failed);
         claimCursor = res.nextCursor;
         logger.info("backfill.batch", {
@@ -950,6 +1024,7 @@ export async function POST(request: NextRequest) {
         inserted_null_btcpubkey: totals.inserted_null_btcpubkey,
         skipped_idempotent: totals.skipped_idempotent,
         skipped_partial: totals.skipped_partial,
+        ...(totals.updated !== undefined ? { updated: totals.updated } : {}),
         failed: totals.failed,
         cursor: null,
         duration_ms,
@@ -965,7 +1040,7 @@ export async function POST(request: NextRequest) {
         res = await backfillAgents(kv, db, batchSize, cursor, dryRun);
         break;
       case "claims":
-        res = await backfillClaims(kv, db, batchSize, cursor, dryRun);
+        res = await backfillClaims(kv, db, batchSize, cursor, dryRun, forceResync);
         break;
       case "inbox_messages":
         res = await backfillInboxMessages(kv, db, batchSize, cursor, dryRun);
@@ -1016,6 +1091,7 @@ export async function POST(request: NextRequest) {
       inserted_null_btcpubkey: res.inserted_null_btcpubkey,
       skipped_idempotent: res.skipped_idempotent,
       skipped_partial: res.skipped_partial,
+      ...(res.updated !== undefined ? { updated: res.updated } : {}),
       failed: res.failed,
       cursor: res.nextCursor,
       duration_ms,
