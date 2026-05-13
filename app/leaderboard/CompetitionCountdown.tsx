@@ -47,12 +47,12 @@ export default function CompetitionCountdown({
     () => formatStartTime(startTimestamp),
     [startTimestamp]
   );
-  const parts = useMemo(() => countdownParts(msRemaining), [msRemaining]);
+  const parts = countdownParts(msRemaining);
 
   useEffect(() => {
     if (isLive) return;
-    const id = window.setInterval(() => setNowMs(Date.now()), SECOND_MS);
-    return () => window.clearInterval(id);
+    const id = setInterval(() => setNowMs(Date.now()), SECOND_MS);
+    return () => clearInterval(id);
   }, [isLive]);
 
   return (
