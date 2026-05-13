@@ -333,6 +333,21 @@ describe("verifyAndPersistSwap — sender + allowlist gates", () => {
     expect(result.reason).toMatch(/Genesis/);
   });
 
+  it("uses an aggregated Genesis lookup so multiple claim rows cannot downgrade a verified agent", async () => {
+    (stacksApiFetch as Mock).mockResolvedValue(mockHiroResponse(buildHappyTx()));
+    const db = buildD1Mock({ registered: true, insertChanges: 1 });
+    const result = await verifyAndPersistSwap({}, db, TXID, "agent");
+    expect(result.status).toBe("verified");
+
+    const prepare = db.prepare as unknown as Mock;
+    const eligibilitySql = prepare.mock.calls
+      .map(([sql]) => String(sql))
+      .find((sql) => sql.includes("FROM registered_wallets"));
+    expect(eligibilitySql).toContain("MAX(CASE WHEN c.status IN ('verified', 'rewarded')");
+    expect(eligibilitySql).toContain("LEFT JOIN agents");
+    expect(eligibilitySql).toContain("GROUP BY rw.stx_address");
+  });
+
   it("rejects with contract_not_allowlisted for an off-allowlist contract", async () => {
     const tx = buildHappyTx();
     tx.contract_call.contract_id = "SP00000000000000000000.unknown-pool-v1";

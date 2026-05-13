@@ -96,9 +96,10 @@ interface PersistArgs {
  *     → agents.stx_address (UNIQUE)
  *     → claims.btc_address (= agents.btc_address)
  *
- * Single round-trip via a single LEFT JOIN — campaign verifier needs to
- * know both "registered?" and "Genesis?" to produce the right rejection
- * code, so separating the two would just double the D1 reads.
+ * Single round-trip with aggregation — campaign verifier needs to know both
+ * "registered?" and "Genesis?" to produce the right rejection code. Claims
+ * are not assumed unique per BTC address, so the query collapses any number
+ * of claim rows into one tier decision.
  */
 type SenderTier = "not_registered" | "registered" | "genesis";
 
@@ -111,11 +112,12 @@ async function senderEligibilityTier(
       `
       SELECT
         1 AS registered,
-        CASE WHEN c.status IN ('verified', 'rewarded') THEN 1 ELSE 0 END AS genesis
+        MAX(CASE WHEN c.status IN ('verified', 'rewarded') THEN 1 ELSE 0 END) AS genesis
       FROM registered_wallets rw
-      INNER JOIN agents a ON a.stx_address = rw.stx_address
+      LEFT JOIN agents a ON a.stx_address = rw.stx_address
       LEFT JOIN claims c ON c.btc_address = a.btc_address
       WHERE rw.stx_address = ?1
+      GROUP BY rw.stx_address
       `
     )
     .bind(stxAddress)
