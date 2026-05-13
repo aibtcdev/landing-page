@@ -12,7 +12,7 @@ import {
 } from "./lib/logging";
 import { getPaymentRepoVersion } from "./lib/inbox/payment-logging";
 import { processInboxReconciliationQueue } from "./lib/inbox/reconciliation-queue";
-import { STATIC_TOKEN_IDS } from "./lib/external/tenero";
+import { getActiveTokenIds } from "./lib/external/tenero";
 import {
   runTeneroTask,
   type TeneroRunResult,
@@ -210,10 +210,16 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
       ? parentLogger.child({ task: "tenero" })
       : parentLogger;
 
+    // Pull the active token set from the swaps table (union'd with the
+    // static core; falls back to static-only on missing binding or query
+    // failure). See `getActiveTokenIds` doc for the SQL + filter.
+    const tokenIds = await getActiveTokenIds(this.env.DB);
+    logger.info("tenero.token_set_resolved", { count: tokenIds.length });
+
     const { result, rateLimited, rateLimitBackoffMs } = await runTeneroTask({
       logger,
       kv: this.env.VERIFIED_AGENTS,
-      tokenIds: STATIC_TOKEN_IDS,
+      tokenIds,
       apiKey: this.lookupTeneroApiKey(),
     });
 
