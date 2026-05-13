@@ -331,6 +331,7 @@ export async function POST(request: NextRequest) {
   // result.status === "rejected"
   switch (result.code) {
     case "sender_not_registered":
+    case "sender_not_genesis":
     case "contract_not_allowlisted":
     case "tx_failed":
     case "before_comp_start":
