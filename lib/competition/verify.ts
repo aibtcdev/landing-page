@@ -44,6 +44,7 @@ const TERMINAL_STATUSES = new Set<string>([
 
 export type VerifyFailureCode =
   | "sender_not_registered"
+  | "sender_not_genesis"
   | "contract_not_allowlisted"
   | "tx_not_found"
   | "tx_fetch_failed"
@@ -79,21 +80,48 @@ interface PersistArgs {
 }
 
 /**
- * Look up a sender in the registered_wallets view.
- * Sender check is the first cheap gate before any Hiro round-trip would
- * normally apply — but in our flow we already have the tx fetched, so this
- * runs after the fetch. Keeping it as a SELECT 1 not a JOIN keeps the
- * shape ergonomic for scheduler callers that may want to batch.
+ * Look up a sender's eligibility tier.
+ *
+ *   "not_registered" → no row in `registered_wallets`
+ *   "registered"     → in `registered_wallets` but no verified/rewarded claim
+ *                       (Level 1 — Verified Agent in `lib/levels.ts`)
+ *   "genesis"        → in `registered_wallets` AND has a verified/rewarded
+ *                       viral claim (Level 2 — Genesis)
+ *
+ * Genesis predicate matches `computeLevel()` in `lib/levels.ts:67-87`:
+ * Level 2 requires the agent row exists AND `claims.status` is one of
+ * `'verified'` or `'rewarded'`. The JOIN path is:
+ *
+ *   registered_wallets.stx_address
+ *     → agents.stx_address (UNIQUE)
+ *     → claims.btc_address (= agents.btc_address)
+ *
+ * Single round-trip via a single LEFT JOIN — campaign verifier needs to
+ * know both "registered?" and "Genesis?" to produce the right rejection
+ * code, so separating the two would just double the D1 reads.
  */
-async function senderIsRegistered(
+type SenderTier = "not_registered" | "registered" | "genesis";
+
+async function senderEligibilityTier(
   db: D1Database,
   stxAddress: string
-): Promise<boolean> {
+): Promise<SenderTier> {
   const row = await db
-    .prepare(`SELECT 1 AS ok FROM registered_wallets WHERE stx_address = ?1`)
+    .prepare(
+      `
+      SELECT
+        1 AS registered,
+        CASE WHEN c.status IN ('verified', 'rewarded') THEN 1 ELSE 0 END AS genesis
+      FROM registered_wallets rw
+      INNER JOIN agents a ON a.stx_address = rw.stx_address
+      LEFT JOIN claims c ON c.btc_address = a.btc_address
+      WHERE rw.stx_address = ?1
+      `
+    )
     .bind(stxAddress)
-    .first<{ ok: number }>();
-  return Boolean(row);
+    .first<{ registered: number; genesis: number }>();
+  if (!row) return "not_registered";
+  return row.genesis === 1 ? "genesis" : "registered";
 }
 
 async function insertSwap(
@@ -304,9 +332,9 @@ export async function verifyAndPersistSwap(
   }
 
   const sender = tx.sender_address;
-  let registered: boolean;
+  let tier: SenderTier;
   try {
-    registered = await senderIsRegistered(db, sender);
+    tier = await senderEligibilityTier(db, sender);
   } catch (err) {
     return {
       status: "rejected",
@@ -314,11 +342,20 @@ export async function verifyAndPersistSwap(
       reason: `D1 read failed: ${err instanceof Error ? err.message : String(err)}`,
     };
   }
-  if (!registered) {
+  if (tier === "not_registered") {
     return {
       status: "rejected",
       code: "sender_not_registered",
       reason: `Sender ${sender} is not in registered_wallets`,
+    };
+  }
+  if (tier === "registered") {
+    // Registered (Level 1) but not Genesis (Level 2). The campaign requires
+    // a verified viral claim — see lib/levels.ts and rules issue #813.
+    return {
+      status: "rejected",
+      code: "sender_not_genesis",
+      reason: `Sender ${sender} is registered but has not reached Genesis (Level 2). Submit a verified viral claim via POST /api/claims/viral first.`,
     };
   }
 
