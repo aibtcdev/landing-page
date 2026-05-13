@@ -7,10 +7,10 @@
  * neither the agent-submit fast path nor the scheduler catch-up pass can
  * pollute `swaps` with pre-campaign history.
  *
- * 1778630400 = 2026-05-13T00:00:00Z.
+ * 1778700600 = 2026-05-13T19:30:00Z.
  *
  * To shift the start, update this constant and re-deploy. If we ever need
  * separate preview vs prod values, promote to an env-var read from the
  * worker bindings.
  */
-export const COMP_START_TIMESTAMP = 1778630400;
+export const COMP_START_TIMESTAMP = 1778700600;
