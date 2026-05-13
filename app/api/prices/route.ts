@@ -16,9 +16,10 @@
  * matches the project convention (#666).
  *
  * Adding a new priceable token: edit `STATIC_TOKEN_IDS` in
- * `lib/external/tenero/tokens.ts` AND `TOKEN_DECIMALS` in
- * `app/leaderboard/page.tsx`. Run a Tenero probe first to confirm the
- * contract id has a non-null `price_usd`.
+ * `lib/external/tenero/tokens.ts`. Run a Tenero probe first to confirm
+ * the contract id has a non-null `price_usd`. The leaderboard reads
+ * decimals directly from Tenero on the client, so no second list is
+ * required there.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -81,7 +82,6 @@ function selfDoc(): NextResponse {
       supportedTokens: STATIC_TOKEN_IDS,
       addingATokenRequires: [
         "Adding to STATIC_TOKEN_IDS in lib/external/tenero/tokens.ts",
-        "Adding to TOKEN_DECIMALS in app/leaderboard/page.tsx",
         "Probing https://api.tenero.io/v1/stacks/tokens/{contract_id} for a non-null price_usd",
       ],
       rateLimit: "300 req / 60 s per IP (RATE_LIMIT_READ binding)",
