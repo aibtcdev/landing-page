@@ -7,7 +7,7 @@ import { X_HANDLE } from "@/lib/constants";
 import { ACTIVE_BEATS_LIST } from "@/lib/news-beats";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
-import { countInboxMessagesFromD1 } from "@/lib/inbox/d1-reads";
+import { cachedUnreadCount } from "@/lib/inbox/cached-counts";
 import {
   CHECK_IN_MESSAGE_FORMAT,
   buildCheckInMessage,
@@ -116,7 +116,7 @@ function getNextAction(
 async function fetchUnreadCount(db: D1Database | undefined, btcAddress: string): Promise<number> {
   if (!db) return 0;
   try {
-    return await countInboxMessagesFromD1(db, btcAddress, "unread");
+    return await cachedUnreadCount(db, btcAddress);
   } catch {
     return 0;
   }

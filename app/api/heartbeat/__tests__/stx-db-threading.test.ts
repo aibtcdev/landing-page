@@ -22,8 +22,8 @@ vi.mock("@/lib/agent-lookup", () => ({
   lookupAgentWithLevel: vi.fn(),
 }));
 
-vi.mock("@/lib/inbox/d1-reads", () => ({
-  countInboxMessagesFromD1: vi.fn().mockResolvedValue(0),
+vi.mock("@/lib/inbox/cached-counts", () => ({
+  cachedUnreadCount: vi.fn().mockResolvedValue(0),
 }));
 
 vi.mock("@/lib/levels", () => ({
