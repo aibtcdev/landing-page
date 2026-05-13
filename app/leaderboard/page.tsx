@@ -29,11 +29,13 @@ export const metadata: Metadata = {
 interface LeaderboardJoinedRow {
   sender: string;
   token_in: string;
+  token_out: string;
   cnt: number;
   // D1 returns SUM of an INTEGER column as a JS number, but the runtime
   // boundary isn't tightly typed — Cloudflare's docs leave room for
   // string returns on very large aggregates. Type defensively here.
   sum_in: number | string | null;
+  sum_out: number | string | null;
   latest_at: number;
   btc_address: string | null;
   display_name: string | null;
@@ -95,22 +97,29 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
 
   if (!db) return [];
 
-  // Single round-trip: aggregate `swaps` per (sender, token_in) and
-  // LEFT JOIN the four display fields from `agents`. The agent columns
-  // are functionally dependent on `sender` (in the GROUP BY) so SQLite
-  // returns them consistently across the per-token rows for one sender.
+  // Single round-trip: aggregate `swaps` per (sender, token_in, token_out)
+  // and LEFT JOIN the four display fields from `agents`. The wider GROUP BY
+  // lets the client compute both:
+  //   - Volume USD = Σ(amount_in × price[token_in])           ("notional spent")
+  //   - P&L USD    = Σ(amount_out × price[token_out]
+  //                   − amount_in × price[token_in])          ("net at end prices")
+  //
+  // `tx_status = 'success'` filter: only successful swaps move tokens.
+  // Failed / aborted txs are recorded in the table for audit but shouldn't
+  // count toward volume or P&L.
   let rows: LeaderboardJoinedRow[] = [];
   try {
     const sql = `
-      SELECT s.sender, s.token_in,
+      SELECT s.sender, s.token_in, s.token_out,
              COUNT(*)             AS cnt,
              SUM(s.amount_in)     AS sum_in,
+             SUM(s.amount_out)    AS sum_out,
              MAX(s.burn_block_time) AS latest_at,
              a.btc_address, a.display_name, a.bns_name, a.erc8004_agent_id
       FROM swaps s
       LEFT JOIN agents a ON a.stx_address = s.sender
-      WHERE s.source = 'agent'
-      GROUP BY s.sender, s.token_in
+      WHERE s.source = 'agent' AND s.tx_status = 'success'
+      GROUP BY s.sender, s.token_in, s.token_out
     `;
     const result = await db.prepare(sql).all<LeaderboardJoinedRow>();
     rows = result.results ?? [];
@@ -120,16 +129,21 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
 
   if (rows.length === 0) return [];
 
-  // Aggregate per sender — sum count, keep max(latest_at), preserve
-  // per-token breakdown for the client-side volume calculation, and
-  // capture display fields once (they're identical across per-token
-  // rows of the same sender).
+  // Roll up per (sender, pair) rows into per-sender state. For each pair we
+  // bump:
+  //   - count (one row per pair contributes COUNT(*))
+  //   - tokensSpent[token_in]    += sum_in
+  //   - tokensReceived[token_out] += sum_out
+  // Display fields are functionally dependent on `sender` (LEFT JOIN against
+  // a row keyed by stx_address) so they're identical across all pair-rows
+  // for one sender — capture once on first sight.
   const bySender = new Map<
     string,
     {
       count: number;
       latestAt: number;
-      tokens: Array<{ tokenId: string; sumAmountIn: number }>;
+      spent: Map<string, number>;
+      received: Map<string, number>;
       display: {
         btcAddress: string | null;
         displayName: string | null;
@@ -142,7 +156,8 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     const existing = bySender.get(r.sender) ?? {
       count: 0,
       latestAt: 0,
-      tokens: [] as Array<{ tokenId: string; sumAmountIn: number }>,
+      spent: new Map<string, number>(),
+      received: new Map<string, number>(),
       display: {
         btcAddress: r.btc_address,
         displayName: r.display_name,
@@ -152,16 +167,22 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     };
     existing.count += r.cnt;
     if (r.latest_at > existing.latestAt) existing.latestAt = r.latest_at;
-    existing.tokens.push({
-      tokenId: r.token_in,
-      sumAmountIn: safeAggregateNumber(r.sum_in),
-    });
+    const sumIn = safeAggregateNumber(r.sum_in);
+    const sumOut = safeAggregateNumber(r.sum_out);
+    existing.spent.set(
+      r.token_in,
+      (existing.spent.get(r.token_in) ?? 0) + sumIn
+    );
+    existing.received.set(
+      r.token_out,
+      (existing.received.get(r.token_out) ?? 0) + sumOut
+    );
     bySender.set(r.sender, existing);
   }
 
   // Per-token breakdowns ride along to the client, which calls Tenero
   // directly per distinct token id and reads both `price_usd` and
-  // `decimals` from the response — no hardcoded decimals table, no KV
+  // `decimals` from the response. No hardcoded decimals table, no KV
   // price-cache dependency on this path.
   const ranked: LeaderboardRow[] = Array.from(bySender.entries())
     .map(([sender, agg]) => ({
@@ -172,7 +193,13 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
       erc8004AgentId: agg.display.erc8004AgentId,
       tradeCount: agg.count,
       latestTradeAt: agg.latestAt,
-      tokens: agg.tokens,
+      tokensSpent: Array.from(agg.spent.entries()).map(([tokenId, sumAmount]) => ({
+        tokenId,
+        sumAmount,
+      })),
+      tokensReceived: Array.from(agg.received.entries()).map(
+        ([tokenId, sumAmount]) => ({ tokenId, sumAmount })
+      ),
     }))
     .sort((a, b) => {
       // Primary: count desc. Tiebreak: latest trade desc.

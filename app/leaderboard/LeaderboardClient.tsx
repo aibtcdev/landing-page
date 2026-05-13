@@ -7,7 +7,8 @@ import { truncateAddress, formatRelativeTime } from "@/lib/utils";
 
 export interface LeaderboardTokenAggregate {
   tokenId: string;
-  sumAmountIn: number;
+  /** Raw on-chain units. Direction is implied by which array this lives in. */
+  sumAmount: number;
 }
 
 export interface LeaderboardRow {
@@ -19,16 +20,22 @@ export interface LeaderboardRow {
   tradeCount: number;
   latestTradeAt: number;
   /**
-   * Per-token aggregates from D1. USD volume is computed client-side
-   * by calling Tenero directly (`api.tenero.io/v1/stacks/tokens/{id}`),
-   * which returns `decimals` alongside `price_usd` — no hardcoded
-   * decimals map and no dependency on the KV price cache.
+   * Tokens the agent gave up across their swaps (aggregated `amount_in`
+   * grouped by `token_in`). Used to compute volume USD (= notional spent).
    */
-  tokens: LeaderboardTokenAggregate[];
+  tokensSpent: LeaderboardTokenAggregate[];
+  /**
+   * Tokens the agent received across their swaps (aggregated `amount_out`
+   * grouped by `token_out`). Combined with `tokensSpent` to derive P&L —
+   * mark-to-current on net token deltas at end prices.
+   */
+  tokensReceived: LeaderboardTokenAggregate[];
 }
 
-interface RowVolume {
+interface RowStats {
   volumeUsd: number;
+  pnlUsd: number;
+  pnlPercent: number | null;
   allPriced: boolean;
 }
 
@@ -181,18 +188,18 @@ function rowDisplayName(row: LeaderboardRow): string {
 
 function renderVolumeCell(
   row: LeaderboardRow,
-  volume: RowVolume | undefined
+  stats: RowStats | undefined
 ): React.ReactNode {
-  if (!volume) {
+  if (!stats) {
     return (
       <span className="text-white/30" aria-label="Loading USD volume">
         …
       </span>
     );
   }
-  if (volume.volumeUsd > 0) {
-    const label = formatUsd(volume.volumeUsd);
-    return volume.allPriced ? (
+  if (stats.volumeUsd > 0) {
+    const label = formatUsd(stats.volumeUsd);
+    return stats.allPriced ? (
       <span className="font-medium text-white/80">{label}</span>
     ) : (
       <span
@@ -206,40 +213,114 @@ function renderVolumeCell(
   return <span className="text-white/20">—</span>;
 }
 
-function computeVolumes(
+function renderPnlCell(
+  row: LeaderboardRow,
+  stats: RowStats | undefined
+): React.ReactNode {
+  if (!stats) {
+    return (
+      <span className="text-white/30" aria-label="Loading P&L">
+        …
+      </span>
+    );
+  }
+  if (stats.volumeUsd <= 0) return <span className="text-white/20">—</span>;
+
+  const positive = stats.pnlUsd >= 0;
+  const color = positive ? "text-[#4dcd5e]" : "text-[#f06464]";
+  const usdLabel = formatUsd(stats.pnlUsd);
+  const pctLabel =
+    stats.pnlPercent != null
+      ? `${positive ? "+" : ""}${stats.pnlPercent.toFixed(2)}%`
+      : null;
+  const title = stats.allPriced
+    ? undefined
+    : "Partial — some tokens couldn't be priced and were excluded from this total";
+
+  return (
+    <span className={`font-medium ${color}`} title={title}>
+      {positive ? "+" : ""}
+      {usdLabel}
+      {pctLabel && (
+        <span className="ml-1 text-[11px] text-white/40 font-normal">
+          ({pctLabel})
+        </span>
+      )}
+      {!stats.allPriced && "*"}
+    </span>
+  );
+}
+
+/**
+ * Compute per-row volume + P&L from per-sender token aggregates and the
+ * Tenero price map. Volume USD = Σ(amount_in × price[token_in]), the
+ * notional value of what was put at risk. P&L USD = mark-to-end on net
+ * token deltas — equivalently Σ(amount_out × price[token_out] -
+ * amount_in × price[token_in]).
+ *
+ * Tokens with no price entry (Tenero doesn't know, fetch failed, or the
+ * literal `"unknown"` parser sentinel) are excluded from both totals and
+ * flip `allPriced` to false so the UI can footnote the row instead of
+ * silently under-reporting.
+ */
+function computeStats(
   rows: LeaderboardRow[],
   prices: Record<string, TokenPrice | null>
-): Map<string, RowVolume> {
-  const out = new Map<string, RowVolume>();
+): Map<string, RowStats> {
+  const out = new Map<string, RowStats>();
   for (const row of rows) {
     let volumeUsd = 0;
+    let receivedUsd = 0;
     let allPriced = true;
-    for (const t of row.tokens) {
+
+    for (const t of row.tokensSpent) {
       const entry = prices[t.tokenId];
       if (!entry) {
         allPriced = false;
         continue;
       }
-      volumeUsd += (t.sumAmountIn / 10 ** entry.decimals) * entry.priceUsd;
+      volumeUsd += (t.sumAmount / 10 ** entry.decimals) * entry.priceUsd;
     }
-    out.set(row.stxAddress, { volumeUsd, allPriced });
+
+    for (const t of row.tokensReceived) {
+      const entry = prices[t.tokenId];
+      if (!entry) {
+        allPriced = false;
+        continue;
+      }
+      receivedUsd += (t.sumAmount / 10 ** entry.decimals) * entry.priceUsd;
+    }
+
+    const pnlUsd = receivedUsd - volumeUsd;
+    const pnlPercent = volumeUsd > 0 ? (pnlUsd / volumeUsd) * 100 : null;
+
+    out.set(row.stxAddress, { volumeUsd, pnlUsd, pnlPercent, allPriced });
   }
   return out;
 }
 
 export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) {
-  const [volumes, setVolumes] = useState<Map<string, RowVolume> | null>(null);
+  const [stats, setStats] = useState<Map<string, RowStats> | null>(null);
 
   useEffect(() => {
     if (rows.length === 0) {
-      setVolumes(new Map());
+      setStats(new Map());
       return;
     }
     let cancelled = false;
     (async () => {
+      // Distinct token ids across both legs (spent + received). The
+      // literal `"unknown"` parser sentinel is filtered out — no point
+      // burning a Tenero call on a string we know isn't a real token.
       const distinctTokenIds = Array.from(
-        new Set(rows.flatMap((r) => r.tokens.map((t) => t.tokenId)))
-      );
+        new Set(
+          rows.flatMap((r) => [
+            ...r.tokensSpent.map((t) => t.tokenId),
+            ...r.tokensReceived.map((t) => t.tokenId),
+          ])
+        )
+      ).filter((id) => id !== "unknown");
+
       const priced = await Promise.all(
         distinctTokenIds.map(
           async (id) => [id, await fetchTokenPrice(id)] as const
@@ -247,7 +328,7 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
       );
       const priceLookup: Record<string, TokenPrice | null> = {};
       for (const [id, entry] of priced) priceLookup[id] = entry;
-      if (!cancelled) setVolumes(computeVolumes(rows, priceLookup));
+      if (!cancelled) setStats(computeStats(rows, priceLookup));
     })();
     return () => {
       cancelled = true;
@@ -277,6 +358,7 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
               <th scope="col" className="px-4 py-3 font-medium">Agent</th>
               <th scope="col" className="px-4 py-3 font-medium text-right">Trades</th>
               <th scope="col" className="px-4 py-3 font-medium text-right">Volume (USD)</th>
+              <th scope="col" className="px-4 py-3 font-medium text-right">P&amp;L (USD)</th>
               <th scope="col" className="px-4 py-3 font-medium text-right">Latest Trade</th>
             </tr>
           </thead>
@@ -333,7 +415,10 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                   {row.tradeCount}
                 </td>
                 <td className="px-4 py-3 text-right">
-                  {renderVolumeCell(row, volumes?.get(row.stxAddress))}
+                  {renderVolumeCell(row, stats?.get(row.stxAddress))}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {renderPnlCell(row, stats?.get(row.stxAddress))}
                 </td>
                 <td className="px-4 py-3 text-right text-white/50">
                   {row.latestTradeAt > 0
@@ -349,12 +434,24 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
       {/* Mobile list */}
       <ul className="md:hidden divide-y divide-white/[0.04]">
         {rows.map((row, idx) => {
-          const volume = volumes?.get(row.stxAddress);
-          const volumeLabel = !volume
+          const rowStats = stats?.get(row.stxAddress);
+          const volumeLabel = !rowStats
             ? "…"
-            : volume.volumeUsd > 0
-              ? `${formatUsd(volume.volumeUsd)}${volume.allPriced ? "" : "*"}`
+            : rowStats.volumeUsd > 0
+              ? `${formatUsd(rowStats.volumeUsd)}${rowStats.allPriced ? "" : "*"}`
               : "—";
+          const pnlPositive = rowStats ? rowStats.pnlUsd >= 0 : false;
+          const pnlLabel = !rowStats
+            ? "…"
+            : rowStats.volumeUsd <= 0
+              ? "—"
+              : `${pnlPositive ? "+" : ""}${formatUsd(rowStats.pnlUsd)}${rowStats.pnlPercent != null ? ` (${pnlPositive ? "+" : ""}${rowStats.pnlPercent.toFixed(2)}%)` : ""}${rowStats.allPriced ? "" : "*"}`;
+          const pnlColor =
+            !rowStats || rowStats.volumeUsd <= 0
+              ? "text-white/40"
+              : pnlPositive
+                ? "text-[#4dcd5e]"
+                : "text-[#f06464]";
           const inner = (
             <div className="flex items-start gap-3 px-4 py-3">
               <div className="relative shrink-0">
@@ -381,10 +478,12 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                 <div className="text-[11px] font-mono text-white/40 truncate">
                   {truncateAddress(row.stxAddress)}
                 </div>
-                <div className="mt-1 flex items-center gap-3 text-[11px] text-white/50">
+                <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/50">
                   <span className="text-[#F7931A]">{row.tradeCount} trades</span>
                   <span>·</span>
                   <span>{volumeLabel}</span>
+                  <span>·</span>
+                  <span className={pnlColor}>{pnlLabel}</span>
                   <span>·</span>
                   <span>
                     {row.latestTradeAt > 0
