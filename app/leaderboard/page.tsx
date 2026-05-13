@@ -3,6 +3,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
+import CompetitionCountdown from "./CompetitionCountdown";
+import { COMP_START_TIMESTAMP } from "@/lib/competition/constants";
 import { LEADERBOARD_AGGREGATE_SQL } from "@/lib/competition/leaderboard-query";
 
 // Reads live Cloudflare bindings (D1, SchedulerDO). Keep this dynamic so
@@ -232,6 +234,11 @@ export default async function LeaderboardPage() {
               </a>
             </p>
           </div>
+
+          <CompetitionCountdown
+            startTimestamp={COMP_START_TIMESTAMP}
+            initialNowMs={Date.now()}
+          />
 
           <LeaderboardClient rows={rows} />
         </div>
