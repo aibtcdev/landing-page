@@ -152,31 +152,40 @@ async function fetchTokenPrice(tokenId: string): Promise<TokenPrice | null> {
 
   const addr = tokenIdToTeneroAddress(tokenId);
   try {
-    const res = await fetch(
-      `${TENERO_API_BASE}/tokens/${encodeURIComponent(addr)}`,
-      { headers: { Accept: "application/json" } }
-    );
-    if (!res.ok) {
+    // Per the /api/prices route docstring: "The leaderboard reads decimals
+    // directly from Tenero on the client". We split the two reads so the
+    // price hop picks up the server-side stablecoin fallback (#849) — which
+    // is the only way aeUSDC and USDCx hydrate at $1 when Tenero responds
+    // with price_usd: 0 — while decimals continue to come from Tenero, which
+    // is the long-standing source of truth for that field.
+    const [priceRes, decimalsRes] = await Promise.all([
+      fetch(`/api/prices?token=${encodeURIComponent(tokenId)}`, {
+        headers: { Accept: "application/json" },
+      }),
+      fetch(`${TENERO_API_BASE}/tokens/${encodeURIComponent(addr)}`, {
+        headers: { Accept: "application/json" },
+      }),
+    ]);
+
+    if (!priceRes.ok || !decimalsRes.ok) {
       writeCachedPrice(tokenId, null, null);
       return null;
     }
-    const body = (await res.json()) as {
-      data?: {
-        price_usd?: number | string | null;
-        decimals?: number | string | null;
-      };
+
+    const priceBody = (await priceRes.json()) as {
+      priceUsd?: number | null;
     };
-    const rawPrice = body.data?.price_usd;
-    const parsedPrice =
-      typeof rawPrice === "string" ? parseFloat(rawPrice) : rawPrice;
     const priceUsd =
-      typeof parsedPrice === "number" &&
-      Number.isFinite(parsedPrice) &&
-      parsedPrice > 0
-        ? parsedPrice
+      typeof priceBody.priceUsd === "number" &&
+      Number.isFinite(priceBody.priceUsd) &&
+      priceBody.priceUsd > 0
+        ? priceBody.priceUsd
         : null;
 
-    const rawDecimals = body.data?.decimals;
+    const decimalsBody = (await decimalsRes.json()) as {
+      data?: { decimals?: number | string | null };
+    };
+    const rawDecimals = decimalsBody.data?.decimals;
     const parsedDecimals =
       typeof rawDecimals === "string" ? parseInt(rawDecimals, 10) : rawDecimals;
     const decimals =
