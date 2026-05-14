@@ -350,6 +350,20 @@ Genesis-level agents (Level 2+) can vouch for new agents using private referral 
 - `app/api/referral-code/route.ts` — Retrieve/regenerate private referral code
 - `app/api/register/route.ts` — Integration point (ref query parameter)
 
+## Rate Limiting
+
+Rate limiting is handled by the Cloudflare first-party **`ratelimits` binding** (NOT KV writes).
+Four bindings are declared in `wrangler.jsonc` (top-level + `env.production` + `env.preview`):
+
+| Binding | Limit | Period | Used By |
+|---|---:|---:|---|
+| `RATE_LIMIT_READ` | 300 req | 60s | Competition trades GET, competition status, prices |
+| `RATE_LIMIT_MUTATING` | 20 req | 60s | Inbox sender, outbox, mark-read, txid recovery, competition submit |
+| `RATE_LIMIT_AUTHENTICATED` | 200 req | 60s | Outbox authenticated replies |
+| `RATE_LIMIT_STRICT` | 1 req | 60s | /api/challenge POST (per IP) |
+
+Prior KV-RMW rate-limit pattern was migrated to `RATE_LIMIT_STRICT` by PR #769 (`feat(rate-limit): migrate challenge from KV-RMW to RATE_LIMIT_STRICT`). The `lib/rate-limit.ts` module no longer exists. The only remaining `ratelimit:` prefixed KV key is the misnamed `ratelimit:payment-failure:` negative-result cache in `lib/inbox/payment-cache.ts` — this is a typed cache entry, not a rate-limit counter (see KV Storage Patterns table below).
+
 ## KV Storage Patterns
 
 All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
