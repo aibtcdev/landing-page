@@ -129,7 +129,7 @@ Replaces KV patterns `inbox:message:{messageId}` (`InboxMessage`) and `inbox:rep
 
 ```sql
 CREATE TABLE inbox_messages (
-  message_id            TEXT PRIMARY KEY,            -- "msg_{ts}_{uuid}"
+  message_id            TEXT PRIMARY KEY,            -- inbound: "msg_{ts}_{uuid}" | reply: "reply_msg_{ts}_{uuid}" (synthesized — see note below)
   is_reply              INTEGER NOT NULL DEFAULT 0,  -- 0 = inbound message, 1 = outbox reply
   reply_to_message_id   TEXT,                        -- message being replied to (NULL for inbound)
   -- Sender address columns: exactly one is populated per row.
@@ -196,6 +196,13 @@ CREATE UNIQUE INDEX idx_inbox_payment_txid ON inbox_messages(payment_txid) WHERE
 ```
 
 **Notes:**
+- **Reply-row `message_id` synthesized PK convention.** KV stores both shapes under the same key-suffix (e.g., `inbox:message:msg_123` for an inbound row and `inbox:reply:msg_123` for its reply, where `msg_123` is the **parent**'s message ID). If both D1 rows used the KV-derived ID directly, they would collide on the `message_id` PRIMARY KEY. Reply rows therefore receive a synthesized PK by prepending the `reply_` prefix to the parent's message ID. The canonical source is `lib/inbox/d1-pk.ts` (`REPLY_D1_PK_PREFIX = "reply_"` + `deriveReplyD1Id(parentMessageId)`). All write paths MUST use `deriveReplyD1Id()` — never inline the prefix string. The prefix is intentionally one-way: to navigate from a reply row back to its parent, use the `reply_to_message_id` FK column, not string manipulation on the PK. See [#673](https://github.com/aibtcdev/landing-page/issues/673) for the full design decision thread.
+
+  | Row type | `message_id` (D1 PK) | `reply_to_message_id` (FK) |
+  |---|---|---|
+  | Inbound (`is_reply = 0`) | `msg_1234` (relay-sourced, no prefix) | NULL |
+  | Reply (`is_reply = 1`) | `reply_msg_1234` (synthesized via `deriveReplyD1Id`) | `msg_1234` (FK to parent) |
+
 - **`from_stx_address` + `from_btc_address` (split sender columns).** Per arc0btc's review on PR #665: a single `from_address` column with type-depending-on-`is_reply` is a latent bug surface for application code that forgets to discriminate. Splitting into two nullable columns + a `CHECK` constraint enforcing exactly-one-populated locks in the invariant at the schema level. Costs one extra `NULL` column per row; trivial.
 - **Single `bitcoin_signature` column** (was `sender_signature` + `signature`). Both columns held the same shape — Bitcoin message signatures over **BIP-322** (segwit-only: `bc1q` P2WPKH and `bc1p` P2TR addresses). Legacy P2PKH (`1...`) is **not in scope**; if it ever needs to come back, that's an explicit decision documented at the time. Generic column name avoids implying a single-standard limitation and accommodates future **BIP-340 / Schnorr / taproot signing** without another schema migration. Per arc0btc's review: collapsing the two columns reduces "different name, same concept in different modes" confusion.
 - **Payment state model mirrors x402-sponsor-relay** (`payment_status` enum + `payment_terminal_reason` + `payment_error_code` + `payment_replacement_txid`). The previous enum (`'confirmed' | 'pending'`) discarded the relay's richer outcome data. Now: `pending` (in flight) / `confirmed` (on-chain success) / `failed` (terminal — populate `payment_terminal_reason` from the canonical `TerminalReason` set in `@aibtc/tx-schemas/core`, plus optional `payment_error_code` like `INSUFFICIENT_FUNDS`) / `replaced` (RBF or head-bump — populate `payment_replacement_txid` so the agent knows the new on-chain identity to track or resubmit against). Source-of-truth for the in-flight detail (`submitted` / `queued` / `broadcasting` / `mempool`) stays in the relay; D1 records the **terminal outcome** plus enough state to reason about replays. Phase 2.5 dual-write reconciliation includes payment-status validation: KV's `inbox:redeemed-txid:` + `inbox:pending-txid:` + `ratelimit:payment-failure:` keys collectively encode this state across multiple namespaces today; the D1 columns consolidate them into one row. Sample query for "how many of today's inbox attempts failed and why":
