@@ -46,6 +46,17 @@ export {
 // D1 PK Helpers
 export { REPLY_D1_PK_PREFIX, deriveReplyD1Id } from "./d1-pk";
 
+// Stats helpers (maintained counters — replaces hot-path COUNT(*))
+export type { AgentInboxStats, ReconciliationResult } from "./stats";
+export {
+  getAgentInboxStats,
+  bumpInboundStats,
+  bumpSentStats,
+  decrementUnreadStats,
+  rebuildAllStats,
+  reconcileStats,
+} from "./stats";
+
 // Payment Failure Cache
 export { getCachedPaymentFailure, cachePaymentFailure } from "./payment-cache";
 

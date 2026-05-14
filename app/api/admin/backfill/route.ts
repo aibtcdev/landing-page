@@ -11,6 +11,17 @@ import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { isStxAddress } from "@/lib/validation/address";
 import { mirrorClaimToD1 } from "@/lib/claims/d1-mirror";
 
+// ── Stats maintenance note ──────────────────────────────────────────────────
+// This admin route directly inserts/updates inbox_messages rows WITHOUT going
+// through the write-path helpers in lib/inbox/d1-dual-write.ts. As a result,
+// agent_inbox_stats counters may drift after running this route.
+//
+// After any admin/backfill run that touches inbox_messages, run the stats
+// repair to re-sync:
+//   POST /api/admin/reconcile?target=inbox_stats
+// (implemented in app/api/admin/reconcile/route.ts, P3 quest)
+// ──────────────────────────────────────────────────────────────────────────
+
 // ── Types ──────────────────────────────────────────────────────────────────
 
 type TableTarget = "agents" | "claims" | "inbox_messages" | "vouches" | "all";

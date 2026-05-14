@@ -29,6 +29,7 @@ import {
   logPaymentEvent,
 } from "@/lib/inbox/payment-logging";
 import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "@/lib/inbox/d1-dual-write";
+import { bumpInboundStats } from "@/lib/inbox/stats";
 import {
   listInboxMessagesFromD1,
   countInboxMessagesFromD1,
@@ -1085,8 +1086,9 @@ export async function POST(
     // SELECT guard and the INSERT can hit idx_inbox_payment_txid. When detected,
     // re-query the canonical existingMessageId and return 409 (not 503) — this
     // is a permanent idempotent outcome, not a transient D1 failure.
+    let insertResult: { changes: number };
     try {
-      await insertInboundMessageToD1(db, message);
+      insertResult = await insertInboundMessageToD1(db, message);
     } catch (err) {
       if (isPaymentTxidUniqueViolation(err)) {
         return resolvePaymentTxidConflict(
@@ -1104,6 +1106,15 @@ export async function POST(
         error: String(err),
       });
       return d1TransientResponse("Message delivery failed. Please retry shortly.");
+    }
+
+    // Bump stats only on a real insert (changes === 1), not on duplicate/retry.
+    if (insertResult.changes === 1) {
+      ctx.waitUntil(
+        bumpInboundStats(db, message.toBtcAddress, message.sentAt).catch(() => {
+          // Best-effort: stats drift is detectable via reconciliation.
+        })
+      );
     }
 
     logger.info("Message stored via txid recovery", {
@@ -1606,8 +1617,9 @@ export async function POST(
     logger.error("D1 binding unavailable on x402 delivery path", { messageId });
     return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
   }
+  let x402InsertResult: { changes: number };
   try {
-    await insertInboundMessageToD1(db, message);
+    x402InsertResult = await insertInboundMessageToD1(db, message);
   } catch (err) {
     if (isPaymentTxidUniqueViolation(err)) {
       return resolvePaymentTxidConflict(
@@ -1625,6 +1637,15 @@ export async function POST(
       error: String(err),
     });
     return d1TransientResponse("Message delivery failed. Please retry shortly.");
+  }
+
+  // Bump stats only on a real insert (changes === 1), not on duplicate/retry.
+  if (x402InsertResult.changes === 1) {
+    ctx.waitUntil(
+      bumpInboundStats(db, message.toBtcAddress, message.sentAt).catch(() => {
+        // Best-effort: stats drift is detectable via reconciliation.
+      })
+    );
   }
 
   const deliveredPaymentStatus = message.paymentStatus ?? "confirmed";

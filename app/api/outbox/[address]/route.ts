@@ -14,6 +14,7 @@ import {
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
 import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import { bumpSentStats } from "@/lib/inbox/stats";
 import {
   listOutboxRepliesFromD1,
   countOutboxRepliesFromD1,
@@ -449,8 +450,9 @@ export async function POST(
   // committed, so the parent state update is best-effort metadata (the reply
   // content itself is durable). This matches the prior fire-and-forget pattern
   // for the parent state update.
+  let replyInsertResult: { changes: number };
   try {
-    await insertReplyToD1(db, kv, outboxReply);
+    replyInsertResult = await insertReplyToD1(db, kv, outboxReply);
   } catch (err) {
     logger.error("outbox.d1_insert_failed", {
       messageId: outboxReply.messageId,
@@ -481,6 +483,16 @@ export async function POST(
       })
     )
   );
+
+  // Bump sent stats only on a real insert (changes === 1), not on recovery replay.
+  // fromAddress is the agent's BTC address (message.toBtcAddress resolved above).
+  if (replyInsertResult.changes === 1) {
+    ctx.waitUntil(
+      bumpSentStats(db, outboxReply.fromAddress, now).catch(() => {
+        // Best-effort: stats drift is detectable via reconciliation.
+      })
+    );
+  }
 
   // Generate reputationPayload (ERC-8004 feedbackHash) using Web Crypto API
   const hashData = new TextEncoder().encode(`${messageId}${reply}${signature}`);
