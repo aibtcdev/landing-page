@@ -3,10 +3,11 @@
 -- Replaces KV writes for `cache:bns:{stxAddress}` and
 -- `cache:identity:{stxAddress}` key families in lib/identity/kv-cache.ts.
 --
--- Three-state cache model preserved:
+-- Cache state model:
 --   state = 'positive'           — Hiro returned a name/NFT (24h TTL for BNS, 24h for identity)
 --   state = 'confirmed-negative' — Hiro authoritatively said "no name" / "no NFT" (7d TTL)
 --   state = 'lookup-failed'      — transient Hiro error (60s TTL); do not poison long-TTL entry
+--   state = 'contract-error'     — BNS-V2 contract returned {okay:false} (5min TTL); BNS-only
 --
 -- TTL enforcement: expires_at (ISO-8601 UTC) checked at read time in Worker.
 -- Expired rows are evicted lazily by INSERT OR REPLACE on the next write.
@@ -24,7 +25,7 @@
 CREATE TABLE IF NOT EXISTS identity_cache (
   cache_type  TEXT NOT NULL,  -- 'bns' | 'identity'
   address     TEXT NOT NULL,  -- stxAddress (normalized to lowercase by caller)
-  state       TEXT NOT NULL,  -- 'positive' | 'confirmed-negative' | 'lookup-failed'
+  state       TEXT NOT NULL,  -- 'positive' | 'confirmed-negative' | 'lookup-failed' | 'contract-error'
   value       TEXT,           -- name string (bns positive), JSON AgentIdentity (identity positive), NULL for all negative/failed states
   expires_at  TEXT NOT NULL,  -- ISO-8601 UTC string, e.g. '2026-05-15T23:00:00.000Z'
   PRIMARY KEY (cache_type, address)

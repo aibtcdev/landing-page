@@ -307,6 +307,62 @@ describe("lookupBnsName", () => {
       );
       expect(result).toBeNull();
     });
+
+    it("does not re-hit Hiro after negative cache is warmed (D1 + caches.default)", async () => {
+      // End-to-end behavioral coverage for the D1 + caches.default cache
+      // path: a 500 from Hiro warms the negative cache; a second
+      // lookupBnsName call for the same address must be served from cache
+      // without re-hitting fetch. We mock globalThis.caches.default with an
+      // in-memory store; getCloudflareContext is unavailable in this Node
+      // test env so d1Get/d1Put are no-ops — caches.default carries the
+      // entry, which is sufficient to exercise the suppress-re-hit contract.
+      const store = new Map<string, Response>();
+      const cacheMock = {
+        match: vi.fn(async (req: Request) => {
+          const key = typeof req === "string" ? req : req.url;
+          const r = store.get(key);
+          return r ? r.clone() : undefined;
+        }),
+        put: vi.fn(async (req: Request, res: Response) => {
+          const key = typeof req === "string" ? req : req.url;
+          store.set(key, res.clone());
+        }),
+        delete: vi.fn(async (req: Request) => {
+          const key = typeof req === "string" ? req : req.url;
+          return store.delete(key);
+        }),
+      };
+      const prevCaches = (globalThis as unknown as Record<string, unknown>)
+        .caches;
+      (globalThis as unknown as Record<string, unknown>).caches = {
+        default: cacheMock,
+      };
+
+      try {
+        mockFetch.mockResolvedValue({
+          ok: false,
+          status: 500,
+          headers: mockHeaders(),
+        });
+
+        await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+        const fetchCountAfterFirst = mockFetch.mock.calls.length;
+        mockFetch.mockClear();
+
+        // Second call — warmed negative cache should suppress the Hiro
+        // request entirely.
+        await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+        expect(fetchCountAfterFirst).toBeGreaterThan(0);
+        expect(mockFetch).not.toHaveBeenCalled();
+      } finally {
+        if (prevCaches === undefined) {
+          delete (globalThis as unknown as Record<string, unknown>).caches;
+        } else {
+          (globalThis as unknown as Record<string, unknown>).caches =
+            prevCaches;
+        }
+      }
+    });
   });
 
   describe("tri-state outcome (lookupBnsNameWithOutcome)", () => {

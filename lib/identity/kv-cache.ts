@@ -100,7 +100,11 @@ export const BNS_NONE_SENTINEL = NONE_SENTINEL;
 // ---------------------------------------------------------------------------
 
 type CacheType = "bns" | "identity";
-type CacheState = "positive" | "confirmed-negative" | "lookup-failed";
+type CacheState =
+  | "positive"
+  | "confirmed-negative"
+  | "lookup-failed"
+  | "contract-error";
 
 interface IdentityCacheRow {
   state: CacheState;
@@ -339,11 +343,29 @@ async function layeredGet(
   const d1Row = await d1Get(type, address, logger);
   if (!d1Row) return null;
 
-  // Warm the hot layer with remaining TTL (avoid writing with negative TTL)
+  // Warm the hot layer with remaining TTL (avoid writing with negative TTL).
+  // Register the put with ctx.waitUntil so the Workers runtime doesn't cancel
+  // it when the request handler returns — falling back to await when ctx is
+  // absent (local dev / test). Mirrors the pattern from lib/edge-cache.ts:94.
   const remainingMs = new Date(d1Row.expires_at).getTime() - Date.now();
   const remainingSeconds = Math.floor(remainingMs / 1000);
   if (remainingSeconds > 0) {
-    void edgeCachePut(type, address, d1Row, Math.min(remainingSeconds, ttlSeconds));
+    const stash = edgeCachePut(
+      type,
+      address,
+      d1Row,
+      Math.min(remainingSeconds, ttlSeconds)
+    );
+    try {
+      const { ctx } = await getCloudflareContext();
+      if (ctx) {
+        ctx.waitUntil(stash);
+      } else {
+        await stash;
+      }
+    } catch {
+      await stash;
+    }
   }
 
   return d1Row;
@@ -603,7 +625,11 @@ export function setCachedBnsLookupFailed(
 
 /**
  * Cache a BNS contract-reported error (Hiro returned `{okay: false}`) for a
- * medium TTL ({@link BNS_CONTRACT_ERROR_CACHE_TTL} = 5min).
+ * medium TTL ({@link BNS_CONTRACT_ERROR_CACHE_TTL} = 5min). Stored under its
+ * own `contract-error` state so the row reflects which branch wrote it —
+ * downstream telemetry can distinguish a 5-min contract-error hit from a
+ * 60s transient lookup-failed hit even though both surface as NONE_SENTINEL
+ * to callers.
  */
 export function setCachedBnsContractError(
   address: string,
@@ -613,7 +639,7 @@ export function setCachedBnsContractError(
   return layeredPut(
     "bns",
     address,
-    "lookup-failed",
+    "contract-error",
     null,
     BNS_CONTRACT_ERROR_CACHE_TTL,
     logger
