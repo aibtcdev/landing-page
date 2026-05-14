@@ -38,21 +38,58 @@ interface InboxResponse {
   };
 }
 
+interface OutboxResponse {
+  agent: {
+    btcAddress: string;
+    displayName?: string;
+  };
+  outbox: {
+    replies: OutboxReply[];
+    totalCount: number;
+    pagination: {
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+      nextOffset: number | null;
+    };
+  };
+}
+
 const PAGE_SIZE = 20;
+
+// Map an OutboxReply to the same shape InboxList consumes, tagged as direction="sent".
+// The owner's BTC/STX address is used for toBtcAddress/toStxAddress so the row's
+// permalink resolves back to the owner's inbox (where the original message lives).
+function mapReplyToSentMessage(
+  reply: OutboxReply,
+  owner: { btcAddress: string; stxAddress: string }
+): MessageWithPeer {
+  return {
+    messageId: reply.messageId,
+    fromAddress: owner.stxAddress,
+    toBtcAddress: owner.btcAddress,
+    toStxAddress: owner.stxAddress,
+    content: reply.reply,
+    paymentSatoshis: 0,
+    sentAt: reply.repliedAt,
+    direction: "sent",
+    peerBtcAddress: reply.toBtcAddress,
+  };
+}
 
 export default function InboxPage() {
   const params = useParams();
   const address = params.address as string;
 
   const [agent, setAgent] = useState<InboxResponse["agent"] | null>(null);
-  const [allMessages, setAllMessages] = useState<MessageWithPeer[]>([]);
+  const [receivedMessages, setReceivedMessages] = useState<MessageWithPeer[]>([]);
+  const [sentMessages, setSentMessages] = useState<MessageWithPeer[]>([]);
   const [replies, setReplies] = useState<Record<string, OutboxReply>>({});
   const [unreadCount, setUnreadCount] = useState(0);
-  const [totalCount, setTotalCount] = useState(0);
   const [receivedCount, setReceivedCount] = useState(0);
   const [sentCount, setSentCount] = useState(0);
-  const [hasMore, setHasMore] = useState(false);
-  const [nextOffset, setNextOffset] = useState<number | null>(null);
+  const [receivedNextOffset, setReceivedNextOffset] = useState<number | null>(null);
+  const [sentNextOffset, setSentNextOffset] = useState<number | null>(null);
 
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -70,28 +107,53 @@ export default function InboxPage() {
     updateMeta("og:description", `x402-gated inbox for ${displayName}`, true);
   }, [address]);
 
-  // Initial fetch
+  // Initial fetch — inbox (received) + outbox (sent) in parallel.
+  // The Sent tab renders outbox replies; the inbox endpoint does not include them.
   useEffect(() => {
     if (!address) return;
 
     setLoading(true);
     setError(null);
 
-    fetch(`/api/inbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=0&view=all`)
-      .then((res) => {
-        if (!res.ok) throw new Error(res.status === 404 ? "Agent not found" : "Failed to fetch inbox");
-        return res.json() as Promise<InboxResponse>;
-      })
-      .then((result) => {
-        setAgent(result.agent);
-        setAllMessages(result.inbox.messages);
-        setReplies(result.inbox.replies);
-        setUnreadCount(result.inbox.unreadCount);
-        setTotalCount(result.inbox.totalCount);
-        setReceivedCount(result.inbox.receivedCount ?? 0);
-        setSentCount(result.inbox.sentCount ?? 0);
-        setHasMore(result.inbox.pagination.hasMore);
-        setNextOffset(result.inbox.pagination.nextOffset);
+    const inboxReq = fetch(
+      `/api/inbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=0&view=all`
+    ).then((res) => {
+      if (!res.ok) throw new Error(res.status === 404 ? "Agent not found" : "Failed to fetch inbox");
+      return res.json() as Promise<InboxResponse>;
+    });
+
+    // Outbox is best-effort: agents with no sent replies return a self-doc
+    // shape without `outbox`. We tolerate that and treat it as zero sent.
+    const outboxReq = fetch(
+      `/api/outbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=0`
+    )
+      .then((res) => (res.ok ? (res.json() as Promise<OutboxResponse | { outbox?: undefined }>) : null))
+      .catch(() => null);
+
+    Promise.all([inboxReq, outboxReq])
+      .then(([inboxResult, outboxResult]) => {
+        setAgent(inboxResult.agent);
+        setReceivedMessages(inboxResult.inbox.messages);
+        setReplies(inboxResult.inbox.replies);
+        setUnreadCount(inboxResult.inbox.unreadCount);
+        setReceivedCount(inboxResult.inbox.receivedCount ?? inboxResult.inbox.totalCount);
+        setReceivedNextOffset(inboxResult.inbox.pagination.nextOffset);
+
+        const outbox = outboxResult && "outbox" in outboxResult ? outboxResult.outbox : undefined;
+        if (outbox) {
+          const owner = {
+            btcAddress: inboxResult.agent.btcAddress,
+            stxAddress: inboxResult.agent.stxAddress,
+          };
+          setSentMessages(outbox.replies.map((r) => mapReplyToSentMessage(r, owner)));
+          setSentCount(outbox.totalCount);
+          setSentNextOffset(outbox.pagination.nextOffset);
+        } else {
+          setSentMessages([]);
+          setSentCount(0);
+          setSentNextOffset(null);
+        }
+
         setLoading(false);
       })
       .catch((err) => {
@@ -100,32 +162,54 @@ export default function InboxPage() {
       });
   }, [address]);
 
-  // Load more — appends to existing messages
+  // Load more — routed by current view. Sent tab loads from outbox; everything
+  // else loads from inbox.
   const loadMore = useCallback(() => {
-    if (!address || nextOffset == null || loadingMore) return;
+    if (!address || !agent || loadingMore) return;
 
+    if (view === "sent") {
+      if (sentNextOffset == null) return;
+      setLoadingMore(true);
+      fetch(`/api/outbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=${sentNextOffset}`)
+        .then((res) => {
+          if (!res.ok) throw new Error("Failed to load more");
+          return res.json() as Promise<OutboxResponse>;
+        })
+        .then((result) => {
+          const owner = { btcAddress: agent.btcAddress, stxAddress: agent.stxAddress };
+          setSentMessages((prev) => {
+            const existing = new Set(prev.map((m) => m.messageId));
+            const incoming = result.outbox.replies
+              .map((r) => mapReplyToSentMessage(r, owner))
+              .filter((m) => !existing.has(m.messageId));
+            return [...prev, ...incoming];
+          });
+          setSentNextOffset(result.outbox.pagination.nextOffset);
+          setLoadingMore(false);
+        })
+        .catch(() => setLoadingMore(false));
+      return;
+    }
+
+    if (receivedNextOffset == null) return;
     setLoadingMore(true);
-
-    fetch(`/api/inbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=${nextOffset}&view=all`)
+    fetch(`/api/inbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=${receivedNextOffset}&view=all`)
       .then((res) => {
         if (!res.ok) throw new Error("Failed to load more");
         return res.json() as Promise<InboxResponse>;
       })
       .then((result) => {
-        setAllMessages((prev) => {
-          const existingIds = new Set(prev.map((m) => m.messageId));
-          const newMessages = result.inbox.messages.filter((m) => !existingIds.has(m.messageId));
-          return [...prev, ...newMessages];
+        setReceivedMessages((prev) => {
+          const existing = new Set(prev.map((m) => m.messageId));
+          const incoming = result.inbox.messages.filter((m) => !existing.has(m.messageId));
+          return [...prev, ...incoming];
         });
         setReplies((prev) => ({ ...prev, ...result.inbox.replies }));
-        setHasMore(result.inbox.pagination.hasMore);
-        setNextOffset(result.inbox.pagination.nextOffset);
+        setReceivedNextOffset(result.inbox.pagination.nextOffset);
         setLoadingMore(false);
       })
-      .catch(() => {
-        setLoadingMore(false);
-      });
-  }, [address, nextOffset, loadingMore]);
+      .catch(() => setLoadingMore(false));
+  }, [address, agent, view, receivedNextOffset, sentNextOffset, loadingMore]);
 
   if (loading) {
     return (
@@ -163,20 +247,21 @@ export default function InboxPage() {
 
   const displayName = agent.displayName || generateName(agent.btcAddress);
   const avatarUrl = `https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(agent.btcAddress)}`;
-  const hasMessages = totalCount > 0;
+  const totalCount = receivedCount + sentCount;
 
-  // Compute reply stats
-  const repliedMessages = allMessages.filter((m) => m.repliedAt || replies[m.messageId]);
-  const awaitingMessages = allMessages.filter((m) => m.direction === "received" && !m.repliedAt && !replies[m.messageId]);
+  // Compute reply stats over the received list. Replied/Awaiting only apply
+  // to received messages.
+  const repliedMessages = receivedMessages.filter((m) => m.repliedAt || replies[m.messageId]);
+  const awaitingMessages = receivedMessages.filter((m) => !m.repliedAt && !replies[m.messageId]);
 
-  // Filter messages client-side based on selected tab
-  let messages: typeof allMessages;
+  // Filter messages client-side based on selected tab.
+  let messages: MessageWithPeer[];
   switch (view) {
     case "received":
-      messages = allMessages.filter((m) => m.direction === "received");
+      messages = receivedMessages;
       break;
     case "sent":
-      messages = allMessages.filter((m) => m.direction === "sent");
+      messages = sentMessages;
       break;
     case "replied":
       messages = repliedMessages;
@@ -185,8 +270,10 @@ export default function InboxPage() {
       messages = awaitingMessages;
       break;
     default:
-      messages = allMessages;
+      messages = receivedMessages;
   }
+
+  const hasMore = view === "sent" ? sentNextOffset != null : receivedNextOffset != null;
 
   return (
     <>
