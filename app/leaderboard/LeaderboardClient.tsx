@@ -152,12 +152,8 @@ async function fetchTokenPrice(tokenId: string): Promise<TokenPrice | null> {
 
   const addr = tokenIdToTeneroAddress(tokenId);
   try {
-    // Per the /api/prices route docstring: "The leaderboard reads decimals
-    // directly from Tenero on the client". We split the two reads so the
-    // price hop picks up the server-side stablecoin fallback (#849) — which
-    // is the only way aeUSDC and USDCx hydrate at $1 when Tenero responds
-    // with price_usd: 0 — while decimals continue to come from Tenero, which
-    // is the long-standing source of truth for that field.
+    // Split fetch: price via /api/prices (picks up server-side stablecoin fallback from #849),
+    // decimals via Tenero directly (intentionally not mirrored server-side).
     const [priceRes, decimalsRes] = await Promise.all([
       fetch(`/api/prices?token=${encodeURIComponent(tokenId)}`, {
         headers: { Accept: "application/json" },
@@ -168,6 +164,20 @@ async function fetchTokenPrice(tokenId: string): Promise<TokenPrice | null> {
     ]);
 
     if (!priceRes.ok || !decimalsRes.ok) {
+      if (!priceRes.ok) {
+        console.warn(
+          "[leaderboard] /api/prices fetch failed for",
+          tokenId,
+          priceRes.status
+        );
+      }
+      if (!decimalsRes.ok) {
+        console.warn(
+          "[leaderboard] Tenero decimals fetch failed for",
+          addr,
+          decimalsRes.status
+        );
+      }
       writeCachedPrice(tokenId, null, null);
       return null;
     }
