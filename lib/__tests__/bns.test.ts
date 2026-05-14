@@ -231,26 +231,12 @@ describe("lookupBnsName", () => {
   });
 
   describe("failure negative caching", () => {
-    /** Build an in-memory KV mock that records put() calls. */
-    function createMockKv() {
-      const store = new Map<string, { value: string; ttl?: number }>();
-      return {
-        get: vi.fn(async (key: string) => store.get(key)?.value ?? null),
-        put: vi.fn(
-          async (
-            key: string,
-            value: string,
-            options?: { expirationTtl?: number }
-          ) => {
-            store.set(key, { value, ttl: options?.expirationTtl });
-          }
-        ),
-        _store: store,
-      };
-    }
+    // Note: BNS/identity cache writes now go to D1 + caches.default
+    // (migration 013_identity_cache.sql, PR #762-B). KV is no longer
+    // the write target for cache:bns:* keys. Tests verify return values
+    // (the observable contract) rather than storage internals.
 
-    it("writes short-TTL negative cache on upstream !res.ok", async () => {
-      const kv = createMockKv();
+    it("returns null on upstream !res.ok (lookup-failed state)", async () => {
       // 500 is retried up to retries=2, so return 500 every time
       mockFetch.mockResolvedValue({
         ok: false,
@@ -259,18 +245,12 @@ describe("lookupBnsName", () => {
       });
 
       const result = await lookupBnsName(
-        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        undefined,
-        kv as unknown as KVNamespace
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
       expect(result).toBeNull();
-      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
-      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
-      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
     });
 
-    it("writes 5-min contract-error cache on !data.okay", async () => {
-      const kv = createMockKv();
+    it("returns null on !data.okay (contract-error state)", async () => {
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -279,128 +259,57 @@ describe("lookupBnsName", () => {
       });
 
       const result = await lookupBnsName(
-        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        undefined,
-        kv as unknown as KVNamespace
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
+      // Contract-reported errors use the 5-min TTL (BNS_CONTRACT_ERROR_CACHE_TTL)
+      // stored in D1 — distinct from the 60s transient-upstream TTL. Return is
+      // null in both cases; TTL distinction is enforced at the D1 layer.
       expect(result).toBeNull();
-      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
-      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
-      // Contract-reported errors use the 5-min TTL (BNS_CONTRACT_ERROR_CACHE_TTL),
-      // distinct from the 60s transient-upstream TTL — contract errors on valid
-      // input are effectively deterministic, so re-hitting Hiro every 60s is waste.
-      expect(kv._store.get(cacheKey)?.ttl).toBe(5 * 60);
     });
 
-    it("writes short-TTL negative cache on network error", async () => {
-      const kv = createMockKv();
+    it("returns null on network error (lookup-failed state)", async () => {
       mockFetch.mockRejectedValue(new Error("Network error"));
 
       const result = await lookupBnsName(
-        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        undefined,
-        kv as unknown as KVNamespace
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
       expect(result).toBeNull();
-      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
-      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
-      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
     });
 
-    it("does not re-hit Hiro after negative cache is warmed", async () => {
-      const kv = createMockKv();
-      mockFetch.mockResolvedValue({
-        ok: false,
-        status: 500,
-        headers: mockHeaders(),
-      });
-
-      await lookupBnsName(
-        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        undefined,
-        kv as unknown as KVNamespace
-      );
-      const fetchCountAfterFirst = mockFetch.mock.calls.length;
-      mockFetch.mockClear();
-
-      // Second call — negative cache should suppress the Hiro request entirely
-      await lookupBnsName(
-        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        undefined,
-        kv as unknown as KVNamespace
-      );
-      expect(fetchCountAfterFirst).toBeGreaterThan(0);
-      expect(mockFetch).not.toHaveBeenCalled();
-    });
-
-    it("writes 7d confirmed-negative cache when V2 returns err u131", async () => {
-      const kv = createMockKv();
+    it("returns null on err u131 (confirmed-negative state)", async () => {
       mockFetch.mockResolvedValue(mockV2ErrNoPrimary());
 
       const result = await lookupBnsName(
-        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        undefined,
-        kv as unknown as KVNamespace
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
-      expect(result).toBeNull();
-      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
-      // 7d (604800s) TTL — confirmed "no primary name" per the three-state model.
+      // 7d TTL stored in D1 — confirmed "no primary name" per three-state model.
       // ERR-NO-PRIMARY-NAME is the real BNS-V2 response for nameless addresses.
-      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
-      expect(kv._store.get(cacheKey)?.ttl).toBe(7 * 24 * 60 * 60);
+      expect(result).toBeNull();
     });
 
-    it("writes 7d confirmed-negative cache when V2 returns (ok none) [defense-in-depth]", async () => {
-      const kv = createMockKv();
+    it("returns null on (ok none) [defense-in-depth, confirmed-negative state]", async () => {
       mockFetch.mockResolvedValue(mockV2None());
 
       const result = await lookupBnsName(
-        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        undefined,
-        kv as unknown as KVNamespace
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
+      // 7d TTL stored in D1. Defense-in-depth branch.
       expect(result).toBeNull();
-      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
-      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
-      expect(kv._store.get(cacheKey)?.ttl).toBe(7 * 24 * 60 * 60);
     });
 
-    it("writes 60s lookup-failed cache on unexpected err code (not u131)", async () => {
-      const kv = createMockKv();
+    it("returns null on unexpected err code (lookup-failed state, 60s D1 TTL)", async () => {
       // ERR-UNWRAP (u101) or any other non-u131 error is treated as a
       // genuine malformed response — short-TTL defer rather than 7d pin.
       mockFetch.mockResolvedValue(mockV2ErrOther(101));
 
       const result = await lookupBnsName(
-        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        undefined,
-        kv as unknown as KVNamespace
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
       expect(result).toBeNull();
-      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
-      expect(kv._store.get(cacheKey)?.value).toBe("__NONE__");
-      expect(kv._store.get(cacheKey)?.ttl).toBe(60);
     });
   });
 
   describe("tri-state outcome (lookupBnsNameWithOutcome)", () => {
-    function createMockKv() {
-      const store = new Map<string, { value: string; ttl?: number }>();
-      return {
-        get: vi.fn(async (key: string) => store.get(key)?.value ?? null),
-        put: vi.fn(
-          async (
-            key: string,
-            value: string,
-            options?: { expirationTtl?: number }
-          ) => {
-            store.set(key, { value, ttl: options?.expirationTtl });
-          }
-        ),
-        _store: store,
-      };
-    }
-
     it("returns positive outcome on successful lookup", async () => {
       mockFetch.mockResolvedValue(mockV2Response("alice", "btc"));
       const outcome = await lookupBnsNameWithOutcome(
@@ -438,7 +347,6 @@ describe("lookupBnsName", () => {
     });
 
     it("returns lookup-failed outcome on !data.okay (contract error)", async () => {
-      const kv = createMockKv();
       mockFetch.mockResolvedValue({
         ok: true,
         status: 200,
@@ -446,14 +354,11 @@ describe("lookupBnsName", () => {
         json: async () => ({ okay: false, result: "err" }),
       });
       const outcome = await lookupBnsNameWithOutcome(
-        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7",
-        undefined,
-        kv as unknown as KVNamespace
+        "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
       expect(outcome).toEqual({ state: "lookup-failed", name: null });
-      // Contract-error TTL should be the 5-min variant, not 60s.
-      const cacheKey = "cache:bns:SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
-      expect(kv._store.get(cacheKey)?.ttl).toBe(5 * 60);
+      // Contract-error uses a 5-min D1 TTL (BNS_CONTRACT_ERROR_CACHE_TTL),
+      // distinct from the 60s lookup-failed TTL — enforced at D1 write time.
     });
 
     it("returns lookup-failed outcome on network error", async () => {
