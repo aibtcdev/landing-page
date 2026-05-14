@@ -223,9 +223,10 @@ export async function listBounties(
     bindings.push(filters.posterBtcAddress);
   }
   if (filters.tag) {
-    // Tags stored as a JSON array string. Use a simple LIKE with quoted match.
-    conditions.push("b.tags LIKE ?");
-    bindings.push(`%"${filters.tag.replace(/"/g, '\\"')}"%`);
+    // Tags are stored as a JSON array; use SQLite JSON1 to test array
+    // membership semantically instead of LIKE-on-JSON-string.
+    conditions.push("EXISTS (SELECT 1 FROM json_each(b.tags) WHERE value = ?)");
+    bindings.push(filters.tag);
   }
 
   const whereClause = conditions.join(" AND ");
