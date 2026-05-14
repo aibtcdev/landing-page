@@ -426,9 +426,11 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
     });
 
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([receivedMsgFromDualPartner]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
+    // P3: received/unread counts come from getAgentInboxStats, not countInboxMessagesFromD1.
+    // Default mock at module level (receivedCount:1, unreadCount:1) is sufficient here.
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([sentReplyToDualPartner]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
+    // P3: sentCount is derived from listOutboxRepliesFromD1 length; countOutboxRepliesFromD1
+    // is no longer called by the route.
 
     const res = await GET(
       buildGetRequest(AGENT_ADDR, "?include=partners"),
@@ -471,9 +473,11 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
     });
 
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([receivedMsgFromDualPartner]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
+    // P3: received/unread counts come from getAgentInboxStats, not countInboxMessagesFromD1.
+    // Default mock at module level (receivedCount:1, unreadCount:1) is sufficient here.
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([sentReplyToDualPartner]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
+    // P3: sentCount is derived from listOutboxRepliesFromD1 length; countOutboxRepliesFromD1
+    // is no longer called by the route.
 
     const res = await GET(
       buildGetRequest(AGENT_ADDR, "?include=partners"),
