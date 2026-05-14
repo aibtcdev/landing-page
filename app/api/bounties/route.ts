@@ -34,8 +34,6 @@ import {
   type BountyStatus,
 } from "@/lib/bounty";
 
-const TERMINAL_STATUSES: BountyStatus[] = ["paid", "abandoned", "cancelled"];
-
 const STATUS_FILTER_VALUES: ReadonlySet<string> = new Set([
   "open",
   "judging",
@@ -364,7 +362,3 @@ function submitterRow(s: import("@/lib/bounty").BountySubmission) {
     createdAt: s.createdAt,
   };
 }
-
-// Silence the unused warning for TERMINAL_STATUSES — exported for future
-// filter widgets without forcing a re-import.
-export const _internal = { TERMINAL_STATUSES };
