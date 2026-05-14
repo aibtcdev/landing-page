@@ -209,6 +209,23 @@ export class SchedulerDO extends DurableObject<CloudflareEnv> {
     const logger = parentLogger.child
       ? parentLogger.child({ task: "tenero" })
       : parentLogger;
+    const startedAt = Date.now();
+
+    if (this.env.TENERO_REFRESH_ENABLED !== "true") {
+      logger.warn("tenero.refresh_skipped_disabled", {
+        deployEnv: this.env.DEPLOY_ENV ?? "unset",
+        teneroRefreshEnabled: this.env.TENERO_REFRESH_ENABLED ?? "unset",
+      });
+      return {
+        startedAt,
+        durationMs: Date.now() - startedAt,
+        tokensAttempted: 0,
+        succeeded: 0,
+        failed: 0,
+        minuteRemaining: null,
+        monthRemaining: null,
+      };
+    }
 
     // Pull the active token set from the swaps table (union'd with the
     // static core; falls back to static-only on missing binding or query

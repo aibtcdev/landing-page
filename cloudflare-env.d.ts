@@ -34,5 +34,6 @@ interface CloudflareEnv {
   SCHEDULER: DurableObjectNamespace<
     Rpc.DurableObjectBranded & import("./lib/scheduler/rpc-types").SchedulerRpc
   >;
+  TENERO_REFRESH_ENABLED?: "true"; // Explicit production-only gate for SchedulerDO Tenero refreshes
   TENERO_API_KEY?: string; // Optional Tenero API key (x-api-key header); raises rate limits above the shared web-ui-ip tier
 }

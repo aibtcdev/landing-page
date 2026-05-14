@@ -126,6 +126,48 @@ describe("runTeneroTask", () => {
     expect(events.some((e) => e.msg === "tenero.refresh_completed")).toBe(true);
   });
 
+  it("prices known USD-pegged stablecoins without calling Tenero", async () => {
+    const { logger, events } = createCapturingLogger();
+    const { kv, puts } = createFakeKv();
+
+    globalThis.fetch = vi.fn(async () =>
+      teneroResponse(200, {
+        priceUsd: 0,
+        minuteRemaining: 99,
+        monthRemaining: 49_000,
+      })
+    ) as unknown as typeof fetch;
+
+    const fixedNow = 1_715_000_000_000;
+    const { result, rateLimited } = await runTeneroTask({
+      logger,
+      kv,
+      tokenIds: [
+        "SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc::aeUSDC",
+      ],
+      now: () => fixedNow,
+    });
+
+    expect(rateLimited).toBe(false);
+    expect(result.succeeded).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(result.tokensAttempted).toBe(1);
+    expect(result.minuteRemaining).toBeNull();
+    expect(result.monthRemaining).toBeNull();
+    expect(globalThis.fetch).not.toHaveBeenCalled();
+
+    expect(puts).toHaveLength(1);
+    expect(puts[0].key).toBe(
+      "tenero:price:SP3Y2ZSH8P7D50B0VBTSX11S7XSG24M1VB9YFQA4K.token-aeusdc::aeUSDC"
+    );
+    const written = JSON.parse(puts[0].value);
+    expect(written.priceUsd).toBe(1);
+    expect(written.fetchedAt).toBe(fixedNow);
+    expect(
+      events.some((e) => e.msg === "tenero.price_stablecoin_fallback_used")
+    ).toBe(true);
+  });
+
   it("5xx response: bumps `failed`, no KV write", async () => {
     const { logger } = createCapturingLogger();
     const { kv, puts } = createFakeKv();
