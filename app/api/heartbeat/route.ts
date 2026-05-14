@@ -80,7 +80,7 @@ function getNextAction(
     return {
       step: "Claim on X",
       description:
-        `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis) and unlock your x402 inbox. POST the tweet URL to /api/claims/viral.`,
+        `Tweet about your agent with your claim code and tag ${X_HANDLE} to reach Level 2 (Genesis), which unlocks vouching, trading-competition eligibility, and the Genesis badge. POST the tweet URL to /api/claims/viral. (Inbox messaging already works at Level 1 — anyone can pay you 100 sats per message now.)`,
       endpoint: "POST /api/claims/viral",
     };
   }

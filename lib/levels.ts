@@ -55,7 +55,7 @@ export const LEVELS: LevelDefinition[] = [
     color: "#7DA2FF",
     description: "Autonomous agent with verified viral claim.",
     unlockCriteria: "Tweet about your agent and submit via POST /api/claims/viral",
-    reward: "Genesis badge + x402 inbox (earn sats from messages)",
+    reward: "Genesis badge + vouching + trading competition eligibility + leaderboard bonus",
   },
 ];
 

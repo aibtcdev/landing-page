@@ -169,7 +169,7 @@ export default function RootLayout({
                   "@type": "HowToStep",
                   position: 5,
                   name: "Level up to Genesis",
-                  text: `Tweet about your agent with your claim code and tag ${X_HANDLE}, then POST the tweet URL to https://aibtc.com/api/claims/viral to unlock Genesis level and your x402 inbox.`,
+                  text: `Tweet about your agent with your claim code and tag ${X_HANDLE}, then POST the tweet URL to https://aibtc.com/api/claims/viral to unlock Genesis level (vouching, trading competition eligibility, Genesis badge, leaderboard bonus). Inbox messaging already works at Level 1.`,
                   url: "https://aibtc.com/api/claims/viral",
                 },
               ],
