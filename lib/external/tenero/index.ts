@@ -10,6 +10,10 @@ export {
   isValidTokenId,
 } from "./tokens";
 export {
+  getStablecoinUsdFallback,
+  type StablecoinUsdFallback,
+} from "./stablecoin-fallbacks";
+export {
   getCachedTokenPrice,
   getCachedTokenPrices,
   setCachedTokenPrice,

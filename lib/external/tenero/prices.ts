@@ -14,6 +14,7 @@
 
 import { teneroFetch, extractTeneroRateLimit, type TeneroRateLimit } from "../tenero-fetch";
 import type { Logger } from "../../logging";
+import { getStablecoinUsdFallback } from "./stablecoin-fallbacks";
 
 export interface TeneroPriceResult {
   /** Parsed USD price, or null when the token has no published price or the fetch failed. */
@@ -42,6 +43,21 @@ export async function fetchTokenPriceUsd(
   apiKey?: string
 ): Promise<TeneroPriceResult> {
   const addr = tokenIdToTeneroAddress(tokenId);
+  const stablecoinFallback = getStablecoinUsdFallback(tokenId);
+  if (stablecoinFallback) {
+    logger?.info("tenero.price_stablecoin_fallback_used", {
+      tokenId,
+      teneroAddress: addr,
+      symbol: stablecoinFallback.symbol,
+      priceUsd: stablecoinFallback.priceUsd,
+    });
+    return {
+      priceUsd: stablecoinFallback.priceUsd,
+      status: 200,
+      rateLimit: { minuteRemaining: null, monthRemaining: null, type: null },
+    };
+  }
+
   const path = `/tokens/${encodeURIComponent(addr)}`;
 
   let response: Response;

@@ -28,6 +28,7 @@ import {
   getCachedTokenPrice,
   getCachedTokenPrices,
 } from "@/lib/external/tenero/kv-cache";
+import { getStablecoinUsdFallback } from "@/lib/external/tenero/stablecoin-fallbacks";
 import { STATIC_TOKEN_IDS } from "@/lib/external/tenero/tokens";
 import { createConsoleLogger, createLogger, isLogsRPC } from "@/lib/logging";
 
@@ -150,10 +151,11 @@ export async function GET(request: NextRequest) {
   // Single-token lookup
   if (token) {
     const cached = await getCachedTokenPrice(kv, token);
+    const stablecoinFallback = getStablecoinUsdFallback(token);
     return NextResponse.json(
       {
         tokenId: token,
-        priceUsd: cached?.priceUsd ?? null,
+        priceUsd: cached?.priceUsd ?? stablecoinFallback?.priceUsd ?? null,
         fetchedAt: cached?.fetchedAt ?? null,
       },
       {

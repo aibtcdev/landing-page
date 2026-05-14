@@ -26,7 +26,15 @@ function schedulerName(url: URL): string | NextResponse {
 }
 
 function schedulerStub(env: CloudflareEnv, name: string): SchedulerRpc {
-  return env.SCHEDULER.get(env.SCHEDULER.idFromName(name));
+  return env.SCHEDULER!.get(env.SCHEDULER!.idFromName(name));
+}
+
+function requireSchedulerBinding(env: CloudflareEnv): NextResponse | null {
+  if (env.SCHEDULER) return null;
+  return json(
+    { error: "Scheduler binding unavailable in this environment." },
+    { status: 503 }
+  );
 }
 
 function schedulerTask(url: URL): SchedulerTask | NextResponse {
@@ -45,6 +53,9 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
 
   const { env } = await getCloudflareContext();
+  const missingScheduler = requireSchedulerBinding(env);
+  if (missingScheduler) return missingScheduler;
+
   const url = new URL(request.url);
   const name = schedulerName(url);
   if (typeof name !== "string") return name;
@@ -58,6 +69,9 @@ export async function POST(request: NextRequest) {
   if (denied) return denied;
 
   const { env } = await getCloudflareContext();
+  const missingScheduler = requireSchedulerBinding(env);
+  if (missingScheduler) return missingScheduler;
+
   const url = new URL(request.url);
   const name = schedulerName(url);
   if (typeof name !== "string") return name;

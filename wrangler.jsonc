@@ -34,10 +34,9 @@
       "remote": true
     }
   ],
-  // Top-level vars: shared across all envs. Setting DEPLOY_ENV here makes a bare
-  // `wrangler deploy` (without --env) safe-by-default — fail-closed gating in route
-  // handlers triggers because env.DEPLOY_ENV !== undefined. Removes the footgun where
-  // a missed --env flag would deploy fail-OPEN to a worker sharing production resources.
+  // Top-level vars: used by bare `wrangler deploy` (without --env). Keep
+  // Tenero refresh disabled here so a no-env deployment cannot consume the
+  // production Tenero key/quota even if the secret exists on the Worker name.
   "vars": {
     "DEPLOY_ENV": "production"
   },
@@ -125,7 +124,8 @@
       // DEPLOY_ENV signals production context to the Worker; used for fail-closed
       // rate-limit binding error handling (env.DEPLOY_ENV !== undefined → fail closed).
       "vars": {
-        "DEPLOY_ENV": "production"
+        "DEPLOY_ENV": "production",
+        "TENERO_REFRESH_ENABLED": "true"
       },
 
       "assets": {
@@ -282,16 +282,13 @@
         ]
       },
 
+      // Preview intentionally has no SchedulerDO binding. It shares
+      // production D1/KV/logging, so a preview scheduler can consume real
+      // upstream quota and write real competition/cache state.
       "durable_objects": {
-        "bindings": [
-          { "name": "SCHEDULER", "class_name": "SchedulerDO" }
-        ]
+        "bindings": []
       },
-      "migrations": [
-        { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
-        { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
-        { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
-      ]
+      "migrations": []
     }
   }
 }
