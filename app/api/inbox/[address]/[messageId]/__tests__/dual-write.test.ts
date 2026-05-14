@@ -47,6 +47,13 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
+  // P3: mark-read PATCH now uses markMessageReadIfUnread (WHERE read_at IS NULL guard)
+  markMessageReadIfUnread: vi.fn().mockResolvedValue({ changes: 1 }),
+}));
+
+// P3: PATCH mark-read now calls decrementUnreadStats from @/lib/inbox/stats
+vi.mock("@/lib/inbox/stats", () => ({
+  decrementUnreadStats: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -75,7 +82,7 @@ import {
   decrementUnreadCount,
 } from "@/lib/inbox";
 import { getInboxMessageFromD1 } from "@/lib/inbox/d1-reads";
-import { updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import { updateMessageStateD1, markMessageReadIfUnread } from "@/lib/inbox/d1-dual-write";
 import { PATCH } from "../route";
 
 // ---- fixtures ---------------------------------------------------------------
@@ -182,12 +189,14 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 sole-source-of-truth (Ph
     (decrementUnreadCount as Mock).mockResolvedValue(undefined);
     // Re-apply resolved values cleared by clearAllMocks
     (updateMessageStateD1 as Mock).mockResolvedValue(undefined);
+    // P3: markMessageReadIfUnread returns D1WriteResult {changes}
+    (markMessageReadIfUnread as Mock).mockResolvedValue({ changes: 1 });
   });
 
-  it("D1 UPDATE is synchronous — returns 200 and updateMessageStateD1 was called directly", async () => {
-    // Step 4 contract: updateMessageStateD1 is called synchronously (not via
-    // ctx.waitUntil). Success → 200 with readAt in the response.
-    const waitUntilFn = vi.fn();
+  it("D1 UPDATE is synchronous — returns 200 and markMessageReadIfUnread was called directly (P3)", async () => {
+    // P3 contract: markMessageReadIfUnread (WHERE read_at IS NULL guard) is called
+    // synchronously. Success → 200 with readAt in the response.
+    const waitUntilFn = vi.fn(async (p: Promise<unknown>) => { await p; });
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
     const kv = createMockKV();
@@ -207,28 +216,25 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 sole-source-of-truth (Ph
     });
 
     expect(resp.status).toBe(200);
-    // D1 UPDATE must have been called synchronously
-    expect(updateMessageStateD1).toHaveBeenCalledOnce();
-    // ctx.waitUntil must NOT have been called — D1 UPDATE is no longer fire-and-forget
-    expect(waitUntilFn).not.toHaveBeenCalled();
+    // P3: markMessageReadIfUnread must have been called (replaces updateMessageStateD1)
+    expect(markMessageReadIfUnread).toHaveBeenCalledOnce();
+    // ctx.waitUntil IS called for decrementUnreadStats (best-effort, changes===1)
+    expect(waitUntilFn).toHaveBeenCalledOnce();
 
-    // Verify called with correct messageId and readAt field
-    const [calledDb, calledMessageId, calledUpdates] = (
-      updateMessageStateD1 as Mock
+    // Verify called with correct args
+    const [calledDb, calledMessageId, calledBtcAddr, calledReadAt] = (
+      markMessageReadIfUnread as Mock
     ).mock.calls[0];
     expect(calledDb).toBe(db);
     expect(calledMessageId).toBe(MESSAGE_ID);
-    expect(calledUpdates).toHaveProperty("readAt");
-    expect(typeof calledUpdates.readAt).toBe("string");
-    expect(calledUpdates).not.toHaveProperty("repliedAt");
+    expect(calledBtcAddr).toBe(AGENT.btcAddress);
+    expect(typeof calledReadAt).toBe("string");
   });
 
-  it("D1 UPDATE failure returns 503 with Retry-After: 5 (Step 4 reversed contract)", async () => {
-    // Step 4 contract: D1 UPDATE failure PROPAGATES — 503 + Retry-After: 5.
-    // The old Step-1/2 contract ("D1 UPDATE failure does NOT fail the 200 response")
-    // is REVERSED: D1 is now the sole write path, so failure must propagate.
+  it("D1 UPDATE failure returns 503 with Retry-After: 5 (P3: markMessageReadIfUnread failure propagates)", async () => {
+    // P3 contract: markMessageReadIfUnread failure PROPAGATES — 503 + Retry-After: 5.
     const d1Error = new Error("D1 constraint violation");
-    (updateMessageStateD1 as Mock).mockRejectedValue(d1Error);
+    (markMessageReadIfUnread as Mock).mockRejectedValue(d1Error);
 
     const waitUntilFn = vi.fn();
     const ctx = createCtxWithWaitUntil(waitUntilFn);

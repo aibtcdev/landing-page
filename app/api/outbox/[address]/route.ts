@@ -17,10 +17,10 @@ import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write
 import { bumpSentStats } from "@/lib/inbox/stats";
 import {
   listOutboxRepliesFromD1,
-  countOutboxRepliesFromD1,
   getInboxMessageFromD1,
   getReplyForMessageFromD1,
 } from "@/lib/inbox/d1-reads";
+import { getAgentInboxStats } from "@/lib/inbox/stats";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
@@ -623,15 +623,18 @@ export async function GET(
   // D1-throws fallback policy (per #728 / #722 dev-council Cycle 26 advisory):
   // If D1 throws — transient unavailability, network error, schema mismatch —
   // return 503 with a structured retry hint rather than an unstructured 500.
-  // totalCount is queried in parallel with the page list so pagination metadata
-  // reflects the full matching row count, not just the current page length.
+  // P3 structural read flip: totalCount now comes from agent_inbox_stats
+  // (O(1) point-lookup) instead of countOutboxRepliesFromD1 (O(N rows)).
+  // The paginated list still fetches actual reply rows for content.
   let replies: OutboxReply[];
   let totalCount: number;
   try {
-    [replies, totalCount] = await Promise.all([
+    const [replyPage, stats] = await Promise.all([
       listOutboxRepliesFromD1(db, agent.btcAddress, limit, offset),
-      countOutboxRepliesFromD1(db, agent.btcAddress),
+      getAgentInboxStats(db, agent.btcAddress),
     ]);
+    replies = replyPage;
+    totalCount = stats.sentCount;
   } catch (e) {
     return NextResponse.json(
       {

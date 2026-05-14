@@ -293,18 +293,20 @@ describe("getAgentsIndex — D1 path", () => {
     expect(kv.stats.lists).toBe(0);
   });
 
-  it("falls back to KV scan when D1 returns fewer than 100 rows", async () => {
-    // Seed 3 agents in KV so the fallback scan produces a real index.
+  it("accepts any result from D1 regardless of row count (MIN_EXPECTED_D1_ROWS guard retired per #783/#691)", async () => {
+    // Seed 3 agents in KV — these should NOT be used since D1 returns a result.
     seedAgents(kv, [makeAgent("a"), makeAgent("b"), makeAgent("c")]);
 
+    // D1 returns only 2 rows (below the old 100-row threshold).
     const db = makeD1([makeD1Row("only1"), makeD1Row("only2")]);
 
     const index = await getAgentsIndex(kv.asKv(), db);
 
-    // Should have fallen back to KV scan (3 agents).
-    expect(index.agents).toHaveLength(3);
-    // KV list must have fired (scan path active).
-    expect(kv.stats.lists).toBeGreaterThan(0);
+    // Should use D1 result (2 agents), NOT fall back to KV scan (3 agents).
+    // The MIN_EXPECTED_D1_ROWS guard was retired in P3 — D1 backfill (#691) is done.
+    expect(index.agents).toHaveLength(2);
+    // KV scan list should NOT have been called (D1 path used).
+    expect(kv.stats.lists).toBe(0);
   });
 
   it("falls back to KV scan when D1 throws", async () => {

@@ -7,7 +7,7 @@ import { X_HANDLE } from "@/lib/constants";
 import { ACTIVE_BEATS_LIST } from "@/lib/news-beats";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
-import { cachedUnreadCount } from "@/lib/inbox/cached-counts";
+import { getAgentInboxStats } from "@/lib/inbox/stats";
 import {
   CHECK_IN_MESSAGE_FORMAT,
   buildCheckInMessage,
@@ -103,23 +103,18 @@ function getNextAction(
 }
 
 /**
- * Fetch live unread count from D1.
+ * Fetch unread count from agent_inbox_stats (O(1) point-lookup).
  *
- * Phase 2.5 Step 4 — replaces the KV inbox:agent:{btcAddress} read that served
- * the cached unreadCount. The D1 live SELECT COUNT(*) WHERE read_at IS NULL is
- * served by idx_inbox_unread and closes the +1 stale-counter drift tracked in
- * aibtc-mcp-server#497.
+ * P3 structural fix — replaces the P2 bandage (cachedUnreadCount wrapping
+ * SELECT COUNT(*) behind a 30s edge cache) with a direct read from the
+ * maintained-counter table. No D1 row scan occurs.
  *
- * Fails open (returns 0) on D1 unavailability so heartbeat orientation is never
- * blocked by a transient D1 error.
+ * Fails open (returns 0) on D1 unavailability (getAgentInboxStats handles
+ * this internally).
  */
 async function fetchUnreadCount(db: D1Database | undefined, btcAddress: string): Promise<number> {
-  if (!db) return 0;
-  try {
-    return await cachedUnreadCount(db, btcAddress);
-  } catch {
-    return 0;
-  }
+  const stats = await getAgentInboxStats(db, btcAddress);
+  return stats.unreadCount;
 }
 
 export async function GET(request: NextRequest) {

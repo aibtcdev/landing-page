@@ -57,13 +57,27 @@ vi.mock("@/lib/inbox/payment-logging", () => ({
 }));
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
-  insertInboundMessageToD1: vi.fn().mockResolvedValue(undefined),
-  insertReplyToD1: vi.fn().mockResolvedValue(undefined),
+  // P3: insertInboundMessageToD1 and insertReplyToD1 now return D1WriteResult
+  insertInboundMessageToD1: vi.fn().mockResolvedValue({ changes: 1 }),
+  insertReplyToD1: vi.fn().mockResolvedValue({ changes: 1 }),
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
   isPaymentTxidUniqueViolation: (err: unknown): boolean => {
     const msg = err instanceof Error ? err.message : String(err);
     return msg.includes("UNIQUE constraint failed: inbox_messages.payment_txid");
   },
+}));
+
+// P3: inbox/outbox routes now import from @/lib/inbox/stats for count reads
+vi.mock("@/lib/inbox/stats", () => ({
+  bumpInboundStats: vi.fn().mockResolvedValue(undefined),
+  bumpSentStats: vi.fn().mockResolvedValue(undefined),
+  getAgentInboxStats: vi.fn().mockResolvedValue({
+    receivedCount: 0,
+    unreadCount: 0,
+    sentCount: 0,
+    lastMessageAt: null,
+    lastSentAt: null,
+  }),
 }));
 
 // Phase 2.5 Step 3.5: outbox POST auth reads now use D1 helpers
@@ -218,8 +232,8 @@ describe("POST /api/inbox/[address] — D1 sole-source-of-truth (Phase 2.5 Step 
     vi.clearAllMocks();
     (lookupAgent as Mock).mockResolvedValue(AGENT);
     (updateAgentInbox as Mock).mockResolvedValue(undefined);
-    // Re-apply resolved values cleared by clearAllMocks
-    (insertInboundMessageToD1 as Mock).mockResolvedValue(undefined);
+    // P3: insertInboundMessageToD1 returns D1WriteResult {changes}
+    (insertInboundMessageToD1 as Mock).mockResolvedValue({ changes: 1 });
   });
 
   it("D1 INSERT is synchronous — returns 201 and insertInboundMessageToD1 was called directly", async () => {
@@ -396,8 +410,8 @@ describe("POST /api/outbox/[address] — D1 sole-source-of-truth (Phase 2.5 Step
     (getInboxMessageFromD1 as Mock).mockResolvedValue(INBOX_MESSAGE); // original message
     (getReplyForMessageFromD1 as Mock).mockResolvedValue(null); // no existing reply
     (buildReplyMessage as Mock).mockReturnValue("Inbox Reply | msg_123 | hello");
-    // Re-apply resolved values cleared by clearAllMocks
-    (insertReplyToD1 as Mock).mockResolvedValue(undefined);
+    // P3: insertReplyToD1 returns D1WriteResult {changes}
+    (insertReplyToD1 as Mock).mockResolvedValue({ changes: 1 });
     (updateMessageStateD1 as Mock).mockResolvedValue(undefined);
   });
 
@@ -549,8 +563,8 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
     // Phase 2.5 Step 3.5: auth reads now use D1 helpers
     (getReplyForMessageFromD1 as Mock).mockResolvedValue(null); // no existing reply
     (buildReplyMessage as Mock).mockReturnValue("Inbox Reply | msg_123 | hello");
-    // Re-apply resolved values cleared by clearAllMocks
-    (insertReplyToD1 as Mock).mockResolvedValue(undefined);
+    // P3: insertReplyToD1 returns D1WriteResult {changes}
+    (insertReplyToD1 as Mock).mockResolvedValue({ changes: 1 });
     (updateMessageStateD1 as Mock).mockResolvedValue(undefined);
   });
 
@@ -603,8 +617,10 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
     const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
     expect(resp.status).toBe(201);
-    // waitUntil called once: for the best-effort parent-state updateMessageStateD1
-    expect(waitUntilFn).toHaveBeenCalledTimes(1);
+    // P3: waitUntil called twice:
+    //   1. best-effort parent-state updateMessageStateD1
+    //   2. bumpSentStats (changes === 1 from insertReplyToD1)
+    expect(waitUntilFn).toHaveBeenCalledTimes(2);
     expect(updateMessageStateD1).toHaveBeenCalledOnce();
 
     const [calledDb, calledMessageId, calledUpdates] = (

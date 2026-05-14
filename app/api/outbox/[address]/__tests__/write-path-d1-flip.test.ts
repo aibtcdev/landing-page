@@ -46,8 +46,21 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
 }));
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
-  insertReplyToD1: vi.fn().mockResolvedValue(undefined),
+  // P3: insertReplyToD1 returns D1WriteResult {changes}
+  insertReplyToD1: vi.fn().mockResolvedValue({ changes: 1 }),
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
+}));
+
+// P3: outbox POST now calls bumpSentStats from @/lib/inbox/stats
+vi.mock("@/lib/inbox/stats", () => ({
+  bumpSentStats: vi.fn().mockResolvedValue(undefined),
+  getAgentInboxStats: vi.fn().mockResolvedValue({
+    receivedCount: 0,
+    unreadCount: 0,
+    sentCount: 0,
+    lastMessageAt: null,
+    lastSentAt: null,
+  }),
 }));
 
 vi.mock("@/lib/bitcoin-verify", () => ({

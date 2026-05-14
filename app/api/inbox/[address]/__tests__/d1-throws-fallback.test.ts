@@ -31,6 +31,19 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
   fetchRepliesForMessages: vi.fn(),
 }));
 
+// P3: inbox route GET now calls getAgentInboxStats (stats table) instead of
+// countInboxMessagesFromD1 for unread/received counts.
+vi.mock("@/lib/inbox/stats", () => ({
+  getAgentInboxStats: vi.fn().mockResolvedValue({
+    receivedCount: 0,
+    unreadCount: 0,
+    sentCount: 0,
+    lastMessageAt: null,
+    lastSentAt: null,
+  }),
+  bumpInboundStats: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/cache", () => ({
   invalidateAgentListCache: vi.fn(),
 }));
@@ -68,7 +81,7 @@ vi.mock("@/lib/inbox/payment-logging", () => ({
 }));
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
-  insertInboundMessageToD1: vi.fn().mockResolvedValue(undefined),
+  insertInboundMessageToD1: vi.fn().mockResolvedValue({ changes: 1 }),
   isPaymentTxidUniqueViolation: (err: unknown): boolean => {
     const msg = err instanceof Error ? err.message : String(err);
     return msg.includes("UNIQUE constraint failed: inbox_messages.payment_txid");
@@ -85,6 +98,7 @@ import {
   countInboxMessagesFromD1,
   fetchRepliesForMessages,
 } from "@/lib/inbox/d1-reads";
+import { getAgentInboxStats } from "@/lib/inbox/stats";
 
 // ---- shared fixtures --------------------------------------------------------
 
@@ -141,9 +155,9 @@ describe("Phase 2.5 Step 3.1 — D1-throws fallback policy", () => {
     expect(res.headers.get("Retry-After")).toBe("5");
   });
 
-  it("returns 503 with structured body when countInboxMessagesFromD1 throws", async () => {
+  it("returns 503 with structured body when getAgentInboxStats throws (P3: replaces countInboxMessagesFromD1)", async () => {
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (countInboxMessagesFromD1 as Mock).mockRejectedValue(
+    (getAgentInboxStats as Mock).mockRejectedValue(
       new Error("D1_ERROR: schema mismatch")
     );
     (fetchRepliesForMessages as Mock).mockResolvedValue(new Map());
@@ -160,7 +174,7 @@ describe("Phase 2.5 Step 3.1 — D1-throws fallback policy", () => {
     (listInboxMessagesFromD1 as Mock).mockRejectedValue(
       new Error("D1_ERROR: anything")
     );
-    (countInboxMessagesFromD1 as Mock).mockRejectedValue(
+    (getAgentInboxStats as Mock).mockRejectedValue(
       new Error("D1_ERROR: anything")
     );
     (fetchRepliesForMessages as Mock).mockResolvedValue(new Map());

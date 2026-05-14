@@ -79,6 +79,18 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
   countOutboxRepliesFromD1: vi.fn().mockResolvedValue(0),
 }));
 
+// P3: inbox POST and GET now import from @/lib/inbox/stats
+vi.mock("@/lib/inbox/stats", () => ({
+  getAgentInboxStats: vi.fn().mockResolvedValue({
+    receivedCount: 0,
+    unreadCount: 0,
+    sentCount: 0,
+    lastMessageAt: null,
+    lastSentAt: null,
+  }),
+  bumpInboundStats: vi.fn().mockResolvedValue(undefined),
+}));
+
 vi.mock("@/lib/bitcoin-verify", () => ({
   verifyBitcoinSignature: vi.fn(),
 }));
@@ -481,8 +493,8 @@ describe("retry-storm simulation — 5 concurrent requests with same payment_txi
     (insertInboundMessageToD1 as Mock).mockImplementation(async () => {
       insertCallCount++;
       if (insertCallCount === 1) {
-        // First insert succeeds
-        return undefined;
+        // First insert succeeds (P3: returns D1WriteResult)
+        return { changes: 1 };
       }
       // Subsequent inserts hit UNIQUE constraint
       throw UNIQUE_CONSTRAINT_ERROR;
@@ -558,7 +570,8 @@ describe("retry-storm simulation — 5 concurrent requests with same payment_txi
     (insertInboundMessageToD1 as Mock).mockImplementation(async () => {
       insertCallCount++;
       if (insertCallCount === 1) {
-        return undefined;
+        // P3: returns D1WriteResult
+        return { changes: 1 };
       }
       throw UNIQUE_CONSTRAINT_ERROR;
     });

@@ -128,11 +128,13 @@ interface AgentIndexRow {
  * as AgentIndexEntry[].
  *
  * Returns null if the D1 query fails (caller falls back to KV scan).
- * Logs a warning if fewer than MIN_EXPECTED_D1_ROWS rows are returned
- * as a signal that D1 may not yet be fully backfilled (see #691).
+ *
+ * Note: the MIN_EXPECTED_D1_ROWS guard that previously returned null for
+ * low row counts was tied to issue #691 (D1 backfill in progress). That
+ * backfill is now complete — the guard is retired. Any result from D1 is
+ * accepted; the KV-scan fallback remains for genuine D1 failures.
+ * Resolves #783 (retire MIN_EXPECTED_D1_ROWS constant).
  */
-const MIN_EXPECTED_D1_ROWS = 100;
-
 async function buildIndexFromD1(
   db: D1Database,
   logger?: Logger,
@@ -164,19 +166,6 @@ async function buildIndexFromD1(
         : null,
       verifiedAt: row.verified_at,
     }));
-
-    if (entries.length < MIN_EXPECTED_D1_ROWS) {
-      // D1 backfill (#691) may be incomplete. Treat as "not ready" and
-      // return null so the caller falls back to the KV-scan safety net.
-      // A partial index must never be cached — callers would serve stale
-      // incomplete results until the next cold-miss rebuild.
-      logger?.warn("agents_index.d1_low_row_count", {
-        count: entries.length,
-        threshold: MIN_EXPECTED_D1_ROWS,
-        note: "D1 backfill (#691) may be in progress — falling back to KV scan",
-      });
-      return null;
-    }
 
     return entries;
   } catch (e) {
@@ -287,8 +276,11 @@ export async function getAgentsIndex(
       }
     }
     if (entries === null) {
+      // reason "d1_low_row_count" was the old name when the guard was active.
+      // Now "d1_query_error" or "no_d1_binding" are the only trigger paths.
+      // Renamed per #783 to avoid false-positive dashboard alerts.
       logger?.warn("agents_index.falling_back_to_kv_scan", {
-        reason: db ? "d1_query_failed" : "no_d1_binding",
+        reason: db ? "d1_query_error" : "no_d1_binding",
       });
       entries = await buildIndexFromScan(kv, logger);
       logger?.info("agents_index.backfilled_from_kv", {
