@@ -285,6 +285,10 @@ async function rebuildAgentListCache(
   const { env } = await getCloudflareContext();
   const db = env.DB as D1Database;
 
+  // P3 structural read flip: replaced two correlated COUNT(*) subqueries per
+  // agent row with a single LEFT JOIN agent_inbox_stats. Previously each of
+  // ~430 agents triggered two inbox_messages table scans (O(N × 2) → O(1 JOIN)).
+  // COALESCE defaults to 0 for agents with no stats row (no messages yet).
   const result = await db
     .prepare(
       `SELECT
@@ -306,14 +310,11 @@ async function rebuildAgentListCache(
         a.github_username,
         c.status   AS claim_status,
         c.claimed_at,
-        (SELECT COUNT(*) FROM inbox_messages
-           WHERE to_btc_address = a.btc_address AND is_reply = 0
-        ) AS message_count,
-        (SELECT COUNT(*) FROM inbox_messages
-           WHERE to_btc_address = a.btc_address AND is_reply = 0 AND read_at IS NULL
-        ) AS unread_count
+        COALESCE(s.received_count, 0) AS message_count,
+        COALESCE(s.unread_count, 0)   AS unread_count
       FROM agents a
       LEFT JOIN claims c ON c.btc_address = a.btc_address
+      LEFT JOIN agent_inbox_stats s ON s.btc_address = a.btc_address
       ORDER BY a.verified_at DESC`
     )
     .all<AgentListRow>();

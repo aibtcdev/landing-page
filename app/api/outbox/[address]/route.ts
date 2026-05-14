@@ -14,12 +14,13 @@ import {
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
 import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import { bumpSentStats } from "@/lib/inbox/stats";
 import {
   listOutboxRepliesFromD1,
-  countOutboxRepliesFromD1,
   getInboxMessageFromD1,
   getReplyForMessageFromD1,
 } from "@/lib/inbox/d1-reads";
+import { getAgentInboxStats } from "@/lib/inbox/stats";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
@@ -449,8 +450,9 @@ export async function POST(
   // committed, so the parent state update is best-effort metadata (the reply
   // content itself is durable). This matches the prior fire-and-forget pattern
   // for the parent state update.
+  let replyInsertResult: { changes: number };
   try {
-    await insertReplyToD1(db, kv, outboxReply);
+    replyInsertResult = await insertReplyToD1(db, kv, outboxReply);
   } catch (err) {
     logger.error("outbox.d1_insert_failed", {
       messageId: outboxReply.messageId,
@@ -481,6 +483,16 @@ export async function POST(
       })
     )
   );
+
+  // Bump sent stats only on a real insert (changes === 1), not on recovery replay.
+  // fromAddress is the agent's BTC address (message.toBtcAddress resolved above).
+  if (replyInsertResult.changes === 1) {
+    ctx.waitUntil(
+      bumpSentStats(db, outboxReply.fromAddress, now).catch(() => {
+        // Best-effort: stats drift is detectable via reconciliation.
+      })
+    );
+  }
 
   // Generate reputationPayload (ERC-8004 feedbackHash) using Web Crypto API
   const hashData = new TextEncoder().encode(`${messageId}${reply}${signature}`);
@@ -611,15 +623,18 @@ export async function GET(
   // D1-throws fallback policy (per #728 / #722 dev-council Cycle 26 advisory):
   // If D1 throws — transient unavailability, network error, schema mismatch —
   // return 503 with a structured retry hint rather than an unstructured 500.
-  // totalCount is queried in parallel with the page list so pagination metadata
-  // reflects the full matching row count, not just the current page length.
+  // P3 structural read flip: totalCount now comes from agent_inbox_stats
+  // (O(1) point-lookup) instead of countOutboxRepliesFromD1 (O(N rows)).
+  // The paginated list still fetches actual reply rows for content.
   let replies: OutboxReply[];
   let totalCount: number;
   try {
-    [replies, totalCount] = await Promise.all([
+    const [replyPage, stats] = await Promise.all([
       listOutboxRepliesFromD1(db, agent.btcAddress, limit, offset),
-      countOutboxRepliesFromD1(db, agent.btcAddress),
+      getAgentInboxStats(db, agent.btcAddress),
     ]);
+    replies = replyPage;
+    totalCount = stats.sentCount;
   } catch (e) {
     return NextResponse.json(
       {

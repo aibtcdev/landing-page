@@ -50,8 +50,22 @@ vi.mock("@/lib/inbox", () => ({
 }));
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
-  insertReplyToD1: vi.fn().mockResolvedValue(undefined),
+  // P3: insertReplyToD1 returns D1WriteResult {changes}
+  insertReplyToD1: vi.fn().mockResolvedValue({ changes: 1 }),
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
+}));
+
+// P3: outbox GET now calls getAgentInboxStats (stats table) instead of
+// countOutboxRepliesFromD1 for totalCount.
+vi.mock("@/lib/inbox/stats", () => ({
+  getAgentInboxStats: vi.fn().mockResolvedValue({
+    receivedCount: 0,
+    unreadCount: 0,
+    sentCount: 1,
+    lastMessageAt: null,
+    lastSentAt: null,
+  }),
+  bumpSentStats: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock("@/lib/bitcoin-verify", () => ({
@@ -78,6 +92,7 @@ import { GET } from "../route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { listOutboxRepliesFromD1, countOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
+import { getAgentInboxStats } from "@/lib/inbox/stats";
 
 // ---- shared fixtures --------------------------------------------------------
 
@@ -157,7 +172,8 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
   it("returns 200 with outbox shape when replies exist in D1", async () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([REPLY_FROM_A]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
+    // P3: totalCount now comes from getAgentInboxStats.sentCount (not countOutboxRepliesFromD1)
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 1, lastMessageAt: null, lastSentAt: null });
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
@@ -177,7 +193,8 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
   it("returns self-documenting empty response when totalCount === 0", async () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
+    // P3: totalCount from stats.sentCount = 0
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 0, lastMessageAt: null, lastSentAt: null });
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
@@ -207,7 +224,8 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_B);
     // D1 returns empty because ADDR_B has not sent any replies
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(0);
+    // P3: totalCount from stats.sentCount = 0 for ADDR_B
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 0, lastMessageAt: null, lastSentAt: null });
 
     const res = await GET(buildGetRequest(ADDR_B), buildContext(ADDR_B));
 
@@ -217,13 +235,13 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
     expect(body.outbox.replies).toHaveLength(0);
     expect(body.outbox.totalCount).toBe(0);
 
-    // Verify both D1 queries were called with ADDR_B (not ADDR_A)
+    // Verify listOutboxRepliesFromD1 was called with ADDR_B (not ADDR_A)
     expect(listOutboxRepliesFromD1).toHaveBeenCalledOnce();
     const [, listCalledAddress] = (listOutboxRepliesFromD1 as Mock).mock.calls[0];
     expect(listCalledAddress).toBe(ADDR_B);
-    expect(countOutboxRepliesFromD1).toHaveBeenCalledOnce();
-    const [, countCalledAddress] = (countOutboxRepliesFromD1 as Mock).mock.calls[0];
-    expect(countCalledAddress).toBe(ADDR_B);
+    // P3: countOutboxRepliesFromD1 is no longer called; replaced by getAgentInboxStats
+    expect(countOutboxRepliesFromD1).not.toHaveBeenCalled();
+    expect(getAgentInboxStats).toHaveBeenCalledOnce();
   });
 
   it("returns 503 with structured body when listOutboxRepliesFromD1 throws — not unhandled 500", async () => {
@@ -246,11 +264,11 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
     expect(res.headers.get("Retry-After")).toBe("5");
   });
 
-  it("returns 503 with structured body when countOutboxRepliesFromD1 throws", async () => {
+  it("returns 503 when getAgentInboxStats throws (P3: replaces countOutboxRepliesFromD1)", async () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([REPLY_FROM_A]);
-    (countOutboxRepliesFromD1 as Mock).mockRejectedValue(
-      new Error("D1_ERROR: count query failed")
+    (getAgentInboxStats as Mock).mockRejectedValue(
+      new Error("D1_ERROR: stats query failed")
     );
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
@@ -263,7 +281,7 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
   it("includes pagination shape in response", async () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([REPLY_FROM_A]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 1, lastMessageAt: null, lastSentAt: null });
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
@@ -278,7 +296,7 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
 });
 
 describe("Phase 2.5 Step 3.3 — pagination metadata correctness", () => {
-  it("totalCount reflects COUNT(*) result, not the current page length", async () => {
+  it("totalCount reflects stats.sentCount, not the current page length (P3: replaces COUNT(*) result)", async () => {
     // Agent has 50 lifetime replies but the page returns only 20 (default limit).
     // totalCount must be 50, not 20.
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
@@ -287,7 +305,8 @@ describe("Phase 2.5 Step 3.3 — pagination metadata correctness", () => {
       messageId: `msg_${i}_parent`,
     }));
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue(pageReplies);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(50);
+    // P3: totalCount from stats.sentCount
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 50, lastMessageAt: null, lastSentAt: null });
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
@@ -308,7 +327,7 @@ describe("Phase 2.5 Step 3.3 — pagination metadata correctness", () => {
       messageId: `msg_${i}_parent`,
     }));
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue(pageReplies);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(20);
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 20, lastMessageAt: null, lastSentAt: null });
 
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
@@ -324,7 +343,8 @@ describe("Phase 2.5 Step 3.3 — pagination metadata correctness", () => {
     // the normal envelope with accurate pagination, NOT the self-doc.
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(5);
+    // P3: totalCount from stats.sentCount = 5
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 5, lastMessageAt: null, lastSentAt: null });
 
     const res = await GET(
       buildGetRequestWithQuery(ADDR_A, "?offset=100"),

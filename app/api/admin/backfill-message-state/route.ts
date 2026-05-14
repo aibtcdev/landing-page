@@ -4,6 +4,13 @@ import { requireAdmin } from "@/lib/admin/auth";
 import type { InboxMessage } from "@/lib/inbox/types";
 
 /**
+ * Stats maintenance note: this route directly updates inbox_messages rows
+ * (read_at, replied_at) without going through the stats write-path helpers.
+ * agent_inbox_stats.unread_count may drift after running this route.
+ * Repair by running: POST /api/admin/reconcile?target=inbox_stats
+ */
+
+/**
  * GET /api/admin/backfill-message-state — Self-documenting endpoint.
  */
 export async function GET(request: NextRequest) {

@@ -112,11 +112,20 @@ export async function resolveReplyRecipientBtcAddress(
  *   read_at             <- NULL (message just delivered)
  *   replied_at          <- NULL (no reply yet)
  */
+/**
+ * Result shape for D1 writes that need to report actual row-change count
+ * to callers performing idempotent stats maintenance.
+ */
+export interface D1WriteResult {
+  /** Number of rows actually written (0 = no-op / duplicate, 1 = inserted). */
+  changes: number;
+}
+
 export async function insertInboundMessageToD1(
   db: D1Database,
   message: InboxMessage
-): Promise<void> {
-  await db
+): Promise<D1WriteResult> {
+  const result = await db
     .prepare(
       `INSERT INTO inbox_messages (
         message_id, is_reply, reply_to_message_id,
@@ -162,6 +171,7 @@ export async function insertInboundMessageToD1(
       message.sentAt
     )
     .run();
+  return { changes: result.meta.changes };
 }
 
 /**
@@ -237,7 +247,7 @@ export async function insertReplyToD1(
   db: D1Database,
   kv: KVNamespace,
   reply: OutboxReply
-): Promise<void> {
+): Promise<D1WriteResult> {
   const resolvedToBtcAddress = await resolveReplyRecipientBtcAddress(kv, reply.toBtcAddress);
   if (!resolvedToBtcAddress) {
     throw new Error(
@@ -247,7 +257,7 @@ export async function insertReplyToD1(
 
   const replyMessageId = deriveReplyD1Id(reply.messageId);
 
-  await db
+  const result = await db
     .prepare(
       `INSERT INTO inbox_messages (
         message_id, is_reply, reply_to_message_id,
@@ -286,4 +296,37 @@ export async function insertReplyToD1(
       reply.repliedAt
     )
     .run();
+  return { changes: result.meta.changes };
+}
+
+/**
+ * Mark a single inbox message as read using a WHERE read_at IS NULL guard
+ * to prevent double-decrement of the unread counter.
+ *
+ * Returns {changes: 1} when a real unread→read transition happened.
+ * Returns {changes: 0} when the message was already read or doesn't exist.
+ *
+ * Callers MUST check changes === 1 before calling decrementUnreadStats().
+ *
+ * The btcAddress gate prevents a caller from marking another agent's
+ * messages as read (address-match security, same pattern as getInboxMessageFromD1).
+ */
+export async function markMessageReadIfUnread(
+  db: D1Database,
+  messageId: string,
+  btcAddress: string,
+  readAt: string
+): Promise<D1WriteResult> {
+  const result = await db
+    .prepare(
+      `UPDATE inbox_messages
+       SET read_at = ?
+       WHERE message_id = ?
+         AND to_btc_address = ?
+         AND is_reply = 0
+         AND read_at IS NULL`
+    )
+    .bind(readAt, messageId, btcAddress)
+    .run();
+  return { changes: result.meta.changes };
 }

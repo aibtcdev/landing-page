@@ -15,6 +15,7 @@ import {
   type UnreadCountDriftEntry,
   type AcceptanceTestResults,
 } from "@/lib/d1/reconcile";
+import { rebuildAllStats, reconcileStats } from "@/lib/inbox/stats";
 
 // ── Inbox pagination types ─────────────────────────────────────────────────
 // Cursor types + encode/decode live in lib/d1/reconcile-cursor.ts because
@@ -1309,6 +1310,33 @@ export async function POST(request: NextRequest) {
     rawTable === "all" ||
     rawTable === "inbox_messages" ||
     searchParams.get("acceptanceTests") === "unreadCount";
+
+  // Handle inbox_stats rebuild target (separate from KV→D1 reconcile tables)
+  const rawTarget = searchParams.get("target");
+  if (rawTarget === "inbox_stats") {
+    logger.info("reconcile.inbox_stats.start");
+    try {
+      const upserted = await rebuildAllStats(db);
+      const reconcileResult = await reconcileStats(db);
+      logger.info("reconcile.inbox_stats.done", {
+        upserted,
+        mismatchCount: reconcileResult.mismatchCount,
+      });
+      return NextResponse.json({
+        target: "inbox_stats",
+        upserted,
+        mismatchCount: reconcileResult.mismatchCount,
+        samples: reconcileResult.samples,
+        duration_ms: Date.now() - start,
+      });
+    } catch (err) {
+      logger.error("reconcile.inbox_stats.failed", { error: String(err) });
+      return NextResponse.json(
+        { error: "inbox_stats rebuild failed", detail: String(err) },
+        { status: 500 }
+      );
+    }
+  }
 
   const validTables = ["agents", "claims", "inbox_messages", "vouches", "all"];
   if (!validTables.includes(rawTable)) {

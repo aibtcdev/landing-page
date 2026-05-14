@@ -33,6 +33,7 @@
 
 import type { InboxMessage, OutboxReply } from "./types";
 import { REPLY_D1_PK_PREFIX } from "./d1-pk";
+import { getAgentInboxStats } from "./stats";
 
 /**
  * A single row from inbox_messages (is_reply=0) mapped back to the
@@ -462,27 +463,19 @@ export async function getAgentInboxFromD1(
   db: D1Database | undefined,
   btcAddress: string
 ): Promise<AgentInboxSummary | null> {
+  // P3 structural read flip: replaced live COUNT(*) / COUNT(CASE WHEN) aggregate
+  // with O(1) point-lookup from agent_inbox_stats. Function signature unchanged
+  // so all callers (agent-enrichment.ts) require no updates.
   if (!db) return null;
   try {
-    const row = await db
-      .prepare(`
-        SELECT
-          COUNT(*) AS total_count,
-          COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread_count,
-          MAX(sent_at) AS last_message_at
-        FROM inbox_messages
-        WHERE to_btc_address = ? AND is_reply = 0
-      `)
-      .bind(btcAddress)
-      .first<{ total_count: number; unread_count: number; last_message_at: string | null }>();
-    if (!row) return null;
-    // A row with total_count=0 means no messages — return null so callers
+    const stats = await getAgentInboxStats(db, btcAddress);
+    // A zero received count means no messages — return null so callers
     // treat this agent as having no inbox (same as a KV miss).
-    if (row.total_count === 0) return null;
+    if (stats.receivedCount === 0) return null;
     return {
-      totalCount: row.total_count,
-      unreadCount: row.unread_count,
-      lastMessageAt: row.last_message_at,
+      totalCount: stats.receivedCount,
+      unreadCount: stats.unreadCount,
+      lastMessageAt: stats.lastMessageAt,
     };
   } catch {
     return null;
@@ -516,22 +509,14 @@ export async function getSentIndexFromD1(
   db: D1Database | undefined,
   btcAddress: string
 ): Promise<AgentSentSummary | null> {
+  // P3 structural read flip: replaced live COUNT(*) aggregate with O(1)
+  // point-lookup from agent_inbox_stats. Function signature unchanged.
   if (!db) return null;
   try {
-    const row = await db
-      .prepare(`
-        SELECT
-          COUNT(*) AS sent_count,
-          MAX(sent_at) AS last_sent_at
-        FROM inbox_messages
-        WHERE is_reply = 1 AND from_btc_address = ?
-      `)
-      .bind(btcAddress)
-      .first<{ sent_count: number; last_sent_at: string | null }>();
-    if (!row) return null;
+    const stats = await getAgentInboxStats(db, btcAddress);
     return {
-      sentCount: row.sent_count,
-      lastSentAt: row.last_sent_at,
+      sentCount: stats.sentCount,
+      lastSentAt: stats.lastSentAt,
     };
   } catch {
     return null;

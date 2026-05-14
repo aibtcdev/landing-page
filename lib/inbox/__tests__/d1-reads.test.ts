@@ -719,7 +719,10 @@ describe("getReplyForMessageFromD1 (Phase 2.5 Step 3.5)", () => {
   });
 });
 
-// ── getAgentInboxFromD1 (Phase 2.5 #746) ─────────────────────────────────────
+// ── getAgentInboxFromD1 (P3 — now delegates to getAgentInboxStats) ───────────
+// P3 structural change: getAgentInboxFromD1 no longer queries inbox_messages
+// directly. It calls getAgentInboxStats (agent_inbox_stats table) instead.
+// The mock D1 shape changes accordingly.
 
 describe("getAgentInboxFromD1", () => {
   it("returns null immediately when db is undefined (fail-open)", async () => {
@@ -727,9 +730,16 @@ describe("getAgentInboxFromD1", () => {
     expect(result).toBeNull();
   });
 
-  it("returns AgentInboxSummary with counts when rows exist", async () => {
-    const summaryRow = { total_count: 5, unread_count: 2, last_message_at: "2026-05-11T15:00:00.000Z" };
-    const db = createMockD1([], summaryRow);
+  it("returns AgentInboxSummary with counts when stats row exists", async () => {
+    // agent_inbox_stats row shape: received_count, unread_count, sent_count, ...
+    const statsRow = {
+      received_count: 5,
+      unread_count: 2,
+      sent_count: 3,
+      last_message_at: "2026-05-11T15:00:00.000Z",
+      last_sent_at: null,
+    };
+    const db = createMockD1([], statsRow);
     const result = await getAgentInboxFromD1(db, BTC_ADDRESS);
     expect(result).not.toBeNull();
     expect(result!.totalCount).toBe(5);
@@ -737,14 +747,21 @@ describe("getAgentInboxFromD1", () => {
     expect(result!.lastMessageAt).toBe("2026-05-11T15:00:00.000Z");
   });
 
-  it("returns null when total_count is 0 (no messages — same as KV miss)", async () => {
-    const summaryRow = { total_count: 0, unread_count: 0, last_message_at: null };
-    const db = createMockD1([], summaryRow);
+  it("returns null when received_count is 0 (no messages — same as KV miss)", async () => {
+    const statsRow = {
+      received_count: 0,
+      unread_count: 0,
+      sent_count: 0,
+      last_message_at: null,
+      last_sent_at: null,
+    };
+    const db = createMockD1([], statsRow);
     const result = await getAgentInboxFromD1(db, BTC_ADDRESS);
     expect(result).toBeNull();
   });
 
-  it("returns null when db.first() returns null", async () => {
+  it("returns null when stats row is missing (no messages for agent)", async () => {
+    // first() returns null → getAgentInboxStats returns zeroed defaults → receivedCount=0 → null
     const db = createMockD1([], null);
     const result = await getAgentInboxFromD1(db, BTC_ADDRESS);
     expect(result).toBeNull();
@@ -759,9 +776,15 @@ describe("getAgentInboxFromD1", () => {
     expect(result).toBeNull();
   });
 
-  it("SQL queries to_btc_address = ? AND is_reply = 0", async () => {
-    const summaryRow = { total_count: 1, unread_count: 0, last_message_at: "2026-05-11T00:00:00.000Z" };
-    const stmtMock = createPreparedStatement([], summaryRow);
+  it("SQL queries agent_inbox_stats by btc_address", async () => {
+    const statsRow = {
+      received_count: 1,
+      unread_count: 0,
+      sent_count: 0,
+      last_message_at: "2026-05-11T00:00:00.000Z",
+      last_sent_at: null,
+    };
+    const stmtMock = createPreparedStatement([], statsRow);
     const db = {
       prepare: vi.fn().mockReturnValue(stmtMock),
       batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
@@ -769,13 +792,15 @@ describe("getAgentInboxFromD1", () => {
 
     await getAgentInboxFromD1(db, BTC_ADDRESS);
     const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sql).toContain("WHERE to_btc_address = ?");
-    expect(sql).toContain("AND is_reply = 0");
+    expect(sql).toContain("agent_inbox_stats");
+    expect(sql).toContain("WHERE btc_address = ?");
     expect(stmtMock.bind.mock.calls[0][0]).toBe(BTC_ADDRESS);
   });
 });
 
-// ── getSentIndexFromD1 (Phase 2.5 #746) ──────────────────────────────────────
+// ── getSentIndexFromD1 (P3 — now delegates to getAgentInboxStats) ─────────────
+// P3 structural change: getSentIndexFromD1 no longer queries inbox_messages
+// directly. It calls getAgentInboxStats (agent_inbox_stats table) instead.
 
 describe("getSentIndexFromD1", () => {
   it("returns null immediately when db is undefined (fail-open)", async () => {
@@ -783,42 +808,68 @@ describe("getSentIndexFromD1", () => {
     expect(result).toBeNull();
   });
 
-  it("returns AgentSentSummary with sentCount and lastSentAt when rows exist", async () => {
-    const summaryRow = { sent_count: 39, last_sent_at: "2026-05-10T12:00:00.000Z" };
-    const db = createMockD1([], summaryRow);
+  it("returns AgentSentSummary with sentCount and lastSentAt from stats", async () => {
+    const statsRow = {
+      received_count: 0,
+      unread_count: 0,
+      sent_count: 39,
+      last_message_at: null,
+      last_sent_at: "2026-05-10T12:00:00.000Z",
+    };
+    const db = createMockD1([], statsRow);
     const result = await getSentIndexFromD1(db, BTC_ADDRESS);
     expect(result).not.toBeNull();
     expect(result!.sentCount).toBe(39);
     expect(result!.lastSentAt).toBe("2026-05-10T12:00:00.000Z");
   });
 
-  it("returns AgentSentSummary with sentCount=0 when no replies sent", async () => {
-    const summaryRow = { sent_count: 0, last_sent_at: null };
-    const db = createMockD1([], summaryRow);
+  it("returns AgentSentSummary with sentCount=0 when stats row has no sent", async () => {
+    const statsRow = {
+      received_count: 0,
+      unread_count: 0,
+      sent_count: 0,
+      last_message_at: null,
+      last_sent_at: null,
+    };
+    const db = createMockD1([], statsRow);
     const result = await getSentIndexFromD1(db, BTC_ADDRESS);
+    // getSentIndexFromD1 always returns a result (even zero) — callers can
+    // use it without null check for the sent-count-only path.
     expect(result).not.toBeNull();
     expect(result!.sentCount).toBe(0);
     expect(result!.lastSentAt).toBeNull();
   });
 
-  it("returns null when db.first() returns null", async () => {
+  it("returns {sentCount: 0} when stats row is missing (first() returns null)", async () => {
+    // getAgentInboxStats returns zeroed defaults when no row exists
     const db = createMockD1([], null);
     const result = await getSentIndexFromD1(db, BTC_ADDRESS);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.sentCount).toBe(0);
   });
 
-  it("returns null on D1 throw (fail-open)", async () => {
+  it("returns zero-stats (fail-open) on D1 throw — does not return null", async () => {
+    // P3: getSentIndexFromD1 delegates to getAgentInboxStats which is fail-open.
+    // On D1 error it returns ZERO_STATS → sentCount=0, not null.
+    // This is intentional: callers should always get a defined result.
     const db = {
       prepare: vi.fn().mockImplementation(() => { throw new Error("D1 unavailable"); }),
       batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
     } as unknown as D1Database;
     const result = await getSentIndexFromD1(db, BTC_ADDRESS);
-    expect(result).toBeNull();
+    expect(result).not.toBeNull();
+    expect(result!.sentCount).toBe(0);
   });
 
-  it("SQL queries is_reply = 1 AND from_btc_address = ?", async () => {
-    const summaryRow = { sent_count: 5, last_sent_at: "2026-05-11T00:00:00.000Z" };
-    const stmtMock = createPreparedStatement([], summaryRow);
+  it("SQL queries agent_inbox_stats by btc_address", async () => {
+    const statsRow = {
+      received_count: 0,
+      unread_count: 0,
+      sent_count: 5,
+      last_message_at: null,
+      last_sent_at: "2026-05-11T00:00:00.000Z",
+    };
+    const stmtMock = createPreparedStatement([], statsRow);
     const db = {
       prepare: vi.fn().mockReturnValue(stmtMock),
       batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
@@ -826,8 +877,8 @@ describe("getSentIndexFromD1", () => {
 
     await getSentIndexFromD1(db, BTC_ADDRESS);
     const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sql).toContain("is_reply = 1");
-    expect(sql).toContain("AND from_btc_address = ?");
+    expect(sql).toContain("agent_inbox_stats");
+    expect(sql).toContain("WHERE btc_address = ?");
     expect(stmtMock.bind.mock.calls[0][0]).toBe(BTC_ADDRESS);
   });
 });

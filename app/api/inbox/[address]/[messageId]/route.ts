@@ -12,7 +12,8 @@ import {
   buildMarkReadMessage,
 } from "@/lib/inbox";
 import { shouldFailClosed } from "@/lib/env";
-import { updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import { markMessageReadIfUnread } from "@/lib/inbox/d1-dual-write";
+import { decrementUnreadStats } from "@/lib/inbox/stats";
 import {
   getInboxMessageFromD1,
   fetchRepliesForMessages,
@@ -293,13 +294,17 @@ export async function PATCH(
   }
 
   // D1 is now the sole write path (Phase 2.5 Step 4 — KV writes removed).
-  // unreadCount is now a live SELECT COUNT(*) so no KV decrement is needed.
+  //
+  // markMessageReadIfUnread uses WHERE read_at IS NULL so:
+  //   - changes === 1 → real unread→read transition → decrement stats
+  //   - changes === 0 → already read or message not found → no stats change
   //
   // D1 UPDATE is synchronous and failure-propagating: failure returns 503
   // + Retry-After: 5 so the caller can retry rather than seeing a phantom 200.
   const now = new Date().toISOString();
+  let markReadResult: { changes: number };
   try {
-    await updateMessageStateD1(db, messageId, { readAt: now });
+    markReadResult = await markMessageReadIfUnread(db, messageId, agent.btcAddress, now);
   } catch (err) {
     logger.error("mark_read.d1_update_failed", {
       messageId,
@@ -313,6 +318,16 @@ export async function PATCH(
         retry_after: 5,
       },
       { status: 503, headers: { "Retry-After": "5" } }
+    );
+  }
+
+  // Decrement stats only on a real unread→read transition (changes === 1).
+  // If changes === 0 the message was already read — no counter adjustment.
+  if (markReadResult.changes === 1) {
+    ctx.waitUntil(
+      decrementUnreadStats(db, agent.btcAddress).catch(() => {
+        // Best-effort: stats drift is detectable via reconciliation.
+      })
     );
   }
 

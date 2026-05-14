@@ -29,9 +29,9 @@ import {
   logPaymentEvent,
 } from "@/lib/inbox/payment-logging";
 import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "@/lib/inbox/d1-dual-write";
+import { bumpInboundStats, getAgentInboxStats } from "@/lib/inbox/stats";
 import {
   listInboxMessagesFromD1,
-  countInboxMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
   checkRedeemedTxidInD1,
@@ -297,33 +297,23 @@ export async function GET(
   // If the D1 query layer throws — transient unavailability, network error,
   // schema mismatch — return 503 with a structured retry hint rather than
   // letting Next.js produce an unstructured 500.
-  // Phase 2.5 Step 4 (#730): D1 is now the sole source of truth for reads
-  // and writes on this path. A 503 here means "D1 transiently unavailable."
+  // P3 structural read flip: counts now come from agent_inbox_stats (O(1) point-lookup)
+  // instead of live SELECT COUNT(*) against inbox_messages (O(matching rows)).
+  // Both stats and the paginated message list run in parallel to minimise latency.
+  //   [0] stats row — receivedCount, unreadCount from maintained counters
+  //   [1] paginated message list (the page the caller asked for)
+  //   [2] sentMessages — outbox replies for partner graph (only when includePartners)
   let receivedMessages: import("@/lib/inbox/types").InboxMessage[];
-  let unreadCount: number;
-  let receivedCount: number;
+  let agentStats: Awaited<ReturnType<typeof getAgentInboxStats>>;
   let sentMessages: import("@/lib/inbox/types").OutboxReply[];
   try {
-    // D1 query: received messages with status filter and pagination.
-    // Four queries run in parallel to minimise latency (reduced from 6 — perf/d1-inbox-count-4to2):
-    //   [0] paginated message list (the page the caller asked for)
-    //   [1] unreadCount — live SELECT COUNT(*) WHERE read_at IS NULL (closes aibtc-mcp-server#497)
-    //   [2] receivedCount — total inbound messages regardless of filter (for economics + pagination)
-    //   [3] sentMessages — outbox replies for partner graph (only when includePartners)
-    //
-    // totalCount and sentCount are derived below to avoid two extra COUNT(*) scans per request.
-    [receivedMessages, unreadCount, receivedCount, sentMessages] = await Promise.all([
+    [agentStats, receivedMessages, sentMessages] = await Promise.all([
+      // Stats O(1) point-lookup — replaces two countInboxMessagesFromD1 scans
+      getAgentInboxStats(db, agent.btcAddress),
+      // Paginated message list (still needed for message content)
       includeReceived
         ? listInboxMessagesFromD1(db, agent.btcAddress, limit, offset, statusFilter)
         : Promise.resolve([] as import("@/lib/inbox/types").InboxMessage[]),
-      // unreadCount: live SELECT COUNT(*) WHERE read_at IS NULL — closes aibtc-mcp-server#497
-      includeReceived
-        ? countInboxMessagesFromD1(db, agent.btcAddress, "unread")
-        : Promise.resolve(0),
-      // receivedCount: total inbound messages regardless of status filter (for economics + pagination)
-      includeReceived
-        ? countInboxMessagesFromD1(db, agent.btcAddress, "all")
-        : Promise.resolve(0),
       // sentMessages: outbox replies for partner graph computation (only when includePartners)
       includePartners
         ? listOutboxRepliesFromD1(db, agent.btcAddress, 100, 0)
@@ -333,7 +323,10 @@ export async function GET(
     return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
   }
 
-  // Derive totalCount from already-fetched counts — no extra COUNT(*) needed.
+  const unreadCount = agentStats.unreadCount;
+  const receivedCount = agentStats.receivedCount;
+
+  // Derive totalCount from stats counters — no extra COUNT(*) needed.
   // statusFilter="all"   → totalCount equals receivedCount (same predicate)
   // statusFilter="unread" → totalCount equals unreadCount (same predicate)
   // statusFilter="read"   → totalCount equals received minus unread
@@ -344,11 +337,10 @@ export async function GET(
         ? Math.max(0, receivedCount - unreadCount)
         : receivedCount; // "all"
 
-  // Derive sentCount from the sentMessages list already fetched for the partner graph.
-  // When includePartners=false, sentMessages is [] so sentCount=0 (no outbox fetch happens).
-  // The primary consumer (InboxActivity) always requests ?include=partners, so this is
-  // accurate in practice. Avoids a separate COUNT(outbox_replies) scan.
-  const sentCount = sentMessages.length;
+  // sentCount: prefer stats table for accuracy. Fall back to sentMessages.length
+  // when include=partners (already fetched for the partner graph). If includePartners
+  // is false, sentMessages is [] but stats still returns the correct total.
+  const sentCount = includePartners ? sentMessages.length : agentStats.sentCount;
 
   // Build inline replies map for the returned page
   const visibleMessageIds = receivedMessages.map((m) => m.messageId);
@@ -1085,8 +1077,9 @@ export async function POST(
     // SELECT guard and the INSERT can hit idx_inbox_payment_txid. When detected,
     // re-query the canonical existingMessageId and return 409 (not 503) — this
     // is a permanent idempotent outcome, not a transient D1 failure.
+    let insertResult: { changes: number };
     try {
-      await insertInboundMessageToD1(db, message);
+      insertResult = await insertInboundMessageToD1(db, message);
     } catch (err) {
       if (isPaymentTxidUniqueViolation(err)) {
         return resolvePaymentTxidConflict(
@@ -1104,6 +1097,15 @@ export async function POST(
         error: String(err),
       });
       return d1TransientResponse("Message delivery failed. Please retry shortly.");
+    }
+
+    // Bump stats only on a real insert (changes === 1), not on duplicate/retry.
+    if (insertResult.changes === 1) {
+      ctx.waitUntil(
+        bumpInboundStats(db, message.toBtcAddress, message.sentAt).catch(() => {
+          // Best-effort: stats drift is detectable via reconciliation.
+        })
+      );
     }
 
     logger.info("Message stored via txid recovery", {
@@ -1606,8 +1608,9 @@ export async function POST(
     logger.error("D1 binding unavailable on x402 delivery path", { messageId });
     return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
   }
+  let x402InsertResult: { changes: number };
   try {
-    await insertInboundMessageToD1(db, message);
+    x402InsertResult = await insertInboundMessageToD1(db, message);
   } catch (err) {
     if (isPaymentTxidUniqueViolation(err)) {
       return resolvePaymentTxidConflict(
@@ -1625,6 +1628,15 @@ export async function POST(
       error: String(err),
     });
     return d1TransientResponse("Message delivery failed. Please retry shortly.");
+  }
+
+  // Bump stats only on a real insert (changes === 1), not on duplicate/retry.
+  if (x402InsertResult.changes === 1) {
+    ctx.waitUntil(
+      bumpInboundStats(db, message.toBtcAddress, message.sentAt).catch(() => {
+        // Best-effort: stats drift is detectable via reconciliation.
+      })
+    );
   }
 
   const deliveredPaymentStatus = message.paymentStatus ?? "confirmed";

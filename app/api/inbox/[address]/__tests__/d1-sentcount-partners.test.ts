@@ -74,11 +74,24 @@ vi.mock("@/lib/inbox/payment-logging", () => ({
 }));
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
-  insertInboundMessageToD1: vi.fn().mockResolvedValue(undefined),
+  insertInboundMessageToD1: vi.fn().mockResolvedValue({ changes: 1 }),
   isPaymentTxidUniqueViolation: (err: unknown): boolean => {
     const msg = err instanceof Error ? err.message : String(err);
     return msg.includes("UNIQUE constraint failed: inbox_messages.payment_txid");
   },
+}));
+
+// P3: inbox route GET now calls getAgentInboxStats (stats table) instead of
+// countInboxMessagesFromD1 for unread/received counts.
+vi.mock("@/lib/inbox/stats", () => ({
+  getAgentInboxStats: vi.fn().mockResolvedValue({
+    receivedCount: 1,
+    unreadCount: 1,
+    sentCount: 0,
+    lastMessageAt: null,
+    lastSentAt: null,
+  }),
+  bumpInboundStats: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ---- imports after mocks ----------------------------------------------------
@@ -92,6 +105,7 @@ import {
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
 } from "@/lib/inbox/d1-reads";
+import { getAgentInboxStats } from "@/lib/inbox/stats";
 
 // ---- shared fixtures --------------------------------------------------------
 
@@ -221,7 +235,7 @@ describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => 
     // When both totalCount === 0 AND sentCount === 0, the route returns the
     // self-doc body. sentCount must still be 0 (not undefined) in that case.
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 0, lastMessageAt: null, lastSentAt: null });
     // listOutboxRepliesFromD1 already returns [] via setupDefaultMocks
 
     const res = await GET(buildGetRequest(AGENT_ADDR), buildContext(AGENT_ADDR));
@@ -235,7 +249,7 @@ describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => 
     // Regression fix: agent has sent replies but has never received a message.
     // sentCount comes from listOutboxRepliesFromD1 (via include=partners).
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 0, lastMessageAt: null, lastSentAt: null });
     const replies = [SENT_REPLY, { ...SENT_REPLY, messageId: "msg_2" }, { ...SENT_REPLY, messageId: "msg_3" }];
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue(replies);
 
@@ -262,7 +276,7 @@ describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => 
       return Promise.resolve(null);
     });
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 0, lastMessageAt: null, lastSentAt: null });
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([SENT_REPLY]);
 
     const res = await GET(
@@ -407,14 +421,15 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
   });
 });
 
-// ---- D1-throws fallback (perf/d1-inbox-count-4to2) --------------------------
-// countOutboxRepliesFromD1 is no longer in Promise.all; the 4 remaining queries
-// are: listInboxMessagesFromD1, countInboxMessagesFromD1 (×2), listOutboxRepliesFromD1.
+// ---- D1-throws fallback (P3 stats read flip) ---------------------------------
+// P3: replaced countInboxMessagesFromD1(×2) with getAgentInboxStats (O(1) stats lookup).
+// The 3 queries in Promise.all are now: getAgentInboxStats, listInboxMessagesFromD1,
+// listOutboxRepliesFromD1.
 
 describe("D1-throws fallback still works after COUNT reduction", () => {
-  it("returns 503 when countInboxMessagesFromD1 throws", async () => {
+  it("returns 503 when getAgentInboxStats throws (P3: replaces countInboxMessagesFromD1)", async () => {
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (countInboxMessagesFromD1 as Mock).mockRejectedValue(
+    (getAgentInboxStats as Mock).mockRejectedValue(
       new Error("D1_ERROR: inbox_messages unavailable")
     );
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
