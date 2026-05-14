@@ -76,6 +76,20 @@ describe("GET /api/admin/scheduler", () => {
     expect(body.error).toContain("Unsupported scheduler name");
     expect(schedulerNamespace.idFromName).not.toHaveBeenCalled();
   });
+
+  it("returns 503 when the SchedulerDO binding is unavailable", async () => {
+    (getCloudflareContext as Mock).mockResolvedValueOnce({
+      env: {},
+      ctx: { waitUntil: vi.fn(), passThroughOnException: vi.fn() },
+    });
+
+    const response = await GET(request("/api/admin/scheduler"));
+    const body = (await response.json()) as any;
+
+    expect(response.status).toBe(503);
+    expect(body.error).toContain("Scheduler binding unavailable");
+    expect(schedulerNamespace.idFromName).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/admin/scheduler", () => {
@@ -88,6 +102,22 @@ describe("POST /api/admin/scheduler", () => {
     expect(response.status).toBe(400);
     expect(body.error).toContain("Missing `until`");
     expect(schedulerStub.pauseUntil).not.toHaveBeenCalled();
+  });
+
+  it("returns 503 on writes when the SchedulerDO binding is unavailable", async () => {
+    (getCloudflareContext as Mock).mockResolvedValueOnce({
+      env: {},
+      ctx: { waitUntil: vi.fn(), passThroughOnException: vi.fn() },
+    });
+
+    const response = await POST(
+      request("/api/admin/scheduler?action=refresh&task=all", "POST")
+    );
+    const body = (await response.json()) as any;
+
+    expect(response.status).toBe(503);
+    expect(body.error).toContain("Scheduler binding unavailable");
+    expect(schedulerStub.refreshNow).not.toHaveBeenCalled();
   });
 
   it("rejects invalid refresh tasks", async () => {

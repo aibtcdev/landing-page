@@ -31,7 +31,7 @@ interface CloudflareEnv {
   //
   // Keep these method signatures in sync with SchedulerRpc in
   // lib/scheduler/rpc-types.ts and SchedulerDO in worker.ts.
-  SCHEDULER: DurableObjectNamespace<
+  SCHEDULER?: DurableObjectNamespace<
     Rpc.DurableObjectBranded & import("./lib/scheduler/rpc-types").SchedulerRpc
   >;
   TENERO_REFRESH_ENABLED?: "true"; // Explicit production-only gate for SchedulerDO Tenero refreshes
