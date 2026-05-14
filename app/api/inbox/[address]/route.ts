@@ -475,9 +475,14 @@ export async function GET(
 
     // Deduplicate resolved partners by btcAddress — the same agent can appear
     // under different pre-resolution keys (STX for received, BTC for sent).
+    // When btcAddress is empty (agentLookupMap miss + resolution also failed), fall
+    // back to stxAddress as the dedup key so the received-direction entry is not
+    // silently dropped. Transient failures that recover in the resolution pass
+    // will have btcAddress set and dedup correctly under the BTC key.
+    // See: https://github.com/aibtcdev/landing-page/issues/733
     const deduped = new Map<string, typeof resolvedPartners[number]>();
     for (const p of resolvedPartners) {
-      const key = p.btcAddress;
+      const key = p.btcAddress || p.stxAddress;
       if (!key) continue;
       const existing = deduped.get(key);
       if (existing) {
