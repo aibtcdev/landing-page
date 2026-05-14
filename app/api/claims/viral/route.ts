@@ -334,7 +334,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      rewardInfo: "Genesis badge + x402 inbox unlocked (earn sats from messages)",
+      rewardInfo: "Genesis badge + vouching + trading competition eligibility + leaderboard bonus",
       documentation: {
         registerFirst: "https://aibtc.com/api/register",
         fullDocs: "https://aibtc.com/llms-full.txt",
