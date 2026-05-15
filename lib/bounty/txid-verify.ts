@@ -22,6 +22,12 @@ import type { BountyRecord, BountySubmission } from "./types";
 import { MEMO_PREFIX, SBTC_CONTRACTS, SBTC_CONTRACT_MAINNET } from "./constants";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "@/lib/identity/constants";
 import { stacksApiFetch } from "@/lib/stacks-api-fetch";
+import type { Logger } from "@/lib/logging";
+import {
+  ClarityType,
+  deserializeCV,
+  type ClarityValue,
+} from "@stacks/transactions";
 
 // ---------------------------------------------------------------------------
 // Public API
@@ -99,16 +105,19 @@ export async function verifyPayoutTxid(params: {
   network?: "mainnet" | "testnet";
   /** Override for tests. Defaults to `new Date()`. */
   now?: Date;
+  /** Pass-through Logger for Hiro rate-limit + retry telemetry. */
+  logger?: Logger;
 }): Promise<TxidVerifyResult> {
   const network = params.network ?? "mainnet";
   const now = params.now ?? new Date();
+  const logger = params.logger;
   const sbtcContractId =
     network === "mainnet"
       ? SBTC_CONTRACT_MAINNET
       : `${SBTC_CONTRACTS.testnet.address}.${SBTC_CONTRACTS.testnet.name}`;
   const apiBase = network === "mainnet" ? STACKS_API_BASE : STACKS_API_TESTNET_BASE;
   const fetchFn =
-    params.fetchFn ?? ((url, init) => stacksApiFetch(url, init));
+    params.fetchFn ?? ((url, init) => stacksApiFetch(url, init, { logger }));
 
   // Pass the txid to Hiro as-is — Hiro accepts both 0x-prefixed and bare hex.
   let res: Response;
@@ -340,45 +349,52 @@ interface HiroTxResponse {
 // Internal helpers
 // ---------------------------------------------------------------------------
 
+// Args are parsed by deserializing the canonical Clarity hex (`arg.hex`) via
+// @stacks/transactions. Type-tagged ClarityValues remove the regex-on-`repr`
+// guesswork that the earlier implementation used — no presentation-string
+// fallbacks, no substring matching on memos.
+
+function decodeArg(arg: HiroFunctionArg | undefined): ClarityValue | null {
+  if (!arg?.hex) return null;
+  try {
+    return deserializeCV(arg.hex);
+  } catch {
+    return null;
+  }
+}
+
 function readPrincipalArg(args: HiroFunctionArg[] | undefined, name: string): string | null {
   if (!args) return null;
-  const arg = args.find((a) => a.name === name);
-  if (!arg?.repr) return null;
-  // Clarity repr is like `'SP1ABC...` — strip the leading apostrophe.
-  return arg.repr.replace(/^'/, "");
+  const cv = decodeArg(args.find((a) => a.name === name));
+  if (!cv) return null;
+  if (cv.type === ClarityType.PrincipalStandard || cv.type === ClarityType.PrincipalContract) {
+    return cv.value;
+  }
+  return null;
 }
 
 function readUintArg(args: HiroFunctionArg[] | undefined, name: string): number | null {
   if (!args) return null;
-  const arg = args.find((a) => a.name === name);
-  if (!arg?.repr) return null;
-  const match = arg.repr.match(/^u(\d+)$/);
-  return match ? Number(match[1]) : null;
+  const cv = decodeArg(args.find((a) => a.name === name));
+  if (!cv || cv.type !== ClarityType.UInt) return null;
+  const n = Number(cv.value);
+  return Number.isFinite(n) ? n : null;
 }
 
 function readMemoArg(args: HiroFunctionArg[] | undefined): string | null {
   if (!args) return null;
-  const arg = args.find((a) => a.name === "memo");
-  if (!arg) return null;
-  // Memo is `(optional (buff 34))`. `repr` looks like `(some 0xabc...)` or `none`.
-  if (!arg.repr || arg.repr === "none") return null;
-  const match = arg.repr.match(/\(some\s+(0x[0-9a-fA-F]+)\)/);
-  if (match) return match[1].toLowerCase();
-  // Fallback to `hex` which encodes the entire Clarity value — less precise,
-  // but if `repr` is unexpectedly missing we still have a hex blob to compare.
-  return arg.hex?.toLowerCase() ?? null;
+  const cv = decodeArg(args.find((a) => a.name === "memo"));
+  if (!cv) return null;
+  if (cv.type !== ClarityType.OptionalSome) return null;
+  const inner = cv.value;
+  if (inner.type !== ClarityType.Buffer) return null;
+  return inner.value.toLowerCase().replace(/^0x/, "");
 }
 
 function memosMatch(actualHex: string, expectedHex: string): boolean {
-  // Strip 0x prefixes, lowercase, compare. The Clarity buff is exactly the
-  // bytes, no length prefix in the principal `(buff N)` encoding.
   const a = actualHex.replace(/^0x/, "").toLowerCase();
   const b = expectedHex.replace(/^0x/, "").toLowerCase();
-  if (a === b) return true;
-  // Some Clarity encoders pad or wrap; allow a substring match where the
-  // expected memo is contained in the actual representation (handles the
-  // (optional ...) wrapper encoded as a longer hex blob in some responses).
-  return a.includes(b);
+  return a === b;
 }
 
 function findSbtcTransferEvent(

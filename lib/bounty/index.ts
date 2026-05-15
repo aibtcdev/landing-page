@@ -2,7 +2,7 @@
  * Bounty system — barrel export.
  *
  * D1 is the sole source of truth. Status is derived from timestamps via
- * `bountyStatus()`. See `lib/bounty/types.ts` and PLAN.md.
+ * `bountyStatus()`. See `lib/bounty/types.ts`.
  */
 
 export type {

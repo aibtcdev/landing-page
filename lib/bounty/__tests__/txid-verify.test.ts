@@ -1,15 +1,28 @@
 import { describe, it, expect, vi } from "vitest";
+import {
+  bufferCV,
+  serializeCV,
+  someCV,
+  standardPrincipalCV,
+  uintCV,
+  type ClarityValue,
+} from "@stacks/transactions";
 import { buildExpectedMemo, verifyPayoutTxid } from "../txid-verify";
 import { SBTC_CONTRACT_MAINNET } from "../constants";
 import type { BountyRecord, BountySubmission } from "../types";
 
 const BOUNTY_ID = "01HNX7TEST";
+const POSTER_STX = "SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR";
+const SUBMITTER_STX = "SP3FBR2AGK5H9QBDH3EEN6DF8EK8JY7RX8QJ5SVTE";
+const OTHER_STX = "SP229F3KDGJJ79DMAPHKYQD6KF6DXM2NPAKHZ51HR";
+
+const argHex = (cv: ClarityValue) => `0x${serializeCV(cv)}`;
 
 function makeBounty(overrides: Partial<BountyRecord> = {}): BountyRecord {
   return {
     id: BOUNTY_ID,
     posterBtcAddress: "bc1qposter",
-    posterStxAddress: "SP1POSTER",
+    posterStxAddress: POSTER_STX,
     title: "t",
     description: "d",
     rewardSats: 5000,
@@ -28,30 +41,54 @@ function makeSubmission(overrides: Partial<BountySubmission> = {}): BountySubmis
     id: "s1",
     bountyId: BOUNTY_ID,
     submitterBtcAddress: "bc1qsubmitter",
-    submitterStxAddress: "SP1SUBMITTER",
+    submitterStxAddress: SUBMITTER_STX,
     message: "here is my work",
     createdAt: "2026-05-12T00:00:00Z",
     ...overrides,
   };
 }
 
+function memoArg(bountyId: string = BOUNTY_ID) {
+  const expected = buildExpectedMemo(bountyId);
+  return {
+    name: "memo",
+    type: "(optional (buff 34))",
+    hex: argHex(someCV(bufferCV(expected.bytes))),
+    repr: `(some ${expected.hex})`,
+  };
+}
+
 function makeHiroTx(overrides: Record<string, unknown> = {}) {
-  const memo = buildExpectedMemo(BOUNTY_ID);
   return {
     tx_id: "0xabc123",
     tx_status: "success",
     tx_type: "contract_call",
-    sender_address: "SP1POSTER",
+    sender_address: POSTER_STX,
     is_unanchored: false,
     burn_block_time_iso: "2026-05-16T00:00:00Z",
     contract_call: {
       contract_id: SBTC_CONTRACT_MAINNET,
       function_name: "transfer",
       function_args: [
-        { name: "amount", repr: "u5000", type: "uint" },
-        { name: "sender", repr: "'SP1POSTER", type: "principal" },
-        { name: "recipient", repr: "'SP1SUBMITTER", type: "principal" },
-        { name: "memo", repr: `(some ${memo.hex})`, type: "(optional (buff 34))" },
+        {
+          name: "amount",
+          type: "uint",
+          hex: argHex(uintCV(5000)),
+          repr: "u5000",
+        },
+        {
+          name: "sender",
+          type: "principal",
+          hex: argHex(standardPrincipalCV(POSTER_STX)),
+          repr: `'${POSTER_STX}`,
+        },
+        {
+          name: "recipient",
+          type: "principal",
+          hex: argHex(standardPrincipalCV(SUBMITTER_STX)),
+          repr: `'${SUBMITTER_STX}`,
+        },
+        memoArg(),
       ],
     },
     events: [
@@ -59,8 +96,8 @@ function makeHiroTx(overrides: Record<string, unknown> = {}) {
         event_type: "fungible_token_asset",
         asset: {
           asset_id: `${SBTC_CONTRACT_MAINNET}::sbtc-token`,
-          sender: "SP1POSTER",
-          recipient: "SP1SUBMITTER",
+          sender: POSTER_STX,
+          recipient: SUBMITTER_STX,
           amount: "5000",
         },
       },
@@ -192,7 +229,7 @@ describe("verifyPayoutTxid", () => {
       txid: "0xabc",
       bounty: makeBounty(),
       acceptedSubmission: makeSubmission(),
-      fetchFn: mockFetch({ json: () => makeHiroTx({ sender_address: "SP1OTHER" }) }),
+      fetchFn: mockFetch({ json: () => makeHiroTx({ sender_address: OTHER_STX }) }),
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("WRONG_SENDER");
@@ -209,8 +246,9 @@ describe("verifyPayoutTxid", () => {
           // Mutate recipient
           tx.contract_call.function_args[2] = {
             name: "recipient",
-            repr: "'SP1WRONG",
             type: "principal",
+            hex: argHex(standardPrincipalCV(OTHER_STX)),
+            repr: `'${OTHER_STX}`,
           };
           return tx;
         },
@@ -232,7 +270,6 @@ describe("verifyPayoutTxid", () => {
   });
 
   it("returns MEMO_MISMATCH when memo doesn't bind to this bountyId", async () => {
-    const wrongMemo = buildExpectedMemo("DIFFERENT_BOUNTY");
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
@@ -240,11 +277,7 @@ describe("verifyPayoutTxid", () => {
       fetchFn: mockFetch({
         json: () => {
           const tx = makeHiroTx();
-          tx.contract_call.function_args[3] = {
-            name: "memo",
-            repr: `(some ${wrongMemo.hex})`,
-            type: "(optional (buff 34))",
-          };
+          tx.contract_call.function_args[3] = memoArg("DIFFERENT_BOUNTY");
           return tx;
         },
       }),

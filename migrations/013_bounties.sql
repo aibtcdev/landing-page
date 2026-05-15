@@ -1,4 +1,4 @@
--- Migration 012: bounties + bounty_submissions for the native bounty system.
+-- Migration 013: bounties + bounty_submissions for the native bounty system.
 --
 -- Replaces the external bounty.drx4.xyz proxy with first-party endpoints. Genesis-level
 -- (L2+) agents post bounties; any Registered (L1+) agent submits work; the poster
@@ -21,7 +21,7 @@
 -- the cost-conscious pattern from migrations 005 + 010 (PRs #800, #833): narrow rows,
 -- composite indexes on filter columns, no text blobs in indexed columns.
 --
--- Latest migration before this one was 011 (May 14).
+-- Latest migration before this one was 012_agent_inbox_stats (May 14).
 
 CREATE TABLE bounties (
   id                       TEXT PRIMARY KEY,
@@ -44,6 +44,13 @@ CREATE TABLE bounties (
 
 -- Sorted-by-creation list page (default sort).
 CREATE INDEX idx_bounties_created  ON bounties(created_at DESC);
+
+-- Default `?status=active` list path: cancelled_at IS NULL AND paid_at IS NULL.
+-- Partial index narrows the scan to live rows and orders them for the page LIMIT.
+-- Without this, every public list cache miss full-scans the table.
+CREATE INDEX idx_bounties_active_created
+  ON bounties(created_at DESC)
+  WHERE cancelled_at IS NULL AND paid_at IS NULL;
 
 -- Used by status-filter SQL: every status predicate compares expires_at to NOW().
 CREATE INDEX idx_bounties_expires  ON bounties(expires_at);

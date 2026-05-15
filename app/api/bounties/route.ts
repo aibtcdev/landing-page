@@ -70,6 +70,8 @@ function selfDoc(): NextResponse {
           tag: "Filter to bounties carrying this tag",
           limit: "1..100, default 20",
           offset: "default 0",
+          withCount:
+            "When `true`, include an exact `total` count (extra COUNT(*) query). Default `false` — `total` is a floor, use `hasMore` for pagination.",
         },
         example: "GET /api/bounties?status=open&limit=10",
       },
@@ -128,6 +130,7 @@ export async function GET(request: NextRequest) {
   const tag = url.searchParams.get("tag") ?? undefined;
   const limit = clampInt(url.searchParams.get("limit"), 20, 1, 100);
   const offset = clampInt(url.searchParams.get("offset"), 0, 0, 100_000);
+  const withCount = url.searchParams.get("withCount") === "true";
 
   const now = new Date();
   const { bounties, total } = await listBounties(db, {
@@ -138,6 +141,7 @@ export async function GET(request: NextRequest) {
     limit,
     offset,
     now,
+    withCount,
   });
 
   // When filtering by submitter, decorate each bounty with the agent's own
@@ -163,7 +167,11 @@ export async function GET(request: NextRequest) {
     return base;
   });
 
-  const nextOffset = offset + bounties.length < total ? offset + bounties.length : null;
+  // Without `?withCount=true`, `total` is a floor (rows.length + offset) and
+  // `hasMore` is the pagination signal callers should use. Setting `withCount`
+  // costs a full COUNT(*) — pass it only when an exact total is needed.
+  const hasMore = withCount ? offset + bounties.length < total : bounties.length === limit;
+  const nextOffset = hasMore ? offset + bounties.length : null;
   return NextResponse.json(
     {
       bounties: out,
@@ -171,6 +179,7 @@ export async function GET(request: NextRequest) {
       limit,
       offset,
       nextOffset,
+      hasMore,
     },
     {
       headers: {
@@ -298,6 +307,11 @@ export async function POST(request: NextRequest) {
     const now = new Date();
     const nowIso = now.toISOString();
     const id = generateBountyId();
+    // Normalize expiresAt to canonical millisecond-precision ISO so the SQL
+    // lex-comparisons against `now.toISOString()` (always `.000Z`-suffixed)
+    // are well-defined at every tick — see the boundary-parity test in
+    // lib/bounty/__tests__/types.test.ts.
+    const expiresAtIso = new Date(data.expiresAt).toISOString();
     const record: BountyRecord = {
       id,
       posterBtcAddress: agent.btcAddress,
@@ -307,7 +321,7 @@ export async function POST(request: NextRequest) {
       rewardSats: data.rewardSats,
       submissionCount: 0,
       createdAt: nowIso,
-      expiresAt: data.expiresAt,
+      expiresAt: expiresAtIso,
       updatedAt: nowIso,
       ...(data.tags && data.tags.length > 0 && { tags: data.tags }),
     };

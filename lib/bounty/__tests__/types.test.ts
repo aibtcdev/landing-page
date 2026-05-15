@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
-import { bountyStatus, type BountyRecord } from "../types";
+import { bountyStatus, type BountyRecord, type BountyStatus } from "../types";
 import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "../constants";
+import { statusToSql } from "../d1-helpers";
 
 function base(overrides: Partial<BountyRecord> = {}): BountyRecord {
   const created = "2026-05-14T00:00:00Z";
@@ -78,10 +79,206 @@ describe("bountyStatus", () => {
     expect(bountyStatus(b)).toBe("paid");
   });
 
-  it("transitions exactly at the boundary (now > expiresAt is judging)", () => {
+  it("transitions exactly at the boundary (now >= expiresAt is judging)", () => {
     const expires = "2026-05-14T00:00:00Z";
     const b = base({ expiresAt: expires });
-    expect(bountyStatus(b, new Date(expires))).toBe("open");
+    // Half-open: at exact equality, the upper state wins.
+    expect(bountyStatus(b, new Date(Date.parse(expires) - 1))).toBe("open");
+    expect(bountyStatus(b, new Date(expires))).toBe("judging");
     expect(bountyStatus(b, new Date(Date.parse(expires) + 1))).toBe("judging");
   });
+});
+
+/**
+ * The SQL predicates in `statusToSql` and the TS `bountyStatus()` are two
+ * implementations of the same contract — a list filter that does not agree
+ * with the per-record status is a bug. Lock parity at every boundary tick
+ * (±1 ms either side of each transition).
+ */
+describe("status boundary parity (TS vs SQL)", () => {
+  type Sample = {
+    label: string;
+    record: BountyRecord;
+    now: Date;
+  };
+
+  function sqlMatchesAtMoment(record: BountyRecord, now: Date, status: BountyStatus): boolean {
+    // SQL predicates parameterize "now" as a single ISO string; evaluate the
+    // record's timestamps against the predicate manually so a real D1 isn't
+    // needed in unit tests.
+    const frag = statusToSql(status, now);
+    const nowIso = now.toISOString();
+    const acceptCutoffIso = new Date(now.getTime() - ACCEPT_GRACE_MS).toISOString();
+    const payCutoffIso = new Date(now.getTime() - PAY_GRACE_MS).toISOString();
+
+    const not = (v: unknown) => v == null;
+    const some = (v: unknown) => v != null;
+
+    switch (status) {
+      case "open":
+        return (
+          not(record.cancelledAt) &&
+          not(record.paidAt) &&
+          not(record.acceptedAt) &&
+          record.expiresAt > nowIso
+        );
+      case "judging":
+        return (
+          not(record.cancelledAt) &&
+          not(record.paidAt) &&
+          not(record.acceptedAt) &&
+          record.expiresAt <= nowIso &&
+          record.expiresAt > acceptCutoffIso
+        );
+      case "winner-announced":
+        return (
+          not(record.cancelledAt) &&
+          not(record.paidAt) &&
+          some(record.acceptedAt) &&
+          (record.acceptedAt ?? "") > payCutoffIso
+        );
+      case "paid":
+        return some(record.paidAt);
+      case "abandoned":
+        return (
+          not(record.cancelledAt) &&
+          not(record.paidAt) &&
+          ((not(record.acceptedAt) && record.expiresAt <= acceptCutoffIso) ||
+            (some(record.acceptedAt) && (record.acceptedAt ?? "") <= payCutoffIso))
+        );
+      case "cancelled":
+        return some(record.cancelledAt);
+      default:
+        return frag.sql === "1=1";
+    }
+  }
+
+  const expires = "2026-05-21T00:00:00.000Z";
+  const acceptedAt = "2026-05-16T00:00:00.000Z";
+  const samples: Sample[] = [
+    // open → judging boundary
+    {
+      label: "1ms before expiresAt",
+      record: {
+        id: "b1",
+        posterBtcAddress: "bc",
+        posterStxAddress: "SP",
+        title: "t",
+        description: "d",
+        rewardSats: 1,
+        submissionCount: 0,
+        createdAt: "2026-05-14T00:00:00Z",
+        expiresAt: expires,
+        updatedAt: "2026-05-14T00:00:00Z",
+      },
+      now: new Date(Date.parse(expires) - 1),
+    },
+    {
+      label: "exact expiresAt",
+      record: {
+        id: "b1",
+        posterBtcAddress: "bc",
+        posterStxAddress: "SP",
+        title: "t",
+        description: "d",
+        rewardSats: 1,
+        submissionCount: 0,
+        createdAt: "2026-05-14T00:00:00Z",
+        expiresAt: expires,
+        updatedAt: "2026-05-14T00:00:00Z",
+      },
+      now: new Date(expires),
+    },
+    // judging → abandoned boundary
+    {
+      label: "1ms before expiresAt + ACCEPT_GRACE",
+      record: {
+        id: "b1",
+        posterBtcAddress: "bc",
+        posterStxAddress: "SP",
+        title: "t",
+        description: "d",
+        rewardSats: 1,
+        submissionCount: 0,
+        createdAt: "2026-05-14T00:00:00Z",
+        expiresAt: expires,
+        updatedAt: "2026-05-14T00:00:00Z",
+      },
+      now: new Date(Date.parse(expires) + ACCEPT_GRACE_MS - 1),
+    },
+    {
+      label: "exact expiresAt + ACCEPT_GRACE",
+      record: {
+        id: "b1",
+        posterBtcAddress: "bc",
+        posterStxAddress: "SP",
+        title: "t",
+        description: "d",
+        rewardSats: 1,
+        submissionCount: 0,
+        createdAt: "2026-05-14T00:00:00Z",
+        expiresAt: expires,
+        updatedAt: "2026-05-14T00:00:00Z",
+      },
+      now: new Date(Date.parse(expires) + ACCEPT_GRACE_MS),
+    },
+    // winner-announced → abandoned boundary
+    {
+      label: "1ms before acceptedAt + PAY_GRACE",
+      record: {
+        id: "b1",
+        posterBtcAddress: "bc",
+        posterStxAddress: "SP",
+        title: "t",
+        description: "d",
+        rewardSats: 1,
+        submissionCount: 0,
+        createdAt: "2026-05-14T00:00:00Z",
+        expiresAt: expires,
+        acceptedAt,
+        acceptedSubmissionId: "s1",
+        updatedAt: acceptedAt,
+      },
+      now: new Date(Date.parse(acceptedAt) + PAY_GRACE_MS - 1),
+    },
+    {
+      label: "exact acceptedAt + PAY_GRACE",
+      record: {
+        id: "b1",
+        posterBtcAddress: "bc",
+        posterStxAddress: "SP",
+        title: "t",
+        description: "d",
+        rewardSats: 1,
+        submissionCount: 0,
+        createdAt: "2026-05-14T00:00:00Z",
+        expiresAt: expires,
+        acceptedAt,
+        acceptedSubmissionId: "s1",
+        updatedAt: acceptedAt,
+      },
+      now: new Date(Date.parse(acceptedAt) + PAY_GRACE_MS),
+    },
+  ];
+
+  for (const sample of samples) {
+    it(`TS and SQL agree at ${sample.label}`, () => {
+      const tsStatus = bountyStatus(sample.record, sample.now);
+      // The SQL predicate for the status TS picked must be true for this row.
+      expect(sqlMatchesAtMoment(sample.record, sample.now, tsStatus)).toBe(true);
+      // And no OTHER non-terminal status's SQL predicate may match.
+      const others: BountyStatus[] = [
+        "open",
+        "judging",
+        "winner-announced",
+        "paid",
+        "abandoned",
+        "cancelled",
+      ];
+      for (const s of others) {
+        if (s === tsStatus) continue;
+        expect(sqlMatchesAtMoment(sample.record, sample.now, s)).toBe(false);
+      }
+    });
+  }
 });

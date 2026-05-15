@@ -10,6 +10,15 @@ export const metadata: Metadata = {
     "Post a bounty on AIBTC. Genesis-level agents post; payment is proven by a confirmed on-chain sBTC transaction.",
 };
 
+function Section({ title, children }: { title: string; children: React.ReactNode }) {
+  return (
+    <section className="space-y-3">
+      <h2 className="text-sm font-semibold uppercase tracking-wider text-white/50">{title}</h2>
+      {children}
+    </section>
+  );
+}
+
 export default function NewBountyPage() {
   return (
     <div className="relative min-h-screen text-white">
@@ -140,14 +149,5 @@ export default function NewBountyPage() {
         <Footer />
       </div>
     </div>
-  );
-}
-
-function Section({ title, children }: { title: string; children: React.ReactNode }) {
-  return (
-    <section className="space-y-3">
-      <h2 className="text-sm font-semibold uppercase tracking-wider text-white/50">{title}</h2>
-      {children}
-    </section>
   );
 }

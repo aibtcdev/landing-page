@@ -60,6 +60,10 @@ export async function POST(
       return NextResponse.json({ error: "validation", details: parsed.errors }, { status: 400 });
     }
     const data = parsed.data!;
+    // Normalize once so the cheap KV pre-check and Hiro verification use the
+    // same form. We canonicalize to bare-lowercase-hex; Hiro accepts both
+    // 0x-prefixed and bare hex in the URL.
+    const normalizedTxid = data.txid.toLowerCase().replace(/^0x/, "");
 
     if (!isWithinSignatureWindow(data.signedAt, SIGNATURE_WINDOW_SECONDS)) {
       return NextResponse.json({ error: "stale_signature" }, { status: 400 });
@@ -122,7 +126,7 @@ export async function POST(
     }
 
     // Cheap pre-check: txid not already redeemed by another bounty.
-    const existingBountyId = await isTxidRedeemed(kv, data.txid);
+    const existingBountyId = await isTxidRedeemed(kv, normalizedTxid);
     if (existingBountyId && existingBountyId !== bounty.id) {
       return NextResponse.json(
         {
@@ -136,9 +140,10 @@ export async function POST(
 
     // On-chain verification via Hiro
     const verify = await verifyPayoutTxid({
-      txid: data.txid,
+      txid: normalizedTxid,
       bounty,
       acceptedSubmission,
+      logger,
     });
     if (!verify.ok) {
       const statusCode = verify.code === "TX_NOT_CONFIRMED" ? 422 : 400;
@@ -184,7 +189,20 @@ export async function POST(
       );
     }
 
-    await reserveTxid(kv, verify.canonicalTxid, bounty.id);
+    // D1 has already committed the paid_txid — the unique partial index is
+    // the durable enforcement. KV reservation is the cheap pre-check for
+    // *future* /paid requests against other bounties; if it fails (KV blip),
+    // log and keep going so the user doesn't see a 500 after a successful
+    // payment.
+    try {
+      await reserveTxid(kv, verify.canonicalTxid, bounty.id);
+    } catch (e) {
+      logger.warn("bounty.paid_kv_reserve_failed", {
+        bountyId: bounty.id,
+        canonicalTxid: verify.canonicalTxid,
+        error: String(e),
+      });
+    }
 
     logger.info("bounty.paid", {
       bountyId: bounty.id,

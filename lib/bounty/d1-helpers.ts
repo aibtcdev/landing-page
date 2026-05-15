@@ -3,7 +3,7 @@
  *
  * D1 is the sole source of truth (post-Phase 2.5 / PR #745). There is no KV
  * mirror of bounty records. Hot reads get an edge cache; reverse indexes are
- * SQL queries with proper indexes (see `migrations/012_bounties.sql`).
+ * SQL queries with proper indexes (see `migrations/013_bounties.sql`).
  *
  * Status is derived, not stored. The list helper accepts a `BountyStatus`
  * filter and compiles it to the matching SQL predicate via `statusToSql`.
@@ -137,9 +137,13 @@ export function statusToSql(
     case "paid":
       return { sql: "paid_at IS NOT NULL", bindings: [] };
     case "abandoned":
+      // Half-open intervals: `t >= expires_at + ACCEPT_GRACE_MS` (no winner)
+      // or `t >= accepted_at + PAY_GRACE_MS` (winner picked, no payment).
+      // Rewritten: `expires_at <= acceptCutoff` / `accepted_at <= payCutoff`.
+      // Matches `bountyStatus()` in lib/bounty/types.ts at the exact tick.
       return {
         sql:
-          "cancelled_at IS NULL AND paid_at IS NULL AND ((accepted_at IS NULL AND expires_at < ?) OR (accepted_at IS NOT NULL AND accepted_at < ?))",
+          "cancelled_at IS NULL AND paid_at IS NULL AND ((accepted_at IS NULL AND expires_at <= ?) OR (accepted_at IS NOT NULL AND accepted_at <= ?))",
         bindings: [acceptCutoffIso, payCutoffIso],
       };
     case "cancelled":
@@ -182,6 +186,14 @@ export interface ListBountiesFilters {
   offset?: number;
   /** Override "now" — used by tests for deterministic status filtering. */
   now?: Date;
+  /**
+   * Run a second COUNT(*) query for paginated UIs. Defaults to `false` — D1
+   * bills row reads and the active-bounties index would still scan every live
+   * row on each cache miss. When false, `total` is derived as
+   * `pageRows.length + offset`, which is exact for `total <= offset + limit`
+   * (the common single-page case).
+   */
+  withCount?: boolean;
 }
 
 export interface ListBountiesResult {
@@ -231,14 +243,6 @@ export async function listBounties(
 
   const whereClause = conditions.join(" AND ");
 
-  // Total count (for pagination UI). Pulled in same code path to keep it
-  // honest — D1 cost is the count plus the page, no extra round-trips.
-  const countRow = await db
-    .prepare(`SELECT COUNT(*) AS cnt FROM bounties b ${joinClause} WHERE ${whereClause}`)
-    .bind(...bindings)
-    .first<{ cnt: number }>();
-  const total = countRow?.cnt ?? 0;
-
   const pageRows = await db
     .prepare(
       `SELECT ${BOUNTY_COLUMNS.split(",").map((c) => `b.${c.trim()}`).join(", ")}
@@ -251,8 +255,18 @@ export async function listBounties(
     .bind(...bindings, limit, offset)
     .all<D1BountyRow>();
 
+  const rows = pageRows.results ?? [];
+  let total = rows.length + offset;
+  if (filters.withCount) {
+    const countRow = await db
+      .prepare(`SELECT COUNT(*) AS cnt FROM bounties b ${joinClause} WHERE ${whereClause}`)
+      .bind(...bindings)
+      .first<{ cnt: number }>();
+    total = countRow?.cnt ?? total;
+  }
+
   return {
-    bounties: (pageRows.results ?? []).map(rowToBounty),
+    bounties: rows.map(rowToBounty),
     total,
   };
 }
@@ -293,10 +307,14 @@ export async function insertBounty(
  * Mark a bounty as accepted with a chosen submission.
  *
  * The WHERE clause guards against concurrent acceptance — only flips a bounty
- * that still has no `accepted_at` and isn't cancelled or paid.
+ * that still has no `accepted_at` and isn't cancelled or paid. The
+ * `expires_at > acceptCutoff` predicate closes the TOCTOU window where a
+ * request straddling the 14-day accept-grace cutoff could resurrect an
+ * `abandoned` bounty (terminal state is now SQL-enforced, not just
+ * read-time-derived).
  *
  * Returns `true` when the row was updated, `false` when the bounty was not in
- * an acceptable state (race, already accepted, etc.).
+ * an acceptable state (race, already accepted, past the abandonment cutoff).
  */
 export async function setAccepted(
   db: D1Database,
@@ -304,6 +322,7 @@ export async function setAccepted(
   submissionId: string,
   acceptedAt: string
 ): Promise<boolean> {
+  const acceptCutoff = new Date(Date.parse(acceptedAt) - ACCEPT_GRACE_MS).toISOString();
   const result = await db
     .prepare(
       `UPDATE bounties
@@ -311,9 +330,10 @@ export async function setAccepted(
        WHERE id = ?
          AND accepted_at IS NULL
          AND cancelled_at IS NULL
-         AND paid_at IS NULL`
+         AND paid_at IS NULL
+         AND expires_at > ?`
     )
-    .bind(submissionId, acceptedAt, acceptedAt, bountyId)
+    .bind(submissionId, acceptedAt, acceptedAt, bountyId, acceptCutoff)
     .run();
   return (result.meta?.changes ?? 0) > 0;
 }
@@ -322,8 +342,10 @@ export async function setAccepted(
  * Mark a bounty as paid with the verified payout txid.
  *
  * Guarded by `accepted_at IS NOT NULL AND paid_at IS NULL` so a bounty can
- * only be flipped to paid from `winner-announced`. The unique partial index
- * on `paid_txid` enforces one-txid-per-bounty at the DB level.
+ * only be flipped to paid from `winner-announced`. The `accepted_at > payCutoff`
+ * predicate closes the TOCTOU window where a request straddling the 7-day
+ * pay-grace cutoff could flip an `abandoned` bounty to `paid`. The unique
+ * partial index on `paid_txid` enforces one-txid-per-bounty at the DB level.
  */
 export async function setPaid(
   db: D1Database,
@@ -331,6 +353,7 @@ export async function setPaid(
   paidTxid: string,
   paidAt: string
 ): Promise<boolean> {
+  const payCutoff = new Date(Date.parse(paidAt) - PAY_GRACE_MS).toISOString();
   const result = await db
     .prepare(
       `UPDATE bounties
@@ -338,23 +361,26 @@ export async function setPaid(
        WHERE id = ?
          AND accepted_at IS NOT NULL
          AND paid_at IS NULL
-         AND cancelled_at IS NULL`
+         AND cancelled_at IS NULL
+         AND accepted_at > ?`
     )
-    .bind(paidTxid, paidAt, paidAt, bountyId)
+    .bind(paidTxid, paidAt, paidAt, bountyId, payCutoff)
     .run();
   return (result.meta?.changes ?? 0) > 0;
 }
 
 /**
- * Cancel a bounty. Allowed only when no acceptance has happened — once a
- * winner is picked, the poster must follow through (or let the pay-grace
- * expire and the bounty flip to `abandoned`).
+ * Cancel a bounty. Allowed only when no acceptance has happened and the
+ * bounty hasn't already passed the abandonment cutoff — once that's true,
+ * `bountyStatus()` reports `abandoned` (terminal) and the spec says cancel
+ * cannot resurrect it.
  */
 export async function setCancelled(
   db: D1Database,
   bountyId: string,
   cancelledAt: string
 ): Promise<boolean> {
+  const acceptCutoff = new Date(Date.parse(cancelledAt) - ACCEPT_GRACE_MS).toISOString();
   const result = await db
     .prepare(
       `UPDATE bounties
@@ -362,9 +388,10 @@ export async function setCancelled(
        WHERE id = ?
          AND cancelled_at IS NULL
          AND paid_at IS NULL
-         AND accepted_at IS NULL`
+         AND accepted_at IS NULL
+         AND expires_at > ?`
     )
-    .bind(cancelledAt, cancelledAt, bountyId)
+    .bind(cancelledAt, cancelledAt, bountyId, acceptCutoff)
     .run();
   return (result.meta?.changes ?? 0) > 0;
 }

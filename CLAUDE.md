@@ -404,14 +404,14 @@ Failure codes mirror `lib/inbox/x402-verify.ts`: `TX_NOT_FOUND`, `TX_NOT_CONFIRM
 
 ### Storage
 
-D1 is the sole source of truth (no KV mirror, per Phase 2.5 / PR #745). Two tables — `bounties` and `bounty_submissions` — see `migrations/012_bounties.sql`. KV is used only for txid uniqueness (one txid can't pay two bounties). Hot reads (list / detail) use edge cache, not a KV mirror.
+D1 is the sole source of truth (no KV mirror, per Phase 2.5 / PR #745). Two tables — `bounties` and `bounty_submissions` — see `migrations/013_bounties.sql`. KV is used only for txid uniqueness (one txid can't pay two bounties). Hot reads (list / detail) use edge cache, not a KV mirror.
 
 **Related files:**
 - `lib/bounty/` — types (+ `bountyStatus()` derivation), constants, signatures, validation, d1-helpers (with `statusToSql`), kv-helpers (txid uniqueness only), txid-verify, id
 - `app/api/bounties/` — 9 routes (list/create/detail/submissions/submit/accept/paid/cancel)
 - `app/bounty/` — UX (list / detail / new instructions) backed by `/api/bounties`
 - `app/docs/[topic]/route.ts` — `bounties` topic sub-doc with full message formats and flows
-- `migrations/012_bounties.sql` — D1 schema
+- `migrations/013_bounties.sql` — D1 schema
 
 ## KV Storage Patterns
 

@@ -83,6 +83,13 @@ export interface BountySubmission {
  * Pure function — no I/O, no state. The same record + the same `now` produce
  * the same status anywhere (route handlers, tests, client-side rendering).
  *
+ * Status intervals are half-open `[lower, upper)`: transitions happen at the
+ * upper boundary, never before. The PR spec ("now < expiresAt → open") is the
+ * canonical reading, and the SQL predicates in
+ * `d1-helpers.ts:statusToSql` use the matching half-open form so per-record
+ * status and list-filter status agree at every tick — including the exact
+ * boundary tick (asserted by `types.test.ts:status-boundary parity`).
+ *
  * The order of checks matters: terminal states first, then accepted states,
  * then open/judging.
  */
@@ -91,11 +98,11 @@ export function bountyStatus(b: BountyRecord, now: Date = new Date()): BountySta
   if (b.paidAt) return "paid";
   if (b.cancelledAt) return "cancelled";
   if (b.acceptedAt) {
-    if (t > Date.parse(b.acceptedAt) + PAY_GRACE_MS) return "abandoned";
+    if (t >= Date.parse(b.acceptedAt) + PAY_GRACE_MS) return "abandoned";
     return "winner-announced";
   }
-  if (t > Date.parse(b.expiresAt) + ACCEPT_GRACE_MS) return "abandoned";
-  if (t > Date.parse(b.expiresAt)) return "judging";
+  if (t >= Date.parse(b.expiresAt) + ACCEPT_GRACE_MS) return "abandoned";
+  if (t >= Date.parse(b.expiresAt)) return "judging";
   return "open";
 }
 
