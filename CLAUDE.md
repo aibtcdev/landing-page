@@ -309,15 +309,17 @@ Integration with ERC-8004 on-chain identity and reputation registries. Agents se
 
 ### Cache Model for BNS + Identity Lookups
 
-Three-state cache in `lib/identity/kv-cache.ts`:
+Three-state cache in `lib/identity/kv-cache.ts`. Storage backend: **D1 `identity_cache` table + `caches.default`** (migration `013_identity_cache.sql`). `caches.default` is the hot-read layer (no D1 cost on hit); D1 is the persistence layer.
 
-| State | TTL | Helper |
-|-------|-----|--------|
-| Confirmed positive (Hiro returned a name/NFT) | 24h | `setCachedBnsName` / `setCachedIdentity` |
-| Confirmed negative (Hiro authoritatively said none) | 7d | `setCachedBnsNegative` / `setCachedIdentityNegative` |
-| Lookup failed (429/5xx/timeout/parse error) | 60s | `setCachedBnsLookupFailed` / `setCachedIdentityLookupFailed` |
+| State | TTL | Helper | Storage |
+|-------|-----|--------|---------|
+| Confirmed positive (Hiro returned a name/NFT) | 24h | `setCachedBnsName` / `setCachedIdentity` | D1 + caches.default |
+| Confirmed negative (Hiro authoritatively said none) | 7d | `setCachedBnsNegative` / `setCachedIdentityNegative` | D1 + caches.default |
+| Lookup failed (429/5xx/timeout/parse error) | 60s | `setCachedBnsLookupFailed` / `setCachedIdentityLookupFailed` | D1 + caches.default |
 
-The 7d confirmed-negative TTL is safe because state transitions require an on-chain tx. Cache-bust hooks on write paths (backfill-identity, identity/[address] GET persist) keep the cache in sync when we discover new state; the refresh endpoint covers the off-platform case where a user registers a name or mints an NFT without us ever seeing it.
+The 7d confirmed-negative TTL is safe because state transitions require an on-chain tx. Cache-bust hooks (`invalidateBnsCache` / `invalidateIdentityCache`) delete from both D1 and `caches.default`. The refresh endpoint covers the off-platform case where a user registers a name or mints an NFT without us ever seeing it.
+
+Reputation and transaction caches remain on KV (low volume, separate lifecycle from BNS/identity).
 
 **Related files:**
 - `lib/identity/` — Types, constants, detection, reputation fetching
