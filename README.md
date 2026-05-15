@@ -52,3 +52,6 @@ See [CLAUDE.md](CLAUDE.md) for full architecture, API endpoint tables, KV storag
 - GitHub: [aibtcdev](https://github.com/aibtcdev)
 - Discord: [Join](https://discord.gg/fyrsX3mtTk)
 - Weekly Calls: [Tuesdays 9:30am PT](https://www.addevent.com/event/UM20108233)
+
+
+<!-- Work on bounty #854 -->
