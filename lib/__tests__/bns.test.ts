@@ -308,6 +308,69 @@ describe("lookupBnsName", () => {
       expect(result).toBeNull();
     });
 
+    it("writes different Cache-Control max-age for contract-error (5min) vs lookup-failed (60s)", async () => {
+      // The 'contract-error' state was added in this migration so the row
+      // reflects which branch wrote it. Verify the TTL distinction at the
+      // observable boundary: the Cache-Control header the cache layer writes.
+      const store = new Map<string, Response>();
+      const captured: { key: string; maxAge: number }[] = [];
+      const cacheMock = {
+        match: vi.fn(async (req: Request) => {
+          const key = typeof req === "string" ? req : req.url;
+          const r = store.get(key);
+          return r ? r.clone() : undefined;
+        }),
+        put: vi.fn(async (req: Request, res: Response) => {
+          const key = typeof req === "string" ? req : req.url;
+          const cc = res.headers.get("Cache-Control") ?? "";
+          const m = cc.match(/max-age=(\d+)/);
+          if (m) captured.push({ key, maxAge: Number(m[1]) });
+          store.set(key, res.clone());
+        }),
+        delete: vi.fn(async (req: Request) => {
+          const key = typeof req === "string" ? req : req.url;
+          return store.delete(key);
+        }),
+      };
+      const prevCaches = (globalThis as unknown as Record<string, unknown>)
+        .caches;
+      (globalThis as unknown as Record<string, unknown>).caches = {
+        default: cacheMock,
+      };
+
+      try {
+        // Contract-error branch: Hiro returns {okay:false}. Expect 5min TTL.
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          status: 200,
+          headers: mockHeaders(),
+          json: async () => ({ okay: false, result: "some error" }),
+        });
+        await lookupBnsName("SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7");
+
+        // Lookup-failed branch: Hiro 500. Expect 60s TTL. Use a different
+        // address so we don't hit the warmed cache from the previous call.
+        mockFetch.mockResolvedValue({
+          ok: false,
+          status: 500,
+          headers: mockHeaders(),
+        });
+        await lookupBnsName("SP1HNK0F18S5J7BMHQA72E1QBKD3K3T56AVMZS3E9");
+
+        const writes = captured.map((c) => c.maxAge);
+        expect(writes).toContain(5 * 60); // BNS_CONTRACT_ERROR_CACHE_TTL
+        expect(writes).toContain(60); // BNS_LOOKUP_FAILED_CACHE_TTL
+        expect(5 * 60).not.toBe(60); // Sanity: the two TTLs are distinct.
+      } finally {
+        if (prevCaches === undefined) {
+          delete (globalThis as unknown as Record<string, unknown>).caches;
+        } else {
+          (globalThis as unknown as Record<string, unknown>).caches =
+            prevCaches;
+        }
+      }
+    });
+
     it("does not re-hit Hiro after negative cache is warmed (D1 + caches.default)", async () => {
       // End-to-end behavioral coverage for the D1 + caches.default cache
       // path: a 500 from Hiro warms the negative cache; a second

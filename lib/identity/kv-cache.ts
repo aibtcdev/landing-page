@@ -185,19 +185,19 @@ async function d1Get(
 
 /**
  * Write a row to D1 `identity_cache` (INSERT OR REPLACE). No-op on error.
+ * Takes the absolute `expiresAt` ISO string rather than a TTL so the caller
+ * is the single owner of the now-vs-expiry computation (see `layeredPut`).
  */
 async function d1Put(
   type: CacheType,
   address: string,
   state: CacheState,
   value: string | null,
-  ttlSeconds: number,
+  expiresAt: string,
   logger?: Logger
 ): Promise<void> {
   const db = await getDb();
   if (!db) return;
-
-  const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
 
   try {
     await db
@@ -327,12 +327,13 @@ async function edgeCacheDelete(type: CacheType, address: string): Promise<void> 
 /**
  * Read from the two-layer cache (caches.default → D1). On a D1 hit that
  * was a caches.default miss, the entry is written back to caches.default
- * to warm the hot layer.
+ * to warm the hot layer for the row's full remaining TTL — the D1 expiry
+ * is the source of truth for "when does this entry die," so the edge cache
+ * should honor it instead of being capped by the fresh-write TTL constant.
  */
 async function layeredGet(
   type: CacheType,
   address: string,
-  ttlSeconds: number,
   logger?: Logger
 ): Promise<IdentityCacheRow | null> {
   // Hot layer first
@@ -343,19 +344,15 @@ async function layeredGet(
   const d1Row = await d1Get(type, address, logger);
   if (!d1Row) return null;
 
-  // Warm the hot layer with remaining TTL (avoid writing with negative TTL).
-  // Register the put with ctx.waitUntil so the Workers runtime doesn't cancel
-  // it when the request handler returns — falling back to await when ctx is
-  // absent (local dev / test). Mirrors the pattern from lib/edge-cache.ts:94.
+  // Warm the hot layer with the row's full remaining TTL (avoid writing with
+  // negative TTL). Register the put with ctx.waitUntil so the Workers runtime
+  // doesn't cancel it when the request handler returns — falling back to
+  // await when ctx is absent (local dev / test). Mirrors the pattern from
+  // lib/edge-cache.ts:94.
   const remainingMs = new Date(d1Row.expires_at).getTime() - Date.now();
   const remainingSeconds = Math.floor(remainingMs / 1000);
   if (remainingSeconds > 0) {
-    const stash = edgeCachePut(
-      type,
-      address,
-      d1Row,
-      Math.min(remainingSeconds, ttlSeconds)
-    );
+    const stash = edgeCachePut(type, address, d1Row, remainingSeconds);
     try {
       const { ctx } = await getCloudflareContext();
       if (ctx) {
@@ -383,11 +380,14 @@ async function layeredPut(
   ttlSeconds: number,
   logger?: Logger
 ): Promise<void> {
+  // Compute `expiresAt` once and pass it through to both layers — the D1
+  // row's `expires_at` column and the edge cache's `IdentityCacheRow.expires_at`
+  // body field stay in lockstep, no sub-ms drift between two `Date.now()` reads.
   const expiresAt = new Date(Date.now() + ttlSeconds * 1000).toISOString();
   const row: IdentityCacheRow = { state, value, expires_at: expiresAt };
 
   await Promise.all([
-    d1Put(type, address, state, value, ttlSeconds, logger),
+    d1Put(type, address, state, value, expiresAt, logger),
     edgeCachePut(type, address, row, ttlSeconds),
   ]);
 }
@@ -545,6 +545,14 @@ async function readSentinelCache<T>(
 // ---------------------------------------------------------------------------
 // Public: BNS cache (D1 + caches.default — no KV writes)
 // ---------------------------------------------------------------------------
+//
+// Every BNS and identity helper in this section accepts `kv?: KVNamespace`
+// but ignores it — storage moved to D1 + `caches.default` in migration
+// 013_identity_cache.sql. The parameter is retained only so the dozens of
+// existing call sites compile without a coordinated update; a future cleanup
+// PR can drop the arg from the signatures. Reputation and transaction
+// helpers (further down) still use `kv` because those caches were
+// intentionally left on KV.
 
 /**
  * Get the cached BNS name for a Stacks address.
@@ -558,7 +566,7 @@ export async function getCachedBnsName(
   kv?: KVNamespace,
   logger?: Logger
 ): Promise<string | null> {
-  const row = await layeredGet("bns", address, BNS_CACHE_TTL, logger);
+  const row = await layeredGet("bns", address, logger);
 
   if (!row) {
     logCacheEvent(logger, "cache.miss", "bns", address);
@@ -668,12 +676,7 @@ export async function getCachedIdentity(
   kv?: KVNamespace,
   logger?: Logger
 ): Promise<CacheResult<AgentIdentity>> {
-  const row = await layeredGet(
-    "identity",
-    address,
-    IDENTITY_CACHE_TTL,
-    logger
-  );
+  const row = await layeredGet("identity", address, logger);
 
   if (!row) {
     logCacheEvent(logger, "cache.miss", "identity", address);
