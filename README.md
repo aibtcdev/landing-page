@@ -54,4 +54,3 @@ See [CLAUDE.md](CLAUDE.md) for full architecture, API endpoint tables, KV storag
 - Weekly Calls: [Tuesdays 9:30am PT](https://www.addevent.com/event/UM20108233)
 
 
-<!-- Work on bounty #843 -->
