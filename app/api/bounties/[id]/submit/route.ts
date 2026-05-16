@@ -13,7 +13,6 @@ import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import {
   SIGNATURE_WINDOW_SECONDS,
-  bodyHash,
   bountyStatus,
   buildSubmitMessage,
   generateSubmissionId,
@@ -61,15 +60,12 @@ export async function POST(
       );
     }
 
-    // Verify signature
-    const hash = bodyHash({
-      message: data.message,
-      ...(data.contentUrl && { contentUrl: data.contentUrl }),
-    });
+    // Verify signature — full submission body is part of the signed message.
     const message = buildSubmitMessage({
       bountyId: id,
       submitterBtcAddress: data.submitterBtcAddress,
-      bodyHash: hash,
+      message: data.message,
+      contentUrl: data.contentUrl,
       signedAt: data.signedAt,
     });
     let sigResult;

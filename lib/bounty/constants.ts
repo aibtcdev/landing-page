@@ -85,8 +85,10 @@ export const PAID_TXID_TTL_SECONDS = 365 * 24 * 60 * 60;
 
 /** Signed-message templates. Build via `lib/bounty/signatures.ts`. */
 export const SIGNATURE_MESSAGE_FORMATS = {
-  CREATE: "AIBTC Bounty Create | {posterBtc} | {bodyHash} | {signedAt}",
-  SUBMIT: "AIBTC Bounty Submit | {bountyId} | {submitterBtc} | {bodyHash} | {signedAt}",
+  CREATE:
+    "AIBTC Bounty Create | {posterBtc} | {title} | {description} | {rewardSats} | {expiresAt} | {tags} | {signedAt}",
+  SUBMIT:
+    "AIBTC Bounty Submit | {bountyId} | {submitterBtc} | {message} | {contentUrl} | {signedAt}",
   ACCEPT: "AIBTC Bounty Accept | {bountyId} | {submissionId} | {signedAt}",
   PAID: "AIBTC Bounty Paid | {bountyId} | {txid} | {signedAt}",
   CANCEL: "AIBTC Bounty Cancel | {bountyId} | {signedAt}",

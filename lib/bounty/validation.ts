@@ -288,7 +288,7 @@ export function validateCreateBounty(body: unknown):
     errors,
     b.signature,
     "signature",
-    "AIBTC Bounty Create | {posterBtcAddress} | {bodyHash} | {signedAt}"
+    "AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}"
   );
 
   if (errors.length > 0) {
@@ -394,7 +394,7 @@ export function validateSubmit(body: unknown):
     errors,
     b.signature,
     "signature",
-    "AIBTC Bounty Submit | {bountyId} | {submitterBtcAddress} | {bodyHash} | {signedAt}"
+    "AIBTC Bounty Submit | {bountyId} | {submitterBtcAddress} | {message} | {contentUrl} | {signedAt}"
   );
 
   if (errors.length > 0) return { errors: errors.map((e) => e.hint) };

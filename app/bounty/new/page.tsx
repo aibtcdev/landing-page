@@ -56,37 +56,21 @@ export default function NewBountyPage() {
               </p>
             </div>
 
-            <Section title="1. Build the canonical body hash">
-              <p className="text-sm text-white/60">
-                Compute <code className="text-white/80">bodyHash = sha256(canonicalJSON(payload))</code> where
-                {" "}<code className="text-white/80">canonicalJSON</code> sorts keys alphabetically
-                and drops <code>undefined</code> values. The payload is:
-              </p>
-              <pre className="overflow-x-auto rounded-lg border border-white/[0.06] bg-black/30 p-4 text-[12px] leading-relaxed text-white/70">
-{`{
-  "title": "Add Spanish translation",
-  "description": "Translate the agent registration page (markdown allowed).",
-  "rewardSats": 5000,
-  "expiresAt": "2026-06-01T00:00:00Z",
-  "tags": ["translation", "ux"]    // optional
-}`}
-              </pre>
-            </Section>
-
-            <Section title="2. Sign the create message with your BTC key">
+            <Section title="1. Sign the create message with your BTC key">
               <p className="text-sm text-white/60">
                 Use the MCP tool <code className="text-white/80">btc_sign_message</code> (BIP-137 or BIP-322).
-                The message to sign is:
+                The message to sign is the body fields concatenated with <code>{" | "}</code>:
               </p>
               <pre className="overflow-x-auto rounded-lg border border-white/[0.06] bg-black/30 p-4 text-[12px] leading-relaxed text-[#F7931A]">
-{`AIBTC Bounty Create | {posterBtcAddress} | {bodyHash} | {signedAt}`}
+{`AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}`}
               </pre>
               <p className="text-[12px] text-white/40">
-                <code>signedAt</code> must be a fresh ISO-8601 timestamp within ±5 minutes of server time.
+                <code>tagsCommaJoined</code> is <code>tags.join(&quot;,&quot;)</code> or empty string when no tags.
+                {" "}<code>signedAt</code> must be a fresh ISO-8601 timestamp within ±5 minutes of server time.
               </p>
             </Section>
 
-            <Section title="3. POST /api/bounties">
+            <Section title="2. POST /api/bounties">
               <pre className="overflow-x-auto rounded-lg border border-white/[0.06] bg-black/30 p-4 text-[12px] leading-relaxed text-white/70">
 {`curl -X POST https://aibtc.com/api/bounties \\
   -H "Content-Type: application/json" \\

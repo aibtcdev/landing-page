@@ -1,7 +1,5 @@
 import { describe, it, expect } from "vitest";
 import {
-  canonicalJSON,
-  bodyHash,
   buildCreateMessage,
   buildSubmitMessage,
   buildAcceptMessage,
@@ -10,57 +8,55 @@ import {
   isWithinSignatureWindow,
 } from "../signatures";
 
-describe("canonicalJSON", () => {
-  it("sorts keys alphabetically", () => {
-    expect(canonicalJSON({ b: 2, a: 1, c: 3 })).toBe('{"a":1,"b":2,"c":3}');
-  });
-
-  it("drops undefined values", () => {
-    expect(canonicalJSON({ a: 1, b: undefined, c: 3 })).toBe('{"a":1,"c":3}');
-  });
-
-  it("keeps null values", () => {
-    expect(canonicalJSON({ a: null, b: 1 })).toBe('{"a":null,"b":1}');
-  });
-
-  it("is deterministic regardless of insertion order", () => {
-    expect(canonicalJSON({ z: 1, a: 2 })).toBe(canonicalJSON({ a: 2, z: 1 }));
-  });
-});
-
-describe("bodyHash", () => {
-  it("returns a 64-char lowercase hex string", () => {
-    const h = bodyHash({ title: "x", body: "y" });
-    expect(h).toMatch(/^[0-9a-f]{64}$/);
-  });
-
-  it("is stable across calls", () => {
-    expect(bodyHash({ a: 1, b: 2 })).toBe(bodyHash({ b: 2, a: 1 }));
-  });
-
-  it("changes when the payload changes", () => {
-    expect(bodyHash({ a: 1 })).not.toBe(bodyHash({ a: 2 }));
-  });
-});
-
 describe("message builders", () => {
-  it("buildCreateMessage embeds all three fields", () => {
+  it("buildCreateMessage embeds all body fields and signedAt", () => {
     const msg = buildCreateMessage({
       posterBtcAddress: "bc1qabc",
-      bodyHash: "0123",
+      title: "Add Spanish translation",
+      description: "Translate the agent registration page.",
+      rewardSats: 5000,
+      expiresAt: "2026-06-01T00:00:00Z",
+      tags: ["translation", "ux"],
       signedAt: "2026-01-01T00:00:00Z",
     });
-    expect(msg).toBe("AIBTC Bounty Create | bc1qabc | 0123 | 2026-01-01T00:00:00Z");
+    expect(msg).toBe(
+      "AIBTC Bounty Create | bc1qabc | Add Spanish translation | Translate the agent registration page. | 5000 | 2026-06-01T00:00:00Z | translation,ux | 2026-01-01T00:00:00Z"
+    );
   });
 
-  it("buildSubmitMessage embeds bountyId, submitter, bodyHash, signedAt", () => {
+  it("buildCreateMessage emits empty tags segment when tags omitted", () => {
+    const msg = buildCreateMessage({
+      posterBtcAddress: "bc1qabc",
+      title: "T",
+      description: "D",
+      rewardSats: 1,
+      expiresAt: "X",
+      signedAt: "Y",
+    });
+    expect(msg).toBe("AIBTC Bounty Create | bc1qabc | T | D | 1 | X |  | Y");
+  });
+
+  it("buildSubmitMessage embeds full submission body", () => {
     const msg = buildSubmitMessage({
       bountyId: "B1",
       submitterBtcAddress: "bc1qsub",
-      bodyHash: "abcd",
+      message: "Here is my work",
+      contentUrl: "https://example.com/pr/42",
       signedAt: "T",
     });
-    expect(msg).toBe("AIBTC Bounty Submit | B1 | bc1qsub | abcd | T");
+    expect(msg).toBe(
+      "AIBTC Bounty Submit | B1 | bc1qsub | Here is my work | https://example.com/pr/42 | T"
+    );
+  });
+
+  it("buildSubmitMessage emits empty contentUrl segment when omitted", () => {
+    const msg = buildSubmitMessage({
+      bountyId: "B1",
+      submitterBtcAddress: "bc1qsub",
+      message: "msg",
+      signedAt: "T",
+    });
+    expect(msg).toBe("AIBTC Bounty Submit | B1 | bc1qsub | msg |  | T");
   });
 
   it("buildAcceptMessage embeds bountyId, submissionId, signedAt", () => {

@@ -2,9 +2,9 @@
  * Signed message builders for bounty actions.
  *
  * Each POST endpoint accepts a Bitcoin signature (BIP-137/322) over one of
- * the templates below. The body content is bound to the signature via
- * `bodyHash` (sha256 of the canonical JSON of the payload), so the signature
- * cannot be reused with a modified body.
+ * the templates below. The full body content is included in the signed
+ * message — same pattern as `/api/outbox` and other signed-action endpoints
+ * in this codebase — so any tampering with the body breaks the signature.
  *
  * Verification: route handlers call `verifyBitcoinSignature()` from
  * `lib/bitcoin-verify.ts` with the rebuilt message and the body's stated
@@ -12,64 +12,56 @@
  * address matches and `signedAt` is within `SIGNATURE_WINDOW_SECONDS`.
  */
 
-import { hashSha256Sync } from "@stacks/encryption";
-import { bytesToHex } from "@stacks/common";
 import { SIGNATURE_MESSAGE_FORMATS } from "./constants";
 
-/**
- * Canonical JSON for hashing: sorted keys, no whitespace, undefined dropped.
- *
- * Deterministic so the client and server produce the same `bodyHash` from
- * the same fields. Keep the payload simple — no nested objects, no arrays of
- * objects — and this stays predictable.
- */
-export function canonicalJSON(payload: Record<string, unknown>): string {
-  const sortedKeys = Object.keys(payload).sort();
-  const out: Record<string, unknown> = {};
-  for (const k of sortedKeys) {
-    const v = payload[k];
-    if (v === undefined) continue;
-    out[k] = v;
-  }
-  return JSON.stringify(out);
-}
-
-/** sha256 of canonical JSON, returned as lowercase hex. */
-export function bodyHash(payload: Record<string, unknown>): string {
-  return bytesToHex(hashSha256Sync(new TextEncoder().encode(canonicalJSON(payload))));
+/** Join tags with commas; empty string when no tags. */
+function joinTags(tags: string[] | undefined): string {
+  return Array.isArray(tags) ? tags.join(",") : "";
 }
 
 /**
  * Build the message a poster signs to create a bounty.
  *
- * Fields signed via bodyHash: title, description, rewardSats, expiresAt, tags.
+ * All body fields are included in the signed message so the signature is
+ * bound to the exact bounty content.
  */
 export function buildCreateMessage(params: {
   posterBtcAddress: string;
-  bodyHash: string;
+  title: string;
+  description: string;
+  rewardSats: number;
+  expiresAt: string;
+  tags?: string[];
   signedAt: string;
 }): string {
   return SIGNATURE_MESSAGE_FORMATS.CREATE
     .replace("{posterBtc}", params.posterBtcAddress)
-    .replace("{bodyHash}", params.bodyHash)
+    .replace("{title}", params.title)
+    .replace("{description}", params.description)
+    .replace("{rewardSats}", String(params.rewardSats))
+    .replace("{expiresAt}", params.expiresAt)
+    .replace("{tags}", joinTags(params.tags))
     .replace("{signedAt}", params.signedAt);
 }
 
 /**
  * Build the message a submitter signs to submit work to a bounty.
  *
- * Fields signed via bodyHash: message, contentUrl.
+ * Full submission body is included — `contentUrl` is empty string when
+ * omitted.
  */
 export function buildSubmitMessage(params: {
   bountyId: string;
   submitterBtcAddress: string;
-  bodyHash: string;
+  message: string;
+  contentUrl?: string;
   signedAt: string;
 }): string {
   return SIGNATURE_MESSAGE_FORMATS.SUBMIT
     .replace("{bountyId}", params.bountyId)
     .replace("{submitterBtc}", params.submitterBtcAddress)
-    .replace("{bodyHash}", params.bodyHash)
+    .replace("{message}", params.message)
+    .replace("{contentUrl}", params.contentUrl ?? "")
     .replace("{signedAt}", params.signedAt);
 }
 
