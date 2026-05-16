@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from "react";
 import Link from "next/link";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime } from "@/lib/utils";
+import { getStablecoinUsdFallback } from "@/lib/external/tenero/stablecoin-fallbacks";
 import Tooltip from "../components/Tooltip";
 
 /**
@@ -142,6 +143,19 @@ function writeCachedPrice(
 }
 
 async function fetchTokenPrice(tokenId: string): Promise<TokenPrice | null> {
+  // USD-pegged tokens: Tenero 404s on these (verified for aeUSDC / USDCx),
+  // so short-circuit to the shared $1 fallback before the HTTP call.
+  // Mirrors the server-side fast path in `lib/external/tenero/prices.ts` so
+  // server and client agree on what a stablecoin is worth, and the
+  // leaderboard's P&L stops silently dropping any trade leg in this set.
+  const stablecoinFallback = getStablecoinUsdFallback(tokenId);
+  if (stablecoinFallback) {
+    return {
+      priceUsd: stablecoinFallback.priceUsd,
+      decimals: stablecoinFallback.decimals,
+    };
+  }
+
   const cached = readCachedPrice(tokenId);
   if (cached) {
     if (cached.priceUsd != null && cached.decimals != null) {
