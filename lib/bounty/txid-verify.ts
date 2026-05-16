@@ -286,8 +286,12 @@ export async function verifyPayoutTxid(params: {
     };
   }
 
-  // (8) Tx time > acceptedAt - 60s skew.
-  const blockTimeIso = tx.burn_block_time_iso ?? tx.block_time_iso ?? now.toISOString();
+  // (8) Tx time > acceptedAt - 60s skew. Prefer `block_time_iso` (Stacks
+  // block time — when the tx actually landed in a Stacks block) over
+  // `burn_block_time_iso` (Bitcoin anchor block time — can lag by 30+ min).
+  // Using the burn block time falsely rejects payouts whose sBTC transfer
+  // landed after `acceptedAt` but were anchored to an older Bitcoin block.
+  const blockTimeIso = tx.block_time_iso ?? tx.burn_block_time_iso ?? now.toISOString();
   const blockTimeMs = Date.parse(blockTimeIso);
   const acceptedMs = params.bounty.acceptedAt ? Date.parse(params.bounty.acceptedAt) : 0;
   if (!Number.isNaN(blockTimeMs) && blockTimeMs + 60_000 < acceptedMs) {

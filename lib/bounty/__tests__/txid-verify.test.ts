@@ -327,6 +327,28 @@ describe("verifyPayoutTxid", () => {
     if (!r.ok) expect(r.code).toBe("TX_TOO_OLD");
   });
 
+  it("prefers Stacks block_time_iso over older burn_block_time_iso", async () => {
+    // Real-world scenario: a Stacks tx broadcast after the bounty was
+    // accepted lands in a Stacks block whose burn anchor (Bitcoin block)
+    // started ~10 min earlier. Using burn_block_time falsely rejects
+    // legitimate payouts. The verifier must prefer block_time_iso (the
+    // Stacks block time — when the tx actually landed).
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty({ acceptedAt: "2026-05-16T13:01:58Z" }),
+      acceptedSubmission: makeSubmission(),
+      fetchFn: mockFetch({
+        json: () =>
+          makeHiroTx({
+            burn_block_time_iso: "2026-05-16T12:56:29Z", // 5 min before accept
+            block_time_iso: "2026-05-16T13:05:16Z", // 3 min after accept
+          }),
+      }),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.blockTimeIso).toBe("2026-05-16T13:05:16Z");
+  });
+
   it("returns HIRO_UNREACHABLE on fetch throw", async () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
