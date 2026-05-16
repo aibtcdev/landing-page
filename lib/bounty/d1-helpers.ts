@@ -216,7 +216,11 @@ export async function listBounties(
   const offset = Math.max(filters.offset ?? 0, 0);
   const now = filters.now ?? new Date();
 
-  const statusFrag = statusToSql(filters.status ?? "active", now);
+  // No internal default — callers who want active-only must pass it
+  // explicitly. The /bounty UI page wants everything (chip filters drive
+  // the view); the /api/bounties GET handler has its own default-to-active
+  // applied before calling. An undefined here means "no status filter."
+  const statusFrag = statusToSql(filters.status, now);
   const conditions: string[] = [statusFrag.sql];
   const bindings: (string | number)[] = [...statusFrag.bindings];
 
