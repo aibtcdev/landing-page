@@ -21,7 +21,6 @@ import {
   MIN_EXPIRY_HOURS,
   MAX_EXPIRY_DAYS,
   SIGNATURE_WINDOW_SECONDS,
-  bodyHash,
   buildCreateMessage,
   isWithinSignatureWindow,
   validateCreateBounty,
@@ -85,7 +84,7 @@ function selfDoc(): NextResponse {
           tags: "Optional string[] (max 5 tags).",
           signedAt: "ISO timestamp you used when signing (±5 minutes of server time).",
           signature:
-            "BIP-137/BIP-322 signature over 'AIBTC Bounty Create | {posterBtcAddress} | {bodyHash} | {signedAt}'. bodyHash is sha256 of canonical JSON of {title, description, rewardSats, expiresAt, tags}.",
+            "BIP-137/BIP-322 signature over 'AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}'. tagsCommaJoined is tags.join(\",\") or empty string when no tags.",
         },
         responses: {
           "201": { bounty: "...", status: "open" },
@@ -218,17 +217,15 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Verify signature
-    const hash = bodyHash({
+    // Verify signature — message is built from the body fields directly so
+    // any tampering with title/description/reward/expiry/tags breaks it.
+    const message = buildCreateMessage({
+      posterBtcAddress: data.posterBtcAddress,
       title: data.title,
       description: data.description,
       rewardSats: data.rewardSats,
       expiresAt: data.expiresAt,
-      ...(data.tags && { tags: data.tags }),
-    });
-    const message = buildCreateMessage({
-      posterBtcAddress: data.posterBtcAddress,
-      bodyHash: hash,
+      tags: data.tags,
       signedAt: data.signedAt,
     });
     let sigResult;

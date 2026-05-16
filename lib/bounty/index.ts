@@ -37,8 +37,6 @@ export {
 } from "./constants";
 
 export {
-  canonicalJSON,
-  bodyHash,
   buildCreateMessage,
   buildSubmitMessage,
   buildAcceptMessage,

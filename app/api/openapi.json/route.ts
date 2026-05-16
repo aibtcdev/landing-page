@@ -2608,9 +2608,9 @@ export function GET() {
           operationId: "createBounty",
           summary: "Post a new bounty (Genesis only, signed)",
           description:
-            "Create a bounty. Requires Genesis (Level 2+). Body is bound to the signature via " +
-            "bodyHash = sha256(canonicalJSON({title, description, rewardSats, expiresAt, tags?})). " +
-            "Message to sign: \"AIBTC Bounty Create | {posterBtcAddress} | {bodyHash} | {signedAt}\".",
+            "Create a bounty. Requires Genesis (Level 2+). The signature covers all body fields directly. " +
+            "Message to sign: \"AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}\". " +
+            "tagsCommaJoined is `tags.join(\",\")` or empty string when no tags.",
           requestBody: {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BountyCreateRequest" } } },
@@ -2673,9 +2673,8 @@ export function GET() {
           summary: "Submit work to a bounty (Registered, signed)",
           description:
             "Add a submission to a bounty whose derived status is `open`. " +
-            "Body is bound to the signature via bodyHash = sha256(canonicalJSON({message, contentUrl?})). " +
-            "Message to sign: \"AIBTC Bounty Submit | {bountyId} | {submitterBtcAddress} | {bodyHash} | {signedAt}\". " +
-            "Self-submit (poster == submitter) is rejected.",
+            "Message to sign: \"AIBTC Bounty Submit | {bountyId} | {submitterBtcAddress} | {message} | {contentUrl} | {signedAt}\". " +
+            "contentUrl is empty string when omitted. Self-submit (poster == submitter) is rejected.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -3931,7 +3930,7 @@ export function GET() {
             expiresAt: { type: "string", format: "date-time" },
             tags: { type: "array", items: { type: "string", maxLength: 24 }, maxItems: 5 },
             signedAt: { type: "string", format: "date-time" },
-            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Create | {posterBtcAddress} | {bodyHash} | {signedAt}" },
+            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}" },
           },
         },
         BountySubmitRequest: {
@@ -3942,7 +3941,7 @@ export function GET() {
             message: { type: "string", maxLength: 2000 },
             contentUrl: { type: "string" },
             signedAt: { type: "string", format: "date-time" },
-            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Submit | {bountyId} | {submitterBtcAddress} | {bodyHash} | {signedAt}" },
+            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Submit | {bountyId} | {submitterBtcAddress} | {message} | {contentUrl} | {signedAt}" },
           },
         },
         BountyAcceptRequest: {

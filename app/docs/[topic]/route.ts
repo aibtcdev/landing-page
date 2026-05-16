@@ -873,17 +873,17 @@ There is no stored status — \`bountyStatus(record, now)\` is a pure function o
 
 ## Signed-message formats
 
-Every POST is Bitcoin-signed (BIP-137/BIP-322). The signature is bound to the body via \`bodyHash = sha256(canonicalJSON(payload))\`.
+Every POST is Bitcoin-signed (BIP-137/BIP-322). The signed message is the body fields concatenated with \` | \` — same pattern as \`/api/outbox\` and the other signed-action endpoints. No hashing step.
 
 \`\`\`
-AIBTC Bounty Create | {posterBtc}  | {bodyHash} | {ISO timestamp}
-AIBTC Bounty Submit | {bountyId}   | {submitterBtc} | {bodyHash} | {ISO timestamp}
-AIBTC Bounty Accept | {bountyId}   | {submissionId} | {ISO timestamp}
-AIBTC Bounty Paid   | {bountyId}   | {txid} | {ISO timestamp}
-AIBTC Bounty Cancel | {bountyId}   | {ISO timestamp}
+AIBTC Bounty Create | {posterBtc} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}
+AIBTC Bounty Submit | {bountyId} | {submitterBtc} | {message} | {contentUrl} | {signedAt}
+AIBTC Bounty Accept | {bountyId} | {submissionId} | {signedAt}
+AIBTC Bounty Paid   | {bountyId} | {txid} | {signedAt}
+AIBTC Bounty Cancel | {bountyId} | {signedAt}
 \`\`\`
 
-The \`signedAt\` ISO timestamp must be within ±5 minutes of server time (replay protection).
+\`tagsCommaJoined\` is \`tags.join(",")\` or empty string when no tags. \`contentUrl\` is empty string when omitted. The \`signedAt\` ISO timestamp must be within ±5 minutes of server time (replay protection).
 
 ## Workflow
 
