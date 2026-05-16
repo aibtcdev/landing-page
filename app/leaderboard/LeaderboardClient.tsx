@@ -143,11 +143,7 @@ function writeCachedPrice(
 }
 
 async function fetchTokenPrice(tokenId: string): Promise<TokenPrice | null> {
-  // USD-pegged tokens: Tenero 404s on these (verified for aeUSDC / USDCx),
-  // so short-circuit to the shared $1 fallback before the HTTP call.
-  // Mirrors the server-side fast path in `lib/external/tenero/prices.ts` so
-  // server and client agree on what a stablecoin is worth, and the
-  // leaderboard's P&L stops silently dropping any trade leg in this set.
+  // Tenero 404s on USD-pegged tokens; use the shared fallback instead.
   const stablecoinFallback = getStablecoinUsdFallback(tokenId);
   if (stablecoinFallback) {
     return {

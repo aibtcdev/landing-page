@@ -7,13 +7,7 @@
 export interface StablecoinUsdFallback {
   symbol: string;
   priceUsd: number;
-  /**
-   * On-chain decimals. Server-side callers (the scheduler / `/api/prices`)
-   * read only `priceUsd`; the leaderboard client also needs decimals to
-   * convert raw amounts to USD, and Tenero 404s on these contracts so it
-   * can't get the value there. Verified via SIP-010 `get-decimals` on
-   * 2026-05-16.
-   */
+  /** On-chain SIP-010 decimals. */
   decimals: number;
 }
 
