@@ -42,7 +42,11 @@ async function fetchBounties(): Promise<{ bounties: BountyWithStatus[]; total: n
     const kv = env.VERIFIED_AGENTS as KVNamespace | undefined;
     if (!db) return null;
     const now = new Date();
-    const { bounties, total } = await listBounties(db, { status: "active", limit: 100, now });
+    // Fetch every bounty regardless of status — the client filter chips
+    // (All / Open / Judging / Winner / Paid / Abandoned / Cancelled) need
+    // the full set to filter against. Paid + abandoned bounties stay
+    // visible forever for transparency.
+    const { bounties, total } = await listBounties(db, { limit: 100, now });
 
     // Enrich each bounty with the poster's display name so cards can show
     // identity instead of a raw BTC address. Dedupe by poster so the same
