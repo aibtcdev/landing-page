@@ -43,23 +43,6 @@ function CheckIcon({ className = "size-3.5" }: { className?: string }) {
   );
 }
 
-function CalendarIcon({ className = "size-3.5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <rect x="3" y="5" width="18" height="16" rx="2" strokeLinecap="round" strokeLinejoin="round" />
-      <path d="M3 9h18M8 3v4M16 3v4" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  );
-}
-
-function InboxIcon({ className = "size-3.5" }: { className?: string }) {
-  return (
-    <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
-      <path strokeLinecap="round" strokeLinejoin="round" d="M3 13l3-8h12l3 8v6a1 1 0 01-1 1H4a1 1 0 01-1-1v-6zM3 13h5l1 2h6l1-2h5" />
-    </svg>
-  );
-}
-
 function TrophyIcon({ className = "size-3.5" }: { className?: string }) {
   return (
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
@@ -159,10 +142,10 @@ function timelineMessage(status: BountyStatus): { tone: "ok" | "warn" | "bad"; t
   }
 }
 
-function MetaItem({ label, icon, children }: { label: string; icon: React.ReactNode; children: React.ReactNode }) {
+function MetaItem({ label, icon, children }: { label: string; icon?: React.ReactNode; children: React.ReactNode }) {
   return (
     <div className="flex items-start gap-2.5 min-w-0">
-      <div className="mt-0.5 text-white/40 shrink-0">{icon}</div>
+      {icon && <div className="mt-0.5 text-white/40 shrink-0">{icon}</div>}
       <div className="min-w-0">
         <div className="text-[10px] font-medium uppercase tracking-wider text-white/40">{label}</div>
         <div className="mt-0.5 text-[13px] text-white/80 truncate">{children}</div>
@@ -258,7 +241,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
           >
             {agentNames?.[bounty.posterBtcAddress] ?? truncAddr(bounty.posterBtcAddress)}
           </MetaItem>
-          <MetaItem label="Closes" icon={<CalendarIcon />}>
+          <MetaItem label="Closes">
             <span title={new Date(bounty.expiresAt).toLocaleString()}>
               {formatDate(bounty.expiresAt)}
             </span>
@@ -272,7 +255,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
               </span>
             )}
           </MetaItem>
-          <MetaItem label="Submissions" icon={<InboxIcon />}>
+          <MetaItem label="Submissions">
             {submissionCount}
           </MetaItem>
         </div>
