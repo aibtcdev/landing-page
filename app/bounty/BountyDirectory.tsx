@@ -167,73 +167,75 @@ export default function BountyDirectory({
         </Link>
       </div>
 
-      <div
-        className="flex flex-wrap items-center gap-2 -mx-1 px-1 max-md:overflow-x-auto max-md:flex-nowrap"
-        role="tablist"
-        aria-label="Filter bounties by status"
-      >
-        {STATUS_OPTIONS.map((opt) => {
-          const active = statusFilter === opt.value;
-          const count =
-            opt.value === "all"
-              ? (initialBounties?.length ?? 0)
-              : (initialBounties?.filter((b) => b.status === opt.value).length ?? 0);
-          return (
-            <button
-              key={opt.value}
-              type="button"
-              role="tab"
-              aria-selected={active}
-              onClick={() => setStatusFilter(opt.value)}
-              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors ${
-                active
-                  ? "border-[#F7931A]/40 bg-[#F7931A]/[0.10] text-[#F7931A]"
-                  : "border-white/[0.08] bg-white/[0.02] text-white/60 hover:border-white/[0.16] hover:text-white/80"
-              }`}
-            >
-              {opt.label}
-              {count > 0 && (
-                <span
-                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${
-                    active ? "bg-[#F7931A]/[0.20] text-[#F7931A]" : "bg-white/[0.06] text-white/40"
-                  }`}
-                >
-                  {count}
-                </span>
-              )}
-            </button>
-          );
-        })}
+      <div className="flex flex-wrap items-center gap-2">
+        <div
+          className="flex flex-wrap items-center gap-2"
+          role="tablist"
+          aria-label="Filter bounties by status"
+        >
+          {STATUS_OPTIONS.map((opt) => {
+            const active = statusFilter === opt.value;
+            const count =
+              opt.value === "all"
+                ? (initialBounties?.length ?? 0)
+                : (initialBounties?.filter((b) => b.status === opt.value).length ?? 0);
+            return (
+              <button
+                key={opt.value}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setStatusFilter(opt.value)}
+                className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                  active
+                    ? "border-[#F7931A]/40 bg-[#F7931A]/[0.10] text-[#F7931A]"
+                    : "border-white/[0.08] bg-white/[0.02] text-white/60 hover:border-white/[0.16] hover:text-white/80"
+                }`}
+              >
+                {opt.label}
+                {count > 0 && (
+                  <span
+                    className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${
+                      active ? "bg-[#F7931A]/[0.20] text-[#F7931A]" : "bg-white/[0.06] text-white/40"
+                    }`}
+                  >
+                    {count}
+                  </span>
+                )}
+              </button>
+            );
+          })}
+        </div>
+
+        <div className="ml-auto flex items-center gap-2 max-md:ml-0 max-md:w-full">
+          <label htmlFor="bounty-sort" className="sr-only">Sort bounties</label>
+          <select
+            id="bounty-sort"
+            value={sort}
+            onChange={(e) => setSort(e.target.value)}
+            className={FILTER_CONTROL_CLASS}
+          >
+            {SORT_OPTIONS.map((opt) => (
+              <option key={opt.value} value={opt.value} className="bg-[#1a1a1a]">
+                {opt.label}
+              </option>
+            ))}
+          </select>
+
+          <label htmlFor="bounty-search" className="sr-only">Search by title, tag, or description</label>
+          <input
+            id="bounty-search"
+            type="text"
+            placeholder="Search title, tag, or text..."
+            value={searchFilter}
+            onChange={(e) => setSearchFilter(e.target.value)}
+            className={`${FILTER_CONTROL_CLASS} w-64 placeholder:text-white/30 max-md:w-auto max-md:flex-1`}
+          />
+        </div>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <label htmlFor="bounty-search" className="sr-only">Search by title, tag, or description</label>
-        <input
-          id="bounty-search"
-          type="text"
-          placeholder="Search title, tag, or text..."
-          value={searchFilter}
-          onChange={(e) => setSearchFilter(e.target.value)}
-          className={`${FILTER_CONTROL_CLASS} min-w-[200px] placeholder:text-white/30 max-md:min-w-0 max-md:flex-1`}
-        />
-
-        <label htmlFor="bounty-sort" className="sr-only">Sort bounties</label>
-        <select
-          id="bounty-sort"
-          value={sort}
-          onChange={(e) => setSort(e.target.value)}
-          className={FILTER_CONTROL_CLASS}
-        >
-          {SORT_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value} className="bg-[#1a1a1a]">
-              {opt.label}
-            </option>
-          ))}
-        </select>
-
-        <span className="ml-auto text-xs text-white/30">
-          {filtered.length} bount{filtered.length !== 1 ? "ies" : "y"}
-        </span>
+      <div className="-mt-4 text-xs text-white/30">
+        {filtered.length} bount{filtered.length !== 1 ? "ies" : "y"}
       </div>
 
       {!initialBounties ? (
