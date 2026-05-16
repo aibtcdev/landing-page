@@ -408,8 +408,9 @@ function findSbtcTransferEvent(
     const recipient = ev.asset?.recipient ?? ev.recipient;
     const amount = ev.asset?.amount ?? ev.amount;
     const assetId = ev.asset?.asset_id ?? ev.asset_id;
-    // sBTC asset_id looks like `${sbtcContractId}::sbtc-token` — match on prefix.
-    if (assetId && assetId.startsWith(expectedAssetId) && sender && recipient && amount) {
+    // sBTC asset_id looks like `${sbtcContractId}::sbtc-token` — anchor on `::`
+    // so we don't accidentally match a sibling like `sbtc-token-extended`.
+    if (assetId && assetId.startsWith(`${expectedAssetId}::`) && sender && recipient && amount) {
       return { sender, recipient, amount };
     }
   }

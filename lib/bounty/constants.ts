@@ -76,7 +76,7 @@ export const SBTC_CONTRACT_MAINNET = `${SBTC_CONTRACTS.mainnet.address}.${SBTC_C
 
 /** KV key prefixes — txid uniqueness only. No record mirror, no pending cache. */
 export const KV_PREFIXES = {
-  /** `bounty:paid-txid:{normalizedTxid}` → bountyId. One txid can pay one bounty. */
+  /** `bounty:paid-txid:{txid}` → bountyId. One txid can pay one bounty. */
   PAID_TXID: "bounty:paid-txid:",
 } as const;
 

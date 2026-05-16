@@ -286,6 +286,34 @@ describe("verifyPayoutTxid", () => {
     if (!r.ok) expect(r.code).toBe("MEMO_MISMATCH");
   });
 
+  it("returns MEMO_MISMATCH when wallet zero-pads the memo to the (buff 34) max", async () => {
+    // Some wallets fill (buff 34) up to its max length with trailing zeros
+    // instead of sending the exact 31 bytes. The verifier must reject this
+    // so the byte-exact memo contract stays crisp.
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn: mockFetch({
+        json: () => {
+          const tx = makeHiroTx();
+          const expected = buildExpectedMemo(BOUNTY_ID);
+          const padded = new Uint8Array(34);
+          padded.set(expected.bytes, 0);
+          tx.contract_call.function_args[3] = {
+            name: "memo",
+            type: "(optional (buff 34))",
+            hex: argHex(someCV(bufferCV(padded))),
+            repr: "(some padded)",
+          };
+          return tx;
+        },
+      }),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("MEMO_MISMATCH");
+  });
+
   it("returns TX_TOO_OLD when tx happened before acceptance", async () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",

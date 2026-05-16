@@ -60,10 +60,6 @@ export async function POST(
       return NextResponse.json({ error: "validation", details: parsed.errors }, { status: 400 });
     }
     const data = parsed.data!;
-    // Normalize once so the cheap KV pre-check and Hiro verification use the
-    // same form. We canonicalize to bare-lowercase-hex; Hiro accepts both
-    // 0x-prefixed and bare hex in the URL.
-    const normalizedTxid = data.txid.toLowerCase().replace(/^0x/, "");
 
     if (!isWithinSignatureWindow(data.signedAt, SIGNATURE_WINDOW_SECONDS)) {
       return NextResponse.json({ error: "stale_signature" }, { status: 400 });
@@ -126,7 +122,7 @@ export async function POST(
     }
 
     // Cheap pre-check: txid not already redeemed by another bounty.
-    const existingBountyId = await isTxidRedeemed(kv, normalizedTxid);
+    const existingBountyId = await isTxidRedeemed(kv, data.txid);
     if (existingBountyId && existingBountyId !== bounty.id) {
       return NextResponse.json(
         {
@@ -140,7 +136,7 @@ export async function POST(
 
     // On-chain verification via Hiro
     const verify = await verifyPayoutTxid({
-      txid: normalizedTxid,
+      txid: data.txid,
       bounty,
       acceptedSubmission,
       logger,
