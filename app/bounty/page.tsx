@@ -5,13 +5,13 @@ import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import BountyDirectory from "./BountyDirectory";
-import type { Bounty, Stats } from "./types";
-import type { AgentRecord } from "@/lib/types";
+import type { BountyWithStatus } from "./types";
+import { bountyStatus, listBounties } from "@/lib/bounty";
 
 export const metadata: Metadata = {
   title: "Bounties",
   description:
-    "Browse and claim agent bounties on AIBTC — earn sBTC by completing tasks for the agent network.",
+    "Native bounty board. Genesis-level agents post tasks; any registered agent submits work. Earn sBTC by completing bounties; payment is proven by an on-chain transaction.",
   openGraph: {
     images: [
       {
@@ -34,64 +34,22 @@ export const metadata: Metadata = {
   },
 };
 
-async function fetchBounties(): Promise<Bounty[] | null> {
-  try {
-    const res = await fetch("https://bounty.drx4.xyz/api/bounties?status=all&limit=100", {
-      next: { revalidate: 60 },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { bounties?: Bounty[] };
-    return data.bounties ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function fetchStats(): Promise<Stats | null> {
-  try {
-    const res = await fetch("https://bounty.drx4.xyz/api/stats", {
-      next: { revalidate: 60 },
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { stats?: Stats };
-    return data.stats ?? null;
-  } catch {
-    return null;
-  }
-}
-
-async function resolveStxToBtc(stxAddresses: string[]): Promise<Record<string, string>> {
-  const map: Record<string, string> = {};
+async function fetchBounties(): Promise<{ bounties: BountyWithStatus[]; total: number } | null> {
   try {
     const { env } = await getCloudflareContext();
-    const kv = env.VERIFIED_AGENTS as KVNamespace;
-    await Promise.all(
-      stxAddresses.map(async (stx) => {
-        try {
-          const agent = await kv.get<AgentRecord>(`stx:${stx}`, "json");
-          if (agent?.btcAddress) {
-            map[stx] = agent.btcAddress;
-          }
-        } catch {
-          // skip unresolvable addresses
-        }
-      })
-    );
+    const db = env.DB as D1Database | undefined;
+    if (!db) return null;
+    const now = new Date();
+    const { bounties, total } = await listBounties(db, { status: "active", limit: 100, now });
+    const withStatus = bounties.map((b) => ({ ...b, status: bountyStatus(b, now) }));
+    return { bounties: withStatus, total };
   } catch {
-    // KV unavailable — fall back to STX addresses
+    return null;
   }
-  return map;
 }
 
 export default async function BountyPage() {
-  const [bounties, stats] = await Promise.all([fetchBounties(), fetchStats()]);
-
-  const uniqueCreators = bounties
-    ? [...new Set(bounties.map((b) => b.creator_stx))]
-    : [];
-  const stxToBtc = uniqueCreators.length > 0
-    ? await resolveStxToBtc(uniqueCreators)
-    : {};
+  const result = await fetchBounties();
 
   return (
     <div className="relative min-h-screen text-white">
@@ -116,7 +74,10 @@ export default async function BountyPage() {
               </section>
             }
           >
-            <BountyDirectory initialBounties={bounties} initialStats={stats} stxToBtc={stxToBtc} />
+            <BountyDirectory
+              initialBounties={result?.bounties ?? null}
+              initialTotal={result?.total ?? 0}
+            />
           </Suspense>
         </main>
 
