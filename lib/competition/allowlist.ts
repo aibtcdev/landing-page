@@ -78,9 +78,35 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
     functions: STABLESWAP_FUNCTIONS,
   },
 
+  // -- New-deployer stableswap cores (pool + core split architecture) --
+  // Newer Bitflow stableswap pools (deployed under BITFLOW_XYK_DEPLOYER)
+  // split into pool (state) + core (logic): the pool contract is passed as
+  // a trait arg, and `swap-x-for-y` / `swap-y-for-x` are invoked on the
+  // *core*. The pool contracts themselves have no public `swap-*` fns and
+  // are never the top-level contract_call target, so only the cores need
+  // allowlisting. Verified against on-chain ABI for v-1-2, v-1-3, v-1-4.
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.stableswap-core-v-1-2`,
+    functions: STABLESWAP_FUNCTIONS,
+  },
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.stableswap-core-v-1-3`,
+    functions: STABLESWAP_FUNCTIONS,
+  },
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.stableswap-core-v-1-4`,
+    functions: STABLESWAP_FUNCTIONS,
+  },
+
   // -- XYK --
   {
     contract_id: `${BITFLOW_XYK_DEPLOYER}.xyk-core-v-1-1`,
+    functions: ["swap-x-for-y", "swap-y-for-x"],
+  },
+  // Successor to xyk-core-v-1-1. Identical swap ABI; both versions are
+  // live on-chain and the Bitflow SDK may pick either depending on routing.
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.xyk-core-v-1-2`,
     functions: ["swap-x-for-y", "swap-y-for-x"],
   },
   // XYK swap helper — where the optional `provider` clarity arg lives
@@ -136,12 +162,33 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
       "swap-y-for-x-simple-range-multi",
     ],
   },
+  // Successor to dlmm-swap-router-v-1-1. Identical 8-variant swap ABI;
+  // both versions are live and the SDK may pick either.
+  {
+    contract_id: `${BITFLOW_DLMM_DEPLOYER}.dlmm-swap-router-v-1-2`,
+    functions: [
+      "swap-multi",
+      "swap-simple-multi",
+      "swap-x-for-y-same-multi",
+      "swap-x-for-y-simple-multi",
+      "swap-x-for-y-simple-range-multi",
+      "swap-y-for-x-same-multi",
+      "swap-y-for-x-simple-multi",
+      "swap-y-for-x-simple-range-multi",
+    ],
+  },
 
   // -- Cross-DEX routers (13 contracts) --
   // Most expose only `swap-helper-a` and `swap-helper-b`. Two velar-alex
   // versions expose `swap-helper-a..p` (16 helpers each).
   {
     contract_id: `${BITFLOW_DEPLOYER}.router-stx-ststx-bitflow-arkadiko-v-1-1`,
+    functions: ROUTER_HELPER_AB,
+  },
+  // Both v-1-1 and v-1-2 of the velar router are live on-chain; v-1-2 was
+  // already allowlisted, v-1-1 was missing.
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.router-stx-ststx-bitflow-velar-v-1-1`,
     functions: ROUTER_HELPER_AB,
   },
   {
@@ -264,6 +311,29 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
   {
     contract_id: `${BITFLOW_DEPLOYER}.wrapper-arkadiko-v-1-1`,
     functions: ["swap-x-for-y", "swap-y-for-x"],
+  },
+  // wrapper-arkadiko-v-1-2 lives under the XYK deployer (not BITFLOW_DEPLOYER
+  // like v-1-1). Same `swap-x-for-y` / `swap-y-for-x` names; signature adds
+  // the optional `provider` arg used for Bitflow attribution.
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.wrapper-arkadiko-v-1-2`,
+    functions: ["swap-x-for-y", "swap-y-for-x"],
+  },
+
+  // -- wrapper-velar-path (new path-based wrapper family) --
+  // Distinct from `wrapper-velar` and `wrapper-velar-multihop` — this is
+  // a separate generalized "path" wrapper that composes Velar univ2v2
+  // pools, Bitflow curves, stSTX, and USDH along an arbitrary route.
+  // Surfaced when an agent's sBTC→STX trade was rejected as
+  // `contract_not_allowlisted` even though the sBTC transfer succeeded
+  // on-chain. Reproducer tx (rejected, `swap-univ2v2`, sBTC→wSTX via
+  // Velar pool 0070):
+  // 0xd714b35559cf76ab22f339dbe9d6648e4ce2afed42e16eebd07c274e33b1663b
+  // Sibling `wrapper-{alex,arkadiko,xyk}-path-v-1-2` do NOT exist on-chain
+  // (Hiro 404 as of 2026-05-16) — only the velar variant is deployed.
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.wrapper-velar-path-v-1-2`,
+    functions: ["swap-curve", "swap-ststx", "swap-univ2v2", "swap-usdh"],
   },
 ] as const;
 
