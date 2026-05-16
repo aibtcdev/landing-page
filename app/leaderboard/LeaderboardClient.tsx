@@ -143,7 +143,8 @@ function writeCachedPrice(
 }
 
 async function fetchTokenPrice(tokenId: string): Promise<TokenPrice | null> {
-  // Tenero 404s on USD-pegged tokens; use the shared fallback instead.
+  // Tenero 404s on USD-pegged tokens — both price and decimals come from
+  // the shared fallback table instead.
   const stablecoinFallback = getStablecoinUsdFallback(tokenId);
   if (stablecoinFallback) {
     return {
