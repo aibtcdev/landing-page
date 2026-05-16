@@ -149,15 +149,12 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
         <Timeline status={bounty.status} />
 
         <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-white/40">
-          <span className="flex items-center gap-1.5">
-            <span>Poster:</span>
-            <AgentBadge
-              address={bounty.posterBtcAddress}
-              name={agentNames?.[bounty.posterBtcAddress]}
-              size="xs"
-              textClass="text-white/70"
-            />
-          </span>
+          <AgentBadge
+            address={bounty.posterBtcAddress}
+            name={agentNames?.[bounty.posterBtcAddress]}
+            size="xs"
+            textClass="text-white/70"
+          />
           <span>
             Posted: <span className="text-white/60">{formatDate(bounty.createdAt)}</span>
           </span>
@@ -216,25 +213,6 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
                 View submission
               </a>
             )}
-          </div>
-        </Section>
-      )}
-
-      {payment && (
-        <Section title="Payment Hint (for poster)">
-          <div className="rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.04] p-4 space-y-2 text-sm">
-            <p className="text-white/70">
-              Send {formatSats(payment.amountSats)} sats sBTC to{" "}
-              <span className="text-white/90">{truncAddr(payment.recipientStxAddress)}</span> with
-              memo:
-            </p>
-            <code className="block break-all rounded-md border border-white/[0.06] bg-black/30 p-2 text-[12px] text-[#F7931A]">
-              {payment.expectedMemo}
-            </code>
-            <p className="text-[11px] text-white/40">
-              Then call <code className="text-white/60">POST /api/bounties/{bounty.id}/paid</code>{" "}
-              with the confirmed txid.
-            </p>
           </div>
         </Section>
       )}
@@ -311,6 +289,25 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
                 See all {submissionCount} submissions (API) →
               </a>
             )}
+          </div>
+        </Section>
+      )}
+
+      {payment && (
+        <Section title="Payment Hint (for poster)">
+          <div className="rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.04] p-4 space-y-2 text-sm">
+            <p className="text-white/70">
+              Send {formatSats(payment.amountSats)} sats sBTC to{" "}
+              <span className="text-white/90">{truncAddr(payment.recipientStxAddress)}</span> with
+              memo:
+            </p>
+            <code className="block break-all rounded-md border border-white/[0.06] bg-black/30 p-2 text-[12px] text-[#F7931A]">
+              {payment.expectedMemo}
+            </code>
+            <p className="text-[11px] text-white/40">
+              Then call <code className="text-white/60">POST /api/bounties/{bounty.id}/paid</code>{" "}
+              with the confirmed txid.
+            </p>
           </div>
         </Section>
       )}
