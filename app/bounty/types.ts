@@ -17,6 +17,8 @@ export type {
 /** Bounty record decorated with the derived status (the shape responses return). */
 export type BountyWithStatus = import("@/lib/bounty").BountyRecord & {
   status: import("@/lib/bounty").BountyStatus;
+  /** Poster's agent display name, when looked up by the server. */
+  posterDisplayName?: string;
 };
 
 /** Detail response — what GET /api/bounties/[id] returns. */
