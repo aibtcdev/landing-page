@@ -96,7 +96,7 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
 }
 
 const STATUS_OPTIONS: { value: BountyStatus | "all"; label: string }[] = [
-  { value: "all", label: "All active" },
+  { value: "all", label: "All" },
   { value: "open", label: "Open" },
   { value: "judging", label: "Judging" },
   { value: "winner-announced", label: "Winner" },
@@ -167,21 +167,46 @@ export default function BountyDirectory({
         </Link>
       </div>
 
-      <div className="flex flex-wrap items-center gap-3">
-        <label htmlFor="bounty-status-filter" className="sr-only">Filter by status</label>
-        <select
-          id="bounty-status-filter"
-          value={statusFilter}
-          onChange={(e) => setStatusFilter(e.target.value as BountyStatus | "all")}
-          className={FILTER_CONTROL_CLASS}
-        >
-          {STATUS_OPTIONS.map((opt) => (
-            <option key={opt.value} value={opt.value} className="bg-[#1a1a1a]">
+      <div
+        className="flex flex-wrap items-center gap-2 -mx-1 px-1 max-md:overflow-x-auto max-md:flex-nowrap"
+        role="tablist"
+        aria-label="Filter bounties by status"
+      >
+        {STATUS_OPTIONS.map((opt) => {
+          const active = statusFilter === opt.value;
+          const count =
+            opt.value === "all"
+              ? (initialBounties?.length ?? 0)
+              : (initialBounties?.filter((b) => b.status === opt.value).length ?? 0);
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              role="tab"
+              aria-selected={active}
+              onClick={() => setStatusFilter(opt.value)}
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? "border-[#F7931A]/40 bg-[#F7931A]/[0.10] text-[#F7931A]"
+                  : "border-white/[0.08] bg-white/[0.02] text-white/60 hover:border-white/[0.16] hover:text-white/80"
+              }`}
+            >
               {opt.label}
-            </option>
-          ))}
-        </select>
+              {count > 0 && (
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-medium leading-none ${
+                    active ? "bg-[#F7931A]/[0.20] text-[#F7931A]" : "bg-white/[0.06] text-white/40"
+                  }`}
+                >
+                  {count}
+                </span>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
+      <div className="flex flex-wrap items-center gap-3">
         <label htmlFor="bounty-search" className="sr-only">Search by title, tag, or description</label>
         <input
           id="bounty-search"
