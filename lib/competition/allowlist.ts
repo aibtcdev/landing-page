@@ -299,8 +299,32 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
     contract_id: `${BITFLOW_DEPLOYER}.wrapper-velar-multihop-v-1-1`,
     functions: ["swap-3", "swap-4", "swap-5"],
   },
+  // wrapper-alex-v-1-1 (older sibling of v-2-1 below). Public ABI exposes
+  // `swap-helper-a` / `swap-helper-b` (the v-2-1 family is wider — 4 helpers
+  // including the unsuffixed `swap-helper`). Lives on the same deployer as
+  // v-2-1; both can be picked by the Bitflow SDK depending on the route.
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.wrapper-alex-v-1-1`,
+    functions: ["swap-helper-a", "swap-helper-b"],
+  },
   {
     contract_id: `${BITFLOW_DEPLOYER}.wrapper-alex-v-2-1`,
+    functions: [
+      "swap-helper",
+      "swap-helper-a",
+      "swap-helper-b",
+      "swap-helper-c",
+    ],
+  },
+  // wrapper-alex-v-2-2 (XYK deployer, not BITFLOW_DEPLOYER like v-2-1).
+  // Same 4-helper shape as v-2-1 (`swap-helper` + `swap-helper-a/b/c`);
+  // signatures gain the optional `provider` arg for Bitflow attribution.
+  // On-chain source header reads `;; wrapper-alex-v-2-2` and the body
+  // calls SP102V8P0F7JX67ARQ77WEA3D3CFB5XW39REDT0AM.amm-pool-v2-01 (ALEX's
+  // canonical AMM), confirming it's an ALEX wrapper despite sharing the
+  // XYK deployer principal with the velar / arkadiko / xyk wrappers.
+  {
+    contract_id: `${BITFLOW_XYK_DEPLOYER}.wrapper-alex-v-2-2`,
     functions: [
       "swap-helper",
       "swap-helper-a",
@@ -320,17 +344,29 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
     functions: ["swap-x-for-y", "swap-y-for-x"],
   },
 
-  // -- wrapper-velar-path (new path-based wrapper family) --
+  // -- wrapper-velar-path (path-based wrapper family) --
   // Distinct from `wrapper-velar` and `wrapper-velar-multihop` — this is
   // a separate generalized "path" wrapper that composes Velar univ2v2
   // pools, Bitflow curves, stSTX, and USDH along an arbitrary route.
   // Surfaced when an agent's sBTC→STX trade was rejected as
   // `contract_not_allowlisted` even though the sBTC transfer succeeded
-  // on-chain. Reproducer tx (rejected, `swap-univ2v2`, sBTC→wSTX via
-  // Velar pool 0070):
+  // on-chain. Reproducer tx for v-1-2 (rejected, `swap-univ2v2`, sBTC→wSTX
+  // via Velar pool 0070):
   // 0xd714b35559cf76ab22f339dbe9d6648e4ce2afed42e16eebd07c274e33b1663b
-  // Sibling `wrapper-{alex,arkadiko,xyk}-path-v-1-2` do NOT exist on-chain
-  // (Hiro 404 as of 2026-05-16) — only the velar variant is deployed.
+  //
+  // v-1-1 lives on BITFLOW_DEPLOYER, v-1-2 on BITFLOW_XYK_DEPLOYER — same
+  // cross-deployer split pattern as the other wrapper families
+  // (`wrapper-velar` v-1-1/v-1-2, `wrapper-arkadiko` v-1-1/v-1-2). Both
+  // versions expose `swap-{curve,ststx,univ2v2,usdh}`; v-1-2 adds an
+  // optional `provider` arg for attribution.
+  //
+  // Sibling `wrapper-{alex,arkadiko,xyk}-path-*` do NOT exist on either
+  // deployer (Hiro 404 across the board as of 2026-05-16) — only the
+  // velar variant of the path family is deployed.
+  {
+    contract_id: `${BITFLOW_DEPLOYER}.wrapper-velar-path-v-1-1`,
+    functions: ["swap-curve", "swap-ststx", "swap-univ2v2", "swap-usdh"],
+  },
   {
     contract_id: `${BITFLOW_XYK_DEPLOYER}.wrapper-velar-path-v-1-2`,
     functions: ["swap-curve", "swap-ststx", "swap-univ2v2", "swap-usdh"],
