@@ -183,7 +183,7 @@ function SubmissionCard({
   return (
     <div
       id={`submission-${sub.id}`}
-      className={`rounded-xl border p-4 space-y-3 ${
+      className={`rounded-md border p-4 space-y-3 ${
         isWinner
           ? "border-[#7DA2FF]/20 bg-[#7DA2FF]/[0.04]"
           : "border-white/[0.06] bg-white/[0.02]"
@@ -265,7 +265,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
     return (
       <div className="space-y-4">
         <BackLink />
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-8 py-16 text-center">
+        <div className="rounded-md border border-white/[0.06] bg-white/[0.02] px-8 py-16 text-center">
           <p className="text-white/40">Bounty not found.</p>
         </div>
       </div>
@@ -292,7 +292,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
       <BackLink />
 
       {/* HERO CARD: status, reward, title, meta row, timeline, tags, description */}
-      <div className="rounded-2xl border border-white/[0.06] bg-white/[0.02] p-5 max-md:p-4 space-y-4">
+      <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-5 max-md:p-4 space-y-4">
         <div className="flex flex-wrap items-start justify-between gap-3">
           <span
             className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyle(bounty.status)}`}
@@ -403,7 +403,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
       {/* PAYMENT HINT (for poster) */}
       {payment && (
         <Section title="Payment Hint (for poster)">
-          <div className="rounded-xl border border-[#F7931A]/20 bg-[#F7931A]/[0.04] p-4 space-y-2">
+          <div className="rounded-md border border-[#F7931A]/20 bg-[#F7931A]/[0.04] p-4 space-y-2">
             <p className="text-white/70 text-[13px]">
               Send {formatSats(payment.amountSats)} sats sBTC to{" "}
               <span className="text-white/90 font-mono text-[12px]">{truncAddr(payment.recipientStxAddress)}</span> with memo:
@@ -420,7 +420,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
 
       {/* API */}
       <Section title="API">
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-white/40 space-y-1">
+        <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-white/40 space-y-1">
           <div>
             Detail: <code className="text-white/60">GET /api/bounties/{bounty.id}</code>
           </div>
