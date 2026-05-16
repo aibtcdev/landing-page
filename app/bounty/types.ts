@@ -17,6 +17,8 @@ export type {
 /** Bounty record decorated with the derived status (the shape responses return). */
 export type BountyWithStatus = import("@/lib/bounty").BountyRecord & {
   status: import("@/lib/bounty").BountyStatus;
+  /** Poster's agent display name, when looked up by the server. */
+  posterDisplayName?: string;
 };
 
 /** Detail response — what GET /api/bounties/[id] returns. */
@@ -26,4 +28,10 @@ export interface BountyDetailData {
   submissionCount: number;
   winner?: import("@/lib/bounty").BountyWinner;
   payment?: import("@/lib/bounty").BountyPaymentHint;
+  /**
+   * Map of BTC address → registered display name for every actor on the
+   * page (poster, winner, every submitter). Addresses without a known
+   * display name are absent from the map — render with truncAddr fallback.
+   */
+  agentNames?: Record<string, string>;
 }

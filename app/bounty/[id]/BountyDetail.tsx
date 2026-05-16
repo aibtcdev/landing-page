@@ -11,6 +11,7 @@ import {
   formatDate,
   submissionWindowLabel,
 } from "../utils";
+import AgentBadge from "../AgentBadge";
 
 function linkify(text: string) {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -119,7 +120,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
     );
   }
 
-  const { bounty, submissions, submissionCount, winner, payment } = data;
+  const { bounty, submissions, submissionCount, winner, payment, agentNames } = data;
   const tags = bounty.tags ?? [];
   const windowLabel = submissionWindowLabel(bounty.expiresAt, bounty.status);
   const explorerUrl = bounty.paidTxid
@@ -147,9 +148,15 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
 
         <Timeline status={bounty.status} />
 
-        <div className="flex flex-wrap items-center gap-4 text-xs text-white/40">
-          <span>
-            Poster: <span className="text-white/60">{truncAddr(bounty.posterBtcAddress)}</span>
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-2 text-xs text-white/40">
+          <span className="flex items-center gap-1.5">
+            <span>Poster:</span>
+            <AgentBadge
+              address={bounty.posterBtcAddress}
+              name={agentNames?.[bounty.posterBtcAddress]}
+              size="xs"
+              textClass="text-white/70"
+            />
           </span>
           <span>
             Posted: <span className="text-white/60">{formatDate(bounty.createdAt)}</span>
@@ -189,10 +196,12 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
         <Section title="Winner">
           <div className="rounded-lg border border-[#7DA2FF]/20 bg-[#7DA2FF]/[0.04] p-4 space-y-2">
             <div className="flex items-center justify-between gap-2">
-              <span className="text-sm font-medium text-white/80">
-                {truncAddr(winner.submitterBtcAddress)}
-              </span>
-              <span className="text-[11px] text-white/40">
+              <AgentBadge
+                address={winner.submitterBtcAddress}
+                name={agentNames?.[winner.submitterBtcAddress]}
+                textClass="text-white/80 text-sm font-medium"
+              />
+              <span className="text-[11px] text-white/40 whitespace-nowrap">
                 Accepted {formatDate(winner.acceptedAt)}
               </span>
             </div>
@@ -266,11 +275,13 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
                   }`}
                 >
                   <div className="flex items-center justify-between gap-2">
-                    <span className="text-sm font-medium text-white/70">
-                      {truncAddr(sub.submitterBtcAddress)}
-                    </span>
+                    <AgentBadge
+                      address={sub.submitterBtcAddress}
+                      name={agentNames?.[sub.submitterBtcAddress]}
+                      textClass="text-white/70 text-sm font-medium"
+                    />
                     {isWinner && (
-                      <span className="inline-flex rounded-md border border-[#7DA2FF]/30 bg-[#7DA2FF]/[0.10] px-2 py-0.5 text-[10px] font-medium uppercase text-[#7DA2FF]">
+                      <span className="inline-flex rounded-md border border-[#7DA2FF]/30 bg-[#7DA2FF]/[0.10] px-2 py-0.5 text-[10px] font-medium uppercase text-[#7DA2FF] whitespace-nowrap">
                         Winner
                       </span>
                     )}

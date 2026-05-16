@@ -7,6 +7,7 @@ import Footer from "../components/Footer";
 import BountyDirectory from "./BountyDirectory";
 import type { BountyWithStatus } from "./types";
 import { bountyStatus, listBounties } from "@/lib/bounty";
+import { lookupAgent } from "@/lib/agent-lookup";
 
 export const metadata: Metadata = {
   title: "Bounties",
@@ -38,10 +39,32 @@ async function fetchBounties(): Promise<{ bounties: BountyWithStatus[]; total: n
   try {
     const { env } = await getCloudflareContext();
     const db = env.DB as D1Database | undefined;
+    const kv = env.VERIFIED_AGENTS as KVNamespace | undefined;
     if (!db) return null;
     const now = new Date();
     const { bounties, total } = await listBounties(db, { status: "active", limit: 100, now });
-    const withStatus = bounties.map((b) => ({ ...b, status: bountyStatus(b, now) }));
+
+    // Enrich each bounty with the poster's display name so cards can show
+    // identity instead of a raw BTC address. Dedupe by poster so the same
+    // agent isn't looked up twice in a single render.
+    const posters = Array.from(new Set(bounties.map((b) => b.posterBtcAddress)));
+    const nameByPoster = new Map<string, string>();
+    if (kv) {
+      const lookups = await Promise.all(
+        posters.map(async (addr) => [addr, await lookupAgent(kv, addr, db)] as const)
+      );
+      for (const [addr, agent] of lookups) {
+        if (agent?.displayName) nameByPoster.set(addr, agent.displayName);
+      }
+    }
+
+    const withStatus: BountyWithStatus[] = bounties.map((b) => ({
+      ...b,
+      status: bountyStatus(b, now),
+      ...(nameByPoster.has(b.posterBtcAddress) && {
+        posterDisplayName: nameByPoster.get(b.posterBtcAddress),
+      }),
+    }));
     return { bounties: withStatus, total };
   } catch {
     return null;

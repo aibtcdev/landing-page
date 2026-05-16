@@ -357,7 +357,9 @@ export function validateSubmit(body: unknown):
     });
   }
 
-  if (b.contentUrl !== undefined) {
+  // Treat an empty string as "not provided" — the field is optional and
+  // clients (MCP tools, curl users) commonly send "" when they have no URL.
+  if (b.contentUrl !== undefined && b.contentUrl !== "") {
     if (typeof b.contentUrl !== "string") {
       errors.push({
         message: "contentUrl must be a string",
@@ -402,7 +404,7 @@ export function validateSubmit(body: unknown):
     data: {
       submitterBtcAddress: b.submitterBtcAddress as string,
       message: (b.message as string).trim(),
-      ...(typeof b.contentUrl === "string" && { contentUrl: b.contentUrl }),
+      ...(typeof b.contentUrl === "string" && b.contentUrl.length > 0 && { contentUrl: b.contentUrl }),
       signedAt: b.signedAt as string,
       signature: b.signature as string,
     },

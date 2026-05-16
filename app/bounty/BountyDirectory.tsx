@@ -8,21 +8,10 @@ import {
   statusStyle,
   statusLabel,
   formatSats,
-  truncAddr,
   relativeTime,
   submissionWindowLabel,
 } from "./utils";
-
-function StatCard({ label, value }: { label: string; value: string | number }) {
-  return (
-    <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-5 py-4 text-center max-md:px-3 max-md:py-3">
-      <div className="text-2xl font-semibold tracking-tight text-white max-md:text-xl">
-        {typeof value === "number" ? formatSats(value) : value}
-      </div>
-      <div className="mt-1 text-xs text-white/40">{label}</div>
-    </div>
-  );
-}
+import AgentBadge from "./AgentBadge";
 
 function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
   const tags = bounty.tags ?? [];
@@ -69,20 +58,37 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
         </div>
       )}
 
-      <div className="mt-auto flex items-center justify-between pt-1 text-[11px] text-white/30">
-        <span>{truncAddr(bounty.posterBtcAddress)}</span>
-        <div className="flex items-center gap-3">
-          {windowLabel && (
-            <span className={windowLabel === "Submissions closed" ? "text-red-400/60" : "text-white/40"}>
-              {windowLabel}
-            </span>
-          )}
-          {bounty.submissionCount > 0 && (
-            <span>
-              {bounty.submissionCount} submission{bounty.submissionCount !== 1 ? "s" : ""}
-            </span>
-          )}
-          <span>{relativeTime(bounty.createdAt)}</span>
+      <div className="mt-auto flex flex-col gap-2 border-t border-white/[0.04] pt-3 text-[11px]">
+        <AgentBadge
+          address={bounty.posterBtcAddress}
+          name={bounty.posterDisplayName}
+          textClass="text-white/60"
+        />
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-white/30">
+          {[
+            windowLabel && (
+              <span
+                key="window"
+                className={`whitespace-nowrap ${
+                  windowLabel === "Submissions closed" ? "text-red-400/60" : "text-white/40"
+                }`}
+              >
+                {windowLabel}
+              </span>
+            ),
+            bounty.submissionCount > 0 && (
+              <span key="subs" className="whitespace-nowrap">
+                {bounty.submissionCount} submission{bounty.submissionCount !== 1 ? "s" : ""}
+              </span>
+            ),
+            <span key="time" className="whitespace-nowrap">{relativeTime(bounty.createdAt)}</span>,
+          ]
+            .filter(Boolean)
+            .flatMap((node, i, arr) =>
+              i < arr.length - 1
+                ? [node, <span key={`sep-${i}`} className="text-white/15" aria-hidden="true">·</span>]
+                : [node]
+            )}
         </div>
       </div>
     </Link>
@@ -144,23 +150,6 @@ export default function BountyDirectory({
     });
   }, [initialBounties, statusFilter, searchFilter, sort]);
 
-  const stats = useMemo(() => {
-    if (!initialBounties) return null;
-    const byStatus = initialBounties.reduce<Record<string, number>>((acc, b) => {
-      acc[b.status] = (acc[b.status] ?? 0) + 1;
-      return acc;
-    }, {});
-    const totalPaid = initialBounties
-      .filter((b) => b.status === "paid")
-      .reduce((sum, b) => sum + b.rewardSats, 0);
-    return {
-      open: byStatus.open ?? 0,
-      paid: byStatus.paid ?? 0,
-      totalPaidSats: totalPaid,
-      total: initialTotal,
-    };
-  }, [initialBounties, initialTotal]);
-
   return (
     <section className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -177,15 +166,6 @@ export default function BountyDirectory({
           Post a bounty
         </Link>
       </div>
-
-      {stats && (
-        <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
-          <StatCard label="Open" value={stats.open} />
-          <StatCard label="Paid" value={stats.paid} />
-          <StatCard label="Total Paid" value={`${formatSats(stats.totalPaidSats)} sats`} />
-          <StatCard label="All Bounties" value={stats.total} />
-        </div>
-      )}
 
       <div className="flex flex-wrap items-center gap-3">
         <label htmlFor="bounty-status-filter" className="sr-only">Filter by status</label>
