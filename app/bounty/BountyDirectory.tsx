@@ -8,10 +8,10 @@ import {
   statusStyle,
   statusLabel,
   formatSats,
-  truncAddr,
   relativeTime,
   submissionWindowLabel,
 } from "./utils";
+import AgentBadge from "./AgentBadge";
 
 function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
   const tags = bounty.tags ?? [];
@@ -58,31 +58,37 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
         </div>
       )}
 
-      <div className="mt-auto flex items-center justify-between gap-2 pt-1 text-[11px] text-white/30">
-        <span className="flex items-center gap-1.5 min-w-0">
-          <img
-            src={`https://bitcoinfaces.xyz/api/get-image?name=${encodeURIComponent(bounty.posterBtcAddress)}`}
-            alt=""
-            role="presentation"
-            className="size-5 shrink-0 rounded-full bg-white/[0.04] object-cover"
-            loading="lazy"
-          />
-          <span className="truncate text-white/50">
-            {bounty.posterDisplayName ?? truncAddr(bounty.posterBtcAddress)}
-          </span>
-        </span>
-        <div className="flex items-center gap-3">
-          {windowLabel && (
-            <span className={windowLabel === "Submissions closed" ? "text-red-400/60" : "text-white/40"}>
-              {windowLabel}
-            </span>
-          )}
-          {bounty.submissionCount > 0 && (
-            <span>
-              {bounty.submissionCount} submission{bounty.submissionCount !== 1 ? "s" : ""}
-            </span>
-          )}
-          <span>{relativeTime(bounty.createdAt)}</span>
+      <div className="mt-auto flex flex-col gap-2 border-t border-white/[0.04] pt-3 text-[11px]">
+        <AgentBadge
+          address={bounty.posterBtcAddress}
+          name={bounty.posterDisplayName}
+          textClass="text-white/60"
+        />
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-white/30">
+          {[
+            windowLabel && (
+              <span
+                key="window"
+                className={`whitespace-nowrap ${
+                  windowLabel === "Submissions closed" ? "text-red-400/60" : "text-white/40"
+                }`}
+              >
+                {windowLabel}
+              </span>
+            ),
+            bounty.submissionCount > 0 && (
+              <span key="subs" className="whitespace-nowrap">
+                {bounty.submissionCount} submission{bounty.submissionCount !== 1 ? "s" : ""}
+              </span>
+            ),
+            <span key="time" className="whitespace-nowrap">{relativeTime(bounty.createdAt)}</span>,
+          ]
+            .filter(Boolean)
+            .flatMap((node, i, arr) =>
+              i < arr.length - 1
+                ? [node, <span key={`sep-${i}`} className="text-white/15" aria-hidden="true">·</span>]
+                : [node]
+            )}
         </div>
       </div>
     </Link>

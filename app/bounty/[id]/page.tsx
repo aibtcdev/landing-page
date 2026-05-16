@@ -15,6 +15,7 @@ import {
   type BountyPaymentHint,
   type BountyWinner,
 } from "@/lib/bounty";
+import { lookupAgent } from "@/lib/agent-lookup";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -24,6 +25,7 @@ async function fetchBountyDetail(id: string): Promise<BountyDetailData | null> {
   try {
     const { env } = await getCloudflareContext();
     const db = env.DB as D1Database | undefined;
+    const kv = env.VERIFIED_AGENTS as KVNamespace | undefined;
     if (!db) return null;
 
     const bounty = await getBounty(db, id);
@@ -62,13 +64,35 @@ async function fetchBountyDetail(id: string): Promise<BountyDetailData | null> {
       };
     }
 
-    const decorated: BountyWithStatus = { ...bounty, status };
+    // Enrich with display names for every actor on the page (poster + all
+    // submitters). Dedupe so we don't look up the same address twice.
+    const addressesToLookup = Array.from(
+      new Set([bounty.posterBtcAddress, ...submissions.map((s) => s.submitterBtcAddress)])
+    );
+    const agentNames: Record<string, string> = {};
+    if (kv) {
+      const lookups = await Promise.all(
+        addressesToLookup.map(async (addr) => [addr, await lookupAgent(kv, addr, db)] as const)
+      );
+      for (const [addr, agent] of lookups) {
+        if (agent?.displayName) agentNames[addr] = agent.displayName;
+      }
+    }
+
+    const decorated: BountyWithStatus = {
+      ...bounty,
+      status,
+      ...(agentNames[bounty.posterBtcAddress] && {
+        posterDisplayName: agentNames[bounty.posterBtcAddress],
+      }),
+    };
     return {
       bounty: decorated,
       submissions,
       submissionCount: total,
       ...(winner && { winner }),
       ...(payment && { payment }),
+      agentNames,
     };
   } catch {
     return null;

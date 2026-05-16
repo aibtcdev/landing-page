@@ -28,4 +28,10 @@ export interface BountyDetailData {
   submissionCount: number;
   winner?: import("@/lib/bounty").BountyWinner;
   payment?: import("@/lib/bounty").BountyPaymentHint;
+  /**
+   * Map of BTC address → registered display name for every actor on the
+   * page (poster, winner, every submitter). Addresses without a known
+   * display name are absent from the map — render with truncAddr fallback.
+   */
+  agentNames?: Record<string, string>;
 }
