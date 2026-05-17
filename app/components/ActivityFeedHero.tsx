@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, useRef, useCallback } from "react";
+import { useEffect, useRef } from "react";
 import Link from "next/link";
+import useSWR from "swr";
 import styles from "./ActivityFeedHero.module.css";
 
 // ─── Types ──────────────────────────────────────────────────────────
@@ -195,45 +196,38 @@ interface HeroProps {
   topAgents?: { btcAddress: string; displayName?: string }[];
 }
 
+type ApiShape = { events?: ActivityEvent[]; stats?: ActivityStats };
+
+const seedFallback: ApiShape = { events: seedEvents() };
+
+function eventsHash(events?: ActivityEvent[]): string {
+  return events?.map((e) => e.timestamp + e.type).join("|") ?? "";
+}
+
 export function ActivityFeedHero({ registeredCount = 0, messageCount = 0, topAgents = [] }: HeroProps) {
-  const [events, setEvents] = useState<ActivityEvent[]>(() => seedEvents());
-  const [stats, setStats] = useState<ActivityStats>({
+  const trackRef = useRef<HTMLDivElement>(null);
+
+  // Absolute URL is intentional (lets the hero work on static deploys
+  // pointing at production data). Cap dedupingInterval at REFRESH_MS so the
+  // 15-min global default doesn't suppress the poll.
+  //
+  // `compare` is the SWR-native way to express the hash-dedup we used to do
+  // in a useEffect: when two consecutive responses have identical events,
+  // SWR keeps the existing reference and skips the re-render — so the CSS
+  // scroll track keeps its animation phase.
+  const { data } = useSWR<ApiShape>(ACTIVITY_API, {
+    refreshInterval: REFRESH_MS,
+    dedupingInterval: REFRESH_MS,
+    fallbackData: seedFallback,
+    compare: (a, b) => eventsHash(a?.events) === eventsHash(b?.events),
+  });
+
+  const events = data?.events?.length ? data.events : seedFallback.events!;
+  const stats: ActivityStats = data?.stats ?? {
     totalAgents: registeredCount,
     totalMessages: messageCount,
     totalSatsTransacted: messageCount * 100,
-  });
-  const trackRef = useRef<HTMLDivElement>(null);
-  const hashRef = useRef("");
-
-  const fetchActivity = useCallback(async () => {
-    try {
-      const res = await fetch(ACTIVITY_API);
-      if (!res.ok) return;
-      const data = (await res.json()) as {
-        events?: ActivityEvent[];
-        stats?: ActivityStats;
-      };
-      if (data.events?.length) {
-        const hash = data.events.map((e) => e.timestamp + e.type).join("|");
-        if (hash !== hashRef.current) {
-          hashRef.current = hash;
-          setEvents(data.events);
-        }
-      }
-      if (data.stats) {
-        setStats(data.stats);
-      }
-    } catch {
-      // keep seed data
-    }
-  }, []);
-
-  // Initial fetch + polling
-  useEffect(() => {
-    fetchActivity();
-    const id = setInterval(fetchActivity, REFRESH_MS);
-    return () => clearInterval(id);
-  }, [fetchActivity]);
+  };
 
   // Recalculate scroll speed when content changes
   useEffect(() => {
