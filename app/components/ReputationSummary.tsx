@@ -3,7 +3,7 @@
 import { useState } from "react";
 import useSWR from "swr";
 import type { ReputationSummary as ReputationSummaryType } from "@/lib/identity";
-import { fetcher } from "@/lib/fetcher";
+import { swrKeys } from "@/lib/swr-keys";
 import ReputationFeedbackList from "./ReputationFeedbackList";
 
 interface ReputationSummaryProps {
@@ -14,8 +14,7 @@ export default function ReputationSummary({
   address,
 }: ReputationSummaryProps) {
   const { data, error, isLoading: loading } = useSWR<{ summary: ReputationSummaryType | null }>(
-    `/api/identity/${encodeURIComponent(address)}/reputation?type=summary`,
-    fetcher
+    swrKeys.reputationSummary(address)
   );
   const summary = data?.summary ?? null;
   const [showFeedback, setShowFeedback] = useState(false);
