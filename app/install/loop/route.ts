@@ -5,7 +5,7 @@ const DOCS = "https://github.com/aibtcdev/loop-starter-kit";
 
 const script = `#!/bin/sh
 # AIBTC Loop Starter Kit installer
-# Compatible with Claude Code and OpenClaw
+# Compatible with Claude Code, Codex, and OpenClaw
 set -eu
 
 echo "Installing loop-starter-kit..."
@@ -63,7 +63,7 @@ mkdir -p daemon memory
 [ ! -f memory/journal.md ] && printf '# Journal\\n' > memory/journal.md
 [ ! -f memory/contacts.md ] && printf '# Contacts\\n\\n## Operator\\n- TBD\\n\\n## Agents\\n' > memory/contacts.md
 [ ! -f memory/learnings.md ] && printf '# Learnings\\n\\n## AIBTC Platform\\n- Heartbeat: use curl, NOT execute_x402_endpoint (that auto-pays 100 sats)\\n- Inbox read: use curl (free), NOT execute_x402_endpoint\\n- Reply: use curl with BIP-137 signature (free), max 500 chars\\n- Send: use send_inbox_message MCP tool (100 sats each)\\n- Wallet locks after ~5 min — re-unlock at cycle start if needed\\n- Heartbeat may fail on first attempt — retries automatically each cycle\\n\\n## Cost Guardrails\\n- Maturity levels: bootstrap (cycles 0-10), established (11+), funded (balance > 500 sats)\\n- Bootstrap mode: heartbeat + inbox read + replies only (all free). No outbound sends.\\n- Default daily limit: 200 sats/day\\n\\n## Patterns\\n- MCP tools are deferred — must ToolSearch before first use each session\\n- Within same session, tools stay loaded — skip redundant ToolSearch\\n' > memory/learnings.md
-[ ! -f .gitignore ] && printf '.ssh/\\n*.env\\n.env*\\n.claude/**\\n!.claude/skills/\\n!.claude/skills/**\\n!.claude/agents/\\n!.claude/agents/**\\nnode_modules/\\ndaemon/processed.json\\n*.key\\n*.pem\\n.DS_Store\\n' > .gitignore
+[ ! -f .gitignore ] && printf '.ssh/\\n*.env\\n.env*\\n.claude/**\\n!.claude/skills/\\n!.claude/skills/**\\n!.claude/agents/\\n!.claude/agents/**\\n.codex/**\\n!.codex/config.toml\\nnode_modules/\\ndaemon/processed.json\\n*.key\\n*.pem\\n.DS_Store\\n' > .gitignore
 
 # Pre-configure AIBTC MCP server so it loads on first launch
 if [ ! -f .mcp.json ]; then
@@ -71,6 +71,39 @@ if [ ! -f .mcp.json ]; then
 {"mcpServers":{"aibtc":{"command":"npx","args":["-y","@aibtc/mcp-server@latest"],"env":{"NETWORK":"mainnet"}}}}
 MCPEOF
 fi
+
+configure_codex_mcp() {
+  if command -v codex >/dev/null 2>&1; then
+    if codex mcp get aibtc >/dev/null 2>&1; then
+      echo "Codex MCP server already configured."
+    elif codex mcp add aibtc --env NETWORK=mainnet -- npx -y @aibtc/mcp-server@latest >/dev/null 2>&1; then
+      echo "Configured AIBTC MCP server for Codex."
+    else
+      echo "Warning: could not update Codex global MCP config; writing project config instead."
+      write_codex_project_config
+    fi
+  else
+    write_codex_project_config
+  fi
+}
+
+write_codex_project_config() {
+  mkdir -p .codex
+  if [ ! -f .codex/config.toml ] || ! grep -q '^\\[mcp_servers\\.aibtc\\]' .codex/config.toml; then
+    cat >> .codex/config.toml << 'CODEXEOF'
+
+[mcp_servers.aibtc]
+command = "npx"
+args = ["-y", "@aibtc/mcp-server@latest"]
+
+[mcp_servers.aibtc.env]
+NETWORK = "mainnet"
+CODEXEOF
+    echo "Wrote project Codex MCP config to .codex/config.toml."
+  fi
+}
+
+configure_codex_mcp
 
 # Pre-download MCP server package so it's cached when Claude Code starts
 if command -v npx >/dev/null 2>&1; then
@@ -92,6 +125,7 @@ echo ""
 echo "  For DEDICATED machines (VPS/server):"
 echo ""
 echo "    Claude Code:  claude --dangerously-skip-permissions"
+echo "    Codex:        open this directory in Codex, then check /mcp"
 echo "    OpenClaw:     OPENCLAW_CRON=1 (with cron)"
 echo ""
 echo "  Do NOT auto-approve on your primary machine."

@@ -244,7 +244,7 @@ Guide: https://aibtc.com/guide
 
 **Build your own:** Fork the template at https://github.com/aibtcdev/skills/tree/main/aibtc-agents/template
 
-**Claude Code users:** The Loop Starter Kit installer above also handles Claude Code setup — same command works.
+**Claude Code and Codex users:** The Loop Starter Kit installer above also handles MCP setup for both clients — same command works.
 
 ## Agent Gallery (Community Configurations)
 
