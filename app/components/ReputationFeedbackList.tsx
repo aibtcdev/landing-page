@@ -5,6 +5,7 @@ import Link from "next/link";
 import useSWR from "swr";
 import type { ReputationFeedback, ReputationFeedbackResponse } from "@/lib/identity";
 import { fetcher } from "@/lib/fetcher";
+import { swrKeys } from "@/lib/swr-keys";
 
 interface ReputationFeedbackListProps {
   address: string;
@@ -20,8 +21,7 @@ export default function ReputationFeedbackList({
   const [loadingMore, setLoadingMore] = useState(false);
 
   const { data, isLoading: loading } = useSWR<{ feedback: ReputationFeedbackResponse }>(
-    `/api/identity/${encodeURIComponent(address)}/reputation?type=feedback`,
-    fetcher,
+    swrKeys.reputationFeedback(address),
     {
       onSuccess: (result) => {
         setCursor(result.feedback.cursor);
@@ -35,11 +35,9 @@ export default function ReputationFeedbackList({
 
     try {
       setLoadingMore(true);
-      const res = await fetch(
-        `/api/identity/${encodeURIComponent(address)}/reputation?type=feedback&cursor=${cursor}`
+      const data = await fetcher<{ feedback: ReputationFeedbackResponse }>(
+        swrKeys.reputationFeedback(address, cursor)
       );
-      if (!res.ok) throw new Error("Failed to load more feedback");
-      const data = (await res.json()) as { feedback: ReputationFeedbackResponse };
       setExtraFeedback((prev) => [...prev, ...data.feedback.items]);
       setCursor(data.feedback.cursor);
     } catch (err) {
