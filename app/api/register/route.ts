@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
@@ -24,6 +24,7 @@ import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { provisionSponsorKey, DEFAULT_RELAY_URL } from "@/lib/sponsor";
 import { validateTaprootAddress } from "@/lib/challenge";
 import { validateNostrPubkey } from "@/lib/nostr";
+import { insertAgentToD1 } from "@/lib/d1/agents-mirror";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import {
   MIN_REFERRER_LEVEL,
@@ -888,6 +889,24 @@ export async function POST(request: NextRequest) {
       referralCode = await generateAndStoreReferralCode(kv, btcResult.address);
     } catch (err) {
       console.error("Failed to generate referral code:", err);
+    }
+
+    // Mirror the new agent into D1 alongside the KV writes above.
+    // P3-0a: additive only — KV remains source-of-truth; D1 becomes the
+    // co-equal store that subsequent P3a–e read flips can rely on.
+    // Skip if referralCode generation failed (column is NOT NULL UNIQUE);
+    // the admin backfill job will hydrate the row on its next run.
+    // Runs via `after()` so it does not add latency to the registration
+    // response — the write is non-authoritative and errors are swallowed.
+    if (referralCode) {
+      const referralCodeForMirror = referralCode;
+      after(async () => {
+        try {
+          await insertAgentToD1(db, record, referralCodeForMirror);
+        } catch (err) {
+          console.error("Failed to mirror agent to D1:", err);
+        }
+      });
     }
 
     // Build response with conditional sponsorApiKey field
