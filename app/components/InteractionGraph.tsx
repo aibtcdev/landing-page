@@ -2,7 +2,7 @@
 
 import useSWR from "swr";
 import { useRouter } from "next/navigation";
-import { fetcher } from "@/lib/fetcher";
+import { swrKeys } from "@/lib/swr-keys";
 import { generateName } from "@/lib/name-generator";
 import { formatRelativeTime } from "@/lib/utils";
 import type { InboxPartner } from "@/lib/inbox/types";
@@ -36,10 +36,9 @@ export default function InteractionGraph({
   className = "",
 }: InteractionGraphProps) {
   const router = useRouter();
-  // Use the same SWR key as InboxActivity to share the cached response
+  // Same key as InboxActivity — SWR dedupe means one network request serves both.
   const { data, error, isLoading: loading } = useSWR<InboxResponse>(
-    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5&view=all&include=partners`,
-    fetcher
+    swrKeys.inbox(btcAddress, { limit: 5, view: "all", includePartners: true })
   );
 
   if (loading) {
