@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { fetcher } from "@/lib/fetcher";
+import { swrKeys } from "@/lib/swr-keys";
 import AnimatedBackground from "../components/AnimatedBackground";
 import Navbar from "../components/Navbar";
 import {
@@ -16,8 +16,7 @@ import {
 
 export default function ActivityPage() {
   const { data, error, isLoading: loading } = useSWR<ActivityResponse>(
-    "/api/activity",
-    fetcher
+    swrKeys.activity()
   );
 
   const [isMobile, setIsMobile] = useState(false);
