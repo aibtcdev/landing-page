@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import useSWR from "swr";
 import Link from "next/link";
+import { swrKeys } from "@/lib/swr-keys";
 
 interface AgentStripAgent {
   rank: number;
@@ -11,8 +12,6 @@ interface AgentStripAgent {
   levelName: string;
   score?: number;
 }
-
-const LEADERBOARD_API = "https://aibtc.com/api/leaderboard?limit=12";
 
 const LEVEL_COLORS: Record<number, string> = {
   0: "text-white/30 border-white/10 bg-white/5",
@@ -39,22 +38,9 @@ const fallbackAgents: AgentStripAgent[] = [
 ];
 
 export default function AgentStrip() {
-  const [agents, setAgents] = useState<AgentStripAgent[]>(fallbackAgents);
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const res = await fetch(LEADERBOARD_API);
-        if (!res.ok) return;
-        const data = (await res.json()) as { leaderboard?: AgentStripAgent[] };
-        if (data.leaderboard?.length) {
-          setAgents(data.leaderboard);
-        }
-      } catch {
-        // keep fallback
-      }
-    })();
-  }, []);
+  // Shares the leaderboard cache with the Leaderboard component (same key).
+  const { data } = useSWR<{ leaderboard?: AgentStripAgent[] }>(swrKeys.leaderboard(12));
+  const agents = data?.leaderboard?.length ? data.leaderboard : fallbackAgents;
 
   return (
     <section id="agents" className="relative px-12 py-10 max-lg:px-8 max-md:px-5 max-md:py-8">
