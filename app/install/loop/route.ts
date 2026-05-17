@@ -82,7 +82,7 @@ configure_codex_mcp() {
       echo "Warning: could not update Codex global MCP config; writing project config instead."
       write_codex_project_config
     fi
-  elif [ -d "$HOME/.codex" ]; then
+  elif [ -n "${HOME:-}" ] && [ -d "$HOME/.codex" ]; then
     echo "Codex config directory detected; writing project MCP config."
     write_codex_project_config
   else
