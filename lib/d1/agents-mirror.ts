@@ -10,8 +10,13 @@
  * existing KV writes, preserving KV as the current source-of-truth while
  * making D1 a co-equal store that subsequent P3a–e read flips can rely on.
  *
- * Same shape as `lib/claims/d1-mirror.ts`. Failures are logged but never
- * thrown; the KV write is the authoritative path for now.
+ * Same shape as `lib/claims/d1-mirror.ts`. **D1 errors propagate to the
+ * caller** — every wiring site is responsible for try/catch + logging.
+ * This is intentional: the mirror should not be silently swallowed in a
+ * helper that's reused across many call paths with different log contexts.
+ * The one exception is the second-pass `referred_by_btc` UPDATE inside
+ * `insertAgentToD1`, which intentionally swallows FK violations (see
+ * function-level doc below).
  */
 
 import type { AgentRecord } from "@/lib/types";
