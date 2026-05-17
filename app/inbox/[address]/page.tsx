@@ -1,14 +1,17 @@
 "use client";
 
-import { useEffect, useState, useCallback } from "react";
+import { useEffect, useState, useCallback, useMemo } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import useSWR from "swr";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import InboxList from "../../components/InboxList";
 import SendMessageModal from "../../components/SendMessageModal";
 import { generateName } from "@/lib/name-generator";
 import { updateMeta } from "@/lib/utils";
+import { swrKeys } from "@/lib/swr-keys";
+import { fetcher } from "@/lib/fetcher";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
 
 type ViewFilter = "all" | "received" | "sent" | "replied" | "awaiting";
@@ -81,19 +84,16 @@ export default function InboxPage() {
   const params = useParams();
   const address = params.address as string;
 
-  const [agent, setAgent] = useState<InboxResponse["agent"] | null>(null);
-  const [receivedMessages, setReceivedMessages] = useState<MessageWithPeer[]>([]);
-  const [sentMessages, setSentMessages] = useState<MessageWithPeer[]>([]);
-  const [replies, setReplies] = useState<Record<string, OutboxReply>>({});
-  const [unreadCount, setUnreadCount] = useState(0);
-  const [receivedCount, setReceivedCount] = useState(0);
-  const [sentCount, setSentCount] = useState(0);
+  // Accumulated pages of additional pulls beyond the first SWR page.
+  // First page lives in the SWR cache so other components benefit; subsequent
+  // pages live in component state because pagination is inherently positional.
+  const [extraReceived, setExtraReceived] = useState<MessageWithPeer[]>([]);
+  const [extraReplies, setExtraReplies] = useState<Record<string, OutboxReply>>({});
+  const [extraSent, setExtraSent] = useState<MessageWithPeer[]>([]);
   const [receivedNextOffset, setReceivedNextOffset] = useState<number | null>(null);
   const [sentNextOffset, setSentNextOffset] = useState<number | null>(null);
 
-  const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
-  const [error, setError] = useState<string | null>(null);
   const [view, setView] = useState<ViewFilter>("all");
   const [sendModalOpen, setSendModalOpen] = useState(false);
 
@@ -107,109 +107,116 @@ export default function InboxPage() {
     updateMeta("og:description", `x402-gated inbox for ${displayName}`, true);
   }, [address]);
 
-  // Initial fetch — inbox (received) + outbox (sent) in parallel.
-  // The Sent tab renders outbox replies; the inbox endpoint does not include them.
-  useEffect(() => {
-    if (!address) return;
+  // First page of inbox (received) + outbox (sent) in parallel via SWR.
+  // Both inherit the global 15-min cache.
+  const {
+    data: inboxData,
+    error: inboxError,
+    isLoading: inboxLoading,
+  } = useSWR<InboxResponse>(
+    address ? swrKeys.inbox(address, { limit: PAGE_SIZE, offset: 0, view: "all" }) : null,
+    {
+      onSuccess: (result) => {
+        setReceivedNextOffset(result.inbox.pagination.nextOffset);
+      },
+    }
+  );
 
-    setLoading(true);
-    setError(null);
-
-    const inboxReq = fetch(
-      `/api/inbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=0&view=all`
-    ).then((res) => {
-      if (!res.ok) throw new Error(res.status === 404 ? "Agent not found" : "Failed to fetch inbox");
-      return res.json() as Promise<InboxResponse>;
-    });
-
-    // Outbox is best-effort: agents with no sent replies return a self-doc
-    // shape without `outbox`. We tolerate that and treat it as zero sent.
-    const outboxReq = fetch(
-      `/api/outbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=0`
-    )
-      .then((res) => (res.ok ? (res.json() as Promise<OutboxResponse | { outbox?: undefined }>) : null))
-      .catch(() => null);
-
-    Promise.all([inboxReq, outboxReq])
-      .then(([inboxResult, outboxResult]) => {
-        setAgent(inboxResult.agent);
-        setReceivedMessages(inboxResult.inbox.messages);
-        setReplies(inboxResult.inbox.replies);
-        setUnreadCount(inboxResult.inbox.unreadCount);
-        setReceivedCount(inboxResult.inbox.receivedCount ?? inboxResult.inbox.totalCount);
-        setReceivedNextOffset(inboxResult.inbox.pagination.nextOffset);
-
-        const outbox = outboxResult && "outbox" in outboxResult ? outboxResult.outbox : undefined;
-        if (outbox) {
-          const owner = {
-            btcAddress: inboxResult.agent.btcAddress,
-            stxAddress: inboxResult.agent.stxAddress,
-          };
-          setSentMessages(outbox.replies.map((r) => mapReplyToSentMessage(r, owner)));
-          setSentCount(outbox.totalCount);
-          setSentNextOffset(outbox.pagination.nextOffset);
-        } else {
-          setSentMessages([]);
-          setSentCount(0);
-          setSentNextOffset(null);
+  // Outbox tolerates 404/missing-shape: agents with no sent replies return a
+  // self-doc body without `outbox`. Fetcher throws on non-2xx, so we catch
+  // here and return an empty shape rather than letting SWR error.
+  const { data: outboxData } = useSWR<OutboxResponse | { outbox?: undefined }>(
+    address ? swrKeys.outbox(address, { limit: PAGE_SIZE, offset: 0 }) : null,
+    {
+      fetcher: async (url: string) => {
+        try {
+          return await fetcher<OutboxResponse>(url);
+        } catch {
+          return { outbox: undefined };
         }
+      },
+      onSuccess: (result) => {
+        const outbox = result && "outbox" in result ? result.outbox : undefined;
+        setSentNextOffset(outbox?.pagination.nextOffset ?? null);
+      },
+    }
+  );
 
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError((err as Error).message);
-        setLoading(false);
-      });
-  }, [address]);
+  const agent = inboxData?.agent ?? null;
+  const loading = inboxLoading && !inboxData;
+  const error =
+    inboxError ? ((inboxError as Error).message.includes("404") ? "Agent not found" : "Failed to fetch inbox") : null;
+
+  // Reconstitute view data from SWR + accumulated pages. Memoized so the
+  // load-more callback's deps stay stable across renders that don't change
+  // the underlying SWR payload.
+  const baseReceived = useMemo(
+    () => inboxData?.inbox.messages ?? [],
+    [inboxData]
+  );
+  const baseReplies = inboxData?.inbox.replies ?? {};
+  const receivedMessages = [...baseReceived, ...extraReceived];
+  const replies = { ...baseReplies, ...extraReplies };
+  const unreadCount = inboxData?.inbox.unreadCount ?? 0;
+  const receivedCount = inboxData?.inbox.receivedCount ?? inboxData?.inbox.totalCount ?? 0;
+
+  const baseOutbox = outboxData && "outbox" in outboxData ? outboxData.outbox : undefined;
+  const baseSent: MessageWithPeer[] = useMemo(
+    () => (agent && baseOutbox ? baseOutbox.replies.map((r) => mapReplyToSentMessage(r, agent)) : []),
+    [agent, baseOutbox]
+  );
+  const sentMessages = [...baseSent, ...extraSent];
+  const sentCount = baseOutbox?.totalCount ?? 0;
 
   // Load more — routed by current view. Sent tab loads from outbox; everything
-  // else loads from inbox.
-  const loadMore = useCallback(() => {
+  // else loads from inbox. Subsequent pages are appended to component state
+  // (the SWR cache holds the first page only).
+  const loadMore = useCallback(async () => {
     if (!address || !agent || loadingMore) return;
 
     if (view === "sent") {
       if (sentNextOffset == null) return;
       setLoadingMore(true);
-      fetch(`/api/outbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=${sentNextOffset}`)
-        .then((res) => {
-          if (!res.ok) throw new Error("Failed to load more");
-          return res.json() as Promise<OutboxResponse>;
-        })
-        .then((result) => {
-          const owner = { btcAddress: agent.btcAddress, stxAddress: agent.stxAddress };
-          setSentMessages((prev) => {
-            const existing = new Set(prev.map((m) => m.messageId));
-            const incoming = result.outbox.replies
-              .map((r) => mapReplyToSentMessage(r, owner))
-              .filter((m) => !existing.has(m.messageId));
-            return [...prev, ...incoming];
-          });
-          setSentNextOffset(result.outbox.pagination.nextOffset);
-          setLoadingMore(false);
-        })
-        .catch(() => setLoadingMore(false));
+      try {
+        const result = await fetcher<OutboxResponse>(
+          swrKeys.outbox(address, { limit: PAGE_SIZE, offset: sentNextOffset })
+        );
+        const owner = { btcAddress: agent.btcAddress, stxAddress: agent.stxAddress };
+        setExtraSent((prev) => {
+          const existing = new Set([...baseSent, ...prev].map((m) => m.messageId));
+          const incoming = result.outbox.replies
+            .map((r) => mapReplyToSentMessage(r, owner))
+            .filter((m) => !existing.has(m.messageId));
+          return [...prev, ...incoming];
+        });
+        setSentNextOffset(result.outbox.pagination.nextOffset);
+      } catch {
+        // swallow — load-more failure leaves existing pages intact
+      } finally {
+        setLoadingMore(false);
+      }
       return;
     }
 
     if (receivedNextOffset == null) return;
     setLoadingMore(true);
-    fetch(`/api/inbox/${encodeURIComponent(address)}?limit=${PAGE_SIZE}&offset=${receivedNextOffset}&view=all`)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to load more");
-        return res.json() as Promise<InboxResponse>;
-      })
-      .then((result) => {
-        setReceivedMessages((prev) => {
-          const existing = new Set(prev.map((m) => m.messageId));
-          const incoming = result.inbox.messages.filter((m) => !existing.has(m.messageId));
-          return [...prev, ...incoming];
-        });
-        setReplies((prev) => ({ ...prev, ...result.inbox.replies }));
-        setReceivedNextOffset(result.inbox.pagination.nextOffset);
-        setLoadingMore(false);
-      })
-      .catch(() => setLoadingMore(false));
-  }, [address, agent, view, receivedNextOffset, sentNextOffset, loadingMore]);
+    try {
+      const result = await fetcher<InboxResponse>(
+        swrKeys.inbox(address, { limit: PAGE_SIZE, offset: receivedNextOffset, view: "all" })
+      );
+      setExtraReceived((prev) => {
+        const existing = new Set([...baseReceived, ...prev].map((m) => m.messageId));
+        const incoming = result.inbox.messages.filter((m) => !existing.has(m.messageId));
+        return [...prev, ...incoming];
+      });
+      setExtraReplies((prev) => ({ ...prev, ...result.inbox.replies }));
+      setReceivedNextOffset(result.inbox.pagination.nextOffset);
+    } catch {
+      // swallow
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [address, agent, view, receivedNextOffset, sentNextOffset, loadingMore, baseSent, baseReceived]);
 
   if (loading) {
     return (
