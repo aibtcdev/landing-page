@@ -82,8 +82,12 @@ configure_codex_mcp() {
       echo "Warning: could not update Codex global MCP config; writing project config instead."
       write_codex_project_config
     fi
-  else
+  elif [ -d "$HOME/.codex" ]; then
+    echo "Codex config directory detected; writing project MCP config."
     write_codex_project_config
+  else
+    echo "Codex not detected; skipping Codex MCP config."
+    echo "To enable later: codex mcp add aibtc --env NETWORK=mainnet -- npx -y @aibtc/mcp-server@latest"
   fi
 }
 
