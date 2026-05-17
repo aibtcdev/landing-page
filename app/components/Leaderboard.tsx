@@ -4,7 +4,7 @@ import { useMemo } from "react";
 import useSWR from "swr";
 import Link from "next/link";
 import LevelBadge from "./LevelBadge";
-import { fetcher } from "@/lib/fetcher";
+import { swrKeys } from "@/lib/swr-keys";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, getActivityStatus, formatShortDate, ACTIVITY_COLORS } from "@/lib/utils";
 import { LEVELS } from "@/lib/levels";
@@ -44,7 +44,7 @@ export default function Leaderboard({
   const { data, isLoading: loading } = useSWR<{
     leaderboard?: LeaderboardAgent[];
     distribution?: Distribution;
-  }>(`/api/leaderboard?limit=${limit}`, fetcher);
+  }>(swrKeys.leaderboard(limit));
   const agents = data?.leaderboard ?? [];
   const distribution = data?.distribution ?? null;
 
