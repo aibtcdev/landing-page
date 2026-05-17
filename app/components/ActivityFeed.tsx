@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import useSWR from "swr";
 import Link from "next/link";
-import { fetcher } from "@/lib/fetcher";
+import { swrKeys } from "@/lib/swr-keys";
 import {
   type ActivityEvent,
   type ActivityResponse,
@@ -11,6 +11,8 @@ import {
   EVENT_CONFIG,
   CompactEventRow,
 } from "./activity-shared";
+
+const POLL_MS = 30_000;
 
 /**
  * Activity feed component for homepage.
@@ -29,10 +31,15 @@ import {
  * on the real API totals when the queue is exhausted.
  */
 export default function ActivityFeed({ initialData }: { initialData?: ActivityResponse }) {
+  // dedupingInterval override: the global 15-min default would silently
+  // block this poll. Cap dedupe at one tick so refreshInterval actually fires.
   const { data, error, isLoading: loading } = useSWR<ActivityResponse>(
-    "/api/activity",
-    fetcher,
-    { refreshInterval: 30_000, fallbackData: initialData }
+    swrKeys.activity(),
+    {
+      refreshInterval: POLL_MS,
+      dedupingInterval: POLL_MS,
+      fallbackData: initialData,
+    }
   );
 
   // Show fewer rows on mobile — hooks must be before early returns
