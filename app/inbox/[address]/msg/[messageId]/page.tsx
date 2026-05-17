@@ -1,12 +1,14 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect } from "react";
 import { useParams } from "next/navigation";
 import Link from "next/link";
+import useSWR from "swr";
 import Navbar from "../../../../components/Navbar";
 import AnimatedBackground from "../../../../components/AnimatedBackground";
 import { generateName } from "@/lib/name-generator";
 import { formatRelativeTime, updateMeta } from "@/lib/utils";
+import { swrKeys } from "@/lib/swr-keys";
 import type { InboxMessage, OutboxReply } from "@/lib/inbox/types";
 
 interface PeerInfo {
@@ -27,38 +29,38 @@ export default function MessagePermalinkPage() {
   const address = params.address as string;
   const messageId = params.messageId as string;
 
-  const [data, setData] = useState<MessageResponse | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const {
+    data,
+    error: fetchError,
+    isLoading,
+  } = useSWR<MessageResponse>(
+    address && messageId ? swrKeys.inboxMessage(address, messageId) : null
+  );
+
+  const loading = isLoading && !data;
+  const error = fetchError
+    ? (fetchError as Error).message.includes("404")
+      ? "Message not found"
+      : "Failed to load message"
+    : null;
 
   useEffect(() => {
     if (!address || !messageId) return;
-
     document.title = "Message - AIBTC";
     updateMeta("description", "View message on AIBTC");
-
-    fetch(`/api/inbox/${encodeURIComponent(address)}/${encodeURIComponent(messageId)}`)
-      .then((res) => {
-        if (!res.ok) throw new Error(res.status === 404 ? "Message not found" : "Failed to load message");
-        return res.json() as Promise<MessageResponse>;
-      })
-      .then((result) => {
-        const senderAddr = result.sender?.btcAddress || result.message.senderBtcAddress || result.message.fromAddress;
-        const recipientAddr = result.recipient?.btcAddress || result.message.toBtcAddress;
-        const senderName = result.sender?.displayName || generateName(senderAddr);
-        const recipientName = result.recipient?.displayName || generateName(recipientAddr);
-
-        document.title = `${senderName} → ${recipientName} - AIBTC`;
-        updateMeta("description", `Message from ${senderName} to ${recipientName} on AIBTC`);
-        updateMeta("og:title", `${senderName} → ${recipientName}`, true);
-        setData(result);
-        setLoading(false);
-      })
-      .catch((err) => {
-        setError((err as Error).message);
-        setLoading(false);
-      });
   }, [address, messageId]);
+
+  useEffect(() => {
+    if (!data) return;
+    const senderAddr =
+      data.sender?.btcAddress || data.message.senderBtcAddress || data.message.fromAddress;
+    const recipientAddr = data.recipient?.btcAddress || data.message.toBtcAddress;
+    const senderName = data.sender?.displayName || generateName(senderAddr);
+    const recipientName = data.recipient?.displayName || generateName(recipientAddr);
+    document.title = `${senderName} → ${recipientName} - AIBTC`;
+    updateMeta("description", `Message from ${senderName} to ${recipientName} on AIBTC`);
+    updateMeta("og:title", `${senderName} → ${recipientName}`, true);
+  }, [data]);
 
   if (loading) {
     return (
