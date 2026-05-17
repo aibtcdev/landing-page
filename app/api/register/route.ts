@@ -1,4 +1,4 @@
-import { NextRequest, NextResponse } from "next/server";
+import { NextRequest, NextResponse, after } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
@@ -896,12 +896,17 @@ export async function POST(request: NextRequest) {
     // co-equal store that subsequent P3a–e read flips can rely on.
     // Skip if referralCode generation failed (column is NOT NULL UNIQUE);
     // the admin backfill job will hydrate the row on its next run.
+    // Runs via `after()` so it does not add latency to the registration
+    // response — the write is non-authoritative and errors are swallowed.
     if (referralCode) {
-      try {
-        await insertAgentToD1(db, record, referralCode);
-      } catch (err) {
-        console.error("Failed to mirror agent to D1:", err);
-      }
+      const referralCodeForMirror = referralCode;
+      after(async () => {
+        try {
+          await insertAgentToD1(db, record, referralCodeForMirror);
+        } catch (err) {
+          console.error("Failed to mirror agent to D1:", err);
+        }
+      });
     }
 
     // Build response with conditional sponsorApiKey field

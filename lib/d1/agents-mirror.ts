@@ -19,14 +19,16 @@ import type { AgentRecord } from "@/lib/types";
 /**
  * Mirror a newly-registered agent into D1. Called from the registration
  * flow once both the KV writes and the referral-code generation have
- * succeeded. Uses `INSERT OR IGNORE` so a re-fired registration (idempotent
- * retry from the client) does not corrupt an existing row.
+ * succeeded. Uses `ON CONFLICT(btc_address) DO NOTHING` so a re-fired
+ * registration (idempotent retry from the client) does not corrupt an
+ * existing row.
  *
- * The agent's `referredBy` is set in a separate path (vouch flow); this
- * function intentionally inserts `referred_by_btc = NULL` so the foreign-key
- * constraint to `agents(btc_address)` is not tripped during the insert
- * window between the new agent and its referrer (if referred_by_btc were
- * set inline and the referrer wasn't yet in D1, the FK would reject).
+ * Inserts with `referred_by_btc = NULL` first to avoid the FK constraint
+ * to `agents(btc_address)` rejecting the row when the referrer hasn't
+ * yet been mirrored. After the insert, if the agent has a `referredBy`,
+ * a best-effort UPDATE attempts to set it; FK violations are swallowed
+ * because the referrer may not be in D1 yet — the admin backfill job
+ * will hydrate the relationship on its next run.
  */
 export async function insertAgentToD1(
   db: D1Database | undefined,
@@ -67,6 +69,22 @@ export async function insertAgentToD1(
       referralCode
     )
     .run();
+
+  // Best-effort second pass: set `referred_by_btc` if the agent has one.
+  // FK to `agents(btc_address)` may reject if the referrer isn't yet in D1
+  // — that's fine; the admin backfill will close the gap on its next run.
+  if (agent.referredBy) {
+    try {
+      await db
+        .prepare(
+          "UPDATE agents SET referred_by_btc = ? WHERE btc_address = ? AND referred_by_btc IS NULL"
+        )
+        .bind(agent.referredBy, agent.btcAddress)
+        .run();
+    } catch {
+      // Referrer not yet in D1; backfill will fill this in. Swallowed.
+    }
+  }
 }
 
 /**
@@ -107,7 +125,7 @@ export async function updateAgentInD1(
          capabilities_json = ?,
          last_identity_check = ?,
          github_username = ?,
-         referred_by_btc = ?,
+         referred_by_btc = COALESCE(?, referred_by_btc),
          btc_public_key = COALESCE(?, btc_public_key)
        WHERE btc_address = ?`
     )
@@ -123,6 +141,9 @@ export async function updateAgentInD1(
       agent.capabilities ? JSON.stringify(agent.capabilities) : null,
       agent.lastIdentityCheck ?? null,
       agent.githubUsername ?? null,
+      // referredBy is immutable once set; COALESCE preserves the existing
+      // value when the incoming AgentRecord omits referredBy (most mutators
+      // don't touch this field). A non-null incoming value still wins.
       agent.referredBy ?? null,
       // btcPublicKey is opportunistic — COALESCE preserves a previously
       // captured value if the current write has none (update-pubkey is
