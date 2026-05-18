@@ -154,7 +154,10 @@ export default function InboxPage() {
     () => inboxData?.inbox.messages ?? [],
     [inboxData]
   );
-  const baseReplies = inboxData?.inbox.replies ?? {};
+  const baseReplies = useMemo(
+    () => inboxData?.inbox.replies ?? {},
+    [inboxData]
+  );
   const receivedMessages = [...baseReceived, ...extraReceived];
   const replies = { ...baseReplies, ...extraReplies };
   const unreadCount = inboxData?.inbox.unreadCount ?? 0;

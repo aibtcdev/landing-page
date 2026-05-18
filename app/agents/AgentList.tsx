@@ -59,6 +59,8 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
 
     // Seed map from any cache hits — skips refetch when SWR already has them
     // (e.g., user navigated back to the list within the 15-min window).
+    // Note: `cache.get(key)?.data` reaches into SWR's internal `State` shape.
+    // Stable in SWR v2 but revisit on major SWR upgrades.
     const seeded = new Map<string, { score: number; count: number }>();
     const toFetch: typeof agentsWithIdentity = [];
     for (const agent of agentsWithIdentity) {
