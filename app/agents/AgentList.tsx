@@ -3,12 +3,15 @@
 import React, { useState, useMemo, useEffect } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import { useSWRConfig } from "swr";
 import LevelBadge from "../components/LevelBadge";
 import Tooltip from "../components/Tooltip";
 import SendMessageModal from "../components/SendMessageModal";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus, ACTIVITY_THRESHOLDS } from "@/lib/utils";
 import { LEVELS } from "@/lib/levels";
+import { fetcher } from "@/lib/fetcher";
+import { swrKeys } from "@/lib/swr-keys";
 import type { AgentRecord } from "@/lib/types";
 
 type Agent = AgentRecord & {
@@ -27,8 +30,16 @@ interface AgentListProps {
   agents: Agent[];
 }
 
-/** Fetch reputation scores client-side for agents with on-chain identity. */
+/**
+ * Fetch reputation scores client-side for agents with on-chain identity.
+ *
+ * Uses a concurrent worker pool (max 5) so we don't fire dozens of requests
+ * at once when the list is long. Each result is also written into the SWR
+ * cache under the canonical reputation-summary key, so the profile page's
+ * ReputationSummary component reads from cache instead of refetching.
+ */
 function useReputationData(agents: Agent[]): Map<string, { score: number; count: number }> {
+  const { cache, mutate } = useSWRConfig();
   const [reputationMap, setReputationMap] = useState<Map<string, { score: number; count: number }>>(new Map());
 
   // Sorted by btcAddress for stable identity across renders
@@ -46,28 +57,51 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
 
     const controller = new AbortController();
 
+    // Seed map from any cache hits — skips refetch when SWR already has them
+    // (e.g., user navigated back to the list within the 15-min window).
+    // Note: `cache.get(key)?.data` reaches into SWR's internal `State` shape.
+    // Stable in SWR v2 but revisit on major SWR upgrades.
+    const seeded = new Map<string, { score: number; count: number }>();
+    const toFetch: typeof agentsWithIdentity = [];
+    for (const agent of agentsWithIdentity) {
+      const cached = cache.get(swrKeys.reputationSummary(agent.btcAddress))?.data as
+        | { summary?: { summaryValue: number; count: number } }
+        | undefined;
+      if (cached?.summary) {
+        seeded.set(agent.btcAddress, {
+          score: cached.summary.summaryValue,
+          count: cached.summary.count,
+        });
+      } else {
+        toFetch.push(agent);
+      }
+    }
+    if (seeded.size > 0) setReputationMap(seeded);
+    if (toFetch.length === 0) return;
+
     async function fetchAll() {
       const MAX_CONCURRENT = 5;
-      const results: { btcAddress: string; score: number; count: number }[] = [];
       let currentIndex = 0;
 
       async function worker() {
         while (!controller.signal.aborted) {
           const index = currentIndex++;
-          if (index >= agentsWithIdentity.length) break;
-          const agent = agentsWithIdentity[index];
+          if (index >= toFetch.length) break;
+          const agent = toFetch[index];
+          const key = swrKeys.reputationSummary(agent.btcAddress);
 
           try {
-            const res = await fetch(`/api/identity/${encodeURIComponent(agent.btcAddress)}/reputation?type=summary`, {
-              signal: controller.signal,
-            });
-            if (!res.ok) continue;
-            const data = (await res.json()) as { summary?: { summaryValue: number; count: number } };
-            if (!data.summary) continue;
-            results.push({
-              btcAddress: agent.btcAddress,
-              score: data.summary.summaryValue,
-              count: data.summary.count,
+            const data = await fetcher<{ summary?: { summaryValue: number; count: number } }>(key);
+            // Populate SWR cache so other components reading this key get a hit.
+            mutate(key, data, { revalidate: false });
+            if (!data.summary || controller.signal.aborted) continue;
+            setReputationMap((prev) => {
+              const next = new Map(prev);
+              next.set(agent.btcAddress, {
+                score: data.summary!.summaryValue,
+                count: data.summary!.count,
+              });
+              return next;
             });
           } catch {
             continue;
@@ -75,21 +109,13 @@ function useReputationData(agents: Agent[]): Map<string, { score: number; count:
         }
       }
 
-      const workerCount = Math.min(MAX_CONCURRENT, agentsWithIdentity.length);
+      const workerCount = Math.min(MAX_CONCURRENT, toFetch.length);
       await Promise.all(Array.from({ length: workerCount }, () => worker()));
-
-      if (controller.signal.aborted) return;
-
-      const map = new Map<string, { score: number; count: number }>();
-      for (const result of results) {
-        map.set(result.btcAddress, { score: result.score, count: result.count });
-      }
-      setReputationMap(map);
     }
 
     fetchAll();
     return () => { controller.abort(); };
-  }, [agentsWithIdentity]);
+  }, [agentsWithIdentity, cache, mutate]);
 
   return reputationMap;
 }

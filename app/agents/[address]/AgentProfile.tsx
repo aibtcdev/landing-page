@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import useSWR from "swr";
+import useSWR, { useSWRConfig } from "swr";
 import { X_HANDLE } from "@/lib/constants";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
@@ -16,7 +16,7 @@ import InteractionGraph from "../../components/InteractionGraph";
 import IdentityBadge from "../../components/IdentityBadge";
 import ReputationSummary from "../../components/ReputationSummary";
 import { generateName } from "@/lib/name-generator";
-import { fetcher } from "@/lib/fetcher";
+import { swrKeys, swrMatchers } from "@/lib/swr-keys";
 import type { AgentRecord } from "@/lib/types";
 import type { NextLevelInfo } from "@/lib/levels";
 import type { BtcBalance } from "@/lib/balances/btc";
@@ -62,6 +62,8 @@ export default function AgentProfile({
   const [levelName, setLevelName] = useState(initialLevelName);
   const [nextLevel, setNextLevel] = useState<NextLevelInfo | null>(initialNextLevel);
 
+  const { mutate: globalMutate } = useSWRConfig();
+
   // UI interaction state
   const [sendMessageOpen, setSendMessageOpen] = useState(false);
   const [tweetCopied, setTweetCopied] = useState(false);
@@ -87,8 +89,7 @@ export default function AgentProfile({
   const hasExistingClaim = claim && (claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending");
 
   const { data: vouchData } = useSWR<VouchResponse>(
-    agentLevel >= 1 ? `/api/vouch/${encodeURIComponent(agent.btcAddress)}` : null,
-    fetcher
+    agentLevel >= 1 ? swrKeys.vouch(agent.btcAddress) : null
   );
 
   const handleValidateCode = async () => {
@@ -141,6 +142,12 @@ export default function AgentProfile({
         if (data.claim.tweetAuthor) {
           setAgent((prev) => ({ ...prev, owner: data.claim!.tweetAuthor }));
         }
+        // Claiming Genesis can change vouch eligibility and unlocks new
+        // features; invalidate vouch + inbox/reputation queries so adjacent
+        // components reflect the new level without a hard reload.
+        globalMutate(swrKeys.vouch(agent.btcAddress));
+        globalMutate(swrMatchers.anyInbox(agent.btcAddress));
+        globalMutate(swrMatchers.anyReputation(agent.btcAddress));
       }
     } catch {
       setClaimError("Network error. Please try again.");

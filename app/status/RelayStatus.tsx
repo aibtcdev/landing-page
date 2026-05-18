@@ -1,7 +1,9 @@
 "use client";
 
-import { useState, useEffect, useCallback } from "react";
+import { useState } from "react";
+import useSWR from "swr";
 import type { SponsorStatusResult } from "@/lib/sponsor/types";
+import { swrKeys } from "@/lib/swr-keys";
 import { STATUS_REFRESH_INTERVAL_MS } from "./constants";
 import type { StatusData } from "./types";
 
@@ -94,34 +96,23 @@ function formatPercent(value: number): string {
   return `${Math.round(value * 100)}%`;
 }
 
-async function fetchAll(): Promise<StatusData> {
-  const response = await fetch("/api/status/summary");
-  if (!response.ok) {
-    throw new Error(`Status refresh failed with ${response.status}`);
-  }
-  return (await response.json()) as StatusData;
-}
-
 export default function RelayStatus({ initialData }: { initialData: StatusData }) {
-  const [data, setData] = useState<StatusData>(initialData);
   const [lastUpdated, setLastUpdated] = useState<Date>(() => new Date());
-  const [refreshing, setRefreshing] = useState(false);
 
-  const refresh = useCallback(async () => {
-    setRefreshing(true);
-    try {
-      const fresh = await fetchAll();
-      setData(fresh);
-      setLastUpdated(new Date());
-    } finally {
-      setRefreshing(false);
-    }
-  }, []);
+  // dedupingInterval cap matches refreshInterval so the global 15-min default
+  // doesn't suppress polling. mutate() handles the manual refresh button.
+  const { data: swrData, isValidating, mutate } = useSWR<StatusData>(swrKeys.statusSummary(), {
+    fallbackData: initialData,
+    refreshInterval: STATUS_REFRESH_INTERVAL_MS,
+    dedupingInterval: STATUS_REFRESH_INTERVAL_MS,
+    onSuccess: () => setLastUpdated(new Date()),
+  });
 
-  useEffect(() => {
-    const id = setInterval(refresh, STATUS_REFRESH_INTERVAL_MS);
-    return () => clearInterval(id);
-  }, [refresh]);
+  // fallbackData guarantees data is defined on first render; SWR types it as
+  // possibly undefined so we narrow here.
+  const data = swrData ?? initialData;
+  const refreshing = isValidating;
+  const refresh = () => mutate();
 
   const { overall, mainnetOk, testnetOk, sponsorOk } = deriveOverallStatus(data);
   const sponsorStatus = data.sponsorStatus;

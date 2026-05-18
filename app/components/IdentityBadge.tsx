@@ -1,8 +1,10 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
+import useSWR, { useSWRConfig } from "swr";
+import { swrKeys, swrMatchers } from "@/lib/swr-keys";
 
 interface IdentityBadgeProps {
   agentId?: number;
@@ -13,26 +15,18 @@ export default function IdentityBadge({
   agentId: initialAgentId,
   stxAddress,
 }: IdentityBadgeProps) {
-  const [agentId, setAgentId] = useState(initialAgentId);
-  const [loading, setLoading] = useState(initialAgentId === undefined);
   const [refreshing, setRefreshing] = useState(false);
   const [refreshError, setRefreshError] = useState<string | null>(null);
   const router = useRouter();
+  const { mutate: globalMutate } = useSWRConfig();
 
-  useEffect(() => {
-    if (initialAgentId !== undefined) return;
+  // Only fetch when SSR didn't already supply the agentId.
+  const { data, isLoading, mutate } = useSWR<{ agentId: number | null }>(
+    initialAgentId === undefined ? swrKeys.identity(stxAddress) : null
+  );
 
-    fetch(`/api/identity/${encodeURIComponent(stxAddress)}`)
-      .then((r) => {
-        if (!r.ok) return null;
-        return r.json() as Promise<{ agentId: number | null }>;
-      })
-      .then((data) => {
-        if (data?.agentId != null) setAgentId(data.agentId);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [initialAgentId, stxAddress]);
+  const agentId = initialAgentId !== undefined ? initialAgentId : data?.agentId ?? undefined;
+  const loading = initialAgentId === undefined && isLoading && !data;
 
   async function handleRefresh() {
     if (refreshing) return;
@@ -47,13 +41,15 @@ export default function IdentityBadge({
         const body = (await resp.json().catch(() => ({}))) as { error?: string };
         throw new Error(body.error || `Refresh failed: ${resp.status}`);
       }
-      const data = (await resp.json()) as {
+      const fresh = (await resp.json()) as {
         agentId: number | null;
         bnsName: string | null;
       };
-      setAgentId(data.agentId ?? undefined);
-      // BNS (and any other server-rendered fields) live on the AgentRecord;
-      // reload the RSC payload to pick those up.
+      // Update this hook's cache, then invalidate every dependent identity
+      // query (reputation summary, feedback list) so they revalidate too.
+      await mutate({ agentId: fresh.agentId }, { revalidate: false });
+      await globalMutate(swrMatchers.anyIdentity(stxAddress), undefined, { revalidate: true });
+      // BNS and other RSC-rendered fields require a server-side refresh.
       router.refresh();
     } catch (e) {
       setRefreshError((e as Error).message);

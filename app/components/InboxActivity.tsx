@@ -5,7 +5,7 @@ import dynamic from "next/dynamic";
 import useSWR from "swr";
 import Link from "next/link";
 import InboxList from "./InboxList";
-import { fetcher } from "@/lib/fetcher";
+import { swrKeys } from "@/lib/swr-keys";
 import { generateName } from "@/lib/name-generator";
 import type { InboxMessage as InboxMessageType, OutboxReply } from "@/lib/inbox/types";
 
@@ -55,8 +55,7 @@ export default function InboxActivity({
 }: InboxActivityProps) {
   const [sendModalOpen, setSendModalOpen] = useState(false);
   const { data, error, isLoading: loading } = useSWR<InboxResponse>(
-    `/api/inbox/${encodeURIComponent(btcAddress)}?limit=5&view=all&include=partners`,
-    fetcher
+    swrKeys.inbox(btcAddress, { limit: 5, view: "all", includePartners: true })
   );
 
   const displayName = data?.agent?.displayName || generateName(btcAddress);
