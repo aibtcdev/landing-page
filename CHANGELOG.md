@@ -1,5 +1,50 @@
 # Changelog
 
+## [1.44.0](https://github.com/aibtcdev/landing-page/compare/v1.43.0...v1.44.0) (2026-05-19)
+
+
+### Features
+
+* **762b:** migrate BNS + identity cache from KV to D1 + caches.default ([#852](https://github.com/aibtcdev/landing-page/issues/852)) ([5e479bc](https://github.com/aibtcdev/landing-page/commit/5e479bc3c8d52efd97cbd82b7835150dc9438d5b))
+* **762c:** live agents D1 mirror; wire into register (P3-0a) ([#876](https://github.com/aibtcdev/landing-page/issues/876)) ([7f54319](https://github.com/aibtcdev/landing-page/commit/7f54319b84e51c58c87f74dc42cb830286a6f8bc))
+* **bounty:** native bounty system — replaces bounty.drx4.xyz proxy ([#843](https://github.com/aibtcdev/landing-page/issues/843)) ([1904698](https://github.com/aibtcdev/landing-page/commit/190469832e0c7fe858f60b7e77d5952e8bd21649))
+* serve canonical agent skill at /skill.md ([#839](https://github.com/aibtcdev/landing-page/issues/839)) ([fda3446](https://github.com/aibtcdev/landing-page/commit/fda3446e43de47a9e9c753a63fbb187c8a69701e))
+
+
+### Bug Fixes
+
+* **bounty:** drop hidden default-to-active in listBounties ([#872](https://github.com/aibtcdev/landing-page/issues/872)) ([5e3b67a](https://github.com/aibtcdev/landing-page/commit/5e3b67a3491c132503e955dfa979364739585845))
+* **bounty:** prefer Stacks block_time_iso over burn_block_time_iso in txid verifier ([#870](https://github.com/aibtcdev/landing-page/issues/870)) ([dc6f3b6](https://github.com/aibtcdev/landing-page/commit/dc6f3b6fe0189507015feecd3572357cf9f4f8f3))
+* **bounty:** show all bounties regardless of status, inline chip filters ([#871](https://github.com/aibtcdev/landing-page/issues/871)) ([15adcfb](https://github.com/aibtcdev/landing-page/commit/15adcfb1c2e7d961c476986bb5486ac30c13179e))
+* **bounty:** show poster identity on card, remove top stats block ([#869](https://github.com/aibtcdev/landing-page/issues/869)) ([91a24c1](https://github.com/aibtcdev/landing-page/commit/91a24c1484e1a3e998fb71d60a24c5519f5d0264))
+* **competition:** allowlist current Bitflow gen + restore stablecoin P&L ([#866](https://github.com/aibtcdev/landing-page/issues/866)) ([4b132a7](https://github.com/aibtcdev/landing-page/commit/4b132a7da0df7bb5fa3c463764eef9d60296037b))
+* **competition:** allowlist router-stableswap-xyk-multihop-v-1-2 ([#830](https://github.com/aibtcdev/landing-page/issues/830)) ([#831](https://github.com/aibtcdev/landing-page/issues/831)) ([c95ec72](https://github.com/aibtcdev/landing-page/commit/c95ec72433004f8907fdd95098a669058286574e))
+* **competition:** peg stablecoin prices ([#849](https://github.com/aibtcdev/landing-page/issues/849)) ([88ed198](https://github.com/aibtcdev/landing-page/commit/88ed19823fae21040bfe5931109c5c280c686d38))
+* **competition:** sync Genesis claims into D1 ([39a2b52](https://github.com/aibtcdev/landing-page/commit/39a2b521bf7873b861a72630a7ee2e9292d0cf24))
+* **inbox:** clamp reconciliation queue to nonceExpiresAt ([#375](https://github.com/aibtcdev/landing-page/issues/375)) ([#883](https://github.com/aibtcdev/landing-page/issues/883)) ([a27d266](https://github.com/aibtcdev/landing-page/commit/a27d2667efadf7a56ca27f808a9b54bcf26e3a3c))
+* **inbox:** dual-fetch outbox so Sent tab on /inbox/[address] renders ([#844](https://github.com/aibtcdev/landing-page/issues/844)) ([7e02a88](https://github.com/aibtcdev/landing-page/commit/7e02a8851d36e66ccbcb908ec95b81f9fca7a592))
+* **inbox:** preserve received partner when BTC resolution fails in dedup pass ([#735](https://github.com/aibtcdev/landing-page/issues/735)) ([1c0a4fe](https://github.com/aibtcdev/landing-page/commit/1c0a4fe5fcd29afa3f432a9cf08b76846dff53f5))
+* **skill:** make install step permission-aware with three branches ([#840](https://github.com/aibtcdev/landing-page/issues/840)) ([59cf611](https://github.com/aibtcdev/landing-page/commit/59cf611c6b099aa73a693fadd377fa097b0a94c7))
+* **skill:** make Step 5 + setup summary level-aware (v0.6) ([#842](https://github.com/aibtcdev/landing-page/issues/842)) ([6db70cd](https://github.com/aibtcdev/landing-page/commit/6db70cd388e46f323f4f9ed658059e0f85749212))
+* **test:** update [#733](https://github.com/aibtcdev/landing-page/issues/733) dedup tests to use P3 stats mocks ([#847](https://github.com/aibtcdev/landing-page/issues/847)) ([89d3e7c](https://github.com/aibtcdev/landing-page/commit/89d3e7c057dd2bc70a489b51e6368cca4d7f3d9e))
+
+
+### Performance Improvements
+
+* **d1:** cache heartbeat unread-count behind 30s edge cache ([#834](https://github.com/aibtcdev/landing-page/issues/834)) ([4b13947](https://github.com/aibtcdev/landing-page/commit/4b139476e226cae3d12388e53ed6c235c3292d4a))
+* **d1:** cut /api/inbox/[address] COUNTs 4→2 to stop rows-read leak ([#833](https://github.com/aibtcdev/landing-page/issues/833)) ([29d98c6](https://github.com/aibtcdev/landing-page/commit/29d98c6b67ce1e47eaf58195b406d085401b60cb))
+* **d1:** P3 — agent_inbox_stats + all hot COUNT(*) → O(1) stats lookups ([#845](https://github.com/aibtcdev/landing-page/issues/845)) ([6d7462c](https://github.com/aibtcdev/landing-page/commit/6d7462cf6b7773dd5780f0ae68ff0fbcd427d482))
+
+
+### Documentation
+
+* **rfc:** document reply-row synthesized PK convention in inbox_messages (closes [#673](https://github.com/aibtcdev/landing-page/issues/673)) ([#848](https://github.com/aibtcdev/landing-page/issues/848)) ([b0e2d4d](https://github.com/aibtcdev/landing-page/commit/b0e2d4d968328944db06f5b9165a3dc3b496f35a))
+
+
+### Code Refactoring
+
+* **bounty:** drop bodyHash, sign body fields directly ([#868](https://github.com/aibtcdev/landing-page/issues/868)) ([c71b4c3](https://github.com/aibtcdev/landing-page/commit/c71b4c346a679ca0823d5ec571646ef07d198dd5))
+
 ## [1.43.0](https://github.com/aibtcdev/landing-page/compare/v1.42.0...v1.43.0) (2026-05-13)
 
 
