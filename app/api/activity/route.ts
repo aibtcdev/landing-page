@@ -3,23 +3,55 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { buildActivityData } from "@/lib/activity";
 import type { ActivityResponse } from "@/app/components/activity-shared";
 
-/**
- * Cached activity data stored at `cache:activity` in KV.
- */
-interface CachedActivity {
-  data: ActivityResponse;
-  cachedAt: string;
-}
-
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
   "Access-Control-Allow-Methods": "GET, OPTIONS",
 };
 
-const CACHE_KEY = "cache:activity";
-const BUILDING_KEY = "cache:activity:building";
-const CACHE_TTL_SECONDS = 120; // 2 minutes
-const BUILDING_TTL_SECONDS = 30;
+const CACHE_KEY_URL = "https://cache.aibtc.local/api/activity";
+const RESPONSE_MAX_AGE = 60;
+const RESPONSE_S_MAXAGE = 120;
+
+// Module-level in-flight map collapses concurrent rebuilds inside one
+// isolate to a single buildActivityData() call. Combined with
+// caches.default (coherent across isolates inside a colo) this gives an
+// effective single-flight without the KV-RMW mutex that previously lived
+// at `cache:activity:building`.
+const inFlight = new Map<string, Promise<Response>>();
+
+function getDefaultCache(): Cache | null {
+  const c = (globalThis as unknown as { caches?: { default?: Cache } }).caches;
+  return c?.default ?? null;
+}
+
+async function buildAndCache(
+  kv: KVNamespace,
+  db: D1Database | undefined,
+  ctx: { waitUntil(p: Promise<unknown>): void } | undefined,
+): Promise<Response> {
+  const data: ActivityResponse = await buildActivityData(kv, db);
+  const response = NextResponse.json(data, {
+    headers: {
+      "Cache-Control": `public, max-age=${RESPONSE_MAX_AGE}, s-maxage=${RESPONSE_S_MAXAGE}`,
+      "X-Cache": "MISS",
+      ...CORS_HEADERS,
+    },
+  });
+
+  const cache = getDefaultCache();
+  if (cache) {
+    const cacheKey = new Request(CACHE_KEY_URL, { method: "GET" });
+    const cachedClone = new Response(response.clone().body, response);
+    const stash = cache.put(cacheKey, cachedClone);
+    if (ctx) {
+      ctx.waitUntil(stash);
+    } else {
+      await stash;
+    }
+  }
+
+  return response;
+}
 
 /**
  * GET /api/activity
@@ -27,11 +59,11 @@ const BUILDING_TTL_SECONDS = 30;
  * Returns recent network activity (messages, registrations)
  * and aggregate statistics (total agents, active agents, messages, sats).
  *
- * Caches result in KV for 2 minutes. Uses the shared agent-list cache
- * to derive stats and identify top active agents — no independent O(N) scan.
+ * Cached in `caches.default` for 120s via s-maxage. Concurrent rebuild
+ * requests inside one isolate are deduplicated through `inFlight`;
+ * cross-isolate coherence comes from `caches.default` itself.
  */
 export async function GET(request: NextRequest) {
-  // Self-documenting: return usage docs when explicitly requested via ?docs=1
   const { searchParams } = new URL(request.url);
   if (searchParams.get("docs") === "1") {
     return NextResponse.json({
@@ -68,9 +100,9 @@ export async function GET(request: NextRequest) {
         },
       },
       cachingStrategy: {
-        description: "Response is cached in KV for 2 minutes. Stats derived from shared agent-list cache (no independent O(N) scan). Only event detail fetches for top 20 active agents remain as targeted KV reads.",
-        ttl: CACHE_TTL_SECONDS,
-        key: CACHE_KEY,
+        description: "Response is cached in caches.default (the Cloudflare edge cache) for 2 minutes via s-maxage. Stats derived from shared agent-list cache (no independent O(N) scan). Only event detail fetches for top 20 active agents remain as targeted KV reads.",
+        sMaxAgeSeconds: RESPONSE_S_MAXAGE,
+        cacheKeyUrl: CACHE_KEY_URL,
       },
       relatedEndpoints: {
         agents: "/api/agents - List all agents with pagination",
@@ -90,85 +122,34 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const db = env.DB as D1Database | undefined;
 
-    // Check cache first
-    const cached = await kv.get<CachedActivity>(CACHE_KEY, "json");
-    if (cached && cached.data) {
-      const cachedAge = Date.now() - new Date(cached.cachedAt).getTime();
-      if (cachedAge < CACHE_TTL_SECONDS * 1000) {
-        return NextResponse.json(cached.data, {
-          headers: {
-            "Cache-Control": "public, max-age=60, s-maxage=120",
-            "X-Cache": "HIT",
-            "X-Cache-Age": Math.floor(cachedAge / 1000).toString(),
-            ...CORS_HEADERS,
-          },
-        });
+    const cache = getDefaultCache();
+    if (cache) {
+      const cached = await cache.match(new Request(CACHE_KEY_URL, { method: "GET" }));
+      if (cached) {
+        const headers = new Headers(cached.headers);
+        headers.set("X-Cache", "HIT");
+        return new Response(cached.body, { status: cached.status, headers });
       }
     }
 
-    // Cache miss — check if another request is already rebuilding (thundering herd guard)
-    const building = await kv.get(BUILDING_KEY);
-    if (building) {
-      // Return stale data if available, otherwise a minimal fallback
-      if (cached && cached.data) {
-        return NextResponse.json(cached.data, {
-          headers: {
-            "Cache-Control": "public, max-age=30, s-maxage=60",
-            "X-Cache": "STALE",
-            ...CORS_HEADERS,
-          },
-        });
-      }
-      return NextResponse.json(
-        { events: [], stats: { totalAgents: 0, activeAgents: 0, totalMessages: 0, totalSatsTransacted: 0 } },
-        {
-          headers: {
-            "Cache-Control": "no-store",
-            "X-Cache": "MISS-BUILDING",
-            ...CORS_HEADERS,
-          },
-        }
-      );
-    }
-
-    // Claim rebuild with sentinel (best-effort)
-    try {
-      await kv.put(BUILDING_KEY, "1", { expirationTtl: BUILDING_TTL_SECONDS });
-    } catch {
-      // Proceed anyway — worst case is a duplicate rebuild
-    }
-
-    let response: ActivityResponse;
-    try {
-      response = await buildActivityData(kv, db);
-
-      // Cache the response
-      const cacheData: CachedActivity = {
-        data: response,
-        cachedAt: new Date().toISOString(),
-      };
-      await kv.put(CACHE_KEY, JSON.stringify(cacheData), {
-        expirationTtl: CACHE_TTL_SECONDS,
+    let promise = inFlight.get(CACHE_KEY_URL);
+    if (!promise) {
+      promise = buildAndCache(kv, db, ctx).finally(() => {
+        inFlight.delete(CACHE_KEY_URL);
       });
-    } catch (buildError) {
-      // Clear sentinel and re-throw so the outer catch returns a structured error
-      await kv.delete(BUILDING_KEY).catch(() => {});
-      throw buildError;
+      inFlight.set(CACHE_KEY_URL, promise);
     }
 
-    // Clear sentinel after successful rebuild
-    await kv.delete(BUILDING_KEY).catch(() => {});
-
-    return NextResponse.json(response, {
-      headers: {
-        "Cache-Control": "public, max-age=60, s-maxage=120",
-        "X-Cache": "MISS",
-        ...CORS_HEADERS,
-      },
+    const result = await promise;
+    // Concurrent awaiters can't share a single Response body stream;
+    // clone for this request so each caller has its own readable copy.
+    return new Response(result.clone().body, {
+      status: result.status,
+      headers: result.headers,
     });
   } catch (error) {
     console.error("Failed to fetch activity:", error);
