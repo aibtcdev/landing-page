@@ -198,6 +198,61 @@ describe("GET /api/activity", () => {
     expect(buildActivityDataMock).toHaveBeenCalledTimes(2);
   });
 
+  it("holds the in-flight slot until cache.put settles (Codex race)", async () => {
+    // Codex P2: with ctx.waitUntil, buildAndCache returned before cache.put
+    // resolved. If inFlight was cleared on response-ready instead of put-settled,
+    // a second request arriving in that window would see both a cache miss
+    // and an empty inFlight and trigger a duplicate rebuild.
+    const store = new Map<string, Response>();
+    let releasePut!: () => void;
+    const putGate = new Promise<void>((resolve) => {
+      releasePut = resolve;
+    });
+    const cache = {
+      match: vi.fn(async (req: Request) => {
+        const stored = store.get(req.url);
+        if (!stored) return undefined;
+        return new Response(stored.clone().body, stored);
+      }),
+      put: vi.fn(async (req: Request, res: Response) => {
+        await putGate; // hold the put open
+        store.set(req.url, res);
+      }),
+      delete: vi.fn(async () => true),
+    };
+    (globalThis as unknown as { caches: { default: typeof cache } }).caches = {
+      default: cache,
+    };
+
+    const { GET } = await import("../route");
+
+    // First request kicks off the build; with the bug it would resolve and clear inFlight before put settled.
+    const first = GET(
+      new Request("https://aibtc.com/api/activity") as unknown as Parameters<typeof GET>[0],
+    );
+
+    // Drain enough microtasks that the leader has finished building (buildActivityData resolved)
+    // and is now waiting on cache.put.
+    for (let i = 0; i < 30; i += 1) {
+      await Promise.resolve();
+    }
+
+    // Now fire a second request. With the fix, inFlight is still populated,
+    // so this should NOT trigger a second buildActivityData call.
+    const second = GET(
+      new Request("https://aibtc.com/api/activity") as unknown as Parameters<typeof GET>[0],
+    );
+
+    for (let i = 0; i < 30; i += 1) {
+      await Promise.resolve();
+    }
+
+    releasePut();
+    await Promise.all([first, second]);
+
+    expect(buildActivityDataMock).toHaveBeenCalledTimes(1);
+  });
+
   it("returns the built response even if cache.put rejects", async () => {
     // Steel-yeti S1: a failed cache.put must not fail an otherwise successful build.
     const store = new Map<string, Response>();

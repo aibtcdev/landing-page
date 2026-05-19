@@ -13,11 +13,11 @@ const RESPONSE_MAX_AGE = 60;
 const RESPONSE_S_MAXAGE = 120;
 
 // Module-level in-flight map collapses concurrent rebuilds inside one
-// isolate to a single buildActivityData() call. Combined with
-// caches.default (coherent across isolates inside a colo) this gives an
-// effective single-flight without the KV-RMW mutex that previously lived
-// at `cache:activity:building`.
-const inFlight = new Map<string, Promise<Response>>();
+// isolate to a single buildActivityData() call. The slot is held until
+// the caches.default put settles — not just until the response is built
+// — so a request arriving in the gap can't slip past both the cache
+// miss and an empty inFlight and trigger a duplicate rebuild.
+const inFlight = new Map<string, Promise<{ response: Response }>>();
 
 function getDefaultCache(): Cache | null {
   const c = (globalThis as unknown as { caches?: { default?: Cache } }).caches;
@@ -26,11 +26,16 @@ function getDefaultCache(): Cache | null {
 
 // `kv` and `db` are forwarded to `buildActivityData` — this layer owns only
 // `caches.default` and does not perform any direct KV reads or writes.
+//
+// Returns both the live response (which the leader serves immediately and
+// concurrent waiters clone) and the `stash` promise that resolves when the
+// cache.default put has settled. The caller uses `stash` to know when it's
+// safe to clear the inFlight slot.
 async function buildAndCache(
   kv: KVNamespace,
   db: D1Database | undefined,
   ctx: { waitUntil(p: Promise<unknown>): void } | undefined,
-): Promise<Response> {
+): Promise<{ response: Response; stash: Promise<unknown> }> {
   const data: ActivityResponse = await buildActivityData(kv, db);
   const response = NextResponse.json(data, {
     headers: {
@@ -41,23 +46,18 @@ async function buildAndCache(
   });
 
   const cache = getDefaultCache();
-  if (cache) {
-    const cacheKey = new Request(CACHE_KEY_URL, { method: "GET" });
-    const cachedClone = new Response(response.clone().body, response);
-    // Best-effort: a failed cache.put must not fail an otherwise successful
-    // build — TTL/freshness costs are bounded by RESPONSE_S_MAXAGE and the
-    // next request will rebuild and retry the cache write.
-    const stash = cache.put(cacheKey, cachedClone).catch((err) => {
-      console.error("Failed to populate caches.default for /api/activity:", err);
-    });
-    if (ctx) {
-      ctx.waitUntil(stash);
-    } else {
-      await stash;
-    }
-  }
+  if (!cache) return { response, stash: Promise.resolve() };
 
-  return response;
+  const cacheKey = new Request(CACHE_KEY_URL, { method: "GET" });
+  const cachedClone = new Response(response.clone().body, response);
+  // Best-effort: a failed cache.put must not fail an otherwise successful
+  // build — TTL/freshness costs are bounded by RESPONSE_S_MAXAGE and the
+  // next request will rebuild and retry the cache write.
+  const stash = cache.put(cacheKey, cachedClone).catch((err) => {
+    console.error("Failed to populate caches.default for /api/activity:", err);
+  });
+  if (ctx) ctx.waitUntil(stash);
+  return { response, stash };
 }
 
 /**
@@ -150,18 +150,25 @@ export async function GET(request: NextRequest) {
 
     let promise = inFlight.get(CACHE_KEY_URL);
     if (!promise) {
-      promise = buildAndCache(kv, db, ctx).finally(() => {
-        inFlight.delete(CACHE_KEY_URL);
-      });
+      promise = buildAndCache(kv, db, ctx);
       inFlight.set(CACHE_KEY_URL, promise);
+      // Hold the inFlight slot until the cache.default put settles — not
+      // just until buildActivityData() returns. Otherwise a request arriving
+      // in the window between response-ready and cache.put-settled would see
+      // both a cache miss and an empty inFlight and trigger a duplicate
+      // rebuild, defeating single-flight.
+      promise.then(
+        ({ stash }) => stash.finally(() => inFlight.delete(CACHE_KEY_URL)),
+        () => inFlight.delete(CACHE_KEY_URL),
+      );
     }
 
-    const result = await promise;
+    const { response } = await promise;
     // Concurrent awaiters can't share a single Response body stream;
     // clone for this request so each caller has its own readable copy.
-    return new Response(result.clone().body, {
-      status: result.status,
-      headers: result.headers,
+    return new Response(response.clone().body, {
+      status: response.status,
+      headers: response.headers,
     });
   } catch (error) {
     console.error("Failed to fetch activity:", error);
