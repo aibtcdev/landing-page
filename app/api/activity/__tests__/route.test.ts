@@ -70,7 +70,7 @@ describe("GET /api/activity", () => {
     uninstallMockCache();
   });
 
-  it("returns docs payload without calling buildActivityData or touching the cache", async () => {
+  it("returns docs payload without calling buildActivityData or touching the cache, and does not leak the internal cache URL", async () => {
     const { store, stats } = installMockCache();
     const { GET } = await import("../route");
 
@@ -83,8 +83,13 @@ describe("GET /api/activity", () => {
     expect(stats.matches).toBe(0);
     expect(stats.puts).toBe(0);
     expect(store.size).toBe(0);
-    const body = (await res.json()) as { endpoint: string };
+    const bodyText = await res.text();
+    const body = JSON.parse(bodyText) as { endpoint: string };
     expect(body.endpoint).toBe("/api/activity");
+    // Public docs payload must not expose the worker-internal pseudo-host
+    // used for caches.default keys (steel-yeti S3).
+    expect(bodyText).not.toContain("cache.aibtc.local");
+    expect(bodyText).not.toContain("cacheKeyUrl");
   });
 
   it("on cache miss, runs buildActivityData once and populates caches.default", async () => {
@@ -132,39 +137,46 @@ describe("GET /api/activity", () => {
   });
 
   it("dedupes concurrent cache-miss requests to a single buildActivityData call", async () => {
-    installMockCache();
-
-    // Hold buildActivityData open until all concurrent GETs have entered the in-flight dedup branch.
-    let release!: (value: {
-      events: never[];
-      stats: { totalAgents: number; activeAgents: number; totalMessages: number; totalSatsTransacted: number };
-    }) => void;
-    const gate = new Promise<{
-      events: never[];
-      stats: { totalAgents: number; activeAgents: number; totalMessages: number; totalSatsTransacted: number };
-    }>((resolve) => {
+    // Deterministic barrier: install a cache.match shim that counts callers and
+    // resolves them only after all N have arrived. By the time cache.match
+    // unblocks each caller, the leader has set the inFlight slot and the
+    // others see it via inFlight.get on their next step — no microtask-drain
+    // guesswork (steel-yeti cycle-2 nit).
+    const TOTAL = 5;
+    const store = new Map<string, Response>();
+    let arrived = 0;
+    let release!: () => void;
+    const allArrived = new Promise<void>((resolve) => {
       release = resolve;
     });
-    buildActivityDataMock.mockImplementationOnce(() => gate);
+    const cache = {
+      match: vi.fn(async (req: Request) => {
+        arrived += 1;
+        if (arrived === TOTAL) release();
+        await allArrived;
+        return store.get(req.url);
+      }),
+      put: vi.fn(async (req: Request, res: Response) => {
+        store.set(req.url, res);
+      }),
+      delete: vi.fn(async (req: Request) => store.delete(req.url)),
+    };
+    (globalThis as unknown as { caches: { default: typeof cache } }).caches = {
+      default: cache,
+    };
+
+    buildActivityDataMock.mockResolvedValue({
+      events: [],
+      stats: { totalAgents: 7, activeAgents: 0, totalMessages: 0, totalSatsTransacted: 0 },
+    });
 
     const { GET } = await import("../route");
 
-    const reqs = Array.from({ length: 5 }, () =>
-      GET(new Request("https://aibtc.com/api/activity") as unknown as Parameters<typeof GET>[0]),
+    const results = await Promise.all(
+      Array.from({ length: TOTAL }, () =>
+        GET(new Request("https://aibtc.com/api/activity") as unknown as Parameters<typeof GET>[0]),
+      ),
     );
-
-    // Yield enough microtasks for all five GETs to enter the inFlight dedup branch
-    // (cache.match is async, getCloudflareContext is async, etc.). 20 is empirical:
-    // ~3-4 awaits per GET before reaching inFlight under the current async stack.
-    // If this test flaps after an upstream async-stack change, raise the count
-    // rather than tightening it — over-draining is harmless, under-draining
-    // releases the gate before all GETs reach dedup.
-    for (let i = 0; i < 20; i += 1) {
-      await Promise.resolve();
-    }
-    release({ events: [], stats: { totalAgents: 7, activeAgents: 0, totalMessages: 0, totalSatsTransacted: 0 } });
-
-    const results = await Promise.all(reqs);
 
     expect(buildActivityDataMock).toHaveBeenCalledTimes(1);
     for (const r of results) {
@@ -224,26 +236,40 @@ describe("GET /api/activity", () => {
       default: cache,
     };
 
+    // Signal fired the moment the leader's cache.put begins — at that point
+    // buildActivityData has returned and the put is awaiting `putGate`.
+    let signalPutStarted!: () => void;
+    const putStarted = new Promise<void>((resolve) => {
+      signalPutStarted = resolve;
+    });
+    cache.put = vi.fn(async (req: Request, res: Response) => {
+      signalPutStarted();
+      await putGate;
+      store.set(req.url, res);
+    });
+
     const { GET } = await import("../route");
 
-    // First request kicks off the build; with the bug it would resolve and clear inFlight before put settled.
     const first = GET(
       new Request("https://aibtc.com/api/activity") as unknown as Parameters<typeof GET>[0],
     );
 
-    // Drain enough microtasks that the leader has finished building (buildActivityData resolved)
-    // and is now waiting on cache.put.
-    for (let i = 0; i < 30; i += 1) {
-      await Promise.resolve();
-    }
+    // Deterministic: wait until the leader has actually entered cache.put.
+    // At this point the response is built and the inFlight slot is at risk
+    // of being cleared if the implementation released it on response-ready.
+    await putStarted;
 
-    // Now fire a second request. With the fix, inFlight is still populated,
-    // so this should NOT trigger a second buildActivityData call.
+    // Second request enters the response-ready → put-settled window. With
+    // the fix it sees the populated inFlight slot and does NOT trigger
+    // a second buildActivityData call.
     const second = GET(
       new Request("https://aibtc.com/api/activity") as unknown as Parameters<typeof GET>[0],
     );
-
-    for (let i = 0; i < 30; i += 1) {
+    // Let second progress through cache.match + inFlight lookup before
+    // we release the put. A small microtask drain here is sufficient
+    // and bounded — we only need second past inFlight.get, which is two
+    // awaits deep from GET entry.
+    for (let i = 0; i < 10; i += 1) {
       await Promise.resolve();
     }
 

@@ -66,14 +66,18 @@ async function buildAndCache(
  * Returns recent network activity (messages, registrations)
  * and aggregate statistics (total agents, active agents, messages, sats).
  *
- * Cached in `caches.default` for 120s via s-maxage. Concurrent rebuild
- * requests inside one isolate are deduplicated through `inFlight`.
+ * **Cache scope: per-colo, not global single-flight.** `caches.default`
+ * does not replicate cached entries across Cloudflare data centers, so
+ * first hits are expected per-colo rather than once-globally. The 120s
+ * `s-maxage` TTL plus bounded colo count gives O(colos) rebuilds-per-TTL
+ * globally — fine for this route, but read this constraint before
+ * reusing the pattern elsewhere.
  *
- * Cache coherence scope: `caches.default` is **per-colo** — Cloudflare
- * does not replicate cached entries across data centers, so first hits
- * are expected per-colo rather than once-globally. The combination of
- * a 120s s-maxage TTL and bounded colo count gives O(colos)
- * rebuilds-per-TTL globally, which is fine for this route.
+ * Pattern: `caches.default` for cross-isolate coherence inside a colo,
+ * plus a module-level `inFlight` Map for in-isolate single-flight
+ * dedup. The inFlight slot is held until `cache.put` settles so a
+ * request arriving in the response-ready → put-settled window cannot
+ * trigger a duplicate rebuild.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
