@@ -20,6 +20,8 @@ import {
   DEFAULT_RELAY_URL,
   enqueueInboxReconciliation,
 } from "@/lib/inbox";
+// Import directly from constants to avoid test-mock interference on the barrel.
+import { SPONSOR_NONCE_TTL_MS } from "@/lib/inbox/constants";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
@@ -1535,11 +1537,28 @@ export async function POST(
       const checkStatusUrl =
         paymentResult.checkStatusUrl ?? `/api/payment-status/${paymentResult.paymentId}`;
 
+      // Capture the original sponsored tx hex and settle options so the
+      // reconciliation queue can re-submit after the relay's sponsor nonce
+      // expires (Phase 5 of quest nonce-conflict-attribution, issue #375).
+      const stagedTxHex = paymentPayload?.payload?.transaction ?? undefined;
+      const stagedNonceExpiresAt = new Date(Date.now() + SPONSOR_NONCE_TTL_MS).toISOString();
+      const stagedSettleOptions =
+        agent.stxAddress && paymentRequirements.amount
+          ? {
+              expectedRecipient: agent.stxAddress,
+              minAmount: String(paymentRequirements.amount),
+              tokenType: "sBTC" as const,
+            }
+          : undefined;
+
       await storeStagedInboxPayment(kv, {
         paymentId: paymentResult.paymentId,
         createdAt: now,
         ...(senderAgent?.btcAddress && { senderSentIndexBtcAddress: senderAgent.btcAddress }),
         message,
+        ...(stagedTxHex && { txHex: stagedTxHex }),
+        nonceExpiresAt: stagedNonceExpiresAt,
+        ...(stagedSettleOptions && { settleOptions: stagedSettleOptions }),
       });
 
       await enqueueInboxReconciliation(
