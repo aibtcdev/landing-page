@@ -1,0 +1,24 @@
+-- Migration 015: add agents.last_check_in_at for P2 heartbeat ratelimits work.
+--
+-- Replaces the `checkin:{btcAddress}` KV key family (no-`{ expirationTtl }`
+-- bug confirmed at the predecessor retro and the 2026-05-18-kv-d1-pattern-finish
+-- quest P0 baseline — 696 lifetime keys, growing forever) with a durable D1
+-- column for the most-recent successful POST /api/heartbeat timestamp.
+--
+-- The enforcement window itself moves to the `RATE_LIMIT_CHECKIN` Cloudflare
+-- `ratelimits` binding (1 req / 60s), so this column is for display and
+-- analytics — not the rate-limit critical path. The response payload reads
+-- the value back to compute `nextCheckInAt`.
+--
+-- Semantically distinct from `last_active_at`: that column updates on any
+-- liveness signal (register, vouch, identity, challenge, ...); this one is
+-- specifically the most recent heartbeat POST. Both nullable.
+--
+-- Backfill: none. Column starts NULL; each agent's next successful POST
+-- /api/heartbeat populates it. P0 noted ~696 active agents with check-in
+-- records; on the 5-min heartbeat convention, ~95% population is reachable
+-- within ~30 min of normal traffic.
+--
+-- Forward-only. Rollback path is a follow-up DROP COLUMN migration.
+
+ALTER TABLE agents ADD COLUMN last_check_in_at TEXT;
