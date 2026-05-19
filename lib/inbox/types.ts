@@ -74,6 +74,16 @@ export interface InboxMessage {
 export type RelayPaymentStatus = "confirmed" | "pending";
 
 /**
+ * Settle options used when submitting a sponsored transaction via RPC.
+ * Stored alongside staged payments so the queue can re-submit after TTL expiry.
+ */
+export interface StagedSettleOptions {
+  expectedRecipient: string;
+  minAmount: string;
+  tokenType?: string;
+}
+
+/**
  * Provisional inbox record staged locally until the relay reaches `confirmed`.
  */
 export interface StagedInboxMessage {
@@ -81,6 +91,33 @@ export interface StagedInboxMessage {
   message: InboxMessage;
   senderSentIndexBtcAddress?: string;
   createdAt: string;
+  /**
+   * Original sponsored tx hex (client-signed, pre-sponsored by the relay).
+   * Stored so the reconciliation queue can re-submit after the relay's sponsor
+   * nonce expires (see `nonceExpiresAt`).  Absent for records staged before
+   * Phase 5 (#375); the queue falls back to discard in that case.
+   */
+  txHex?: string;
+  /**
+   * ISO 8601 UTC timestamp after which the relay's sponsor nonce for this
+   * payment is considered stale and may be reclaimed.  Derived from the relay's
+   * `sponsorNonceValidForMs` constant (10 minutes) at submission time.
+   *
+   * The reconciliation queue must not poll `checkPayment` past this timestamp
+   * using the same `paymentId`.  Instead it re-calls `submitPayment(txHex)`
+   * to obtain a fresh sponsor assignment.
+   */
+  nonceExpiresAt?: string;
+  /**
+   * Settle options forwarded to the relay on re-submission after TTL expiry.
+   * Required when `txHex` is present.
+   */
+  settleOptions?: StagedSettleOptions;
+  /**
+   * Idempotency key forwarded to the relay on re-submission.
+   * If absent, no idempotency key is sent (relay assigns a fresh paymentId).
+   */
+  paymentIdentifier?: string;
 }
 
 /**

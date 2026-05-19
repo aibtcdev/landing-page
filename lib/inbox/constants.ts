@@ -113,6 +113,25 @@ export const PAYMENT_FAILURE_CACHE_TTL_SECONDS = 300;
  */
 export const CACHEABLE_PAYMENT_FAILURE_CODES = new Set(["INSUFFICIENT_FUNDS"]);
 
+// --- Sponsor nonce TTL constants ---
+
+/**
+ * Mirror of STALE_THRESHOLD_MS in the relay's NonceDO (currently 10 minutes).
+ *
+ * After this duration the relay may reclaim the sponsor nonce assigned to a
+ * submitted payment, making the original sponsored hex invalid for rebroadcast.
+ *
+ * Used to populate `nonceExpiresAt` in StagedInboxMessage at submission time
+ * and to detect expiry in the reconciliation queue.
+ *
+ * MUST stay in sync with the relay's `STALE_THRESHOLD_MS` constant in
+ * `src/durable-objects/nonce-do.ts`.  The relay also publishes this value as
+ * `sponsorNonceValidForMs` in its `/sponsor` and `/relay` responses (Phase 3,
+ * issue #374).  When the relay response includes that field, prefer it over
+ * this constant for forward-compatibility.
+ */
+export const SPONSOR_NONCE_TTL_MS = 10 * 60 * 1000; // 600 000 ms
+
 // --- RPC service binding polling constants ---
 
 /** Interval between checkPayment() polls (ms). */

@@ -1,11 +1,15 @@
-import { STAGED_PAYMENT_TTL_SECONDS } from "@/lib/inbox/constants";
-import type { RelayRPC } from "@/lib/inbox/relay-rpc";
+import { STAGED_PAYMENT_TTL_SECONDS, SPONSOR_NONCE_TTL_MS } from "@/lib/inbox/constants";
+import type { RelayRPC, RelaySettleOptions } from "@/lib/inbox/relay-rpc";
 import type { Logger } from "@/lib/logging";
 import { logPaymentEvent } from "@/lib/inbox/payment-logging";
 import {
   reconcileStagedInboxPayment,
   type ReconciliationTrigger,
 } from "@/lib/inbox/reconcile-staged-payment";
+import {
+  getStagedInboxPayment,
+  storeStagedInboxPayment,
+} from "@/lib/inbox/kv-helpers";
 
 export interface InboxReconciliationQueueMessage {
   paymentId: string;
@@ -17,6 +21,9 @@ export interface InboxReconciliationQueueMessage {
 const MAX_RECONCILIATION_ATTEMPTS = 10;
 const RECONCILIATION_DELAYS_SECONDS = [30, 60, 120, 300, 600];
 export const INBOX_RECONCILIATION_QUEUE_ROUTE = "/__queue/inbox-reconciliation";
+
+/** Small clock-skew buffer subtracted from nonceExpiresAt before comparing (ms). */
+const NONCE_EXPIRY_BUFFER_MS = 5_000;
 
 function isInboxReconciliationQueueMessage(
   value: unknown
@@ -45,6 +52,33 @@ function getStagedAgeSeconds(stagedAt: string): number {
   // Treat unparseable dates as expired to prevent infinite retries
   if (!Number.isFinite(time)) return STAGED_PAYMENT_TTL_SECONDS;
   return Math.max(0, Math.floor((Date.now() - time) / 1000));
+}
+
+/**
+ * Determine whether the relay's sponsor nonce for this payment has expired.
+ *
+ * Uses `nonceExpiresAt` from the staged record when available (preferred —
+ * relay clock is authoritative).  Falls back to `stagedAt + SPONSOR_NONCE_TTL_MS`
+ * for records created before Phase 5 that lack the explicit field.
+ *
+ * A small clock-skew buffer (NONCE_EXPIRY_BUFFER_MS) is subtracted so the
+ * queue never races the relay's NonceDO reclaim alarm.
+ */
+function isSponsorNonceExpired(stagedAt: string, nonceExpiresAt?: string): boolean {
+  const now = Date.now();
+  if (nonceExpiresAt) {
+    const expiryMs = new Date(nonceExpiresAt).getTime();
+    if (!Number.isFinite(expiryMs)) {
+      // Unparseable timestamp — fall back to derived TTL
+      const derivedExpiry = new Date(stagedAt).getTime() + SPONSOR_NONCE_TTL_MS;
+      return now >= derivedExpiry - NONCE_EXPIRY_BUFFER_MS;
+    }
+    return now >= expiryMs - NONCE_EXPIRY_BUFFER_MS;
+  }
+  // No stored timestamp — derive from stagedAt
+  const stagedMs = new Date(stagedAt).getTime();
+  if (!Number.isFinite(stagedMs)) return true; // unparseable → treat as expired
+  return now >= stagedMs + SPONSOR_NONCE_TTL_MS - NONCE_EXPIRY_BUFFER_MS;
 }
 
 export async function enqueueInboxReconciliation(
@@ -177,6 +211,195 @@ export async function processInboxReconciliationQueue(
         trigger,
       },
     });
+
+    // --- Sponsor-nonce TTL check (#375 Option C) ---
+    // Read the staged record to check whether the relay's sponsor nonce has
+    // expired.  If it has, rebroadcasting the same sponsored hex would produce
+    // a ConflictingNonceInMempool error because the relay already reclaimed
+    // that nonce slot.  Instead, re-call submitPayment(txHex) to obtain a
+    // fresh sponsor assignment before continuing the poll cycle.
+    const stagedRecord = await getStagedInboxPayment(env.VERIFIED_AGENTS, body.paymentId);
+
+    if (stagedRecord && isSponsorNonceExpired(body.stagedAt, stagedRecord.nonceExpiresAt)) {
+      if (!stagedRecord.txHex) {
+        // Pre-Phase-5 record: no txHex stored — cannot re-sponsor.
+        // Log a warning and ack so the payment is discarded gracefully.
+        logPaymentEvent(logger, "warn", "payment.retry_decision", repoVersion, {
+          route: INBOX_RECONCILIATION_QUEUE_ROUTE,
+          paymentId: body.paymentId,
+          status: "pending",
+          action: "ack_nonce_expired_no_tx_hex",
+          additionalContext: {
+            attempt: body.attempt,
+            stagedAgeSeconds,
+            nonceExpiresAt: stagedRecord.nonceExpiresAt ?? null,
+            worker_stage: "queue_consumer",
+            trigger,
+          },
+        });
+        message.ack();
+        continue;
+      }
+
+      // Re-submit the original tx hex to obtain a fresh sponsor nonce.
+      // Do NOT fall back to the stale hex on failure — treat submit failure
+      // as a terminal condition and ack so the message is not retried.
+      logPaymentEvent(logger, "info", "payment.retry_decision", repoVersion, {
+        route: INBOX_RECONCILIATION_QUEUE_ROUTE,
+        paymentId: body.paymentId,
+        status: "pending",
+        action: "resubmit_after_nonce_expiry",
+        additionalContext: {
+          attempt: body.attempt,
+          stagedAgeSeconds,
+          nonceExpiresAt: stagedRecord.nonceExpiresAt ?? null,
+          worker_stage: "queue_consumer",
+          trigger,
+        },
+      });
+
+      let resubmitResult: Awaited<ReturnType<RelayRPC["submitPayment"]>>;
+      try {
+        const settle: RelaySettleOptions | undefined = stagedRecord.settleOptions
+          ? {
+              expectedRecipient: stagedRecord.settleOptions.expectedRecipient,
+              minAmount: stagedRecord.settleOptions.minAmount,
+              ...(stagedRecord.settleOptions.tokenType && {
+                tokenType: stagedRecord.settleOptions.tokenType,
+              }),
+            }
+          : undefined;
+        resubmitResult = await rpc.submitPayment(
+          stagedRecord.txHex,
+          settle,
+          stagedRecord.paymentIdentifier
+        );
+      } catch (err) {
+        // Network or binding error — log and ack (do NOT rebroadcast stale hex).
+        logPaymentEvent(logger, "warn", "payment.retry_decision", repoVersion, {
+          route: INBOX_RECONCILIATION_QUEUE_ROUTE,
+          paymentId: body.paymentId,
+          status: "pending",
+          action: "ack_resubmit_exception",
+          additionalContext: {
+            attempt: body.attempt,
+            stagedAgeSeconds,
+            worker_stage: "queue_consumer",
+            trigger,
+            error: String(err),
+          },
+        });
+        message.ack();
+        continue;
+      }
+
+      if (!resubmitResult.accepted) {
+        // Relay rejected the re-submission — ack and discard.
+        logPaymentEvent(logger, "warn", "payment.retry_decision", repoVersion, {
+          route: INBOX_RECONCILIATION_QUEUE_ROUTE,
+          paymentId: body.paymentId,
+          status: "pending",
+          action: "ack_resubmit_rejected",
+          additionalContext: {
+            attempt: body.attempt,
+            stagedAgeSeconds,
+            worker_stage: "queue_consumer",
+            trigger,
+            code: resubmitResult.code ?? null,
+            error: resubmitResult.error,
+          },
+        });
+        message.ack();
+        continue;
+      }
+
+      // Re-submission succeeded: update staged record with the new paymentId
+      // and a fresh nonceExpiresAt, then re-enqueue for the next poll cycle.
+      const newPaymentId = resubmitResult.paymentId;
+      const newNonceExpiresAt = new Date(Date.now() + SPONSOR_NONCE_TTL_MS).toISOString();
+
+      try {
+        await storeStagedInboxPayment(env.VERIFIED_AGENTS, {
+          ...stagedRecord,
+          paymentId: newPaymentId,
+          nonceExpiresAt: newNonceExpiresAt,
+        });
+      } catch (err) {
+        // KV write failed — cannot safely continue (old paymentId is stale,
+        // new paymentId is not persisted).  Log and ack to avoid orphaned state.
+        logPaymentEvent(logger, "warn", "payment.retry_decision", repoVersion, {
+          route: INBOX_RECONCILIATION_QUEUE_ROUTE,
+          paymentId: body.paymentId,
+          status: "pending",
+          action: "ack_resubmit_kv_write_failed",
+          additionalContext: {
+            attempt: body.attempt,
+            newPaymentId,
+            worker_stage: "queue_consumer",
+            trigger,
+            error: String(err),
+          },
+        });
+        message.ack();
+        continue;
+      }
+
+      logPaymentEvent(logger, "info", "payment.retry_decision", repoVersion, {
+        route: INBOX_RECONCILIATION_QUEUE_ROUTE,
+        paymentId: body.paymentId,
+        status: "pending",
+        action: "resubmit_succeeded",
+        additionalContext: {
+          oldPaymentId: body.paymentId,
+          newPaymentId,
+          newNonceExpiresAt,
+          attempt: body.attempt,
+          nextAttempt: body.attempt + 1,
+          queueDelaySeconds: getRetryDelaySeconds(body.attempt),
+          stagedAgeSeconds,
+          worker_stage: "queue_consumer",
+          trigger,
+        },
+      });
+
+      const nextAttempt = body.attempt + 1;
+      const queueDelaySeconds = getRetryDelaySeconds(body.attempt);
+
+      if (queue) {
+        try {
+          await queue.send(
+            {
+              paymentId: newPaymentId,
+              stagedAt: body.stagedAt,
+              attempt: nextAttempt,
+              source: "queue_retry",
+            },
+            { delaySeconds: queueDelaySeconds }
+          );
+          message.ack();
+        } catch (err) {
+          logPaymentEvent(logger, "warn", "payment.queue", repoVersion, {
+            route: INBOX_RECONCILIATION_QUEUE_ROUTE,
+            paymentId: newPaymentId,
+            status: "pending",
+            action: "enqueue_failed",
+            additionalContext: {
+              attempt: body.attempt,
+              nextAttempt,
+              queueDelaySeconds,
+              worker_stage: "queue_consumer",
+              trigger: "queue_retry",
+              error: String(err),
+            },
+          });
+          message.retry({ delaySeconds: queueDelaySeconds });
+        }
+      } else {
+        message.retry({ delaySeconds: queueDelaySeconds });
+      }
+      continue;
+    }
+    // --- End sponsor-nonce TTL check ---
 
     const reconciliation = await reconcileStagedInboxPayment({
       kv: env.VERIFIED_AGENTS,

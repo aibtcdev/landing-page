@@ -13,6 +13,7 @@ export type {
   SentMessageIndex,
   RelayPaymentStatus,
   StagedInboxMessage,
+  StagedSettleOptions,
   PaymentFailureCache,
 } from "./types";
 
@@ -37,6 +38,7 @@ export {
   PAYMENT_FAILURE_CACHE_PREFIX,
   PAYMENT_FAILURE_CACHE_TTL_SECONDS,
   STAGED_PAYMENT_TTL_SECONDS,
+  SPONSOR_NONCE_TTL_MS,
   CACHEABLE_PAYMENT_FAILURE_CODES,
   buildMarkReadMessage,
   buildReplyMessage,

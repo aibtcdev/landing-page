@@ -389,4 +389,340 @@ describe("inbox reconciliation queue", () => {
       })
     );
   });
+
+  // ---- Sponsor-nonce TTL tests (#375 Phase 5) ----
+
+  it("acks when nonce is expired and staged record has no txHex (pre-Phase-5 record)", async () => {
+    const kv = createMockKV();
+    const { db } = createMockD1();
+    // Store a staged record WITHOUT txHex (old-format record)
+    const stagedAt = new Date(Date.now() - 15 * 60 * 1000).toISOString(); // 15 min ago
+
+    await storeStagedInboxPayment(kv, {
+      paymentId: "pay_ttl_no_txhex",
+      createdAt: stagedAt,
+      // no txHex, nonceExpiresAt is implicitly expired (15 min ago)
+      message: {
+        messageId: "msg_ttl_no_txhex",
+        fromAddress: "SP123",
+        toBtcAddress: "bc1recipient",
+        toStxAddress: "SP456",
+        content: "hello",
+        paymentSatoshis: 100,
+        sentAt: stagedAt,
+        paymentStatus: "pending",
+        paymentId: "pay_ttl_no_txhex",
+      },
+    });
+
+    const ack = vi.fn();
+    const retry = vi.fn();
+    const submitPayment = vi.fn();
+
+    await processInboxReconciliationQueue(
+      {
+        queue: "landing-page-inbox-reconciliation",
+        messages: [
+          {
+            id: "queue-msg-ttl-1",
+            timestamp: new Date(),
+            attempts: 1,
+            body: {
+              paymentId: "pay_ttl_no_txhex",
+              stagedAt, // 15 min ago — nonce expired
+              attempt: 0,
+              source: "queue_retry" as const,
+            },
+            ack,
+            retry,
+          },
+        ],
+        ackAll: vi.fn(),
+        retryAll: vi.fn(),
+      },
+      {
+        VERIFIED_AGENTS: kv,
+        DB: db,
+        X402_RELAY: {
+          submitPayment,
+          checkPayment: vi.fn(), // should NOT be called
+        },
+        INBOX_RECONCILIATION_QUEUE: { send: vi.fn(), sendBatch: vi.fn() },
+      },
+      mocks.logger,
+      "test-version"
+    );
+
+    // Should ack (discard) without calling checkPayment or submitPayment
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(retry).not.toHaveBeenCalled();
+    expect(submitPayment).not.toHaveBeenCalled();
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      "payment.retry_decision",
+      expect.objectContaining({
+        paymentId: "pay_ttl_no_txhex",
+        action: "ack_nonce_expired_no_tx_hex",
+      })
+    );
+  });
+
+  it("re-submits txHex via submitPayment when nonce is expired and txHex is stored", async () => {
+    const kv = createMockKV();
+    const { db } = createMockD1();
+    const stagedAt = new Date(Date.now() - 15 * 60 * 1000).toISOString(); // 15 min ago
+    const expiredNonceExpiresAt = new Date(Date.now() - 5 * 60 * 1000).toISOString(); // 5 min ago
+
+    await storeStagedInboxPayment(kv, {
+      paymentId: "pay_ttl_resubmit",
+      createdAt: stagedAt,
+      nonceExpiresAt: expiredNonceExpiresAt,
+      txHex: "0xdeadbeef01",
+      settleOptions: {
+        expectedRecipient: "SP456",
+        minAmount: "100",
+        tokenType: "sBTC",
+      },
+      message: {
+        messageId: "msg_ttl_resubmit",
+        fromAddress: "SP123",
+        toBtcAddress: "bc1recipient",
+        toStxAddress: "SP456",
+        content: "hello",
+        paymentSatoshis: 100,
+        sentAt: stagedAt,
+        paymentStatus: "pending",
+        paymentId: "pay_ttl_resubmit",
+      },
+    });
+
+    const ack = vi.fn();
+    const retry = vi.fn();
+    const queueSend = vi.fn().mockResolvedValue(undefined);
+    const submitPayment = vi.fn().mockResolvedValue({
+      accepted: true,
+      paymentId: "pay_ttl_resubmit_fresh",
+      status: "queued",
+    });
+
+    await processInboxReconciliationQueue(
+      {
+        queue: "landing-page-inbox-reconciliation",
+        messages: [
+          {
+            id: "queue-msg-ttl-2",
+            timestamp: new Date(),
+            attempts: 1,
+            body: {
+              paymentId: "pay_ttl_resubmit",
+              stagedAt,
+              attempt: 1,
+              source: "queue_retry" as const,
+            },
+            ack,
+            retry,
+          },
+        ],
+        ackAll: vi.fn(),
+        retryAll: vi.fn(),
+      },
+      {
+        VERIFIED_AGENTS: kv,
+        DB: db,
+        X402_RELAY: {
+          submitPayment,
+          checkPayment: vi.fn(), // should NOT be called (TTL already expired)
+        },
+        INBOX_RECONCILIATION_QUEUE: { send: queueSend, sendBatch: vi.fn() },
+      },
+      mocks.logger,
+      "test-version"
+    );
+
+    // submitPayment called with stored txHex and settleOptions
+    expect(submitPayment).toHaveBeenCalledWith(
+      "0xdeadbeef01",
+      expect.objectContaining({
+        expectedRecipient: "SP456",
+        minAmount: "100",
+        tokenType: "sBTC",
+      }),
+      undefined // no paymentIdentifier
+    );
+
+    // staged record updated with new paymentId
+    const updatedStaged = await getStagedInboxPayment(kv, "pay_ttl_resubmit_fresh");
+    expect(updatedStaged).not.toBeNull();
+    expect(updatedStaged?.paymentId).toBe("pay_ttl_resubmit_fresh");
+    expect(updatedStaged?.txHex).toBe("0xdeadbeef01");
+
+    // old paymentId should still exist (storeStagedInboxPayment creates a new key)
+    // queue re-enqueued with new paymentId
+    expect(queueSend).toHaveBeenCalledWith(
+      expect.objectContaining({
+        paymentId: "pay_ttl_resubmit_fresh",
+        attempt: 2,
+        source: "queue_retry",
+      }),
+      expect.objectContaining({ delaySeconds: expect.any(Number) })
+    );
+
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(retry).not.toHaveBeenCalled();
+  });
+
+  it("acks without retrying when submitPayment rejects after nonce expiry", async () => {
+    const kv = createMockKV();
+    const { db } = createMockD1();
+    const stagedAt = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+    const expiredNonceExpiresAt = new Date(Date.now() - 5 * 60 * 1000).toISOString();
+
+    await storeStagedInboxPayment(kv, {
+      paymentId: "pay_ttl_resubmit_rejected",
+      createdAt: stagedAt,
+      nonceExpiresAt: expiredNonceExpiresAt,
+      txHex: "0xdeadbeef02",
+      settleOptions: {
+        expectedRecipient: "SP456",
+        minAmount: "100",
+      },
+      message: {
+        messageId: "msg_ttl_resubmit_rejected",
+        fromAddress: "SP123",
+        toBtcAddress: "bc1recipient",
+        toStxAddress: "SP456",
+        content: "hello",
+        paymentSatoshis: 100,
+        sentAt: stagedAt,
+        paymentStatus: "pending",
+        paymentId: "pay_ttl_resubmit_rejected",
+      },
+    });
+
+    const ack = vi.fn();
+    const retry = vi.fn();
+
+    await processInboxReconciliationQueue(
+      {
+        queue: "landing-page-inbox-reconciliation",
+        messages: [
+          {
+            id: "queue-msg-ttl-3",
+            timestamp: new Date(),
+            attempts: 1,
+            body: {
+              paymentId: "pay_ttl_resubmit_rejected",
+              stagedAt,
+              attempt: 0,
+              source: "queue_retry" as const,
+            },
+            ack,
+            retry,
+          },
+        ],
+        ackAll: vi.fn(),
+        retryAll: vi.fn(),
+      },
+      {
+        VERIFIED_AGENTS: kv,
+        DB: db,
+        X402_RELAY: {
+          submitPayment: vi.fn().mockResolvedValue({
+            accepted: false,
+            error: "Relay rejected",
+            code: "INTERNAL_ERROR",
+          }),
+          checkPayment: vi.fn(),
+        },
+        INBOX_RECONCILIATION_QUEUE: { send: vi.fn(), sendBatch: vi.fn() },
+      },
+      mocks.logger,
+      "test-version"
+    );
+
+    // Must ack without retrying — do NOT fall back to stale hex
+    expect(ack).toHaveBeenCalledTimes(1);
+    expect(retry).not.toHaveBeenCalled();
+    expect(mocks.logger.warn).toHaveBeenCalledWith(
+      "payment.retry_decision",
+      expect.objectContaining({
+        paymentId: "pay_ttl_resubmit_rejected",
+        action: "ack_resubmit_rejected",
+      })
+    );
+  });
+
+  it("does not trigger TTL path when nonce has not yet expired", async () => {
+    const kv = createMockKV();
+    const { db } = createMockD1();
+    const sentAt = new Date().toISOString(); // just now — within TTL
+
+    await storeStagedInboxPayment(kv, {
+      paymentId: "pay_ttl_not_expired",
+      createdAt: sentAt,
+      nonceExpiresAt: new Date(Date.now() + 8 * 60 * 1000).toISOString(), // 8 min from now
+      txHex: "0xdeadbeef03",
+      settleOptions: { expectedRecipient: "SP456", minAmount: "100" },
+      message: {
+        messageId: "msg_ttl_not_expired",
+        fromAddress: "SP123",
+        toBtcAddress: "bc1recipient",
+        toStxAddress: "SP456",
+        content: "hello",
+        paymentSatoshis: 100,
+        sentAt,
+        paymentStatus: "pending",
+        paymentId: "pay_ttl_not_expired",
+      },
+    });
+
+    const ack = vi.fn();
+    const submitPayment = vi.fn();
+    const checkPayment = vi.fn().mockResolvedValue({
+      paymentId: "pay_ttl_not_expired",
+      status: "queued",
+      checkStatusUrl: "https://relay.example/check/pay_ttl_not_expired",
+    });
+    const queueSend = vi.fn().mockResolvedValue(undefined);
+
+    await processInboxReconciliationQueue(
+      {
+        queue: "landing-page-inbox-reconciliation",
+        messages: [
+          {
+            id: "queue-msg-ttl-4",
+            timestamp: new Date(),
+            attempts: 1,
+            body: {
+              paymentId: "pay_ttl_not_expired",
+              stagedAt: sentAt,
+              attempt: 0,
+              source: "inbox_post" as const,
+            },
+            ack,
+            retry: vi.fn(),
+          },
+        ],
+        ackAll: vi.fn(),
+        retryAll: vi.fn(),
+      },
+      {
+        VERIFIED_AGENTS: kv,
+        DB: db,
+        X402_RELAY: { submitPayment, checkPayment },
+        INBOX_RECONCILIATION_QUEUE: { send: queueSend, sendBatch: vi.fn() },
+      },
+      mocks.logger,
+      "test-version"
+    );
+
+    // TTL not expired: should go through normal reconcile path (checkPayment called)
+    expect(submitPayment).not.toHaveBeenCalled();
+    expect(checkPayment).toHaveBeenCalledTimes(1);
+    // Payment is still queued → re-enqueued
+    expect(queueSend).toHaveBeenCalledWith(
+      expect.objectContaining({ paymentId: "pay_ttl_not_expired", attempt: 1 }),
+      expect.objectContaining({ delaySeconds: 30 })
+    );
+    expect(ack).toHaveBeenCalledTimes(1);
+  });
 });
