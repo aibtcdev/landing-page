@@ -19,8 +19,9 @@ import {
   buildSenderAuthMessage,
   DEFAULT_RELAY_URL,
   enqueueInboxReconciliation,
-  SPONSOR_NONCE_TTL_MS,
 } from "@/lib/inbox";
+// Import directly from constants to avoid test-mock interference on the barrel.
+import { SPONSOR_NONCE_TTL_MS } from "@/lib/inbox/constants";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
