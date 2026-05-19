@@ -315,8 +315,16 @@ export async function processInboxReconciliationQueue(
 
       // Re-submission succeeded: update staged record with the new paymentId
       // and a fresh nonceExpiresAt, then re-enqueue for the next poll cycle.
+      //
+      // Phase 5.1 (relay PRs #379/#383): prefer the relay's authoritative
+      // nonceExpiresAt over LP local derivation.  When the relay version in
+      // deploy does not yet emit the field, fall back to `now +
+      // SPONSOR_NONCE_TTL_MS` (the legacy behavior).
       const newPaymentId = resubmitResult.paymentId;
-      const newNonceExpiresAt = new Date(Date.now() + SPONSOR_NONCE_TTL_MS).toISOString();
+      const newNonceExpiresAt =
+        typeof resubmitResult.nonceExpiresAt === "string" && resubmitResult.nonceExpiresAt.length > 0
+          ? resubmitResult.nonceExpiresAt
+          : new Date(Date.now() + SPONSOR_NONCE_TTL_MS).toISOString();
 
       try {
         await storeStagedInboxPayment(env.VERIFIED_AGENTS, {

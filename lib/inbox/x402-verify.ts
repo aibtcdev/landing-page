@@ -155,6 +155,28 @@ export interface InboxPaymentVerification {
   retryAfterSeconds?: number;
   /** RPC payment ID for continued polling or log correlation. */
   paymentId?: string;
+  /**
+   * ISO 8601 UTC after which the relay may reclaim the sponsor nonce
+   * assigned to this payment.  When set, this is the relay's authoritative
+   * TTL — prefer over LP-side derivation from `SPONSOR_NONCE_TTL_MS`.
+   * Source: relay PR#379 (`/sponsor` + RPC submitPayment success).
+   */
+  nonceExpiresAt?: string;
+  /**
+   * Duration in ms the sponsor nonce is valid (typically 600 000).
+   * Source: relay PR#383 (`/sponsor` + RPC submitPayment success).
+   */
+  sponsorNonceValidForMs?: number;
+  /**
+   * Attribution of a broadcast failure: sender, sponsor, or network.
+   * Source: relay PR#381 (broadcast error arm).
+   */
+  responsible?: "sender" | "sponsor" | "network";
+  /**
+   * Agent-facing reason code; set when `responsible === "sender"`.
+   * Source: relay PR#381 (broadcast error arm).
+   */
+  agentErrorCode?: string;
 }
 
 /**
