@@ -154,7 +154,11 @@ describe("GET /api/activity", () => {
     );
 
     // Yield enough microtasks for all five GETs to enter the inFlight dedup branch
-    // (cache.match is async, getCloudflareContext is async, etc.).
+    // (cache.match is async, getCloudflareContext is async, etc.). 20 is empirical:
+    // ~3-4 awaits per GET before reaching inFlight under the current async stack.
+    // If this test flaps after an upstream async-stack change, raise the count
+    // rather than tightening it — over-draining is harmless, under-draining
+    // releases the gate before all GETs reach dedup.
     for (let i = 0; i < 20; i += 1) {
       await Promise.resolve();
     }
@@ -192,6 +196,31 @@ describe("GET /api/activity", () => {
     );
     expect(ok.status).toBe(200);
     expect(buildActivityDataMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("returns the built response even if cache.put rejects", async () => {
+    // Steel-yeti S1: a failed cache.put must not fail an otherwise successful build.
+    const store = new Map<string, Response>();
+    const cache = {
+      match: vi.fn(async () => undefined),
+      put: vi.fn(async () => {
+        throw new Error("simulated cache.put failure");
+      }),
+      delete: vi.fn(async () => true),
+    };
+    (globalThis as unknown as { caches: { default: typeof cache } }).caches = {
+      default: cache,
+    };
+
+    const { GET } = await import("../route");
+    const res = await GET(
+      new Request("https://aibtc.com/api/activity") as unknown as Parameters<typeof GET>[0],
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.headers.get("X-Cache")).toBe("MISS");
+    expect(cache.put).toHaveBeenCalledTimes(1);
+    expect(store.size).toBe(0);
   });
 
   it("falls through to building (no cache reads/writes) when caches.default is unavailable", async () => {

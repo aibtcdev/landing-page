@@ -24,6 +24,8 @@ function getDefaultCache(): Cache | null {
   return c?.default ?? null;
 }
 
+// `kv` and `db` are forwarded to `buildActivityData` — this layer owns only
+// `caches.default` and does not perform any direct KV reads or writes.
 async function buildAndCache(
   kv: KVNamespace,
   db: D1Database | undefined,
@@ -42,7 +44,12 @@ async function buildAndCache(
   if (cache) {
     const cacheKey = new Request(CACHE_KEY_URL, { method: "GET" });
     const cachedClone = new Response(response.clone().body, response);
-    const stash = cache.put(cacheKey, cachedClone);
+    // Best-effort: a failed cache.put must not fail an otherwise successful
+    // build — TTL/freshness costs are bounded by RESPONSE_S_MAXAGE and the
+    // next request will rebuild and retry the cache write.
+    const stash = cache.put(cacheKey, cachedClone).catch((err) => {
+      console.error("Failed to populate caches.default for /api/activity:", err);
+    });
     if (ctx) {
       ctx.waitUntil(stash);
     } else {
@@ -60,8 +67,13 @@ async function buildAndCache(
  * and aggregate statistics (total agents, active agents, messages, sats).
  *
  * Cached in `caches.default` for 120s via s-maxage. Concurrent rebuild
- * requests inside one isolate are deduplicated through `inFlight`;
- * cross-isolate coherence comes from `caches.default` itself.
+ * requests inside one isolate are deduplicated through `inFlight`.
+ *
+ * Cache coherence scope: `caches.default` is **per-colo** — Cloudflare
+ * does not replicate cached entries across data centers, so first hits
+ * are expected per-colo rather than once-globally. The combination of
+ * a 120s s-maxage TTL and bounded colo count gives O(colos)
+ * rebuilds-per-TTL globally, which is fine for this route.
  */
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -100,9 +112,9 @@ export async function GET(request: NextRequest) {
         },
       },
       cachingStrategy: {
-        description: "Response is cached in caches.default (the Cloudflare edge cache) for 2 minutes via s-maxage. Stats derived from shared agent-list cache (no independent O(N) scan). Only event detail fetches for top 20 active agents remain as targeted KV reads.",
+        description: "Response is cached in caches.default (the Cloudflare edge cache) for 2 minutes via s-maxage. Cache scope is per-colo, not global. Stats derived from shared agent-list cache (no independent O(N) scan). Only event detail fetches for top 20 active agents remain as targeted KV reads.",
+        ttl: RESPONSE_S_MAXAGE,
         sMaxAgeSeconds: RESPONSE_S_MAXAGE,
-        cacheKeyUrl: CACHE_KEY_URL,
       },
       relatedEndpoints: {
         agents: "/api/agents - List all agents with pagination",
