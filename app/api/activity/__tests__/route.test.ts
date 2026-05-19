@@ -215,19 +215,40 @@ describe("GET /api/activity", () => {
     // resolved. If inFlight was cleared on response-ready instead of put-settled,
     // a second request arriving in that window would see both a cache miss
     // and an empty inFlight and trigger a duplicate rebuild.
+    //
+    // Deterministic barrier strategy (steel-yeti cycle 4 residual):
+    // - `putStarted` fires when the leader's cache.put enters — i.e. response
+    //   is built and the inFlight slot is at the at-risk window.
+    // - `secondReachedMatch` fires when the second GET's cache.match runs —
+    //   i.e. the second caller has progressed far enough to consult inFlight
+    //   on its next step. No empirical microtask drains.
     const store = new Map<string, Response>();
     let releasePut!: () => void;
     const putGate = new Promise<void>((resolve) => {
       releasePut = resolve;
     });
+
+    let matchCalls = 0;
+    let signalSecondReached!: () => void;
+    const secondReachedMatch = new Promise<void>((resolve) => {
+      signalSecondReached = resolve;
+    });
+    let signalPutStarted!: () => void;
+    const putStarted = new Promise<void>((resolve) => {
+      signalPutStarted = resolve;
+    });
+
     const cache = {
       match: vi.fn(async (req: Request) => {
+        matchCalls += 1;
+        if (matchCalls === 2) signalSecondReached();
         const stored = store.get(req.url);
         if (!stored) return undefined;
         return new Response(stored.clone().body, stored);
       }),
       put: vi.fn(async (req: Request, res: Response) => {
-        await putGate; // hold the put open
+        signalPutStarted();
+        await putGate;
         store.set(req.url, res);
       }),
       delete: vi.fn(async () => true),
@@ -236,42 +257,26 @@ describe("GET /api/activity", () => {
       default: cache,
     };
 
-    // Signal fired the moment the leader's cache.put begins — at that point
-    // buildActivityData has returned and the put is awaiting `putGate`.
-    let signalPutStarted!: () => void;
-    const putStarted = new Promise<void>((resolve) => {
-      signalPutStarted = resolve;
-    });
-    cache.put = vi.fn(async (req: Request, res: Response) => {
-      signalPutStarted();
-      await putGate;
-      store.set(req.url, res);
-    });
-
     const { GET } = await import("../route");
 
     const first = GET(
       new Request("https://aibtc.com/api/activity") as unknown as Parameters<typeof GET>[0],
     );
 
-    // Deterministic: wait until the leader has actually entered cache.put.
-    // At this point the response is built and the inFlight slot is at risk
-    // of being cleared if the implementation released it on response-ready.
+    // Wait until leader has built the response and is now blocked inside cache.put.
+    // This is exactly the at-risk window for the race.
     await putStarted;
 
-    // Second request enters the response-ready → put-settled window. With
-    // the fix it sees the populated inFlight slot and does NOT trigger
-    // a second buildActivityData call.
+    // Second request enters that window. With the fix it sees the populated
+    // inFlight slot via inFlight.get and does NOT trigger a second
+    // buildActivityData call.
     const second = GET(
       new Request("https://aibtc.com/api/activity") as unknown as Parameters<typeof GET>[0],
     );
-    // Let second progress through cache.match + inFlight lookup before
-    // we release the put. A small microtask drain here is sufficient
-    // and bounded — we only need second past inFlight.get, which is two
-    // awaits deep from GET entry.
-    for (let i = 0; i < 10; i += 1) {
-      await Promise.resolve();
-    }
+
+    // Wait deterministically until second's cache.match has run — at that point
+    // second is one step from inFlight.get and we can safely release the put.
+    await secondReachedMatch;
 
     releasePut();
     await Promise.all([first, second]);

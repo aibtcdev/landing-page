@@ -17,7 +17,7 @@ const RESPONSE_S_MAXAGE = 120;
 // the caches.default put settles — not just until the response is built
 // — so a request arriving in the gap can't slip past both the cache
 // miss and an empty inFlight and trigger a duplicate rebuild.
-const inFlight = new Map<string, Promise<{ response: Response }>>();
+const inFlight = new Map<string, Promise<{ response: Response; stash: Promise<unknown> }>>();
 
 function getDefaultCache(): Cache | null {
   const c = (globalThis as unknown as { caches?: { default?: Cache } }).caches;
