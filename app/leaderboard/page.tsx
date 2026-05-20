@@ -49,6 +49,17 @@ function getDefaultCache(): Cache | null {
   return c?.default ?? null;
 }
 
+/**
+ * In-flight singleflight for the leaderboard rebuild. Keyed by the
+ * cache URL so a future second cached surface in this file would not
+ * share the gate. Prevents N concurrent isolates-in-this-colo from all
+ * running LEADERBOARD_AGGREGATE_SQL when the cache misses — only the
+ * first miss runs the scan; the rest await the same Promise and then
+ * read from the warmed cache. Same shape as `app/api/activity/route.ts`
+ * (P1 caches.default + inFlight singleflight pattern).
+ */
+const inFlightRebuild = new Map<string, Promise<LeaderboardRow[]>>();
+
 export const metadata: Metadata = {
   title: "Trading Leaderboard - AIBTC",
   description:
@@ -112,12 +123,34 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   const { env, ctx } = await getCloudflareContext();
   const db = env.DB as D1Database | undefined;
 
+  // Opportunistic SchedulerDO kick — runs on EVERY visit, including
+  // cache hits, because a DO instance doesn't exist until something
+  // calls a method on it. Skipping the kick on cache hits would let
+  // alarm re-arming/recovery stall for up to the cache TTL after a DO
+  // reset or deploy (Codex PR #891 feedback). Idempotent on warm DOs.
+  // ctx may be undefined in non-Workers test runtimes — the catch
+  // below handles that path.
+  try {
+    if (env.SCHEDULER) {
+      const kick = env.SCHEDULER.get(env.SCHEDULER.idFromName(SCHEDULER_INSTANCE_NAME))
+        .status()
+        .then(() => undefined)
+        .catch(() => undefined);
+      if (ctx?.waitUntil) {
+        ctx.waitUntil(kick);
+      } else {
+        // No ctx (test runtime) — drop the kick rather than block the response.
+        void kick;
+      }
+    }
+  } catch {
+    // Binding access threw — render proceeds without the kick.
+  }
+
   // P3B cache layer — short-circuit the LEADERBOARD_AGGREGATE_SQL scan +
-  // per-sender rollup on cache hit. The page itself stays
-  // force-dynamic (the SchedulerDO kick below has its own side effect
-  // we want to run every visit), so this cache is *data-level*, not
-  // page-level. ctx.waitUntil persists the write past the response
-  // teardown so the next request in this colo gets the warm copy.
+  // per-sender rollup on cache hit. The cache is *data-level*, not
+  // page-level: the page itself stays force-dynamic so the scheduler
+  // kick above runs every visit.
   const cache = getDefaultCache();
   if (cache) {
     const cacheKey = new Request(LEADERBOARD_CACHE_URL, { method: "GET" });
@@ -132,26 +165,37 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     }
   }
 
-  // Opportunistic SchedulerDO kick. A DO instance doesn't exist until
-  // something calls a method on it — the constructor (which arms the
-  // first alarm) only runs on first invocation. Fire-and-forget here so
-  // SSR isn't blocked; `ctx.waitUntil` keeps the RPC alive past response
-  // teardown. Idempotent — subsequent renders just touch a live instance.
-  // Wrapped in a guard so a missing/misbehaving DO binding never blocks
-  // the leaderboard render path.
-  try {
-    if (env.SCHEDULER) {
-      ctx.waitUntil(
-        env.SCHEDULER.get(env.SCHEDULER.idFromName(SCHEDULER_INSTANCE_NAME))
-          .status()
-          .then(() => undefined)
-          .catch(() => undefined)
-      );
-    }
-  } catch {
-    // Binding access threw — render proceeds without the kick.
-  }
+  // Cache miss — funnel concurrent miss-traffic through a single
+  // in-flight Promise so only one isolate-thread runs the expensive
+  // aggregate per TTL window. Mirrors the inFlight map in
+  // app/api/activity/route.ts (P1). Cleared in a finally block on the
+  // computeFn so a failed rebuild doesn't pin an exception forever.
+  const existing = inFlightRebuild.get(LEADERBOARD_CACHE_URL);
+  if (existing) return existing;
 
+  const rebuild = (async (): Promise<LeaderboardRow[]> => {
+    try {
+      return await rebuildLeaderboard(db, cache, ctx);
+    } finally {
+      inFlightRebuild.delete(LEADERBOARD_CACHE_URL);
+    }
+  })();
+  inFlightRebuild.set(LEADERBOARD_CACHE_URL, rebuild);
+  return rebuild;
+}
+
+/**
+ * The expensive rebuild path — exists separately from `fetchLeaderboard`
+ * so the singleflight gate can wrap it cleanly. Caches both populated
+ * results and the legitimate empty case so an early-competition empty
+ * leaderboard doesn't run the full scan on every visit (Copilot PR #891
+ * feedback). Returns `[]` when DB binding is missing (local dev).
+ */
+async function rebuildLeaderboard(
+  db: D1Database | undefined,
+  cache: Cache | null,
+  ctx: { waitUntil?: (p: Promise<unknown>) => void } | undefined
+): Promise<LeaderboardRow[]> {
   if (!db) return [];
 
   // Cache miss path — run the aggregate scan. Capture meta.rows_read so
@@ -186,7 +230,14 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
     totalMs: Date.now() - rebuildStart,
   });
 
-  if (rows.length === 0) return [];
+  // Legitimate empty leaderboard (pre-first-trade, off-season, etc.) —
+  // still cache `[]` so the next request in this colo skips the scan
+  // for the TTL window. Without this, the empty case would run the
+  // full aggregate on every visit (Copilot PR #891 feedback).
+  if (rows.length === 0) {
+    await writeLeaderboardCache(cache, ctx, []);
+    return [];
+  }
 
   // Roll up per (sender, pair) rows into per-sender state. For each pair we
   // bump:
@@ -266,28 +317,38 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
       return b.latestTradeAt - a.latestTradeAt;
     });
 
-  // Stash the rebuilt payload in caches.default. The cache write is
-  // detached via ctx.waitUntil so it doesn't block the response — the
-  // next request in this colo will short-circuit at the cache.match
-  // above for up to LEADERBOARD_CACHE_TTL_SECONDS.
-  if (cache) {
-    const payload = JSON.stringify(ranked);
-    const cachedResponse = new Response(payload, {
-      headers: {
-        "Cache-Control": `public, max-age=${LEADERBOARD_CACHE_TTL_SECONDS}, s-maxage=${LEADERBOARD_CACHE_TTL_SECONDS}`,
-        "Content-Type": "application/json",
-      },
-    });
-    const cacheKey = new Request(LEADERBOARD_CACHE_URL, { method: "GET" });
-    try {
-      ctx.waitUntil(cache.put(cacheKey, cachedResponse));
-    } catch {
-      // ctx may be unavailable in non-Workers test runtimes; the cache
-      // write is best-effort, so a missing ctx silently drops the put.
-    }
-  }
-
+  await writeLeaderboardCache(cache, ctx, ranked);
   return ranked;
+}
+
+/**
+ * Persist a leaderboard payload to `caches.default`. Mirrors the
+ * lib/edge-cache.ts pattern: if `ctx.waitUntil` is available, detach
+ * the write so it doesn't block the response. If `ctx` is missing
+ * (some test runtimes), `await` the put inline so the cache actually
+ * lands — silently dropping would cause perpetual cache misses
+ * (Copilot PR #891 feedback).
+ */
+async function writeLeaderboardCache(
+  cache: Cache | null,
+  ctx: { waitUntil?: (p: Promise<unknown>) => void } | undefined,
+  payload: LeaderboardRow[]
+): Promise<void> {
+  if (!cache) return;
+  const body = JSON.stringify(payload);
+  const cachedResponse = new Response(body, {
+    headers: {
+      "Cache-Control": `public, max-age=${LEADERBOARD_CACHE_TTL_SECONDS}, s-maxage=${LEADERBOARD_CACHE_TTL_SECONDS}`,
+      "Content-Type": "application/json",
+    },
+  });
+  const cacheKey = new Request(LEADERBOARD_CACHE_URL, { method: "GET" });
+  const put = cache.put(cacheKey, cachedResponse);
+  if (ctx?.waitUntil) {
+    ctx.waitUntil(put);
+  } else {
+    await put;
+  }
 }
 
 export default async function LeaderboardPage() {
