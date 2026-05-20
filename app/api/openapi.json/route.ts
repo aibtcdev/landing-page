@@ -1081,6 +1081,48 @@ export function GET() {
                       verified_trade_count: { type: "integer", minimum: 0 },
                       first_trade_at: { type: ["integer", "null"], description: "Unix seconds" },
                       last_trade_at: { type: ["integer", "null"], description: "Unix seconds" },
+                      latestRoundResult: {
+                        description:
+                          "The agent's result in the most recent finalized round. " +
+                          "Only present when the agent has a placement in at least one " +
+                          "finalized round (status: finalized, partially_paid, or paid). " +
+                          "Omitted from the response object entirely when the agent has " +
+                          "no round placements — the field is never present with a null value.",
+                        type: "object",
+                        properties: {
+                          round_id: { type: "string", description: "Round identifier (e.g. week-1-2026-05-13)" },
+                          rank: { type: "integer", minimum: 1, description: "Ordinal rank within the round (1 = highest P&L)" },
+                          stx_address: { type: "string" },
+                          btc_address: { type: "string" },
+                          erc8004_agent_id: { type: ["integer", "null"] },
+                          trade_count: { type: "integer" },
+                          priced_trade_count: { type: "integer" },
+                          unpriced_trade_count: { type: "integer" },
+                          volume_usd: { type: "number" },
+                          received_usd: { type: "number" },
+                          pnl_usd: { type: "number" },
+                          pnl_percent: {
+                            type: ["number", "null"],
+                            description: "pnl_usd / volume_usd * 100. NULL when volume_usd = 0 (NaN guard).",
+                          },
+                          latest_trade_at: { type: ["integer", "null"], description: "Unix seconds" },
+                          result_json: {
+                            type: "object",
+                            properties: {
+                              source_counts: {
+                                type: "object",
+                                properties: {
+                                  agent: { type: "integer" },
+                                  cron: { type: "integer" },
+                                  chainhook: { type: "integer" },
+                                },
+                              },
+                              unpriced_tokens: { type: "array", items: { type: "string" } },
+                            },
+                          },
+                          calculated_at: { type: "string", format: "date-time" },
+                        },
+                      },
                     },
                   },
                 },
@@ -2180,6 +2222,369 @@ export function GET() {
               AdminKey: [],
             },
           ],
+        },
+      },
+      "/api/competition/rounds": {
+        get: {
+          operationId: "listFinalizedRounds",
+          summary: "Paginated list of finalized competition rounds",
+          description:
+            "Returns finalized competition rounds, newest first. Only rounds with status " +
+            "finalized, partially_paid, or paid are returned — in-flight rounds " +
+            "(open, closed, finalizing) are excluded from the public surface. " +
+            "Pass ?docs=1 to receive a self-documenting payload.",
+          parameters: [
+            {
+              name: "limit",
+              in: "query",
+              required: false,
+              description: "Page size, 1–100, default 20",
+              schema: { type: "integer", minimum: 1, maximum: 100, default: 20 },
+            },
+            {
+              name: "offset",
+              in: "query",
+              required: false,
+              description: "Number of rounds to skip, default 0",
+              schema: { type: "integer", minimum: 0, default: 0 },
+            },
+            {
+              name: "docs",
+              in: "query",
+              required: false,
+              description: "Pass 1 to return the self-documenting payload instead of data",
+              schema: { type: "string", enum: ["1"] },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Paginated list of finalized rounds",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["rounds", "pagination"],
+                    properties: {
+                      rounds: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          required: ["round_id", "starts_at", "ends_at", "grace_ends_at", "status", "min_volume_usd", "min_priced_trade_count", "created_at"],
+                          properties: {
+                            round_id: { type: "string", description: "Round identifier (e.g. week-1-2026-05-13)" },
+                            starts_at: { type: "integer", description: "Unix epoch seconds" },
+                            ends_at: { type: "integer", description: "Unix epoch seconds" },
+                            grace_ends_at: { type: "integer", description: "Unix epoch seconds" },
+                            status: {
+                              type: "string",
+                              enum: ["finalized", "partially_paid", "paid"],
+                            },
+                            min_volume_usd: { type: "number" },
+                            min_priced_trade_count: { type: "integer" },
+                            created_at: { type: "string", format: "date-time" },
+                            finalized_at: { type: ["string", "null"], format: "date-time" },
+                          },
+                        },
+                      },
+                      pagination: {
+                        type: "object",
+                        required: ["limit", "offset", "hasMore"],
+                        properties: {
+                          limit: { type: "integer" },
+                          offset: { type: "integer" },
+                          hasMore: { type: "boolean", description: "True if more rounds exist beyond this page" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid limit or offset parameter",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limited (per-IP read bucket)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "503": {
+              description: "D1 temporarily unavailable — retry per Retry-After header",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/competition/rounds/{roundId}": {
+        get: {
+          operationId: "getFinalizedRound",
+          summary: "Full detail for a single finalized competition round",
+          description:
+            "Returns round metadata, all agent results ranked by overall P&L (ascending rank), " +
+            "and reward rows for the named round. Returns 404 when the round does not exist " +
+            "or has status open, closed, or finalizing — only finalized, partially_paid, " +
+            "or paid rounds are publicly visible. Pass ?docs=1 for self-documentation.",
+          parameters: [
+            {
+              name: "roundId",
+              in: "path",
+              required: true,
+              description: "Round identifier (e.g. week-1-2026-05-13)",
+              schema: { type: "string" },
+            },
+            {
+              name: "docs",
+              in: "query",
+              required: false,
+              description: "Pass 1 to return the self-documenting payload instead of data",
+              schema: { type: "string", enum: ["1"] },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Round metadata, agent results, and reward rows",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["round", "results", "rewards"],
+                    properties: {
+                      round: {
+                        type: "object",
+                        properties: {
+                          round_id: { type: "string" },
+                          starts_at: { type: "integer", description: "Unix epoch seconds" },
+                          ends_at: { type: "integer", description: "Unix epoch seconds" },
+                          grace_ends_at: { type: "integer", description: "Unix epoch seconds" },
+                          status: { type: "string", enum: ["finalized", "partially_paid", "paid"] },
+                          min_volume_usd: { type: "number" },
+                          min_priced_trade_count: { type: "integer" },
+                          created_at: { type: "string", format: "date-time" },
+                          finalized_at: { type: ["string", "null"], format: "date-time" },
+                        },
+                      },
+                      results: {
+                        type: "array",
+                        description: "Per-agent results, ordered by rank ascending (1 = highest P&L)",
+                        items: {
+                          type: "object",
+                          properties: {
+                            round_id: { type: "string" },
+                            rank: { type: "integer", minimum: 1 },
+                            stx_address: { type: "string" },
+                            btc_address: { type: "string" },
+                            erc8004_agent_id: { type: ["integer", "null"] },
+                            trade_count: { type: "integer" },
+                            priced_trade_count: { type: "integer" },
+                            unpriced_trade_count: { type: "integer" },
+                            volume_usd: { type: "number" },
+                            received_usd: { type: "number" },
+                            pnl_usd: { type: "number" },
+                            pnl_percent: {
+                              type: ["number", "null"],
+                              description: "NULL when volume_usd = 0 (NaN guard). Null agents ineligible for Return Champion.",
+                            },
+                            latest_trade_at: { type: ["integer", "null"], description: "Unix seconds" },
+                            result_json: {
+                              type: "object",
+                              properties: {
+                                source_counts: {
+                                  type: "object",
+                                  properties: {
+                                    agent: { type: "integer" },
+                                    cron: { type: "integer" },
+                                    chainhook: { type: "integer" },
+                                  },
+                                },
+                                unpriced_tokens: { type: "array", items: { type: "string" } },
+                              },
+                            },
+                            calculated_at: { type: "string", format: "date-time" },
+                          },
+                        },
+                      },
+                      rewards: {
+                        type: "array",
+                        description: "One row per reward category (overall_pnl, volume, return), ordered by category",
+                        items: {
+                          type: "object",
+                          properties: {
+                            round_id: { type: "string" },
+                            category: { type: "string", enum: ["overall_pnl", "volume", "return"] },
+                            rank: { type: "integer" },
+                            stx_address: { type: "string" },
+                            erc8004_agent_id: { type: ["integer", "null"] },
+                            amount_sats: { type: "integer", description: "0 at finalization; set by payout path" },
+                            status: { type: "string", enum: ["pending", "paid", "failed", "void"] },
+                            payout_txid: { type: ["string", "null"] },
+                            paid_at: { type: ["string", "null"], format: "date-time" },
+                            notes: { type: ["string", "null"] },
+                            created_at: { type: "string", format: "date-time" },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "404": {
+              description: "round_not_found — round does not exist or is not yet finalized",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limited (per-IP read bucket)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "503": {
+              description: "D1 temporarily unavailable — retry per Retry-After header",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+        },
+      },
+      "/api/competition/rounds/{roundId}/results/{stxAddress}": {
+        get: {
+          operationId: "getAgentRoundResult",
+          summary: "Per-agent result permalink for a finalized competition round",
+          description:
+            "Returns the named agent's rank, P&L, volume, and trade counts in the named round. " +
+            "Returns 404 when the round is not finalized or when the agent has no placement " +
+            "in the round. The round must have status finalized, partially_paid, or paid. " +
+            "Pass ?docs=1 for self-documentation.",
+          parameters: [
+            {
+              name: "roundId",
+              in: "path",
+              required: true,
+              description: "Round identifier (e.g. week-1-2026-05-13)",
+              schema: { type: "string" },
+            },
+            {
+              name: "stxAddress",
+              in: "path",
+              required: true,
+              description: "Stacks mainnet address (SP… / SM…)",
+              schema: { type: "string", pattern: "^S[MP][0-9A-Z]{38,40}$" },
+            },
+            {
+              name: "docs",
+              in: "query",
+              required: false,
+              description: "Pass 1 to return the self-documenting payload instead of data",
+              schema: { type: "string", enum: ["1"] },
+            },
+          ],
+          responses: {
+            "200": {
+              description: "Agent result for the named round",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    required: ["round_id", "result"],
+                    properties: {
+                      round_id: { type: "string" },
+                      result: {
+                        type: "object",
+                        properties: {
+                          round_id: { type: "string" },
+                          rank: { type: "integer", minimum: 1 },
+                          stx_address: { type: "string" },
+                          btc_address: { type: "string" },
+                          erc8004_agent_id: { type: ["integer", "null"] },
+                          trade_count: { type: "integer" },
+                          priced_trade_count: { type: "integer" },
+                          unpriced_trade_count: { type: "integer" },
+                          volume_usd: { type: "number" },
+                          received_usd: { type: "number" },
+                          pnl_usd: { type: "number" },
+                          pnl_percent: {
+                            type: ["number", "null"],
+                            description: "NULL when volume_usd = 0 (NaN guard).",
+                          },
+                          latest_trade_at: { type: ["integer", "null"], description: "Unix seconds" },
+                          result_json: {
+                            type: "object",
+                            properties: {
+                              source_counts: {
+                                type: "object",
+                                properties: {
+                                  agent: { type: "integer" },
+                                  cron: { type: "integer" },
+                                  chainhook: { type: "integer" },
+                                },
+                              },
+                              unpriced_tokens: { type: "array", items: { type: "string" } },
+                            },
+                          },
+                          calculated_at: { type: "string", format: "date-time" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid stxAddress path parameter — expected Stacks mainnet address (SP… / SM…)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description:
+                "round_not_found — round does not exist or is not yet finalized; " +
+                "or agent_not_placed — agent has no result in this round",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "429": {
+              description: "Rate limited (per-IP read bucket)",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "503": {
+              description: "D1 temporarily unavailable — retry per Retry-After header",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
         },
       },
       "/api/admin/competition/finalize": {

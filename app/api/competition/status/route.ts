@@ -8,6 +8,7 @@ import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
 import { getCompetitionStatusFromD1 } from "@/lib/competition/d1-reads";
+import { getLatestFinalizedRoundResultForAgent } from "@/lib/competition/finalize/read";
 
 /** Retry-After value (seconds) to return on 429s — matches the 60s binding window. */
 const RATE_LIMIT_RETRY_AFTER = 60;
@@ -40,11 +41,15 @@ function selfDocResponse() {
         verified_trade_count: "number (swaps with tx_status='success')",
         first_trade_at: "number | null (unix seconds of earliest swap)",
         last_trade_at: "number | null (unix seconds of latest swap)",
+        latestRoundResult:
+          "RoundResult | omitted — the agent's result in the most recent finalized round. Only present when the agent has a placement in at least one finalized round.",
       },
       relatedEndpoints: {
         trades: "GET /api/competition/trades?address={stx} — paginated trade history",
         submit: "POST /api/competition/trades — verify a swap by txid (ships in Phase 3.1 PR-B)",
         identity: "GET /api/agents/{address} — agent profile",
+        rounds: "GET /api/competition/rounds — paginated list of finalized rounds",
+        roundDetail: "GET /api/competition/rounds/{roundId} — full round results",
       },
       documentation: {
         openApiSpec: "https://aibtc.com/api/openapi.json",
@@ -111,8 +116,28 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const status = await getCompetitionStatusFromD1(db, address);
-    return NextResponse.json(status, {
+    // Issue both D1 reads in parallel — they are independent. The outer try
+    // catches getCompetitionStatusFromD1 failures (→ 503); latestRoundResult
+    // degrades gracefully via .catch() and never blocks the base response.
+    const [status, latestRoundResult] = await Promise.all([
+      getCompetitionStatusFromD1(db, address),
+      getLatestFinalizedRoundResultForAgent(db, address).catch((err) => {
+        logger.warn("latestRoundResult lookup failed — omitting from response", {
+          error: String(err),
+          address,
+        });
+        return null;
+      }),
+    ]);
+
+    // Only include the field when the agent has a placement; omit otherwise so
+    // existing callers that don't expect the field are unaffected.
+    const responseBody =
+      latestRoundResult !== null
+        ? { ...status, latestRoundResult }
+        : status;
+
+    return NextResponse.json(responseBody, {
       headers: { "Cache-Control": "public, max-age=10, s-maxage=10" },
     });
   } catch (err) {
