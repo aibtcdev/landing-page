@@ -34,9 +34,6 @@ import {
   INBOX_PRICE_SATS,
   RELAY_SETTLE_TIMEOUT_MS,
   SBTC_CONTRACTS,
-  RELAY_CIRCUIT_BREAKER_KEY,
-  RELAY_CIRCUIT_BREAKER_THRESHOLD,
-  RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
   PAYMENT_FAILURE_CACHE_TTL_SECONDS,
   CACHEABLE_PAYMENT_FAILURE_CODES,
@@ -220,7 +217,8 @@ async function handleRelayException(
   label: string,
   error: unknown,
   log: Logger,
-  kv: KVNamespace | undefined
+  env: CloudflareEnv | undefined,
+  ctx: { waitUntil?: (p: Promise<unknown>) => void } | undefined
 ): Promise<InboxPaymentVerification> {
   if (isRelayTimeout(error)) {
     log.warn(`${label} timeout (queue backpressure) — not counting as relay failure`);
@@ -237,13 +235,8 @@ async function handleRelayException(
     relayCode: result.relayCode,
     errorCode: result.errorCode,
   });
-  if (kv) {
-    await recordRelayFailure(
-      kv,
-      RELAY_CIRCUIT_BREAKER_KEY,
-      RELAY_CIRCUIT_BREAKER_THRESHOLD,
-      RELAY_CIRCUIT_BREAKER_TTL_SECONDS
-    );
+  if (env) {
+    await recordRelayFailure(env, ctx, log);
   }
   return result;
 }
@@ -330,7 +323,11 @@ export async function verifyInboxPayment(
   logger?: Logger,
   kv?: KVNamespace,
   relayRPC?: RelayRPC,
-  observability?: { route: string; repoVersion?: string; env?: Record<string, unknown> }
+  observability?: { route: string; repoVersion?: string; env?: Record<string, unknown> },
+  /** P4: Cloudflare env for the RATE_LIMIT_RELAY_FAILURES binding used by the circuit breaker. */
+  cfEnv?: CloudflareEnv,
+  /** P4: ExecutionContext for `caches.default` writes (ctx.waitUntil). */
+  cfCtx?: { waitUntil?: (p: Promise<unknown>) => void }
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
   const repoVersion =
@@ -373,11 +370,12 @@ export async function verifyInboxPayment(
 
   // Check circuit breaker before attempting any relay call.
   // When open, return 503-equivalent immediately to shed load.
-  if (kv) {
-    const cbState = await checkCircuitBreaker(kv, RELAY_CIRCUIT_BREAKER_KEY);
+  // P4: breaker state lives in caches.default (per-colo) instead of
+  // KV; no longer carries an `openedAt` timestamp.
+  {
+    const cbState = await checkCircuitBreaker(log);
     if (cbState.open) {
       log.warn("Relay circuit breaker open — blocking request", {
-        openedAt: cbState.openedAt,
         retryAfterSeconds: RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS,
       });
       return {
@@ -520,13 +518,8 @@ export async function verifyInboxPayment(
         // shouldCountRelayFailureForBreaker(), cache for INSUFFICIENT_FUNDS,
         // then return.
         if (!rpcResult.success) {
-          if (kv && shouldCountRelayFailureForBreaker(rpcResult.errorCode)) {
-            await recordRelayFailure(
-              kv,
-              RELAY_CIRCUIT_BREAKER_KEY,
-              RELAY_CIRCUIT_BREAKER_THRESHOLD,
-              RELAY_CIRCUIT_BREAKER_TTL_SECONDS
-            );
+          if (cfEnv && shouldCountRelayFailureForBreaker(rpcResult.errorCode)) {
+            await recordRelayFailure(cfEnv, cfCtx, log);
           }
           return returnWithCacheCheck(rpcResult);
         }
@@ -546,7 +539,7 @@ export async function verifyInboxPayment(
         relayCheckStatusUrl = rpcResult.checkStatusUrl;
         relayTerminalReason = rpcResult.terminalReason;
       } catch (error) {
-        return handleRelayException("RPC relay", error, log, kv);
+        return handleRelayException("RPC relay", error, log, cfEnv, cfCtx);
       }
     } else {
       // --- HTTP fallback path: original fetch() logic ---
@@ -644,13 +637,8 @@ export async function verifyInboxPayment(
         } else if (!relayResponse.ok) {
           const errorText = await relayResponse.text();
           // Record 5xx relay failures toward the circuit breaker threshold.
-          if (kv && relayResponse.status >= 500) {
-            await recordRelayFailure(
-              kv,
-              RELAY_CIRCUIT_BREAKER_KEY,
-              RELAY_CIRCUIT_BREAKER_THRESHOLD,
-              RELAY_CIRCUIT_BREAKER_TTL_SECONDS
-            );
+          if (cfEnv && relayResponse.status >= 500) {
+            await recordRelayFailure(cfEnv, cfCtx, log);
           }
           const errorResult = buildRelayErrorResult(errorText, relayResponse.status, log);
           return returnWithCacheCheck(errorResult);
@@ -709,7 +697,7 @@ export async function verifyInboxPayment(
         };
         log.debug("Sponsor relay result", { relayData, settleResult, relayPaymentStatus });
       } catch (error) {
-        return handleRelayException("Sponsor relay", error, log, kv);
+        return handleRelayException("Sponsor relay", error, log, cfEnv, cfCtx);
       }
     }
   } else {
@@ -725,7 +713,7 @@ export async function verifyInboxPayment(
       });
       log.debug("Relay settle result", { settleResult });
     } catch (error) {
-      const result = await handleRelayException("Non-sponsored relay", error, log, kv);
+      const result = await handleRelayException("Non-sponsored relay", error, log, cfEnv, cfCtx);
       return returnWithCacheCheck(result);
     }
   }
@@ -758,9 +746,7 @@ export async function verifyInboxPayment(
   }
 
   // Relay succeeded — reset circuit breaker so past failures don't linger.
-  if (kv) {
-    await resetCircuitBreaker(kv, RELAY_CIRCUIT_BREAKER_KEY);
-  }
+  await resetCircuitBreaker(cfCtx, log);
 
   log.info("Inbox payment verified", {
     payerStxAddress,

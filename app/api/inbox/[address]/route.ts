@@ -1214,7 +1214,9 @@ export async function POST(
     logger,
     kv,
     env.X402_RELAY,
-    { route: request.nextUrl.pathname, repoVersion, env: env as unknown as Record<string, unknown> }
+    { route: request.nextUrl.pathname, repoVersion, env: env as unknown as Record<string, unknown> },
+    env,
+    ctx
   );
 
   if (!paymentResult.success) {
