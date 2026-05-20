@@ -15,6 +15,40 @@ export const dynamic = "force-dynamic";
 
 const SCHEDULER_INSTANCE_NAME = "v2";
 
+/**
+ * Leaderboard SSR cache TTL — 5 minutes. Matches the scheduler's
+ * ALARM_TICK_MS / TENERO_INTERVAL_MS = 5*60*1000 (`worker.ts:55,57`).
+ * Competition sweep cadence is 15min (`COMPETITION_INTERVAL_MS`) so
+ * 5-min TTL is more responsive than the slowest data path; chainhook
+ * can deliver between sweeps and that surfaces on the next rebuild.
+ *
+ * P3B target: collapses ~625K leaderboard renders/day into ≤288 D1
+ * aggregate rebuilds/day (1 per cache window, per-colo). The
+ * LEADERBOARD_AGGREGATE_SQL scan is the largest known steady-state
+ * D1 read surface; see `phases/P3B/plan.md` for attribution.
+ */
+const LEADERBOARD_CACHE_TTL_SECONDS = 300;
+
+/**
+ * Cache key for the leaderboard SSR data. Synthetic `cache.aibtc.local`
+ * host (matches the pattern in `lib/edge-cache.ts`) keeps these entries
+ * out of the live domain's HTTP cache namespace. Global key (no
+ * per-request variation) — the leaderboard is a public ranking and the
+ * SSR payload is identical for all visitors. Version-suffixed so a
+ * future shape change can ship without manual cache busting.
+ */
+const LEADERBOARD_CACHE_URL = "https://cache.aibtc.local/leaderboard/ssr:v1";
+
+/**
+ * Get the `caches.default` namespace if running on the Cloudflare
+ * Workers runtime. Null in Node / `next dev` — callers fall through
+ * to the uncached path.
+ */
+function getDefaultCache(): Cache | null {
+  const c = (globalThis as unknown as { caches?: { default?: Cache } }).caches;
+  return c?.default ?? null;
+}
+
 export const metadata: Metadata = {
   title: "Trading Leaderboard - AIBTC",
   description:
@@ -78,6 +112,26 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   const { env, ctx } = await getCloudflareContext();
   const db = env.DB as D1Database | undefined;
 
+  // P3B cache layer — short-circuit the LEADERBOARD_AGGREGATE_SQL scan +
+  // per-sender rollup on cache hit. The page itself stays
+  // force-dynamic (the SchedulerDO kick below has its own side effect
+  // we want to run every visit), so this cache is *data-level*, not
+  // page-level. ctx.waitUntil persists the write past the response
+  // teardown so the next request in this colo gets the warm copy.
+  const cache = getDefaultCache();
+  if (cache) {
+    const cacheKey = new Request(LEADERBOARD_CACHE_URL, { method: "GET" });
+    const cached = await cache.match(cacheKey);
+    if (cached) {
+      try {
+        return (await cached.json()) as LeaderboardRow[];
+      } catch {
+        // Malformed cache entry — fall through and rebuild. The bad
+        // entry will be overwritten by the put below.
+      }
+    }
+  }
+
   // Opportunistic SchedulerDO kick. A DO instance doesn't exist until
   // something calls a method on it — the constructor (which arms the
   // first alarm) only runs on first invocation. Fire-and-forget here so
@@ -100,15 +154,37 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
 
   if (!db) return [];
 
+  // Cache miss path — run the aggregate scan. Capture meta.rows_read so
+  // worker-logs can attribute leaderboard's contribution to the D1 read
+  // budget (one log line per rebuild; cache hits skip this entirely).
+  // See phases/P3B/plan.md for the attribution methodology.
+  const rebuildStart = Date.now();
   let rows: LeaderboardJoinedRow[] = [];
+  let scanMeta: { rowsRead?: number; durationMs?: number } | undefined;
   try {
     const result = await db
       .prepare(LEADERBOARD_AGGREGATE_SQL)
       .all<LeaderboardJoinedRow>();
     rows = result.results ?? [];
+    // D1 result.meta exposes rowsRead, duration, etc. Pluck only what
+    // we log; ignore the rest so we don't leak driver internals.
+    const m = (result as unknown as { meta?: { rows_read?: number; duration?: number } }).meta;
+    scanMeta = { rowsRead: m?.rows_read, durationMs: m?.duration };
   } catch {
     return [];
   }
+
+  // P3B observability: emit one log line per cache rebuild with the
+  // D1 read cost. Frequency of this event = cache miss rate; sum over
+  // 24h × rowsRead = leaderboard's daily contribution to the read
+  // budget. Cleaned up after P3B verify when the attribution is
+  // archived in `phases/P3B/verify.md`.
+  console.log("leaderboard.rebuild", {
+    rowCount: rows.length,
+    rowsRead: scanMeta?.rowsRead,
+    d1DurationMs: scanMeta?.durationMs,
+    totalMs: Date.now() - rebuildStart,
+  });
 
   if (rows.length === 0) return [];
 
@@ -189,6 +265,27 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
       if (b.tradeCount !== a.tradeCount) return b.tradeCount - a.tradeCount;
       return b.latestTradeAt - a.latestTradeAt;
     });
+
+  // Stash the rebuilt payload in caches.default. The cache write is
+  // detached via ctx.waitUntil so it doesn't block the response — the
+  // next request in this colo will short-circuit at the cache.match
+  // above for up to LEADERBOARD_CACHE_TTL_SECONDS.
+  if (cache) {
+    const payload = JSON.stringify(ranked);
+    const cachedResponse = new Response(payload, {
+      headers: {
+        "Cache-Control": `public, max-age=${LEADERBOARD_CACHE_TTL_SECONDS}, s-maxage=${LEADERBOARD_CACHE_TTL_SECONDS}`,
+        "Content-Type": "application/json",
+      },
+    });
+    const cacheKey = new Request(LEADERBOARD_CACHE_URL, { method: "GET" });
+    try {
+      ctx.waitUntil(cache.put(cacheKey, cachedResponse));
+    } catch {
+      // ctx may be unavailable in non-Workers test runtimes; the cache
+      // write is best-effort, so a missing ctx silently drops the put.
+    }
+  }
 
   return ranked;
 }
