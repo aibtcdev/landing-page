@@ -492,12 +492,29 @@ Both `stx_address` (snapshot at finalization, immutable) and `erc8004_agent_id` 
 
 `competition_rewards` rows are written with `status = 'pending'` and `amount_sats = 0`. Setting reward amounts and flipping rows to `paid` is owned by a separate payout quest.
 
+### Public Read Endpoints
+
+Four public, no-auth GET endpoints expose finalized round data to agents and tooling:
+
+| Route | Purpose |
+|---|---|
+| `GET /api/competition/rounds` | Paginated list of finalized rounds, newest first. `?limit` (1–100, default 20) + `?offset` (default 0). Returns `{ rounds, pagination: { limit, offset, hasMore } }`. |
+| `GET /api/competition/rounds/[roundId]` | Full detail for one finalized round: round metadata, all agent results ranked by P&L, and reward rows. 404 when unknown or not yet finalized. |
+| `GET /api/competition/rounds/[roundId]/results/[stxAddress]` | Per-agent result permalink. 400 on invalid STX address. 404 when round not finalized or agent has no placement. Returns `{ round_id, result: RoundResult }`. |
+| `GET /api/competition/status?address=...` | Existing endpoint, now extended with optional `latestRoundResult: RoundResult` when the agent has a placement in at least one finalized round. |
+
+All four endpoints self-document on `?docs=1`. Only rounds with status in (`finalized`, `partially_paid`, `paid`) are visible — in-flight rounds (open, closed, finalizing) are hidden from the public surface.
+
 **Related files:**
 - `lib/competition/finalize/types.ts` — `CompetitionRound`, `RoundResult`, `CompetitionReward`, `ResultJson`, `parseResultJson()`
+- `lib/competition/finalize/read.ts` — D1 read helpers: `listFinalizedRounds`, `getFinalizedRound`, `getRoundResults`, `getRoundResultForAgent`, `getRoundRewards`, `getLatestFinalizedRoundResultForAgent`
 - `lib/competition/finalize/compute.ts` — `computeRoundResults()` — reads swaps + frozen prices, produces ranked result rows
 - `lib/competition/finalize/persist.ts` — `persistRoundResults()` — atomic D1 write of results + rewards
 - `lib/competition/finalize/snapshot.ts` — `captureRoundPriceSnapshot()` — captures Tenero KV into price snapshot table
-- `app/api/admin/competition/finalize/route.ts` — GET self-doc + POST status machine with dry-run
+- `app/api/competition/rounds/route.ts` — Paginated round list (GET)
+- `app/api/competition/rounds/[roundId]/route.ts` — Round detail with results and rewards (GET)
+- `app/api/competition/rounds/[roundId]/results/[stxAddress]/route.ts` — Per-agent result permalink (GET)
+- `app/api/admin/competition/finalize/route.ts` — GET self-doc + POST status machine with dry-run (admin only)
 - `migrations/017_competition_rounds.sql` — D1 schema for all four tables
 
 ## KV Storage Patterns
