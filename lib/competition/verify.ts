@@ -441,8 +441,9 @@ export async function verifyAndPersistSwap(
   } else {
     // P3B PR 2: maintain agent_swap_stats so countSwapsFromD1 and
     // getCompetitionStatusFromD1 can serve O(1) reads. Errors are
-    // swallowed inside recordSwapInsert — a stats hiccup must not
-    // surface as a swap-persist failure.
+    // caught + warn-logged inside recordSwapInsert (via logger.warn
+    // when a Logger is provided, console.warn otherwise) — a stats
+    // hiccup must not surface as a swap-persist failure.
     await recordSwapInsert(
       db,
       persistArgs.sender,

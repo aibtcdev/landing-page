@@ -91,15 +91,21 @@ export async function recordSwapInsert(
       .bind(stxAddress, verifiedDelta, burnBlockTime, updatedAt)
       .run();
   } catch (e) {
-    const msg = `[agent-swap-stats] recordSwapInsert failed for ${stxAddress}: ${(e as Error).message}`;
+    // Warn (not error) — a stats-maintenance failure is data drift, not
+    // a hot bug: the authoritative `swaps` row was already INSERTed by
+    // the caller, and the next successful recordSwapInsert for this
+    // sender will reconcile via the ON CONFLICT branch. The fallback
+    // path in countSwapsFromD1 also surfaces the drift if it persists.
     if (logger) {
-      logger.error("agent_swap_stats.record_failed", {
+      logger.warn("agent_swap_stats.record_failed", {
         stxAddress,
         error: (e as Error).message,
       });
     } else {
       // eslint-disable-next-line no-console
-      console.warn(msg);
+      console.warn(
+        `[agent-swap-stats] recordSwapInsert failed for ${stxAddress}: ${(e as Error).message}`
+      );
     }
   }
 }

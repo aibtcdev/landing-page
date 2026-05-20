@@ -44,6 +44,8 @@
         "lib/agent-lookup.ts",
         "lib/bitcoin-verify.ts",
         "lib/d1/agents-mirror.ts",
+        "lib/competition/d1-reads.ts",
+        "lib/competition/stats.ts",
         "lib/challenge.ts",
         "lib/achievements/kv.ts",
         "lib/heartbeat/kv-helpers.ts",

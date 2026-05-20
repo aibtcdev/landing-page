@@ -46,3 +46,33 @@ CREATE TABLE IF NOT EXISTS agent_swap_stats (
   last_trade_at   INTEGER,
   updated_at      TEXT NOT NULL
 );
+
+-- Atomic seed: populate the new table from every existing sender in
+-- one statement, inside the same migration transaction as the CREATE.
+-- This closes the correctness window where a deploy applies the
+-- migration but the operator hasn't yet run the backfill SQL: without
+-- this seed, every historical trader would report trade_count=0 on
+-- /api/competition/status and /api/competition/trades until the manual
+-- backfill ran (Codex PR #892 P1 feedback).
+--
+-- INSERT OR REPLACE keeps the seed re-runnable; in normal operation
+-- this runs once at migration-apply time and is a no-op thereafter
+-- (the maintained write path in lib/competition/stats.ts owns updates
+-- from this point forward). The `2026-05-20T06:30:00Z` timestamp is
+-- the migration-author time; updated_at gets refreshed on the next
+-- recordSwapInsert per sender.
+--
+-- The standalone phases/P3B/backfill-swap-stats-2026-05-20.sql file
+-- remains as an operator artifact for manual repair (e.g. after admin
+-- mutations to swaps) and historical reference.
+INSERT OR REPLACE INTO agent_swap_stats
+  (stx_address, trade_count, verified_count, first_trade_at, last_trade_at, updated_at)
+SELECT
+  sender                                                     AS stx_address,
+  COUNT(*)                                                   AS trade_count,
+  SUM(CASE WHEN tx_status = 'success' THEN 1 ELSE 0 END)     AS verified_count,
+  MIN(burn_block_time)                                       AS first_trade_at,
+  MAX(burn_block_time)                                       AS last_trade_at,
+  '2026-05-20T06:30:00Z'                                     AS updated_at
+FROM swaps
+GROUP BY sender;
