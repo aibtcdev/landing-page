@@ -390,25 +390,15 @@ export async function POST(request: NextRequest) {
       lastCheckInAt: timestamp,
     };
 
-    // Persist to D1 synchronously via the canonical mirror helper. This
-    // updates `last_active_at` AND `last_check_in_at` in one statement,
-    // folding the prior direct UPDATE (P2 PR #889) into the same call site
-    // every other AgentRecord mutator uses post-P3A. NOT in
-    // after()/waitUntil: the response shape includes the timestamp we just
-    // wrote and consumers expect it to be visible on the next read.
+    // Persist to D1 synchronously via the canonical mirror helper (P3A).
+    // updateAgentInD1 internally swallows + logs D1 errors per the
+    // KV-is-source-of-truth contract — heartbeat does not 500 on a D1
+    // mirror failure. The response payload's lastCheckInAt comes from the
+    // in-memory updatedAgent, so consumers see a coherent check-in even
+    // if D1 lagged; the timestamp will reconcile on the next successful
+    // mutation via the max() expression in updateAgentInD1.
     if (db) {
-      try {
-        await updateAgentInD1(db, updatedAgent);
-      } catch (e) {
-        console.error("heartbeat.d1_update_failed", {
-          btcAddress,
-          error: (e as Error).message,
-        });
-        return NextResponse.json(
-          { error: "Failed to record check-in" },
-          { status: 500 }
-        );
-      }
+      await updateAgentInD1(db, updatedAgent);
     }
 
     // Write canonical btc: key only; stx: secondary index is no longer

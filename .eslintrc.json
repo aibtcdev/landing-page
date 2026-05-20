@@ -43,6 +43,7 @@
         "lib/admin/auth.ts",
         "lib/agent-lookup.ts",
         "lib/bitcoin-verify.ts",
+        "lib/d1/agents-mirror.ts",
         "lib/challenge.ts",
         "lib/achievements/kv.ts",
         "lib/heartbeat/kv-helpers.ts",

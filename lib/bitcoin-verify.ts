@@ -571,19 +571,27 @@ export async function persistBtcPubkeyIfMissing(
       `[btcPublicKey-capture] Persisted pubkey for ${btcAddress} via BIP-322 witness`
     );
 
-    // D1 UPDATE via the canonical mirror helper (P3A). The helper uses
-    // COALESCE on btc_public_key so the existing column value is preserved
-    // when the incoming AgentRecord has none — same conservative semantics
-    // as the prior targeted UPDATE, but now consistent with every other
-    // AgentRecord mutator. Wrapped in try/catch so a D1 hiccup never
-    // affects the calling request (outer catch is the safety net anyway).
-    try {
-      await updateAgentInD1(db, updatedAgent);
-    } catch (d1Err) {
-      console.warn(
-        `[btcPublicKey-capture] D1 mirror failed: ${(d1Err as Error).message}`
-      );
-    }
+    // D1 UPDATE via the canonical mirror helper (P3A). Different semantics
+    // from the prior targeted UPDATE:
+    //
+    //   Before: `UPDATE ... SET btc_public_key = ? WHERE btc_address = ?
+    //            AND (btc_public_key IS NULL OR btc_public_key = '')` —
+    //            fill-when-empty only; never overwrites an existing value.
+    //
+    //   After:  `btc_public_key = COALESCE(?, btc_public_key)` — the
+    //            incoming pubkeyHex wins whenever it is non-null.
+    //
+    // In practice the upstream guard at the top of this function
+    // (`if (agent.btcPublicKey) return;`) means we only enter this branch
+    // when the agent record we read had no pubkey, so the "incoming wins"
+    // branch is the only one that ever fires in the request that triggered
+    // capture. A concurrent capture from another request could in theory
+    // race and overwrite, but both writers are deriving pubkeyHex from the
+    // same canonical witness for the same btcAddress, so the value
+    // converges. updateAgentInD1 already wraps the UPDATE in try/catch
+    // with logging for FK/transient errors. The outer catch in this
+    // function is a final safety net.
+    await updateAgentInD1(db, updatedAgent);
   } catch (err) {
     // Never throw — persistence failure must not affect the calling request.
     console.error(

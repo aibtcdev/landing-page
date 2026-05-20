@@ -184,4 +184,38 @@ describe("updateAgentInD1", () => {
 
     expect(runs[0].binds[12]).toBeNull();
   });
+
+  it("uses max(...) for last_active_at + last_check_in_at so stale reads can't move the clock backward (P3A Codex feedback)", async () => {
+    // Codex flagged: when challenge/vouch/verify read the agent record
+    // from `stx:` KV (which heartbeat does NOT refresh per P4.2),
+    // `lastActiveAt` can be 10+ days stale. With a plain `?`-bind this
+    // would clobber D1's fresher value. The max() expression preserves
+    // whichever timestamp is later (ISO 8601 strings sort lexicographically).
+    const { db, runs } = makeMockDb();
+
+    await updateAgentInD1(db, makeAgent({ lastActiveAt: "2026-05-09T00:00:00.000Z" }));
+
+    expect(runs[0].sql).toMatch(/last_active_at\s*=\s*max\s*\(/);
+    expect(runs[0].sql).toMatch(/last_check_in_at\s*=\s*max\s*\(/);
+    // Sentinel must be in the SQL so SQLite's max() handles the
+    // "both NULL" case correctly (max(NULL, NULL) = NULL is fine, but
+    // max(NULL, ?) returns the non-null arg only when the COALESCE
+    // sentinel fallback is present).
+    expect(runs[0].sql).toContain("'0000-01-01T00:00:00Z'");
+  });
+
+  it("swallows D1 errors and logs a warning (KV is source-of-truth in P3A)", async () => {
+    const { db, throwOnNextRun, runs } = makeMockDb();
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+
+    throwOnNextRun(new Error("FOREIGN KEY constraint failed"));
+
+    // Must not throw to the caller even though the underlying D1 op rejected.
+    await expect(updateAgentInD1(db, makeAgent())).resolves.toBeUndefined();
+    expect(runs).toHaveLength(1);
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("FOREIGN KEY constraint failed")
+    );
+    warnSpy.mockRestore();
+  });
 });

@@ -162,8 +162,8 @@ describe("heartbeat POST — RATE_LIMIT_CHECKIN binding allows", () => {
     expect(mock.prepare).toHaveBeenCalledTimes(1);
     const sql = mock.prepare.mock.calls[0][0] as string;
     expect(sql).toContain("UPDATE agents SET");
-    expect(sql).toContain("last_check_in_at = COALESCE(?, last_check_in_at)");
-    expect(sql).toContain("last_active_at = COALESCE(?, last_active_at)");
+    expect(sql).toMatch(/last_check_in_at\s*=\s*max\s*\(/);
+    expect(sql).toMatch(/last_active_at\s*=\s*max\s*\(/);
     expect(sql).toContain("WHERE btc_address = ?");
     // last-active-at + last-check-in-at slots both receive the timestamp.
     const binds = mock.bind.mock.calls[0] as unknown[];
@@ -309,12 +309,17 @@ describe("heartbeat POST — fail-open on binding throw", () => {
   });
 });
 
-describe("heartbeat POST — D1 update failure surfaces", () => {
-  it("returns 500 when the D1 UPDATE rejects (no silent failure)", async () => {
+describe("heartbeat POST — D1 update failure does NOT 500 (P3A: KV-source-of-truth)", () => {
+  it("returns 200 with a logged warning when the D1 mirror UPDATE rejects", async () => {
+    // P3A change: updateAgentInD1 swallows errors internally because KV
+    // is still authoritative. A D1 mirror failure should never turn a
+    // KV-successful heartbeat into a user-facing 500. Per Copilot/Codex
+    // PR #890 feedback — heartbeat falls back to the same swallow-and-log
+    // contract every other AgentRecord mutator gets in P3A.
     const mockKv = buildMockKv();
     const mock = buildMockD1(() => Promise.reject(new Error("D1 boom")));
     const limit = vi.fn().mockResolvedValue({ success: true });
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
+    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     (getCloudflareContext as Mock).mockResolvedValue({
       env: {
@@ -327,16 +332,18 @@ describe("heartbeat POST — D1 update failure surfaces", () => {
 
     const response = await POST(buildPostRequest());
 
-    expect(response.status).toBe(500);
-    // Rate-limit binding was already consumed — that's accepted (no rollback).
+    expect(response.status).toBe(200);
     expect(limit).toHaveBeenCalledTimes(1);
-    // No KV write should have happened — we bailed before the success path.
-    expect(mockKv.put).not.toHaveBeenCalled();
-    expect(errorSpy).toHaveBeenCalledWith(
-      "heartbeat.d1_update_failed",
-      expect.objectContaining({ btcAddress: TEST_BTC })
+    // KV mirror still writes — that's the authoritative path in P3A.
+    expect(mockKv.put).toHaveBeenCalled();
+    // Mirror failure logged via the agents-mirror helper, not heartbeat.
+    expect(warnSpy).toHaveBeenCalledWith(
+      expect.stringContaining("[agents-mirror]")
     );
-    errorSpy.mockRestore();
+    // Response payload still includes the timestamp the caller submitted.
+    const body = (await response.json()) as { checkIn: { lastCheckInAt: string } };
+    expect(body.checkIn.lastCheckInAt).toBe(TEST_TIMESTAMP);
+    warnSpy.mockRestore();
   });
 });
 
