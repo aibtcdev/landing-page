@@ -20,7 +20,11 @@
  *   pnl_usd      = received_usd - volume_usd
  *   pnl_percent  = pnl_usd / volume_usd  (NULL when volume_usd = 0 — NaN guard)
  *
- * Ranking: pnl_usd DESC, tiebreak volume_usd DESC. Rank is 1-based, dense.
+ * Ranking: pnl_usd DESC, tiebreak volume_usd DESC. Rank is 1-based and ordinal
+ * (idx + 1) — ties do not collapse. The (pnl_usd, volume_usd) tiebreak is the
+ * total ordering, so ties at both keys are vanishingly rare in practice; if
+ * one occurs, downstream consumers should treat rank as a row identifier
+ * within the sorted set, not as a "shared placement" value.
  *
  * Reward categories:
  *   overall_pnl — rank-1 agent by pnl_usd (tiebreak volume_usd)

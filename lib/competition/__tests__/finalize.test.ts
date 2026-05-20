@@ -622,9 +622,26 @@ describe("persistRoundResults", () => {
 // ── captureRoundPriceSnapshot ─────────────────────────────────────────────────
 
 describe("captureRoundPriceSnapshot", () => {
-  function createSnapshotMockD1(roundStatus: string): D1Database {
+  /**
+   * Routes both SELECT first() queries by SQL text:
+   *   - SELECT status FROM competition_rounds WHERE round_id = ?1  → { status }
+   *   - SELECT COUNT(*) AS cnt FROM competition_round_price_snapshots ...
+   *     → { cnt: existingSnapshotCount }
+   * Plus a configurable batch-UPDATE meta.changes for concurrent-modification tests.
+   */
+  function createSnapshotMockD1(
+    roundStatus: string,
+    opts: {
+      existingSnapshotCount?: number;
+      updateChanges?: number;
+    } = {}
+  ): D1Database {
+    const existingSnapshotCount = opts.existingSnapshotCount ?? 0;
+    const updateChanges = opts.updateChanges ?? 1;
+
     const db = {
       prepare: vi.fn((sql: string) => {
+        const lower = sql.toLowerCase();
         const stmt = {
           _sql: sql,
           _binds: [] as unknown[],
@@ -633,7 +650,13 @@ describe("captureRoundPriceSnapshot", () => {
             return stmt;
           }),
           first: vi.fn(async (): Promise<unknown> => {
-            if (sql.includes("from competition_rounds") || sql.toLowerCase().includes("from competition_rounds")) {
+            if (
+              lower.includes("count(*)") &&
+              lower.includes("competition_round_price_snapshots")
+            ) {
+              return { cnt: existingSnapshotCount };
+            }
+            if (lower.includes("from competition_rounds")) {
               return { status: roundStatus };
             }
             return null;
@@ -645,7 +668,11 @@ describe("captureRoundPriceSnapshot", () => {
         return stmt;
       }),
       batch: vi.fn(async (stmts: Array<{ _sql: string; _binds: unknown[] }>) => {
-        return stmts.map(() => ({ meta: { changes: 1 } }));
+        // Last statement is the UPDATE; rest are INSERTs. Use updateChanges
+        // for the last one so we can simulate a concurrent flip (changes=0).
+        return stmts.map((_, i) => ({
+          meta: { changes: i === stmts.length - 1 ? updateChanges : 1 },
+        }));
       }),
       dump: vi.fn(),
       exec: vi.fn(),
@@ -760,5 +787,81 @@ describe("captureRoundPriceSnapshot", () => {
 
     // 2 INSERT + 1 UPDATE status flip
     expect(batchStatements).toHaveLength(3);
+  });
+
+  it("throws already_snapshotted when price rows exist for the round", async () => {
+    const db = createSnapshotMockD1("closed", { existingSnapshotCount: 2 });
+    const kv = createMockKV(new Map([["SP111.wstx", 0.25]]));
+    await expect(
+      captureRoundPriceSnapshot(db, {
+        roundId: ROUND_ID,
+        kv,
+        tokenIds: ["SP111.wstx"],
+        decimalsMap: new Map([["SP111.wstx", 6]]),
+      })
+    ).rejects.toThrow("already_snapshotted");
+  });
+
+  it("throws empty_price_cache when zero tokens are priced (per #880)", async () => {
+    const db = createSnapshotMockD1("closed");
+    // All tokens return null prices — simulates production state when
+    // TENERO_REFRESH_ENABLED is unset and the KV cache is empty.
+    const kv = createMockKV(
+      new Map([
+        ["SP111.wstx", null],
+        ["SP222.ststx", null],
+      ])
+    );
+    await expect(
+      captureRoundPriceSnapshot(db, {
+        roundId: ROUND_ID,
+        kv,
+        tokenIds: ["SP111.wstx", "SP222.ststx"],
+        decimalsMap: new Map([
+          ["SP111.wstx", 6],
+          ["SP222.ststx", 6],
+        ]),
+      })
+    ).rejects.toThrow("empty_price_cache");
+  });
+
+  it("rejects non-integer decimals (NaN/float/negative) as unpriced", async () => {
+    const db = createSnapshotMockD1("closed");
+    const kv = createMockKV(
+      new Map([
+        ["SP111.wstx", 0.25],
+        ["SP222.ststx", 0.28],
+        ["SP333.sbtc", 103000.0],
+      ])
+    );
+    const result = await captureRoundPriceSnapshot(db, {
+      roundId: ROUND_ID,
+      kv,
+      tokenIds: ["SP111.wstx", "SP222.ststx", "SP333.sbtc"],
+      decimalsMap: new Map<string, number>([
+        ["SP111.wstx", Number.NaN],
+        ["SP222.ststx", 6.5],
+        ["SP333.sbtc", 8],
+      ]),
+    });
+    // Only the well-formed sbtc row should survive validation.
+    expect(result.priced).toBe(1);
+    expect(result.unpriced.sort()).toEqual(["SP111.wstx", "SP222.ststx"]);
+  });
+
+  it("throws concurrent_modification when status UPDATE changes 0 rows", async () => {
+    // First read sees status=closed (so we pass the pre-check), but the
+    // batch UPDATE reports changes=0 — simulating a parallel snapshot call
+    // that flipped status between our read and our write.
+    const db = createSnapshotMockD1("closed", { updateChanges: 0 });
+    const kv = createMockKV(new Map([["SP111.wstx", 0.25]]));
+    await expect(
+      captureRoundPriceSnapshot(db, {
+        roundId: ROUND_ID,
+        kv,
+        tokenIds: ["SP111.wstx"],
+        decimalsMap: new Map([["SP111.wstx", 6]]),
+      })
+    ).rejects.toThrow("concurrent_modification");
   });
 });

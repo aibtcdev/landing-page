@@ -59,7 +59,9 @@ CREATE TABLE IF NOT EXISTS competition_rounds (
   -- 60-min grace window after ends_at. Stacks blocks are now ~5 s (not
   -- 10 min as cited in issue #822), but 60 min is the right default given
   -- the SchedulerDO ~15 min cadence + safety margin.
-  grace_ends_at          INTEGER NOT NULL DEFAULT (ends_at + 3600),
+  -- SQLite/D1 disallow column-referencing DEFAULT expressions, so callers
+  -- must compute and supply grace_ends_at on INSERT (typically ends_at + 3600).
+  grace_ends_at          INTEGER NOT NULL,
   -- Status machine. 'partially_paid' lets per-row retry proceed without
   -- blocking the round; 'paid' means all rewards rows are settled.
   status                 TEXT    NOT NULL DEFAULT 'open'

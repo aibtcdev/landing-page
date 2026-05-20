@@ -439,7 +439,10 @@ describe("POST action: snapshot", () => {
           roundId: ROUND_ID,
           action: "snapshot",
           tokenIds: ["SP111.wstx", "SP999.unknown"],
-          decimalsMap: { "SP111.wstx": 6 },
+          // Both tokens have decimals declared so the missing-decimals 400
+          // doesn't fire; SP999 is unpriced because the KV mock above only
+          // has a price for SP111.
+          decimalsMap: { "SP111.wstx": 6, "SP999.unknown": 6 },
         },
         true // dry-run
       )
@@ -483,6 +486,72 @@ describe("POST action: snapshot", () => {
 
     // db.batch must have been called (writes the snapshot + status update)
     expect(batchCalled()).toBe(true);
+  });
+
+  it("returns 400 when decimalsMap contains non-integer values", async () => {
+    const { db, batchCalled } = createD1Mock({ roundRow: CLOSED_ROUND });
+    mockCtx(db);
+
+    const resp = await POST(
+      buildPostRequest({
+        roundId: ROUND_ID,
+        action: "snapshot",
+        tokenIds: ["SP111.wstx", "SP222.ststx"],
+        // "abc" coerces to NaN; 6.5 is a non-integer float — both must be rejected.
+        decimalsMap: { "SP111.wstx": "abc", "SP222.ststx": 6.5 },
+      })
+    );
+    expect(resp.status).toBe(400);
+    const body = await resp.json() as { error: string; invalidTokens: string[] };
+    expect(body.error).toMatch(/non-negative integer/i);
+    expect(body.invalidTokens.sort()).toEqual(["SP111.wstx", "SP222.ststx"]);
+    expect(batchCalled()).toBe(false);
+  });
+
+  it("returns 400 when decimalsMap is missing entries for some tokenIds", async () => {
+    const { db, batchCalled } = createD1Mock({ roundRow: CLOSED_ROUND });
+    mockCtx(db);
+
+    const resp = await POST(
+      buildPostRequest({
+        roundId: ROUND_ID,
+        action: "snapshot",
+        tokenIds: ["SP111.wstx", "SP222.ststx"],
+        decimalsMap: { "SP111.wstx": 6 }, // missing SP222.ststx
+      })
+    );
+    expect(resp.status).toBe(400);
+    const body = await resp.json() as { error: string; missingTokens: string[] };
+    expect(body.error).toMatch(/missing entries/i);
+    expect(body.missingTokens).toEqual(["SP222.ststx"]);
+    expect(batchCalled()).toBe(false);
+  });
+
+  it("dry-run returns 503 empty_price_cache when zero tokens are priced (per #880)", async () => {
+    const { db, batchCalled } = createD1Mock({ roundRow: CLOSED_ROUND });
+    const kv = buildKvMock();
+    mockCtx(db, kv);
+
+    // Simulates production state when Tenero refresh is disabled — KV
+    // returns no priced entries. The dry-run should refuse so the operator
+    // sees the dependency problem before running the real snapshot.
+    (getCachedTokenPrices as Mock).mockResolvedValue(new Map());
+
+    const resp = await POST(
+      buildPostRequest(
+        {
+          roundId: ROUND_ID,
+          action: "snapshot",
+          tokenIds: ["SP111.wstx"],
+          decimalsMap: { "SP111.wstx": 6 },
+        },
+        true // dry-run
+      )
+    );
+    expect(resp.status).toBe(503);
+    const body = await resp.json() as { error: string };
+    expect(body.error).toContain("empty_price_cache");
+    expect(batchCalled()).toBe(false);
   });
 });
 

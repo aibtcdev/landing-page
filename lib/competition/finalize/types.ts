@@ -150,7 +150,13 @@ export interface RoundResult {
   rank: number;
   stx_address: string;
   btc_address: string;
-  /** Null if the agent has not minted an ERC-8004 identity NFT. */
+  /**
+   * Schema-nullable, but in practice non-null for every row produced by
+   * computeRoundResults() — the eligibility predicate requires
+   * `agents.erc8004_agent_id IS NOT NULL` (mirrors LEADERBOARD_AGGREGATE_SQL).
+   * The column stays nullable in D1 so a future admin-only override path
+   * can insert manual rows without minting an identity NFT.
+   */
   erc8004_agent_id: number | null;
   trade_count: number;
   priced_trade_count: number;

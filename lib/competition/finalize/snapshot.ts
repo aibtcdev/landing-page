@@ -38,15 +38,42 @@ export interface SnapshotResult {
   unpriced: string[];
 }
 
+/**
+ * True for a non-negative integer in the SQLite INTEGER range we accept for
+ * token decimals. Rejects NaN, Infinity, floats, negative values, and strings.
+ */
+function isValidDecimals(d: unknown): d is number {
+  return typeof d === "number" && Number.isInteger(d) && d >= 0;
+}
+
 // ── Main export ───────────────────────────────────────────────────────────────
 
 /**
  * Capture Tenero KV prices into competition_round_price_snapshots and flip
  * competition_rounds.status from 'closed' → 'finalizing'.
  *
+ * Concurrency / idempotency:
+ *   - Pre-flight check fails fast if any price snapshot rows already exist
+ *     for this round, so a partial second call can never append extra rows
+ *     without flipping status.
+ *   - The status UPDATE is the last statement in the batch and is gated on
+ *     `status = 'closed'`. If a concurrent caller already flipped it, we
+ *     detect zero changes and throw `concurrent_modification` after writing.
+ *     (D1 batches don't roll back on logical no-ops, but the unique
+ *     PRIMARY KEY (round_id, token_id) on the snapshot table means a second
+ *     call hits a UNIQUE constraint before it can corrupt anything.)
+ *
+ * Pre-flight Tenero cache gate (per #880):
+ *   - If `getCachedTokenPrices` returns zero priced entries for the requested
+ *     tokenIds, throws `empty_price_cache` so the operator gets a clean
+ *     signal instead of silently snapshotting an all-unpriced round.
+ *
  * Throws:
- *   'round_not_found: {roundId}' — round does not exist
- *   'wrong_status: expected closed, got {status}' — round is not in closed state
+ *   'round_not_found: {roundId}'                       — round does not exist
+ *   'wrong_status: expected closed, got {status}'      — round is not in closed state
+ *   'already_snapshotted: {roundId}'                   — price rows exist for this round
+ *   'empty_price_cache: zero priced tokens'            — Tenero KV cache returned nothing usable
+ *   'concurrent_modification: round {roundId} status changed during snapshot'
  */
 export async function captureRoundPriceSnapshot(
   db: D1Database,
@@ -71,10 +98,22 @@ export async function captureRoundPriceSnapshot(
     );
   }
 
-  // ── 2. Fetch prices from Tenero KV ────────────────────────────────────────
+  // ── 2. Idempotency guard: refuse if snapshot rows already exist ───────────
+  const existsRow = await db
+    .prepare(
+      "SELECT COUNT(*) AS cnt FROM competition_round_price_snapshots WHERE round_id = ?1"
+    )
+    .bind(roundId)
+    .first<{ cnt: number }>();
+
+  if (existsRow && existsRow.cnt > 0) {
+    throw new Error(`already_snapshotted: ${roundId}`);
+  }
+
+  // ── 3. Fetch prices from Tenero KV ────────────────────────────────────────
   const priceCache = await getCachedTokenPrices(kv, tokenIds);
 
-  // ── 3. Classify tokens as priced vs unpriced ──────────────────────────────
+  // ── 4. Classify tokens as priced vs unpriced ──────────────────────────────
   const pricedRows: Array<{
     tokenId: string;
     priceUsd: number;
@@ -90,7 +129,7 @@ export async function captureRoundPriceSnapshot(
       cached.priceUsd !== null &&
       typeof cached.priceUsd === "number" &&
       Number.isFinite(cached.priceUsd) &&
-      typeof decimals === "number"
+      isValidDecimals(decimals)
     ) {
       pricedRows.push({ tokenId, priceUsd: cached.priceUsd, decimals });
     } else {
@@ -98,7 +137,15 @@ export async function captureRoundPriceSnapshot(
     }
   }
 
-  // ── 4. Write to D1 in a single batch ──────────────────────────────────────
+  // ── 5. Pre-flight cache gate: refuse if zero priced (per #880) ───────────
+  if (pricedRows.length === 0) {
+    throw new Error(
+      `empty_price_cache: zero priced tokens (requested ${tokenIds.length}); ` +
+        `check Tenero refresh scheduler is running (see issue #880)`
+    );
+  }
+
+  // ── 6. Write to D1 in a single batch ──────────────────────────────────────
   const insertSql = `
     INSERT INTO competition_round_price_snapshots
       (round_id, token_id, price_usd, decimals, source, captured_at)
@@ -120,7 +167,17 @@ export async function captureRoundPriceSnapshot(
     db.prepare(updateSql).bind(roundId),
   ];
 
-  await db.batch(statements);
+  const batchResults = await db.batch(statements);
+
+  // Verify the UPDATE (last statement) actually flipped the row. Concurrent
+  // callers can race the read → write window; if status changed under us,
+  // surface that explicitly rather than reporting a silent success.
+  const updateMeta = batchResults[batchResults.length - 1];
+  if (updateMeta.meta.changes === 0) {
+    throw new Error(
+      `concurrent_modification: round ${roundId} status changed during snapshot`
+    );
+  }
 
   return { priced: pricedRows.length, unpriced };
 }

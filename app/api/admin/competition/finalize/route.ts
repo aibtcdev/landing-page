@@ -47,10 +47,14 @@ interface D1RoundRow {
 const ERROR_STATUS_MAP: Array<[string, number]> = [
   ["round_not_found:", 404],
   ["already_finalized:", 409],
+  ["already_snapshotted:", 409],
   ["unexpected_status:", 409],
   ["wrong_status:", 409],
   ["grace_period_active:", 409],
   ["concurrent_modification:", 409],
+  // #880: Tenero refresh disabled → KV cache empty. Treat as 503 so the
+  // operator gets a clear "dependency not ready" signal instead of 500.
+  ["empty_price_cache:", 503],
 ];
 
 function mapErrorToStatus(message: string): number {
@@ -276,11 +280,47 @@ export async function POST(request: NextRequest) {
         );
       }
 
-      const decimalsMap = new Map<string, number>(
-        Object.entries(decimalsMapRaw as Record<string, unknown>).map(
-          ([k, v]) => [k, Number(v)]
-        )
+      // Validate decimalsMap entries up front so a typo like
+      // {"decimalsMap": {"token": "abc"}} fails at the boundary with a 400
+      // instead of getting silently coerced to NaN and reaching snapshot
+      // writes / dry-run misclassification.
+      const decimalsMap = new Map<string, number>();
+      const invalidDecimals: string[] = [];
+      for (const [k, v] of Object.entries(
+        decimalsMapRaw as Record<string, unknown>
+      )) {
+        const n = typeof v === "number" ? v : Number(v);
+        if (Number.isInteger(n) && n >= 0) {
+          decimalsMap.set(k, n);
+        } else {
+          invalidDecimals.push(k);
+        }
+      }
+      if (invalidDecimals.length > 0) {
+        return NextResponse.json(
+          {
+            error:
+              "decimalsMap entries must be non-negative integers (e.g. 6 or 8)",
+            invalidTokens: invalidDecimals,
+          },
+          { status: 400 }
+        );
+      }
+      // Every requested tokenId must have a decimals entry — otherwise the
+      // snapshot would silently classify it as unpriced for a recoverable
+      // reason (no decimals provided) vs an actual missing price.
+      const missingDecimals = (tokenIds as string[]).filter(
+        (t) => !decimalsMap.has(t)
       );
+      if (missingDecimals.length > 0) {
+        return NextResponse.json(
+          {
+            error: "decimalsMap is missing entries for some tokenIds",
+            missingTokens: missingDecimals,
+          },
+          { status: 400 }
+        );
+      }
 
       if (dryRun) {
         // Fetch KV prices without writing anything
@@ -295,12 +335,29 @@ export async function POST(request: NextRequest) {
             cached.priceUsd !== null &&
             typeof cached.priceUsd === "number" &&
             Number.isFinite(cached.priceUsd) &&
-            typeof decimals === "number"
+            typeof decimals === "number" &&
+            Number.isInteger(decimals) &&
+            decimals >= 0
           ) {
             priced.push(tokenId);
           } else {
             unpriced.push(tokenId);
           }
+        }
+        // Mirror the captureRoundPriceSnapshot pre-flight gate so dry-run
+        // surfaces the #880 dependency before the real call would 503.
+        if (priced.length === 0) {
+          return NextResponse.json(
+            {
+              error:
+                "empty_price_cache: zero priced tokens; check Tenero refresh scheduler (see issue #880)",
+              dryRun: true,
+              roundId,
+              action: "snapshot",
+              unpriced,
+            },
+            { status: 503 }
+          );
         }
         return NextResponse.json({
           dryRun: true,
