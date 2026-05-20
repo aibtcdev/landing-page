@@ -116,19 +116,19 @@ export async function GET(request: NextRequest) {
   }
 
   try {
-    const status = await getCompetitionStatusFromD1(db, address);
-
-    // Optional extension: add the agent's latest finalized round result when available.
-    // Graceful degradation: if this call fails, the base status response is still returned.
-    let latestRoundResult = null;
-    try {
-      latestRoundResult = await getLatestFinalizedRoundResultForAgent(db, address);
-    } catch (err) {
-      logger.warn("latestRoundResult lookup failed — omitting from response", {
-        error: String(err),
-        address,
-      });
-    }
+    // Issue both D1 reads in parallel — they are independent. The outer try
+    // catches getCompetitionStatusFromD1 failures (→ 503); latestRoundResult
+    // degrades gracefully via .catch() and never blocks the base response.
+    const [status, latestRoundResult] = await Promise.all([
+      getCompetitionStatusFromD1(db, address),
+      getLatestFinalizedRoundResultForAgent(db, address).catch((err) => {
+        logger.warn("latestRoundResult lookup failed — omitting from response", {
+          error: String(err),
+          address,
+        });
+        return null;
+      }),
+    ]);
 
     // Only include the field when the agent has a placement; omit otherwise so
     // existing callers that don't expect the field are unaffected.

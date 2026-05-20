@@ -1115,7 +1115,10 @@ Response \`200\`:
 
 Response \`400\` — invalid STX address:
 \`\`\`json
-{ "error": "Invalid stxAddress path parameter. Expected a Stacks mainnet address (SP… / SM…)." }
+{
+  "error": "Invalid stxAddress path parameter. Expected a Stacks mainnet address (SP… / SM…).",
+  "example": "/api/competition/rounds/week-1-2026-05-13/results/SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE"
+}
 \`\`\`
 
 Response \`404\` — round not finalized or agent has no placement:

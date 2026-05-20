@@ -105,7 +105,13 @@ export async function GET(request: NextRequest) {
   let offset = 0;
   if (offsetParam !== null) {
     const parsed = parseInt(offsetParam, 10);
-    offset = Math.max(Number.isFinite(parsed) ? parsed : 0, 0);
+    if (!Number.isFinite(parsed) || parsed < 0) {
+      return NextResponse.json(
+        { error: "Invalid offset. Expected non-negative integer." },
+        { status: 400 }
+      );
+    }
+    offset = parsed;
   }
 
   // IP-keyed read rate limit (300/min).

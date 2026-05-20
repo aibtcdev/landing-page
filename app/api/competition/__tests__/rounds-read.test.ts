@@ -204,17 +204,20 @@ describe("rounds list — GET /api/competition/rounds", () => {
     );
   });
 
-  it("non-negative offset enforcement: offset=-1 treated as 0", async () => {
-    (listFinalizedRounds as Mock).mockResolvedValue([]);
-    await listGet(buildRequest("?offset=-1"));
-    expect(listFinalizedRounds).toHaveBeenCalledWith(
-      expect.anything(),
-      expect.objectContaining({ offset: 0 })
-    );
+  it("negative offset returns 400", async () => {
+    const res = await listGet(buildRequest("?offset=-1"));
+    expect(res.status).toBe(400);
+    expect(listFinalizedRounds).not.toHaveBeenCalled();
   });
 
   it("invalid non-integer limit returns 400", async () => {
     const res = await listGet(buildRequest("?limit=abc"));
+    expect(res.status).toBe(400);
+    expect(listFinalizedRounds).not.toHaveBeenCalled();
+  });
+
+  it("invalid non-integer offset returns 400", async () => {
+    const res = await listGet(buildRequest("?offset=abc"));
     expect(res.status).toBe(400);
     expect(listFinalizedRounds).not.toHaveBeenCalled();
   });

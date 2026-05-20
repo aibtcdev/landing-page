@@ -11,9 +11,18 @@
  *
  * Routes stay thin — all SQL lives here.
  *
- * Visibility filter: all read helpers restrict to rounds with status in
- * ('finalized', 'partially_paid', 'paid'). In-flight rounds (open, closed,
- * finalizing) are excluded from public read surfaces.
+ * Visibility filter: enforced in SQL by listFinalizedRounds,
+ * getFinalizedRound, and getLatestFinalizedRoundResultForAgent — these
+ * either query competition_rounds directly with the visible-status filter
+ * or JOIN against it. The result/reward fetchers (getRoundResults,
+ * getRoundRewards, getRoundResultForAgent) do NOT join against
+ * competition_rounds and therefore do NOT enforce visibility on their own.
+ * Routes that call them MUST first verify the round is visible via
+ * getFinalizedRound — see app/api/competition/rounds/[roundId]/route.ts
+ * and .../results/[stxAddress]/route.ts for the gate pattern.
+ * In-flight rounds (open, closed, finalizing) are never exposed because
+ * no public route reaches the result/reward helpers without first passing
+ * the getFinalizedRound gate.
  *
  * result_json: D1 stores this column as TEXT. All helpers that return
  * RoundResult call parseResultJson() before constructing the typed interface.
@@ -34,6 +43,10 @@ import {
 /**
  * Statuses that are visible on the public read surface.
  * In-flight rounds (open, closed, finalizing) are never returned.
+ *
+ * Interpolated as a SQL fragment rather than bound because D1 does not
+ * support binding array parameters for IN clauses. Safe to interpolate
+ * because the literal is module-local and contains no user input.
  */
 const VISIBLE_STATUSES = `('finalized','partially_paid','paid')`;
 

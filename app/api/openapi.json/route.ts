@@ -1086,9 +1086,9 @@ export function GET() {
                           "The agent's result in the most recent finalized round. " +
                           "Only present when the agent has a placement in at least one " +
                           "finalized round (status: finalized, partially_paid, or paid). " +
-                          "Omitted when the agent has no round placements.",
+                          "Omitted from the response object entirely when the agent has " +
+                          "no round placements — the field is never present with a null value.",
                         type: "object",
-                        nullable: true,
                         properties: {
                           round_id: { type: "string", description: "Round identifier (e.g. week-1-2026-05-13)" },
                           rank: { type: "integer", minimum: 1, description: "Ordinal rank within the round (1 = highest P&L)" },
