@@ -17,6 +17,7 @@ import {
   getAvailableActions,
 } from "@/lib/challenge";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import {
   publicKeyFromSignatureRsv,
   getAddressFromPublicKey,
@@ -276,6 +277,7 @@ export async function POST(request: NextRequest) {
 
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     // Retrieve stored challenge
     const storedChallenge = await getChallenge(kv, address);
@@ -403,11 +405,13 @@ export async function POST(request: NextRequest) {
 
     const updatedAgent = actionResult.updated as AgentRecord;
 
-    // Update both KV records and fetch claim status in parallel
+    // Update both KV records, mirror the AgentRecord into D1 (P3A), and
+    // fetch claim status in parallel.
     const updatedJson = JSON.stringify(updatedAgent);
-    const [, , claimData] = await Promise.all([
+    const [, , , claimData] = await Promise.all([
       kv.put(`btc:${updatedAgent.btcAddress}`, updatedJson),
       kv.put(`stx:${updatedAgent.stxAddress}`, updatedJson),
+      updateAgentInD1(db, updatedAgent),
       kv.get(`claim:${updatedAgent.btcAddress}`),
     ]);
 

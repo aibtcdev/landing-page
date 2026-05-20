@@ -4,6 +4,7 @@ import type { AgentRecord, ClaimRecord } from "@/lib/types";
 import { lookupBnsName, lookupOwnerByBnsName } from "@/lib/bns";
 import { enrichAgentProfile } from "@/lib/agent-enrichment";
 import { getAgentsIndex, invalidateAgentsIndex } from "@/lib/agents-index";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import {
   lookupBtcAddressByBnsName,
   syncBnsLookup,
@@ -284,6 +285,7 @@ export async function GET(
               Promise.all([
                 kv.put(`stx:${agent!.stxAddress}`, updated),
                 kv.put(`btc:${agent!.btcAddress}`, updated),
+                updateAgentInD1(db, agent!),
                 invalidateAgentsIndex(kv, logger),
                 syncBnsLookup(kv, previousBnsName, bnsName, agent!.btcAddress, logger),
               ]).catch((err) =>

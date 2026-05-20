@@ -4,6 +4,7 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { getAgentLevel } from "@/lib/levels";
 import { lookupBnsName } from "@/lib/bns";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import { syncBnsLookup } from "@/lib/bns-reverse-index";
 import { getCAIP19AgentId } from "@/lib/caip19";
 import {
@@ -76,6 +77,7 @@ export async function GET(
 
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
     const hiroApiKey = env.HIRO_API_KEY;
 
     const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
@@ -127,6 +129,7 @@ export async function GET(
       await Promise.all([
         kv.put(`stx:${agent.stxAddress}`, updated),
         kv.put(`btc:${agent.btcAddress}`, updated),
+        updateAgentInD1(db, agent),
         invalidateAgentsIndex(kv, logger),
         syncBnsLookup(kv, previousBnsName, bnsName, agent.btcAddress, logger),
       ]);

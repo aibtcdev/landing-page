@@ -5,6 +5,7 @@ import type { AgentRecord } from "@/lib/types";
 import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "@/lib/identity/constants";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
 import { getCachedIdentity, setCachedIdentity, setCachedIdentityNegative } from "@/lib/identity/kv-cache";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import {
   createLogger,
   createConsoleLogger,
@@ -41,6 +42,7 @@ export async function GET(request: NextRequest) {
   try {
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
     const hiroApiKey = env.HIRO_API_KEY as string | undefined;
 
     const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
@@ -137,10 +139,12 @@ export async function GET(request: NextRequest) {
               // Positive result — update both KV keys AND the three-state
               // identity cache so downstream SSR/profile paths see the fresh
               // state instead of any stale confirmed-negative (7d TTL).
-              const updatedRecord = JSON.stringify({ ...agent, erc8004AgentId: agentId });
+              const updatedAgent = { ...agent, erc8004AgentId: agentId };
+              const updatedRecord = JSON.stringify(updatedAgent);
               await Promise.all([
                 kv.put(`btc:${agent.btcAddress}`, updatedRecord),
                 kv.put(`stx:${agent.stxAddress}`, updatedRecord),
+                updateAgentInD1(db, updatedAgent),
                 setCachedIdentity(
                   agent.stxAddress,
                   { agentId, owner: agent.stxAddress, uri: "" },

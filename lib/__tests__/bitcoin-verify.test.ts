@@ -478,7 +478,7 @@ describe("persistBtcPubkeyIfMissing", () => {
     ).resolves.not.toThrow();
   });
 
-  it("runs D1 UPDATE when db binding is provided", async () => {
+  it("runs D1 UPDATE when db binding is provided (via updateAgentInD1 — P3A)", async () => {
     const agent = makeAgent({ btcPublicKey: "" });
     const kv = makeMockKv();
     const pubkeyHex = "02" + "ab".repeat(32);
@@ -488,10 +488,19 @@ describe("persistBtcPubkeyIfMissing", () => {
 
     await persistBtcPubkeyIfMissing(kv, db, "bc1qtest", pubkeyHex, agent);
 
+    // P3A: persist path now delegates to updateAgentInD1 (canonical mirror).
+    // The UPDATE writes the full AgentRecord shape; btc_public_key is one
+    // of the COALESCEd columns.
     expect(db.prepare).toHaveBeenCalledWith(
-      expect.stringContaining("UPDATE agents SET btc_public_key")
+      expect.stringContaining("UPDATE agents SET")
     );
-    expect(mockStmt.bind).toHaveBeenCalledWith(pubkeyHex, "bc1qtest");
+    expect(db.prepare).toHaveBeenCalledWith(
+      expect.stringContaining("btc_public_key = COALESCE(?, btc_public_key)")
+    );
+    // Pubkey must be in the bound args. WHERE clause's btc_address is last.
+    const binds = mockStmt.bind.mock.calls[0] as unknown[];
+    expect(binds).toContain(pubkeyHex);
+    expect(binds[binds.length - 1]).toBe("bc1qtest");
     expect(mockStmt.run).toHaveBeenCalled();
   });
 

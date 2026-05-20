@@ -116,45 +116,83 @@ export async function updateAgentInD1(
 ): Promise<void> {
   if (!db) return;
 
-  await db
-    .prepare(
-      `UPDATE agents SET
-         taproot_address = ?,
-         display_name = ?,
-         description = ?,
-         bns_name = ?,
-         owner = ?,
-         last_active_at = ?,
-         erc8004_agent_id = ?,
-         nostr_public_key = ?,
-         capabilities_json = ?,
-         last_identity_check = ?,
-         github_username = ?,
-         referred_by_btc = COALESCE(?, referred_by_btc),
-         btc_public_key = COALESCE(?, btc_public_key)
-       WHERE btc_address = ?`
-    )
-    .bind(
-      agent.taprootAddress ?? null,
-      agent.displayName ?? null,
-      agent.description ?? null,
-      agent.bnsName ?? null,
-      agent.owner ?? null,
-      agent.lastActiveAt ?? null,
-      agent.erc8004AgentId ?? null,
-      agent.nostrPublicKey ?? null,
-      agent.capabilities ? JSON.stringify(agent.capabilities) : null,
-      agent.lastIdentityCheck ?? null,
-      agent.githubUsername ?? null,
-      // referredBy is immutable once set; COALESCE preserves the existing
-      // value when the incoming AgentRecord omits referredBy (most mutators
-      // don't touch this field). A non-null incoming value still wins.
-      agent.referredBy ?? null,
-      // btcPublicKey is opportunistic — COALESCE preserves a previously
-      // captured value if the current write has none (update-pubkey is
-      // a one-time challenge action).
-      agent.btcPublicKey || null,
-      agent.btcAddress
-    )
-    .run();
+  // The UPDATE uses MAX() for the two monotonic timestamp columns
+  // (last_active_at, last_check_in_at) so a stale-read incoming value
+  // never moves D1's clock backward. Other paths in P3A read the agent
+  // record from `stx:{addr}` which is not refreshed by the heartbeat
+  // POST (P4.2 dropped that dual-write), so an incoming `lastActiveAt`
+  // can be older than what D1 already has. ISO 8601 strings sort
+  // lexicographically; SQLite scalar `max(a, b)` returns NULL only when
+  // both args are NULL, so the COALESCE-with-sentinel pattern below
+  // protects the always-non-null heartbeat write while still preserving
+  // existing values when both incoming and current are NULL.
+  //
+  // Failure mode: wrapped in try/catch with logging because KV is still
+  // source-of-truth during P3A. A D1 mirror failure (FK violations from
+  // not-yet-backfilled referrer rows, transient binding errors) must NOT
+  // turn a successful KV mutation into a user-facing 500. (Codex/Copilot
+  // PR #890 feedback.)
+  try {
+    await db
+      .prepare(
+        `UPDATE agents SET
+           taproot_address = ?,
+           display_name = ?,
+           description = ?,
+           bns_name = ?,
+           owner = ?,
+           last_active_at = max(
+             COALESCE(?, '0000-01-01T00:00:00Z'),
+             COALESCE(last_active_at, '0000-01-01T00:00:00Z')
+           ),
+           last_check_in_at = max(
+             COALESCE(?, '0000-01-01T00:00:00Z'),
+             COALESCE(last_check_in_at, '0000-01-01T00:00:00Z')
+           ),
+           erc8004_agent_id = ?,
+           nostr_public_key = ?,
+           capabilities_json = ?,
+           last_identity_check = ?,
+           github_username = ?,
+           referred_by_btc = COALESCE(?, referred_by_btc),
+           btc_public_key = COALESCE(?, btc_public_key)
+         WHERE btc_address = ?`
+      )
+      .bind(
+        agent.taprootAddress ?? null,
+        agent.displayName ?? null,
+        agent.description ?? null,
+        agent.bnsName ?? null,
+        agent.owner ?? null,
+        agent.lastActiveAt ?? null,
+        agent.lastCheckInAt ?? null,
+        agent.erc8004AgentId ?? null,
+        agent.nostrPublicKey ?? null,
+        agent.capabilities ? JSON.stringify(agent.capabilities) : null,
+        agent.lastIdentityCheck ?? null,
+        agent.githubUsername ?? null,
+        // referredBy is immutable once set; COALESCE preserves the existing
+        // value when the incoming AgentRecord omits referredBy (most mutators
+        // don't touch this field). A non-null incoming value still wins.
+        agent.referredBy ?? null,
+        // btcPublicKey is opportunistic — COALESCE preserves a previously
+        // captured value if the current write has none (update-pubkey is
+        // a one-time challenge action).
+        agent.btcPublicKey || null,
+        agent.btcAddress
+      )
+      .run();
+  } catch (e) {
+    // FK violations (referrer not yet in D1), schema mismatches, or
+    // transient binding errors. Log and continue — P3A is a transition
+    // phase, KV is authoritative.
+    console.warn(
+      `[agents-mirror] updateAgentInD1 failed for ${agent.btcAddress}: ${(e as Error).message}`
+    );
+  }
 }
+
+// Sentinel constant used by the SQL `max(...)` expressions above. Exported
+// so tests can compare against it. Pre-dates any realistic ISO 8601
+// timestamp the system would ever write, so any real incoming value wins.
+export const AGENT_MIRROR_TIMESTAMP_SENTINEL = "0000-01-01T00:00:00Z";

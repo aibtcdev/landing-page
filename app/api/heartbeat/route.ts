@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature, persistBtcPubkeyIfMissing } from "@/lib/bitcoin-verify";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import { getAgentLevel, getNextLevel } from "@/lib/levels";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
 import { X_HANDLE } from "@/lib/constants";
@@ -382,38 +383,23 @@ export async function POST(request: NextRequest) {
       // Fall through to allow the check-in (fail-open).
     }
 
-    // Persist `last_check_in_at` to D1 synchronously — this is the durable
-    // last-check-in timestamp consumed by /api/agents/[address] and friends
-    // via lib/agent-enrichment. NOT in after()/waitUntil: the response shape
-    // includes the timestamp we just wrote and consumers expect it to be
-    // visible on the next read.
-    if (db) {
-      try {
-        await db
-          .prepare("UPDATE agents SET last_check_in_at = ? WHERE btc_address = ?")
-          .bind(timestamp, btcAddress)
-          .run();
-      } catch (e) {
-        console.error("heartbeat.d1_update_failed", {
-          btcAddress,
-          error: (e as Error).message,
-        });
-        return NextResponse.json(
-          { error: "Failed to record check-in" },
-          { status: 500 }
-        );
-      }
-    }
-
-    // Update the in-memory agent record with both timestamps. The KV write
-    // below persists the merged record so KV-fallback callers see the new
-    // lastCheckInAt; the authoritative durable copy lives in D1's
-    // `last_check_in_at` column (written synchronously above).
+    // Update the in-memory agent record with both timestamps.
     const updatedAgent = {
       ...agent,
       lastActiveAt: timestamp,
       lastCheckInAt: timestamp,
     };
+
+    // Persist to D1 synchronously via the canonical mirror helper (P3A).
+    // updateAgentInD1 internally swallows + logs D1 errors per the
+    // KV-is-source-of-truth contract — heartbeat does not 500 on a D1
+    // mirror failure. The response payload's lastCheckInAt comes from the
+    // in-memory updatedAgent, so consumers see a coherent check-in even
+    // if D1 lagged; the timestamp will reconcile on the next successful
+    // mutation via the max() expression in updateAgentInD1.
+    if (db) {
+      await updateAgentInD1(db, updatedAgent);
+    }
 
     // Write canonical btc: key only; stx: secondary index is no longer
     // refreshed by heartbeat (P4.2 — drops ~30–40K KV writes/day).

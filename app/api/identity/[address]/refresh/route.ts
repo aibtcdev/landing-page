@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
 import { syncBnsLookup } from "@/lib/bns-reverse-index";
 import { lookupBnsNameWithOutcome } from "@/lib/bns";
@@ -164,6 +165,7 @@ export async function POST(
       await Promise.all([
         kv.put(`stx:${stxAddress}`, serialized),
         kv.put(`btc:${agent.btcAddress}`, serialized),
+        updateAgentInD1(db, updatedRecord),
       ]);
       // Maintain indices only when bnsName actually changed — id-
       // only refreshes don't touch any indexed field.

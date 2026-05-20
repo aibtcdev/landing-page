@@ -14,6 +14,7 @@ import {
   NETWORK as BTC_NETWORK,
 } from "@scure/btc-signer";
 import type { AgentRecord } from "@/lib/types";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 
 export { BTC_NETWORK };
 export const BITCOIN_MSG_PREFIX = "\x18Bitcoin Signed Message:\n";
@@ -570,24 +571,27 @@ export async function persistBtcPubkeyIfMissing(
       `[btcPublicKey-capture] Persisted pubkey for ${btcAddress} via BIP-322 witness`
     );
 
-    // D1 UPDATE — only runs when the DB binding is available and the agents
-    // table has a btc_public_key column (post-PR-A). Pre-PR-A this is a no-op
-    // because the column does not exist; post-PR-A it fills NULL slots.
-    if (db) {
-      try {
-        await db
-          .prepare(
-            "UPDATE agents SET btc_public_key = ? WHERE btc_address = ? AND (btc_public_key IS NULL OR btc_public_key = '')"
-          )
-          .bind(pubkeyHex, btcAddress)
-          .run();
-      } catch (d1Err) {
-        // Column may not exist yet (pre-PR-A schema). Log and continue.
-        console.warn(
-          `[btcPublicKey-capture] D1 UPDATE skipped (schema not ready?): ${(d1Err as Error).message}`
-        );
-      }
-    }
+    // D1 UPDATE via the canonical mirror helper (P3A). Different semantics
+    // from the prior targeted UPDATE:
+    //
+    //   Before: `UPDATE ... SET btc_public_key = ? WHERE btc_address = ?
+    //            AND (btc_public_key IS NULL OR btc_public_key = '')` —
+    //            fill-when-empty only; never overwrites an existing value.
+    //
+    //   After:  `btc_public_key = COALESCE(?, btc_public_key)` — the
+    //            incoming pubkeyHex wins whenever it is non-null.
+    //
+    // In practice the upstream guard at the top of this function
+    // (`if (agent.btcPublicKey) return;`) means we only enter this branch
+    // when the agent record we read had no pubkey, so the "incoming wins"
+    // branch is the only one that ever fires in the request that triggered
+    // capture. A concurrent capture from another request could in theory
+    // race and overwrite, but both writers are deriving pubkeyHex from the
+    // same canonical witness for the same btcAddress, so the value
+    // converges. updateAgentInD1 already wraps the UPDATE in try/catch
+    // with logging for FK/transient errors. The outer catch in this
+    // function is a final safety net.
+    await updateAgentInD1(db, updatedAgent);
   } catch (err) {
     // Never throw — persistence failure must not affect the calling request.
     console.error(

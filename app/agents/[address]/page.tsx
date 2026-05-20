@@ -8,6 +8,7 @@ import { generateName } from "@/lib/name-generator";
 import { lookupOwnerByBnsName } from "@/lib/bns";
 import { X_HANDLE } from "@/lib/constants";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
 import {
   getCachedIdentity,
@@ -135,6 +136,7 @@ async function resolveAgentAndClaim(
  */
 async function resolveIdentity(
   kv: KVNamespace,
+  db: D1Database | undefined,
   agent: AgentRecord,
   hiroApiKey?: string
 ): Promise<AgentRecord> {
@@ -181,6 +183,7 @@ async function resolveIdentity(
       await Promise.all([
         kv.put(`stx:${agent.stxAddress}`, updated),
         kv.put(`btc:${agent.btcAddress}`, updated),
+        updateAgentInD1(db, agent),
         setCachedIdentity(agent.stxAddress, identity, kv),
       ]);
     } else {
@@ -269,6 +272,7 @@ export default async function AgentProfilePage({
   try {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     // Use cached resolver (shared with generateMetadata)
     const result = await cachedResolveAgentAndClaim(address);
@@ -302,7 +306,7 @@ export default async function AgentProfilePage({
     const { agent, claim: claimRecord } = result;
 
     // Resolve identity (cached KV + Hiro)
-    const agentWithIdentity = await resolveIdentity(kv, agent, env.HIRO_API_KEY);
+    const agentWithIdentity = await resolveIdentity(kv, db, agent, env.HIRO_API_KEY);
 
     // Compute level info
     const claimStatus = claimRecord
