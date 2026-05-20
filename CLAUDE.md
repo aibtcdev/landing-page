@@ -415,6 +415,91 @@ D1 is the sole source of truth (no KV mirror, per Phase 2.5 / PR #745). Two tabl
 - `app/docs/[topic]/route.ts` — `bounties` topic sub-doc with full message formats and flows
 - `migrations/013_bounties.sql` — D1 schema
 
+## Competition Finalize
+
+End-to-end finalization for the AIBTC trading competition (issue #822). Each week-long round is frozen into a tamper-evident snapshot: prices are captured from the Tenero KV cache, per-agent P&L and volume are computed using only those frozen prices, and `competition_rewards` rows are written for a downstream payout path to consume.
+
+**Out of scope:** Payout execution. This system produces `competition_rewards` rows in status `pending`. A separate quest owns the payout path that flips rows to `paid` and writes `payout_txid`.
+
+### Status Machine
+
+`competition_rounds.status` transitions are one-way and enforced by the admin route:
+
+| Status | Meaning |
+|---|---|
+| `open` | Accepting swaps; round is live |
+| `closed` | Grace period passed; round closed, awaiting snapshot |
+| `finalizing` | Price snapshot captured; compute pass in progress |
+| `finalized` | Results and rewards rows written (terminal for scoring) |
+| `partially_paid` | At least one reward row paid; others still pending |
+| `paid` | All reward rows settled (terminal) |
+
+`partially_paid` allows per-row payout retry without blocking the round-level status until every reward is settled.
+
+### D1 Tables
+
+Four tables added by `migrations/017_competition_rounds.sql`:
+
+| Table | PK | Purpose |
+|---|---|---|
+| `competition_rounds` | `round_id` | One row per scored window; drives status machine + configures floor gates |
+| `competition_round_price_snapshots` | `(round_id, token_id)` | Frozen per-token price at round close; immutable after write |
+| `competition_round_results` | `(round_id, stx_address)` | One row per eligible agent: rank, volume_usd, pnl_usd, pnl_percent (nullable — NaN guard), result_json |
+| `competition_rewards` | `(round_id, category)` | One row per reward category: stx_address + erc8004_agent_id snapshot, amount_sats, status |
+
+**NaN guard:** `pnl_percent` is stored as `NULL` (not `0.0`) when `volume_usd = 0`. NULL agents are ineligible for Return Champion but still rank in Overall P&L and Volume.
+
+**result_json:** Typed shape `{ source_counts: { agent, cron, chainhook }, unpriced_tokens: string[] }`. Deserialize with `parseResultJson()` from `lib/competition/finalize/types.ts` — never raw `JSON.parse`.
+
+**Price snapshot source enum:** `'tenero'` (written by the snapshot helper from the Tenero KV cache) or `'manual_admin'` (reserved for operator overrides via the admin route).
+
+### Admin Route
+
+`/api/admin/competition/finalize` — requires `X-Admin-Key` header.
+
+**GET** — self-doc + list all rounds with current status (newest-first).
+
+**POST** — drive the status machine. Body: `{ roundId, action, tokenIds?, decimalsMap? }`.
+
+| Action | Transition | Notes |
+|---|---|---|
+| `close` | `open → closed` | Requires `now >= grace_ends_at` |
+| `snapshot` | `closed → finalizing` | Captures Tenero KV prices into `competition_round_price_snapshots` |
+| `finalize` | `finalizing → finalized` | Computes results + writes `competition_round_results` and `competition_rewards` |
+
+**`?dry-run=true`:** All three actions support dry-run. Returns computed rows as JSON; writes nothing to D1.
+
+**Tenero pre-flight gate:** The `snapshot` action returns `503 empty_price_cache` if the Tenero KV cache is empty (TENERO_REFRESH_ENABLED must be `true` — see PR #880). This is the intended signal for the operator to enable the scheduler and wait for the first refresh before retrying.
+
+**Idempotency and concurrency guards:**
+- `close` is idempotent if already closed (`409 wrong_status` if already past `closed`).
+- `snapshot` returns `409 already_snapshotted` if price rows already exist for the round.
+- `finalize` returns `409 concurrent_modification` if a concurrent write is detected via optimistic D1 check.
+
+### Reward Categories
+
+Three categories are computed per round (configurable floor gates per round):
+
+| Category | Key | Tiebreak | Floor Gate |
+|---|---|---|---|
+| `overall_pnl` | Highest `pnl_usd` | `volume_usd` descending | None |
+| `volume` | Highest `volume_usd` | None (one winner) | None |
+| `return` | Highest `pnl_percent` | None (one winner) | `min_volume_usd` (default $50) + `min_priced_trade_count` (default 3) |
+
+Both `stx_address` (snapshot at finalization, immutable) and `erc8004_agent_id` (nullable) are persisted on `competition_rewards` so the payout path can reference either key without re-querying agents.
+
+### Out of Scope
+
+`competition_rewards` rows are written with `status = 'pending'` and `amount_sats = 0`. Setting reward amounts and flipping rows to `paid` is owned by a separate payout quest.
+
+**Related files:**
+- `lib/competition/finalize/types.ts` — `CompetitionRound`, `RoundResult`, `CompetitionReward`, `ResultJson`, `parseResultJson()`
+- `lib/competition/finalize/compute.ts` — `computeRoundResults()` — reads swaps + frozen prices, produces ranked result rows
+- `lib/competition/finalize/persist.ts` — `persistRoundResults()` — atomic D1 write of results + rewards
+- `lib/competition/finalize/snapshot.ts` — `captureRoundPriceSnapshot()` — captures Tenero KV into price snapshot table
+- `app/api/admin/competition/finalize/route.ts` — GET self-doc + POST status machine with dry-run
+- `migrations/017_competition_rounds.sql` — D1 schema for all four tables
+
 ## KV Storage Patterns
 
 All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
