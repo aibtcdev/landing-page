@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import { stacksApiFetch, buildHiroHeaders } from "@/lib/stacks-api-fetch";
 import { STACKS_API_BASE, IDENTITY_REGISTRY_CONTRACT } from "@/lib/identity/constants";
 import {
@@ -154,6 +155,7 @@ export async function GET(
       await Promise.all([
         kv.put(`stx:${agent.stxAddress}`, updated),
         kv.put(`btc:${agent.btcAddress}`, updated),
+        updateAgentInD1(db, agent),
       ]);
     }
 

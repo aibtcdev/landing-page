@@ -170,7 +170,11 @@ describe("updateAgentInD1", () => {
     await updateAgentInD1(db, makeAgent({ referredBy: TEST_REFERRER_BTC }));
 
     // referred_by_btc bind is the 12th in the UPDATE (matches column order).
-    expect(runs[0].binds[11]).toBe(TEST_REFERRER_BTC);
+    // bind order after P3A: 0=taproot, 1=display_name, 2=description,
+    // 3=bns_name, 4=owner, 5=last_active_at, 6=last_check_in_at,
+    // 7=erc8004_agent_id, 8=nostr_public_key, 9=capabilities_json,
+    // 10=last_identity_check, 11=github_username, 12=referred_by_btc.
+    expect(runs[0].binds[12]).toBe(TEST_REFERRER_BTC);
   });
 
   it("binds null for referred_by_btc when absent so COALESCE preserves existing", async () => {
@@ -178,6 +182,6 @@ describe("updateAgentInD1", () => {
 
     await updateAgentInD1(db, makeAgent());
 
-    expect(runs[0].binds[11]).toBeNull();
+    expect(runs[0].binds[12]).toBeNull();
   });
 });

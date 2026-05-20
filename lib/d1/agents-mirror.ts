@@ -124,7 +124,8 @@ export async function updateAgentInD1(
          description = ?,
          bns_name = ?,
          owner = ?,
-         last_active_at = ?,
+         last_active_at = COALESCE(?, last_active_at),
+         last_check_in_at = COALESCE(?, last_check_in_at),
          erc8004_agent_id = ?,
          nostr_public_key = ?,
          capabilities_json = ?,
@@ -140,7 +141,17 @@ export async function updateAgentInD1(
       agent.description ?? null,
       agent.bnsName ?? null,
       agent.owner ?? null,
+      // last_active_at: COALESCE preserves the prior D1 value when the
+      // incoming mutation doesn't carry one. Lazy-refresh paths (BNS lookup,
+      // identity detection, pubkey capture) mutate the AgentRecord but
+      // don't bump activity — they should not clear D1's last_active_at.
+      // Mutators that explicitly bump activity (heartbeat, vouch, challenge,
+      // verify) still win because they pass a non-null value.
       agent.lastActiveAt ?? null,
+      // last_check_in_at: only the heartbeat POST sets this. Other mutators
+      // pass undefined → COALESCE preserves the existing D1 value.
+      // Schema added by migration 015 (P2).
+      agent.lastCheckInAt ?? null,
       agent.erc8004AgentId ?? null,
       agent.nostrPublicKey ?? null,
       agent.capabilities ? JSON.stringify(agent.capabilities) : null,

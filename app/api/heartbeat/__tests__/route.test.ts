@@ -154,10 +154,21 @@ describe("heartbeat POST — RATE_LIMIT_CHECKIN binding allows", () => {
 
     expect(response.status).toBe(200);
     expect(limit).toHaveBeenCalledWith({ key: TEST_BTC });
-    expect(mock.prepare).toHaveBeenCalledWith(
-      "UPDATE agents SET last_check_in_at = ? WHERE btc_address = ?"
-    );
-    expect(mock.bind).toHaveBeenCalledWith(TEST_TIMESTAMP, TEST_BTC);
+
+    // P3A: heartbeat POST now writes via the canonical updateAgentInD1
+    // mirror helper (a single UPDATE that touches last_active_at +
+    // last_check_in_at + other mutable columns). Assert against that
+    // statement shape, not the prior bespoke single-column UPDATE.
+    expect(mock.prepare).toHaveBeenCalledTimes(1);
+    const sql = mock.prepare.mock.calls[0][0] as string;
+    expect(sql).toContain("UPDATE agents SET");
+    expect(sql).toContain("last_check_in_at = COALESCE(?, last_check_in_at)");
+    expect(sql).toContain("last_active_at = COALESCE(?, last_active_at)");
+    expect(sql).toContain("WHERE btc_address = ?");
+    // last-active-at + last-check-in-at slots both receive the timestamp.
+    const binds = mock.bind.mock.calls[0] as unknown[];
+    expect(binds).toContain(TEST_TIMESTAMP);
+    expect(binds[binds.length - 1]).toBe(TEST_BTC);
     expect(mock.run).toHaveBeenCalledTimes(1);
 
     const body = (await response.json()) as {

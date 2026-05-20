@@ -5,6 +5,7 @@ import { lookupAgent } from "@/lib/agent-lookup";
 import { generateName } from "@/lib/name-generator";
 import { computeLevel } from "@/lib/levels";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import {
   publicKeyFromSignatureRsv,
   getAddressFromPublicKey,
@@ -305,11 +306,12 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Update agent record with referredBy
+    // Update agent record with referredBy; mirror into D1 (P3A).
     const updatedAgent = { ...agent, referredBy: referrer.btcAddress };
     await Promise.all([
       kv.put(`btc:${agent.btcAddress}`, JSON.stringify(updatedAgent)),
       kv.put(`stx:${agent.stxAddress}`, JSON.stringify(updatedAgent)),
+      updateAgentInD1(db, updatedAgent),
     ]);
 
     // Store the vouch record
