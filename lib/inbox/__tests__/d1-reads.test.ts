@@ -7,8 +7,6 @@
  * Verifies:
  *   - listInboxMessagesFromD1: correct SQL shape, status filter variants,
  *     ORDER BY sent_at DESC, pagination bindings, InboxMessage mapping
- *   - countInboxMessagesFromD1: unread/read/all variants, the live
- *     SELECT COUNT(*) that closes aibtc-mcp-server#497
  *   - fetchRepliesForMessages: IN-clause construction, OutboxReply mapping,
  *     empty-input guard
  *   - getReplyForMessageFromD1: tenant-discriminator gate, hit/miss, SQL shape
@@ -26,16 +24,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   listInboxMessagesFromD1,
-  countInboxMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
-  countOutboxRepliesFromD1,
   getReplyForMessageFromD1,
   getAgentInboxFromD1,
   getSentIndexFromD1,
   getRecentInboxEventsFromD1,
   checkRedeemedTxidInD1,
-  type StatusFilter,
 } from "../d1-reads";
 
 // ── D1 mock helpers ───────────────────────────────────────────────────────────
@@ -281,104 +276,6 @@ describe("listInboxMessagesFromD1", () => {
   });
 });
 
-// ── countInboxMessagesFromD1 ──────────────────────────────────────────────────
-
-describe("countInboxMessagesFromD1", () => {
-  it("queries SELECT COUNT(*) from inbox_messages for status=all (no read_at filter)", async () => {
-    const stmtMock = createPreparedStatement([], { cnt: 5 });
-    const db = {
-      prepare: vi.fn().mockReturnValue(stmtMock),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    const count = await countInboxMessagesFromD1(db, BTC_ADDRESS, "all");
-
-    expect(count).toBe(5);
-    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sql).toContain("SELECT COUNT(*)");
-    expect(sql).toContain("FROM inbox_messages");
-    expect(sql).toContain("is_reply = 0");
-    expect(sql).not.toContain("read_at IS NULL");
-    expect(sql).not.toContain("read_at IS NOT NULL");
-  });
-
-  it("adds AND read_at IS NULL for status=unread (the live counter that closes aibtc-mcp-server#497)", async () => {
-    const stmtMock = createPreparedStatement([], { cnt: 2 });
-    const db = {
-      prepare: vi.fn().mockReturnValue(stmtMock),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    const count = await countInboxMessagesFromD1(db, BTC_ADDRESS, "unread");
-
-    expect(count).toBe(2);
-    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sql).toContain("AND read_at IS NULL");
-  });
-
-  it("adds AND read_at IS NOT NULL for status=read", async () => {
-    const stmtMock = createPreparedStatement([], { cnt: 3 });
-    const db = {
-      prepare: vi.fn().mockReturnValue(stmtMock),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    const count = await countInboxMessagesFromD1(db, BTC_ADDRESS, "read");
-
-    expect(count).toBe(3);
-    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sql).toContain("AND read_at IS NOT NULL");
-  });
-
-  it("binds the btcAddress as the first positional param", async () => {
-    const stmtMock = createPreparedStatement([], { cnt: 0 });
-    const db = {
-      prepare: vi.fn().mockReturnValue(stmtMock),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    await countInboxMessagesFromD1(db, BTC_ADDRESS, "all");
-
-    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
-    expect(bindArgs[0]).toBe(BTC_ADDRESS);
-  });
-
-  it("returns 0 when db.first() returns null", async () => {
-    const stmtMock = createPreparedStatement([], null);
-    const db = {
-      prepare: vi.fn().mockReturnValue(stmtMock),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    const count = await countInboxMessagesFromD1(db, BTC_ADDRESS, "unread");
-    expect(count).toBe(0);
-  });
-
-  it("correctly distinguishes unreadCount=2 vs totalCount=2 (the acceptance test signal)", async () => {
-    // Simulates the §1.4 acceptance test:
-    // Pre-flip KV had unreadCount=3 (stale) / totalCount=2.
-    // Post-flip D1 should return unreadCount=2 / totalCount=2 (truthful).
-    const stmtUnread = createPreparedStatement([], { cnt: 2 });
-    const stmtTotal = createPreparedStatement([], { cnt: 2 });
-
-    let callCount = 0;
-    const db = {
-      prepare: vi.fn().mockImplementation(() => {
-        callCount++;
-        return callCount === 1 ? stmtUnread : stmtTotal;
-      }),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    const unreadCount = await countInboxMessagesFromD1(db, BTC_ADDRESS, "unread");
-    const totalCount = await countInboxMessagesFromD1(db, BTC_ADDRESS, "all");
-
-    // Post-flip: both should be 2 (no drift)
-    expect(unreadCount).toBe(2);
-    expect(totalCount).toBe(2);
-    expect(unreadCount).toBe(totalCount); // drift=0 proves the stale-counter is fixed
-  });
-});
 
 // ── fetchRepliesForMessages ───────────────────────────────────────────────────
 
@@ -561,66 +458,6 @@ describe("listOutboxRepliesFromD1 (Phase 2.5 Step 3.3)", () => {
   });
 });
 
-// ── countOutboxRepliesFromD1 ──────────────────────────────────────────────────
-
-describe("countOutboxRepliesFromD1 (Phase 2.5 Step 3.3 — sentCount restoration)", () => {
-  const REPLIER_BTC = "bc1qp66jvxe765wgwpzqk8kcrmgh2mucyxg540mtzv";
-
-  it("queries SELECT COUNT(*) WHERE is_reply=1 AND from_btc_address=?", async () => {
-    const stmtMock = createPreparedStatement([], { cnt: 3 });
-    const db = {
-      prepare: vi.fn().mockReturnValue(stmtMock),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    const count = await countOutboxRepliesFromD1(db, REPLIER_BTC);
-
-    expect(count).toBe(3);
-    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sql).toContain("SELECT COUNT(*)");
-    expect(sql).toContain("FROM inbox_messages");
-    expect(sql).toContain("is_reply = 1");
-    expect(sql).toContain("from_btc_address = ?");
-  });
-
-  it("returns 0 when db.first() returns null", async () => {
-    const stmtMock = createPreparedStatement([], null);
-    const db = {
-      prepare: vi.fn().mockReturnValue(stmtMock),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    const count = await countOutboxRepliesFromD1(db, REPLIER_BTC);
-    expect(count).toBe(0);
-  });
-
-  it("sentCount restoration: returns > 0 for known-replier address (Step 3.3 acceptance signal)", async () => {
-    // This test represents the acceptance signal for Step 3.3:
-    // POST-flip, countOutboxRepliesFromD1 must return > 0 for an address that has sent replies.
-    // Was stubbed to 0 in Step 3.1 ("const sentCount = 0;").
-    const stmtMock = createPreparedStatement([], { cnt: 5 });
-    const db = {
-      prepare: vi.fn().mockReturnValue(stmtMock),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    const count = await countOutboxRepliesFromD1(db, REPLIER_BTC);
-    expect(count).toBeGreaterThan(0); // Step 3.3 acceptance signal: sentCount > 0
-  });
-
-  it("binds from_btc_address as the first positional param", async () => {
-    const stmtMock = createPreparedStatement([], { cnt: 0 });
-    const db = {
-      prepare: vi.fn().mockReturnValue(stmtMock),
-      batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
-    } as unknown as D1Database;
-
-    await countOutboxRepliesFromD1(db, REPLIER_BTC);
-
-    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
-    expect(bindArgs[0]).toBe(REPLIER_BTC);
-  });
-});
 
 // ── getReplyForMessageFromD1 ──────────────────────────────────────────────────
 
@@ -988,18 +825,16 @@ describe("checkRedeemedTxidInD1 (Phase 2.5 Step 4 — double-redemption guard)",
 
 describe("cache-key invariants (structural verification)", () => {
   it("Invariant 1: the helpers accept no auth/session parameters — public branch only", () => {
-    // listInboxMessagesFromD1 and countInboxMessagesFromD1 take only
-    // (db, btcAddress, ...) — no authToken, no sessionId, no signature.
-    // This proves the public-only code path does not accidentally mix
-    // auth'd and public queries from the same parameter set.
+    // The d1-reads helpers take only (db, btcAddress, ...) — no authToken,
+    // no sessionId, no signature. This proves the public-only code path
+    // does not accidentally mix auth'd and public queries from the same
+    // parameter set.
     //
     // A future auth'd branch MUST pass an additional verified-owner parameter
     // AND use a different cache key (or no caching at all — Cache-Control: private, no-store).
     expect(listInboxMessagesFromD1.length).toBe(5); // (db, btcAddress, limit, offset, status)
-    expect(countInboxMessagesFromD1.length).toBe(3); // (db, btcAddress, status)
     expect(fetchRepliesForMessages.length).toBe(2);  // (db, parentMessageIds)
     expect(listOutboxRepliesFromD1.length).toBe(4);  // (db, btcAddress, limit, offset)
-    expect(countOutboxRepliesFromD1.length).toBe(2); // (db, btcAddress)
     expect(getReplyForMessageFromD1.length).toBe(3); // (db, parentMessageId, fromBtcAddress)
     // Phase 2.5 #746 enrichment helpers (db is optional — fail-open when undefined)
     expect(getAgentInboxFromD1.length).toBe(2);       // (db, btcAddress)

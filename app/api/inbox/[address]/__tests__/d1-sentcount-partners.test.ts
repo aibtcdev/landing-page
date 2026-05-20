@@ -32,7 +32,9 @@ vi.mock("@/lib/agent-lookup", () => ({
 
 vi.mock("@/lib/inbox/d1-reads", () => ({
   listInboxMessagesFromD1: vi.fn(),
-  countInboxMessagesFromD1: vi.fn(),
+  // countInboxMessagesFromD1 was deleted in P3C PR 1 — counts come from
+  // getAgentInboxStats (lib/inbox/stats.ts) per migration 012's
+  // agent_inbox_stats table.
   fetchRepliesForMessages: vi.fn(),
   listOutboxRepliesFromD1: vi.fn(),
 }));
@@ -101,7 +103,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
   listInboxMessagesFromD1,
-  countInboxMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
 } from "@/lib/inbox/d1-reads";
@@ -173,7 +174,6 @@ function setupDefaultMocks() {
   });
   (lookupAgent as Mock).mockResolvedValue(TEST_AGENT);
   (listInboxMessagesFromD1 as Mock).mockResolvedValue([RECEIVED_MESSAGE]);
-  (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
   (fetchRepliesForMessages as Mock).mockResolvedValue(new Map());
   (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
   // countOutboxRepliesFromD1 is no longer called (perf/d1-inbox-count-4to2)
@@ -318,7 +318,6 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
   it("partners includes both received senders AND sent reply targets when both exist", async () => {
     // Mock received messages (partner = sender)
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([RECEIVED_MESSAGE]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
     // Mock sent replies (partner = toBtcAddress) — sentCount derives from this list
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([SENT_REPLY]);
 
@@ -342,7 +341,6 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
   it("partners from sent-only direction have direction='sent'", async () => {
     // Only sent replies, no received messages — sentCount=1 derived from this list
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([SENT_REPLY]);
 
     const res = await GET(
@@ -376,7 +374,6 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
     };
 
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([receivedMsgFromDualPartner]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([sentReplyToDualPartner]);
 
     const res = await GET(
@@ -510,7 +507,6 @@ describe("Phase 2.5 Step 3.3 — partners-with-sent in inbox-list GET", () => {
 
   it("partners only from received when no sent replies (received-only path still works)", async () => {
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([RECEIVED_MESSAGE]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]); // no sent replies — sentCount=0
 
     const res = await GET(
@@ -556,7 +552,6 @@ describe("D1-throws fallback still works after COUNT reduction", () => {
 
   it("returns 503 when listOutboxRepliesFromD1 throws (partners requested)", async () => {
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
     (listOutboxRepliesFromD1 as Mock).mockRejectedValue(
       new Error("D1_ERROR: schema mismatch")
     );

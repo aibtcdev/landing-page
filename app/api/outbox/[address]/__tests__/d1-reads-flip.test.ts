@@ -36,7 +36,8 @@ vi.mock("@/lib/agent-lookup", () => ({
 
 vi.mock("@/lib/inbox/d1-reads", () => ({
   listOutboxRepliesFromD1: vi.fn(),
-  countOutboxRepliesFromD1: vi.fn(),
+  // countOutboxRepliesFromD1 was deleted in P3C PR 1 — sentCount now
+  // comes from getAgentInboxStats() per the migration-012 stats table.
 }));
 
 vi.mock("@/lib/inbox", () => ({
@@ -91,7 +92,7 @@ vi.mock("@/lib/validation/address", () => ({
 import { GET } from "../route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
-import { listOutboxRepliesFromD1, countOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
+import { listOutboxRepliesFromD1 } from "@/lib/inbox/d1-reads";
 import { getAgentInboxStats } from "@/lib/inbox/stats";
 
 // ---- shared fixtures --------------------------------------------------------
@@ -239,8 +240,8 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
     expect(listOutboxRepliesFromD1).toHaveBeenCalledOnce();
     const [, listCalledAddress] = (listOutboxRepliesFromD1 as Mock).mock.calls[0];
     expect(listCalledAddress).toBe(ADDR_B);
-    // P3: countOutboxRepliesFromD1 is no longer called; replaced by getAgentInboxStats
-    expect(countOutboxRepliesFromD1).not.toHaveBeenCalled();
+    // P3: totalCount comes from getAgentInboxStats (the legacy
+    // countOutboxRepliesFromD1 helper was deleted in P3C PR 1).
     expect(getAgentInboxStats).toHaveBeenCalledOnce();
   });
 
@@ -249,8 +250,6 @@ describe("Phase 2.5 Step 3.3 — GET /api/outbox/[address] D1 flip", () => {
     (listOutboxRepliesFromD1 as Mock).mockRejectedValue(
       new Error("D1_ERROR: connection reset")
     );
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
-
     const res = await GET(buildGetRequest(ADDR_A), buildContext(ADDR_A));
 
     expect(res.status).toBe(503);
@@ -378,7 +377,6 @@ describe("Phase 2.5 Step 3.3 — query param validation (NaN guard)", () => {
     expect(body.error).toBe("invalid_query_param");
     // D1 helpers must never be invoked for invalid input
     expect(listOutboxRepliesFromD1).not.toHaveBeenCalled();
-    expect(countOutboxRepliesFromD1).not.toHaveBeenCalled();
   });
 
   it("rejects out-of-range ?limit=0 with 400", async () => {
@@ -430,7 +428,6 @@ describe("Phase 2.5 Step 3.3 — query param validation (NaN guard)", () => {
   it("accepts ?limit=100 and ?offset=0 (boundary)", async () => {
     (lookupAgent as Mock).mockResolvedValue(AGENT_A);
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([REPLY_FROM_A]);
-    (countOutboxRepliesFromD1 as Mock).mockResolvedValue(1);
 
     const res = await GET(
       buildGetRequestWithQuery(ADDR_A, "?limit=100&offset=0"),
