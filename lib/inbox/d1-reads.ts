@@ -160,36 +160,12 @@ export async function listInboxMessagesFromD1(
   return (result.results ?? []).map(rowToInboxMessage);
 }
 
-/**
- * Count inbound messages for an agent, optionally filtered to unread.
- *
- * This is the live SELECT COUNT(*) that replaces the stale KV cached counter
- * and closes aibtc-mcp-server#497.
- */
-export async function countInboxMessagesFromD1(
-  db: D1Database,
-  btcAddress: string,
-  status: StatusFilter
-): Promise<number> {
-  let sql = `
-    SELECT COUNT(*) AS cnt
-    FROM inbox_messages
-    WHERE to_btc_address = ? AND is_reply = 0
-  `;
-
-  if (status === "unread") {
-    sql += " AND read_at IS NULL";
-  } else if (status === "read") {
-    sql += " AND read_at IS NOT NULL";
-  }
-
-  const row = await db
-    .prepare(sql)
-    .bind(btcAddress)
-    .first<{ cnt: number }>();
-
-  return row?.cnt ?? 0;
-}
+// Dead code purge (P3C PR 1): `countInboxMessagesFromD1` removed.
+// Replaced by `getAgentInboxStats(db, btcAddress)` from `lib/inbox/stats.ts`
+// which serves O(1) point-lookups against the maintained `agent_inbox_stats`
+// table (migration 012). The prior `SELECT COUNT(*) FROM inbox_messages
+// WHERE to_btc_address = ?` was the textbook D1 COUNT(*) anti-pattern
+// (cf. `feedback_d1_count_antipattern`).
 
 /**
  * Fetch reply rows for a set of parent message IDs.
@@ -311,33 +287,13 @@ export async function listOutboxRepliesFromD1(
   return (result.results ?? []).map(replyRowToOutboxReply);
 }
 
-/**
- * Count outbox replies sent by an agent from D1.
- *
- * Used to restore the `sentCount` dimension in GET /api/inbox/[address] that
- * was stubbed to 0 in Step 3.1.
- *
- * SQL shape:
- *   SELECT COUNT(*) FROM inbox_messages
- *   WHERE is_reply = 1 AND from_btc_address = ?
- */
-export async function countOutboxRepliesFromD1(
-  db: D1Database,
-  btcAddress: string
-): Promise<number> {
-  const sql = `
-    SELECT COUNT(*) AS cnt
-    FROM inbox_messages
-    WHERE is_reply = 1 AND from_btc_address = ?
-  `;
-
-  const row = await db
-    .prepare(sql)
-    .bind(btcAddress)
-    .first<{ cnt: number }>();
-
-  return row?.cnt ?? 0;
-}
+// Dead code purge (P3C PR 1): `countOutboxRepliesFromD1` removed.
+// Replaced by `getAgentInboxStats(db, btcAddress).sentCount` from
+// `lib/inbox/stats.ts` which serves O(1) point-lookups against the
+// maintained `agent_inbox_stats` table (migration 012). The prior
+// `SELECT COUNT(*) FROM inbox_messages WHERE is_reply = 1 AND
+// from_btc_address = ?` was the textbook D1 COUNT(*) anti-pattern
+// (cf. `feedback_d1_count_antipattern`).
 
 /**
  * Fetch a single reply for a parent message, filtered by the replier's BTC address.

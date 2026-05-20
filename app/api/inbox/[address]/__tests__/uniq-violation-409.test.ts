@@ -73,10 +73,9 @@ vi.mock("@/lib/inbox/d1-dual-write", () => ({
 vi.mock("@/lib/inbox/d1-reads", () => ({
   checkRedeemedTxidInD1: vi.fn(),
   listInboxMessagesFromD1: vi.fn().mockResolvedValue([]),
-  countInboxMessagesFromD1: vi.fn().mockResolvedValue(0),
+  // countInboxMessagesFromD1 / countOutboxRepliesFromD1 deleted in P3C PR 1.
   fetchRepliesForMessages: vi.fn().mockResolvedValue(new Map()),
   listOutboxRepliesFromD1: vi.fn().mockResolvedValue([]),
-  countOutboxRepliesFromD1: vi.fn().mockResolvedValue(0),
 }));
 
 // P3: inbox POST and GET now import from @/lib/inbox/stats

@@ -42,7 +42,7 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
   getInboxMessageFromD1: vi.fn(),
   getReplyForMessageFromD1: vi.fn(),
   listOutboxRepliesFromD1: vi.fn().mockResolvedValue([]),
-  countOutboxRepliesFromD1: vi.fn().mockResolvedValue(0),
+  // countOutboxRepliesFromD1 was deleted in P3C PR 1.
 }));
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
