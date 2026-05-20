@@ -102,10 +102,11 @@ export async function enrichAgentProfile(
 
   // Fetch identity+reputation, inbox, and sent index in parallel.
   // Claim is either passed in (skips KV) or fetched from KV alongside the others.
-  // Check-in is read directly off the agent record (D1 column `last_check_in_at`,
-  // migration 015) — no separate KV/D1 fetch. KV-fallback agents will have
-  // checkIn=null until they hit D1, which matches the prior behavior where
-  // their `checkin:*` KV key was also unavailable for them.
+  // Check-in is read directly off the agent record's `lastCheckInAt` field —
+  // sourced from the D1 `agents.last_check_in_at` column (migration 015) on
+  // the D1 lookup path, and from the mirrored KV `btc:{address}` JSON on the
+  // KV-fallback path. No separate KV/D1 fetch. The field is undefined (and
+  // checkIn=null) only when the agent has never successfully checked in.
   const enrichmentResult = await Promise.race([
     Promise.all([
       hasPrefetchedClaim ? Promise.resolve(null) : kv.get(`claim:${agent.btcAddress}`),

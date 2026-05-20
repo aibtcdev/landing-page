@@ -347,15 +347,32 @@ export async function POST(request: NextRequest) {
     try {
       const { success } = await env.RATE_LIMIT_CHECKIN.limit({ key: btcAddress });
       if (!success) {
-        return NextResponse.json(
-          {
-            error: `Rate limit exceeded. You can check in again in ${CHECK_IN_RATE_LIMIT_SECONDS} seconds.`,
-          },
-          {
-            status: 429,
-            headers: { "Retry-After": String(CHECK_IN_RATE_LIMIT_SECONDS) },
-          }
-        );
+        // 429 body shape is part of the public contract documented in
+        // `/api/openapi.json` (429 schema requires `nextCheckInAt`) and in
+        // /llms-full.txt. `nextCheckInAt` is the conservative "you can retry
+        // in the binding's full window" estimate — the actual ratelimits
+        // bucket may free sooner if the offending request was old, but the
+        // client cannot observe that and should not assume a tighter retry.
+        // `lastCheckInAt` is pulled from the agent row when known (D1) or
+        // omitted when the agent has never successfully checked in.
+        const nextCheckInAt = new Date(
+          Date.now() + CHECK_IN_RATE_LIMIT_SECONDS * 1000
+        ).toISOString();
+        const body: {
+          error: string;
+          retryAfter: number;
+          nextCheckInAt: string;
+          lastCheckInAt?: string;
+        } = {
+          error: `Rate limit exceeded. You can check in again in ${CHECK_IN_RATE_LIMIT_SECONDS} seconds.`,
+          retryAfter: CHECK_IN_RATE_LIMIT_SECONDS,
+          nextCheckInAt,
+        };
+        if (agent.lastCheckInAt) body.lastCheckInAt = agent.lastCheckInAt;
+        return NextResponse.json(body, {
+          status: 429,
+          headers: { "Retry-After": String(CHECK_IN_RATE_LIMIT_SECONDS) },
+        });
       }
     } catch (e) {
       console.error("heartbeat.ratelimit_binding_threw", {
@@ -388,7 +405,10 @@ export async function POST(request: NextRequest) {
       }
     }
 
-    // Update agent record with lastActiveAt only.
+    // Update the in-memory agent record with both timestamps. The KV write
+    // below persists the merged record so KV-fallback callers see the new
+    // lastCheckInAt; the authoritative durable copy lives in D1's
+    // `last_check_in_at` column (written synchronously above).
     const updatedAgent = {
       ...agent,
       lastActiveAt: timestamp,

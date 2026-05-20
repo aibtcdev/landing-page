@@ -15,6 +15,7 @@
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { NextRequest } from "next/server";
+import { buildMockD1 } from "./helpers/mock-d1";
 
 // ---- module mocks -----------------------------------------------------------
 
@@ -87,20 +88,6 @@ function buildMockKv(): KVNamespace {
     list: vi.fn().mockResolvedValue({ keys: [] }),
     getWithMetadata: vi.fn().mockResolvedValue({ value: null, metadata: null }),
   } as unknown as KVNamespace;
-}
-
-interface MockD1 {
-  db: D1Database;
-  run: Mock;
-  bind: Mock;
-  prepare: Mock;
-}
-
-function buildMockD1(runImpl?: () => Promise<unknown>): MockD1 {
-  const run = vi.fn(runImpl ?? (() => Promise.resolve({ success: true })));
-  const bind = vi.fn().mockReturnValue({ run });
-  const prepare = vi.fn().mockReturnValue({ bind });
-  return { db: { prepare } as unknown as D1Database, run, bind, prepare };
 }
 
 function buildSuccessAgent() {
@@ -201,6 +188,85 @@ describe("heartbeat POST — RATE_LIMIT_CHECKIN binding denies", () => {
     expect(response.headers.get("Retry-After")).toBe("60");
     expect(mock.run).not.toHaveBeenCalled();
     expect(mockKv.put).not.toHaveBeenCalled();
+  });
+
+  it("429 body matches the public contract — includes nextCheckInAt and retryAfter (OpenAPI 429 schema, openapi.json)", async () => {
+    // Pin time so nextCheckInAt is deterministic.
+    const fixedNow = new Date("2026-05-20T12:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(fixedNow);
+
+    const mockKv = buildMockKv();
+    const mock = buildMockD1();
+    const limit = vi.fn().mockResolvedValue({ success: false });
+
+    // Agent has a prior lastCheckInAt so we can assert it is echoed back.
+    const agentWithPriorCheckIn = {
+      ...buildSuccessAgent(),
+      agent: {
+        ...buildSuccessAgent().agent,
+        lastCheckInAt: "2026-05-20T11:58:00.000Z",
+      },
+    };
+    (lookupAgentWithLevel as Mock).mockResolvedValue(agentWithPriorCheckIn);
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: mockKv,
+        DB: mock.db,
+        RATE_LIMIT_CHECKIN: { limit } as unknown as RateLimit,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const response = await POST(buildPostRequest());
+
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as {
+      error: string;
+      retryAfter: number;
+      nextCheckInAt: string;
+      lastCheckInAt?: string;
+    };
+    expect(body.error).toContain("Rate limit exceeded");
+    expect(body.retryAfter).toBe(60);
+    // nextCheckInAt = now + 60s
+    expect(body.nextCheckInAt).toBe("2026-05-20T12:01:00.000Z");
+    // lastCheckInAt is echoed when the agent record has one
+    expect(body.lastCheckInAt).toBe("2026-05-20T11:58:00.000Z");
+
+    vi.useRealTimers();
+  });
+
+  it("429 body omits lastCheckInAt when the agent has never checked in", async () => {
+    const fixedNow = new Date("2026-05-20T12:00:00.000Z");
+    vi.useFakeTimers();
+    vi.setSystemTime(fixedNow);
+
+    const mockKv = buildMockKv();
+    const mock = buildMockD1();
+    const limit = vi.fn().mockResolvedValue({ success: false });
+
+    // Default agent fixture has no lastCheckInAt (first-time checker).
+    (lookupAgentWithLevel as Mock).mockResolvedValue(buildSuccessAgent());
+
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: mockKv,
+        DB: mock.db,
+        RATE_LIMIT_CHECKIN: { limit } as unknown as RateLimit,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const response = await POST(buildPostRequest());
+
+    expect(response.status).toBe(429);
+    const body = (await response.json()) as Record<string, unknown>;
+    expect(body.nextCheckInAt).toBe("2026-05-20T12:01:00.000Z");
+    expect(body).not.toHaveProperty("lastCheckInAt");
+
+    vi.useRealTimers();
   });
 });
 

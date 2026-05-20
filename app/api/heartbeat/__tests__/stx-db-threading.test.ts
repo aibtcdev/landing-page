@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { NextRequest } from "next/server";
+import { buildMockD1 } from "./helpers/mock-d1";
 
 // ---- module mocks -----------------------------------------------------------
 
@@ -86,13 +87,8 @@ function buildMockKv(): KVNamespace {
 }
 
 function buildMockDb(): D1Database {
-  // prepare(...).bind(...).run() chain — used by the heartbeat POST D1
-  // update of `agents.last_check_in_at`. Other read paths are not exercised
-  // here; tests that need read results stub them directly.
-  const run = vi.fn().mockResolvedValue({ success: true });
-  const bind = vi.fn().mockReturnValue({ run });
-  const prepare = vi.fn().mockReturnValue({ bind });
-  return { prepare } as unknown as D1Database;
+  // Shared with route.test.ts via app/api/heartbeat/__tests__/helpers/mock-d1.ts.
+  return buildMockD1().db;
 }
 
 function buildMockRateLimitCheckin(success = true): RateLimit {
