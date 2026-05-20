@@ -61,7 +61,11 @@ export async function checkCircuitBreaker(
     const cache = getDefaultCache();
     if (!cache) return { open: false };
     const cached = await cache.match(new Request(CIRCUIT_OPEN_CACHE_URL));
-    return { open: cached !== undefined };
+    // Truthy check (not `!== undefined`) — Cache match semantics across
+    // runtimes return either `undefined` or `null` on miss; treating
+    // either as "no marker" is safer than just checking !== undefined
+    // (Copilot PR #894 feedback).
+    return { open: !!cached };
   } catch (e) {
     logger?.warn?.("circuit-breaker.check_failed", { error: String(e) });
     return { open: false };
@@ -119,9 +123,26 @@ export async function recordRelayFailure(
 
 /**
  * Reset the circuit breaker after a successful relay call. Deletes the
- * per-colo "open" memo from `caches.default`. No ratelimits-side reset
- * needed — the binding's rolling 60s window self-heals naturally after
- * a quiet period, matching the prior TTL behavior.
+ * per-colo "open" memo from `caches.default`. The ratelimits binding's
+ * rolling 60s window is NOT explicitly reset — the binding has no public
+ * reset method, and the window self-heals after a quiet period.
+ *
+ * Semantic change from the pre-P4 KV-RMW implementation (Codex PR #894
+ * P1 feedback):
+ *
+ *   Pre-P4: a single successful relay call wiped the failure counter,
+ *           so the breaker required `RELAY_CIRCUIT_BREAKER_THRESHOLD`
+ *           *consecutive* failures within a 60s window to trip.
+ *
+ *   Post-P4: the binding counts ALL failures in any rolling 60s window
+ *           regardless of intermixed successes. A relay with 9 failures
+ *           and 1 success in 60s then 1 more failure 50s later WILL trip.
+ *
+ * This is intentional and more conservative — a relay showing 10
+ * failures within a minute is degraded regardless of whether those
+ * failures are interleaved with successes. Acceptable for the
+ * circuit-breaker semantic per `phases/P4/design-call.md`. The 60s
+ * window self-heals naturally after a quiet period (no resets needed).
  *
  * Silently swallows cache errors so a successful relay settlement is
  * never disrupted by a cache issue.

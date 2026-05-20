@@ -324,9 +324,22 @@ export async function verifyInboxPayment(
   kv?: KVNamespace,
   relayRPC?: RelayRPC,
   observability?: { route: string; repoVersion?: string; env?: Record<string, unknown> },
-  /** P4: Cloudflare env for the RATE_LIMIT_RELAY_FAILURES binding used by the circuit breaker. */
+  /**
+   * P4: Cloudflare env for the RATE_LIMIT_RELAY_FAILURES binding used by
+   * the circuit breaker. Optional only to keep the legacy test signature
+   * working; production callers (route handlers) MUST pass this — when
+   * omitted, relay failures silently skip circuit-breaker accounting
+   * (Copilot PR #894 feedback). The route handler at
+   * `app/api/inbox/[address]/route.ts:1209` passes `env` explicitly.
+   */
   cfEnv?: CloudflareEnv,
-  /** P4: ExecutionContext for `caches.default` writes (ctx.waitUntil). */
+  /**
+   * P4: ExecutionContext for `caches.default` writes. When omitted, the
+   * circuit-breaker helpers fall back to `await put` / `await delete`
+   * inline; passing a real `ctx` lets them detach via `ctx.waitUntil`
+   * so the response isn't blocked on the cache mutation. Route callers
+   * should always pass this in Workers; tests may omit.
+   */
   cfCtx?: { waitUntil?: (p: Promise<unknown>) => void }
 ): Promise<InboxPaymentVerification> {
   const log = logger || NOOP_LOGGER;
