@@ -11,7 +11,7 @@
 import type { AgentRecord, ClaimRecord, ClaimStatus } from "@/lib/types";
 import type { AgentIdentity, ReputationSummary } from "@/lib/identity/types";
 import { getAgentLevel, type AgentLevelInfo } from "@/lib/levels";
-import { getCheckInRecord, type CheckInRecord } from "@/lib/heartbeat";
+import type { CheckInRecord } from "@/lib/heartbeat";
 import { detectAgentIdentity, getReputationSummary } from "@/lib/identity";
 import { getAgentInboxFromD1, getSentIndexFromD1 } from "@/lib/inbox/d1-reads";
 import { getCAIP19AgentId } from "@/lib/caip19";
@@ -100,16 +100,15 @@ export async function enrichAgentProfile(
   // null means "caller confirmed no claim" (same as a KV miss).
   const hasPrefetchedClaim = prefetchedClaim !== undefined;
 
-  // Fetch check-in, identity+reputation, inbox, and sent index in parallel.
+  // Fetch identity+reputation, inbox, and sent index in parallel.
   // Claim is either passed in (skips KV) or fetched from KV alongside the others.
-  // Identity and reputation are combined into a single slot so reputation starts immediately
-  // after identity resolves, without blocking the other parallel fetches.
-  // Inbox + sent metrics use D1 reads when `db` is provided (phase 2.5 #746),
-  // returning null/empty to fail-open when the binding is unavailable.
+  // Check-in is read directly off the agent record (D1 column `last_check_in_at`,
+  // migration 015) — no separate KV/D1 fetch. KV-fallback agents will have
+  // checkIn=null until they hit D1, which matches the prior behavior where
+  // their `checkin:*` KV key was also unavailable for them.
   const enrichmentResult = await Promise.race([
     Promise.all([
       hasPrefetchedClaim ? Promise.resolve(null) : kv.get(`claim:${agent.btcAddress}`),
-      getCheckInRecord(kv, agent.btcAddress),
       fetchIdentityAndReputation(agent, hiroApiKey, kv, logger),
       getAgentInboxFromD1(db, agent.btcAddress),
       getSentIndexFromD1(db, agent.btcAddress),
@@ -120,17 +119,19 @@ export async function enrichAgentProfile(
   // Destructure enrichment result; fall back to empty values on timeout
   const [
     claimData,
-    checkInRecord,
     identityAndReputation,
     inboxSummary,
     sentSummary,
   ] = enrichmentResult ?? [
     null,
-    null,
     { identity: null, reputation: null },
     null,
     null,
   ];
+
+  const checkInRecord: CheckInRecord | null = agent.lastCheckInAt
+    ? { btcAddress: agent.btcAddress, lastCheckInAt: agent.lastCheckInAt }
+    : null;
 
   const identity = identityAndReputation?.identity ?? null;
   const reputation = identityAndReputation?.reputation ?? null;

@@ -7,10 +7,13 @@
  */
 
 /**
- * A check-in record stored at `checkin:{btcAddress}`.
+ * A check-in shape returned in API responses.
  *
- * Tracks when an agent last checked in. Used for rate limiting check-ins
- * to one every 5 minutes.
+ * Carries the most recent successful POST /api/heartbeat timestamp for an
+ * agent. Sourced from the `agents.last_check_in_at` D1 column (migration
+ * 015) — the prior KV `checkin:{btcAddress}` storage was retired in PR 2 of
+ * the P2 quest (KV no-TTL bug). No longer used for rate limiting; the
+ * RATE_LIMIT_CHECKIN ratelimits binding is the enforcement source.
  */
 export interface CheckInRecord {
   btcAddress: string;

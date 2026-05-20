@@ -2,7 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   buildCheckInMessage,
   CHECK_IN_MESSAGE_FORMAT,
-  CHECK_IN_RATE_LIMIT_MS,
+  CHECK_IN_RATE_LIMIT_SECONDS,
   CHECK_IN_TIMESTAMP_WINDOW_MS,
 } from "../constants";
 
@@ -34,8 +34,8 @@ describe("buildCheckInMessage", () => {
 });
 
 describe("constant values", () => {
-  it("CHECK_IN_RATE_LIMIT_MS is 5 minutes", () => {
-    expect(CHECK_IN_RATE_LIMIT_MS).toBe(5 * 60 * 1000);
+  it("CHECK_IN_RATE_LIMIT_SECONDS matches the RATE_LIMIT_CHECKIN binding period (60s)", () => {
+    expect(CHECK_IN_RATE_LIMIT_SECONDS).toBe(60);
   });
 
   it("CHECK_IN_TIMESTAMP_WINDOW_MS is 5 minutes", () => {

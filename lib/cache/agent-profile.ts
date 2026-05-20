@@ -36,6 +36,7 @@ export interface AgentProfileRow {
   owner: string | null;
   verified_at: string;
   last_active_at: string | null;
+  last_check_in_at: string | null;
   erc8004_agent_id: number | null;
   nostr_public_key: string | null;
   capabilities_json: string | null;
@@ -71,6 +72,7 @@ export function mapRowToAgentRecord(row: AgentProfileRow): AgentRecord {
     owner: row.owner,
     verifiedAt: row.verified_at,
     lastActiveAt: row.last_active_at ?? undefined,
+    lastCheckInAt: row.last_check_in_at ?? undefined,
     erc8004AgentId: row.erc8004_agent_id,
     nostrPublicKey: row.nostr_public_key,
     // capabilities_json is stored as a JSON array string; parse if present
@@ -157,6 +159,7 @@ SELECT
   a.owner,
   a.verified_at,
   a.last_active_at,
+  a.last_check_in_at,
   a.erc8004_agent_id,
   a.nostr_public_key,
   a.capabilities_json,

@@ -20,9 +20,9 @@ vi.mock("@/lib/identity", () => ({
   getReputationSummary: vi.fn().mockResolvedValue(null),
 }));
 
-vi.mock("@/lib/heartbeat", () => ({
-  getCheckInRecord: vi.fn().mockResolvedValue(null),
-}));
+// P2 PR 2: agent-enrichment no longer reads check-in from KV. The check-in
+// shape is derived from agent.lastCheckInAt (D1 column `last_check_in_at`).
+// No heartbeat mock needed here — the type-only import compiles statically.
 
 // Phase 2.5 #746: enrichAgentProfile now uses D1 reads for inbox/sent metrics.
 // The kv-helpers mock is no longer needed for inbox reads (kv-helpers is no
