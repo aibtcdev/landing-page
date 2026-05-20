@@ -87,25 +87,33 @@ const SWAP_ROW = {
 // ── getCompetitionStatusFromD1 ───────────────────────────────────────────────
 
 describe("getCompetitionStatusFromD1", () => {
-  it("issues a JOIN over registered_wallets + agents + swaps with sender filter", async () => {
+  it("issues a JOIN over registered_wallets + agents + agent_swap_stats with sender filter (P3B PR 2)", async () => {
     const { db, stmt } = createMockD1([], STATUS_ROW);
     await getCompetitionStatusFromD1(db, STX_ADDRESS);
 
     const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
     expect(sql).toContain("FROM registered_wallets rw");
     expect(sql).toContain("JOIN agents a ON a.stx_address = rw.stx_address");
-    expect(sql).toContain("LEFT JOIN swaps s ON s.sender = rw.stx_address");
+    // P3B PR 2: replaces the per-request `LEFT JOIN swaps + COUNT/SUM/MIN/MAX`
+    // scan with an O(1) lookup on the maintained-counter table.
+    expect(sql).toContain("LEFT JOIN agent_swap_stats s ON s.stx_address = rw.stx_address");
+    expect(sql).not.toContain("LEFT JOIN swaps");
     expect(sql).toContain("WHERE rw.stx_address = ?1");
-    expect(sql).toContain("GROUP BY");
+    // No GROUP BY needed now — the source table is one-row-per-sender.
+    expect(sql).not.toContain("GROUP BY");
 
     expect(stmt.bind.mock.calls[0][0]).toBe(STX_ADDRESS);
   });
 
-  it("counts success-status trades into verified_trade_count via SUM CASE", async () => {
+  it("reads pre-aggregated verified_count from agent_swap_stats instead of SUM(CASE...)", async () => {
     const { db } = createMockD1([], STATUS_ROW);
     await getCompetitionStatusFromD1(db, STX_ADDRESS);
     const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sql).toContain("SUM(CASE WHEN s.tx_status = 'success' THEN 1 ELSE 0 END)");
+    // No SUM/COUNT/MIN/MAX over swaps any more — the helper writes them.
+    expect(sql).not.toContain("SUM(CASE WHEN");
+    expect(sql).not.toContain("COUNT(s.txid)");
+    expect(sql).toContain("COALESCE(s.verified_count, 0)");
+    expect(sql).toContain("COALESCE(s.trade_count, 0)");
   });
 
   it("maps a populated row to CompetitionStatusRow with registered=true", async () => {
@@ -235,19 +243,23 @@ describe("listSwapsFromD1", () => {
 // ── countSwapsFromD1 ─────────────────────────────────────────────────────────
 
 describe("countSwapsFromD1", () => {
-  it("issues SELECT COUNT(*) FROM swaps WHERE sender = ?1", async () => {
+  it("reads trade_count from agent_swap_stats (P3B PR 2 — was SELECT COUNT(*) FROM swaps)", async () => {
     const { db, stmt } = createMockD1([], { cnt: 7 });
     const count = await countSwapsFromD1(db, STX_ADDRESS);
 
     expect(count).toBe(7);
     const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sql).toContain("SELECT COUNT(*)");
-    expect(sql).toContain("FROM swaps");
-    expect(sql).toContain("WHERE sender = ?1");
+    // P3B PR 2: O(1) point-lookup on the maintained-counter table.
+    // The prior `SELECT COUNT(*) FROM swaps` was the textbook D1
+    // COUNT(*) anti-pattern called out in `feedback_d1_count_antipattern`.
+    expect(sql).toContain("FROM agent_swap_stats");
+    expect(sql).toContain("WHERE stx_address = ?1");
+    expect(sql).not.toContain("FROM swaps");
+    expect(sql).not.toContain("COUNT(*)");
     expect(stmt.bind.mock.calls[0][0]).toBe(STX_ADDRESS);
   });
 
-  it("returns 0 when first() returns null", async () => {
+  it("returns 0 when the agent has no agent_swap_stats row (never traded)", async () => {
     const { db } = createMockD1([], null);
     const count = await countSwapsFromD1(db, STX_ADDRESS);
     expect(count).toBe(0);

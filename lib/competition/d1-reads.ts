@@ -142,20 +142,28 @@ export async function getCompetitionStatusFromD1(
   db: D1Database,
   stxAddress: string
 ): Promise<CompetitionStatusRow> {
+  // P3B PR 2: aggregate fields come from agent_swap_stats (O(1)
+  // point-lookup) instead of a per-request `LEFT JOIN swaps +
+  // COUNT/SUM/MIN/MAX` scan. `agent_swap_stats` is maintained on
+  // every swap INSERT by `lib/competition/stats.ts:recordSwapInsert`;
+  // see migration 016 + phases/P3B/pr2-plan.md.
+  //
+  // The COALESCE pattern serves agents who are registered but have
+  // never traded (LEFT JOIN miss on agent_swap_stats) — counts go
+  // to zero, first/last_trade_at stay null.
   const sql = `
     SELECT
       rw.stx_address AS address,
       a.erc8004_agent_id AS agent_id,
       1 AS registered,
-      COUNT(s.txid) AS trade_count,
-      SUM(CASE WHEN s.tx_status = 'success' THEN 1 ELSE 0 END) AS verified_trade_count,
-      MIN(s.burn_block_time) AS first_trade_at,
-      MAX(s.burn_block_time) AS last_trade_at
+      COALESCE(s.trade_count, 0)     AS trade_count,
+      COALESCE(s.verified_count, 0)  AS verified_trade_count,
+      s.first_trade_at               AS first_trade_at,
+      s.last_trade_at                AS last_trade_at
     FROM registered_wallets rw
     JOIN agents a ON a.stx_address = rw.stx_address
-    LEFT JOIN swaps s ON s.sender = rw.stx_address
+    LEFT JOIN agent_swap_stats s ON s.stx_address = rw.stx_address
     WHERE rw.stx_address = ?1
-    GROUP BY rw.stx_address, a.erc8004_agent_id
   `;
 
   const row = await db.prepare(sql).bind(stxAddress).first<D1StatusRow>();
@@ -264,7 +272,12 @@ export async function countSwapsFromD1(
   db: D1Database,
   stxAddress: string
 ): Promise<number> {
-  const sql = `SELECT COUNT(*) AS cnt FROM swaps WHERE sender = ?1`;
+  // P3B PR 2: was `SELECT COUNT(*) FROM swaps WHERE sender = ?1`
+  // (textbook D1 COUNT(*) anti-pattern — pay-per-row-scanned).
+  // Now an O(1) point-lookup on `agent_swap_stats.trade_count`
+  // (migration 016). Missing-row case → 0, matching the prior
+  // empty-COUNT behavior.
+  const sql = `SELECT trade_count AS cnt FROM agent_swap_stats WHERE stx_address = ?1`;
   const row = await db.prepare(sql).bind(stxAddress).first<{ cnt: number }>();
   return row?.cnt ?? 0;
 }

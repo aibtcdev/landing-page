@@ -26,6 +26,7 @@ import { isAllowedSwap } from "./allowlist";
 import { COMP_START_TIMESTAMP } from "./constants";
 import { parseSwapFromTx, type HiroTxForSwap } from "./parse";
 import type { SwapRow } from "./d1-reads";
+import { recordSwapInsert } from "./stats";
 
 /** The Stacks tx_status values that mean "still in flight; no row should be written". */
 const PENDING_STATUSES = new Set<string>(["pending"]);
@@ -437,6 +438,18 @@ export async function verifyAndPersistSwap(
     // Should never happen — log + return the row we attempted to write so
     // the caller still gets a useful payload.
     logger?.warn?.("competition.verify.insert_skip_no_existing", { txid });
+  } else {
+    // P3B PR 2: maintain agent_swap_stats so countSwapsFromD1 and
+    // getCompetitionStatusFromD1 can serve O(1) reads. Errors are
+    // swallowed inside recordSwapInsert — a stats hiccup must not
+    // surface as a swap-persist failure.
+    await recordSwapInsert(
+      db,
+      persistArgs.sender,
+      persistArgs.burn_block_time,
+      persistArgs.tx_status,
+      logger
+    );
   }
 
   return {
