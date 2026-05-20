@@ -2182,6 +2182,230 @@ export function GET() {
           ],
         },
       },
+      "/api/admin/competition/finalize": {
+        get: {
+          operationId: "getCompetitionFinalizeStatus",
+          summary: "Get competition finalize documentation and round list",
+          description:
+            "Returns self-documentation for the finalize endpoint plus a list of " +
+            "all competition rounds with their current status, ordered newest-first. " +
+            "Requires X-Admin-Key header authentication.",
+          responses: {
+            "200": {
+              description: "Self-doc and round list",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      endpoint: { type: "string" },
+                      description: { type: "string" },
+                      actions: {
+                        type: "object",
+                        description:
+                          "Descriptions of the close, snapshot, and finalize actions",
+                      },
+                      rounds: {
+                        type: "array",
+                        items: {
+                          type: "object",
+                          properties: {
+                            round_id: { type: "string" },
+                            status: {
+                              type: "string",
+                              enum: [
+                                "open",
+                                "closed",
+                                "finalizing",
+                                "finalized",
+                                "partially_paid",
+                                "paid",
+                              ],
+                            },
+                            starts_at: { type: "integer" },
+                            ends_at: { type: "integer" },
+                            grace_ends_at: { type: "integer" },
+                            finalized_at: { type: "string", nullable: true },
+                          },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "401": {
+              description: "Missing X-Admin-Key header",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "403": {
+              description: "Invalid X-Admin-Key header",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+          security: [{ AdminKey: [] }],
+        },
+        post: {
+          operationId: "runCompetitionFinalizeAction",
+          summary: "Drive competition round through the finalization status machine",
+          description:
+            "Admin endpoint to advance a competition round through the three-step " +
+            "finalization process. Each action advances the round one step: " +
+            "close (open → closed), snapshot (closed → finalizing), finalize " +
+            "(finalizing → finalized). Supports ?dry-run=true to preview changes " +
+            "without writing to D1. Requires X-Admin-Key header authentication.",
+          parameters: [
+            {
+              name: "dry-run",
+              in: "query",
+              required: false,
+              description:
+                "When true, returns computed rows as JSON but writes nothing to D1. " +
+                "Supported for all three actions (close, snapshot, finalize).",
+              schema: { type: "boolean" },
+            },
+          ],
+          requestBody: {
+            required: true,
+            content: {
+              "application/json": {
+                schema: {
+                  type: "object",
+                  required: ["roundId", "action"],
+                  properties: {
+                    roundId: {
+                      type: "string",
+                      description:
+                        "Round identifier (e.g. 'week-1-2026-05-13'). Must match a row in competition_rounds.",
+                    },
+                    action: {
+                      type: "string",
+                      enum: ["close", "snapshot", "finalize"],
+                      description:
+                        "close: open → closed (requires now >= grace_ends_at). " +
+                        "snapshot: closed → finalizing (captures Tenero KV prices). " +
+                        "finalize: finalizing → finalized (computes results + writes rewards).",
+                    },
+                    tokenIds: {
+                      type: "array",
+                      items: { type: "string" },
+                      description:
+                        "Optional: restrict snapshot to a specific set of token IDs. " +
+                        "When omitted, all tokens in the Tenero KV cache are captured.",
+                    },
+                    decimalsMap: {
+                      type: "object",
+                      additionalProperties: { type: "integer" },
+                      description:
+                        "Optional: override decimals for specific token IDs. " +
+                        "Useful when Tenero does not return decimals for a token.",
+                    },
+                  },
+                },
+              },
+            },
+          },
+          responses: {
+            "200": {
+              description:
+                "Action completed successfully (or dry-run preview returned). " +
+                "Body varies by action: close returns wouldUpdate/updated; " +
+                "snapshot returns priced/unpriced counts; finalize returns result rows + reward rows.",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      success: { type: "boolean" },
+                      dryRun: { type: "boolean" },
+                      action: { type: "string" },
+                      roundId: { type: "string" },
+                      results: {
+                        type: "array",
+                        description:
+                          "Computed competition_round_results rows (finalize action only)",
+                        items: { type: "object" },
+                      },
+                      rewards: {
+                        type: "array",
+                        description:
+                          "Computed competition_rewards rows (finalize action only)",
+                        items: { type: "object" },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+            "400": {
+              description: "Invalid request body — missing roundId or action",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "401": {
+              description: "Missing X-Admin-Key header",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "403": {
+              description: "Invalid X-Admin-Key header",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "404": {
+              description: "round_not_found — no competition_rounds row with this round_id",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "409": {
+              description:
+                "State conflict — one of: " +
+                "already_snapshotted (price rows already exist for this round); " +
+                "concurrent_modification (optimistic D1 check failed — retry); " +
+                "wrong_status (round is not in the expected status for this action); " +
+                "grace_period_active (close action attempted before grace_ends_at).",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+            "503": {
+              description:
+                "empty_price_cache — the snapshot action requires the Tenero KV cache to " +
+                "be populated (TENERO_REFRESH_ENABLED must be true and at least one " +
+                "scheduler run must have completed). See PR #880. Enable the scheduler " +
+                "and wait for the first Tenero refresh before retrying.",
+              content: {
+                "application/json": {
+                  schema: { $ref: "#/components/schemas/ErrorResponse" },
+                },
+              },
+            },
+          },
+          security: [{ AdminKey: [] }],
+        },
+      },
       "/api/claims/code": {
         get: {
           operationId: "validateClaimCode",
