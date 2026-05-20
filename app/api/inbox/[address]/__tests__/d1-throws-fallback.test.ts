@@ -27,7 +27,8 @@ vi.mock("@/lib/agent-lookup", () => ({
 
 vi.mock("@/lib/inbox/d1-reads", () => ({
   listInboxMessagesFromD1: vi.fn(),
-  countInboxMessagesFromD1: vi.fn(),
+  // countInboxMessagesFromD1 was deleted in P3C PR 1 — counts come from
+  // getAgentInboxStats per the migration-012 agent_inbox_stats table.
   fetchRepliesForMessages: vi.fn(),
 }));
 
@@ -95,7 +96,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
   listInboxMessagesFromD1,
-  countInboxMessagesFromD1,
   fetchRepliesForMessages,
 } from "@/lib/inbox/d1-reads";
 import { getAgentInboxStats } from "@/lib/inbox/stats";
@@ -140,7 +140,6 @@ describe("Phase 2.5 Step 3.1 — D1-throws fallback policy", () => {
     (listInboxMessagesFromD1 as Mock).mockRejectedValue(
       new Error("D1_ERROR: connection reset")
     );
-    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
     (fetchRepliesForMessages as Mock).mockResolvedValue(new Map());
 
     const res = await GET(buildRequest(), buildContext());
