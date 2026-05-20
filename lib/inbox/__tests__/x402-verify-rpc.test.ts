@@ -78,13 +78,21 @@ describe("verifyInboxPayment RPC contract", () => {
     });
   });
 
-  it("counts missing canonical identity as a relay failure for breaker accounting", async () => {
-    const { kv, store } = createMockKVWithOptions();
+  it("counts missing canonical identity as a relay failure for breaker accounting (P4: ratelimits binding)", async () => {
+    const { kv } = createMockKVWithOptions();
     mocks.submitViaRPC.mockResolvedValue({
       success: false,
       errorCode: "MISSING_CANONICAL_IDENTITY",
       error: "Relay accepted payment but did not return a canonical payment identity",
     });
+
+    // P4: circuit breaker now uses env.RATE_LIMIT_RELAY_FAILURES.limit()
+    // instead of a KV-RMW counter. Mock the binding and assert it was
+    // called when the relay failure code is breaker-eligible.
+    const limit = vi.fn().mockResolvedValue({ success: true });
+    const cfEnv = {
+      RATE_LIMIT_RELAY_FAILURES: { limit },
+    } as unknown as CloudflareEnv;
 
     const relayRPC = {} as RelayRPC;
     const result = await verifyInboxPayment(
@@ -94,11 +102,15 @@ describe("verifyInboxPayment RPC contract", () => {
       "https://relay.example",
       undefined,
       kv,
-      relayRPC
+      relayRPC,
+      undefined,
+      cfEnv
     );
 
     expect(result.success).toBe(false);
     expect(result.errorCode).toBe("MISSING_CANONICAL_IDENTITY");
-    expect(store.get("inbox:relay:circuit-breaker:count")).toBe("1");
+    // Failure was counted via the ratelimits binding (atomic per-key
+    // counter, replaces the prior `kv.put("inbox:relay:circuit-breaker:count", ...)` shape).
+    expect(limit).toHaveBeenCalledWith({ key: "relay-failures" });
   });
 });

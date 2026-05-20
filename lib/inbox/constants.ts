@@ -68,23 +68,17 @@ export const STAGED_PAYMENT_TTL_SECONDS = 7 * 24 * 60 * 60;
 
 // --- Circuit breaker constants ---
 
-/**
- * KV key for the x402 relay circuit breaker state.
- * Suffixed with ":count" for the failure counter key.
- */
-export const RELAY_CIRCUIT_BREAKER_KEY = "inbox:relay:circuit-breaker";
-
-/**
- * Number of consecutive relay failures that trip the circuit breaker.
- * Set to 10 to match the sponsor wallet pool size — one bad wallet
- * should not trip the breaker for the entire pool.
- */
-export const RELAY_CIRCUIT_BREAKER_THRESHOLD = 10;
+// RELAY_CIRCUIT_BREAKER_KEY and RELAY_CIRCUIT_BREAKER_THRESHOLD removed in
+// P4 — the threshold + key are now expressed by the
+// `RATE_LIMIT_RELAY_FAILURES` ratelimits binding (10 failures / 60s on
+// key "relay-failures"), declared in `wrangler.jsonc`. See
+// `phases/P4/design-call.md`.
 
 /**
  * Seconds the circuit breaker stays open after tripping (1 minute).
- * Observed relay recovery time is ~60s; 300s was a 5x overshoot.
- * Also the rolling window for counting failures.
+ * Observed relay recovery time is ~60s; 300s was a 5x overshoot. Also
+ * the cache-default TTL for the per-colo "circuit-open" memo written
+ * by `lib/inbox/circuit-breaker.ts:recordRelayFailure`.
  */
 export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 60;
 
