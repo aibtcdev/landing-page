@@ -11,6 +11,7 @@
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
 import { NextRequest } from "next/server";
+import { buildMockD1 } from "./helpers/mock-d1";
 
 // ---- module mocks -----------------------------------------------------------
 
@@ -44,10 +45,8 @@ vi.mock("@/lib/name-generator", () => ({
 
 vi.mock("@/lib/heartbeat", () => ({
   CHECK_IN_MESSAGE_FORMAT: "AIBTC Check-In | {timestamp}",
+  CHECK_IN_RATE_LIMIT_SECONDS: 60,
   buildCheckInMessage: vi.fn().mockReturnValue("AIBTC Check-In | 2026-01-01T00:00:00.000Z"),
-  CHECK_IN_RATE_LIMIT_MS: 3600000,
-  getCheckInRecord: vi.fn().mockResolvedValue(null),
-  updateCheckInRecord: vi.fn().mockResolvedValue({}),
   validateCheckInBody: vi.fn().mockReturnValue({ data: {} }),
 }));
 
@@ -88,7 +87,14 @@ function buildMockKv(): KVNamespace {
 }
 
 function buildMockDb(): D1Database {
-  return { prepare: vi.fn() } as unknown as D1Database;
+  // Shared with route.test.ts via app/api/heartbeat/__tests__/helpers/mock-d1.ts.
+  return buildMockD1().db;
+}
+
+function buildMockRateLimitCheckin(success = true): RateLimit {
+  return {
+    limit: vi.fn().mockResolvedValue({ success }),
+  } as unknown as RateLimit;
 }
 
 function makeSuccessResult() {
@@ -192,6 +198,7 @@ describe("heartbeat POST — P4.2 stx: write removed", () => {
       env: {
         VERIFIED_AGENTS: mockKv,
         DB: mockDb,
+        RATE_LIMIT_CHECKIN: buildMockRateLimitCheckin(true),
       },
       ctx: { waitUntil: vi.fn() },
     });

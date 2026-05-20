@@ -50,7 +50,9 @@
     { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050802", "simple": { "limit":  20, "period": 60 } },
     { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050803", "simple": { "limit": 200, "period": 60 } },
     // RATE_LIMIT_STRICT: 1 req / 60s per key. Used by /api/challenge — tightens burst tolerance vs the prior lib/challenge.ts 6/10min KV-RMW; trade-off documented in PR.
-    { "name": "RATE_LIMIT_STRICT",        "namespace_id": "2026050804", "simple": { "limit":   1, "period":  60 } }
+    { "name": "RATE_LIMIT_STRICT",        "namespace_id": "2026050804", "simple": { "limit":   1, "period":  60 } },
+    // RATE_LIMIT_CHECKIN: 1 req / 60s per key. Used by /api/heartbeat POST — retires the `checkin:{btcAddress}` KV key family (no-TTL bug). Loosens window from 300s → 60s; same trade-off precedent as RATE_LIMIT_STRICT.
+    { "name": "RATE_LIMIT_CHECKIN",       "namespace_id": "2026051901", "simple": { "limit":   1, "period":  60 } }
   ],
   // Service bindings: worker-logs RPC and x402 sponsor relay RPC
   "services": [
@@ -159,7 +161,9 @@
         { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050802", "simple": { "limit":  20, "period": 60 } },
         { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050803", "simple": { "limit": 200, "period": 60 } },
         // RATE_LIMIT_STRICT: 1 req / 60s per key. Used by /api/challenge — tightens burst tolerance vs the prior lib/challenge.ts 6/10min KV-RMW; trade-off documented in PR.
-        { "name": "RATE_LIMIT_STRICT",        "namespace_id": "2026050804", "simple": { "limit":   1, "period":  60 } }
+        { "name": "RATE_LIMIT_STRICT",        "namespace_id": "2026050804", "simple": { "limit":   1, "period":  60 } },
+        // RATE_LIMIT_CHECKIN: 1 req / 60s per key. Used by /api/heartbeat POST — retires the `checkin:{btcAddress}` KV key family (no-TTL bug). Loosens window from 300s → 60s; same trade-off precedent as RATE_LIMIT_STRICT.
+        { "name": "RATE_LIMIT_CHECKIN",       "namespace_id": "2026051901", "simple": { "limit":   1, "period":  60 } }
       ],
 
       "services": [
@@ -243,7 +247,9 @@
         { "name": "RATE_LIMIT_MUTATING",      "namespace_id": "2026050812", "simple": { "limit":  20, "period": 60 } },
         { "name": "RATE_LIMIT_AUTHENTICATED", "namespace_id": "2026050813", "simple": { "limit": 200, "period": 60 } },
         // RATE_LIMIT_STRICT: 1 req / 60s per key. Used by /api/challenge — tightens burst tolerance vs the prior lib/challenge.ts 6/10min KV-RMW; trade-off documented in PR.
-        { "name": "RATE_LIMIT_STRICT",        "namespace_id": "2026050814", "simple": { "limit":   1, "period":  60 } }
+        { "name": "RATE_LIMIT_STRICT",        "namespace_id": "2026050814", "simple": { "limit":   1, "period":  60 } },
+        // RATE_LIMIT_CHECKIN: 1 req / 60s per key. Used by /api/heartbeat POST — retires the `checkin:{btcAddress}` KV key family (no-TTL bug). Loosens window from 300s → 60s; same trade-off precedent as RATE_LIMIT_STRICT.
+        { "name": "RATE_LIMIT_CHECKIN",       "namespace_id": "2026051911", "simple": { "limit":   1, "period":  60 } }
       ],
 
       // Service bindings — preview INTENTIONALLY shares production logging + relay services.

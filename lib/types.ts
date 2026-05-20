@@ -24,6 +24,21 @@ export interface AgentRecord {
   verifiedAt: string;
   owner?: string | null;
   lastActiveAt?: string;
+  /**
+   * Most recent successful POST /api/heartbeat timestamp (ISO 8601).
+   *
+   * Distinct from lastActiveAt: lastActiveAt fires on any liveness signal
+   * (heartbeat, register, vouch, challenge, etc.) while lastCheckInAt is
+   * specifically the most recent heartbeat check-in.
+   *
+   * Authoritative source: the D1 `agents.last_check_in_at` column added by
+   * migration 015 and read via `lib/cache/agent-profile.ts`. The same value
+   * is also mirrored into the KV `btc:{address}` record by the heartbeat
+   * POST handler so KV-fallback reads stay coherent. Undefined for agents
+   * that have never successfully checked in (regardless of where the
+   * AgentRecord was loaded from).
+   */
+  lastCheckInAt?: string;
   erc8004AgentId?: number | null;
   nostrPublicKey?: string | null;
   capabilities?: string[] | null;

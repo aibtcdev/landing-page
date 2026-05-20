@@ -10,10 +10,8 @@ import { generateName } from "@/lib/name-generator";
 import { getAgentInboxStats } from "@/lib/inbox/stats";
 import {
   CHECK_IN_MESSAGE_FORMAT,
+  CHECK_IN_RATE_LIMIT_SECONDS,
   buildCheckInMessage,
-  CHECK_IN_RATE_LIMIT_MS,
-  getCheckInRecord,
-  updateCheckInRecord,
   validateCheckInBody,
   type HeartbeatOrientation,
 } from "@/lib/heartbeat";
@@ -221,7 +219,7 @@ export async function GET(request: NextRequest) {
           messageFormat: CHECK_IN_MESSAGE_FORMAT,
           formatExplained:
             'Sign the string: "AIBTC Check-In | {ISO 8601 timestamp}"',
-          rateLimit: `One check-in per ${CHECK_IN_RATE_LIMIT_MS / 60000} minutes`,
+          rateLimit: `One check-in per ${CHECK_IN_RATE_LIMIT_SECONDS} seconds`,
           updatesLastActiveAt:
             "Check-ins update the agent's lastActiveAt timestamp",
           prerequisite: {
@@ -316,9 +314,10 @@ export async function POST(request: NextRequest) {
 
     const { address: btcAddress, publicKey: witnessPublicKey } = btcResult;
 
-    // Get KV namespace
+    // Get Cloudflare context (KV, D1, ratelimits binding)
     const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
+    const db = env.DB as D1Database | undefined;
 
     // Require Registered level (Level 1+)
     const result = await lookupAgentWithLevel(kv, btcAddress, 1);
@@ -339,37 +338,81 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Check rate limit
-    const existingCheckIn = await getCheckInRecord(kv, btcAddress);
-    if (existingCheckIn) {
-      const lastCheckInTime = new Date(existingCheckIn.lastCheckInAt).getTime();
-      const now = Date.now();
-      const timeSinceLastCheckIn = now - lastCheckInTime;
+    // Rate limit via the RATE_LIMIT_CHECKIN ratelimits binding (1 req / 60s
+    // per key). Replaces the prior `checkin:{btcAddress}` KV-RMW pattern that
+    // leaked forever-keys (no TTL). Window tightens 300s → 60s; same trade-off
+    // precedent as the /api/challenge RATE_LIMIT_STRICT migration. Fail-open
+    // on binding throw to match the /api/inbox pattern — a transient platform
+    // error should not 429 a hot agent path.
+    try {
+      const { success } = await env.RATE_LIMIT_CHECKIN.limit({ key: btcAddress });
+      if (!success) {
+        // 429 body shape is part of the public contract documented in
+        // `/api/openapi.json` (429 schema requires `nextCheckInAt`) and in
+        // /llms-full.txt. `nextCheckInAt` is the conservative "you can retry
+        // in the binding's full window" estimate — the actual ratelimits
+        // bucket may free sooner if the offending request was old, but the
+        // client cannot observe that and should not assume a tighter retry.
+        // `lastCheckInAt` is pulled from the agent row when known (D1) or
+        // omitted when the agent has never successfully checked in.
+        const nextCheckInAt = new Date(
+          Date.now() + CHECK_IN_RATE_LIMIT_SECONDS * 1000
+        ).toISOString();
+        const body: {
+          error: string;
+          retryAfter: number;
+          nextCheckInAt: string;
+          lastCheckInAt?: string;
+        } = {
+          error: `Rate limit exceeded. You can check in again in ${CHECK_IN_RATE_LIMIT_SECONDS} seconds.`,
+          retryAfter: CHECK_IN_RATE_LIMIT_SECONDS,
+          nextCheckInAt,
+        };
+        if (agent.lastCheckInAt) body.lastCheckInAt = agent.lastCheckInAt;
+        return NextResponse.json(body, {
+          status: 429,
+          headers: { "Retry-After": String(CHECK_IN_RATE_LIMIT_SECONDS) },
+        });
+      }
+    } catch (e) {
+      console.error("heartbeat.ratelimit_binding_threw", {
+        btcAddress,
+        error: (e as Error).message,
+      });
+      // Fall through to allow the check-in (fail-open).
+    }
 
-      if (timeSinceLastCheckIn < CHECK_IN_RATE_LIMIT_MS) {
-        const remainingSeconds = Math.ceil(
-          (CHECK_IN_RATE_LIMIT_MS - timeSinceLastCheckIn) / 1000
-        );
+    // Persist `last_check_in_at` to D1 synchronously — this is the durable
+    // last-check-in timestamp consumed by /api/agents/[address] and friends
+    // via lib/agent-enrichment. NOT in after()/waitUntil: the response shape
+    // includes the timestamp we just wrote and consumers expect it to be
+    // visible on the next read.
+    if (db) {
+      try {
+        await db
+          .prepare("UPDATE agents SET last_check_in_at = ? WHERE btc_address = ?")
+          .bind(timestamp, btcAddress)
+          .run();
+      } catch (e) {
+        console.error("heartbeat.d1_update_failed", {
+          btcAddress,
+          error: (e as Error).message,
+        });
         return NextResponse.json(
-          {
-            error: `Rate limit exceeded. You can check in again in ${remainingSeconds} seconds.`,
-            lastCheckInAt: existingCheckIn.lastCheckInAt,
-            nextCheckInAt: new Date(
-              lastCheckInTime + CHECK_IN_RATE_LIMIT_MS
-            ).toISOString(),
-          },
-          { status: 429 }
+          { error: "Failed to record check-in" },
+          { status: 500 }
         );
       }
     }
 
-    // Update check-in record (rate-limit timestamp only)
-    const checkInRecord = await updateCheckInRecord(kv, btcAddress, timestamp);
-
-    // Update agent record with lastActiveAt only.
+    // Update the in-memory agent record with both timestamps. The KV write
+    // below persists the merged record so KV-fallback callers see the new
+    // lastCheckInAt; the authoritative durable copy lives in D1's
+    // `last_check_in_at` column (written synchronously above).
     const updatedAgent = {
       ...agent,
       lastActiveAt: timestamp,
+      lastCheckInAt: timestamp,
     };
 
     // Write canonical btc: key only; stx: secondary index is no longer
@@ -379,7 +422,6 @@ export async function POST(request: NextRequest) {
     // not on every 5-min check-in. Identical JSON across both sides per
     // inventory, so this is data-lossless.
     // Phase 2.5 Step 4 — unreadCount served from D1 live SELECT COUNT(*).
-    const db = env.DB as D1Database | undefined;
     const [, unreadCount] = await Promise.all([
       kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
       fetchUnreadCount(db, btcAddress),
@@ -391,7 +433,7 @@ export async function POST(request: NextRequest) {
       success: true,
       message: "Check-in recorded!",
       checkIn: {
-        lastCheckInAt: checkInRecord.lastCheckInAt,
+        lastCheckInAt: timestamp,
       },
       agent: {
         btcAddress,

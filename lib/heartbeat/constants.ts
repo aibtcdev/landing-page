@@ -31,20 +31,17 @@ export function buildCheckInMessage(timestamp: string): string {
 }
 
 /**
- * Rate limit for check-ins: 5 minutes between check-ins per address.
- */
-export const CHECK_IN_RATE_LIMIT_MS = 5 * 60 * 1000;
-
-/**
  * Timestamp tolerance window: 5 minutes.
  * Check-in timestamps must be within this window of server time.
  */
 export const CHECK_IN_TIMESTAMP_WINDOW_MS = 5 * 60 * 1000;
 
 /**
- * KV key prefix for check-in records.
+ * Heartbeat rate-limit window (seconds). Used for the 429 `Retry-After`
+ * header and for the user-facing rate-limit string in the self-doc.
  *
- * Key: "checkin:{btcAddress}"
- * Value: CheckInRecord
+ * The enforcement source is the Cloudflare `RATE_LIMIT_CHECKIN` ratelimits
+ * binding (limit 1, period 60 in wrangler.jsonc) — this constant must match
+ * the binding's `period` value.
  */
-export const CHECK_IN_PREFIX = "checkin:";
+export const CHECK_IN_RATE_LIMIT_SECONDS = 60;
