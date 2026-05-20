@@ -34,11 +34,16 @@
       "remote": true
     }
   ],
-  // Top-level vars: used by bare `wrangler deploy` (without --env). Keep
-  // Tenero refresh disabled here so a no-env deployment cannot consume the
-  // production Tenero key/quota even if the secret exists on the Worker name.
+  // Top-level vars: used by bare `wrangler deploy` (without --env), which is
+  // what the Cloudflare Workers Build pipeline runs. The prior "keep Tenero
+  // refresh disabled here" guard meant the SchedulerDO never populated the
+  // KV cache in prod (issue #880) — so the competition-finalize snapshot
+  // path can't fetch frozen prices. Enabling here is the resolution.
+  // env.preview below still omits TENERO_REFRESH_ENABLED, so a preview
+  // build cannot accidentally consume the production Tenero quota.
   "vars": {
-    "DEPLOY_ENV": "production"
+    "DEPLOY_ENV": "production",
+    "TENERO_REFRESH_ENABLED": "true"
   },
   // First-party rate limit bindings. Mirrors the agent-news pattern (agent-news#704/#705).
   // Top-level IDs are the local-dev defaults — they are overridden in each named env
