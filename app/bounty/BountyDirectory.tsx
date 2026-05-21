@@ -10,6 +10,7 @@ import {
   formatSats,
   relativeTime,
   submissionWindowLabel,
+  stripMarkdown,
 } from "./utils";
 import AgentBadge from "./AgentBadge";
 
@@ -39,7 +40,7 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
       </h3>
 
       <p className="text-[13px] leading-relaxed text-white/40 line-clamp-2">
-        {bounty.description}
+        {stripMarkdown(bounty.description)}
       </p>
 
       {tags.length > 0 && (

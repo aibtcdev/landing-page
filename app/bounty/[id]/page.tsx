@@ -16,6 +16,7 @@ import {
   type BountyWinner,
 } from "@/lib/bounty";
 import { lookupAgent } from "@/lib/agent-lookup";
+import { stripMarkdown } from "../utils";
 
 interface PageProps {
   params: Promise<{ id: string }>;
@@ -106,7 +107,7 @@ export async function generateMetadata({ params }: PageProps): Promise<Metadata>
     if (data) {
       return {
         title: data.bounty.title,
-        description: data.bounty.description.slice(0, 160),
+        description: stripMarkdown(data.bounty.description).slice(0, 160),
       };
     }
   } catch {

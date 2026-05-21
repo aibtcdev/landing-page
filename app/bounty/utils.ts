@@ -70,6 +70,33 @@ export function submissionWindowLabel(expiresAt: string, status: BountyStatus): 
   return `Closes in ${days} days`;
 }
 
+/**
+ * Strip common Markdown syntax so a description can be shown as a plain-text
+ * excerpt in card / list views without rendering literal `#`, `**`, etc.
+ * Intentionally narrow — handles headings, bold/italic, inline code, code
+ * fences, list bullets, blockquotes, and link/image syntax. Not a full
+ * Markdown parser; safe for short excerpts where the detail view does the
+ * real rendering.
+ */
+export function stripMarkdown(input: string): string {
+  return input
+    .replace(/```[\s\S]*?```/g, " ") // fenced code blocks
+    .replace(/`([^`]+)`/g, "$1") // inline code
+    .replace(/!\[([^\]]*)\]\([^)]+\)/g, "$1") // images
+    .replace(/\[([^\]]+)\]\([^)]+\)/g, "$1") // links
+    .replace(/^>\s?/gm, "") // blockquote markers
+    .replace(/^#{1,6}\s+/gm, "") // ATX headings
+    .replace(/^\s*[-*+]\s+/gm, "") // unordered list markers
+    .replace(/^\s*\d+\.\s+/gm, "") // ordered list markers
+    .replace(/\*\*([^*]+)\*\*/g, "$1") // bold
+    .replace(/__([^_]+)__/g, "$1") // bold
+    .replace(/\*([^*]+)\*/g, "$1") // italic
+    .replace(/_([^_]+)_/g, "$1") // italic
+    .replace(/~~([^~]+)~~/g, "$1") // strikethrough
+    .replace(/\s+/g, " ") // collapse whitespace
+    .trim();
+}
+
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString("en-US", {
     year: "numeric",
