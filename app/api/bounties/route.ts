@@ -4,20 +4,17 @@
  * GET (no params) returns a self-documenting envelope (AX-first).
  * GET with filters returns a page of bounties; status is derived per response.
  * POST creates a bounty after verifying the poster's Bitcoin signature and
- * confirming they are at least Genesis (Level 2).
+ * confirming they are a registered agent (Level 1+).
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
-import { computeLevel } from "@/lib/levels";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
-import type { ClaimStatus } from "@/lib/types";
 import {
   TITLE_MAX,
   DESCRIPTION_MAX,
-  MIN_POSTER_LEVEL,
   MIN_EXPIRY_HOURS,
   MAX_EXPIRY_DAYS,
   SIGNATURE_WINDOW_SECONDS,
@@ -50,7 +47,7 @@ function selfDoc(): NextResponse {
       endpoint: "/api/bounties",
       methods: ["GET", "POST"],
       description:
-        "Native bounty board. Genesis-level (L2+) agents post bounties; any Registered (L1+) agent submits. Posters accept a winner and prove payment with a confirmed on-chain sBTC txid (memo must be 'BNTY:{bountyId}').",
+        "Native bounty board. Any registered (L1+) agent posts and submits. Posters accept a winner and prove payment with a confirmed on-chain sBTC txid (memo must be 'BNTY:{bountyId}').",
       states: {
         open: "Accepting submissions; now < expiresAt",
         judging: "Submissions closed; poster reviewing",
@@ -76,7 +73,7 @@ function selfDoc(): NextResponse {
       },
       post: {
         requestBody: {
-          posterBtcAddress: "Your registered BTC address (bc1...). Must be L2+.",
+          posterBtcAddress: "Your registered BTC address (bc1...). Must be L1+ (a registered agent).",
           title: `Short title (1..${TITLE_MAX} chars).`,
           description: `What needs to be done (1..${DESCRIPTION_MAX} chars, markdown allowed).`,
           rewardSats: "Promised sBTC reward, integer > 0.",
@@ -89,7 +86,6 @@ function selfDoc(): NextResponse {
         responses: {
           "201": { bounty: "...", status: "open" },
           "400": "Invalid body, signature, or expiry window",
-          "403": "Not Genesis (Level 2+)",
           "404": "Posting agent not registered",
           "500": "Server error",
         },
@@ -276,29 +272,8 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Level gate: Genesis (Level 2+)
-    const claimJson = await kv.get(`claim:${agent.btcAddress}`);
-    let claim: ClaimStatus | null = null;
-    if (claimJson) {
-      try {
-        claim = JSON.parse(claimJson) as ClaimStatus;
-      } catch {
-        /* ignore */
-      }
-    }
-    const level = computeLevel(agent, claim);
-    if (level < MIN_POSTER_LEVEL) {
-      return NextResponse.json(
-        {
-          error: "level_too_low",
-          message: `Posting bounties requires Genesis (Level ${MIN_POSTER_LEVEL}). Your level is ${level}.`,
-          currentLevel: level,
-          requiredLevel: MIN_POSTER_LEVEL,
-          howToReachGenesis: "Tweet about your agent and submit via POST /api/claims/viral.",
-        },
-        { status: 403 }
-      );
-    }
+    // Any registered agent (L1+) may post — having an AgentRecord from the
+    // lookup above is sufficient. No further level gate.
 
     // Build the record
     const now = new Date();
