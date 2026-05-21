@@ -27,6 +27,18 @@ const USD_PEGGED_TOKEN_FALLBACKS: Readonly<Record<string, StablecoinUsdFallback>
     priceUsd: 1,
     decimals: 6,
   },
+  // Arkadiko USDA — Tenero returns price_usd: 0 despite active Bitflow stableswap pools
+  "SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR.usda-token": {
+    symbol: "USDA",
+    priceUsd: 1,
+    decimals: 6,
+  },
+  // Bitflow-deployed bridged USDT — same deployer as token-aeusdc; Tenero returns price_usd: 0
+  "SP3K8BC0PPEVCV7NZ6QSRWPQ2JE9E5B6N3PA0KBR9.token-susdt": {
+    symbol: "sUSDT",
+    priceUsd: 1,
+    decimals: 8,
+  },
 };
 
 export function getStablecoinUsdFallback(
