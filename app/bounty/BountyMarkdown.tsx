@@ -21,7 +21,11 @@ import type { Components } from "react-markdown";
  */
 
 const components: Components = {
-  a: ({ href, children, ...props }) => (
+  // Destructure `node` (mdast AST) out of props so it doesn't get spread
+  // onto the real <a> and trigger React's "Invalid DOM prop" warning.
+  // The sr-only span gives screen-reader users a cue that the link
+  // opens in a new tab — matches the standard a11y pattern.
+  a: ({ node: _node, href, children, ...props }) => (
     <a
       {...props}
       href={href}
@@ -30,19 +34,24 @@ const components: Components = {
       className="text-[#7DA2FF] hover:text-[#9db8ff] underline underline-offset-2 break-all"
     >
       {children}
+      <span className="sr-only"> (opens in new tab)</span>
     </a>
   ),
+  // Demote Markdown headings one level: the bounty detail page already
+  // has an <h1> for the bounty title, so Markdown `# Heading` (a second
+  // <h1>) would skip the natural h1→h2 progression. Map h1→h2, h2→h3,
+  // h3→h4, h4→h5; sizing stays the same, only the semantic tag shifts.
   h1: ({ children }) => (
-    <h1 className="mt-4 mb-2 text-base font-semibold text-white/90 first:mt-0">{children}</h1>
+    <h2 className="mt-4 mb-2 text-base font-semibold text-white/90 first:mt-0">{children}</h2>
   ),
   h2: ({ children }) => (
-    <h2 className="mt-4 mb-2 text-[15px] font-semibold text-white/90 first:mt-0">{children}</h2>
+    <h3 className="mt-4 mb-2 text-[15px] font-semibold text-white/90 first:mt-0">{children}</h3>
   ),
   h3: ({ children }) => (
-    <h3 className="mt-3 mb-1.5 text-sm font-semibold text-white/85 first:mt-0">{children}</h3>
+    <h4 className="mt-3 mb-1.5 text-sm font-semibold text-white/85 first:mt-0">{children}</h4>
   ),
   h4: ({ children }) => (
-    <h4 className="mt-3 mb-1 text-sm font-medium text-white/85 first:mt-0">{children}</h4>
+    <h5 className="mt-3 mb-1 text-sm font-medium text-white/85 first:mt-0">{children}</h5>
   ),
   p: ({ children }) => <p className="my-2 first:mt-0 last:mb-0">{children}</p>,
   ul: ({ children }) => <ul className="my-2 list-disc pl-5 space-y-1">{children}</ul>,
