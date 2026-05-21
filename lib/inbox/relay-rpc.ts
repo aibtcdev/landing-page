@@ -211,11 +211,11 @@ function parseSubmitPaymentResult(raw: unknown): RelaySubmitResult {
       ...raw,
       error: "Payment submission rejected by relay",
     });
-    return { ...parsed, ...extras } as RelaySubmitResult;
+    return { ...parsed, ...extras };
   }
 
   const parsed = RpcSubmitPaymentResultSchema.parse(raw);
-  return { ...parsed, ...extras } as RelaySubmitResult;
+  return { ...parsed, ...extras };
 }
 
 function parseCheckPaymentResult(raw: unknown): RelayCheckResult {
@@ -234,13 +234,13 @@ function parseCheckPaymentResponse(raw: unknown): ParsedCheckPaymentResult {
   ) {
     const { errorCode, ...rest } = collapsed as Record<string, unknown>;
     return {
-      result: { ...RpcCheckPaymentResultSchema.parse(rest), ...extras } as RelayCheckResult,
+      result: { ...RpcCheckPaymentResultSchema.parse(rest), ...extras },
       ...(typeof errorCode === "string" && { rawErrorCode: errorCode }),
     };
   }
 
   return {
-    result: { ...RpcCheckPaymentResultSchema.parse(collapsed), ...extras } as RelayCheckResult,
+    result: { ...RpcCheckPaymentResultSchema.parse(collapsed), ...extras },
   };
 }
 export const __testUtils = {
@@ -374,6 +374,12 @@ export async function submitViaRPC(
         checkResult.checkStatusUrl,
         submitCheckStatusUrl
       );
+      // Surface the submit-time nonce TTL on the confirmed arm too: the
+      // nonce has already been consumed so the TTL is informational, but
+      // downstream telemetry/logging can correlate it with the staged
+      // record.  No fallback to `checkResult` here — once confirmed the
+      // sponsor never re-emits a fresh TTL, so `submitResult` is the only
+      // source.
       return {
         success: true,
         paymentTxid: checkResult.txid || "",

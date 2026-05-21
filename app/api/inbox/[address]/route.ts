@@ -1241,9 +1241,14 @@ export async function POST(
 
     const errorCode = paymentResult.errorCode;
     const retryAfterSeconds = paymentResult.retryAfterSeconds ?? 5;
+    // Surface relay broadcast attribution (Phase 5.1: relay PR#381) so
+    // senders can disambiguate sender-fault vs sponsor/network-fault and
+    // choose the correct retry strategy without parsing logs.
     const relayDiag = {
       ...(paymentResult.relayCode && { relayCode: paymentResult.relayCode }),
       ...(paymentResult.relayDetail && { relayDetail: paymentResult.relayDetail }),
+      ...(paymentResult.responsible && { responsible: paymentResult.responsible }),
+      ...(paymentResult.agentErrorCode && { agentErrorCode: paymentResult.agentErrorCode }),
     };
 
     // NONCE_CONFLICT — retryable; same tx hex is idempotent within 5 min.
