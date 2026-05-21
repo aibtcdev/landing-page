@@ -1243,9 +1243,14 @@ export async function POST(
 
     const errorCode = paymentResult.errorCode;
     const retryAfterSeconds = paymentResult.retryAfterSeconds ?? 5;
+    // Surface relay broadcast attribution (Phase 5.1: relay PR#381) so
+    // senders can disambiguate sender-fault vs sponsor/network-fault and
+    // choose the correct retry strategy without parsing logs.
     const relayDiag = {
       ...(paymentResult.relayCode && { relayCode: paymentResult.relayCode }),
       ...(paymentResult.relayDetail && { relayDetail: paymentResult.relayDetail }),
+      ...(paymentResult.responsible && { responsible: paymentResult.responsible }),
+      ...(paymentResult.agentErrorCode && { agentErrorCode: paymentResult.agentErrorCode }),
     };
 
     // NONCE_CONFLICT — retryable; same tx hex is idempotent within 5 min.
@@ -1543,7 +1548,13 @@ export async function POST(
       // reconciliation queue can re-submit after the relay's sponsor nonce
       // expires (Phase 5 of quest nonce-conflict-attribution, issue #375).
       const stagedTxHex = paymentPayload?.payload?.transaction ?? undefined;
-      const stagedNonceExpiresAt = new Date(Date.now() + SPONSOR_NONCE_TTL_MS).toISOString();
+      // Prefer the relay's authoritative nonceExpiresAt (Phase 5.1: relay
+      // PRs #379/#383 surface this on `/sponsor` + RPC submitPayment
+      // responses).  Falls back to LP local derivation when the relay
+      // version in deploy does not yet emit it.
+      const stagedNonceExpiresAt =
+        paymentResult.nonceExpiresAt ??
+        new Date(Date.now() + SPONSOR_NONCE_TTL_MS).toISOString();
       const stagedSettleOptions =
         agent.stxAddress && paymentRequirements.amount
           ? {

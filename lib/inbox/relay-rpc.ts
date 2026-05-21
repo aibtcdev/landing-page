@@ -29,12 +29,69 @@ import {
 
 export type RelaySettleOptions = z.infer<typeof RpcSettleOptionsSchema>;
 export type RelaySenderNonceInfo = z.infer<typeof RpcSenderNonceInfoSchema>;
-export type RelaySubmitResult = z.infer<typeof RpcSubmitPaymentResultSchema>;
-export type RelayCheckResult = z.infer<typeof RpcCheckPaymentResultSchema>;
+
+/**
+ * Wire fields surfaced by the x402-sponsor-relay alongside the canonical
+ * schema-defined fields.  These are NOT yet part of the
+ * `RpcSubmitPaymentResultSchema` in `@aibtc/tx-schemas` — `z.core.$strip` mode
+ * would strip them — so we extract them BEFORE the zod parse and re-attach
+ * after.  This keeps the LP forward-compatible: the moment the relay's RPC
+ * binding starts surfacing these fields, downstream consumers (staging,
+ * reconciliation, inbox UI) see them without further plumbing changes.
+ *
+ * Source contracts (merged 2026-05-19):
+ * - `nonceExpiresAt`, `sponsorNonceValidForMs` — relay PR#379 + #383 (`/sponsor`
+ *   success path).  Relay clock is authoritative; prefer over LP local
+ *   derivation from `SPONSOR_NONCE_TTL_MS`.
+ * - `responsible`, `agentErrorCode` — relay PR#381 (broadcast attribution
+ *   on the error arm).  `responsible` discriminates sender/sponsor/network
+ *   fault; `agentErrorCode` is the agent-facing reason code when
+ *   `responsible === "sender"`.
+ */
+export interface RelayWireExtras {
+  /** ISO 8601 UTC — relay-side TTL after which the sponsor nonce may be reclaimed. */
+  nonceExpiresAt?: string;
+  /** Duration in ms the sponsor nonce is valid (typically 600 000). */
+  sponsorNonceValidForMs?: number;
+  /** Attribution of a broadcast failure to sender, sponsor, or network. */
+  responsible?: "sender" | "sponsor" | "network";
+  /** Agent-facing reason code, set when `responsible === "sender"`. */
+  agentErrorCode?: string;
+}
+
+export type RelaySubmitResult = z.infer<typeof RpcSubmitPaymentResultSchema> & RelayWireExtras;
+export type RelayCheckResult = z.infer<typeof RpcCheckPaymentResultSchema> & RelayWireExtras;
 type ParsedCheckPaymentResult = {
   result: RelayCheckResult;
   rawErrorCode?: string;
 };
+
+const RESPONSIBLE_VALUES = new Set(["sender", "sponsor", "network"]);
+
+/**
+ * Extract the new wire fields from a raw RPC response.  Returns only the
+ * fields that are present and well-typed; unknown shapes (e.g. an old relay
+ * that omits these fields entirely) return an empty object — callers must
+ * treat all four fields as optional.
+ */
+function extractRelayWireExtras(raw: unknown): RelayWireExtras {
+  if (!raw || typeof raw !== "object") return {};
+  const r = raw as Record<string, unknown>;
+  const extras: RelayWireExtras = {};
+  if (typeof r.nonceExpiresAt === "string" && r.nonceExpiresAt.length > 0) {
+    extras.nonceExpiresAt = r.nonceExpiresAt;
+  }
+  if (typeof r.sponsorNonceValidForMs === "number" && Number.isFinite(r.sponsorNonceValidForMs)) {
+    extras.sponsorNonceValidForMs = r.sponsorNonceValidForMs;
+  }
+  if (typeof r.responsible === "string" && RESPONSIBLE_VALUES.has(r.responsible)) {
+    extras.responsible = r.responsible as RelayWireExtras["responsible"];
+  }
+  if (typeof r.agentErrorCode === "string" && r.agentErrorCode.length > 0) {
+    extras.agentErrorCode = r.agentErrorCode;
+  }
+  return extras;
+}
 
 /**
  * Typed interface for the X402_RELAY service binding RPC methods.
@@ -123,6 +180,8 @@ const TERMINAL_REASON_ERROR_CODE_MAP: Partial<Record<TerminalReason, InboxPaymen
 };
 
 function parseSubmitPaymentResult(raw: unknown): RelaySubmitResult {
+  const extras = extractRelayWireExtras(raw);
+
   if (
     raw &&
     typeof raw === "object" &&
@@ -137,6 +196,7 @@ function parseSubmitPaymentResult(raw: unknown): RelaySubmitResult {
       ...(typeof rawRecord.checkStatusUrl === "string" && {
         checkStatusUrl: rawRecord.checkStatusUrl,
       }),
+      ...extras,
     } as RelaySubmitResult;
   }
 
@@ -147,13 +207,15 @@ function parseSubmitPaymentResult(raw: unknown): RelaySubmitResult {
     (raw as { accepted?: unknown }).accepted === false &&
     !("error" in raw)
   ) {
-    return RpcSubmitPaymentResultSchema.parse({
+    const parsed = RpcSubmitPaymentResultSchema.parse({
       ...raw,
       error: "Payment submission rejected by relay",
     });
+    return { ...parsed, ...extras };
   }
 
-  return RpcSubmitPaymentResultSchema.parse(raw);
+  const parsed = RpcSubmitPaymentResultSchema.parse(raw);
+  return { ...parsed, ...extras };
 }
 
 function parseCheckPaymentResult(raw: unknown): RelayCheckResult {
@@ -162,6 +224,8 @@ function parseCheckPaymentResult(raw: unknown): RelayCheckResult {
 
 function parseCheckPaymentResponse(raw: unknown): ParsedCheckPaymentResult {
   const collapsed = collapseSubmittedStatus(raw);
+  const extras = extractRelayWireExtras(collapsed);
+
   if (
     collapsed &&
     typeof collapsed === "object" &&
@@ -170,17 +234,19 @@ function parseCheckPaymentResponse(raw: unknown): ParsedCheckPaymentResult {
   ) {
     const { errorCode, ...rest } = collapsed as Record<string, unknown>;
     return {
-      result: RpcCheckPaymentResultSchema.parse(rest),
+      result: { ...RpcCheckPaymentResultSchema.parse(rest), ...extras },
       ...(typeof errorCode === "string" && { rawErrorCode: errorCode }),
     };
   }
 
   return {
-    result: RpcCheckPaymentResultSchema.parse(collapsed),
+    result: { ...RpcCheckPaymentResultSchema.parse(collapsed), ...extras },
   };
 }
 export const __testUtils = {
   parseCheckPaymentResult,
+  parseSubmitPaymentResult,
+  extractRelayWireExtras,
 };
 
 /**
@@ -253,6 +319,8 @@ export async function submitViaRPC(
       code: submitResult.code,
       errorCode,
       error: submitResult.error,
+      ...(submitResult.responsible && { responsible: submitResult.responsible }),
+      ...(submitResult.agentErrorCode && { agentErrorCode: submitResult.agentErrorCode }),
     });
     return {
       success: false,
@@ -260,6 +328,8 @@ export async function submitViaRPC(
       errorCode,
       ...(submitResult.code != null && { relayCode: submitResult.code }),
       ...(submitResult.error && { relayDetail: submitResult.error }),
+      ...(submitResult.responsible && { responsible: submitResult.responsible }),
+      ...(submitResult.agentErrorCode && { agentErrorCode: submitResult.agentErrorCode }),
     };
   }
 
@@ -304,6 +374,12 @@ export async function submitViaRPC(
         checkResult.checkStatusUrl,
         submitCheckStatusUrl
       );
+      // Surface the submit-time nonce TTL on the confirmed arm too: the
+      // nonce has already been consumed so the TTL is informational, but
+      // downstream telemetry/logging can correlate it with the staged
+      // record.  No fallback to `checkResult` here — once confirmed the
+      // sponsor never re-emits a fresh TTL, so `submitResult` is the only
+      // source.
       return {
         success: true,
         paymentTxid: checkResult.txid || "",
@@ -311,6 +387,10 @@ export async function submitViaRPC(
         paymentId,
         ...(checkStatusUrl && { checkStatusUrl }),
         ...(checkResult.terminalReason && { terminalReason: checkResult.terminalReason }),
+        ...(submitResult.nonceExpiresAt && { nonceExpiresAt: submitResult.nonceExpiresAt }),
+        ...(submitResult.sponsorNonceValidForMs != null && {
+          sponsorNonceValidForMs: submitResult.sponsorNonceValidForMs,
+        }),
       };
     }
 
@@ -320,12 +400,16 @@ export async function submitViaRPC(
         submitCheckStatusUrl
       );
       const errorCode = mapTerminalOutcome(checkResult);
+      const responsible = checkResult.responsible ?? submitResult.responsible;
+      const agentErrorCode = checkResult.agentErrorCode ?? submitResult.agentErrorCode;
       log.warn("RPC: payment failed", {
         paymentId,
         status: checkResult.status,
         terminalReason: checkResult.terminalReason,
         errorCode: relayCode,
         error: checkResult.error,
+        ...(responsible && { responsible }),
+        ...(agentErrorCode && { agentErrorCode }),
       });
       return {
         success: false,
@@ -337,6 +421,8 @@ export async function submitViaRPC(
         ...(checkResult.txid && { paymentTxid: checkResult.txid }),
         ...(relayCode != null && { relayCode }),
         ...(checkResult.error && { relayDetail: checkResult.error }),
+        ...(responsible && { responsible }),
+        ...(agentErrorCode && { agentErrorCode }),
       };
     }
 
@@ -381,10 +467,14 @@ export async function submitViaRPC(
       lastCheckResult?.checkStatusUrl,
       submitCheckStatusUrl
     );
+    const nonceExpiresAt = submitResult.nonceExpiresAt ?? lastCheckResult?.nonceExpiresAt;
+    const sponsorNonceValidForMs =
+      submitResult.sponsorNonceValidForMs ?? lastCheckResult?.sponsorNonceValidForMs;
     log.info("RPC: poll exhausted after relay accepted — treating as pending success", {
       paymentId,
       lastStatus: lastStatus ?? "none",
       ...(lastCheckResult?.txid && { txid: lastCheckResult.txid }),
+      ...(nonceExpiresAt && { nonceExpiresAt }),
     });
     return {
       success: true,
@@ -392,6 +482,8 @@ export async function submitViaRPC(
       paymentId,
       ...(checkStatusUrl && { checkStatusUrl }),
       ...(lastCheckResult?.txid && { paymentTxid: lastCheckResult.txid }),
+      ...(nonceExpiresAt && { nonceExpiresAt }),
+      ...(sponsorNonceValidForMs != null && { sponsorNonceValidForMs }),
     };
   }
 
