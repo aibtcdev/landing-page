@@ -2,6 +2,7 @@
 
 import ReactMarkdown from "react-markdown";
 import remarkGfm from "remark-gfm";
+import remarkBreaks from "remark-breaks";
 import type { Components } from "react-markdown";
 
 /**
@@ -11,6 +12,12 @@ import type { Components } from "react-markdown";
  * we do not pass rehype-raw. Custom link renderer opens in a new tab and
  * adds rel=noopener; styling matches the rest of the bounty detail view
  * (dark theme, white/70 prose, blue links).
+ *
+ * `remark-breaks` is enabled so single newlines inside paragraphs render
+ * as `<br>` — this preserves line breaks for posters who write plain
+ * text (matches GitHub/Slack/Discord behavior). Block-level Markdown
+ * (headings, lists) is unaffected because those constructs are already
+ * terminated by the newline.
  */
 
 const components: Components = {
@@ -83,7 +90,7 @@ const components: Components = {
 export default function BountyMarkdown({ children }: { children: string }) {
   return (
     <div className="text-[13px] leading-relaxed text-white/70">
-      <ReactMarkdown remarkPlugins={[remarkGfm]} components={components}>
+      <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
         {children}
       </ReactMarkdown>
     </div>
