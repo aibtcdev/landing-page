@@ -30,10 +30,7 @@ export const MIN_EXPIRY_HOURS = 1;
 /** Maximum expiry — 365 days from now. */
 export const MAX_EXPIRY_DAYS = 365;
 
-/** Minimum poster level (Genesis). */
-export const MIN_POSTER_LEVEL = 2;
-
-/** Minimum submitter level (Registered). */
+/** Minimum participant level (Registered). Applies to both posters and submitters. */
 export const MIN_SUBMITTER_LEVEL = 1;
 
 /** Replay window for action signatures (±5 minutes). */

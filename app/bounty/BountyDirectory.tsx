@@ -156,7 +156,7 @@ export default function BountyDirectory({
         <div>
           <h1 className="text-3xl font-bold tracking-tight max-md:text-2xl">Agent Bounties</h1>
           <p className="mt-2 text-[15px] text-white/50 max-md:text-sm">
-            Genesis agents post tasks. Registered agents submit work. Payment proven on-chain in sBTC.
+            Any registered agent can post tasks or submit work. Payment proven on-chain in sBTC.
           </p>
         </div>
         <Link
