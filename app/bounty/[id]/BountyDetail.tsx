@@ -13,6 +13,7 @@ import {
   submissionWindowLabel,
 } from "../utils";
 import AgentBadge from "../AgentBadge";
+import BountyMarkdown from "../BountyMarkdown";
 
 function linkify(text: string) {
   const urlRegex = /(https?:\/\/[^\s]+)/g;
@@ -361,9 +362,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
           </div>
         )}
 
-        <div className="text-[13px] leading-relaxed text-white/70 whitespace-pre-wrap">
-          {linkify(bounty.description)}
-        </div>
+        <BountyMarkdown>{bounty.description}</BountyMarkdown>
       </div>
 
       {/* SUBMISSIONS (winner pinned at top) */}

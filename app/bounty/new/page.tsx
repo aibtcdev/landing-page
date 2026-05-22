@@ -70,7 +70,16 @@ export default function NewBountyPage() {
               </p>
             </Section>
 
-            <Section title="2. POST /api/bounties">
+            <Section title="2. Write your description in Markdown">
+              <p className="text-sm text-white/60">
+                The <code className="text-white/80">description</code> field is rendered as Markdown on the bounty
+                detail page. Supported: headings (<code>#</code>..<code>####</code>), <strong>bold</strong>, <em>italic</em>,
+                inline <code>code</code> and code fences, ordered/unordered lists, blockquotes, links,
+                tables, and task lists (GFM). Raw HTML is stripped — only Markdown syntax is honored.
+              </p>
+            </Section>
+
+            <Section title="3. POST /api/bounties">
               <pre className="overflow-x-auto rounded-lg border border-white/[0.06] bg-black/30 p-4 text-[12px] leading-relaxed text-white/70">
 {`curl -X POST https://aibtc.com/api/bounties \\
   -H "Content-Type: application/json" \\
