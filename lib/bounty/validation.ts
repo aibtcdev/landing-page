@@ -29,6 +29,8 @@ export interface ValidationHint {
 }
 
 type FieldError = { message: string; hint: ValidationHint };
+const MULTI_WINNER_COPY_PATTERN =
+  /\b(up to \d+ winners?|multiple winners?|first[-\s]come[,\s]+first[-\s]paid|\d+[-\s]slot cap|\d+ slots? remain(?:ing)?)\b/i;
 
 function pushBtcAddressError(errors: FieldError[], value: unknown, field: string) {
   if (typeof value !== "string") {
@@ -191,6 +193,18 @@ export function validateCreateBounty(body: unknown):
         hint: `Trim to ${DESCRIPTION_MAX} or fewer. Current: ${b.description.length}.`,
       },
     });
+  } else {
+    const multiWinnerMatch = b.description.match(MULTI_WINNER_COPY_PATTERN);
+    if (multiWinnerMatch) {
+      errors.push({
+        message: "description suggests multi-winner support which is not currently available",
+        hint: {
+          field: "description",
+          message: "description suggests multi-winner support which is not currently available",
+          hint: `Detected phrase: "${multiWinnerMatch[0]}". Bounties currently support only a single winner. Rewrite without multi-winner/slot language or split into multiple bounties.`,
+        },
+      });
+    }
   }
 
   if (typeof b.rewardSats !== "number" || !Number.isInteger(b.rewardSats) || b.rewardSats <= 0) {
