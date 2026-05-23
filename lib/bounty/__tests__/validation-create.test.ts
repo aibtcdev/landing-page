@@ -14,15 +14,33 @@ function validCreateBody(description: string) {
 }
 
 describe("validateCreateBounty multi-winner copy guard", () => {
-  it("rejects descriptions that suggest multi-winner payout semantics", () => {
-    const result = validateCreateBounty(
-      validCreateBody("Up to 3 winners. First-come first-paid within the 3-slot cap.")
-    );
+  function expectDescriptionRejected(description: string) {
+    const result = validateCreateBounty(validCreateBody(description));
     expect("errors" in result).toBe(true);
     if ("errors" in result) {
       expect(result.errors.some((e) => e.field === "description")).toBe(true);
-      expect(result.errors[0]?.message).toContain("multi-winner support");
+      expect(result.errors.some((e) => e.message.includes("multi-winner support"))).toBe(true);
     }
+  }
+
+  it("rejects 'up to N winners' phrasing", () => {
+    expectDescriptionRejected("Up to 3 winners. First report accepted wins.");
+  });
+
+  it("rejects 'multiple winners' phrasing", () => {
+    expectDescriptionRejected("Multiple winners possible if submissions are distinct.");
+  });
+
+  it("rejects first-come first-paid phrasing", () => {
+    expectDescriptionRejected("First-come, first-paid until all payouts are used.");
+  });
+
+  it("rejects slot-cap phrasing", () => {
+    expectDescriptionRejected("This bounty has a 3-slot cap for accepted submissions.");
+  });
+
+  it("rejects slots-remaining phrasing", () => {
+    expectDescriptionRejected("2 slots remaining for this payout.");
   });
 
   it("accepts descriptions that do not imply multiple winners", () => {
