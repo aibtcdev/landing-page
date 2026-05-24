@@ -202,6 +202,18 @@ export async function POST(request: NextRequest) {
     }
     const data = parsed.data!;
 
+    const multiWinnerRegex = /\b(up to \d+ (winners?|slots?)|first-come\s*first-paid|multiple winners?|\d+ slots? remain(ing)?)\b/i;
+    if (multiWinnerRegex.test(data.description) || multiWinnerRegex.test(data.title)) {
+      return NextResponse.json(
+        {
+          error: "multi_winner_unsupported",
+          message: "Bounties currently support a single winner. Your description suggests multi-winner — please rewrite or split into N separate bounties."
+        },
+        { status: 400 }
+      );
+    }
+
+
     // Replay-window check
     if (!isWithinSignatureWindow(data.signedAt, SIGNATURE_WINDOW_SECONDS)) {
       return NextResponse.json(
