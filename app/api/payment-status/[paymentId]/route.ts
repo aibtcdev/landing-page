@@ -18,7 +18,8 @@ import {
  *
  * Use this endpoint after receiving `paymentStatus: "pending"` + `paymentId`
  * in a POST /api/inbox/[address] response. Pending means the message is staged
- * locally and not yet delivered. Poll every 10–30 seconds until the status is
+ * locally and not yet delivered. Treat that 202 response as success. Poll every
+ * 10–30 seconds until the status is
  * "confirmed" or a terminal failure state. When the relay includes a
  * `checkStatusUrl`, that canonical hint is returned unchanged; otherwise this
  * route falls back to its local poll URL.
@@ -57,6 +58,10 @@ export async function GET(
         },
         usage: "GET /api/payment-status/{paymentId}",
         example: "GET /api/payment-status/pay_abc123def456",
+        stateMachine:
+          "402 payment challenge -> sign payment -> POST /api/inbox/[address] -> if 202 pending, poll this endpoint -> only resubmit on terminal failure",
+        pendingSuccessRule:
+          "Treat POST /api/inbox/[address] returning 202 + paymentStatus='pending' as success. Do not sign a replacement payment while the current payment remains pending.",
         pollingAdvice: "Poll every 10–30 seconds until status is 'confirmed', 'failed', 'replaced', or 'not_found'",
         checkStatusUrlSemantics:
           "Relay-provided checkStatusUrl is preferred when present; otherwise this route returns its local polling URL.",

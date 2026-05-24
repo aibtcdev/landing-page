@@ -291,6 +291,8 @@ describe("inbox POST canonical staged-payment semantics", () => {
     });
     const body = (await response.json()) as {
       message: string;
+      resolution?: string;
+      warning?: string;
       inbox: { paymentStatus: string; paymentId?: string };
       checkStatusUrl?: string;
     };
@@ -299,6 +301,8 @@ describe("inbox POST canonical staged-payment semantics", () => {
     expect(body.message).toBe(
       "Payment accepted. Inbox delivery is staged until the relay reports confirmed."
     );
+    expect(body.resolution).toBe("poll_payment_status");
+    expect(body.warning).toContain("Do not sign or submit a replacement payment");
     expect(body.message).not.toContain("Message sent successfully");
     expect(body.inbox.paymentStatus).toBe("pending");
     expect(body.inbox.paymentId).toBe("pay_staged_case");

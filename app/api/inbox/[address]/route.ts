@@ -1273,6 +1273,7 @@ export async function POST(
         {
           error: `Nonce conflict: another transaction from your wallet is pending. Retry after ${retryAfterSeconds}s.`,
           code: errorCode,
+          resolution: "wait_for_queued_tx",
           retryable: true,
           retryAfter: retryAfterSeconds,
           nextSteps: "Retry the payment — the relay had a transient nonce collision",
@@ -1448,6 +1449,7 @@ export async function POST(
         {
           error: nonceError.error,
           code: errorCode,
+          resolution: nonceAction,
           retryable: true,
           retryAfter: nonceError.retryAfter,
           nextSteps: nonceError.nextSteps,
@@ -1615,6 +1617,9 @@ export async function POST(
         {
           success: true,
           message: "Payment accepted. Inbox delivery is staged until the relay reports confirmed.",
+          resolution: "poll_payment_status",
+          warning:
+            "Do not sign or submit a replacement payment while this payment remains pending.",
           inbox: {
             fromAddress,
             toBtcAddress,
