@@ -308,8 +308,23 @@ export async function GET(
   let receivedMessages: import("@/lib/inbox/types").InboxMessage[];
   let agentStats: Awaited<ReturnType<typeof getAgentInboxStats>>;
   let sentMessages: import("@/lib/inbox/types").OutboxReply[];
+  let filteredCount: number | null = null;
+  const filteredCountPromise: Promise<number | null> =
+    statusFilter === "all"
+      ? Promise.resolve(null)
+      : db
+          .prepare(
+            `SELECT COUNT(*) AS n
+             FROM inbox_messages
+             WHERE to_btc_address = ?
+               AND is_reply = 0
+               ${statusFilter === "unread" ? "AND read_at IS NULL" : "AND read_at IS NOT NULL"}`
+          )
+          .bind(agent.btcAddress)
+          .first<{ n: number }>()
+          .then((row) => row?.n ?? 0);
   try {
-    [agentStats, receivedMessages, sentMessages] = await Promise.all([
+    [agentStats, receivedMessages, sentMessages, filteredCount] = await Promise.all([
       // Stats O(1) point-lookup — replaces two countInboxMessagesFromD1 scans
       getAgentInboxStats(db, agent.btcAddress),
       // Paginated message list (still needed for message content)
@@ -320,6 +335,7 @@ export async function GET(
       includePartners
         ? listOutboxRepliesFromD1(db, agent.btcAddress, 100, 0)
         : Promise.resolve([] as import("@/lib/inbox/types").OutboxReply[]),
+      filteredCountPromise,
     ]);
   } catch (e) {
     return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
@@ -328,15 +344,13 @@ export async function GET(
   const unreadCount = agentStats.unreadCount;
   const receivedCount = agentStats.receivedCount;
 
-  // Derive totalCount from stats counters — no extra COUNT(*) needed.
-  // statusFilter="all"   → totalCount equals receivedCount (same predicate)
-  // statusFilter="unread" → totalCount equals unreadCount (same predicate)
-  // statusFilter="read"   → totalCount equals received minus unread
+  // Derive filtered totals from live inbox_messages COUNT(*) for status-filtered
+  // requests, with stats-based fallback if the filtered count is unavailable.
   const totalCount: number =
     statusFilter === "unread"
-      ? unreadCount
+      ? (filteredCount ?? unreadCount)
       : statusFilter === "read"
-        ? Math.max(0, receivedCount - unreadCount)
+        ? (filteredCount ?? Math.max(0, receivedCount - unreadCount))
         : receivedCount; // "all"
 
   // sentCount: prefer stats table for accuracy. Fall back to sentMessages.length
