@@ -31,10 +31,8 @@ vi.mock("@/lib/agent-lookup", () => ({
 }));
 
 vi.mock("@/lib/inbox/d1-reads", () => ({
+  countInboxMessagesFromD1: vi.fn(),
   listInboxMessagesFromD1: vi.fn(),
-  // countInboxMessagesFromD1 was deleted in P3C PR 1 — counts come from
-  // getAgentInboxStats (lib/inbox/stats.ts) per migration 012's
-  // agent_inbox_stats table.
   fetchRepliesForMessages: vi.fn(),
   listOutboxRepliesFromD1: vi.fn(),
 }));
@@ -83,8 +81,8 @@ vi.mock("@/lib/inbox/d1-dual-write", () => ({
   },
 }));
 
-// P3: inbox route GET now calls getAgentInboxStats (stats table) instead of
-// countInboxMessagesFromD1 for unread/received counts.
+  // P3/P4: inbox route GET uses getAgentInboxStats for denormalized stats and
+  // countInboxMessagesFromD1 for live filtered totalCount.
 vi.mock("@/lib/inbox/stats", () => ({
   getAgentInboxStats: vi.fn().mockResolvedValue({
     receivedCount: 1,
@@ -102,6 +100,7 @@ import { GET } from "../route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
+  countInboxMessagesFromD1,
   listInboxMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
@@ -173,6 +172,7 @@ function setupDefaultMocks() {
     ctx: { waitUntil: vi.fn() },
   });
   (lookupAgent as Mock).mockResolvedValue(TEST_AGENT);
+  (countInboxMessagesFromD1 as Mock).mockResolvedValue(1);
   (listInboxMessagesFromD1 as Mock).mockResolvedValue([RECEIVED_MESSAGE]);
   (fetchRepliesForMessages as Mock).mockResolvedValue(new Map());
   (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
@@ -189,6 +189,25 @@ beforeEach(() => {
 // not from a separate countOutboxRepliesFromD1 call.
 
 describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => {
+  it("uses live filtered count for unread totalCount", async () => {
+    (countInboxMessagesFromD1 as Mock).mockResolvedValueOnce(0);
+    (listInboxMessagesFromD1 as Mock).mockResolvedValueOnce([]);
+
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?status=unread"),
+      buildContext(AGENT_ADDR)
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.inbox.totalCount).toBe(0);
+    expect(countInboxMessagesFromD1).toHaveBeenCalledWith(
+      expect.any(Object),
+      AGENT_ADDR,
+      "unread"
+    );
+  });
+
   it("returns sentCount > 0 when listOutboxRepliesFromD1 returns reply objects", async () => {
     // sentCount is now sentMessages.length — requires ?include=partners to get replies.
     // Without include=partners, listOutboxRepliesFromD1 returns [] so sentCount=0.
@@ -247,9 +266,10 @@ describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => 
 
   it("sent-only inbox (totalCount===0 but sentCount>0) returns sentCount in normal envelope, not self-doc", async () => {
     // Regression fix: agent has sent replies but has never received a message.
-    // sentCount comes from listOutboxRepliesFromD1 (via include=partners).
+    // totalCount comes from live COUNT(*); sentCount comes from listOutboxRepliesFromD1.
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
     (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 0, lastMessageAt: null, lastSentAt: null });
+    (countInboxMessagesFromD1 as Mock).mockResolvedValue(0);
     const replies = [SENT_REPLY, { ...SENT_REPLY, messageId: "msg_2" }, { ...SENT_REPLY, messageId: "msg_3" }];
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue(replies);
 

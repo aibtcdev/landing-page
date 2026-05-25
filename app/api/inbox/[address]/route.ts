@@ -33,6 +33,7 @@ import {
 import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "@/lib/inbox/d1-dual-write";
 import { bumpInboundStats, getAgentInboxStats } from "@/lib/inbox/stats";
 import {
+  countInboxMessagesFromD1,
   listInboxMessagesFromD1,
   listSentMessagesFromD1,
   fetchRepliesForMessages,
@@ -378,11 +379,13 @@ export async function GET(
   //   [0] stats row — receivedCount, unreadCount from maintained counters
   //   [1] paginated message list (the page the caller asked for)
   //   [2] sentMessages — outbox replies for partner graph (only when includePartners)
+  //   [3] live filtered count — keeps totalCount aligned with the row query
   let receivedMessages: import("@/lib/inbox/types").InboxMessage[];
   let agentStats: Awaited<ReturnType<typeof getAgentInboxStats>>;
   let sentMessages: import("@/lib/inbox/types").OutboxReply[];
+  let filteredTotalCount: number;
   try {
-    [agentStats, receivedMessages, sentMessages] = await Promise.all([
+    [agentStats, receivedMessages, sentMessages, filteredTotalCount] = await Promise.all([
       // Stats O(1) point-lookup — replaces two countInboxMessagesFromD1 scans
       getAgentInboxStats(db, agent.btcAddress),
       // Paginated message list (still needed for message content)
@@ -393,6 +396,8 @@ export async function GET(
       includePartners
         ? listOutboxRepliesFromD1(db, agent.btcAddress, 100, 0)
         : Promise.resolve([] as import("@/lib/inbox/types").OutboxReply[]),
+      // live totalCount for the active status filter
+      countInboxMessagesFromD1(db, agent.btcAddress, statusFilter),
     ]);
   } catch (e) {
     return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
@@ -401,16 +406,9 @@ export async function GET(
   const unreadCount = agentStats.unreadCount;
   const receivedCount = agentStats.receivedCount;
 
-  // Derive totalCount from stats counters — no extra COUNT(*) needed.
-  // statusFilter="all"   → totalCount equals receivedCount (same predicate)
-  // statusFilter="unread" → totalCount equals unreadCount (same predicate)
-  // statusFilter="read"   → totalCount equals received minus unread
-  const totalCount: number =
-    statusFilter === "unread"
-      ? unreadCount
-      : statusFilter === "read"
-        ? Math.max(0, receivedCount - unreadCount)
-        : receivedCount; // "all"
+  // totalCount comes from the live filtered D1 query so it stays aligned with
+  // the row enumeration path, even when denormalized counters drift.
+  const totalCount: number = filteredTotalCount;
 
   // sentCount: prefer stats table for accuracy. Fall back to sentMessages.length
   // when include=partners (already fetched for the partner graph). If includePartners

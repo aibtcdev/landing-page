@@ -161,6 +161,33 @@ export async function listInboxMessagesFromD1(
 }
 
 /**
+ * Count inbox messages for a status filter using live D1 rows.
+ *
+ * This is the source of truth for API totalCount when the route needs the
+ * filtered count to match the page query exactly.
+ */
+export async function countInboxMessagesFromD1(
+  db: D1Database,
+  btcAddress: string,
+  status: StatusFilter
+): Promise<number> {
+  let sql = `
+    SELECT COUNT(*) AS total_count
+    FROM inbox_messages
+    WHERE to_btc_address = ? AND is_reply = 0
+  `;
+
+  if (status === "unread") {
+    sql += " AND read_at IS NULL";
+  } else if (status === "read") {
+    sql += " AND read_at IS NOT NULL";
+  }
+
+  const result = await db.prepare(sql).bind(btcAddress).first<{ total_count: number }>();
+  return result?.total_count ?? 0;
+}
+
+/**
  * Fetch a page of ORIGINATED messages an agent has sent from D1.
  *
  * "Sent" here means messages this agent AUTHORED to other agents (is_reply=0),
