@@ -90,7 +90,9 @@ export default function InboxActivity({
 
   const { messages, replies = {}, unreadCount, totalCount, receivedCount = 0, sentCount = 0 } = data.inbox;
   const hasMessages = totalCount > 0;
-  const repliedCount = messages.filter((m) => m.repliedAt).length;
+  // `sentCount` is the maintained count of replies this agent has sent
+  // (is_reply=1) — NOT originated messages. Labeled "replied" so it isn't
+  // mistaken for a sent-message total the inbox doesn't cheaply track.
 
   return (
     <div className={className}>
@@ -101,12 +103,10 @@ export default function InboxActivity({
           {hasMessages && (
             <div className="flex items-center gap-2 text-[11px] text-white/40 sm:gap-3 sm:text-[12px]">
               <span>{receivedCount} received</span>
-              <span className="text-white/15">&middot;</span>
-              <span>{sentCount} sent</span>
-              {repliedCount > 0 && (
+              {sentCount > 0 && (
                 <>
                   <span className="text-white/15">&middot;</span>
-                  <span>{repliedCount} replied</span>
+                  <span>{sentCount} replied</span>
                 </>
               )}
             </div>
