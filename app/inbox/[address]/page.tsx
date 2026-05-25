@@ -41,44 +41,7 @@ interface InboxResponse {
   };
 }
 
-interface OutboxResponse {
-  agent: {
-    btcAddress: string;
-    displayName?: string;
-  };
-  outbox: {
-    replies: OutboxReply[];
-    totalCount: number;
-    pagination: {
-      limit: number;
-      offset: number;
-      hasMore: boolean;
-      nextOffset: number | null;
-    };
-  };
-}
-
 const PAGE_SIZE = 20;
-
-// Map an OutboxReply to the same shape InboxList consumes, tagged as direction="sent".
-// The owner's BTC/STX address is used for toBtcAddress/toStxAddress so the row's
-// permalink resolves back to the owner's inbox (where the original message lives).
-function mapReplyToSentMessage(
-  reply: OutboxReply,
-  owner: { btcAddress: string; stxAddress: string }
-): MessageWithPeer {
-  return {
-    messageId: reply.messageId,
-    fromAddress: owner.stxAddress,
-    toBtcAddress: owner.btcAddress,
-    toStxAddress: owner.stxAddress,
-    content: reply.reply,
-    paymentSatoshis: 0,
-    sentAt: reply.repliedAt,
-    direction: "sent",
-    peerBtcAddress: reply.toBtcAddress,
-  };
-}
 
 export default function InboxPage() {
   const params = useParams();
@@ -122,22 +85,22 @@ export default function InboxPage() {
     }
   );
 
-  // Outbox tolerates 404/missing-shape: agents with no sent replies return a
-  // self-doc body without `outbox`. Fetcher throws on non-2xx, so we catch
-  // here and return an empty shape rather than letting SWR error.
-  const { data: outboxData } = useSWR<OutboxResponse | { outbox?: undefined }>(
-    address ? swrKeys.outbox(address, { limit: PAGE_SIZE, offset: 0 }) : null,
+  // Sent tab: originated messages this agent authored (inbox view=sent). Same
+  // endpoint and response shape as received, so it reuses the inbox pagination
+  // plumbing. Tolerates error/missing-shape by returning an empty inbox.
+  const { data: sentData } = useSWR<InboxResponse | { inbox?: undefined }>(
+    address ? swrKeys.inbox(address, { limit: PAGE_SIZE, offset: 0, view: "sent" }) : null,
     {
       fetcher: async (url: string) => {
         try {
-          return await fetcher<OutboxResponse>(url);
+          return await fetcher<InboxResponse>(url);
         } catch {
-          return { outbox: undefined };
+          return { inbox: undefined };
         }
       },
       onSuccess: (result) => {
-        const outbox = result && "outbox" in result ? result.outbox : undefined;
-        setSentNextOffset(outbox?.pagination.nextOffset ?? null);
+        const inbox = result && "inbox" in result ? result.inbox : undefined;
+        setSentNextOffset(inbox?.pagination.nextOffset ?? null);
       },
     }
   );
@@ -163,13 +126,15 @@ export default function InboxPage() {
   const unreadCount = inboxData?.inbox.unreadCount ?? 0;
   const receivedCount = inboxData?.inbox.receivedCount ?? inboxData?.inbox.totalCount ?? 0;
 
-  const baseOutbox = outboxData && "outbox" in outboxData ? outboxData.outbox : undefined;
+  const baseSentInbox = sentData && "inbox" in sentData ? sentData.inbox : undefined;
   const baseSent: MessageWithPeer[] = useMemo(
-    () => (agent && baseOutbox ? baseOutbox.replies.map((r) => mapReplyToSentMessage(r, agent)) : []),
-    [agent, baseOutbox]
+    () => baseSentInbox?.messages ?? [],
+    [baseSentInbox]
   );
   const sentMessages = [...baseSent, ...extraSent];
-  const sentCount = baseOutbox?.totalCount ?? 0;
+  // No maintained total for originals — badge reflects what's loaded, the same
+  // way the Replied/Awaiting tabs count their loaded rows.
+  const sentCount = sentMessages.length;
 
   // Load more — routed by current view. Sent tab loads from outbox; everything
   // else loads from inbox. Subsequent pages are appended to component state
@@ -181,18 +146,15 @@ export default function InboxPage() {
       if (sentNextOffset == null) return;
       setLoadingMore(true);
       try {
-        const result = await fetcher<OutboxResponse>(
-          swrKeys.outbox(address, { limit: PAGE_SIZE, offset: sentNextOffset })
+        const result = await fetcher<InboxResponse>(
+          swrKeys.inbox(address, { limit: PAGE_SIZE, offset: sentNextOffset, view: "sent" })
         );
-        const owner = { btcAddress: agent.btcAddress, stxAddress: agent.stxAddress };
         setExtraSent((prev) => {
           const existing = new Set([...baseSent, ...prev].map((m) => m.messageId));
-          const incoming = result.outbox.replies
-            .map((r) => mapReplyToSentMessage(r, owner))
-            .filter((m) => !existing.has(m.messageId));
+          const incoming = (result.inbox.messages ?? []).filter((m) => !existing.has(m.messageId));
           return [...prev, ...incoming];
         });
-        setSentNextOffset(result.outbox.pagination.nextOffset);
+        setSentNextOffset(result.inbox.pagination.nextOffset);
       } catch {
         // swallow — load-more failure leaves existing pages intact
       } finally {

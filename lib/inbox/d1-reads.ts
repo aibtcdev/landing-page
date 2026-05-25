@@ -160,6 +160,54 @@ export async function listInboxMessagesFromD1(
   return (result.results ?? []).map(rowToInboxMessage);
 }
 
+/**
+ * Fetch a page of ORIGINATED messages an agent has sent from D1.
+ *
+ * "Sent" here means messages this agent AUTHORED to other agents (is_reply=0),
+ * keyed by the sender's STX identity (from_stx_address — the x402 payer recorded
+ * at delivery time). This is distinct from listOutboxRepliesFromD1, which returns
+ * replies (is_reply=1) keyed by the replier's BTC address.
+ *
+ * Newest-first and paginated, backed by idx_inbox_sent_from_stx (migration 018)
+ * so the scan stays bounded to the LIMIT/OFFSET window — old messages never load
+ * unless explicitly paged to.
+ *
+ * Each row carries the recipient on to_btc_address / to_stx_address, so callers
+ * can render "to whom" without any extra resolution.
+ *
+ * SQL shape:
+ *   SELECT … FROM inbox_messages
+ *   WHERE is_reply = 0 AND from_stx_address = ?
+ *   ORDER BY sent_at DESC
+ *   LIMIT ? OFFSET ?
+ */
+export async function listSentMessagesFromD1(
+  db: D1Database,
+  fromStxAddress: string,
+  limit: number,
+  offset: number
+): Promise<InboxMessage[]> {
+  const sql = `
+    SELECT
+      message_id, from_stx_address, to_btc_address, to_stx_address,
+      content, payment_txid, payment_satoshis, payment_status,
+      payment_id, receipt_id, recovered_via_txid, authenticated,
+      bitcoin_signature, sender_btc_address,
+      sent_at, read_at, replied_at, reply_to_message_id
+    FROM inbox_messages
+    WHERE is_reply = 0 AND from_stx_address = ?
+    ORDER BY sent_at DESC
+    LIMIT ? OFFSET ?
+  `;
+
+  const result = await db
+    .prepare(sql)
+    .bind(fromStxAddress, limit, offset)
+    .all<D1InboxRow>();
+
+  return (result.results ?? []).map(rowToInboxMessage);
+}
+
 // Dead code purge (P3C PR 1): `countInboxMessagesFromD1` removed.
 // Replaced by `getAgentInboxStats(db, btcAddress)` from `lib/inbox/stats.ts`
 // which serves O(1) point-lookups against the maintained `agent_inbox_stats`

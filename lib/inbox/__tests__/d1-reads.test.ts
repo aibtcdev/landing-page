@@ -24,6 +24,7 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   listInboxMessagesFromD1,
+  listSentMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
   getReplyForMessageFromD1,
@@ -366,6 +367,46 @@ describe("fetchRepliesForMessages", () => {
 
     const result = await fetchRepliesForMessages(db, ["msg_no_reply"]);
     expect(result.size).toBe(0);
+  });
+});
+
+// ── listSentMessagesFromD1 ────────────────────────────────────────────────────
+
+describe("listSentMessagesFromD1", () => {
+  const SENDER_STX = "SP4DXVEC16FS6QR7RBKGWZYJKTXPC81W49W0ATJE";
+
+  it("filters by is_reply=0 AND from_stx_address, newest-first, paginated", async () => {
+    const db = createMockD1([INBOUND_ROW]);
+    const stmtMock = createPreparedStatement([INBOUND_ROW]);
+    (db.prepare as ReturnType<typeof vi.fn>).mockReturnValue(stmtMock);
+
+    await listSentMessagesFromD1(db, SENDER_STX, 20, 40);
+
+    const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(sql).toContain("FROM inbox_messages");
+    expect(sql).toContain("WHERE is_reply = 0 AND from_stx_address = ?");
+    expect(sql).toContain("ORDER BY sent_at DESC");
+    expect(sql).toContain("LIMIT ? OFFSET ?");
+
+    const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
+    expect(bindArgs[0]).toBe(SENDER_STX);
+    expect(bindArgs[1]).toBe(20); // limit
+    expect(bindArgs[2]).toBe(40); // offset
+  });
+
+  it("maps rows to InboxMessage shape carrying the recipient", async () => {
+    const db = createMockD1([INBOUND_ROW]);
+    const [msg] = await listSentMessagesFromD1(db, SENDER_STX, 20, 0);
+    expect(msg.messageId).toBe(INBOUND_ROW.message_id);
+    expect(msg.fromAddress).toBe(SENDER_STX);
+    expect(msg.toBtcAddress).toBe(INBOUND_ROW.to_btc_address);
+    expect(msg.toStxAddress).toBe(INBOUND_ROW.to_stx_address);
+  });
+
+  it("returns an empty array when the agent has sent nothing", async () => {
+    const db = createMockD1([]);
+    const result = await listSentMessagesFromD1(db, SENDER_STX, 20, 0);
+    expect(result).toEqual([]);
   });
 });
 
