@@ -34,6 +34,7 @@ import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "@/lib/in
 import { bumpInboundStats, getAgentInboxStats } from "@/lib/inbox/stats";
 import {
   listInboxMessagesFromD1,
+  listSentMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
   checkRedeemedTxidInD1,
@@ -271,14 +272,10 @@ export async function GET(
   // See: https://github.com/aibtcdev/landing-page/issues/697 (Phase 2.5 umbrella)
   // See: https://github.com/aibtcdev/landing-page/issues/723 (cache-invariant extraction)
 
-  // This route only supports received messages for the inbox list GET.
-  // The 'view' param is preserved for response-shape compatibility and
-  // future extension; for now only received/all is meaningful for inbox-list.
-  // Sent messages (outbox view) are not yet flipped in this PR (Step 3.3).
-  //
-  // For 'view=sent' with D1, we fall back to the same D1 path but return
-  // only received messages (view=all treats inbox as the source of truth).
-  // The sent-outbox flip will be handled in Step 3.3.
+  // 'view=received' and 'view=all' read the received inbox (messages addressed
+  // to this agent). 'view=sent' reads ORIGINATED messages this agent authored
+  // to other agents (handled in its own branch just below). Replies (is_reply=1)
+  // remain available inline on received messages and via GET /api/outbox.
 
   // Fetch the paginated message list from D1
   if (!db) {
@@ -290,9 +287,85 @@ export async function GET(
     );
   }
 
+  // ── view=sent: originated messages this agent authored to others ──────────
+  // (is_reply=0, keyed by from_stx_address = the agent's STX identity, the
+  // x402 payer recorded at delivery). Backed by idx_inbox_sent_from_stx
+  // (migration 018) and paginated newest-first, so old messages never load
+  // unless explicitly paged to. There is no maintained total counter for
+  // originals — hasMore is derived from whether a full page came back, which
+  // is all the "Load more" UI needs (nobody pages a precise count of old sent
+  // messages). This intentionally does NOT touch the received/all path below.
+  if (view === "sent") {
+    let sentOriginals: import("@/lib/inbox/types").InboxMessage[];
+    // Originals are keyed by STX, so an agent without a resolved STX address
+    // cannot have authored any — short-circuit to an empty page.
+    if (!agent.stxAddress) {
+      sentOriginals = [];
+    } else {
+      try {
+        sentOriginals = await listSentMessagesFromD1(
+          db,
+          agent.stxAddress,
+          limit,
+          offset
+        );
+      } catch (e) {
+        return d1TransientResponse(
+          "Inbox database temporarily unavailable. Please retry shortly."
+        );
+      }
+    }
+
+    // Resolve recipient display names for "to whom". The recipient BTC address
+    // is stored directly on the row (to_btc_address), so no STX→BTC resolution
+    // is needed — we only look up the agent record for the display name.
+    const recipientSet = new Set<string>();
+    for (const m of sentOriginals) recipientSet.add(m.toBtcAddress);
+    const recipientMap = new Map<string, import("@/lib/types").AgentRecord>();
+    await Promise.all(
+      Array.from(recipientSet).map(async (addr) => {
+        const found = await lookupAgent(kv, addr, db);
+        if (found) recipientMap.set(addr, found);
+      })
+    );
+
+    const sentMessagesOut = sentOriginals.map((message) => {
+      const peer = recipientMap.get(message.toBtcAddress);
+      return {
+        ...message,
+        direction: "sent" as const,
+        peerBtcAddress: peer?.btcAddress ?? message.toBtcAddress,
+        peerDisplayName: peer?.displayName,
+      };
+    });
+
+    const hasMore = sentOriginals.length === limit;
+    return NextResponse.json({
+      agent: {
+        btcAddress: agent.btcAddress,
+        stxAddress: agent.stxAddress,
+        displayName: agent.displayName,
+      },
+      inbox: {
+        messages: sentMessagesOut,
+        replies: {},
+        unreadCount: 0,
+        // Lower-bound total — exact counts of old sent messages aren't tracked.
+        totalCount: offset + sentOriginals.length,
+        view,
+        status: statusFilter,
+        pagination: {
+          limit,
+          offset,
+          hasMore,
+          nextOffset: hasMore ? offset + limit : null,
+        },
+      },
+    });
+  }
+
   // Run the message list query and count queries in parallel for the
-  // received inbox. For 'view=sent', we return an empty inbox (Step 3.3
-  // handles the outbox flip). For 'view=all' and 'view=received', query D1.
+  // received inbox ('view=all' and 'view=received').
   const includeReceived = view === "received" || view === "all";
 
   // D1-throws fallback policy (declared per #722 dev-council Cycle 26 advisory):
