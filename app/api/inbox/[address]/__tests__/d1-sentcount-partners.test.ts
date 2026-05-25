@@ -32,6 +32,7 @@ vi.mock("@/lib/agent-lookup", () => ({
 
 vi.mock("@/lib/inbox/d1-reads", () => ({
   listInboxMessagesFromD1: vi.fn(),
+  countInboxMessagesByStatusFromD1: vi.fn(),
   // countInboxMessagesFromD1 was deleted in P3C PR 1 — counts come from
   // getAgentInboxStats (lib/inbox/stats.ts) per migration 012's
   // agent_inbox_stats table.
@@ -103,6 +104,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
   listInboxMessagesFromD1,
+  countInboxMessagesByStatusFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
 } from "@/lib/inbox/d1-reads";
@@ -174,6 +176,7 @@ function setupDefaultMocks() {
   });
   (lookupAgent as Mock).mockResolvedValue(TEST_AGENT);
   (listInboxMessagesFromD1 as Mock).mockResolvedValue([RECEIVED_MESSAGE]);
+  (countInboxMessagesByStatusFromD1 as Mock).mockResolvedValue(1);
   (fetchRepliesForMessages as Mock).mockResolvedValue(new Map());
   (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
   // countOutboxRepliesFromD1 is no longer called (perf/d1-inbox-count-4to2)
@@ -214,6 +217,34 @@ describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => 
     expect(res.status).toBe(200);
     const body = await res.json();
     expect(body.inbox.sentCount).toBe(0);
+  });
+
+  it("uses live filtered count for status=unread when stats drift", async () => {
+    (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
+    (getAgentInboxStats as Mock).mockResolvedValue({
+      receivedCount: 17,
+      unreadCount: 1,
+      sentCount: 0,
+      lastMessageAt: null,
+      lastSentAt: null,
+    });
+    (countInboxMessagesByStatusFromD1 as Mock).mockResolvedValue(0);
+
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?status=unread"),
+      buildContext(AGENT_ADDR)
+    );
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(countInboxMessagesByStatusFromD1).toHaveBeenCalledWith(
+      expect.anything(),
+      AGENT_ADDR,
+      "unread"
+    );
+    expect(body.inbox.totalCount).toBe(0);
+    expect(body.inbox.unreadCount).toBe(1);
+    expect(body.inbox.messages).toEqual([]);
   });
 
   it("includes sentCount in economics.satsSent calculation", async () => {

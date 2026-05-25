@@ -160,12 +160,32 @@ export async function listInboxMessagesFromD1(
   return (result.results ?? []).map(rowToInboxMessage);
 }
 
-// Dead code purge (P3C PR 1): `countInboxMessagesFromD1` removed.
-// Replaced by `getAgentInboxStats(db, btcAddress)` from `lib/inbox/stats.ts`
-// which serves O(1) point-lookups against the maintained `agent_inbox_stats`
-// table (migration 012). The prior `SELECT COUNT(*) FROM inbox_messages
-// WHERE to_btc_address = ?` was the textbook D1 COUNT(*) anti-pattern
-// (cf. `feedback_d1_count_antipattern`).
+/**
+ * Count inbox rows for a status filter using the same predicates as the list query.
+ *
+ * Used as a narrow reconciliation fallback when status-filter counters drift from
+ * the underlying row set (for example unread counter skew).
+ */
+export async function countInboxMessagesByStatusFromD1(
+  db: D1Database,
+  btcAddress: string,
+  status: StatusFilter
+): Promise<number> {
+  let sql = `
+    SELECT COUNT(*) AS count
+    FROM inbox_messages
+    WHERE to_btc_address = ? AND is_reply = 0
+  `;
+
+  if (status === "unread") {
+    sql += " AND read_at IS NULL";
+  } else if (status === "read") {
+    sql += " AND read_at IS NOT NULL";
+  }
+
+  const row = await db.prepare(sql).bind(btcAddress).first<{ count: number | string }>();
+  return Number(row?.count ?? 0);
+}
 
 /**
  * Fetch reply rows for a set of parent message IDs.

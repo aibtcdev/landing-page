@@ -33,6 +33,7 @@ import {
 import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "@/lib/inbox/d1-dual-write";
 import { bumpInboundStats, getAgentInboxStats } from "@/lib/inbox/stats";
 import {
+  countInboxMessagesByStatusFromD1,
   listInboxMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
@@ -328,16 +329,24 @@ export async function GET(
   const unreadCount = agentStats.unreadCount;
   const receivedCount = agentStats.receivedCount;
 
-  // Derive totalCount from stats counters — no extra COUNT(*) needed.
+  // Derive totalCount from stats counters on the fast path.
   // statusFilter="all"   → totalCount equals receivedCount (same predicate)
-  // statusFilter="unread" → totalCount equals unreadCount (same predicate)
+  // statusFilter="unread" → fallback to live filtered count if stats drift
   // statusFilter="read"   → totalCount equals received minus unread
-  const totalCount: number =
+  let totalCount: number =
     statusFilter === "unread"
       ? unreadCount
       : statusFilter === "read"
         ? Math.max(0, receivedCount - unreadCount)
         : receivedCount; // "all"
+
+  if (includeReceived && statusFilter !== "all") {
+    try {
+      totalCount = await countInboxMessagesByStatusFromD1(db, agent.btcAddress, statusFilter);
+    } catch (_e) {
+      return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
+    }
+  }
 
   // sentCount: prefer stats table for accuracy. Fall back to sentMessages.length
   // when include=partners (already fetched for the partner graph). If includePartners
@@ -518,7 +527,7 @@ export async function GET(
   // AND no sent replies), return the self-documenting response. An agent that
   // has only sent replies (sentCount > 0, totalCount === 0) falls through to
   // the normal envelope so sentCount/economics/partners are exposed.
-  if (totalCount === 0 && sentCount === 0) {
+  if (totalCount === 0 && sentCount === 0 && unreadCount === 0 && receivedCount === 0) {
     return NextResponse.json({
       endpoint: "/api/inbox/[address]",
       description:
