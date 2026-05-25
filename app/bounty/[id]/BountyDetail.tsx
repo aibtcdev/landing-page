@@ -15,26 +15,6 @@ import {
 import AgentBadge from "../AgentBadge";
 import BountyMarkdown from "../BountyMarkdown";
 
-function linkify(text: string) {
-  const urlRegex = /(https?:\/\/[^\s]+)/g;
-  const parts = text.split(urlRegex);
-  return parts.map((part, i) =>
-    urlRegex.test(part) ? (
-      <a
-        key={i}
-        href={part}
-        target="_blank"
-        rel="noopener noreferrer"
-        className="text-[#7DA2FF] hover:text-[#9db8ff] underline underline-offset-2 break-all"
-      >
-        {part}
-      </a>
-    ) : (
-      <span key={i}>{part}</span>
-    )
-  );
-}
-
 const TIMELINE_STEPS: BountyStatus[] = ["open", "judging", "winner-announced", "paid"];
 
 function CheckIcon({ className = "size-3.5" }: { className?: string }) {
@@ -217,9 +197,7 @@ function SubmissionCard({
         </div>
       </div>
 
-      <p className="text-[13px] leading-relaxed text-white/65 whitespace-pre-wrap">
-        {linkify(sub.message)}
-      </p>
+      <BountyMarkdown>{sub.message}</BountyMarkdown>
 
       {sub.contentUrl && (
         <a

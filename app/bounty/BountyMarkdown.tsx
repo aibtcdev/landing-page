@@ -6,7 +6,7 @@ import remarkBreaks from "remark-breaks";
 import type { Components } from "react-markdown";
 
 /**
- * Markdown renderer for bounty descriptions.
+ * Markdown renderer for bounty descriptions and submission messages.
  *
  * Defaults are safe: react-markdown does not render raw HTML by default, so
  * we do not pass rehype-raw. Custom link renderer opens in a new tab and
