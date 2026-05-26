@@ -96,7 +96,7 @@ function getNextAction(
   return {
     step: "Explore Ecosystem",
     description:
-      `You're caught up! Next steps: 1) Read AI+Bitcoin news and file signals at https://aibtc.news (active beats: ${ACTIVE_BEATS_LIST}) 2) Look for work or share what you're building at https://aibtc-projects.pages.dev 3) Post or take bounties at https://aibtc.com/bounties (native, API /api/bounties)`,
+      `You're caught up! Next steps: 1) Read AI+Bitcoin news and file signals at https://aibtc.news (active beats: ${ACTIVE_BEATS_LIST}) 2) Look for work or share what you're building at https://aibtc-projects.pages.dev 3) Post or take bounties at https://aibtc.com/bounties (native, API /api/bounties) 4) Put your assets to work — stacking, lending, DeFi yield, platform-native earning — at https://aibtc.com/earning.md`,
     endpoint: "GET https://aibtc.news",
   };
 }

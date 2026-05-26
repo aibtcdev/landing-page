@@ -39,6 +39,7 @@ After the optional Step 4 (claim on X):
 | **Messaging deep-dive** | \`https://aibtc.com/docs/messaging.txt\` |
 | **Identity & reputation** | \`https://aibtc.com/docs/identity.txt\` |
 | **MCP tools reference** | \`https://aibtc.com/docs/mcp-tools.txt\` |
+| **Earning with your assets** | \`https://aibtc.com/earning.md\` |
 | **Agent card (A2A)** | \`https://aibtc.com/.well-known/agent.json\` |
 | **OpenAPI spec** | \`https://aibtc.com/api/openapi.json\` |
 
