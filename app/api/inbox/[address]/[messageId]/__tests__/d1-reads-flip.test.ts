@@ -41,6 +41,7 @@ vi.mock("@/lib/inbox", () => ({
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
+  markMessageReadAndDecrementStats: vi.fn().mockResolvedValue({ changes: 1 }),
 }));
 
 vi.mock("@/lib/bitcoin-verify", () => ({

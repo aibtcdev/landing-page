@@ -13,7 +13,11 @@ import {
 } from "@/lib/inbox";
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
-import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import {
+  insertReplyToD1,
+  markMessageReadAndDecrementStats,
+  updateMessageStateD1,
+} from "@/lib/inbox/d1-dual-write";
 import { bumpSentStats } from "@/lib/inbox/stats";
 import {
   listOutboxRepliesFromD1,
@@ -438,18 +442,17 @@ export async function POST(
   };
 
   // D1 is now the sole write path (Phase 2.5 Step 4 — KV writes removed).
-  // unreadCount is now a live SELECT COUNT(*) so no KV decrement is needed.
+  // unreadCount is served from agent_inbox_stats, so implicit read transitions
+  // must maintain that counter.
   //
   // insertReplyToD1 is synchronous + failure-propagating: failure returns 503
   // + Retry-After: 5 so the sender retries rather than losing the reply.
   // Note: insertReplyToD1 resolves outboxReply.toBtcAddress (may be STX) to BTC
   // via KV lookup before inserting.
   //
-  // updateMessageStateD1 sets replied_at (and read_at if unread) on the parent
-  // message row. Failure here is logged-and-swallowed: the reply row already
-  // committed, so the parent state update is best-effort metadata (the reply
-  // content itself is durable). This matches the prior fire-and-forget pattern
-  // for the parent state update.
+  // Parent metadata remains best-effort after the reply row commits, but the
+  // implicit unread→read transition uses a guarded batch so read_at and
+  // agent_inbox_stats.unread_count cannot drift apart.
   let replyInsertResult: { changes: number };
   try {
     replyInsertResult = await insertReplyToD1(db, kv, outboxReply);
@@ -468,15 +471,17 @@ export async function POST(
     );
   }
 
-  // Best-effort: update parent message's replied_at (and read_at if unread).
+  // Best-effort: update parent message's replied_at and, if unread, mark read
+  // with the stats decrement in the same D1 batch.
   // The reply row is already committed; this is metadata only.
   const wasUnread = !message.readAt;
-  const parentUpdates: { readAt?: string; repliedAt?: string } = {
-    repliedAt: now,
-    ...(wasUnread && { readAt: now }),
-  };
   ctx.waitUntil(
-    updateMessageStateD1(db, messageId, parentUpdates).catch((err) =>
+    (async () => {
+      if (wasUnread) {
+        await markMessageReadAndDecrementStats(db, messageId, message.toBtcAddress, now);
+      }
+      await updateMessageStateD1(db, messageId, { repliedAt: now });
+    })().catch((err) =>
       logger.error("outbox.d1_parent_state_failed", {
         messageId,
         error: String(err),

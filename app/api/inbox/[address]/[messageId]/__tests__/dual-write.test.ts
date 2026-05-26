@@ -47,13 +47,18 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
-  // P3: mark-read PATCH now uses markMessageReadIfUnread (WHERE read_at IS NULL guard)
-  markMessageReadIfUnread: vi.fn().mockResolvedValue({ changes: 1 }),
+  // P3/#906: mark-read PATCH updates read_at and stats in one guarded D1 batch.
+  markMessageReadAndDecrementStats: vi.fn().mockResolvedValue({ changes: 1 }),
 }));
 
-// P3: PATCH mark-read now calls decrementUnreadStats from @/lib/inbox/stats
 vi.mock("@/lib/inbox/stats", () => ({
-  decrementUnreadStats: vi.fn().mockResolvedValue(undefined),
+  getAgentInboxStats: vi.fn().mockResolvedValue({
+    receivedCount: 0,
+    unreadCount: 0,
+    sentCount: 0,
+    lastMessageAt: null,
+    lastSentAt: null,
+  }),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -82,7 +87,7 @@ import {
   decrementUnreadCount,
 } from "@/lib/inbox";
 import { getInboxMessageFromD1 } from "@/lib/inbox/d1-reads";
-import { updateMessageStateD1, markMessageReadIfUnread } from "@/lib/inbox/d1-dual-write";
+import { updateMessageStateD1, markMessageReadAndDecrementStats } from "@/lib/inbox/d1-dual-write";
 import { PATCH } from "../route";
 
 // ---- fixtures ---------------------------------------------------------------
@@ -189,13 +194,13 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 sole-source-of-truth (Ph
     (decrementUnreadCount as Mock).mockResolvedValue(undefined);
     // Re-apply resolved values cleared by clearAllMocks
     (updateMessageStateD1 as Mock).mockResolvedValue(undefined);
-    // P3: markMessageReadIfUnread returns D1WriteResult {changes}
-    (markMessageReadIfUnread as Mock).mockResolvedValue({ changes: 1 });
+    // P3/#906: markMessageReadAndDecrementStats returns D1WriteResult {changes}
+    (markMessageReadAndDecrementStats as Mock).mockResolvedValue({ changes: 1 });
   });
 
-  it("D1 UPDATE is synchronous — returns 200 and markMessageReadIfUnread was called directly (P3)", async () => {
-    // P3 contract: markMessageReadIfUnread (WHERE read_at IS NULL guard) is called
-    // synchronously. Success → 200 with readAt in the response.
+  it("D1 UPDATE is synchronous — returns 200 and markMessageReadAndDecrementStats was called directly (P3/#906)", async () => {
+    // P3/#906 contract: markMessageReadAndDecrementStats is called synchronously.
+    // Success → 200 with readAt in the response.
     const waitUntilFn = vi.fn(async (p: Promise<unknown>) => { await p; });
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
@@ -216,14 +221,13 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 sole-source-of-truth (Ph
     });
 
     expect(resp.status).toBe(200);
-    // P3: markMessageReadIfUnread must have been called (replaces updateMessageStateD1)
-    expect(markMessageReadIfUnread).toHaveBeenCalledOnce();
-    // ctx.waitUntil IS called for decrementUnreadStats (best-effort, changes===1)
-    expect(waitUntilFn).toHaveBeenCalledOnce();
+    expect(markMessageReadAndDecrementStats).toHaveBeenCalledOnce();
+    // The stats decrement is part of the same D1 batch; no best-effort waitUntil.
+    expect(waitUntilFn).not.toHaveBeenCalled();
 
     // Verify called with correct args
     const [calledDb, calledMessageId, calledBtcAddr, calledReadAt] = (
-      markMessageReadIfUnread as Mock
+      markMessageReadAndDecrementStats as Mock
     ).mock.calls[0];
     expect(calledDb).toBe(db);
     expect(calledMessageId).toBe(MESSAGE_ID);
@@ -231,10 +235,10 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 sole-source-of-truth (Ph
     expect(typeof calledReadAt).toBe("string");
   });
 
-  it("D1 UPDATE failure returns 503 with Retry-After: 5 (P3: markMessageReadIfUnread failure propagates)", async () => {
-    // P3 contract: markMessageReadIfUnread failure PROPAGATES — 503 + Retry-After: 5.
+  it("D1 UPDATE failure returns 503 with Retry-After: 5 (P3/#906: markMessageReadAndDecrementStats failure propagates)", async () => {
+    // P3/#906 contract: markMessageReadAndDecrementStats failure PROPAGATES — 503 + Retry-After: 5.
     const d1Error = new Error("D1 constraint violation");
-    (markMessageReadIfUnread as Mock).mockRejectedValue(d1Error);
+    (markMessageReadAndDecrementStats as Mock).mockRejectedValue(d1Error);
 
     const waitUntilFn = vi.fn();
     const ctx = createCtxWithWaitUntil(waitUntilFn);

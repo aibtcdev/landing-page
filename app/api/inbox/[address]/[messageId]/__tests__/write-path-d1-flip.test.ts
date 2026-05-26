@@ -42,13 +42,18 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
-  // P3: mark-read PATCH now uses markMessageReadIfUnread
-  markMessageReadIfUnread: vi.fn().mockResolvedValue({ changes: 1 }),
+  // P3/#906: mark-read PATCH now uses guarded read+stats batch helper.
+  markMessageReadAndDecrementStats: vi.fn().mockResolvedValue({ changes: 1 }),
 }));
 
-// P3: decrementUnreadStats called after markMessageReadIfUnread changes===1
 vi.mock("@/lib/inbox/stats", () => ({
-  decrementUnreadStats: vi.fn().mockResolvedValue(undefined),
+  getAgentInboxStats: vi.fn().mockResolvedValue({
+    receivedCount: 0,
+    unreadCount: 0,
+    sentCount: 0,
+    lastMessageAt: null,
+    lastSentAt: null,
+  }),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -247,11 +252,11 @@ describe("Phase 2.5 Step 3.5 — PATCH mark-read write-path D1 flip", () => {
   });
 
   it("D1 UPDATE failure on mark-read write → 503 with canonical transient_d1_unavailable shape (#747)", async () => {
-    // P3: markMessageReadIfUnread throws — the D1 write path for PATCH mark-read.
+    // P3/#906: markMessageReadAndDecrementStats throws — the D1 write path for PATCH mark-read.
     // Issue #747: this path emits canonical shape with error: "transient_d1_unavailable",
     // snake_case retry_after, and Retry-After header.
-    const { markMessageReadIfUnread } = await import("@/lib/inbox/d1-dual-write");
-    (markMessageReadIfUnread as Mock).mockRejectedValue(
+    const { markMessageReadAndDecrementStats } = await import("@/lib/inbox/d1-dual-write");
+    (markMessageReadAndDecrementStats as Mock).mockRejectedValue(
       new Error("D1_ERROR: database is locked")
     );
 

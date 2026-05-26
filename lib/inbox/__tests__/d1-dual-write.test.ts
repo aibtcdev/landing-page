@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   insertInboundMessageToD1,
   insertReplyToD1,
+  markMessageReadAndDecrementStats,
   resolveReplyRecipientBtcAddress,
   updateMessageStateD1,
 } from "../d1-dual-write";
@@ -471,5 +472,98 @@ describe("updateMessageStateD1", () => {
     const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
     // Last bind param must be the messageId (WHERE clause)
     expect(bindArgs[bindArgs.length - 1]).toBe(customMsgId);
+  });
+});
+
+// ── markMessageReadAndDecrementStats ─────────────────────────────────────────
+
+describe("markMessageReadAndDecrementStats", () => {
+  const MSG_ID = "msg_1771381602504_30487f5e-1f3a-473a-8068-e040295a76bf";
+  const BTC_ADDRESS = "bc1qyu22hyqr406pus0g9jmfytk4ss5z8qsje74l76";
+  const READ_AT = "2026-05-10T12:00:00.000Z";
+
+  function createBatchDb(markChanges: number) {
+    const stmts: Array<{
+      bind: ReturnType<typeof vi.fn>;
+      run: ReturnType<typeof vi.fn>;
+      first: ReturnType<typeof vi.fn>;
+      all: ReturnType<typeof vi.fn>;
+      raw: ReturnType<typeof vi.fn>;
+    }> = [];
+    const prepare = vi.fn(() => {
+      const stmt = {
+        bind: vi.fn(),
+        run: vi.fn(),
+        first: vi.fn(),
+        all: vi.fn(),
+        raw: vi.fn(),
+      };
+      stmt.bind.mockReturnValue(stmt);
+      stmts.push(stmt);
+      return stmt;
+    });
+    const batch = vi.fn().mockResolvedValue([
+      { meta: { changes: markChanges } },
+      { meta: { changes: markChanges } },
+    ]);
+    const db = {
+      prepare,
+      batch,
+      dump: vi.fn(),
+      exec: vi.fn(),
+    } as unknown as D1Database;
+    return { db, prepare, batch, stmts };
+  }
+
+  it("batches read_at update with guarded stats decrement", async () => {
+    const { db, prepare, batch } = createBatchDb(1);
+
+    const result = await markMessageReadAndDecrementStats(
+      db,
+      MSG_ID,
+      BTC_ADDRESS,
+      READ_AT
+    );
+
+    expect(result.changes).toBe(1);
+    expect(prepare).toHaveBeenCalledTimes(2);
+    expect(batch).toHaveBeenCalledOnce();
+
+    const markSql = (prepare.mock.calls[0] as unknown[])[0] as string;
+    expect(markSql).toContain("UPDATE inbox_messages");
+    expect(markSql).toContain("read_at IS NULL");
+
+    const statsSql = (prepare.mock.calls[1] as unknown[])[0] as string;
+    expect(statsSql).toContain("UPDATE agent_inbox_stats");
+    expect(statsSql).toContain("unread_count = MAX(0, unread_count - 1)");
+    expect(statsSql).toContain("read_at = ?");
+  });
+
+  it("binds the exact read_at timestamp into the stats guard", async () => {
+    const { db, stmts } = createBatchDb(1);
+
+    await markMessageReadAndDecrementStats(db, MSG_ID, BTC_ADDRESS, READ_AT);
+
+    expect(stmts[0].bind.mock.calls[0]).toEqual([READ_AT, MSG_ID, BTC_ADDRESS]);
+    expect(stmts[1].bind.mock.calls[0]).toEqual([
+      expect.any(String),
+      BTC_ADDRESS,
+      MSG_ID,
+      BTC_ADDRESS,
+      READ_AT,
+    ]);
+  });
+
+  it("returns zero changes when the guarded message update did not change a row", async () => {
+    const { db } = createBatchDb(0);
+
+    const result = await markMessageReadAndDecrementStats(
+      db,
+      MSG_ID,
+      BTC_ADDRESS,
+      READ_AT
+    );
+
+    expect(result.changes).toBe(0);
   });
 });

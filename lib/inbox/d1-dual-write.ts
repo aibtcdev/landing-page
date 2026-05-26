@@ -330,3 +330,51 @@ export async function markMessageReadIfUnread(
     .run();
   return { changes: result.meta.changes };
 }
+
+/**
+ * Mark a message read and decrement agent_inbox_stats in the same D1 batch.
+ *
+ * The stats decrement is gated by the exact read_at value written by the
+ * preceding UPDATE, so duplicate calls and already-read rows do not double
+ * decrement. D1 batches are used elsewhere in this codebase for all-or-nothing
+ * multi-statement writes; keeping read_at and unread_count together prevents
+ * the phantom-unread drift class from #906.
+ */
+export async function markMessageReadAndDecrementStats(
+  db: D1Database,
+  messageId: string,
+  btcAddress: string,
+  readAt: string
+): Promise<D1WriteResult> {
+  const now = new Date().toISOString();
+  const [markResult] = await db.batch([
+    db
+      .prepare(
+        `UPDATE inbox_messages
+         SET read_at = ?
+         WHERE message_id = ?
+           AND to_btc_address = ?
+           AND is_reply = 0
+           AND read_at IS NULL`
+      )
+      .bind(readAt, messageId, btcAddress),
+    db
+      .prepare(
+        `UPDATE agent_inbox_stats
+         SET unread_count = MAX(0, unread_count - 1),
+             updated_at   = ?
+         WHERE btc_address = ?
+           AND EXISTS (
+             SELECT 1
+             FROM inbox_messages
+             WHERE message_id = ?
+               AND to_btc_address = ?
+               AND is_reply = 0
+               AND read_at = ?
+           )`
+      )
+      .bind(now, btcAddress, messageId, btcAddress, readAt),
+  ]);
+
+  return { changes: markResult.meta.changes };
+}

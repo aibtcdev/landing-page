@@ -53,6 +53,7 @@ vi.mock("@/lib/inbox", () => ({
 vi.mock("@/lib/inbox/d1-dual-write", () => ({
   // P3: insertReplyToD1 returns D1WriteResult {changes}
   insertReplyToD1: vi.fn().mockResolvedValue({ changes: 1 }),
+  markMessageReadAndDecrementStats: vi.fn().mockResolvedValue({ changes: 1 }),
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
 }));
 

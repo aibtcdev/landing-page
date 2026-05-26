@@ -60,6 +60,7 @@ vi.mock("@/lib/inbox/d1-dual-write", () => ({
   // P3: insertInboundMessageToD1 and insertReplyToD1 now return D1WriteResult
   insertInboundMessageToD1: vi.fn().mockResolvedValue({ changes: 1 }),
   insertReplyToD1: vi.fn().mockResolvedValue({ changes: 1 }),
+  markMessageReadAndDecrementStats: vi.fn().mockResolvedValue({ changes: 1 }),
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
   isPaymentTxidUniqueViolation: (err: unknown): boolean => {
     const msg = err instanceof Error ? err.message : String(err);
@@ -148,7 +149,12 @@ import {
   getInboxMessageFromD1,
   getReplyForMessageFromD1,
 } from "@/lib/inbox/d1-reads";
-import { insertInboundMessageToD1, insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import {
+  insertInboundMessageToD1,
+  insertReplyToD1,
+  markMessageReadAndDecrementStats,
+  updateMessageStateD1,
+} from "@/lib/inbox/d1-dual-write";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { POST as inboxPOST } from "../route";
 import { POST as outboxPOST } from "../.././../outbox/[address]/route";
@@ -565,10 +571,11 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
     (buildReplyMessage as Mock).mockReturnValue("Inbox Reply | msg_123 | hello");
     // P3: insertReplyToD1 returns D1WriteResult {changes}
     (insertReplyToD1 as Mock).mockResolvedValue({ changes: 1 });
+    (markMessageReadAndDecrementStats as Mock).mockResolvedValue({ changes: 1 });
     (updateMessageStateD1 as Mock).mockResolvedValue(undefined);
   });
 
-  it("schedules D1 parent-state UPDATE via ctx.waitUntil after reply write (unread message)", async () => {
+  it("schedules guarded read+stats batch plus parent repliedAt update after reply write (unread message)", async () => {
     const waitUntilFn = vi.fn(async (p: Promise<unknown>) => { await p; });
     const ctx = createCtxWithWaitUntil(waitUntilFn);
     const db = createMockDB();
@@ -588,7 +595,7 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
       data: { messageId: MESSAGE_ID, reply: "hello", signature: "sig123" },
     });
 
-    // Message is UNREAD (no readAt) — both readAt and repliedAt should be set
+    // Message is UNREAD (no readAt) — readAt is set by the guarded read+stats batch.
     (getInboxMessageFromD1 as Mock).mockResolvedValue({
       messageId: MESSAGE_ID,
       toBtcAddress: AGENT.btcAddress,
@@ -617,11 +624,19 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
     const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
     expect(resp.status).toBe(201);
-    // P3: waitUntil called twice:
-    //   1. best-effort parent-state updateMessageStateD1
+    // P3/#906: waitUntil called twice:
+    //   1. best-effort parent metadata task (mark read+decrement stats, then repliedAt)
     //   2. bumpSentStats (changes === 1 from insertReplyToD1)
     expect(waitUntilFn).toHaveBeenCalledTimes(2);
+    expect(markMessageReadAndDecrementStats).toHaveBeenCalledOnce();
     expect(updateMessageStateD1).toHaveBeenCalledOnce();
+
+    const [calledReadDb, calledReadMessageId, calledReadBtcAddress] = (
+      markMessageReadAndDecrementStats as Mock
+    ).mock.calls[0];
+    expect(calledReadDb).toBe(db);
+    expect(calledReadMessageId).toBe(MESSAGE_ID);
+    expect(calledReadBtcAddress).toBe(AGENT.btcAddress);
 
     const [calledDb, calledMessageId, calledUpdates] = (
       updateMessageStateD1 as Mock
@@ -629,11 +644,11 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
     expect(calledDb).toBe(db);
     // Must target the PARENT message_id directly (not the derived reply PK)
     expect(calledMessageId).toBe(MESSAGE_ID);
-    // Message was unread → both fields should be set
+    // Parent metadata update only sets repliedAt; readAt/counter update is in
+    // markMessageReadAndDecrementStats.
     expect(calledUpdates).toHaveProperty("repliedAt");
-    expect(calledUpdates).toHaveProperty("readAt");
     expect(typeof calledUpdates.repliedAt).toBe("string");
-    expect(typeof calledUpdates.readAt).toBe("string");
+    expect(calledUpdates).not.toHaveProperty("readAt");
   });
 
   it("sets only repliedAt (not readAt) when parent message was already read", async () => {
@@ -685,6 +700,7 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
     const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
     expect(resp.status).toBe(201);
+    expect(markMessageReadAndDecrementStats).not.toHaveBeenCalled();
     expect(updateMessageStateD1).toHaveBeenCalledOnce();
 
     const [, , calledUpdates] = (updateMessageStateD1 as Mock).mock.calls[0];
