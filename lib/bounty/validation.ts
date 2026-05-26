@@ -29,6 +29,8 @@ export interface ValidationHint {
 }
 
 type FieldError = { message: string; hint: ValidationHint };
+// Narrow guard for observed unsupported multi-winner copy from #908. This is not
+// a semantic classifier; extend with new phrases only when real false negatives appear.
 const MULTI_WINNER_COPY_PATTERN =
   /\b(up to \d+ winners?|multiple winners?|first[-\s]come[,\s]+first[-\s]paid|\d+[-\s]slot cap|\d+ slots? remain(?:ing)?)\b/i;
 
