@@ -55,7 +55,7 @@ CREATE INDEX IF NOT EXISTS idx_vouches_paid_out ON vouches(paid_out, registered_
 CREATE INDEX IF NOT EXISTS idx_balances_agent_token_time
   ON balances(agent_address, token_id, captured_at DESC);
 
--- ── swaps (010 re-added the token_in/out indexes; these three were not) ──────
+-- ── swaps (010 added the token_in/out indexes; these three from 005 were not) ─
 CREATE INDEX IF NOT EXISTS idx_swaps_sender_burn_time ON swaps(sender, burn_block_time DESC);
 CREATE INDEX IF NOT EXISTS idx_swaps_scored_at ON swaps(scored_at) WHERE scored_at IS NULL;
 CREATE INDEX IF NOT EXISTS idx_swaps_contract_burn_time ON swaps(contract_id, burn_block_time DESC);
