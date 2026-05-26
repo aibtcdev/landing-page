@@ -131,7 +131,7 @@ function Section({ title, children }: { title: string; children: React.ReactNode
 function BackLink() {
   return (
     <Link
-      href="/bounty"
+      href="/bounties"
       className="inline-flex items-center gap-1.5 text-sm text-white/50 hover:text-white/80 transition-colors"
     >
       <svg className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
