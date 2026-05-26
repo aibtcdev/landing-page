@@ -20,7 +20,7 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
 
   return (
     <Link
-      href={`/bounty/${bounty.id}`}
+      href={`/bounties/${bounty.id}`}
       className="group flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 transition-[border-color,background-color] duration-200 hover:border-white/[0.12] hover:bg-white/[0.04] max-md:p-4"
     >
       <div className="flex items-start justify-between gap-2">
@@ -161,7 +161,7 @@ export default function BountyDirectory({
           </p>
         </div>
         <Link
-          href="/bounty/new"
+          href="/bounties/new"
           className="inline-flex items-center gap-2 rounded-lg border border-[#F7931A]/30 bg-[#F7931A]/[0.08] px-4 py-2 text-sm font-medium text-[#F7931A] hover:bg-[#F7931A]/[0.14] transition-colors"
         >
           Post a bounty

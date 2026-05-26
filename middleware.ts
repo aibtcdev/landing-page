@@ -293,6 +293,16 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(new URL(redirectTarget, request.url), 301);
   }
 
+  // The bounty board UX route was renamed /bounty -> /bounties (the API has
+  // always been /api/bounties). Redirect the old path and any sub-path,
+  // preserving the suffix and query string. Guard against matching /bounties.
+  if (path === "/bounty" || path.startsWith("/bounty/")) {
+    const target = "/bounties" + path.slice("/bounty".length);
+    const url = new URL(target, request.url);
+    url.search = request.nextUrl.search;
+    return NextResponse.redirect(url, 301);
+  }
+
   // Paths that serve different content for CLI (curl/wget) vs browser.
   // Both branches must set Vary: User-Agent so shared caches key on UA.
   const cliRewrites: Record<string, string> = {
@@ -377,6 +387,8 @@ export const config = {
     "/guide/mcp",
     "/guide/loop",
     "/install/claude",
+    "/bounty",
+    "/bounty/:path*",
     "/vps",
     "/local",
     "/update",
