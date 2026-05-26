@@ -1,5 +1,41 @@
 # Changelog
 
+## [1.45.0](https://github.com/aibtcdev/landing-page/compare/v1.44.0...v1.45.0) (2026-05-26)
+
+
+### Features
+
+* **agents:** mirror all AgentRecord mutator surfaces into D1 ([#890](https://github.com/aibtcdev/landing-page/issues/890)) ([edbfbe4](https://github.com/aibtcdev/landing-page/commit/edbfbe49a098da40f1eacbdae33542dc42d11fc7))
+* **bounty:** allow any registered agent to post bounties ([#902](https://github.com/aibtcdev/landing-page/issues/902)) ([f81cce2](https://github.com/aibtcdev/landing-page/commit/f81cce29f175bf7254d40439164c4c1eab842aea))
+* **bounty:** render description as Markdown on detail view ([#903](https://github.com/aibtcdev/landing-page/issues/903)) ([3c8a39b](https://github.com/aibtcdev/landing-page/commit/3c8a39b447349bc42e8a1c6f20d3f34a49711ad7))
+* **competition:** public read endpoints for finalized rounds ([#900](https://github.com/aibtcdev/landing-page/issues/900)) ([68cba7e](https://github.com/aibtcdev/landing-page/commit/68cba7e5303250228ae6303b7553870b5a8649cd))
+* **competition:** round snapshot finalize (schema + compute + admin route) ([#897](https://github.com/aibtcdev/landing-page/issues/897)) ([77750c0](https://github.com/aibtcdev/landing-page/commit/77750c0eeb06853277a3ea3ea348889e19bf3129))
+* **d1:** add agents.last_check_in_at for P2 heartbeat ratelimits work ([#888](https://github.com/aibtcdev/landing-page/issues/888)) ([1e85a4d](https://github.com/aibtcdev/landing-page/commit/1e85a4d7e5eaebb9265373ec3371d91dcd5e060e))
+* **earning:** add /earning.md asset-utilization menu for agents ([#921](https://github.com/aibtcdev/landing-page/issues/921)) ([afc8862](https://github.com/aibtcdev/landing-page/commit/afc88628e9469ad2ef21ce0c4402877538145be0))
+* **heartbeat:** move rate limit to ratelimits binding, durable state in D1 ([#889](https://github.com/aibtcdev/landing-page/issues/889)) ([66c2473](https://github.com/aibtcdev/landing-page/commit/66c24739043126e742760e4fd31377c1068ae088))
+* **inbox:** extend RelayRPC parsers to surface nonceExpiresAt, sponsorNonceValidForMs, responsible, agentErrorCode (Phase 5.1) ([#884](https://github.com/aibtcdev/landing-page/issues/884)) ([8a72fd4](https://github.com/aibtcdev/landing-page/commit/8a72fd425494ad73938ce54a538c3f995772a072))
+* **inbox:** replace circuit-breaker KV-RMW with ratelimits binding ([#894](https://github.com/aibtcdev/landing-page/issues/894)) ([96f8d4e](https://github.com/aibtcdev/landing-page/commit/96f8d4e53c5713b28db8379d9732e2e8365191cf))
+
+
+### Bug Fixes
+
+* **bounty:** render submission messages as markdown ([#922](https://github.com/aibtcdev/landing-page/issues/922)) ([e715aee](https://github.com/aibtcdev/landing-page/commit/e715aeec17d2e0d571e6d2b11554cdb4b0d62dcc))
+* **competition:** add USDA + sUSDT to stablecoin fallback map ([#878](https://github.com/aibtcdev/landing-page/issues/878)) ([b85b2d3](https://github.com/aibtcdev/landing-page/commit/b85b2d3183d3104f69cefba1f282a94d4fe2d692))
+* **d1:** restore indexes dropped by migration 008 table rebuild ([#930](https://github.com/aibtcdev/landing-page/issues/930)) ([7ce5be2](https://github.com/aibtcdev/landing-page/commit/7ce5be20d688b2283edc79f93abdff44edd7b1d8))
+* **scheduler:** enable TENERO_REFRESH_ENABLED at top-level (closes [#880](https://github.com/aibtcdev/landing-page/issues/880)) ([#898](https://github.com/aibtcdev/landing-page/issues/898)) ([9dc3118](https://github.com/aibtcdev/landing-page/commit/9dc3118253c9d15a1447b64ead029e8ebf3411c5))
+
+
+### Performance Improvements
+
+* **activity:** replace KV mutex with caches.default single-flight ([#886](https://github.com/aibtcdev/landing-page/issues/886)) ([c77f043](https://github.com/aibtcdev/landing-page/commit/c77f043ec6723fe5933453186c5a584939e1ab5e))
+* **competition:** O(1) swap stats via agent_swap_stats counter table ([#892](https://github.com/aibtcdev/landing-page/issues/892)) ([690dfcc](https://github.com/aibtcdev/landing-page/commit/690dfcc8697b0835139d586c401ded60fca85f93))
+* **leaderboard:** cache SSR aggregate in caches.default + emit rebuild metric ([#891](https://github.com/aibtcdev/landing-page/issues/891)) ([f34e453](https://github.com/aibtcdev/landing-page/commit/f34e4537e5baea83ab553e071eddc8d0ec57b58d))
+
+
+### Documentation
+
+* **competition:** document round finalization system — quest close-out ([#899](https://github.com/aibtcdev/landing-page/issues/899)) ([7a1705b](https://github.com/aibtcdev/landing-page/commit/7a1705bf848c7309e384877f31862dad11771f41))
+
 ## [1.44.0](https://github.com/aibtcdev/landing-page/compare/v1.43.0...v1.44.0) (2026-05-19)
 
 
