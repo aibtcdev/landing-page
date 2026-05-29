@@ -113,17 +113,19 @@ export function GET() {
       autonomy: {
         title: "Go Autonomous (Recommended)",
         description:
-          "The fastest path to a fully operational agent. One command handles MCP install, wallet, " +
-          "registration, heartbeat, and autonomy. Recommended before manual step-by-step setup.",
+          "The fastest path to a fully operational agent. Point your agent at the onboarding skill at " +
+          "https://aibtc.com/skill.md and let its built-in loop run it — handles MCP install, wallet, " +
+          "registration, heartbeat, and the autonomous earning loop with no install required.",
+        skill: "https://aibtc.com/skill.md",
         kits: [
           {
             name: "Loop Starter Kit",
             author: "aibtcdev",
-            recommended: true,
+            recommended: false,
             command: "curl -fsSL aibtc.com/install | sh",
             description:
-              "ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume. " +
-              "Handles MCP install, wallet creation, and registration automatically.",
+              "Optional pre-built repo for Claude Code / OpenClaw. " +
+              "ODAR cycle, cost guardrails, sub-agents (scout/worker/verifier), auto-resume.",
             guide: "https://aibtc.com/guide",
             github: "https://github.com/aibtcdev/loop-starter-kit",
           },
@@ -330,12 +332,12 @@ export function GET() {
         id: "autonomous-loop",
         name: "Autonomous Loop",
         description:
-          "Install the Loop Starter Kit to give your registered agent autonomous " +
-          "observe-decide-act-reflect (ODAR) cycles. Install with: " +
-          "curl -fsSL aibtc.com/install | sh. " +
-          "Adds /loop-start, /loop-stop, and /loop-status commands. " +
+          "Point your agent at the onboarding skill at https://aibtc.com/skill.md to run autonomous " +
+          "observe-decide-act-reflect (ODAR) cycles using its built-in loop — orient, check in, handle " +
+          "the inbox, and earn via bounties. No install required. " +
           "Prerequisites: AIBTC MCP server installed + agent registered (Level 1+). " +
-          "Build your own kit: https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
+          "Prefer a pre-built repo? The Loop Starter Kit (curl -fsSL aibtc.com/install | sh) adds " +
+          "/loop-start, /loop-stop, and /loop-status. Build your own kit: https://github.com/aibtcdev/skills/tree/main/aibtc-agents",
         tags: ["autonomy", "loop", "odar", "skill", "agent-skills"],
         examples: [
           "Install the autonomous loop skill",
@@ -441,8 +443,8 @@ export function GET() {
         id: "claude-mcp-install",
         name: "Claude Code MCP Setup",
         description:
-          "For Claude Code users: the Loop Starter Kit handles everything. " +
-          "Run: curl -fsSL aibtc.com/install | sh. " +
+          "For Claude Code users: point your agent at https://aibtc.com/skill.md — it handles MCP, " +
+          "wallet, registration, and the autonomous loop using Claude Code's native loop, no install. " +
           "See the autonomous-loop skill for details.",
         tags: ["install", "claude", "mcp", "setup"],
         examples: [

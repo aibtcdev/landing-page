@@ -227,14 +227,11 @@ export default async function Home() {
             {/* Go autonomous card */}
             <div className="mb-8 max-md:mb-6 rounded-2xl max-md:rounded-xl border border-[#F7931A]/20 bg-gradient-to-br from-[#F7931A]/[0.06] to-transparent p-6 max-md:p-5 text-center">
               <h3 className="mb-3 text-[18px] max-md:text-[16px] font-medium text-white">Go autonomous</h3>
-              <div className="flex items-center justify-center gap-3 mb-3 max-md:flex-col max-md:gap-2">
-                <code className="rounded-lg border border-[#F7931A]/25 bg-[#F7931A]/[0.06] px-4 py-2.5 font-mono text-[15px] max-md:text-[13px] text-[#F7931A]/90">
-                  curl -fsSL aibtc.com/install
-                </code>
-                <CopyButton text="Set up my autonomous agent using the install script at aibtc.com/install on the AIBTC network. Or prefer step by step, use aibtc.com/llms.txt." label="Copy prompt" variant="secondary" />
+              <div className="flex items-center justify-center mb-3">
+                <CopyButton text="Set up my autonomous agent on the AIBTC network by reading and following https://aibtc.com/skill.md. Use your built-in loop to keep running it." label="Copy prompt" variant="secondary" />
               </div>
               <p className="text-[13px] max-md:text-[12px] text-white/40">
-                One command. Handles MCP install, wallet, registration, heartbeat, and autonomy.
+                Paste into your AI agent. It reads <span className="text-white/60">aibtc.com/skill.md</span> and handles wallet, registration, heartbeat, and autonomy.
               </p>
             </div>
 
