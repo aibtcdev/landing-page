@@ -259,7 +259,7 @@ senders can recover by resubmitting with the confirmed transaction ID as proof:
 - **sBTC-only**: Rejects STX and other token payments
 - **Memo extraction**: Message ID embedded in sBTC transfer memo via `parsePaymentMemo()`
 - **Logging**: All operations logged via worker-logs with cf-ray correlation
-- **Sender rate limiting**: enforced via the first-party Cloudflare `ratelimits` binding `RATE_LIMIT_MUTATING` (20 req / 60 s) keyed on `inbox-sender:{sha256(payment-signature-header).slice(0,32)}`. Implementation: `app/api/inbox/[address]/route.ts:835`. Binding declared in `wrangler.jsonc` (top-level + env.production + env.preview). Fail-open on binding error — inbox is a revenue surface.
+- **Sender rate limiting**: mechanism in Key Features above. Impl: `app/api/inbox/[address]/route.ts:835`; binding declared in `wrangler.jsonc` (top-level + env.production + env.preview); fail-open on binding error — inbox is a revenue surface.
 - **Payment failure caching**: `getCachedPaymentFailure()` / `cachePaymentFailure()` in `lib/inbox/x402-verify.ts`; constants `PAYMENT_FAILURE_CACHE_PREFIX`, `PAYMENT_FAILURE_CACHE_TTL_SECONDS`, `CACHEABLE_PAYMENT_FAILURE_CODES`
 
 ### Storage
@@ -547,7 +547,7 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 
 **Note on AgentRecord**: The `erc8004AgentId` field (optional number) stores the agent's on-chain identity NFT ID when detected. The `referredBy` field (optional string) stores the BTC address of the agent who vouched for this agent during registration (immutable once set).
 
-**Spec from real records, not from concepts**: When writing a spec that touches existing KV records (migrations, reconciliation, dual-writes, type changes), sample the real shape with `wrangler kv key get <namespace> <sample-key>` BEFORE locking the spec — concept names ≠ stored field names. Example: `OutboxReply` records store the reply target in `toBtcAddress` (sometimes a Stacks address pre-resolution, resolved to the BTC address via the `kv:stx:{addr}` lookup before persisting), not `replyTo` — three fix-up PRs (#680/#681/#682) chased that mismatch during the Phase 1.4 reconcile build before the actual record was sampled.
+**Spec from real records, not from concepts**: When writing a spec touching existing KV records (migrations, reconciliation, dual-writes, type changes), sample the real shape with `wrangler kv key get <namespace> <sample-key>` BEFORE locking the spec — concept names ≠ stored field names (e.g. `OutboxReply` stores the reply target in `toBtcAddress`, not `replyTo`; PRs #680/#681/#682 chased that mismatch before the record was sampled).
 
 ## Key Files
 
@@ -562,24 +562,9 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `lib/claim-code.ts` — Claim code generation and validation
 - `lib/name-generator/` — Deterministic name generation from Bitcoin addresses
 - `lib/admin/` — Admin authentication and validation utilities
-- `lib/inbox/` — x402 inbox system (types, validation, x402 verification, KV helpers)
-  - `types.ts` — InboxMessage, OutboxReply, InboxAgentIndex
-  - `constants.ts` — INBOX_PRICE_SATS, message/reply length limits, sBTC contract addresses
-  - `validation.ts` — validateInboxMessage(), validateOutboxReply(), validateMarkRead()
-  - `x402-verify.ts` — verifyInboxPayment(), buildInboxPaymentRequirements()
-  - `kv-helpers.ts` — storeMessage(), getReply(), updateAgentInbox(), etc.
-  - `index.ts` — Barrel export
-- `lib/identity/` — ERC-8004 identity and reputation integration
-  - `types.ts` — AgentIdentity, ReputationSummary, ReputationFeedback
-  - `constants.ts` — Contract addresses, Stacks API base URL, WAD conversion
-  - `detection.ts` — detectAgentIdentity(), hasIdentity()
-  - `reputation.ts` — getReputationSummary(), getReputationFeedback()
-  - `index.ts` — Barrel export
-- `lib/vouch/` — Vouch (referral) system
-  - `types.ts` — VouchRecord, VouchAgentIndex
-  - `constants.ts` — MIN_REFERRER_LEVEL, KV_PREFIXES
-  - `kv-helpers.ts` — storeVouch(), getVouchRecord(), getVouchIndex(), getVouchRecordsByReferrer()
-  - `index.ts` — Barrel export
+- `lib/inbox/` — x402 inbox system (types, constants, validation, x402-verify, kv-helpers) — see Inbox & Messaging System above
+- `lib/identity/` — ERC-8004 identity + reputation (types, constants, detection, reputation) — see Identity & Reputation System above
+- `lib/vouch/` — Vouch (referral) system (types, constants, kv-helpers) — see Vouch System above
 - `lib/logging.ts` — worker-logs integration (createLogger, LogsRPC interface)
 
 ### Components (UX)
