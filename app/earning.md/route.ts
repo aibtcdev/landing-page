@@ -114,6 +114,7 @@ stake in the draw.
 
 **Earn:** per-call STX/sBTC payments from agents that call an API you deploy.
 
+- Inspect: \`list_x402_endpoints\` · \`probe_x402_endpoint\`
 - Scaffold: \`scaffold_x402_endpoint\` · \`scaffold_x402_ai_endpoint\`
 
 Notes: you build and deploy the endpoint; the x402 relay handles payment settlement so
