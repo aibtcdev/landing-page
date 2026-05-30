@@ -38,8 +38,42 @@ const TAG_STYLES: Record<string, string> = {
   sensitive: "text-red-400/70 bg-red-400/[0.06] border-red-400/10",
 };
 
+/** Human label + dot color for each tag, used by the filter rail and card chips. */
+const TAG_META: Record<string, { label: string; dot: string }> = {
+  l1: { label: "Bitcoin L1", dot: "bg-[#F7931A]" },
+  l2: { label: "Stacks L2", dot: "bg-[#7DA2FF]" },
+  defi: { label: "DeFi", dot: "bg-emerald-400" },
+  write: { label: "Write", dot: "bg-purple-400" },
+  "read-only": { label: "Read-only", dot: "bg-sky-400" },
+  infrastructure: { label: "Infra", dot: "bg-white/50" },
+  "mainnet-only": { label: "Mainnet", dot: "bg-amber-400" },
+  "requires-funds": { label: "Needs funds", dot: "bg-rose-400" },
+  sensitive: { label: "Sensitive", dot: "bg-red-400" },
+};
+
+/** Curated display order for the filter rail (layers, access, domain, flags). */
+const TAG_ORDER = [
+  "l1",
+  "l2",
+  "read-only",
+  "write",
+  "defi",
+  "infrastructure",
+  "mainnet-only",
+  "requires-funds",
+  "sensitive",
+];
+
 function tc(tag: string) {
   return TAG_STYLES[tag] ?? "text-white/50 bg-white/[0.04] border-white/[0.06]";
+}
+
+function tagLabel(tag: string) {
+  return TAG_META[tag]?.label ?? tag;
+}
+
+function tagDot(tag: string) {
+  return TAG_META[tag]?.dot ?? "bg-white/40";
 }
 
 /* ─── Short descriptions (≤6 words) ─── */
@@ -137,6 +171,21 @@ function toSlug(name: string): string {
   return name.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
 }
 
+/** Layer badges (L1 / L2) derived from a skill's tags. */
+function layers(skill: Skill): Array<{ key: string; label: string; cls: string }> {
+  const out: Array<{ key: string; label: string; cls: string }> = [];
+  if (skill.tags.includes("l1"))
+    out.push({ key: "l1", label: "L1", cls: "text-[#F7931A] border-[#F7931A]/30 bg-[#F7931A]/[0.08]" });
+  if (skill.tags.includes("l2"))
+    out.push({ key: "l2", label: "L2", cls: "text-[#7DA2FF] border-[#7DA2FF]/30 bg-[#7DA2FF]/[0.08]" });
+  return out;
+}
+
+/** Non-layer category tags, used for the chips shown on a card. */
+function categoryTags(skill: Skill): string[] {
+  return skill.tags.filter((t) => t !== "l1" && t !== "l2");
+}
+
 /* ─── Component ─── */
 
 export default function SkillsDirectory({ initialData }: { initialData: SkillsData | null }) {
@@ -145,46 +194,78 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
   const [openSkill, setOpenSkill] = useState<string | null>(null);
+  const [drawerShown, setDrawerShown] = useState(false);
   const searchRef = useRef<HTMLInputElement>(null);
-  const skillRefs = useRef<Record<string, HTMLDivElement | null>>({});
+  const closeBtnRef = useRef<HTMLButtonElement>(null);
+  const closeTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  /* Read ?skill= param on mount to open + scroll to a deep-linked skill */
+  /* Stable 1-based index per skill (registry numbering, independent of filters) */
+  const indexOf = useMemo(() => {
+    const m = new Map<string, number>();
+    data?.skills.forEach((s, i) => m.set(s.name, i + 1));
+    return m;
+  }, [data]);
+
+  const activeSkill = useMemo(
+    () => data?.skills.find((s) => s.name === openSkill) ?? null,
+    [data, openSkill]
+  );
+
+  /* ─── Drawer open / close with enter+exit transitions ─── */
+  const openDrawer = useCallback((name: string) => {
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    setOpenSkill(name);
+    requestAnimationFrame(() => setDrawerShown(true));
+  }, []);
+
+  const closeDrawer = useCallback(() => {
+    setDrawerShown(false);
+    if (closeTimer.current) clearTimeout(closeTimer.current);
+    closeTimer.current = setTimeout(() => setOpenSkill(null), 260);
+  }, []);
+
+  useEffect(() => {
+    return () => {
+      if (closeTimer.current) clearTimeout(closeTimer.current);
+    };
+  }, []);
+
+  /* Read ?skill= (or #hash) on mount to open + scroll to a deep-linked skill */
   useEffect(() => {
     const skillParam = searchParams.get("skill");
-    if (skillParam && data?.skills.some((s) => s.name === skillParam)) {
-      setOpenSkill(skillParam);
-      // Scroll after render
-      requestAnimationFrame(() => {
-        skillRefs.current[skillParam]?.scrollIntoView({ behavior: "smooth", block: "center" });
-      });
-    }
-    // Also support hash-based deep links (#wallet)
-    if (!skillParam && window.location.hash) {
-      const hash = window.location.hash.slice(1);
-      if (data?.skills.some((s) => s.name === hash)) {
-        setOpenSkill(hash);
-        requestAnimationFrame(() => {
-          skillRefs.current[hash]?.scrollIntoView({ behavior: "smooth", block: "center" });
-        });
-      }
+    const target =
+      skillParam ??
+      (typeof window !== "undefined" ? window.location.hash.slice(1) : "");
+    if (target && data?.skills.some((s) => s.name === target)) {
+      setOpenSkill(target);
+      requestAnimationFrame(() => setDrawerShown(true));
     }
   }, [searchParams, data]);
 
-  const toggleSkill = useCallback((name: string) => {
-    setOpenSkill((prev) => (prev === name ? null : name));
-  }, []);
-
-  /* Sync URL when openSkill changes — side effects must stay outside state updater */
+  /* Sync URL when openSkill changes */
   useEffect(() => {
     if (typeof window === "undefined") return;
     const url = new URL(window.location.href);
-    if (openSkill) {
-      url.searchParams.set("skill", openSkill);
-    } else {
-      url.searchParams.delete("skill");
-    }
+    if (openSkill) url.searchParams.set("skill", openSkill);
+    else url.searchParams.delete("skill");
     window.history.replaceState(null, "", url.toString());
   }, [openSkill]);
+
+  /* Body scroll lock + Escape to close while drawer is open */
+  useEffect(() => {
+    if (!openSkill) return;
+    const prevOverflow = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    requestAnimationFrame(() => closeBtnRef.current?.focus());
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") closeDrawer();
+    };
+    window.addEventListener("keydown", onKey);
+    return () => {
+      document.body.style.overflow = prevOverflow;
+      window.removeEventListener("keydown", onKey);
+    };
+  }, [openSkill, closeDrawer]);
 
   /* Keyboard shortcut: / to focus search */
   useEffect(() => {
@@ -198,36 +279,33 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  /* All unique tags sorted alphabetically */
-  const allTags = useMemo(() => {
-    if (!data) return [];
-    const s = new Set<string>();
-    data.skills.forEach((sk) => sk.tags.forEach((t) => s.add(t)));
-    return [...s].sort();
+  /* Tag counts + ordered tag list for the filter rail */
+  const { orderedTags, tagCounts } = useMemo(() => {
+    const counts: Record<string, number> = {};
+    data?.skills.forEach((sk) => sk.tags.forEach((t) => (counts[t] = (counts[t] ?? 0) + 1)));
+    const present = TAG_ORDER.filter((t) => counts[t]);
+    // append any tags not in the curated order
+    Object.keys(counts)
+      .filter((t) => !TAG_ORDER.includes(t))
+      .sort()
+      .forEach((t) => present.push(t));
+    return { orderedTags: present, tagCounts: counts };
   }, [data]);
 
   const filtered = useMemo(() => {
     if (!data) return [];
     let skills = data.skills;
-
-    // Tag filter
-    if (tagFilter) {
-      skills = skills.filter((sk) => sk.tags.includes(tagFilter));
-    }
-
-    // Text search
+    if (tagFilter) skills = skills.filter((sk) => sk.tags.includes(tagFilter));
     const q = query.toLowerCase().trim();
     if (q) {
-      skills = skills.filter((sk) => {
-        return (
+      skills = skills.filter(
+        (sk) =>
           sk.name.toLowerCase().includes(q) ||
           sk.description.toLowerCase().includes(q) ||
           sk.arguments.some((a) => a.includes(q)) ||
           sk.tags.some((t) => t.includes(q))
-        );
-      });
+      );
     }
-
     return skills;
   }, [data, query, tagFilter]);
 
@@ -236,333 +314,504 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
     [data]
   );
 
-  const tagCount = allTags.length;
-
   /* ─── Render ─── */
   return (
     <>
-      {/* ─── Hero header ─── */}
-      <div className="mb-8 max-md:mb-6 text-center max-md:text-left">
-        <h1 className="mb-3 text-[clamp(28px,3.5vw,42px)] font-medium leading-[1.1] tracking-tight text-white">
+      {/* ─── Hero ─── */}
+      <header className="mb-7 max-md:mb-6 text-center max-md:text-left">
+        <h1 className="mb-2.5 text-[clamp(28px,3.5vw,42px)] font-medium leading-[1.1] tracking-[-0.02em] text-white">
           Agent Skills
         </h1>
-        <p className="mx-auto max-w-[560px] text-[18px] max-md:text-[16px] leading-[1.6] text-white/70 max-md:mx-0">
-          Install reusable capabilities — wallets, DeFi, identity, signing, and
-          messaging — with a single command.
+
+        <p className="mx-auto max-w-[560px] text-[clamp(15px,1.4vw,17px)] leading-[1.6] text-white/55 max-md:mx-0">
+          Drop-in capabilities for wallets, DeFi, identity, signing, and messaging
+          on Bitcoin, installed with a single command.
         </p>
-      </div>
 
-      {/* ─── Install CTA ─── */}
-      <div className="mx-auto max-w-xl mb-10 max-md:mb-7 rounded-lg border border-[#F7931A]/15 bg-gradient-to-br from-[#F7931A]/[0.05] to-[#F7931A]/[0.01] px-5 py-3 max-md:px-4 max-md:py-2.5 text-center max-md:text-left backdrop-blur-[12px] animate-glowPulse">
-        <CopyButton
-          text="npx skills add aibtcdev/skills"
-          label={
-            <span className="inline-flex items-center gap-2">
-              <span className="text-[10px] font-medium uppercase tracking-widest text-[#F7931A]/70">Install</span>
-              <span className="font-mono text-[15px] max-md:text-[14px]">npx skills add aibtcdev/skills</span>
-              <svg aria-hidden="true" className="size-3.5 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-              </svg>
+        {/* Terminal install block — echoes the home page browser-frame motif */}
+        <div className="mx-auto mt-6 max-w-[460px] overflow-hidden rounded-xl border border-white/[0.1] bg-gradient-to-b from-[rgba(22,22,22,0.85)] to-[rgba(10,10,10,0.7)] shadow-2xl shadow-black/40 backdrop-blur-xl animate-glowPulse">
+          <div className="flex items-center gap-2 border-b border-white/[0.06] px-3.5 py-2">
+            <div className="flex gap-1.5">
+              <span className="size-2 rounded-full bg-white/10" />
+              <span className="size-2 rounded-full bg-white/10" />
+              <span className="size-2 rounded-full bg-white/10" />
+            </div>
+            <span className="ml-1.5 font-mono text-[10px] tracking-wide text-white/30">
+              skills — zsh
             </span>
-          }
-          variant="inline"
-          className="text-[15px] max-md:text-[14px] font-medium text-white transition-colors duration-200 hover:text-white/80"
-        />
-      </div>
-
-      {/* ─── Directory card ─── */}
-      <div className="rounded-xl border border-white/[0.08] bg-gradient-to-br from-[rgba(26,26,26,0.6)] to-[rgba(15,15,15,0.4)] backdrop-blur-[12px] overflow-hidden">
-        {/* Stats strip */}
-        {data && (
-          <div className="flex items-center border-b border-white/[0.06]">
-            {[
-              { value: data.skills.length, label: "Skills" },
-              { value: totalCmds, label: "Commands" },
-              { value: tagCount, label: "Categories" },
-            ].map((s, i) => (
-              <div
-                key={s.label}
-                className={`flex-1 text-center py-3 ${
-                  i > 0 ? "border-l border-white/[0.06]" : ""
-                }`}
-              >
-                <div className="text-[18px] max-md:text-[16px] font-medium text-white tabular-nums leading-none mb-1">
-                  {s.value}
-                </div>
-                <div className="text-[11px] uppercase tracking-widest text-white/40">
-                  {s.label}
-                </div>
-              </div>
-            ))}
           </div>
-        )}
-
-        {/* Search */}
-        <div className="relative border-b border-white/[0.06]">
-          <input
-            ref={searchRef}
-            type="text"
-            value={query}
-            onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search skills ..."
-            className="w-full bg-transparent py-3 px-5 pr-14 text-[14px] text-white placeholder:text-white/35 outline-none focus:bg-white/[0.02] transition-colors"
+          <CopyButton
+            text="npx skills add aibtcdev/skills"
+            label={
+              <span className="flex w-full items-center gap-2.5 px-4 py-3 text-left">
+                <span className="font-mono text-[14px] text-[#F7931A]/70">$</span>
+                <span className="font-mono text-[14px] max-md:text-[13px] text-white/90">
+                  npx skills add aibtcdev/skills
+                </span>
+                <svg
+                  aria-hidden="true"
+                  className="ml-auto size-3.5 shrink-0 text-white/30 transition-colors group-hover:text-white/60"
+                  fill="none"
+                  viewBox="0 0 24 24"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                </svg>
+              </span>
+            }
+            variant="inline"
+            className="block w-full !rounded-none"
           />
-          {query ? (
-            <button
-              onClick={() => setQuery("")}
-              className="absolute right-5 top-1/2 -translate-y-1/2 text-white/40 hover:text-white/60 transition-colors"
-            >
-              <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-              </svg>
-            </button>
-          ) : (
-            <kbd className="absolute right-5 top-1/2 -translate-y-1/2 rounded border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 text-[11px] text-white/35 font-mono max-md:hidden">
-              /
-            </kbd>
-          )}
         </div>
 
-        {/* ─── Tag filter chips ─── */}
-        {data && allTags.length > 0 && (
-          <div className="flex flex-wrap items-center gap-1.5 px-5 py-3 border-b border-white/[0.06]">
-            <button
-              aria-pressed={tagFilter === null}
-              onClick={() => setTagFilter(null)}
-              className={`rounded-full px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                tagFilter === null
-                  ? "bg-white/[0.12] text-white"
-                  : "bg-white/[0.04] text-white/50 hover:bg-white/[0.07] hover:text-white/70"
-              }`}
+        {/* Meta stats */}
+        {data && (
+          <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[13px] text-white/45 max-md:justify-start">
+            <Stat value={data.skills.length} label="skills" />
+            <Dot />
+            <Stat value={totalCmds} label="commands" />
+            <Dot />
+            <Stat value={orderedTags.length} label="categories" />
+            <Dot />
+            <a
+              href="https://github.com/aibtcdev/skills"
+              target="_blank"
+              rel="noopener noreferrer"
+              className="inline-flex items-center gap-1.5 text-[#F7931A]/60 transition-colors hover:text-[#F7931A]"
             >
-              All
-            </button>
-            {allTags.map((tag) => (
+              <svg aria-hidden="true" className="size-3.5" fill="currentColor" viewBox="0 0 16 16">
+                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+              </svg>
+              Contribute a skill
+            </a>
+          </div>
+        )}
+      </header>
+
+      {/* ─── Sticky controls (search + category rail) ─── */}
+      {data && (
+        <div className="sticky top-[68px] z-30 -mx-4 mb-6 rounded-2xl border border-white/[0.07] bg-[rgba(8,8,8,0.72)] px-4 py-3 backdrop-blur-xl backdrop-saturate-150 max-md:top-[60px]">
+          {/* Search */}
+          <div className="relative">
+            <svg
+              aria-hidden="true"
+              className="pointer-events-none absolute left-3.5 top-1/2 size-4 -translate-y-1/2 text-white/30"
+              fill="none"
+              viewBox="0 0 24 24"
+              stroke="currentColor"
+              strokeWidth="2"
+            >
+              <path strokeLinecap="round" strokeLinejoin="round" d="M21 21l-5.197-5.197m0 0A7.5 7.5 0 105.196 5.196a7.5 7.5 0 0010.607 10.607z" />
+            </svg>
+            <input
+              ref={searchRef}
+              type="text"
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              placeholder="Search 100+ skills, commands, and tags…"
+              className="w-full rounded-lg border border-white/[0.07] bg-white/[0.03] py-2.5 pl-10 pr-12 text-[14px] text-white outline-none transition-colors placeholder:text-white/35 focus:border-[#F7931A]/30 focus:bg-white/[0.05]"
+            />
+            {query ? (
               <button
-                key={tag}
-                aria-pressed={tagFilter === tag}
-                onClick={() => setTagFilter(tagFilter === tag ? null : tag)}
-                className={`rounded-full border px-2.5 py-1 text-[11px] font-medium transition-colors ${
-                  tagFilter === tag
-                    ? tc(tag) + " opacity-100"
-                    : tc(tag) + " opacity-60 hover:opacity-80"
+                onClick={() => setQuery("")}
+                aria-label="Clear search"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/40 transition-colors hover:text-white/70"
+              >
+                <svg aria-hidden="true" className="size-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+                </svg>
+              </button>
+            ) : (
+              <kbd className="absolute right-3 top-1/2 -translate-y-1/2 rounded border border-white/[0.1] bg-white/[0.04] px-1.5 py-0.5 font-mono text-[11px] text-white/35 max-md:hidden">
+                /
+              </kbd>
+            )}
+          </div>
+
+          {/* Category rail */}
+          {orderedTags.length > 0 && (
+            <div className="scrollbar-hide mt-3 flex items-center gap-1.5 overflow-x-auto">
+              <button
+                aria-pressed={tagFilter === null}
+                onClick={() => setTagFilter(null)}
+                className={`shrink-0 rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                  tagFilter === null
+                    ? "bg-white text-black"
+                    : "bg-white/[0.05] text-white/55 hover:bg-white/[0.09] hover:text-white/80"
                 }`}
               >
-                {tag}
+                All
+                <span className="ml-1.5 tabular-nums opacity-60">{data.skills.length}</span>
               </button>
-            ))}
-          </div>
-        )}
-
-        {/* ─── Content ─── */}
-
-        {/* Error (server fetch failed) */}
-        {!data && (
-          <div className="px-6 py-16 text-center">
-            <p className="text-[14px] text-red-400/80 mb-3">Failed to load skills</p>
-            <button
-              onClick={() => window.location.reload()}
-              className="text-[13px] text-[#F7931A]/70 hover:text-[#F7931A] transition-colors"
-            >
-              Try again
-            </button>
-          </div>
-        )}
-
-        {/* Empty search */}
-        {data && filtered.length === 0 && (
-          <div className="px-6 py-16 text-center">
-            <p className="text-[14px] text-white/50 mb-3">No matching skills</p>
-            <button
-              onClick={() => { setQuery(""); setTagFilter(null); }}
-              className="text-[13px] text-[#F7931A]/70 hover:text-[#F7931A] transition-colors"
-            >
-              Clear filters
-            </button>
-          </div>
-        )}
-
-        {/* ─── Rows ─── */}
-        {data && filtered.length > 0 && (
-          <>
-            <div className="divide-y divide-white/[0.05]">
-              {filtered.map((skill) => {
-                const open = openSkill === skill.name;
-                const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
-                const slug = toSlug(skill.name);
-
+              {orderedTags.map((tag) => {
+                const active = tagFilter === tag;
                 return (
-                  <div key={skill.name} ref={(el) => { skillRefs.current[skill.name] = el; }} id={slug}>
-                    {/* Row */}
-                    <button
-                      onClick={() => toggleSkill(skill.name)}
-                      aria-expanded={open}
-                      className={`group flex w-full items-center px-5 py-3.5 text-left transition-all duration-100 ${
-                        open
-                          ? "bg-white/[0.03]"
-                          : "hover:bg-white/[0.02]"
-                      }`}
-                    >
-                      {/* Name + mobile description */}
-                      <div className="min-w-0">
-                        <span className={`text-[14px] font-medium transition-colors ${open ? "text-[#F7931A]" : "text-white/90 group-hover:text-white"}`}>
-                          {skill.name}
-                        </span>
-                        <p className="text-[12px] text-white/50 truncate md:hidden">
-                          {shortDesc(skill)}
-                        </p>
-                      </div>
-
-                      {/* Short description — right aligned, desktop */}
-                      <span className="ml-auto mr-3 text-[13px] text-white/50 truncate max-w-[320px] max-md:hidden">
-                        {shortDesc(skill)}
-                      </span>
-
-                      {/* Chevron */}
-                      <svg
-                        aria-hidden="true"
-                        className={`size-3.5 shrink-0 text-white/30 transition-transform duration-200 max-md:ml-auto ${open ? "rotate-180" : ""}`}
-                        fill="none"
-                        viewBox="0 0 24 24"
-                        stroke="currentColor"
-                        strokeWidth="2.5"
-                      >
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M19.5 8.25l-7.5 7.5-7.5-7.5" />
-                      </svg>
-                    </button>
-
-                    {/* ─── Expanded detail ─── */}
-                    {open && (
-                      <div className="px-5 pb-5 pt-1 bg-white/[0.015]">
-                        {/* Description + share link */}
-                        <div className="flex items-start justify-between gap-3 mb-4">
-                          <p className="text-[14px] leading-[1.65] text-white/70">
-                            {skill.description}
-                          </p>
-                          <CopyButton
-                            text={`${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`}
-                            label={
-                              <span className="inline-flex items-center gap-1 text-[11px] text-white/40 hover:text-white/60 transition-colors whitespace-nowrap">
-                                <svg aria-hidden="true" className="size-3" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
-                                </svg>
-                                Link
-                              </span>
-                            }
-                            variant="inline"
-                            className="shrink-0"
-                          />
-                        </div>
-
-                        {/* Install command */}
-                        <div className="mb-4 rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-2.5 overflow-x-auto">
-                          <CopyButton
-                            text={`npx skills add aibtcdev/skills/${skill.name}`}
-                            label={
-                              <span className="inline-flex items-center gap-2 whitespace-nowrap">
-                                <span className="text-[#F7931A]/70 font-mono text-[13px] max-md:text-[12px]">$</span>
-                                <span className="font-mono text-[13px] max-md:text-[12px] text-white/80">npx skills add aibtcdev/skills/{skill.name}</span>
-                                <svg aria-hidden="true" className="size-3 shrink-0 text-white/40" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                                  <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                                </svg>
-                              </span>
-                            }
-                            variant="inline"
-                            className="text-[13px] max-md:text-[12px]"
-                          />
-                        </div>
-
-                        {/* Mobile tags */}
-                        <div className="flex flex-wrap gap-1.5 mb-4 md:hidden">
-                          {skill.tags.map((t) => (
-                            <span
-                              key={t}
-                              className={`inline-block rounded border px-2 py-0.5 text-[11px] leading-[16px] ${tc(t)}`}
-                            >
-                              {t}
-                            </span>
-                          ))}
-                        </div>
-
-                        {/* Entry + Requires */}
-                        <div className="flex flex-wrap gap-x-8 gap-y-3 mb-3">
-                          <div>
-                            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Entry</p>
-                            <div className="flex flex-wrap gap-1.5">
-                              {entries.map((e) => (
-                                <code key={e} className="rounded border border-white/[0.1] bg-white/[0.05] px-2.5 py-1 text-[12px] font-mono text-white/60 leading-none">{e}</code>
-                              ))}
-                            </div>
-                          </div>
-                          {skill.requires.length > 0 && (
-                            <div>
-                              <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Requires</p>
-                              <div className="flex flex-wrap gap-1.5">
-                                {skill.requires.map((r) => (
-                                  <span key={r} className="rounded border border-[#F7931A]/20 bg-[#F7931A]/[0.07] px-2.5 py-1 text-[12px] text-[#F7931A]/70 leading-none">{r}</span>
-                                ))}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-
-                        {/* Commands — separate row */}
-                        <div className={(skill.author || skill.authorAgent) ? "mb-3" : ""}>
-                          <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Commands</p>
-                          <div className="flex flex-wrap gap-1.5">
-                            {skill.arguments.map((a) => (
-                              <code key={a} className="rounded border border-white/[0.1] bg-white/[0.05] px-2.5 py-1 text-[12px] font-mono text-white/60 leading-none">{a}</code>
-                            ))}
-                          </div>
-                        </div>
-
-                        {/* Author */}
-                        {(skill.author || skill.authorAgent) && (
-                          <div>
-                            <p className="mb-1.5 text-[11px] font-medium uppercase tracking-wider text-white/50">Created by</p>
-                            <p className="text-[13px] text-white/60">
-                              {skill.author && <span>{skill.author}</span>}
-                              {skill.author && skill.authorAgent && <span className="text-white/30"> / </span>}
-                              {skill.authorAgent && <span>{skill.authorAgent}</span>}
-                            </p>
-                          </div>
-                        )}
-                      </div>
-                    )}
-                  </div>
+                  <button
+                    key={tag}
+                    aria-pressed={active}
+                    onClick={() => setTagFilter(active ? null : tag)}
+                    className={`group flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium transition-all ${
+                      active ? tc(tag) + " opacity-100" : tc(tag) + " opacity-55 hover:opacity-90"
+                    }`}
+                  >
+                    <span className={`size-1.5 rounded-full ${tagDot(tag)}`} />
+                    {tagLabel(tag)}
+                    <span className="tabular-nums opacity-60">{tagCounts[tag]}</span>
+                  </button>
                 );
               })}
             </div>
+          )}
+        </div>
+      )}
 
-            {/* Footer */}
-            <div className="flex items-center justify-between px-5 py-2.5 border-t border-white/[0.06] text-[12px] text-white/40">
-              <span>
-                {filtered.length === data.skills.length
-                  ? `${filtered.length} skills`
-                  : `${filtered.length} of ${data.skills.length}`}
-              </span>
-              <div className="flex items-center gap-3">
-                {data.version && (
-                  <span className="text-[#F7931A]/50">v{data.version}</span>
-                )}
-                <span>{totalCmds} commands</span>
-                <span className="text-white/20">·</span>
-                <a
-                  href="https://github.com/aibtcdev/skills"
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="inline-flex items-center gap-1 text-[#F7931A]/60 hover:text-[#F7931A] transition-colors"
+      {/* ─── Error (server fetch failed) ─── */}
+      {!data && (
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-6 py-20 text-center backdrop-blur-md">
+          <p className="mb-3 text-[14px] text-red-400/80">Failed to load skills</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="text-[13px] text-[#F7931A]/70 transition-colors hover:text-[#F7931A]"
+          >
+            Try again
+          </button>
+        </div>
+      )}
+
+      {/* ─── Empty search ─── */}
+      {data && filtered.length === 0 && (
+        <div className="rounded-2xl border border-white/[0.08] bg-white/[0.02] px-6 py-20 text-center backdrop-blur-md">
+          <p className="mb-3 text-[14px] text-white/50">No skills match your filters</p>
+          <button
+            onClick={() => {
+              setQuery("");
+              setTagFilter(null);
+            }}
+            className="text-[13px] text-[#F7931A]/70 transition-colors hover:text-[#F7931A]"
+          >
+            Clear filters
+          </button>
+        </div>
+      )}
+
+      {/* ─── Card grid ─── */}
+      {data && filtered.length > 0 && (
+        <>
+          <p className="mb-4 px-1 text-[12px] text-white/35">
+            {tagFilter || query ? (
+              <>
+                <span className="text-white/60 tabular-nums">{filtered.length}</span> of{" "}
+                {data.skills.length} skills
+              </>
+            ) : (
+              <>
+                Showing all{" "}
+                <span className="text-white/60 tabular-nums">{data.skills.length}</span> skills
+              </>
+            )}
+          </p>
+
+          <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {filtered.map((skill) => {
+              const cats = categoryTags(skill);
+              const lyr = layers(skill);
+              const slug = toSlug(skill.name);
+              return (
+                <button
+                  key={skill.name}
+                  id={slug}
+                  onClick={() => openDrawer(skill.name)}
+                  className="group relative flex flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] p-4 text-left backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-[#F7931A]/25 hover:from-[#F7931A]/[0.05] hover:shadow-lg hover:shadow-[#F7931A]/[0.05] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/40"
                 >
-                  <svg aria-hidden="true" className="size-3" fill="currentColor" viewBox="0 0 16 16">
-                    <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
-                  </svg>
-                  Contribute a skill
-                </a>
-              </div>
-            </div>
-          </>
-        )}
-      </div>
+                  {/* top accent line on hover */}
+                  <span className="absolute inset-x-0 top-0 h-px scale-x-0 bg-gradient-to-r from-transparent via-[#F7931A]/60 to-transparent transition-transform duration-300 group-hover:scale-x-100" />
+
+                  {/* Header row: index + layer badges */}
+                  <div className="mb-2.5 flex items-center justify-between">
+                    <span className="font-mono text-[11px] tabular-nums text-white/20">
+                      {String(indexOf.get(skill.name) ?? 0).padStart(3, "0")}
+                    </span>
+                    <div className="flex items-center gap-1">
+                      {lyr.map((l) => (
+                        <span
+                          key={l.key}
+                          className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium leading-none ${l.cls}`}
+                        >
+                          {l.label}
+                        </span>
+                      ))}
+                    </div>
+                  </div>
+
+                  {/* Name */}
+                  <h3 className="mb-1.5 font-mono text-[15px] font-medium text-white/90 transition-colors group-hover:text-[#F7931A]">
+                    {skill.name}
+                  </h3>
+
+                  {/* Short description */}
+                  <p className="mb-3.5 line-clamp-2 text-[13px] leading-[1.5] text-white/50">
+                    {shortDesc(skill)}
+                  </p>
+
+                  {/* Footer: tags + open affordance */}
+                  <div className="mt-auto flex items-center gap-1.5">
+                    <div className="flex min-w-0 flex-wrap items-center gap-1">
+                      {cats.slice(0, 2).map((t) => (
+                        <span
+                          key={t}
+                          className="inline-flex items-center gap-1 rounded-full bg-white/[0.04] px-2 py-0.5 text-[10px] text-white/45"
+                        >
+                          <span className={`size-1 rounded-full ${tagDot(t)}`} />
+                          {tagLabel(t)}
+                        </span>
+                      ))}
+                      {cats.length > 2 && (
+                        <span className="text-[10px] text-white/30">+{cats.length - 2}</span>
+                      )}
+                    </div>
+                    <svg
+                      aria-hidden="true"
+                      className="ml-auto size-4 shrink-0 -translate-x-1 text-white/20 opacity-0 transition-all duration-200 group-hover:translate-x-0 group-hover:text-[#F7931A]/70 group-hover:opacity-100"
+                      fill="none"
+                      viewBox="0 0 24 24"
+                      stroke="currentColor"
+                      strokeWidth="2"
+                    >
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M13.5 4.5L21 12m0 0l-7.5 7.5M21 12H3" />
+                    </svg>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </>
+      )}
+
+      {/* ─── Detail drawer ─── */}
+      {activeSkill && (
+        <SkillDrawer
+          skill={activeSkill}
+          index={indexOf.get(activeSkill.name) ?? 0}
+          shown={drawerShown}
+          onClose={closeDrawer}
+          closeBtnRef={closeBtnRef}
+        />
+      )}
     </>
+  );
+}
+
+/* ─── Hero stat pieces ─── */
+
+function Stat({ value, label }: { value: number; label: string }) {
+  return (
+    <span className="inline-flex items-baseline gap-1">
+      <span className="font-medium tabular-nums text-white/80">{value}</span>
+      <span>{label}</span>
+    </span>
+  );
+}
+
+function Dot() {
+  return <span className="text-white/15">·</span>;
+}
+
+/* ─── Drawer ─── */
+
+function SkillDrawer({
+  skill,
+  index,
+  shown,
+  onClose,
+  closeBtnRef,
+}: {
+  skill: Skill;
+  index: number;
+  shown: boolean;
+  onClose: () => void;
+  closeBtnRef: React.RefObject<HTMLButtonElement | null>;
+}) {
+  const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
+  const lyr = layers(skill);
+  const shareUrl = `${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`;
+
+  return (
+    <div className="fixed inset-0 z-[70]" role="dialog" aria-modal="true" aria-label={`${skill.name} skill details`}>
+      {/* Backdrop */}
+      <div
+        onClick={onClose}
+        className={`absolute inset-0 bg-black/60 backdrop-blur-sm transition-opacity duration-300 ${
+          shown ? "opacity-100" : "opacity-0"
+        }`}
+      />
+
+      {/* Panel — right slide-over on desktop, bottom sheet on mobile */}
+      <div
+        className={`absolute flex flex-col border-white/[0.1] bg-gradient-to-b from-[rgba(20,20,20,0.96)] to-[rgba(8,8,8,0.96)] backdrop-blur-2xl transition-transform duration-[280ms] ease-out
+          md:inset-y-0 md:right-0 md:w-[440px] md:border-l
+          max-md:inset-x-0 max-md:bottom-0 max-md:max-h-[86vh] max-md:rounded-t-2xl max-md:border-t
+          ${shown ? "translate-x-0 translate-y-0" : "max-md:translate-y-full md:translate-x-full"}`}
+        style={{ willChange: "transform" }}
+      >
+        {/* mobile grab handle */}
+        <div className="mx-auto mt-2.5 h-1 w-10 shrink-0 rounded-full bg-white/15 md:hidden" />
+
+        {/* Header */}
+        <div className="flex items-start gap-3 border-b border-white/[0.07] px-5 py-4 max-md:pt-3">
+          <div className="min-w-0 flex-1">
+            <div className="mb-1.5 flex items-center gap-2">
+              <span className="font-mono text-[11px] tabular-nums text-white/25">
+                {String(index).padStart(3, "0")}
+              </span>
+              {lyr.map((l) => (
+                <span
+                  key={l.key}
+                  className={`rounded border px-1.5 py-0.5 font-mono text-[10px] font-medium leading-none ${l.cls}`}
+                >
+                  {l.label}
+                </span>
+              ))}
+            </div>
+            <h2 className="break-words font-mono text-[20px] font-medium text-white">
+              {skill.name}
+            </h2>
+          </div>
+          <button
+            ref={closeBtnRef}
+            onClick={onClose}
+            aria-label="Close"
+            className="-mr-1 -mt-1 flex size-9 shrink-0 items-center justify-center rounded-lg text-white/40 transition-colors hover:bg-white/[0.06] hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/40"
+          >
+            <svg aria-hidden="true" className="size-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+              <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+            </svg>
+          </button>
+        </div>
+
+        {/* Scrollable body */}
+        <div className="flex-1 overflow-y-auto px-5 py-5">
+          <p className="mb-5 text-[14px] leading-[1.65] text-white/70">{skill.description}</p>
+
+          {/* Install command */}
+          <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
+            <CopyButton
+              text={`npx skills add aibtcdev/skills/${skill.name}`}
+              label={
+                <span className="flex items-center gap-2 whitespace-nowrap">
+                  <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
+                  <span className="font-mono text-[13px] max-md:text-[12px] text-white/85">
+                    npx skills add aibtcdev/skills/{skill.name}
+                  </span>
+                  <svg aria-hidden="true" className="size-3.5 shrink-0 text-white/40 transition-colors group-hover:text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                  </svg>
+                </span>
+              }
+              variant="inline"
+            />
+          </div>
+
+          {/* Tags */}
+          <Section label="Tags">
+            <div className="flex flex-wrap gap-1.5">
+              {skill.tags.map((t) => (
+                <span
+                  key={t}
+                  className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 text-[11px] ${tc(t)}`}
+                >
+                  <span className={`size-1.5 rounded-full ${tagDot(t)}`} />
+                  {tagLabel(t)}
+                </span>
+              ))}
+            </div>
+          </Section>
+
+          {/* Commands */}
+          {skill.arguments.length > 0 && (
+            <Section label={`Commands (${skill.arguments.length})`}>
+              <div className="flex flex-wrap gap-1.5">
+                {skill.arguments.map((a) => (
+                  <code key={a} className="rounded border border-white/[0.1] bg-white/[0.05] px-2.5 py-1 font-mono text-[12px] leading-none text-white/65">
+                    {a}
+                  </code>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Entry */}
+          <Section label="Entry">
+            <div className="flex flex-wrap gap-1.5">
+              {entries.map((e) => (
+                <code key={e} className="rounded border border-white/[0.1] bg-white/[0.05] px-2.5 py-1 font-mono text-[12px] leading-none text-white/60">
+                  {e}
+                </code>
+              ))}
+            </div>
+          </Section>
+
+          {/* Requires */}
+          {skill.requires.length > 0 && (
+            <Section label="Requires">
+              <div className="flex flex-wrap gap-1.5">
+                {skill.requires.map((r) => (
+                  <span key={r} className="rounded border border-[#F7931A]/20 bg-[#F7931A]/[0.07] px-2.5 py-1 text-[12px] leading-none text-[#F7931A]/70">
+                    {r}
+                  </span>
+                ))}
+              </div>
+            </Section>
+          )}
+
+          {/* Author */}
+          {(skill.author || skill.authorAgent) && (
+            <Section label="Created by">
+              <p className="text-[13px] text-white/65">
+                {skill.author && <span>{skill.author}</span>}
+                {skill.author && skill.authorAgent && <span className="text-white/30"> / </span>}
+                {skill.authorAgent && <span>{skill.authorAgent}</span>}
+              </p>
+            </Section>
+          )}
+        </div>
+
+        {/* Footer */}
+        <div className="flex items-center justify-between gap-3 border-t border-white/[0.07] px-5 py-3">
+          <CopyButton
+            text={shareUrl}
+            label={
+              <span className="inline-flex items-center gap-1.5 text-[12px] text-white/45 transition-colors hover:text-white/70">
+                <svg aria-hidden="true" className="size-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1" />
+                </svg>
+                Copy link
+              </span>
+            }
+            variant="inline"
+          />
+          <a
+            href="https://github.com/aibtcdev/skills"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-1.5 text-[12px] text-[#F7931A]/60 transition-colors hover:text-[#F7931A]"
+          >
+            <svg aria-hidden="true" className="size-3.5" fill="currentColor" viewBox="0 0 16 16">
+              <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z" />
+            </svg>
+            View source
+          </a>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function Section({ label, children }: { label: string; children: React.ReactNode }) {
+  return (
+    <div className="mb-4 last:mb-0">
+      <p className="mb-2 text-[11px] font-medium uppercase tracking-wider text-white/45">{label}</p>
+      {children}
+    </div>
   );
 }

@@ -39,16 +39,25 @@ export default async function SkillsPage() {
           <Suspense
             fallback={
               <section
-                className="space-y-6"
+                className="animate-pulse"
                 aria-busy="true"
                 aria-label="Loading skills directory"
               >
-                <div className="h-10 w-64 rounded-lg bg-white/5" />
-                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                  {[...Array(6)].map((_, index) => (
+                {/* Hero placeholder */}
+                <div className="mb-12 flex flex-col items-center text-center max-md:items-start">
+                  <div className="mb-5 h-7 w-36 rounded-full bg-white/5" />
+                  <div className="mb-4 h-12 w-[80%] max-w-[480px] rounded-lg bg-white/5" />
+                  <div className="mb-8 h-5 w-[60%] max-w-[360px] rounded bg-white/5" />
+                  <div className="h-24 w-full max-w-[480px] rounded-xl border border-white/5 bg-white/5" />
+                </div>
+                {/* Controls placeholder */}
+                <div className="mb-6 h-24 rounded-2xl border border-white/5 bg-white/5" />
+                {/* Grid placeholder */}
+                <div className="grid grid-cols-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                  {[...Array(9)].map((_, index) => (
                     <div
                       key={index}
-                      className="h-40 rounded-xl border border-white/5 bg-white/5"
+                      className="h-36 rounded-xl border border-white/5 bg-white/5"
                     />
                   ))}
                 </div>
