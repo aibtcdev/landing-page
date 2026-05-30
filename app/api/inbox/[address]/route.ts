@@ -34,6 +34,7 @@ import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "@/lib/in
 import { bumpInboundStats, getAgentInboxStats } from "@/lib/inbox/stats";
 import {
   listInboxMessagesFromD1,
+  countInboxMessagesFromD1,
   listSentMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
@@ -378,12 +379,16 @@ export async function GET(
   //   [0] stats row — receivedCount, unreadCount from maintained counters
   //   [1] paginated message list (the page the caller asked for)
   //   [2] sentMessages — outbox replies for partner graph (only when includePartners)
+  //   [3] live unread count — only when status=unread, bypasses stale denormalized counter
+  //       (#906: agent_inbox_stats.unread_count can drift above live row count,
+  //       producing totalCount=1 + messages=[] phantom unread)
   let receivedMessages: import("@/lib/inbox/types").InboxMessage[];
   let agentStats: Awaited<ReturnType<typeof getAgentInboxStats>>;
   let sentMessages: import("@/lib/inbox/types").OutboxReply[];
+  let liveUnreadCount: number | null = null;
   try {
-    [agentStats, receivedMessages, sentMessages] = await Promise.all([
-      // Stats O(1) point-lookup — replaces two countInboxMessagesFromD1 scans
+    [agentStats, receivedMessages, sentMessages, liveUnreadCount] = await Promise.all([
+      // Stats O(1) point-lookup — receivedCount and sentCount remain accurate
       getAgentInboxStats(db, agent.btcAddress),
       // Paginated message list (still needed for message content)
       includeReceived
@@ -393,18 +398,23 @@ export async function GET(
       includePartners
         ? listOutboxRepliesFromD1(db, agent.btcAddress, 100, 0)
         : Promise.resolve([] as import("@/lib/inbox/types").OutboxReply[]),
+      // Live count for status=unread only — avoids phantom unread from counter drift
+      statusFilter === "unread"
+        ? countInboxMessagesFromD1(db, agent.btcAddress, "unread")
+        : Promise.resolve(null),
     ]);
   } catch (e) {
     return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
   }
 
-  const unreadCount = agentStats.unreadCount;
+  const unreadCount = liveUnreadCount ?? agentStats.unreadCount;
   const receivedCount = agentStats.receivedCount;
 
-  // Derive totalCount from stats counters — no extra COUNT(*) needed.
-  // statusFilter="all"   → totalCount equals receivedCount (same predicate)
-  // statusFilter="unread" → totalCount equals unreadCount (same predicate)
-  // statusFilter="read"   → totalCount equals received minus unread
+  // Derive totalCount from counters.
+  // statusFilter="all"    → totalCount equals receivedCount (maintained counter, accurate)
+  // statusFilter="unread" → totalCount comes from live COUNT(*) WHERE read_at IS NULL
+  //                         (liveUnreadCount), not the denormalized counter that can drift
+  // statusFilter="read"   → totalCount equals received minus live unread
   const totalCount: number =
     statusFilter === "unread"
       ? unreadCount

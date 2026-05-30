@@ -161,6 +161,40 @@ export async function listInboxMessagesFromD1(
 }
 
 /**
+ * Count inbound messages for an agent with the given status filter.
+ *
+ * Restored to serve as the source-of-truth for totalCount when
+ * statusFilter === "unread", bypassing the denormalized agent_inbox_stats
+ * counter which can drift when a mark-read update misses decrementUnreadStats.
+ * Hits idx_inbox_unread (partial index on read_at IS NULL) for the unread
+ * case — O(log n) not O(n). See: https://github.com/aibtcdev/landing-page/issues/906
+ */
+export async function countInboxMessagesFromD1(
+  db: D1Database,
+  btcAddress: string,
+  status: StatusFilter
+): Promise<number> {
+  let sql = `
+    SELECT COUNT(*) AS cnt
+    FROM inbox_messages
+    WHERE to_btc_address = ? AND is_reply = 0
+  `;
+
+  if (status === "unread") {
+    sql += " AND read_at IS NULL";
+  } else if (status === "read") {
+    sql += " AND read_at IS NOT NULL";
+  }
+
+  const row = await db
+    .prepare(sql)
+    .bind(btcAddress)
+    .first<{ cnt: number }>();
+
+  return row?.cnt ?? 0;
+}
+
+/**
  * Fetch a page of ORIGINATED messages an agent has sent from D1.
  *
  * "Sent" here means messages this agent AUTHORED to other agents (is_reply=0),
