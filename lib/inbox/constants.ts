@@ -88,6 +88,18 @@ export const RELAY_CIRCUIT_BREAKER_TTL_SECONDS = 60;
  */
 export const RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS = 60;
 
+/**
+ * Failure threshold that trips the breaker, mirrored for log/telemetry context.
+ *
+ * The authoritative config is the `RATE_LIMIT_RELAY_FAILURES` ratelimits binding
+ * in `wrangler.jsonc` (`{ limit: 10, period: 60 }` — 10 failures / 60s rolling
+ * window). These constants exist only so `circuit-breaker.opened` logs can
+ * report the actual trip threshold alongside the marker TTL — keep them in sync
+ * with the binding if it's ever retuned (#895).
+ */
+export const RELAY_CIRCUIT_BREAKER_BINDING_LIMIT = 10;
+export const RELAY_CIRCUIT_BREAKER_BINDING_PERIOD_SECONDS = 60;
+
 // --- Payment failure cache constants ---
 
 /**

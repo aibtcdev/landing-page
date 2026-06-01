@@ -23,7 +23,11 @@
  */
 
 import type { Logger } from "@/lib/logging";
-import { RELAY_CIRCUIT_BREAKER_TTL_SECONDS } from "./constants";
+import {
+  RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
+  RELAY_CIRCUIT_BREAKER_BINDING_LIMIT,
+  RELAY_CIRCUIT_BREAKER_BINDING_PERIOD_SECONDS,
+} from "./constants";
 
 /** Result of a circuit breaker check. */
 export interface CircuitBreakerState {
@@ -113,8 +117,15 @@ export async function recordRelayFailure(
     } else {
       await put;
     }
+    // Log the actual trip threshold (binding: 10 failures / 60s) AND the
+    // marker TTL separately. The old single `thresholdSeconds` field carried
+    // the marker TTL but read as the failure-rate threshold — a conflation that
+    // would silently misfire any alert rule if the TTL were ever retuned
+    // independently of the binding window (#895).
     logger?.warn?.("circuit-breaker.opened", {
-      thresholdSeconds: RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
+      bindingLimit: RELAY_CIRCUIT_BREAKER_BINDING_LIMIT,
+      bindingPeriodSeconds: RELAY_CIRCUIT_BREAKER_BINDING_PERIOD_SECONDS,
+      markerTtlSeconds: RELAY_CIRCUIT_BREAKER_TTL_SECONDS,
     });
   } catch (e) {
     logger?.warn?.("circuit-breaker.record_failed", { error: String(e) });
