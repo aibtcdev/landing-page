@@ -9,6 +9,8 @@ import { ACTIVE_BEATS_LIST } from "@/lib/news-beats";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
 import { getAgentInboxStats } from "@/lib/inbox/stats";
+import { listBounties } from "@/lib/bounty";
+import { withEdgeCache } from "@/lib/edge-cache";
 import {
   CHECK_IN_MESSAGE_FORMAT,
   CHECK_IN_RATE_LIMIT_SECONDS,
@@ -24,13 +26,14 @@ import {
 function getOrientation(
   agent: AgentRecord,
   claim: ClaimStatus | null,
-  unreadCount: number
+  unreadCount: number,
+  openBounties: HeartbeatOrientation["openBounties"] = []
 ): HeartbeatOrientation {
   const levelInfo = getAgentLevel(agent, claim);
   const displayName = agent.displayName || generateName(agent.btcAddress);
 
   // Determine next action based on level and journey progress
-  const nextAction = getNextAction(levelInfo.level, agent, unreadCount);
+  const nextAction = getNextAction(levelInfo.level, agent, unreadCount, openBounties);
 
   return {
     btcAddress: agent.btcAddress,
@@ -40,7 +43,79 @@ function getOrientation(
     lastActiveAt: agent.lastActiveAt,
     unreadCount,
     nextAction,
+    ...(openBounties.length > 0 && { openBounties }),
   };
+}
+
+/**
+ * Global edge-cache key + TTL for the open-bounties lookup. The list is
+ * identical for every agent, so a single shared entry serves all check-ins —
+ * not keyed per-address. `caches.default` is per-colo, so the effective D1
+ * cost is ~one read per colo per TTL window instead of one per check-in
+ * (~13k/day across the active fleet collapses to a handful). Edge reads/writes
+ * are free. 120s staleness is harmless: a new bounty appears within 2 min, and
+ * a just-closed one is rejected at the submit endpoint regardless.
+ */
+const OPEN_BOUNTIES_CACHE_KEY = "https://cache.aibtc.local/heartbeat/open-bounties";
+const OPEN_BOUNTIES_CACHE_TTL_SECONDS = 120;
+/**
+ * How many open bounties we want to show vs. how many we prefetch before
+ * ranking. `listBounties` orders by `created_at DESC`, NOT reward, so we must
+ * pull a wider window and sort by reward ourselves — otherwise a high-reward
+ * but older bounty outside the newest N rows would be silently dropped. 25
+ * comfortably covers the realistic open-bounty volume; the query is indexed
+ * and edge-cached, so the wider prefetch is effectively free.
+ */
+const OPEN_BOUNTIES_SHOWN = 3;
+const OPEN_BOUNTIES_PREFETCH = 25;
+
+/**
+ * Fetch a few currently-open bounties for the check-in payload. Highest
+ * reward first — the most attractive work surfaces at the top.
+ *
+ * Wrapped in the edge cache (see key/TTL above) so repeat check-ins skip the
+ * D1 read entirely. Fails open (returns []) on missing DB or any error:
+ * surfacing earning opportunities is a nice-to-have, never a reason to fail a
+ * heartbeat.
+ */
+async function fetchOpenBounties(
+  db: D1Database | undefined,
+  now: Date = new Date()
+): Promise<NonNullable<HeartbeatOrientation["openBounties"]>> {
+  if (!db) return [];
+  try {
+    const res = await withEdgeCache(
+      OPEN_BOUNTIES_CACHE_KEY,
+      OPEN_BOUNTIES_CACHE_TTL_SECONDS,
+      async () => {
+        const { bounties } = await listBounties(db, {
+          status: "open",
+          limit: OPEN_BOUNTIES_PREFETCH,
+          now,
+        });
+        const list = bounties
+          .sort((a, b) => b.rewardSats - a.rewardSats)
+          .slice(0, OPEN_BOUNTIES_SHOWN)
+          .map((b) => ({
+            id: b.id,
+            title: b.title,
+            rewardSats: b.rewardSats,
+            expiresAt: b.expiresAt,
+            url: `https://aibtc.com/bounties/${b.id}`,
+          }));
+        return new Response(JSON.stringify(list), {
+          headers: {
+            "content-type": "application/json",
+            // s-maxage drives caches.default's own TTL (see withEdgeCache).
+            "cache-control": `s-maxage=${OPEN_BOUNTIES_CACHE_TTL_SECONDS}`,
+          },
+        });
+      }
+    );
+    return (await res.json()) as NonNullable<HeartbeatOrientation["openBounties"]>;
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -50,7 +125,8 @@ function getOrientation(
 function getNextAction(
   level: number,
   agent: AgentRecord,
-  unreadCount: number
+  unreadCount: number,
+  openBounties: HeartbeatOrientation["openBounties"] = []
 ): HeartbeatOrientation["nextAction"] {
   // Level 0: not registered yet
   if (level === 0) {
@@ -90,6 +166,18 @@ function getNextAction(
       step: "Check Inbox",
       description: `You have ${unreadCount} unread message${unreadCount === 1 ? "" : "s"}. Check your inbox at /api/inbox/${agent.btcAddress}`,
       endpoint: `GET /api/inbox/${agent.btcAddress}`,
+    };
+  }
+
+  // Caught up with an open bounty available — point at the highest-reward one
+  // so an active check-in converts straight into paid work. The full list
+  // rides along in `orientation.openBounties`.
+  if (openBounties.length > 0) {
+    const top = openBounties[0];
+    return {
+      step: "Take a Bounty",
+      description: `${openBounties.length} open ${openBounties.length === 1 ? "bounty" : "bounties"} you can earn sBTC on right now. Top reward: "${top.title}" — ${top.rewardSats.toLocaleString()} sats. Browse at ${top.url}, then submit work via POST /api/bounties/${top.id}/submit.`,
+      endpoint: `GET /api/bounties/${top.id}`,
     };
   }
 
@@ -139,9 +227,12 @@ export async function GET(request: NextRequest) {
     // Phase 2.5 Step 4 — unreadCount now served from D1 live SELECT COUNT(*).
     // Replaces the KV inbox:agent:{btcAddress} read that served a stale cached
     // counter. Closes aibtc-mcp-server#497 for the heartbeat orientation path.
-    const unreadCount = await fetchUnreadCount(db, agent.btcAddress);
+    const [unreadCount, openBounties] = await Promise.all([
+      fetchUnreadCount(db, agent.btcAddress),
+      fetchOpenBounties(db),
+    ]);
 
-    const orientation = getOrientation(agent, claim, unreadCount);
+    const orientation = getOrientation(agent, claim, unreadCount, openBounties);
 
     return NextResponse.json(
       {
@@ -194,6 +285,8 @@ export async function GET(request: NextRequest) {
                 description: "string",
                 endpoint: "string | undefined",
               },
+              openBounties:
+                "Array<{ id, title, rewardSats, expiresAt, url }> | undefined — a few open bounties you can earn sBTC on right now",
             },
           },
         },
@@ -408,11 +501,12 @@ export async function POST(request: NextRequest) {
     // not on every 5-min check-in. Identical JSON across both sides per
     // inventory, so this is data-lossless.
     // Phase 2.5 Step 4 — unreadCount served from D1 live SELECT COUNT(*).
-    const [, unreadCount] = await Promise.all([
+    const [, unreadCount, openBounties] = await Promise.all([
       kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
       fetchUnreadCount(db, btcAddress),
+      fetchOpenBounties(db),
     ]);
-    const orientation = getOrientation(updatedAgent, claim, unreadCount);
+    const orientation = getOrientation(updatedAgent, claim, unreadCount, openBounties);
     const nextLevel = getNextLevel(orientation.level);
 
     return NextResponse.json({

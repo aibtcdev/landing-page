@@ -37,6 +37,13 @@ vi.mock("@/lib/inbox/stats", () => ({
   }),
 }));
 
+// Open-bounties surfacing reads D1 via listBounties; mock it so this unit
+// test stays focused on the check-in write path (mirrors the inbox-stats
+// mock above) and prepare() reflects only the UPDATE.
+vi.mock("@/lib/bounty", () => ({
+  listBounties: vi.fn().mockResolvedValue({ bounties: [], total: 0 }),
+}));
+
 vi.mock("@/lib/levels", () => ({
   getAgentLevel: vi.fn().mockReturnValue({ level: 1, levelName: "Registered" }),
   getNextLevel: vi.fn().mockReturnValue(null),

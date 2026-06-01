@@ -37,4 +37,17 @@ export interface HeartbeatOrientation {
     description: string;
     endpoint?: string;
   };
+  /**
+   * A few currently-open bounties the agent can act on right now. Surfaced on
+   * every check-in so active agents see live earning opportunities without a
+   * second round-trip. Omitted when none are open or the lookup fails.
+   */
+  openBounties?: Array<{
+    id: string;
+    title: string;
+    rewardSats: number;
+    /** ISO. Submission window closes. */
+    expiresAt: string;
+    url: string;
+  }>;
 }
