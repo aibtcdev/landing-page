@@ -24,7 +24,8 @@ const BNS_V2_NAME = "BNS-V2";
 
 // BNS-V2 error code returned by `get-primary` when the address has no
 // primary name. Treated as an authoritative "no name" signal and cached
-// with the confirmed-negative (7d) TTL.
+// with the confirmed-negative TTL (6h — see BNS_CONFIRMED_NEGATIVE_CACHE_TTL
+// in lib/identity/kv-cache.ts; short because a primary name is mutable).
 const BNS_ERR_NO_PRIMARY_NAME = "131";
 
 /**
@@ -122,7 +123,7 @@ export async function lookupBnsNameWithOutcome(
     if (!json.success) {
       const errCode = json.value?.value;
       if (errCode === BNS_ERR_NO_PRIMARY_NAME) {
-        // Authoritative "no primary name" — cache as confirmed-negative (7d).
+        // Authoritative "no primary name" — cache as confirmed-negative (6h).
         await setCachedBnsNegative(stxAddress, kv, logger);
         return { state: "confirmed-negative", name: null };
       }
