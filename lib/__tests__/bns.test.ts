@@ -282,7 +282,7 @@ describe("lookupBnsName", () => {
       const result = await lookupBnsName(
         "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
-      // 7d TTL stored in D1 — confirmed "no primary name" per three-state model.
+      // 6h TTL stored in D1 — confirmed "no primary name" per three-state model.
       // ERR-NO-PRIMARY-NAME is the real BNS-V2 response for nameless addresses.
       expect(result).toBeNull();
     });
@@ -293,13 +293,13 @@ describe("lookupBnsName", () => {
       const result = await lookupBnsName(
         "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7"
       );
-      // 7d TTL stored in D1. Defense-in-depth branch.
+      // 6h TTL stored in D1. Defense-in-depth branch.
       expect(result).toBeNull();
     });
 
     it("returns null on unexpected err code (lookup-failed state, 60s D1 TTL)", async () => {
       // ERR-UNWRAP (u101) or any other non-u131 error is treated as a
-      // genuine malformed response — short-TTL defer rather than 7d pin.
+      // genuine malformed response — short-TTL defer rather than 6h pin.
       mockFetch.mockResolvedValue(mockV2ErrOther(101));
 
       const result = await lookupBnsName(

@@ -39,11 +39,23 @@ import { samplingFor } from "../logging";
 
 const BNS_CACHE_TTL = 24 * 60 * 60; // 24 hours (confirmed positive)
 /**
- * "Confirmed no name" — Hiro returned `(ok none)`. A state change requires
- * an on-chain BNS registration tx; we bust this cache on registration/update
- * write paths and via the explicit refresh endpoint.
+ * "Confirmed no name" — Hiro returned `(ok none)` / `ERR-NO-PRIMARY-NAME`.
+ *
+ * Kept deliberately short (6h, not 7d) because a BNS primary name is *mutable*:
+ * an agent can call `set-primary-name` at any time after registering, and
+ * nothing on the write side busts this entry. With a 7d TTL an agent who
+ * registers before owning a name (the common case) stays `bnsName: null` for
+ * up to a week — the lazy refresh in `/api/agents/[address]` reads *through*
+ * this cache (`lookupBnsName` → `getCachedBnsName`) and so can never re-hit
+ * Hiro until the entry expires. 6h bounds that staleness while still absorbing
+ * a profile-view hammer. This is the asymmetry with identity NFTs below: an
+ * NFT can't be un-minted, so its negative is safe to cache for 7d; a primary
+ * name can appear (and change) with no event we observe. See issue #946.
+ *
+ * The `POST /api/identity/:address/refresh` endpoint remains the instant
+ * manual escape hatch (it calls `invalidateBnsCache` before re-looking up).
  */
-const BNS_CONFIRMED_NEGATIVE_CACHE_TTL = 7 * 24 * 60 * 60; // 7 days
+const BNS_CONFIRMED_NEGATIVE_CACHE_TTL = 6 * 60 * 60; // 6 hours
 /**
  * "Lookup failed" — Hiro 429/5xx, malformed response, timeout. Short TTL so
  * a transient upstream blip doesn't pin an address as name-less; long enough
@@ -594,8 +606,8 @@ export function setCachedBnsName(
 
 /**
  * Cache a "confirmed no BNS name" response (Hiro returned `(ok none)`).
- * Uses the long {@link BNS_CONFIRMED_NEGATIVE_CACHE_TTL} (7d) because state
- * change requires an on-chain BNS registration tx.
+ * Uses {@link BNS_CONFIRMED_NEGATIVE_CACHE_TTL} (6h) — kept short because a
+ * BNS primary name is mutable and nothing on the write side busts this entry.
  */
 export function setCachedBnsNegative(
   address: string,
@@ -657,7 +669,7 @@ export function setCachedBnsContractError(
 /**
  * Delete the cached BNS entry for an address (both positive and negative).
  * Use on write paths (registration completed, manual refresh) so the next
- * lookup re-hits Hiro instead of serving a stale 7d confirmed-negative.
+ * lookup re-hits Hiro instead of serving a stale confirmed-negative entry.
  */
 export function invalidateBnsCache(
   address: string,
