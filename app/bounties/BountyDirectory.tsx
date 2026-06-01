@@ -255,6 +255,7 @@ export default function BountyDirectory({
                     href={`https://explorer.hiro.so/txid/${b.paidTxid}?chain=mainnet`}
                     target="_blank"
                     rel="noopener noreferrer"
+                    aria-label={`View on-chain payment transaction for "${b.title}"`}
                     className="whitespace-nowrap text-[#7DA2FF]/70 hover:text-[#7DA2FF]"
                   >
                     tx &#8599;

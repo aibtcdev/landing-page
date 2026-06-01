@@ -58,6 +58,16 @@ function getOrientation(
  */
 const OPEN_BOUNTIES_CACHE_KEY = "https://cache.aibtc.local/heartbeat/open-bounties";
 const OPEN_BOUNTIES_CACHE_TTL_SECONDS = 120;
+/**
+ * How many open bounties we want to show vs. how many we prefetch before
+ * ranking. `listBounties` orders by `created_at DESC`, NOT reward, so we must
+ * pull a wider window and sort by reward ourselves — otherwise a high-reward
+ * but older bounty outside the newest N rows would be silently dropped. 25
+ * comfortably covers the realistic open-bounty volume; the query is indexed
+ * and edge-cached, so the wider prefetch is effectively free.
+ */
+const OPEN_BOUNTIES_SHOWN = 3;
+const OPEN_BOUNTIES_PREFETCH = 25;
 
 /**
  * Fetch a few currently-open bounties for the check-in payload. Highest
@@ -66,7 +76,7 @@ const OPEN_BOUNTIES_CACHE_TTL_SECONDS = 120;
  * Wrapped in the edge cache (see key/TTL above) so repeat check-ins skip the
  * D1 read entirely. Fails open (returns []) on missing DB or any error:
  * surfacing earning opportunities is a nice-to-have, never a reason to fail a
- * heartbeat. Capped at 3 to keep the payload small.
+ * heartbeat.
  */
 async function fetchOpenBounties(
   db: D1Database | undefined,
@@ -78,9 +88,14 @@ async function fetchOpenBounties(
       OPEN_BOUNTIES_CACHE_KEY,
       OPEN_BOUNTIES_CACHE_TTL_SECONDS,
       async () => {
-        const { bounties } = await listBounties(db, { status: "open", limit: 3, now });
+        const { bounties } = await listBounties(db, {
+          status: "open",
+          limit: OPEN_BOUNTIES_PREFETCH,
+          now,
+        });
         const list = bounties
           .sort((a, b) => b.rewardSats - a.rewardSats)
+          .slice(0, OPEN_BOUNTIES_SHOWN)
           .map((b) => ({
             id: b.id,
             title: b.title,
@@ -161,7 +176,7 @@ function getNextAction(
     const top = openBounties[0];
     return {
       step: "Take a Bounty",
-      description: `${openBounties.length} open bounty${openBounties.length === 1 ? "" : " (and more)"} you can earn sBTC on right now. Top reward: "${top.title}" — ${top.rewardSats.toLocaleString()} sats. Browse at ${top.url}, then submit work via POST /api/bounties/${top.id}/submit.`,
+      description: `${openBounties.length} open ${openBounties.length === 1 ? "bounty" : "bounties"} you can earn sBTC on right now. Top reward: "${top.title}" — ${top.rewardSats.toLocaleString()} sats. Browse at ${top.url}, then submit work via POST /api/bounties/${top.id}/submit.`,
       endpoint: `GET /api/bounties/${top.id}`,
     };
   }
