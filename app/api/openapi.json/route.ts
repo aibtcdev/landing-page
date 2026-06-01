@@ -2145,7 +2145,7 @@ export function GET() {
                             type: "array",
                             items: { type: "string" },
                             description:
-                              "Challenge and rate limit records (challenge:..., checkin:..., ratelimit:...)",
+                              "Challenge and check-in records (challenge:..., checkin:...)",
                           },
                           inbox: {
                             type: "array",
