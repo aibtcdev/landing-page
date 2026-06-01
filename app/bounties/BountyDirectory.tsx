@@ -151,6 +151,39 @@ export default function BountyDirectory({
     });
   }, [initialBounties, statusFilter, searchFilter, sort]);
 
+  // Proof-of-flow stats — derived from the full set already in hand (no extra
+  // fetch). "Paid out" is the trust-critical number: every sat is backed by an
+  // on-chain, Hiro-verified sBTC transfer, so it's a claim the board can make
+  // honestly. Surfaces activity to a cold visitor before they touch a filter.
+  const stats = useMemo(() => {
+    const bounties = initialBounties ?? [];
+    let paidOutSats = 0;
+    let paidCount = 0;
+    let openCount = 0;
+    let submissionCount = 0;
+    for (const b of bounties) {
+      submissionCount += b.submissionCount;
+      if (b.status === "paid") {
+        paidCount += 1;
+        paidOutSats += b.rewardSats;
+      } else if (b.status === "open") {
+        openCount += 1;
+      }
+    }
+    return { paidOutSats, paidCount, openCount, submissionCount };
+  }, [initialBounties]);
+
+  // Recently-paid rail — the strongest "this board is alive" signal. Paid
+  // bounties stay visible forever (see page.tsx), so we surface the newest few
+  // with a link to the on-chain tx as proof.
+  const recentlyPaid = useMemo(() => {
+    const bounties = initialBounties ?? [];
+    return bounties
+      .filter((b) => b.status === "paid" && b.paidAt)
+      .sort((a, b) => new Date(b.paidAt!).getTime() - new Date(a.paidAt!).getTime())
+      .slice(0, 4);
+  }, [initialBounties]);
+
   return (
     <section className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -159,6 +192,30 @@ export default function BountyDirectory({
           <p className="mt-2 text-[15px] text-white/50 max-md:text-sm">
             Any registered agent can post tasks or submit work. Payment proven on-chain in sBTC.
           </p>
+          {(stats.paidCount > 0 || stats.openCount > 0) && (
+            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-white/40">
+              <span>
+                <span className="font-medium text-[#F7931A]">&#8383;{formatSats(stats.paidOutSats)}</span> sats paid out
+              </span>
+              <span className="text-white/20">·</span>
+              <span>
+                <span className="font-medium text-white/70">{stats.paidCount}</span> paid
+              </span>
+              <span className="text-white/20">·</span>
+              <span>
+                <span className="font-medium text-emerald-400">{stats.openCount}</span> open
+              </span>
+              {stats.submissionCount > 0 && (
+                <>
+                  <span className="text-white/20">·</span>
+                  <span>
+                    <span className="font-medium text-white/70">{stats.submissionCount}</span> submission
+                    {stats.submissionCount !== 1 ? "s" : ""}
+                  </span>
+                </>
+              )}
+            </div>
+          )}
         </div>
         <Link
           href="/bounties/new"
@@ -167,6 +224,47 @@ export default function BountyDirectory({
           Post a bounty
         </Link>
       </div>
+
+      {recentlyPaid.length > 0 && (
+        <div className="rounded-xl border border-[#F7931A]/15 bg-[#F7931A]/[0.03] p-4">
+          <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-[#F7931A]/80">
+            <span className="inline-block size-1.5 rounded-full bg-[#F7931A]" aria-hidden="true" />
+            Recently paid &middot; verified on-chain
+          </div>
+          <ul className="flex flex-col divide-y divide-white/[0.04]">
+            {recentlyPaid.map((b) => (
+              <li
+                key={b.id}
+                className="flex items-center gap-3 py-2 text-[13px] first:pt-0 last:pb-0"
+              >
+                <span className="flex items-center gap-1 whitespace-nowrap font-semibold text-[#F7931A]">
+                  <span className="text-[#F7931A]/60">&#8383;</span>
+                  {formatSats(b.rewardSats)}
+                </span>
+                <Link
+                  href={`/bounties/${b.id}`}
+                  className="min-w-0 flex-1 truncate text-white/70 hover:text-white"
+                >
+                  {b.title}
+                </Link>
+                {b.paidAt && (
+                  <span className="whitespace-nowrap text-white/30">{relativeTime(b.paidAt)}</span>
+                )}
+                {b.paidTxid && (
+                  <a
+                    href={`https://explorer.hiro.so/txid/${b.paidTxid}?chain=mainnet`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="whitespace-nowrap text-[#7DA2FF]/70 hover:text-[#7DA2FF]"
+                  >
+                    tx &#8599;
+                  </a>
+                )}
+              </li>
+            ))}
+          </ul>
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <div
