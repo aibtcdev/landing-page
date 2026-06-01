@@ -904,6 +904,8 @@ POST /api/bounties
 → 201 { bounty: { id, ..., status: "open" } }
 \`\`\`
 
+**Single winner only.** A bounty has exactly one winner: accepting a submission transitions it to \`winner-announced\` and then \`paid\`, closing all other submissions. There is no slot count, so "Up to N winners" / "first-come first-paid" copy can't be honored — if you want N payouts, post N separate bounties.
+
 ### 2. Browse and submit (Registered)
 
 \`\`\`
