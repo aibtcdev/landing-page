@@ -36,7 +36,8 @@ export async function callReadOnly(
   functionName: string,
   args: ClarityValue[],
   hiroApiKey?: string,
-  logger?: Logger
+  logger?: Logger,
+  perAttemptTimeoutMs?: number
 ): Promise<any> {
   const [contractAddress, contractName] = contract.split(".");
   const url = `${STACKS_API_BASE}/v2/contracts/call-read/${contractAddress}/${contractName}/${functionName}`;
@@ -47,8 +48,9 @@ export async function callReadOnly(
   const headers = buildHiroHeaders(hiroApiKey);
   headers["Content-Type"] = "application/json";
 
-  // Reduced retry budget for synchronous profile lookups: worst-case ~20s
-  // instead of default ~71s. retries=2 (5xx), baseDelayMs=500, retries429=2.
+  // Reduced retry budget for synchronous profile lookups. Pass
+  // perAttemptTimeoutMs (SYNC_PER_ATTEMPT_TIMEOUT_MS) from request-path callers
+  // so a hung upstream fails fast instead of burning the caller's budget (#939).
   const response = await stacksApiFetch(
     url,
     {
@@ -59,7 +61,7 @@ export async function callReadOnly(
         arguments: hexArgs,
       }),
     },
-    { retries: 2, retries429: 2, logger }
+    { retries: 2, retries429: 2, perAttemptTimeoutMs, logger }
   );
 
   // Log cf-ray for observability if the final response is still a 429 after retries

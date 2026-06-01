@@ -5,7 +5,7 @@
 import { uintCV } from "@stacks/transactions";
 import { IDENTITY_REGISTRY_CONTRACT, STACKS_API_BASE } from "./constants";
 import { callReadOnly, parseClarityValue, buildHiroHeaders } from "./stacks-api";
-import { stacksApiFetch } from "../stacks-api-fetch";
+import { stacksApiFetch, SYNC_PER_ATTEMPT_TIMEOUT_MS } from "../stacks-api-fetch";
 import type { AgentIdentity } from "./types";
 import {
   getCachedIdentity,
@@ -65,27 +65,43 @@ export async function detectAgentIdentityWithOutcome(
     const holdingsUrl = `${STACKS_API_BASE}/extended/v1/tokens/nft/holdings?principal=${stxAddress}&asset_identifiers=${encodeURIComponent(assetId)}&limit=1`;
 
     const headers = buildHiroHeaders(hiroApiKey);
-    // Reduced retry budget for synchronous profile lookups: worst-case ~13s
-    // instead of default ~71s. Primary NFT holdings call gets retries429=1 (1s max
-    // 429 delay) and retries=2 (1.5s max 5xx delay).
+    // Synchronous profile lookup: keep the worst case to a few seconds so the
+    // request never blows a consumer's ~3s budget (#939). One attempt each for
+    // 429 and 5xx, with a 3.5s per-attempt timeout — a hung CF→Hiro call fails
+    // fast and is short-TTL negative-cached rather than retried in-band.
     const response = await stacksApiFetch(holdingsUrl, { headers }, {
-      retries: 2,
+      retries: 1,
       retries429: 1,
+      perAttemptTimeoutMs: SYNC_PER_ATTEMPT_TIMEOUT_MS,
       logger,
     });
 
     if (!response.ok) {
-      // Fallback to legacy scan if holdings API fails (e.g. 404, 500)
-      logger?.warn("identity.holdings_api_failed_falling_back", {
+      // Only fall back to the O(N) legacy scan when the holdings endpoint
+      // genuinely cannot serve this lookup (404 — e.g. asset path unknown).
+      // A 429 or 5xx means Hiro is throttling/erroring our egress, and the
+      // legacy scan fires 5+ MORE call-read requests against the same throttled
+      // upstream — turning one rate-limited call into a multi-second storm that
+      // still ends in lookup-failed (the #939 25s symptom). Fail fast instead,
+      // with a short-TTL negative cache so the next request retries cleanly.
+      if (response.status === 404) {
+        logger?.warn("identity.holdings_api_failed_falling_back", {
+          stxAddress,
+          status: response.status,
+        });
+        return await detectAgentIdentityLegacyWithOutcome(
+          stxAddress,
+          hiroApiKey,
+          kv,
+          logger
+        );
+      }
+      logger?.warn("identity.holdings_api_unavailable", {
         stxAddress,
         status: response.status,
       });
-      return await detectAgentIdentityLegacyWithOutcome(
-        stxAddress,
-        hiroApiKey,
-        kv,
-        logger
-      );
+      await setCachedIdentityLookupFailed(stxAddress, kv, logger);
+      return { state: "lookup-failed", identity: null };
     }
 
     const data = await response.json() as {
@@ -123,7 +139,8 @@ export async function detectAgentIdentityWithOutcome(
         "get-token-uri",
         [uintCV(agentId)],
         hiroApiKey,
-        logger
+        logger,
+        SYNC_PER_ATTEMPT_TIMEOUT_MS
       );
       uri = parseClarityValue(uriResult, logger) || "";
     } catch (error) {

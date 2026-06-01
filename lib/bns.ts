@@ -15,7 +15,7 @@ import {
   type LookupOutcomeState,
 } from "./identity/kv-cache";
 import { buildHiroHeaders } from "./identity/stacks-api";
-import { stacksApiFetch } from "./stacks-api-fetch";
+import { stacksApiFetch, SYNC_PER_ATTEMPT_TIMEOUT_MS } from "./stacks-api-fetch";
 import { STACKS_API_BASE } from "./identity/constants";
 import type { Logger } from "./logging";
 
@@ -76,7 +76,8 @@ export async function lookupBnsNameWithOutcome(
     headers["Content-Type"] = "application/json";
 
     // BNS lookup runs on request paths (register, verify, SSR). Use a reduced
-    // retry budget so a degraded Hiro cannot block requests for tens of seconds.
+    // retry budget AND a short per-attempt timeout so a degraded/throttled Hiro
+    // egress cannot block the request for tens of seconds (#939).
     const res = await stacksApiFetch(
       `${STACKS_API_BASE}/v2/contracts/call-read/${BNS_V2_CONTRACT}/${BNS_V2_NAME}/get-primary`,
       {
@@ -87,7 +88,12 @@ export async function lookupBnsNameWithOutcome(
           arguments: [`0x${serialized}`],
         }),
       },
-      { retries: 2, retries429: 1, logger }
+      {
+        retries: 1,
+        retries429: 1,
+        perAttemptTimeoutMs: SYNC_PER_ATTEMPT_TIMEOUT_MS,
+        logger,
+      }
     );
 
     if (!res.ok) {
