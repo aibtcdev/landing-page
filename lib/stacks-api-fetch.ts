@@ -134,8 +134,18 @@ export function extractRateLimitInfo(
   return { remainingMonth, limitMonth, costStacks };
 }
 
-/** Per-attempt fetch timeout in milliseconds. */
+/** Per-attempt fetch timeout in milliseconds (default for background/non-sync calls). */
 const PER_ATTEMPT_TIMEOUT_MS = 8_000;
+
+/**
+ * Tighter per-attempt timeout for *synchronous, user/consumer-facing* lookups
+ * (profile enrichment, identity/BNS refresh). The 8s default is fine for
+ * background work but far too long on a request path whose consumers budget
+ * ~3s (e.g. aibtc.news identity-gate): a single hung CF→Hiro call would burn
+ * 8s × retries ≈ 16s and blow the caller's budget. Pair this with a reduced
+ * retry budget so the worst case stays well under a few seconds. See #939.
+ */
+export const SYNC_PER_ATTEMPT_TIMEOUT_MS = 3_500;
 
 /** Maximum delay from Retry-After header (milliseconds). */
 const MAX_RETRY_AFTER_MS = 30_000;
@@ -180,6 +190,12 @@ export interface StacksApiFetchConfig {
   /** Max attempts for 429 rate-limit errors (default: {@link RATE_LIMIT_RETRIES} = 5). */
   retries429?: number;
   /**
+   * Per-attempt fetch timeout in ms (default: {@link PER_ATTEMPT_TIMEOUT_MS} = 8000).
+   * Synchronous request-path callers should pass {@link SYNC_PER_ATTEMPT_TIMEOUT_MS}
+   * so a hung upstream fails fast instead of exhausting the caller's budget.
+   */
+  perAttemptTimeoutMs?: number;
+  /**
    * Optional Logger; when provided, emits `stacksApi.*` telemetry events
    * (approaching_monthly_quota, retry_budget_exhausted, retrying). Silent
    * when omitted — we do not fall back to `console.*`,
@@ -220,6 +236,7 @@ export async function stacksApiFetch(
     retries = 3,
     baseDelayMs = 500,
     retries429 = RATE_LIMIT_RETRIES,
+    perAttemptTimeoutMs = PER_ATTEMPT_TIMEOUT_MS,
     logger,
   } = config;
   const path = extractPath(url);
@@ -236,7 +253,7 @@ export async function stacksApiFetch(
     totalAttempts++;
     const attemptOptions: RequestInit = {
       ...options,
-      signal: AbortSignal.timeout(PER_ATTEMPT_TIMEOUT_MS),
+      signal: AbortSignal.timeout(perAttemptTimeoutMs),
     };
 
     try {
