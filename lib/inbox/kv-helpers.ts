@@ -15,6 +15,7 @@ import type {
 } from "./types";
 import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "./d1-dual-write";
 import { getInboxMessageFromD1 } from "./d1-reads";
+import { bumpInboundStats } from "./stats";
 
 /**
  * Build KV key for an individual inbox message.
@@ -406,12 +407,14 @@ export async function finalizeStagedInboxPayment(
     paymentId,
   };
 
+  let insertResult: { changes: number };
   try {
-    await insertInboundMessageToD1(db, finalizedMessage);
+    insertResult = await insertInboundMessageToD1(db, finalizedMessage);
   } catch (err) {
     if (isPaymentTxidUniqueViolation(err)) {
       // A parallel finalize already inserted the row under the same payment_txid.
       // Re-query D1 for the canonical row, clear the staged record, and return it.
+      // No stats bump here — the finalize that won the race owns the increment.
       const canonical = await getInboxMessageFromD1(
         db,
         staged.message.toBtcAddress,
@@ -421,6 +424,24 @@ export async function finalizeStagedInboxPayment(
       return canonical;
     }
     throw err;
+  }
+
+  // Bump received_count/unread_count for the staged → confirmed delivery.
+  // Pending payments return 202 from POST /api/inbox/[address] WITHOUT inserting
+  // the row, so the synchronous bump on that path never runs for them — the row
+  // is first written here, when the confirmed payment finalizes. Omitting this
+  // is the systematic source of agent_inbox_stats received-count drift (#945):
+  // every pending→confirmed message landed in inbox_messages but was never
+  // counted. Bump only on a real insert (changes === 1) — a parallel finalize
+  // that lost the ON CONFLICT race returns 0 and must not double-count. Best-
+  // effort to mirror the synchronous delivery path; any residual drift stays
+  // reconcilable via /api/admin/reconcile?target=inbox_stats.
+  if (insertResult.changes === 1) {
+    await bumpInboundStats(
+      db,
+      finalizedMessage.toBtcAddress,
+      finalizedMessage.sentAt
+    ).catch(() => {});
   }
 
   await deleteStagedInboxPayment(kv, paymentId);

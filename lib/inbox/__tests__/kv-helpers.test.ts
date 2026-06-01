@@ -46,9 +46,17 @@ function createMockD1(opts?: {
   insertError?: Error;
   /** Pre-populate rows. */
   seedRows?: InboxRow[];
-}): { db: D1Database; rows: InboxRow[]; insertCalls: { sql: string; binds: unknown[] }[] } {
+}): {
+  db: D1Database;
+  rows: InboxRow[];
+  insertCalls: { sql: string; binds: unknown[] }[];
+  statsBumps: { binds: unknown[] }[];
+} {
   const rows: InboxRow[] = opts?.seedRows ? [...opts.seedRows] : [];
   const insertCalls: { sql: string; binds: unknown[] }[] = [];
+  // Records every agent_inbox_stats received-count bump (bumpInboundStats) so
+  // tests can assert the staged → confirmed delivery path maintains the counter.
+  const statsBumps: { binds: unknown[] }[] = [];
 
   const db = {
     prepare: (sql: string) => {
@@ -59,6 +67,10 @@ function createMockD1(opts?: {
           return stmt;
         },
         run: async () => {
+          if (sql.includes("agent_inbox_stats")) {
+            statsBumps.push({ binds });
+            return { success: true, meta: { changes: 1 } };
+          }
           if (sql.includes("INSERT INTO inbox_messages")) {
             insertCalls.push({ sql, binds });
             if (opts?.insertError) throw opts.insertError;
@@ -161,7 +173,7 @@ function createMockD1(opts?: {
     },
   } as unknown as D1Database;
 
-  return { db, rows, insertCalls };
+  return { db, rows, insertCalls, statsBumps };
 }
 
 describe("decrementUnreadCount", () => {
@@ -352,7 +364,7 @@ describe("staged inbox payment helpers", () => {
 
   it("finalizes a staged inbox payment by inserting into D1 and clearing the staged KV record (#760)", async () => {
     const kv = createMockKV();
-    const { db, rows, insertCalls } = createMockD1();
+    const { db, rows, insertCalls, statsBumps } = createMockD1();
     const now = new Date().toISOString();
     const stagedMessage: InboxMessage = {
       messageId: "msg_stage_confirmed",
@@ -393,6 +405,14 @@ describe("staged inbox payment helpers", () => {
     expect(rows[0]?.payment_status).toBe("confirmed");
     expect(rows[0]?.to_btc_address).toBe("bc1recipient");
 
+    // #945: the staged → confirmed delivery is the ONLY place the row is first
+    // written for a pending payment, so it must bump received_count/unread_count
+    // here — exactly once, for the recipient. Without this the counter silently
+    // drifts below the live inbox row count.
+    expect(statsBumps).toHaveLength(1);
+    expect(statsBumps[0]?.binds[0]).toBe("bc1recipient"); // btc_address
+    expect(statsBumps[0]?.binds[1]).toBe(now); // last_message_at = sentAt
+
     // Critically: NO legacy KV writes happened — the inbox:message / inbox:agent
     // / inbox:sent keys must stay empty. This is the regression the fix prevents.
     expect(await getMessage(kv, "msg_stage_confirmed")).toBeNull();
@@ -401,7 +421,7 @@ describe("staged inbox payment helpers", () => {
 
   it("is idempotent: re-finalize after staged record was cleared returns null without a second INSERT (#760)", async () => {
     const kv = createMockKV();
-    const { db, insertCalls } = createMockD1();
+    const { db, insertCalls, statsBumps } = createMockD1();
     const now = new Date().toISOString();
     const stagedMessage: InboxMessage = {
       messageId: "msg_idempotent",
@@ -435,6 +455,9 @@ describe("staged inbox payment helpers", () => {
     });
     expect(second).toBeNull();
     expect(insertCalls).toHaveLength(1);
+    // #945: only the first finalize (the real insert) bumped the counter — the
+    // re-finalize is a noop and must not double-count.
+    expect(statsBumps).toHaveLength(1);
   });
 
   it("returns the canonical D1 row when the staged record exists but D1 already has the message (queue retry race) (#760)", async () => {
@@ -461,7 +484,7 @@ describe("staged inbox payment helpers", () => {
       read_at: null,
       replied_at: null,
     };
-    const { db, insertCalls } = createMockD1({ seedRows: [seededRow] });
+    const { db, insertCalls, statsBumps } = createMockD1({ seedRows: [seededRow] });
     const now = new Date().toISOString();
 
     await storeStagedInboxPayment(kv, {
@@ -491,6 +514,9 @@ describe("staged inbox payment helpers", () => {
 
     // No INSERT attempted — the existing-row branch short-circuits.
     expect(insertCalls).toHaveLength(0);
+    // #945: the row already existed (a prior finalize owns the increment), so
+    // this short-circuit must not bump the counter.
+    expect(statsBumps).toHaveLength(0);
   });
 
   it("treats UNIQUE-violation on payment_txid as idempotent success and returns the canonical row (#760)", async () => {
@@ -524,7 +550,7 @@ describe("staged inbox payment helpers", () => {
 
     // Force INSERT to throw the UNIQUE constraint error, but pre-populate the
     // row so the post-violation re-query finds it.
-    const { db, insertCalls } = createMockD1({
+    const { db, insertCalls, statsBumps } = createMockD1({
       insertError: new Error(
         "D1_ERROR: UNIQUE constraint failed: inbox_messages.payment_txid"
       ),
@@ -562,6 +588,9 @@ describe("staged inbox payment helpers", () => {
     expect(insertCalls).toHaveLength(1);
     expect(finalized).toBeNull();
     expect(await getStagedInboxPayment(kv, "pay_unique_race")).toBeNull();
+    // #945: the INSERT lost the UNIQUE race (no row written by us), so the catch
+    // branch must not bump — the finalize that won the race owns the increment.
+    expect(statsBumps).toHaveLength(0);
   });
 
   it("propagates non-UNIQUE D1 errors so the queue retries (#760)", async () => {
