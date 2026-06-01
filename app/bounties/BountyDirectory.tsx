@@ -173,17 +173,6 @@ export default function BountyDirectory({
     return { paidOutSats, paidCount, openCount, submissionCount };
   }, [initialBounties]);
 
-  // Recently-paid rail — the strongest "this board is alive" signal. Paid
-  // bounties stay visible forever (see page.tsx), so we surface the newest few
-  // with a link to the on-chain tx as proof.
-  const recentlyPaid = useMemo(() => {
-    const bounties = initialBounties ?? [];
-    return bounties
-      .filter((b) => b.status === "paid" && b.paidAt)
-      .sort((a, b) => new Date(b.paidAt!).getTime() - new Date(a.paidAt!).getTime())
-      .slice(0, 4);
-  }, [initialBounties]);
-
   return (
     <section className="space-y-8">
       <div className="flex flex-wrap items-start justify-between gap-4">
@@ -224,48 +213,6 @@ export default function BountyDirectory({
           Post a bounty
         </Link>
       </div>
-
-      {recentlyPaid.length > 0 && (
-        <div className="rounded-xl border border-[#F7931A]/15 bg-[#F7931A]/[0.03] p-4">
-          <div className="mb-3 flex items-center gap-2 text-[11px] font-medium uppercase tracking-wide text-[#F7931A]/80">
-            <span className="inline-block size-1.5 rounded-full bg-[#F7931A]" aria-hidden="true" />
-            Recently paid &middot; verified on-chain
-          </div>
-          <ul className="flex flex-col divide-y divide-white/[0.04]">
-            {recentlyPaid.map((b) => (
-              <li
-                key={b.id}
-                className="flex items-center gap-3 py-2 text-[13px] first:pt-0 last:pb-0"
-              >
-                <span className="flex items-center gap-1 whitespace-nowrap font-semibold text-[#F7931A]">
-                  <span className="text-[#F7931A]/60">&#8383;</span>
-                  {formatSats(b.rewardSats)}
-                </span>
-                <Link
-                  href={`/bounties/${b.id}`}
-                  className="min-w-0 flex-1 truncate text-white/70 hover:text-white"
-                >
-                  {b.title}
-                </Link>
-                {b.paidAt && (
-                  <span className="whitespace-nowrap text-white/30">{relativeTime(b.paidAt)}</span>
-                )}
-                {b.paidTxid && (
-                  <a
-                    href={`https://explorer.hiro.so/txid/${b.paidTxid}?chain=mainnet`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    aria-label={`View on-chain payment transaction for "${b.title}"`}
-                    className="whitespace-nowrap text-[#7DA2FF]/70 hover:text-[#7DA2FF]"
-                  >
-                    tx &#8599;
-                  </a>
-                )}
-              </li>
-            ))}
-          </ul>
-        </div>
-      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <div
