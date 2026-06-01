@@ -13,8 +13,12 @@ import {
 } from "@/lib/inbox";
 import { isStxAddress } from "@/lib/validation/address";
 import { shouldFailClosed } from "@/lib/env";
-import { insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
-import { bumpSentStats } from "@/lib/inbox/stats";
+import {
+  insertReplyToD1,
+  updateMessageStateD1,
+  markMessageReadIfUnread,
+} from "@/lib/inbox/d1-dual-write";
+import { bumpSentStats, decrementUnreadStats } from "@/lib/inbox/stats";
 import {
   listOutboxRepliesFromD1,
   getInboxMessageFromD1,
@@ -438,7 +442,10 @@ export async function POST(
   };
 
   // D1 is now the sole write path (Phase 2.5 Step 4 — KV writes removed).
-  // unreadCount is now a live SELECT COUNT(*) so no KV decrement is needed.
+  // When this reply marks the parent read, the maintained unread_count is
+  // decremented below (via markMessageReadIfUnread + decrementUnreadStats).
+  // (The old "unreadCount is a live COUNT so no decrement needed" assumption
+  // stopped holding once #845 made status=all read from agent_inbox_stats.)
   //
   // insertReplyToD1 is synchronous + failure-propagating: failure returns 503
   // + Retry-After: 5 so the sender retries rather than losing the reply.
@@ -468,21 +475,44 @@ export async function POST(
     );
   }
 
-  // Best-effort: update parent message's replied_at (and read_at if unread).
-  // The reply row is already committed; this is metadata only.
+  // Best-effort: update parent message's replied_at, and mark it read if this
+  // reply is the first acknowledgement. The reply row is already committed, so
+  // these are metadata-only updates.
   const wasUnread = !message.readAt;
-  const parentUpdates: { readAt?: string; repliedAt?: string } = {
-    repliedAt: now,
-    ...(wasUnread && { readAt: now }),
-  };
+
+  // Always stamp replied_at on the parent.
   ctx.waitUntil(
-    updateMessageStateD1(db, messageId, parentUpdates).catch((err) =>
+    updateMessageStateD1(db, messageId, { repliedAt: now }).catch((err) =>
       logger.error("outbox.d1_parent_state_failed", {
         messageId,
         error: String(err),
       })
     )
   );
+
+  // Replying to an unread message implicitly marks it read. Route this through
+  // the guarded atomic UPDATE (WHERE read_at IS NULL) — mirroring the PATCH
+  // mark-read path — so we both stamp read_at and learn whether this was a real
+  // unread→read transition, then decrement the maintained unread_count only on
+  // changes === 1. Previously this path set read_at but never decremented
+  // unread_count, leaving it inflated above the live unread row count — the
+  // phantom-unread root cause behind #906 / #942.
+  if (wasUnread) {
+    ctx.waitUntil(
+      markMessageReadIfUnread(db, messageId, agent.btcAddress, now)
+        .then((res) =>
+          res.changes === 1
+            ? decrementUnreadStats(db, agent.btcAddress).catch(() => {})
+            : undefined
+        )
+        .catch((err) =>
+          logger.error("outbox.d1_mark_read_failed", {
+            messageId,
+            error: String(err),
+          })
+        )
+    );
+  }
 
   // Bump sent stats only on a real insert (changes === 1), not on recovery replay.
   // fromAddress is the agent's BTC address (message.toBtcAddress resolved above).

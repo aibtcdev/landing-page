@@ -61,6 +61,7 @@ vi.mock("@/lib/inbox/d1-dual-write", () => ({
   insertInboundMessageToD1: vi.fn().mockResolvedValue({ changes: 1 }),
   insertReplyToD1: vi.fn().mockResolvedValue({ changes: 1 }),
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
+  markMessageReadIfUnread: vi.fn().mockResolvedValue({ changes: 1 }),
   isPaymentTxidUniqueViolation: (err: unknown): boolean => {
     const msg = err instanceof Error ? err.message : String(err);
     return msg.includes("UNIQUE constraint failed: inbox_messages.payment_txid");
@@ -71,6 +72,7 @@ vi.mock("@/lib/inbox/d1-dual-write", () => ({
 vi.mock("@/lib/inbox/stats", () => ({
   bumpInboundStats: vi.fn().mockResolvedValue(undefined),
   bumpSentStats: vi.fn().mockResolvedValue(undefined),
+  decrementUnreadStats: vi.fn().mockResolvedValue(undefined),
   getAgentInboxStats: vi.fn().mockResolvedValue({
     receivedCount: 0,
     unreadCount: 0,
@@ -148,7 +150,7 @@ import {
   getInboxMessageFromD1,
   getReplyForMessageFromD1,
 } from "@/lib/inbox/d1-reads";
-import { insertInboundMessageToD1, insertReplyToD1, updateMessageStateD1 } from "@/lib/inbox/d1-dual-write";
+import { insertInboundMessageToD1, insertReplyToD1, updateMessageStateD1, markMessageReadIfUnread } from "@/lib/inbox/d1-dual-write";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { POST as inboxPOST } from "../route";
 import { POST as outboxPOST } from "../.././../outbox/[address]/route";
@@ -617,10 +619,11 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
     const resp = await outboxPOST(req, { params: Promise.resolve({ address: AGENT.btcAddress }) });
 
     expect(resp.status).toBe(201);
-    // P3: waitUntil called twice:
-    //   1. best-effort parent-state updateMessageStateD1
-    //   2. bumpSentStats (changes === 1 from insertReplyToD1)
-    expect(waitUntilFn).toHaveBeenCalledTimes(2);
+    // P3 + #945 twin: waitUntil called three times for an unread parent:
+    //   1. best-effort parent-state updateMessageStateD1 (replied_at)
+    //   2. guarded mark-read + unread_count decrement (markMessageReadIfUnread)
+    //   3. bumpSentStats (changes === 1 from insertReplyToD1)
+    expect(waitUntilFn).toHaveBeenCalledTimes(3);
     expect(updateMessageStateD1).toHaveBeenCalledOnce();
 
     const [calledDb, calledMessageId, calledUpdates] = (
@@ -629,11 +632,18 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
     expect(calledDb).toBe(db);
     // Must target the PARENT message_id directly (not the derived reply PK)
     expect(calledMessageId).toBe(MESSAGE_ID);
-    // Message was unread → both fields should be set
+    // replied_at is set here; read_at now goes through the guarded mark-read.
     expect(calledUpdates).toHaveProperty("repliedAt");
-    expect(calledUpdates).toHaveProperty("readAt");
+    expect(calledUpdates).not.toHaveProperty("readAt");
     expect(typeof calledUpdates.repliedAt).toBe("string");
-    expect(typeof calledUpdates.readAt).toBe("string");
+
+    // The unread parent is marked read via the guarded UPDATE, keyed by the
+    // parent recipient (the replying agent), which drives the unread_count
+    // decrement (#945 twin — previously this decrement was missing).
+    expect(markMessageReadIfUnread).toHaveBeenCalledOnce();
+    const [, markMsgId, markAddr] = (markMessageReadIfUnread as Mock).mock.calls[0];
+    expect(markMsgId).toBe(MESSAGE_ID);
+    expect(markAddr).toBe(AGENT.btcAddress);
   });
 
   it("sets only repliedAt (not readAt) when parent message was already read", async () => {

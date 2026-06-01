@@ -49,11 +49,15 @@ vi.mock("@/lib/inbox/d1-dual-write", () => ({
   // P3: insertReplyToD1 returns D1WriteResult {changes}
   insertReplyToD1: vi.fn().mockResolvedValue({ changes: 1 }),
   updateMessageStateD1: vi.fn().mockResolvedValue(undefined),
+  // #945 twin: replying to an unread message marks it read via this guarded
+  // UPDATE; changes === 1 signals a real unread→read transition.
+  markMessageReadIfUnread: vi.fn().mockResolvedValue({ changes: 1 }),
 }));
 
 // P3: outbox POST now calls bumpSentStats from @/lib/inbox/stats
 vi.mock("@/lib/inbox/stats", () => ({
   bumpSentStats: vi.fn().mockResolvedValue(undefined),
+  decrementUnreadStats: vi.fn().mockResolvedValue(undefined),
   getAgentInboxStats: vi.fn().mockResolvedValue({
     receivedCount: 0,
     unreadCount: 0,
@@ -96,6 +100,8 @@ import {
   getInboxMessageFromD1,
   getReplyForMessageFromD1,
 } from "@/lib/inbox/d1-reads";
+import { markMessageReadIfUnread } from "@/lib/inbox/d1-dual-write";
+import { decrementUnreadStats } from "@/lib/inbox/stats";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 
 // ---- shared fixtures --------------------------------------------------------
@@ -381,5 +387,55 @@ describe("Phase 2.5 Step 3.5 — POST outbox write-path D1 flip", () => {
     expect(body.error).toBe("transient_d1_unavailable");
     expect(body.retry_after).toBe(5);
     expect(res.headers.get("Retry-After")).toBe("5");
+  });
+});
+
+describe("#945 twin — unread_count decrement on implicit mark-read (reply)", () => {
+  // The mark-read + decrement run inside ctx.waitUntil (a vi.fn here), so the
+  // promise chain executes but isn't awaited by the route. Flush a macrotask
+  // before asserting so the chained decrement has run.
+  const flush = () => new Promise((r) => setTimeout(r, 0));
+
+  it("replying to an UNREAD message marks it read and decrements unread_count once", async () => {
+    // INBOX_MESSAGE has no readAt → wasUnread. markMessageReadIfUnread returns
+    // {changes: 1} (default mock) — a real unread→read transition.
+    const res = await POST(buildPostRequest(ADDR_A), buildContext(ADDR_A));
+    expect(res.status).toBe(201);
+    await flush();
+
+    expect(markMessageReadIfUnread).toHaveBeenCalledOnce();
+    const [, mId, mAddr] = (markMessageReadIfUnread as Mock).mock.calls[0];
+    expect(mId).toBe(MSG_ID);
+    expect(mAddr).toBe(ADDR_A); // parent recipient = the replying agent
+
+    expect(decrementUnreadStats).toHaveBeenCalledOnce();
+    expect((decrementUnreadStats as Mock).mock.calls[0][1]).toBe(ADDR_A);
+  });
+
+  it("replying to an ALREADY-READ message neither marks read nor decrements", async () => {
+    (getInboxMessageFromD1 as Mock).mockResolvedValue({
+      ...INBOX_MESSAGE,
+      readAt: "2026-05-08T06:30:00.000Z",
+    });
+
+    const res = await POST(buildPostRequest(ADDR_A), buildContext(ADDR_A));
+    expect(res.status).toBe(201);
+    await flush();
+
+    expect(markMessageReadIfUnread).not.toHaveBeenCalled();
+    expect(decrementUnreadStats).not.toHaveBeenCalled();
+  });
+
+  it("does not decrement when the guarded mark-read finds the row already read (changes === 0)", async () => {
+    // wasUnread at fetch, but a concurrent reader marked it read first: the
+    // guarded UPDATE (WHERE read_at IS NULL) matches no rows → no decrement.
+    (markMessageReadIfUnread as Mock).mockResolvedValueOnce({ changes: 0 });
+
+    const res = await POST(buildPostRequest(ADDR_A), buildContext(ADDR_A));
+    expect(res.status).toBe(201);
+    await flush();
+
+    expect(markMessageReadIfUnread).toHaveBeenCalledOnce();
+    expect(decrementUnreadStats).not.toHaveBeenCalled();
   });
 });
