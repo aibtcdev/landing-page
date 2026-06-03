@@ -834,6 +834,58 @@ export function setCachedReputationLookupFailed(
   );
 }
 
+/**
+ * KV key for the shared Hiro-budget circuit breaker.
+ * Set when any reputation callReadOnly fails; checked before every call.
+ * TTL matches REPUTATION_LOOKUP_FAILED_CACHE_TTL (60s).
+ *
+ * Uses a distinct sub-namespace so it cannot collide with per-agentId keys,
+ * which always start with `cache:reputation:summary:` or
+ * `cache:reputation:feedback:`.
+ */
+const REPUTATION_CIRCUIT_BREAKER_KEY =
+  "cache:reputation:circuit-breaker:open";
+
+/**
+ * Check whether the reputation circuit breaker is open (Hiro budget
+ * exhausted or persistent rate-limit). Returns true when the shared
+ * breaker key exists in KV.
+ *
+ * Fail-open: returns false on KV error so a transient KV failure never
+ * blocks an otherwise valid Hiro call.
+ */
+export async function isReputationCircuitOpen(
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<boolean> {
+  const val = await kvGet(
+    kv,
+    REPUTATION_CIRCUIT_BREAKER_KEY,
+    "reputation",
+    logger
+  );
+  return val !== null;
+}
+
+/**
+ * Open the reputation circuit breaker for REPUTATION_LOOKUP_FAILED_CACHE_TTL
+ * (60s). After this TTL the breaker self-heals and the next request attempts
+ * Hiro again.
+ */
+export function setReputationCircuitOpen(
+  kv?: KVNamespace,
+  logger?: Logger
+): Promise<void> {
+  return kvPut(
+    kv,
+    REPUTATION_CIRCUIT_BREAKER_KEY,
+    "1",
+    REPUTATION_LOOKUP_FAILED_CACHE_TTL,
+    "reputation",
+    logger
+  );
+}
+
 // ---------------------------------------------------------------------------
 // Public: Transaction cache (remains on KV — low volume, out of P2 scope)
 // ---------------------------------------------------------------------------

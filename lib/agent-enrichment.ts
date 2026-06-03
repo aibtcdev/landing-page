@@ -216,7 +216,10 @@ async function fetchIdentityAndReputation(
 
   let reputation: ReputationSummary | null = null;
   try {
-    reputation = await getReputationSummary(identityResult.agentId, hiroApiKey, kv, logger);
+    // getReputationSummary now returns a discriminated ReputationResult; enrichment
+    // only needs the value (a transient breaker/Hiro-error fallback is treated as null here).
+    const summaryResult = await getReputationSummary(identityResult.agentId, hiroApiKey, kv, logger);
+    reputation = summaryResult.value;
   } catch (e) {
     logger?.error("enrichment.reputation_fetch_failed", {
       btcAddress: agent.btcAddress,

@@ -2,6 +2,20 @@
  * ERC-8004 Identity and Reputation types
  */
 
+/**
+ * Discriminated result returned by reputation fetch helpers.
+ *
+ * - `transient: false` — authoritative result (on-chain success or confirmed
+ *   empty). Safe to persist in a long-lived edge cache or per-agent KV entry.
+ * - `transient: true` — fallback produced when the circuit breaker is open or
+ *   a Hiro call fails. Value is a safe empty shape, but it MUST NOT be
+ *   edge-cached as if it were an authoritative result. Routes should bypass
+ *   `withEdgeCache` and set `Cache-Control: no-store` for these responses.
+ */
+export type ReputationResult<T> =
+  | { transient: false; value: T }
+  | { transient: true; value: T };
+
 export interface AgentIdentity {
   agentId: number;
   owner: string;
