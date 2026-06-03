@@ -120,9 +120,24 @@ export async function GET(
     const agentId = agent.erc8004AgentId;
 
     if (type === "summary") {
-      const summary = await getReputationSummary(agentId, hiroApiKey, kv, logger);
+      const summaryResult = await getReputationSummary(agentId, hiroApiKey, kv, logger);
+      // Transient fallback (circuit breaker open or Hiro error): do not
+      // edge-cache this response. Setting no-store here causes withEdgeCache
+      // (called below) to receive a non-ok or explicitly non-cacheable response
+      // — but we bypass the cache wrapper entirely for transient results so the
+      // fake empty shape is never pinned for up to 5 minutes post-recovery.
+      if (summaryResult.transient) {
+        return NextResponse.json(
+          { summary: summaryResult.value },
+          {
+            headers: {
+              "Cache-Control": "no-store",
+            },
+          }
+        );
+      }
       return NextResponse.json(
-        { summary },
+        { summary: summaryResult.value },
         {
           headers: {
             "Cache-Control": "public, max-age=60, s-maxage=300",
@@ -143,7 +158,21 @@ export async function GET(
       }
       cursor = parsedCursor;
     }
-    const feedback = await getReputationFeedback(agentId, cursor, hiroApiKey, kv, logger);
+    const feedbackResult = await getReputationFeedback(agentId, cursor, hiroApiKey, kv, logger);
+
+    // Transient fallback (circuit breaker open or Hiro error): bypass edge cache.
+    if (feedbackResult.transient) {
+      return NextResponse.json(
+        { feedback: feedbackResult.value },
+        {
+          headers: {
+            "Cache-Control": "no-store",
+          },
+        }
+      );
+    }
+
+    const feedback = feedbackResult.value;
 
     // Resolve client STX addresses to agent display names
     const clientAddresses = [...new Set(feedback.items.map((item) => item.client))];

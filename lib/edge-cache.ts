@@ -82,6 +82,13 @@ export async function withEdgeCache(
   const response = await loader();
   if (!response.ok) return response;
 
+  // Respect `Cache-Control: no-store` from the loader. A transient fallback
+  // response (e.g. circuit-breaker open) sets this header so fake empty data
+  // is never pinned at the edge for the full TTL window. If no-store is
+  // present, skip the cache write and return the response immediately.
+  const cacheControl = response.headers.get("Cache-Control") ?? "";
+  if (cacheControl.includes("no-store")) return response;
+
   // Don't overwrite a Cache-Control already set by the loader —
   // routes set their own client-facing directives (e.g.
   // s-maxage, stale-while-revalidate). The clone is stored verbatim

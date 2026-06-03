@@ -12,7 +12,7 @@ import {
   isReputationCircuitOpen,
   setReputationCircuitOpen,
 } from "./kv-cache";
-import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback } from "./types";
+import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback, ReputationResult } from "./types";
 import type { Logger } from "../logging";
 
 /**
@@ -31,27 +31,38 @@ function wadToNumber(wadStr: string): number {
 }
 
 /**
- * Get reputation summary for an agent
- * Returns count and average score (WAD converted to decimal)
+ * Get reputation summary for an agent.
+ * Returns count and average score (WAD converted to decimal).
+ *
+ * The returned `ReputationResult` carries a `transient` flag:
+ *  - `false` — authoritative on-chain result (or confirmed empty). Safe to
+ *    edge-cache for the full TTL.
+ *  - `true` — transient fallback (circuit breaker open or Hiro error). The
+ *    caller MUST NOT edge-cache this response; it should set `no-store` so a
+ *    fake empty reputation is never pinned for up to 5 minutes after recovery.
  */
 export async function getReputationSummary(
   agentId: number,
   hiroApiKey?: string,
   kv?: KVNamespace,
   logger?: Logger
-): Promise<ReputationSummary | null> {
+): Promise<ReputationResult<ReputationSummary | null>> {
   const cacheKey = `summary:${agentId}`;
   const cached = await getCachedReputation<ReputationSummary>(cacheKey, kv, logger);
-  if (cached.hit) return cached.value;
+  // A KV cache hit is always authoritative: it was written either from a
+  // confirmed on-chain lookup (positive/empty) or a previous 60s lookup-failed
+  // entry. Either way it is NOT a fresh transient fallback, so transient=false.
+  if (cached.hit) return { transient: false, value: cached.value };
 
-  // Circuit-breaker pre-check: if Hiro budget is exhausted, skip callReadOnly
-  // and write a per-agentId negative cache so this key also short-circuits on
-  // subsequent requests. Log at warn — the breaker being open is expected
+  // Circuit-breaker pre-check: if Hiro budget is exhausted, skip callReadOnly.
+  // Do NOT write a per-agentId negative cache here — the shared breaker already
+  // gates all subsequent calls for 60s, and writing a per-agent KV entry would
+  // pollute the cache with a transient fallback that looks like an authoritative
+  // "no reputation" result. Log at warn — the breaker being open is expected
   // during budget-exhaustion windows, not an actionable error.
   if (await isReputationCircuitOpen(kv, logger)) {
     logger?.warn("reputation.summary_circuit_open", { agentId });
-    await setCachedReputationLookupFailed(cacheKey, kv, logger);
-    return null;
+    return { transient: true, value: null };
   }
 
   try {
@@ -59,8 +70,9 @@ export async function getReputationSummary(
     const summary = parseClarityValue(result, logger);
 
     if (!summary || Number(summary.count) === 0) {
+      // Confirmed on-chain empty: cache authoritatively and mark non-transient.
       await setCachedReputation(cacheKey, null, kv, logger);
-      return null;
+      return { transient: false, value: null };
     }
 
     // Convert WAD value to decimal using bigint for precision
@@ -73,7 +85,7 @@ export async function getReputationSummary(
     };
 
     await setCachedReputation(cacheKey, reputationSummary, kv, logger);
-    return reputationSummary;
+    return { transient: false, value: reputationSummary };
   } catch (error) {
     // Open the shared circuit breaker so subsequent calls for ANY agentId
     // skip callReadOnly for the next 60s. This stops the error storm when
@@ -87,20 +99,23 @@ export async function getReputationSummary(
       agentId,
       error: String(error),
     });
-    // Mirrors the setCachedBnsLookupFailed / setCachedIdentityLookupFailed
-    // pattern from kv-cache.ts: write a 60s negative cache and return null
-    // silently. Throwing here would create an asymmetry — the first request
-    // within the failure window returns 500, subsequent requests within 60s
-    // return the cached null as 200 — surfacing inconsistent behavior to
-    // the same polling client. Returning null on both calls matches the
-    // BNS/identity helpers' behavior and bounds Hiro retries to 1/60s.
+    // Write a 60s per-agentId negative cache so this specific key short-circuits
+    // on subsequent requests within the breaker window (bounds Hiro retries to
+    // 1/60s on per-key recovery even if the shared breaker already healed).
+    // This is a lookup-failed entry, not an authoritative empty — it expires
+    // in 60s and does not masquerade as "confirmed no reputation."
     await setCachedReputationLookupFailed(cacheKey, kv, logger);
-    return null;
+    // Transient: the caller must not edge-cache this as an authoritative result.
+    return { transient: true, value: null };
   }
 }
 
 /**
- * Get all feedback for an agent with pagination
+ * Get all feedback for an agent with pagination.
+ *
+ * The returned `ReputationResult` carries a `transient` flag with the same
+ * semantics as `getReputationSummary`: `true` means the caller must not
+ * edge-cache the response.
  */
 export async function getReputationFeedback(
   agentId: number,
@@ -108,21 +123,22 @@ export async function getReputationFeedback(
   hiroApiKey?: string,
   kv?: KVNamespace,
   logger?: Logger
-): Promise<ReputationFeedbackResponse> {
+): Promise<ReputationResult<ReputationFeedbackResponse>> {
   const cacheKey = `feedback:${agentId}:${cursor || 0}`;
   const cached = await getCachedReputation<ReputationFeedbackResponse>(cacheKey, kv, logger);
-  if (cached.hit) return cached.value ?? { items: [], cursor: null };
+  // KV cache hit is authoritative — not a fresh transient fallback.
+  if (cached.hit) return { transient: false, value: cached.value ?? { items: [], cursor: null } };
 
   // Circuit-breaker pre-check: same semantics as getReputationSummary.
-  // If the shared breaker is open, skip callReadOnly and write a per-key
-  // negative cache so this feedback key also short-circuits.
+  // Do NOT write a per-key negative cache for a breaker-open fallback — same
+  // rationale as getReputationSummary: avoids poisoning the per-agent cache
+  // with a transient result that looks authoritative to later callers.
   if (await isReputationCircuitOpen(kv, logger)) {
     logger?.warn("reputation.feedback_circuit_open", {
       agentId,
       cursor: cursor ?? null,
     });
-    await setCachedReputationLookupFailed(cacheKey, kv, logger);
-    return { items: [], cursor: null };
+    return { transient: true, value: { items: [], cursor: null } };
   }
 
   try {
@@ -139,9 +155,10 @@ export async function getReputationFeedback(
     const response = parseClarityValue(result, logger);
 
     if (!response || !response.items) {
+      // Confirmed on-chain empty: cache authoritatively.
       const empty: ReputationFeedbackResponse = { items: [], cursor: null };
       await setCachedReputation(cacheKey, empty, kv, logger);
-      return empty;
+      return { transient: false, value: empty };
     }
 
     const items: ReputationFeedback[] = response.items.map((item: any) => ({
@@ -161,7 +178,7 @@ export async function getReputationFeedback(
     };
 
     await setCachedReputation(cacheKey, feedbackResponse, kv, logger);
-    return feedbackResponse;
+    return { transient: false, value: feedbackResponse };
   } catch (error) {
     // Open the shared circuit breaker so subsequent calls for ANY agentId
     // skip callReadOnly for the next 60s — same rationale as getReputationSummary.
@@ -173,12 +190,10 @@ export async function getReputationFeedback(
       cursor: cursor ?? null,
       error: String(error),
     });
-    // Same 60s negative-cache treatment as getReputationSummary: break the
-    // polling-storm amplification on transient Hiro errors (TimeoutError,
-    // 5xx). Returns an empty feedback page silently — matches BNS/identity
-    // behavior where lookup-failed and confirmed-negative both surface as
-    // null/empty to callers, distinguished only by TTL.
+    // Write a 60s per-key negative cache (lookup-failed, not authoritative empty)
+    // to bound Hiro retries to 1/60s on per-key recovery.
     await setCachedReputationLookupFailed(cacheKey, kv, logger);
-    return { items: [], cursor: null };
+    // Transient: the caller must not edge-cache this.
+    return { transient: true, value: { items: [], cursor: null } };
   }
 }

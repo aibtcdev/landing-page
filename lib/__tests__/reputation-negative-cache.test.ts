@@ -1,33 +1,46 @@
 /**
  * Tests for reputation fetch resilience: 60s negative-cache-on-timeout (issue
- * #795) and cross-agent circuit breaker (Hiro budget exhaustion, issue #933).
+ * #795), cross-agent circuit breaker (Hiro budget exhaustion, issue #933), and
+ * transient-vs-authoritative result discrimination (issue #958 Codex P2).
  *
  * Negative-cache behavior (original): on transient upstream error
  * (TimeoutError / 5xx), write a 60s per-agentId negative cache and return
- * null/empty silently. Throwing here would create an asymmetry between the
- * first request (500) and subsequent requests within the 60s window (200 from
- * cached null) for the same polling client.
+ * a `{ transient: true, value: null }` result. Throwing here would create an
+ * asymmetry between the first request (500) and subsequent requests within the
+ * 60s window (200 from cached null) for the same polling client.
  *
  * Circuit-breaker behavior (added): when Hiro budget is globally exhausted,
  * a shared KV key is set for 60s. Subsequent calls for ANY agentId check this
  * key BEFORE calling callReadOnly — skipping the Hiro call entirely. This
  * stops the 56–441/day error storm caused by the competition sweep starving
- * the shared Hiro key budget.
+ * the shared Hiro key budget. When the breaker is open, NO per-agentId KV
+ * negative cache is written (the shared breaker key already gates all calls;
+ * writing per-agent entries would pollute the cache with transient results
+ * that look authoritative to later callers).
+ *
+ * Transient discrimination (issue #958): all results carry a `transient` flag.
+ * Routes must not edge-cache responses where `transient: true`. A genuine
+ * on-chain "no reputation" (`transient: false`) is still safely cacheable.
  *
  * Covers:
  *  (a) getReputationSummary: callReadOnly throws → setCachedReputationLookupFailed
- *      called with the correct key, returns null silently (no rethrow).
- *  (b) getReputationSummary: second call within 60s returns cached null
- *      without hitting callReadOnly again.
+ *      called with the correct key, returns { transient: true, value: null }.
+ *  (b) getReputationSummary: second call within 60s returns { transient: false,
+ *      value: null } from the KV cache without hitting callReadOnly again.
  *  (c) getReputationFeedback: callReadOnly throws → setCachedReputationLookupFailed
- *      called with the correct key, returns empty page silently (no rethrow).
- *  (d) getReputationFeedback: cached negative prevents second Hiro call.
+ *      called with the correct key, returns { transient: true, value: empty }.
+ *  (d) getReputationFeedback: cached negative returns { transient: false, value: empty }
+ *      without a second Hiro call.
  *  (e) getReputationSummary: circuit open → callReadOnly NOT called, per-agentId
- *      negative cache written, returns null.
+ *      negative cache NOT written, returns { transient: true, value: null }.
  *  (f) getReputationSummary: callReadOnly throws → setReputationCircuitOpen called
  *      (shared breaker set for all future agentIds).
- *  (g) getReputationFeedback: circuit open → callReadOnly NOT called, returns
- *      empty page { items: [], cursor: null }.
+ *  (g) getReputationFeedback: circuit open → callReadOnly NOT called, per-agentId
+ *      negative cache NOT written, returns { transient: true, value: empty }.
+ *  (h) getReputationSummary: genuine on-chain empty → { transient: false, value: null },
+ *      per-agentId cache written (authoritative negative).
+ *  (i) Breaker-open result is NOT equal to the authoritative empty shape that
+ *      would be edge-cached: transient flag must differ.
  */
 
 import { describe, it, expect, vi, beforeEach, type Mock } from "vitest";
@@ -50,9 +63,10 @@ vi.mock("@/lib/identity/kv-cache", () => ({
 // ---- imports ----------------------------------------------------------------
 
 import { getReputationSummary, getReputationFeedback } from "@/lib/identity/reputation";
-import { callReadOnly } from "@/lib/identity/stacks-api";
+import { callReadOnly, parseClarityValue } from "@/lib/identity/stacks-api";
 import {
   getCachedReputation,
+  setCachedReputation,
   setCachedReputationLookupFailed,
   isReputationCircuitOpen,
   setReputationCircuitOpen,
@@ -102,15 +116,16 @@ beforeEach(() => {
 
 // ---- getReputationSummary ---------------------------------------------------
 
-describe("getReputationSummary: TimeoutError → negative cache + silent null", () => {
-  it("(a) calls setCachedReputationLookupFailed and returns null on callReadOnly timeout", async () => {
+describe("getReputationSummary: TimeoutError → negative cache + transient null", () => {
+  it("(a) calls setCachedReputationLookupFailed and returns transient null on callReadOnly timeout", async () => {
     const kv = buildMockKv();
     mockCacheMiss();
     (callReadOnly as Mock).mockRejectedValue(TIMEOUT_ERROR);
 
     const result = await getReputationSummary(42, undefined, kv);
 
-    expect(result).toBeNull();
+    // Must be transient: route must NOT edge-cache this result
+    expect(result).toEqual({ transient: true, value: null });
     expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
     expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledWith(
       "summary:42",
@@ -120,15 +135,16 @@ describe("getReputationSummary: TimeoutError → negative cache + silent null", 
   });
 });
 
-describe("getReputationSummary: cached negative prevents second Hiro call", () => {
-  it("(b) returns null from cache on second call without calling callReadOnly again", async () => {
+describe("getReputationSummary: cached negative returns authoritative (non-transient) null", () => {
+  it("(b) returns { transient: false, value: null } from KV cache without calling callReadOnly again", async () => {
     const kv = buildMockKv();
     // Second call sees a cache hit (as if the 60s negative was already written)
     mockCacheHitNull();
 
     const result = await getReputationSummary(42, undefined, kv);
 
-    expect(result).toBeNull();
+    // KV cache hit is authoritative — safe to edge-cache
+    expect(result).toEqual({ transient: false, value: null });
     // callReadOnly must NOT be invoked — the cache short-circuited it
     expect(callReadOnly as Mock).not.toHaveBeenCalled();
     expect(setCachedReputationLookupFailed as Mock).not.toHaveBeenCalled();
@@ -137,15 +153,16 @@ describe("getReputationSummary: cached negative prevents second Hiro call", () =
 
 // ---- getReputationFeedback --------------------------------------------------
 
-describe("getReputationFeedback: TimeoutError → negative cache + silent empty", () => {
-  it("(c) calls setCachedReputationLookupFailed and returns empty page on callReadOnly timeout", async () => {
+describe("getReputationFeedback: TimeoutError → negative cache + transient empty", () => {
+  it("(c) calls setCachedReputationLookupFailed and returns transient empty page on callReadOnly timeout", async () => {
     const kv = buildMockKv();
     mockCacheMiss();
     (callReadOnly as Mock).mockRejectedValue(TIMEOUT_ERROR);
 
     const result = await getReputationFeedback(42, undefined, undefined, kv);
 
-    expect(result).toEqual({ items: [], cursor: null });
+    // Must be transient: route must NOT edge-cache this result
+    expect(result).toEqual({ transient: true, value: { items: [], cursor: null } });
     expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
     expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledWith(
       "feedback:42:0",
@@ -155,8 +172,8 @@ describe("getReputationFeedback: TimeoutError → negative cache + silent empty"
   });
 });
 
-describe("getReputationFeedback: cached negative prevents second Hiro call", () => {
-  it("(d) returns empty response from cache on second call without calling callReadOnly again", async () => {
+describe("getReputationFeedback: cached negative returns authoritative (non-transient) empty", () => {
+  it("(d) returns { transient: false, value: empty } from KV cache without calling callReadOnly again", async () => {
     const kv = buildMockKv();
     // When getCachedReputation returns {hit: true, value: null}, the function
     // returns the fallback empty response: { items: [], cursor: null }
@@ -164,7 +181,8 @@ describe("getReputationFeedback: cached negative prevents second Hiro call", () 
 
     const result = await getReputationFeedback(42, undefined, undefined, kv);
 
-    expect(result).toEqual({ items: [], cursor: null });
+    // KV cache hit is authoritative — safe to edge-cache
+    expect(result).toEqual({ transient: false, value: { items: [], cursor: null } });
     expect(callReadOnly as Mock).not.toHaveBeenCalled();
     expect(setCachedReputationLookupFailed as Mock).not.toHaveBeenCalled();
   });
@@ -172,24 +190,22 @@ describe("getReputationFeedback: cached negative prevents second Hiro call", () 
 
 // ---- Circuit breaker -----------------------------------------------------------
 
-describe("getReputationSummary: circuit open → short-circuits callReadOnly", () => {
-  it("(e) skips callReadOnly, writes per-agentId negative cache, returns null", async () => {
+describe("getReputationSummary: circuit open → short-circuits callReadOnly, no per-agent KV write", () => {
+  it("(e) skips callReadOnly, does NOT write per-agentId negative cache, returns transient null", async () => {
     const kv = buildMockKv();
     mockCacheMiss();
     mockBreakerOpen();
 
     const result = await getReputationSummary(42, undefined, kv);
 
-    expect(result).toBeNull();
+    // Must be transient: route must NOT edge-cache this result
+    expect(result).toEqual({ transient: true, value: null });
     // callReadOnly must NOT be called when the breaker is open
     expect(callReadOnly as Mock).not.toHaveBeenCalled();
-    // Per-agentId negative cache written so this specific key also short-circuits
-    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
-    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledWith(
-      "summary:42",
-      kv,
-      undefined
-    );
+    // Per-agentId KV negative cache must NOT be written for a breaker-open
+    // fallback — writing it would pollute the per-agent cache with a transient
+    // result that looks authoritative. The shared breaker key is the gate.
+    expect(setCachedReputationLookupFailed as Mock).not.toHaveBeenCalled();
   });
 });
 
@@ -204,28 +220,67 @@ describe("getReputationSummary: callReadOnly failure opens shared circuit breake
     // The shared circuit breaker must be opened so future calls for ANY agentId skip Hiro
     expect(setReputationCircuitOpen as Mock).toHaveBeenCalledTimes(1);
     expect(setReputationCircuitOpen as Mock).toHaveBeenCalledWith(kv, undefined);
-    // Per-agentId negative cache also written (pre-existing behavior)
+    // Per-agentId negative cache also written (bounds Hiro retries to 1/60s
+    // on per-key recovery even if the shared breaker already healed)
     expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
   });
 });
 
-describe("getReputationFeedback: circuit open → short-circuits callReadOnly", () => {
-  it("(g) skips callReadOnly, writes per-agentId negative cache, returns empty page", async () => {
+describe("getReputationFeedback: circuit open → short-circuits callReadOnly, no per-agent KV write", () => {
+  it("(g) skips callReadOnly, does NOT write per-agentId negative cache, returns transient empty page", async () => {
     const kv = buildMockKv();
     mockCacheMiss();
     mockBreakerOpen();
 
     const result = await getReputationFeedback(42, undefined, undefined, kv);
 
-    expect(result).toEqual({ items: [], cursor: null });
+    // Must be transient: route must NOT edge-cache this result
+    expect(result).toEqual({ transient: true, value: { items: [], cursor: null } });
     // callReadOnly must NOT be called when the breaker is open
     expect(callReadOnly as Mock).not.toHaveBeenCalled();
-    // Per-agentId negative cache written
-    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
-    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledWith(
-      "feedback:42:0",
-      kv,
-      undefined
-    );
+    // Per-agentId KV negative cache must NOT be written for a breaker-open fallback
+    expect(setCachedReputationLookupFailed as Mock).not.toHaveBeenCalled();
+  });
+});
+
+// ---- Transient vs. authoritative distinction (issue #958) -------------------
+
+describe("getReputationSummary: genuine on-chain empty → authoritative, negatively cached", () => {
+  it("(h) on-chain count=0 returns { transient: false, value: null } and writes authoritative cache", async () => {
+    const kv = buildMockKv();
+    mockCacheMiss();
+    mockBreakerClosed();
+    // Hiro succeeds but count is 0 — confirmed no reputation
+    (callReadOnly as Mock).mockResolvedValue({ okay: true, result: "..." });
+    (parseClarityValue as Mock).mockReturnValue({ count: "0", "summary-value": "0", "summary-value-decimals": "18" });
+
+    const result = await getReputationSummary(42, undefined, kv);
+
+    // Authoritative: this is safe to edge-cache for the full TTL
+    expect(result).toEqual({ transient: false, value: null });
+    // Authoritative negative cache written (not lookup-failed)
+    expect(setCachedReputation as Mock).toHaveBeenCalledTimes(1);
+    expect(setCachedReputation as Mock).toHaveBeenCalledWith("summary:42", null, kv, undefined);
+    expect(setCachedReputationLookupFailed as Mock).not.toHaveBeenCalled();
+  });
+});
+
+describe("transient vs. authoritative: breaker-open result is marked transient", () => {
+  it("(i) breaker-open transient flag differs from genuine-empty authoritative flag", async () => {
+    const kv = buildMockKv();
+    mockCacheMiss();
+    mockBreakerOpen();
+
+    const breakerResult = await getReputationSummary(42, undefined, kv);
+    expect(breakerResult.transient).toBe(true);
+
+    // Compare: a KV cache hit (authoritative) is non-transient
+    mockBreakerClosed();
+    mockCacheHitNull();
+    const cachedResult = await getReputationSummary(42, undefined, kv);
+    expect(cachedResult.transient).toBe(false);
+
+    // The transient flag distinguishes the two — route can make correct cache decision
+    expect(breakerResult.transient).not.toBe(cachedResult.transient);
   });
 });
