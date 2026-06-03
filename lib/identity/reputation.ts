@@ -5,7 +5,13 @@
 import { uintCV, noneCV, falseCV, someCV } from "@stacks/transactions";
 import { REPUTATION_REGISTRY_CONTRACT } from "./constants";
 import { callReadOnly, parseClarityValue } from "./stacks-api";
-import { getCachedReputation, setCachedReputation, setCachedReputationLookupFailed } from "./kv-cache";
+import {
+  getCachedReputation,
+  setCachedReputation,
+  setCachedReputationLookupFailed,
+  isReputationCircuitOpen,
+  setReputationCircuitOpen,
+} from "./kv-cache";
 import type { ReputationSummary, ReputationFeedbackResponse, ReputationFeedback } from "./types";
 import type { Logger } from "../logging";
 
@@ -38,6 +44,16 @@ export async function getReputationSummary(
   const cached = await getCachedReputation<ReputationSummary>(cacheKey, kv, logger);
   if (cached.hit) return cached.value;
 
+  // Circuit-breaker pre-check: if Hiro budget is exhausted, skip callReadOnly
+  // and write a per-agentId negative cache so this key also short-circuits on
+  // subsequent requests. Log at warn — the breaker being open is expected
+  // during budget-exhaustion windows, not an actionable error.
+  if (await isReputationCircuitOpen(kv, logger)) {
+    logger?.warn("reputation.summary_circuit_open", { agentId });
+    await setCachedReputationLookupFailed(cacheKey, kv, logger);
+    return null;
+  }
+
   try {
     const result = await callReadOnly(REPUTATION_REGISTRY_CONTRACT, "get-summary", [uintCV(agentId)], hiroApiKey, logger);
     const summary = parseClarityValue(result, logger);
@@ -59,7 +75,15 @@ export async function getReputationSummary(
     await setCachedReputation(cacheKey, reputationSummary, kv, logger);
     return reputationSummary;
   } catch (error) {
-    logger?.error("reputation.summary_fetch_error", {
+    // Open the shared circuit breaker so subsequent calls for ANY agentId
+    // skip callReadOnly for the next 60s. This stops the error storm when
+    // Hiro budget is exhausted — each retry would otherwise trigger up to 3
+    // Hiro requests (1 + 2 retries) before hitting its per-key negative cache.
+    await setReputationCircuitOpen(kv, logger);
+    // Downgrade from error to warn: budget exhaustion is an expected upstream
+    // condition, not a local bug. Error-level events were driving the
+    // reputation.summary_fetch_error alert storm (56–441/day).
+    logger?.warn("reputation.summary_fetch_error", {
       agentId,
       error: String(error),
     });
@@ -88,6 +112,18 @@ export async function getReputationFeedback(
   const cacheKey = `feedback:${agentId}:${cursor || 0}`;
   const cached = await getCachedReputation<ReputationFeedbackResponse>(cacheKey, kv, logger);
   if (cached.hit) return cached.value ?? { items: [], cursor: null };
+
+  // Circuit-breaker pre-check: same semantics as getReputationSummary.
+  // If the shared breaker is open, skip callReadOnly and write a per-key
+  // negative cache so this feedback key also short-circuits.
+  if (await isReputationCircuitOpen(kv, logger)) {
+    logger?.warn("reputation.feedback_circuit_open", {
+      agentId,
+      cursor: cursor ?? null,
+    });
+    await setCachedReputationLookupFailed(cacheKey, kv, logger);
+    return { items: [], cursor: null };
+  }
 
   try {
     // read-all-feedback(agent-id, opt-tag1, opt-tag2, include-revoked, opt-cursor)
@@ -127,7 +163,12 @@ export async function getReputationFeedback(
     await setCachedReputation(cacheKey, feedbackResponse, kv, logger);
     return feedbackResponse;
   } catch (error) {
-    logger?.error("reputation.feedback_fetch_error", {
+    // Open the shared circuit breaker so subsequent calls for ANY agentId
+    // skip callReadOnly for the next 60s — same rationale as getReputationSummary.
+    await setReputationCircuitOpen(kv, logger);
+    // Downgrade from error to warn: budget exhaustion is an expected upstream
+    // condition during the competition sweep window.
+    logger?.warn("reputation.feedback_fetch_error", {
       agentId,
       cursor: cursor ?? null,
       error: String(error),
