@@ -9,7 +9,7 @@
  */
 
 import { describe, it, expect, vi } from "vitest";
-import { isScanWithoutIndex } from "../route";
+import { isScanWithoutIndex } from "../scan-detection";
 
 // ── (a-c) isScanWithoutIndex unit tests ─────────────────────────────────────
 
