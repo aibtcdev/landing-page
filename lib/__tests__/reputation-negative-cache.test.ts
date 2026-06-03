@@ -284,3 +284,159 @@ describe("transient vs. authoritative: breaker-open result is marked transient",
     expect(breakerResult.transient).not.toBe(cachedResult.transient);
   });
 });
+
+// ---- Error classification: upstream vs. local ----------------------------------
+//
+// The circuit breaker must only open for upstream Hiro conditions (HTTP 429,
+// 5xx, network/timeout). A local processing error (e.g. BigInt() on an
+// unexpected Clarity response shape) must NOT open the global breaker — that
+// would suppress reputation lookups for ALL agentIds for 60s when the cause
+// is a local defect affecting only one agent.
+
+const RATE_LIMIT_ERROR = new Error("Stacks API call failed: 429 Too Many Requests");
+const SERVER_ERROR_500 = new Error("Stacks API call failed: 503 Service Unavailable");
+// stacksApiFetch re-throws the native fetch() error on network failure.
+// In Node.js and Cloudflare Workers, this is a TypeError with message "fetch failed".
+const NETWORK_ERROR = new TypeError("fetch failed");
+// AbortError is thrown when AbortSignal.timeout() fires (per-attempt timeout in stacksApiFetch).
+const ABORT_ERROR = new Error("The operation was aborted");
+Object.defineProperty(ABORT_ERROR, "name", { value: "AbortError" });
+// A local BigInt parse error — simulates an unexpected Clarity shape where
+// parseClarityValue succeeds but wadToNumber(summary["summary-value"]) throws
+// because the value is not a valid integer string. This is NOT an upstream error.
+const LOCAL_PARSE_ERROR = new TypeError("Cannot convert undefined to a BigInt");
+
+describe("getReputationSummary: upstream errors open global circuit breaker", () => {
+  it("(j) HTTP 429 opens the global breaker and returns transient null", async () => {
+    const kv = buildMockKv();
+    mockCacheMiss();
+    (callReadOnly as Mock).mockRejectedValue(RATE_LIMIT_ERROR);
+
+    const result = await getReputationSummary(42, undefined, kv);
+
+    expect(result).toEqual({ transient: true, value: null });
+    // Global breaker MUST be opened — this is an upstream Hiro condition
+    expect(setReputationCircuitOpen as Mock).toHaveBeenCalledTimes(1);
+    expect(setReputationCircuitOpen as Mock).toHaveBeenCalledWith(kv, undefined);
+    // Per-agentId negative cache also written
+    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("(k) HTTP 5xx opens the global breaker and returns transient null", async () => {
+    const kv = buildMockKv();
+    mockCacheMiss();
+    (callReadOnly as Mock).mockRejectedValue(SERVER_ERROR_500);
+
+    const result = await getReputationSummary(42, undefined, kv);
+
+    expect(result).toEqual({ transient: true, value: null });
+    expect(setReputationCircuitOpen as Mock).toHaveBeenCalledTimes(1);
+    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("(l1) network/fetch-failed TypeError opens the global breaker and returns transient null", async () => {
+    const kv = buildMockKv();
+    mockCacheMiss();
+    (callReadOnly as Mock).mockRejectedValue(NETWORK_ERROR);
+
+    const result = await getReputationSummary(42, undefined, kv);
+
+    expect(result).toEqual({ transient: true, value: null });
+    expect(setReputationCircuitOpen as Mock).toHaveBeenCalledTimes(1);
+    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
+  });
+
+  it("(l2) AbortError (per-attempt timeout) opens the global breaker and returns transient null", async () => {
+    const kv = buildMockKv();
+    mockCacheMiss();
+    (callReadOnly as Mock).mockRejectedValue(ABORT_ERROR);
+
+    const result = await getReputationSummary(42, undefined, kv);
+
+    expect(result).toEqual({ transient: true, value: null });
+    expect(setReputationCircuitOpen as Mock).toHaveBeenCalledTimes(1);
+    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getReputationSummary: local processing errors do NOT open global circuit breaker", () => {
+  it("(m) BigInt/parse error does NOT call setReputationCircuitOpen, scoped to this agentId only", async () => {
+    const kv = buildMockKv();
+    mockCacheMiss();
+    // Simulate callReadOnly succeeding but parseClarityValue returning a shape
+    // that causes wadToNumber (BigInt) to throw. We simulate this by having
+    // callReadOnly resolve successfully and parseClarityValue return a non-zero
+    // count with a bad summary-value that BigInt() cannot parse.
+    (callReadOnly as Mock).mockResolvedValue({ okay: true, result: "0x..." });
+    (parseClarityValue as Mock).mockReturnValue({
+      count: "3",
+      "summary-value": "not-a-number", // BigInt("not-a-number") throws SyntaxError
+      "summary-value-decimals": "18",
+    });
+
+    // The actual BigInt throw would happen inside wadToNumber — simulate it as
+    // a rejection from the callReadOnly mock chain to represent the error
+    // propagating out of the try block. In real code, parseClarityValue is
+    // called synchronously after callReadOnly, so any throw propagates to catch.
+    // We use a fresh mock that throws a local error after callReadOnly resolves.
+    (callReadOnly as Mock).mockResolvedValue({ okay: true, result: "0x..." });
+    (parseClarityValue as Mock).mockImplementation(() => {
+      throw LOCAL_PARSE_ERROR;
+    });
+
+    const result = await getReputationSummary(42, undefined, kv);
+
+    // Still returns transient (not authoritative), but scoped to this agent
+    expect(result).toEqual({ transient: true, value: null });
+    // CRITICAL: global breaker must NOT be opened for a local parse error
+    expect(setReputationCircuitOpen as Mock).not.toHaveBeenCalled();
+    // Per-agentId negative cache is still written (limits retry to 1/60s for this agent)
+    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
+    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledWith(
+      "summary:42",
+      kv,
+      undefined
+    );
+  });
+});
+
+describe("getReputationFeedback: upstream errors open global circuit breaker", () => {
+  it("(n) HTTP 429 opens the global breaker and returns transient empty page", async () => {
+    const kv = buildMockKv();
+    mockCacheMiss();
+    (callReadOnly as Mock).mockRejectedValue(RATE_LIMIT_ERROR);
+
+    const result = await getReputationFeedback(42, undefined, undefined, kv);
+
+    expect(result).toEqual({ transient: true, value: { items: [], cursor: null } });
+    expect(setReputationCircuitOpen as Mock).toHaveBeenCalledTimes(1);
+    expect(setReputationCircuitOpen as Mock).toHaveBeenCalledWith(kv, undefined);
+    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
+  });
+});
+
+describe("getReputationFeedback: local processing errors do NOT open global circuit breaker", () => {
+  it("(o) parse error does NOT call setReputationCircuitOpen, scoped to this agentId only", async () => {
+    const kv = buildMockKv();
+    mockCacheMiss();
+    // Simulate callReadOnly succeeding but parseClarityValue returning a shape
+    // that causes the items map() to throw (e.g. unexpected item structure).
+    (callReadOnly as Mock).mockResolvedValue({ okay: true, result: "0x..." });
+    (parseClarityValue as Mock).mockImplementation(() => {
+      throw LOCAL_PARSE_ERROR;
+    });
+
+    const result = await getReputationFeedback(42, undefined, undefined, kv);
+
+    expect(result).toEqual({ transient: true, value: { items: [], cursor: null } });
+    // CRITICAL: global breaker must NOT be opened for a local parse error
+    expect(setReputationCircuitOpen as Mock).not.toHaveBeenCalled();
+    // Per-agentId negative cache is still written
+    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledTimes(1);
+    expect(setCachedReputationLookupFailed as Mock).toHaveBeenCalledWith(
+      "feedback:42:0",
+      kv,
+      undefined
+    );
+  });
+});
