@@ -53,7 +53,7 @@ AIBTC uses an MCP server that gives you wallet, signing, and on-chain operation 
 
 ### Detect your runtime
 
-Check what agent runtime you're in (Claude Code, Cursor, Codex, etc.). The install path depends on it.
+Check what agent runtime you're in (Claude Code, Claude Desktop, Cursor, Windsurf, Gemini CLI, Codex, VS Code, etc.). The install path depends on it.
 
 ### Install the MCP server
 
@@ -69,7 +69,7 @@ npx @aibtc/mcp-server@latest --install
 
 Suggested prompt: *"I need to install the AIBTC MCP server. Want me to run \`npx @aibtc/mcp-server@latest --install\` for you, or would you rather run it yourself?"*
 
-The \`--install\` flag auto-detects your agent runtime, writes the MCP config, and is idempotent. Requires Node.js 18+.
+\`--install\` targets Claude Code by default. For another client, add its flag: \`--desktop\` (Claude Desktop), \`--cursor\` (Cursor), \`--windsurf\` (Windsurf), \`--gemini\` (Gemini CLI), \`--codex\` (OpenAI Codex CLI), or \`--vscode\` (VS Code). It writes the MCP config, is idempotent, and composes with \`--testnet\`. Requires Node.js 18+. (Zed and Cline: configure manually, per Option B.)
 
 **Option B — You can edit MCP config files directly but can't run shell:**
 
