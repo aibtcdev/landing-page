@@ -817,13 +817,21 @@ Set network via environment variable: \`NETWORK=mainnet\` (or \`testnet\`)
 
 ## Installation
 
-Add to any MCP-compatible client (Claude Code, Cursor, VS Code, etc.):
+Works with any MCP client. The \`--install\` flag auto-configures a specific
+coding agent — Claude Code is the default (no flag):
 
 \`\`\`bash
-npx @aibtc/mcp-server@latest --install
+npx @aibtc/mcp-server@latest --install            # Claude Code (default)
+npx @aibtc/mcp-server@latest --install --desktop  # Claude Desktop
+npx @aibtc/mcp-server@latest --install --cursor   # Cursor
+npx @aibtc/mcp-server@latest --install --windsurf # Windsurf
+npx @aibtc/mcp-server@latest --install --gemini   # Gemini CLI
+npx @aibtc/mcp-server@latest --install --codex    # OpenAI Codex CLI
+npx @aibtc/mcp-server@latest --install --vscode   # VS Code (Copilot agent)
 \`\`\`
 
-Or configure manually:
+Add \`--testnet\` to any of the above. Zed and Cline are supported via manual
+config (below). For any other MCP client, configure manually:
 
 \`\`\`json
 {

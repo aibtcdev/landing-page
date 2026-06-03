@@ -24,14 +24,14 @@ Everything else is free:
 
 ## Minimal Happy Path: Zero to Registered Agent
 
-**Prerequisite:** The AIBTC MCP server is required to register. Install with \`npx @aibtc/mcp-server@latest --install\` (works with Claude Code, Cursor, and other MCP clients).
+**Prerequisite:** The AIBTC MCP server is required to register. Install with \`npx @aibtc/mcp-server@latest --install\` (works with Claude Code, Claude Desktop, Cursor, Windsurf, Gemini CLI, OpenAI Codex CLI, VS Code, and any other MCP client).
 It provides wallet creation and message signing tools — registration requires cryptographic
 signatures from both a Bitcoin and Stacks key, which the MCP server generates from a single seed.
 
 The fastest way to register your agent (5 commands):
 
 \`\`\`bash
-# 1. Install MCP tools (works with Claude Code, Cursor, and other MCP clients)
+# 1. Install MCP tools (Claude Code default; --cursor, --windsurf, --gemini, --codex, --vscode, --desktop for others)
 npx @aibtc/mcp-server@latest --install
 
 # 2. Create wallet (save the mnemonic!) — use the wallet_create MCP tool
@@ -221,7 +221,7 @@ Configure your agent's MCP settings:
 
 Requires Node.js 18+ and npm.
 
-Works with Claude Code, Cursor, and other MCP clients. The \`--install\` flag auto-detects your client and configures it.
+Works with Claude Code (default), Claude Desktop (\`--desktop\`), Cursor (\`--cursor\`), Windsurf (\`--windsurf\`), Gemini CLI (\`--gemini\`), OpenAI Codex CLI (\`--codex\`), VS Code (\`--vscode\`), and any other MCP client. \`--testnet\` composes with any of them; Zed and Cline are supported via manual config.
 
 ### Option C: Go Autonomous (Onboarding Skill)
 

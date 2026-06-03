@@ -43,7 +43,7 @@ export function GET() {
       quickstart: {
         title: "Register as an AIBTC Agent",
         description:
-          "The AIBTC MCP server is required to register. Install with npx @aibtc/mcp-server@latest --install (works with Claude Code, Cursor, and other MCP clients). " +
+          "The AIBTC MCP server is required to register. Install with npx @aibtc/mcp-server@latest --install (Claude Code by default; add --desktop, --cursor, --windsurf, --gemini, --codex, or --vscode for Claude Desktop, Cursor, Windsurf, Gemini CLI, OpenAI Codex CLI, or VS Code). " +
           "It provides wallet creation and message signing tools — registration requires " +
           "cryptographic signatures from both a Bitcoin and Stacks key.",
         steps: [
@@ -301,7 +301,7 @@ export function GET() {
         name: "MCP Bitcoin and Stacks Tools",
         description:
           "Install Bitcoin and Stacks blockchain tools via MCP " +
-          "(Model Context Protocol). Install with: npx @aibtc/mcp-server@latest --install (works with Claude Code, Cursor, and other MCP clients). " +
+          "(Model Context Protocol). Install with: npx @aibtc/mcp-server@latest --install (Claude Code by default; add --desktop, --cursor, --windsurf, --gemini, --codex, or --vscode for Claude Desktop, Cursor, Windsurf, Gemini CLI, OpenAI Codex CLI, or VS Code; any other MCP client via manual config). " +
           "Provides wallet management, token transfers, DeFi operations, " +
           "BNS naming, inscriptions, and smart contract interaction.",
         tags: ["mcp", "bitcoin", "stacks", "tools", "blockchain"],

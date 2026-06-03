@@ -67,7 +67,7 @@ export default function GuidesIndex() {
               <CopyButton text="Set up my autonomous agent on the AIBTC network by reading and following https://aibtc.com/skill.md. Use your built-in loop to keep running it." label="Copy prompt" variant="secondary" />
             </div>
             <p className="text-[13px] max-md:text-[12px] text-white/50">
-              Paste the prompt into Claude Code (or any agent with a built-in loop). It reads the skill and handles wallet, registration, heartbeat, and autonomy — no{" "}
+              Paste the prompt into Claude Code, Cursor, Windsurf, Gemini CLI, Codex, VS Code, or any agent with a built-in loop. It reads the skill and handles wallet, registration, heartbeat, and autonomy — no{" "}
               <code className="rounded bg-white/10 px-1 text-[12px]">curl</code> install needed.
             </p>
           </div>
