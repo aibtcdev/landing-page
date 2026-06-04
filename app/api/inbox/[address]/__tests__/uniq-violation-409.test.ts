@@ -260,6 +260,27 @@ describe("POST /api/inbox/[address] — txid-recovery UNIQUE violation → 409 (
     });
   });
 
+  it("pre-insert guard: returns 409 already_redeemed with canonical shape (no txid field) when txid already redeemed before INSERT (#757)", async () => {
+    // Default checkRedeemedTxidInD1 mock returns EXISTING_MESSAGE_ID, so the
+    // pre-insert SELECT guard fires and 409s before any INSERT is attempted.
+    mockCloudflareContext({
+      VERIFIED_AGENTS: createMockKV(),
+      DB: createMockDB(),
+      RATE_LIMIT_MUTATING: createRateLimitMock(true),
+    });
+
+    const resp = await inboxPOST(buildTxidRecoveryRequest(), routeParams());
+
+    expect(resp.status).toBe(409);
+    const body = await resp.json();
+    // Standardized to match the post-INSERT UNIQUE-violation 409 shape.
+    expect(body.error).toBe("already_redeemed");
+    expect(body.existingMessageId).toBe(EXISTING_MESSAGE_ID);
+    // No human string and no txid echo — canonical id only.
+    expect(body).not.toHaveProperty("txid");
+    expect(insertInboundMessageToD1 as Mock).not.toHaveBeenCalled();
+  });
+
   it("returns 409 with already_redeemed and existingMessageId when INSERT hits UNIQUE(payment_txid)", async () => {
     // Simulate: first SELECT guard passes (no existing record), then INSERT hits UNIQUE violation.
     // This is the txid-recovery race between SELECT and INSERT.

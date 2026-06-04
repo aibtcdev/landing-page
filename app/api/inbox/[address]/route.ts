@@ -995,10 +995,11 @@ export async function POST(
     }
     if (existingRedemptionMessageId) {
       logger.warn("Txid already redeemed", { txid: paymentTxid });
+      // Same shape as the post-INSERT UNIQUE-violation 409 (resolvePaymentTxidConflict):
+      // machine-parseable code + canonical existingMessageId, no human string or txid echo (#757).
       return NextResponse.json(
         {
-          error: "This transaction has already been used for a message",
-          txid: paymentTxid,
+          error: "already_redeemed",
           existingMessageId: existingRedemptionMessageId,
         },
         { status: 409 }
