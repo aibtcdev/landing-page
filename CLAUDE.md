@@ -607,6 +607,51 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `middleware.ts` — CLI tool detection, deprecated path redirects, serves `/llms.txt` at `/` for curl/wget
 - `wrangler.jsonc` — Cloudflare Workers configuration (routes to aibtc.com)
 
+## Client Data Fetching (SWR)
+
+Client components fetch `/api/*` data with [SWR](https://swr.vercel.app/). A global
+`SWRConfig` provider in `app/providers.tsx` sets the shared defaults so individual
+`useSWR` calls stay bare:
+
+```ts
+// app/providers.tsx
+<SWRConfig value={{
+  fetcher,                            // lib/fetcher.ts — throws on non-2xx
+  dedupingInterval: DEFAULT_CACHE_MS, // lib/swr-keys.ts — 15 min
+  revalidateOnFocus: true,
+  revalidateOnReconnect: true,
+  keepPreviousData: true,
+}}>
+```
+
+Because of the provider, a plain `useSWR(swrKeys.leaderboard(12))` already gets the
+shared `fetcher`, a 15-minute dedupe/cache window, and coordinated revalidation —
+no per-call options needed for the common read-once case.
+
+### Default to SSR-hydrated SWR, not bare client fetches
+
+When SSR is cheap, render the initial data on the server (`page.tsx`) and hand it to
+SWR as `fallbackData` so first paint has data and the background revalidate keeps it
+fresh:
+
+```ts
+useSWR<ActivityResponse>(swrKeys.activity(), {
+  refreshInterval: 30_000,
+  dedupingInterval: 30_000,  // see polling footgun below
+  fallbackData: initialData, // SSR-provided — no loading flash
+})
+```
+
+Reference implementations: `app/components/ActivityFeed.tsx`,
+`app/components/ActivityFeedHero.tsx`, `app/status/RelayStatus.tsx`.
+
+- **Keys:** use the builders in `lib/swr-keys.ts` (`swrKeys.*`) so keys stay
+  consistent across SSR hydration, client reads, and `mutate()` invalidation.
+- **Polling footgun:** the global `dedupingInterval` is 15 min. A polling component
+  (`refreshInterval` set) **MUST** override `dedupingInterval` locally to a value at
+  or below its `refreshInterval`, or the dedupe window silently swallows the polling
+  tick. See the note in `app/providers.tsx`.
+
 ## Styling Patterns
 
 - Uses CSS custom properties via `@theme` (e.g., `--color-orange: #F7931A`)
