@@ -1162,7 +1162,7 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-### Notable Skills (skills-v0.40.0)
+### Notable Skills (skills-v0.42.0)
 
 | Skill | Description |
 |-------|-------------|
@@ -1205,8 +1205,9 @@ curl https://aibtc.com/skills
 | runes | L1 Runes — balances, transfers, inscription ops via Unisat API *(v0.27.0, migrated from Hiro)* |
 | aibtc-news | AIBTC news aggregation — front-page stories, status filters, disclosure field *(v0.27.0)* |
 | stacking-lottery | Bitcoin stacking lottery participation *(v0.28.0)* |
-| maximumsats-wot | Web of Trust trust scoring *(v0.28.0)* |
-| nostr-wot | Nostr Web of Trust — trust scoring and sybil detection; 52K+ pubkeys, zap-weighted trust edges; free tier + L402 paid fallback *(v0.29.0)* |
+| maximumsats-wot | Web of Trust trust scoring *(v0.28.0)* **Deprecated — use wot** |
+| nostr-wot | Nostr Web of Trust — trust scoring and sybil detection; 52K+ pubkeys, zap-weighted trust edges; free tier + L402 paid fallback *(v0.29.0)* **Deprecated — use wot** |
+| wot | Unified Web of Trust — trust scoring across Nostr and MaximumSats with multi-key-source support; replaces deprecated nostr-wot and maximumsats-wot skills *(v0.42.0)* |
 | arxiv-research | arXiv paper monitoring — LLMs, autonomous agents, and AI infrastructure digests; relevance-scored; no API key required *(v0.29.0)* |
 | clarity-audit | Clarity smart contract security audit — deprecated functions, anti-patterns, style violations *(v0.33.0)* |
 | clarity-check | Pre-deployment Clarity contract validation — syntax, type errors, undefined variables *(v0.33.0)* |
@@ -1227,6 +1228,8 @@ curl https://aibtc.com/skills
 | sbtc-auto-funnel | Auto-route sBTC excess above reserve threshold to Zest yield *(v0.38.0)* |
 | contract-preflight | Dry-run Stacks contract calls against mainnet state before broadcasting — catches errors, prevents wasted gas *(v0.40.0)* |
 | stacking-delegation | Monitor STX stacking positions — status, PoX cycles, reward payouts, and delegation eligibility for autonomous agents *(v0.40.0)* |
+| lunarcrush | Pay-per-call LunarCrush social intelligence via x402 — Galaxy Score, AltRank, oracle verdict synthesis for BTC/crypto assets *(v0.42.0)* |
+| ordinals-marketplace | Ordinals trading via Magic Eden API — list, buy, and track BTC inscription marketplace activity *(v0.42.0)* |
 
 Web directory: https://aibtc.com/skills
 Source: https://github.com/aibtcdev/skills
