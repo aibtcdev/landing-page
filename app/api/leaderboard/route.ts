@@ -186,6 +186,48 @@ export async function GET(request: NextRequest) {
       };
     });
 
+    // Collapse wallet-rotated agents. Rows sharing an `erc8004AgentId` are the
+    // same on-chain identity (the agent rotated wallets but kept the NFT), so the
+    // leaderboard shows one row per identity: the most recently verified wallet's
+    // display, carrying the highest level/score across the rotation chain (status
+    // follows the identity, not the abandoned wallet). Rows with no on-chain
+    // identity can't be rotation duplicates and pass through unchanged.
+    const identityGroups = new Map<number, typeof ranked>();
+    const deduped: typeof ranked = [];
+    for (const row of ranked) {
+      if (row.erc8004AgentId == null) {
+        deduped.push(row);
+        continue;
+      }
+      const group = identityGroups.get(row.erc8004AgentId);
+      if (group) group.push(row);
+      else identityGroups.set(row.erc8004AgentId, [row]);
+    }
+    for (const group of identityGroups.values()) {
+      if (group.length === 1) {
+        deduped.push(group[0]);
+        continue;
+      }
+      // Most recently verified wallet supplies the display fields (current wallet).
+      const canonical = group.reduce((a, b) =>
+        new Date(b.verifiedAt).getTime() > new Date(a.verifiedAt).getTime() ? b : a
+      );
+      // Highest level across the rotation chain is authoritative for the identity.
+      const top = group.reduce((a, b) => (b.level > a.level ? b : a));
+      deduped.push({
+        ...canonical,
+        level: top.level,
+        levelName: top.levelName,
+        // Swap the level bonus to the chain's top level, keeping the canonical
+        // wallet's BNS + recency contributions.
+        score:
+          canonical.score -
+          computeLevelBonus(canonical.level) +
+          computeLevelBonus(top.level),
+      });
+    }
+    ranked = deduped;
+
     // Filter by level if requested
     if (levelFilter !== null) {
       const filterLevel = parseInt(levelFilter, 10);
