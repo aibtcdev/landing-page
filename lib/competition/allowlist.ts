@@ -38,8 +38,14 @@ export const AIBTC_PROVIDER_ADDRESS =
 const BITFLOW_DEPLOYER = "SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M";
 /** Bitflow XYK deployer (core + swap helper). Separate principal from above. */
 const BITFLOW_XYK_DEPLOYER = "SM1793C4R5PZ4NS4VQ4WMP7SKKYVH8JZEWSZ9HCCR";
-/** Bitflow DLMM deployer. */
+/** Bitflow DLMM deployer (swap routers). */
 const BITFLOW_DLMM_DEPLOYER = "SM1FKXGNZJWSTWDWXQZJNF7B5TV5ZB235JTCXYXKD";
+/**
+ * Bitflow DLMM core/pool deployer. Separate principal from the router deployer
+ * above; both `dlmm-swap-router-v-1-1` and `-v-1-2` reference this core directly
+ * in their on-chain source, which is what attributes it to Bitflow.
+ */
+const BITFLOW_DLMM_CORE_DEPLOYER = "SP1PFR4V08H1RAZXREBGFFQ59WB739XM8VVGTFSEA";
 
 /** Stableswap pools — all expose the same `swap-x-for-y` / `swap-y-for-x` pair. */
 const STABLESWAP_FUNCTIONS = ["swap-x-for-y", "swap-y-for-x"] as const;
@@ -176,6 +182,16 @@ export const BITFLOW_ALLOWLIST: readonly AllowlistEntry[] = [
       "swap-y-for-x-simple-multi",
       "swap-y-for-x-simple-range-multi",
     ],
+  },
+  // DLMM core/pool — agents can swap against the pool directly (`swap-x-for-y` /
+  // `swap-y-for-x`) instead of going through the router above. Same Bitflow DLMM
+  // system: both allowlisted routers reference this exact core in their source.
+  // Surfaced by the week-1 audit (#901) — direct calls from Graphite Elan and
+  // Zen Rocket were rejected as `contract_not_allowlisted`. Reproducer txid:
+  // 0x64507932692d19cce2e374708d22a337e64a9c1e27c1199e960c10f5de1161c9
+  {
+    contract_id: `${BITFLOW_DLMM_CORE_DEPLOYER}.dlmm-core-v-1-1`,
+    functions: ["swap-x-for-y", "swap-y-for-x"],
   },
 
   // -- Cross-DEX routers (13 contracts) --
