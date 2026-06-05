@@ -132,6 +132,10 @@ export default function BountyDirectory({
 
     if (statusFilter !== "all") {
       result = result.filter((b) => b.status === statusFilter);
+    } else {
+      // Default "all" view hides cancelled bounties — they only show when the
+      // Cancelled chip is explicitly selected.
+      result = result.filter((b) => b.status !== "cancelled");
     }
 
     if (searchFilter.trim()) {
@@ -224,7 +228,7 @@ export default function BountyDirectory({
             const active = statusFilter === opt.value;
             const count =
               opt.value === "all"
-                ? (initialBounties?.length ?? 0)
+                ? (initialBounties?.filter((b) => b.status !== "cancelled").length ?? 0)
                 : (initialBounties?.filter((b) => b.status === opt.value).length ?? 0);
             return (
               <button
