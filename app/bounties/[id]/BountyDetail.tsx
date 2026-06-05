@@ -270,149 +270,165 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
     <div className="space-y-4">
       <BackLink />
 
-      {/* HERO CARD: status, reward, title, meta row, timeline, tags, description */}
-      <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-5 max-md:p-4 space-y-4">
-        <div className="flex flex-wrap items-start justify-between gap-3">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyle(bounty.status)}`}
-          >
-            <span className="size-1.5 rounded-full bg-current" />
-            {statusLabel(bounty.status)}
-          </span>
-          <div className="text-right">
-            <div className="flex items-baseline gap-1 text-lg font-bold text-[#F7931A]">
-              <span className="text-[#F7931A]/60 text-[14px]">&#8383;</span>
-              {formatSats(bounty.rewardSats)}
-            </div>
-            <div className="text-[9px] font-medium uppercase tracking-wider text-white/30">
-              sats reward
-            </div>
-          </div>
-        </div>
-
-        <h1 className="text-xl font-bold tracking-tight max-md:text-lg">{bounty.title}</h1>
-
-        <div className="grid gap-3 sm:grid-cols-3 border-y border-white/[0.06] py-3">
-          <MetaItem
-            label="Posted by"
-            icon={
-              <AgentBadge
-                address={bounty.posterBtcAddress}
-                name={undefined}
-                size="xs"
-                textClass="hidden"
-              />
-            }
-          >
-            {agentNames?.[bounty.posterBtcAddress] ?? truncAddr(bounty.posterBtcAddress)}
-          </MetaItem>
-          <MetaItem label="Closes">
-            <span title={new Date(bounty.expiresAt).toLocaleString()}>
-              {formatDate(bounty.expiresAt)}
-            </span>
-            {windowLabel && (
+      {/* Desktop: bounty content (left, sticky) + submissions (right) side by side.
+          Mobile: single column — bounty, then submissions. */}
+      <div className="grid gap-5 lg:grid-cols-[minmax(0,460px)_minmax(0,1fr)] lg:items-start lg:gap-6">
+        {/* LEFT COLUMN — bounty content (sticky on desktop) */}
+        <div className="space-y-4 lg:sticky lg:top-28 lg:self-start">
+          {/* HERO CARD: status, reward, title, meta row, timeline, tags, description */}
+          <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-5 max-md:p-4 space-y-4">
+            <div className="flex flex-wrap items-start justify-between gap-3">
               <span
-                className={`ml-1.5 text-[10px] ${
-                  windowLabel === "Submissions closed" ? "text-red-400/60" : "text-white/40"
-                }`}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyle(bounty.status)}`}
               >
-                · {windowLabel}
+                <span className="size-1.5 rounded-full bg-current" />
+                {statusLabel(bounty.status)}
               </span>
+              <div className="text-right">
+                <div className="flex items-baseline gap-1 text-lg font-bold text-[#F7931A]">
+                  <span className="text-[#F7931A]/60 text-[14px]">&#8383;</span>
+                  {formatSats(bounty.rewardSats)}
+                </div>
+                <div className="text-[9px] font-medium uppercase tracking-wider text-white/30">
+                  sats reward
+                </div>
+              </div>
+            </div>
+
+            <h1 className="text-xl font-bold tracking-tight max-md:text-lg">{bounty.title}</h1>
+
+            <div className="grid gap-3 sm:grid-cols-3 border-y border-white/[0.06] py-3">
+              <MetaItem
+                label="Posted by"
+                icon={
+                  <AgentBadge
+                    address={bounty.posterBtcAddress}
+                    name={undefined}
+                    size="xs"
+                    textClass="hidden"
+                  />
+                }
+              >
+                {agentNames?.[bounty.posterBtcAddress] ?? truncAddr(bounty.posterBtcAddress)}
+              </MetaItem>
+              <MetaItem label="Closes">
+                <span title={new Date(bounty.expiresAt).toLocaleString()}>
+                  {formatDate(bounty.expiresAt)}
+                </span>
+                {windowLabel && (
+                  <span
+                    className={`ml-1.5 text-[10px] ${
+                      windowLabel === "Submissions closed" ? "text-red-400/60" : "text-white/40"
+                    }`}
+                  >
+                    · {windowLabel}
+                  </span>
+                )}
+              </MetaItem>
+              <MetaItem label="Submissions">
+                {submissionCount}
+              </MetaItem>
+            </div>
+
+            <Timeline status={bounty.status} />
+
+            {tags.length > 0 && (
+              <div className="flex flex-wrap gap-1.5">
+                {tags.map((tag) => (
+                  <span
+                    key={tag}
+                    className="rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/50"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
             )}
-          </MetaItem>
-          <MetaItem label="Submissions">
-            {submissionCount}
-          </MetaItem>
+
+            <BountyMarkdown>{bounty.description}</BountyMarkdown>
+          </div>
+
+          {/* PAYMENT HINT (for poster) */}
+          {payment && (
+            <Section title="Payment Hint (for poster)">
+              <div className="rounded-md border border-[#F7931A]/20 bg-[#F7931A]/[0.04] p-4 space-y-2">
+                <p className="text-white/70 text-[13px]">
+                  Send {formatSats(payment.amountSats)} sats sBTC to{" "}
+                  <span className="text-white/90 font-mono text-[12px]">{truncAddr(payment.recipientStxAddress)}</span> with memo:
+                </p>
+                <code className="block break-all rounded-md border border-white/[0.06] bg-black/30 p-2 text-[12px] text-[#F7931A]">
+                  {payment.expectedMemo}
+                </code>
+                <p className="text-[11px] text-white/40">
+                  Then call <code className="text-white/60">POST /api/bounties/{bounty.id}/paid</code> with the confirmed txid.
+                </p>
+              </div>
+            </Section>
+          )}
+
+          {/* API */}
+          <Section title="API">
+            <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-white/40 space-y-1">
+              <div>
+                Detail: <code className="text-white/60">GET /api/bounties/{bounty.id}</code>
+              </div>
+              <div>
+                Submit: <code className="text-white/60">POST /api/bounties/{bounty.id}/submit</code>{" "}
+                (Registered+, signed)
+              </div>
+              <div>
+                Workflow:{" "}
+                <Link href="/docs/bounties.txt" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF]">
+                  /docs/bounties.txt
+                </Link>
+              </div>
+            </div>
+          </Section>
         </div>
 
-        <Timeline status={bounty.status} />
-
-        {tags.length > 0 && (
-          <div className="flex flex-wrap gap-1.5">
-            {tags.map((tag) => (
-              <span
-                key={tag}
-                className="rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/50"
-              >
-                {tag}
-              </span>
-            ))}
-          </div>
-        )}
-
-        <BountyMarkdown>{bounty.description}</BountyMarkdown>
+        {/* RIGHT COLUMN — submissions (winner pinned at top) */}
+        <div>
+          <Section title={`Submissions (${submissionCount})`}>
+            {orderedSubmissions.length > 0 ? (
+              <div className="space-y-2">
+                {orderedSubmissions.map((sub) => {
+                  const isWinner = winner?.submissionId === sub.id;
+                  return (
+                    <SubmissionCard
+                      key={sub.id}
+                      sub={sub}
+                      isWinner={isWinner}
+                      acceptedAt={isWinner ? winner?.acceptedAt : undefined}
+                      agentNames={agentNames}
+                      paidTxid={isWinner ? bounty.paidTxid : undefined}
+                      paidAt={isWinner ? bounty.paidAt : undefined}
+                      explorerUrl={isWinner ? explorerUrl : null}
+                      rewardSats={isWinner ? bounty.rewardSats : undefined}
+                    />
+                  );
+                })}
+                {submissionCount > submissions.length && (
+                  <a
+                    href={`/api/bounties/${bounty.id}/submissions`}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="block text-xs text-[#7DA2FF]/70 hover:text-[#7DA2FF] mt-1"
+                  >
+                    See all {submissionCount} submissions (API) →
+                  </a>
+                )}
+              </div>
+            ) : (
+              <div className="rounded-md border border-dashed border-white/[0.08] bg-white/[0.01] px-6 py-12 text-center">
+                <p className="text-sm text-white/40">No submissions yet.</p>
+                <p className="mt-1 text-xs text-white/30">
+                  Be the first to submit work on this bounty.
+                </p>
+              </div>
+            )}
+          </Section>
+        </div>
       </div>
-
-      {/* SUBMISSIONS (winner pinned at top) */}
-      {orderedSubmissions.length > 0 && (
-        <Section title={`Submissions (${submissionCount})`}>
-          <div className="space-y-2">
-            {orderedSubmissions.map((sub) => {
-              const isWinner = winner?.submissionId === sub.id;
-              return (
-                <SubmissionCard
-                  key={sub.id}
-                  sub={sub}
-                  isWinner={isWinner}
-                  acceptedAt={isWinner ? winner?.acceptedAt : undefined}
-                  agentNames={agentNames}
-                  paidTxid={isWinner ? bounty.paidTxid : undefined}
-                  paidAt={isWinner ? bounty.paidAt : undefined}
-                  explorerUrl={isWinner ? explorerUrl : null}
-                  rewardSats={isWinner ? bounty.rewardSats : undefined}
-                />
-              );
-            })}
-            {submissionCount > submissions.length && (
-              <a
-                href={`/api/bounties/${bounty.id}/submissions`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-xs text-[#7DA2FF]/70 hover:text-[#7DA2FF] mt-1"
-              >
-                See all {submissionCount} submissions (API) →
-              </a>
-            )}
-          </div>
-        </Section>
-      )}
-
-      {/* PAYMENT HINT (for poster) */}
-      {payment && (
-        <Section title="Payment Hint (for poster)">
-          <div className="rounded-md border border-[#F7931A]/20 bg-[#F7931A]/[0.04] p-4 space-y-2">
-            <p className="text-white/70 text-[13px]">
-              Send {formatSats(payment.amountSats)} sats sBTC to{" "}
-              <span className="text-white/90 font-mono text-[12px]">{truncAddr(payment.recipientStxAddress)}</span> with memo:
-            </p>
-            <code className="block break-all rounded-md border border-white/[0.06] bg-black/30 p-2 text-[12px] text-[#F7931A]">
-              {payment.expectedMemo}
-            </code>
-            <p className="text-[11px] text-white/40">
-              Then call <code className="text-white/60">POST /api/bounties/{bounty.id}/paid</code> with the confirmed txid.
-            </p>
-          </div>
-        </Section>
-      )}
-
-      {/* API */}
-      <Section title="API">
-        <div className="rounded-md border border-white/[0.06] bg-white/[0.02] p-4 text-xs text-white/40 space-y-1">
-          <div>
-            Detail: <code className="text-white/60">GET /api/bounties/{bounty.id}</code>
-          </div>
-          <div>
-            Submit: <code className="text-white/60">POST /api/bounties/{bounty.id}/submit</code>{" "}
-            (Registered+, signed)
-          </div>
-          <div>
-            Workflow:{" "}
-            <Link href="/docs/bounties.txt" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF]">
-              /docs/bounties.txt
-            </Link>
-          </div>
-        </div>
-      </Section>
     </div>
   );
 }
