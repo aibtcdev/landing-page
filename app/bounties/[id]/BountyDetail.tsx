@@ -234,33 +234,31 @@ function BountyDetailView({
     <div className="space-y-5">
       <BackLink />
 
-      {/* HEADER — status, title, then reward·deadline·submissions as one strip. */}
+      {/* HEADER — reward sits top-right beside the status, above the title (highest
+          in the hierarchy); submissions + deadline follow below. */}
       <div className="rounded-md border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] backdrop-blur-md p-5 max-md:p-4">
-        <span
-          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyle(bounty.status)}`}
-        >
-          <span className="size-1.5 rounded-full bg-current" />
-          {statusLabel(bounty.status)}
-        </span>
+        <div className="flex items-center justify-between gap-3">
+          <span
+            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyle(bounty.status)}`}
+          >
+            <span className="size-1.5 rounded-full bg-current" />
+            {statusLabel(bounty.status)}
+          </span>
+          <div className="flex items-baseline gap-1 text-base font-bold text-[#F7931A]">
+            <span className="text-[#F7931A]/60">&#8383;</span>
+            {formatSats(bounty.rewardSats)}
+            <span className="ml-1 text-[11px] font-medium uppercase tracking-wider text-white/30">
+              sats
+            </span>
+          </div>
+        </div>
 
         <h1 className="mt-3 break-words text-xl font-semibold leading-snug tracking-tight text-white max-md:text-lg">
           {bounty.title}
         </h1>
 
-        {/* Primary metrics — borderless: stacked on mobile, a clean spaced row on desktop. */}
+        {/* Secondary metrics — submissions + deadline (reward is up top). */}
         <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:gap-10">
-          {/* Reward — the headline number */}
-          <div>
-            <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Reward</div>
-            <div className="mt-1 flex items-baseline gap-1 text-base font-bold text-[#F7931A]">
-              <span className="text-[#F7931A]/60">&#8383;</span>
-              {formatSats(bounty.rewardSats)}
-              <span className="ml-1 text-[11px] font-medium uppercase tracking-wider text-white/30">
-                sats
-              </span>
-            </div>
-          </div>
-
           {/* Submissions */}
           <div>
             <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Submissions</div>
