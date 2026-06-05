@@ -106,3 +106,12 @@ export function formatDate(iso: string): string {
     minute: "2-digit",
   });
 }
+
+/** Date only (no time) — e.g. "Jul 2, 2026". Used where a countdown is primary. */
+export function formatDateOnly(iso: string): string {
+  return new Date(iso).toLocaleDateString("en-US", {
+    year: "numeric",
+    month: "short",
+    day: "numeric",
+  });
+}

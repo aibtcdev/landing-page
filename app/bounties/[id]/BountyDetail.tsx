@@ -3,7 +3,6 @@
 import { useState } from "react";
 import Link from "next/link";
 import type { BountyDetailData } from "../types";
-import type { BountyStatus } from "@/lib/bounty";
 import type { BountySubmission } from "@/lib/bounty";
 import {
   statusStyle,
@@ -11,12 +10,11 @@ import {
   formatSats,
   truncAddr,
   formatDate,
+  formatDateOnly,
   submissionWindowLabel,
 } from "../utils";
 import AgentBadge from "../AgentBadge";
 import BountyMarkdown from "../BountyMarkdown";
-
-const TIMELINE_STEPS: BountyStatus[] = ["open", "judging", "winner-announced", "paid"];
 
 function CheckIcon({ className = "size-3.5" }: { className?: string }) {
   return (
@@ -39,89 +37,6 @@ function ExternalLinkIcon({ className = "size-3" }: { className?: string }) {
     <svg className={className} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2">
       <path strokeLinecap="round" strokeLinejoin="round" d="M14 5h5v5M19 5l-9 9M19 14v5H5V5h5" />
     </svg>
-  );
-}
-
-function Timeline({ status }: { status: BountyStatus }) {
-  const activeIndex = TIMELINE_STEPS.indexOf(status);
-  const isTerminalFail = status === "cancelled" || status === "abandoned";
-
-  return (
-    <div className="flex items-start gap-0 max-md:overflow-x-auto max-md:pb-1">
-      {TIMELINE_STEPS.map((step, i) => {
-        const isCompleted = i < activeIndex && !isTerminalFail;
-        const isCurrent = step === status && !isTerminalFail;
-        const isUpcoming = i > activeIndex || isTerminalFail;
-
-        return (
-          <div key={step} className="flex flex-1 items-start gap-0 min-w-[70px]">
-            <div className="flex flex-col items-center gap-1 flex-1">
-              <div className="relative flex items-center w-full">
-                {i > 0 && (
-                  <div
-                    className={`absolute right-1/2 mr-[12px] h-px w-[calc(50%-12px)] ${
-                      isCompleted || isCurrent ? "bg-emerald-400/30" : "bg-white/[0.06]"
-                    }`}
-                  />
-                )}
-                {i < TIMELINE_STEPS.length - 1 && (
-                  <div
-                    className={`absolute left-1/2 ml-[12px] h-px w-[calc(50%-12px)] ${
-                      isCompleted ? "bg-emerald-400/30" : "bg-white/[0.06]"
-                    }`}
-                  />
-                )}
-                <div
-                  className={`relative mx-auto flex size-6 items-center justify-center rounded-full border text-[10px] font-semibold ${
-                    isCompleted
-                      ? "border-emerald-400/40 bg-emerald-400/[0.12] text-emerald-400"
-                      : isCurrent
-                      ? "border-[#F7931A]/50 bg-[#F7931A]/[0.14] text-[#F7931A] shadow-[0_0_0_3px_rgba(247,147,26,0.08)]"
-                      : "border-white/[0.08] bg-white/[0.02] text-white/30"
-                  }`}
-                >
-                  {isCompleted ? <CheckIcon className="size-3" /> : i + 1}
-                </div>
-              </div>
-              <span
-                className={`text-[9px] font-medium uppercase tracking-wider ${
-                  isCurrent ? "text-[#F7931A]" : isCompleted ? "text-white/60" : isUpcoming ? "text-white/25" : "text-white/40"
-                }`}
-              >
-                {statusLabel(step)}
-              </span>
-            </div>
-          </div>
-        );
-      })}
-      {isTerminalFail && (
-        <div className="ml-2 flex flex-col items-center gap-1 min-w-[70px]">
-          <div className="flex size-6 items-center justify-center rounded-full border border-red-400/30 bg-red-400/[0.10] text-[10px] font-semibold text-red-400">
-            !
-          </div>
-          <span className="text-[9px] font-medium uppercase tracking-wider text-red-400/70">
-            {statusLabel(status)}
-          </span>
-        </div>
-      )}
-    </div>
-  );
-}
-
-function SidebarStat({
-  label,
-  children,
-  valueClass = "text-white/85",
-}: {
-  label: string;
-  children: React.ReactNode;
-  valueClass?: string;
-}) {
-  return (
-    <div>
-      <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">{label}</div>
-      <div className={`mt-1 text-sm ${valueClass}`}>{children}</div>
-    </div>
   );
 }
 
@@ -319,31 +234,74 @@ function BountyDetailView({
     <div className="space-y-5">
       <BackLink />
 
-      {/* HEADER: title + identity (left), prize + deadline + meta (right). */}
-      <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_320px] lg:items-start">
-        {/* LEFT — status, title, poster, tags */}
-        <div className="rounded-md border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] backdrop-blur-md p-6 max-md:p-4">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyle(bounty.status)}`}
-          >
-            <span className="size-1.5 rounded-full bg-current" />
-            {statusLabel(bounty.status)}
-          </span>
+      {/* HEADER — status, title, then reward·deadline·submissions as one strip. */}
+      <div className="rounded-md border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] backdrop-blur-md p-5 max-md:p-4">
+        <span
+          className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyle(bounty.status)}`}
+        >
+          <span className="size-1.5 rounded-full bg-current" />
+          {statusLabel(bounty.status)}
+        </span>
 
-          <h1 className="mt-4 text-2xl font-bold tracking-tight max-md:text-xl">{bounty.title}</h1>
+        <h1 className="mt-3 break-words text-2xl font-semibold leading-snug tracking-tight text-white max-md:text-xl">
+          {bounty.title}
+        </h1>
 
-          <div className="mt-4 flex items-center gap-2 text-[13px] text-white/50">
+        {/* Primary metrics — one connected panel: reward · deadline · submissions */}
+        <div className="mt-4 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.02]">
+          <div className="grid grid-cols-2 sm:grid-cols-3">
+            {/* Reward — the headline number */}
+            <div className="col-span-2 border-b border-white/[0.08] p-4 sm:col-span-1 sm:border-b-0 sm:border-r">
+              <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Reward</div>
+              <div className="mt-1 flex items-baseline gap-1 text-2xl font-bold text-[#F7931A]">
+                <span className="text-base text-[#F7931A]/60">&#8383;</span>
+                {formatSats(bounty.rewardSats)}
+                <span className="ml-1 text-[11px] font-medium uppercase tracking-wider text-white/30">
+                  sats
+                </span>
+              </div>
+            </div>
+
+            {/* Deadline — countdown primary, exact date secondary */}
+            <div className="border-r border-white/[0.08] p-4">
+              <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Deadline</div>
+              {windowLabel ? (
+                <>
+                  <div className={`mt-1 text-sm font-medium ${submissionsClosed ? "text-red-400/80" : "text-emerald-400"}`}>
+                    {windowLabel}
+                  </div>
+                  <div className="text-[11px] text-white/40" title={new Date(bounty.expiresAt).toLocaleString()}>
+                    {formatDateOnly(bounty.expiresAt)}
+                  </div>
+                </>
+              ) : (
+                <div className="mt-1 text-sm text-white/85" title={new Date(bounty.expiresAt).toLocaleString()}>
+                  {formatDateOnly(bounty.expiresAt)}
+                </div>
+              )}
+            </div>
+
+            {/* Submissions */}
+            <div className="p-4">
+              <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Submissions</div>
+              <div className="mt-1 text-sm font-medium text-white/85">{submissionCount}</div>
+            </div>
+          </div>
+        </div>
+
+        {/* Poster + tags — supporting context */}
+        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
+          <div className="flex items-center gap-1.5 text-[12px] text-white/40">
             <span>Posted by</span>
             <AgentBadge
               address={bounty.posterBtcAddress}
               name={agentNames?.[bounty.posterBtcAddress]}
               size="xs"
-              textClass="text-white/80 font-medium"
+              textClass="text-white/70 font-medium"
             />
           </div>
-
           {tags.length > 0 && (
-            <div className="mt-4 flex flex-wrap gap-1.5">
+            <div className="flex flex-wrap gap-1.5">
               {tags.map((tag) => (
                 <span
                   key={tag}
@@ -354,41 +312,7 @@ function BountyDetailView({
               ))}
             </div>
           )}
-
-          <div className="mt-5 border-t border-white/[0.06] pt-4">
-            <Timeline status={bounty.status} />
-          </div>
         </div>
-
-        {/* RIGHT — prize, deadline, time left, submission count */}
-        <aside className="rounded-md border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] backdrop-blur-md p-5 space-y-4">
-          <div className="border-b border-white/[0.06] pb-4">
-            <div className="flex items-baseline gap-1.5 text-3xl font-bold text-[#F7931A]">
-              <span className="text-[#F7931A]/60 text-xl">&#8383;</span>
-              {formatSats(bounty.rewardSats)}
-            </div>
-            <div className="mt-1 text-[9px] font-medium uppercase tracking-wider text-white/30">
-              sats reward
-            </div>
-          </div>
-
-          <SidebarStat label="Submission deadline">
-            <span title={new Date(bounty.expiresAt).toLocaleString()}>
-              {formatDate(bounty.expiresAt)}
-            </span>
-          </SidebarStat>
-
-          {windowLabel && (
-            <SidebarStat
-              label="Time left"
-              valueClass={submissionsClosed ? "text-red-400/70" : "text-emerald-400"}
-            >
-              {windowLabel}
-            </SidebarStat>
-          )}
-
-          <SidebarStat label="Submissions">{submissionCount}</SidebarStat>
-        </aside>
       </div>
 
       {/* TABS — Submissions (default) + Details */}
