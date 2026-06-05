@@ -243,61 +243,58 @@ function BountyDetailView({
           {statusLabel(bounty.status)}
         </span>
 
-        <h1 className="mt-3 break-words text-2xl font-semibold leading-snug tracking-tight text-white max-md:text-xl">
+        <h1 className="mt-3 break-words text-xl font-semibold leading-snug tracking-tight text-white max-md:text-lg">
           {bounty.title}
         </h1>
 
-        {/* Primary metrics — one connected panel: reward · deadline · submissions */}
-        <div className="mt-4 overflow-hidden rounded-lg border border-white/[0.08] bg-white/[0.02]">
-          <div className="grid grid-cols-2 sm:grid-cols-3">
-            {/* Reward — the headline number */}
-            <div className="col-span-2 border-b border-white/[0.08] p-4 sm:col-span-1 sm:border-b-0 sm:border-r">
-              <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Reward</div>
-              <div className="mt-1 flex items-baseline gap-1 text-2xl font-bold text-[#F7931A]">
-                <span className="text-base text-[#F7931A]/60">&#8383;</span>
-                {formatSats(bounty.rewardSats)}
-                <span className="ml-1 text-[11px] font-medium uppercase tracking-wider text-white/30">
-                  sats
-                </span>
+        {/* Primary metrics — borderless: stacked on mobile, a clean spaced row on desktop. */}
+        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:gap-10">
+          {/* Reward — the headline number */}
+          <div>
+            <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Reward</div>
+            <div className="mt-1 flex items-baseline gap-1 text-base font-bold text-[#F7931A]">
+              <span className="text-[#F7931A]/60">&#8383;</span>
+              {formatSats(bounty.rewardSats)}
+              <span className="ml-1 text-[11px] font-medium uppercase tracking-wider text-white/30">
+                sats
+              </span>
+            </div>
+          </div>
+
+          {/* Submissions */}
+          <div>
+            <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Submissions</div>
+            <div className="mt-1 text-sm font-medium text-white/85">{submissionCount}</div>
+          </div>
+
+          {/* Deadline — single countdown value (exact date on hover), kept to two
+              lines so it matches Reward and Submissions. */}
+          <div>
+            <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Deadline</div>
+            {windowLabel ? (
+              <div
+                className={`mt-1 text-sm font-medium ${submissionsClosed ? "text-red-400/80" : "text-emerald-400"}`}
+                title={new Date(bounty.expiresAt).toLocaleString()}
+              >
+                {windowLabel}
               </div>
-            </div>
-
-            {/* Deadline — countdown primary, exact date secondary */}
-            <div className="border-r border-white/[0.08] p-4">
-              <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Deadline</div>
-              {windowLabel ? (
-                <>
-                  <div className={`mt-1 text-sm font-medium ${submissionsClosed ? "text-red-400/80" : "text-emerald-400"}`}>
-                    {windowLabel}
-                  </div>
-                  <div className="text-[11px] text-white/40" title={new Date(bounty.expiresAt).toLocaleString()}>
-                    {formatDateOnly(bounty.expiresAt)}
-                  </div>
-                </>
-              ) : (
-                <div className="mt-1 text-sm text-white/85" title={new Date(bounty.expiresAt).toLocaleString()}>
-                  {formatDateOnly(bounty.expiresAt)}
-                </div>
-              )}
-            </div>
-
-            {/* Submissions */}
-            <div className="p-4">
-              <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Submissions</div>
-              <div className="mt-1 text-sm font-medium text-white/85">{submissionCount}</div>
-            </div>
+            ) : (
+              <div className="mt-1 text-sm text-white/85" title={new Date(bounty.expiresAt).toLocaleString()}>
+                {formatDateOnly(bounty.expiresAt)}
+              </div>
+            )}
           </div>
         </div>
 
-        {/* Poster + tags — supporting context */}
-        <div className="mt-4 flex flex-wrap items-center gap-x-3 gap-y-2">
-          <div className="flex items-center gap-1.5 text-[12px] text-white/40">
+        {/* Poster + tags — secondary context, divided off from the core. */}
+        <div className="mt-4 flex flex-col items-start gap-2.5 border-t border-white/[0.06] pt-4">
+          <div className="flex items-center gap-2 text-[13px] text-white/45">
             <span>Posted by</span>
             <AgentBadge
               address={bounty.posterBtcAddress}
               name={agentNames?.[bounty.posterBtcAddress]}
               size="xs"
-              textClass="text-white/70 font-medium"
+              textClass="text-white/80 font-medium"
             />
           </div>
           {tags.length > 0 && (
@@ -305,7 +302,7 @@ function BountyDetailView({
               {tags.map((tag) => (
                 <span
                   key={tag}
-                  className="rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/50"
+                  className="rounded-md border border-white/[0.05] px-2 py-0.5 text-[11px] text-white/40"
                 >
                   {tag}
                 </span>
