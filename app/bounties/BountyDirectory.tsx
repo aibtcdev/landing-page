@@ -99,17 +99,9 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
 const STATUS_OPTIONS: { value: BountyStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "open", label: "Open" },
-  { value: "judging", label: "Judging" },
-  { value: "winner-announced", label: "Winner" },
   { value: "paid", label: "Paid" },
   { value: "abandoned", label: "Abandoned" },
   { value: "cancelled", label: "Cancelled" },
-];
-
-const SORT_OPTIONS = [
-  { value: "newest", label: "Newest" },
-  { value: "highest", label: "Highest Reward" },
-  { value: "lowest", label: "Lowest Reward" },
 ];
 
 const FILTER_CONTROL_CLASS =
@@ -124,7 +116,6 @@ export default function BountyDirectory({
 }) {
   const [statusFilter, setStatusFilter] = useState<BountyStatus | "all">("all");
   const [searchFilter, setSearchFilter] = useState("");
-  const [sort, setSort] = useState("newest");
 
   const filtered = useMemo(() => {
     const bounties = initialBounties ?? [];
@@ -148,12 +139,11 @@ export default function BountyDirectory({
       );
     }
 
-    return [...result].sort((a, b) => {
-      if (sort === "highest") return b.rewardSats - a.rewardSats;
-      if (sort === "lowest") return a.rewardSats - b.rewardSats;
-      return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
-    });
-  }, [initialBounties, statusFilter, searchFilter, sort]);
+    // Newest first.
+    return [...result].sort(
+      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+    );
+  }, [initialBounties, statusFilter, searchFilter]);
 
   // Proof-of-flow stats — derived from the full set already in hand (no extra
   // fetch). "Paid out" is the trust-critical number: every sat is backed by an
@@ -259,20 +249,6 @@ export default function BountyDirectory({
         </div>
 
         <div className="ml-auto flex items-center gap-2 max-md:ml-0 max-md:w-full">
-          <label htmlFor="bounty-sort" className="sr-only">Sort bounties</label>
-          <select
-            id="bounty-sort"
-            value={sort}
-            onChange={(e) => setSort(e.target.value)}
-            className={FILTER_CONTROL_CLASS}
-          >
-            {SORT_OPTIONS.map((opt) => (
-              <option key={opt.value} value={opt.value} className="bg-[#1a1a1a]">
-                {opt.label}
-              </option>
-            ))}
-          </select>
-
           <label htmlFor="bounty-search" className="sr-only">Search by title, tag, or description</label>
           <input
             id="bounty-search"
@@ -280,7 +256,7 @@ export default function BountyDirectory({
             placeholder="Search title, tag, or text..."
             value={searchFilter}
             onChange={(e) => setSearchFilter(e.target.value)}
-            className={`${FILTER_CONTROL_CLASS} w-64 placeholder:text-white/30 max-md:w-auto max-md:flex-1`}
+            className={`${FILTER_CONTROL_CLASS} w-64 placeholder:text-white/30 max-md:w-full`}
           />
         </div>
       </div>
