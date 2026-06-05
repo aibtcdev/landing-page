@@ -21,7 +21,7 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
   return (
     <Link
       href={`/bounties/${bounty.id}`}
-      className="group flex flex-col gap-3 rounded-xl border border-white/[0.06] bg-white/[0.02] p-5 transition-[border-color,background-color] duration-200 hover:border-white/[0.12] hover:bg-white/[0.04] max-md:p-4"
+      className="group flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] p-5 backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-[#F7931A]/25 hover:from-[#F7931A]/[0.05] hover:shadow-lg hover:shadow-[#F7931A]/[0.05] max-md:p-4"
     >
       <div className="flex items-start justify-between gap-2">
         <span
@@ -277,7 +277,7 @@ export default function BountyDirectory({
           ))}
         </div>
       ) : (
-        <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] px-8 py-16 text-center">
+        <div className="rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] backdrop-blur-md px-8 py-16 text-center">
           <p className="text-white/40">No bounties found matching your filters.</p>
           {statusFilter !== "all" && (
             <button
@@ -290,7 +290,7 @@ export default function BountyDirectory({
         </div>
       )}
 
-      <div className="rounded-xl border border-white/[0.06] bg-white/[0.02] p-6 max-md:p-4">
+      <div className="rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] backdrop-blur-md p-6 max-md:p-4">
         <h2 className="text-lg font-semibold text-white/80 mb-4">How It Works</h2>
         <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
           {[

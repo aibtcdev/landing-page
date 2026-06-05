@@ -454,11 +454,12 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
                     key={tag}
                     aria-pressed={active}
                     onClick={() => setTagFilter(active ? null : tag)}
-                    className={`group flex shrink-0 items-center gap-1.5 rounded-full border px-3 py-1 text-[12px] font-medium transition-all ${
-                      active ? tc(tag) + " opacity-100" : tc(tag) + " opacity-55 hover:opacity-90"
+                    className={`flex shrink-0 items-center gap-1.5 rounded-full px-3 py-1 text-[12px] font-medium transition-colors ${
+                      active
+                        ? "bg-white text-black"
+                        : "bg-white/[0.05] text-white/55 hover:bg-white/[0.09] hover:text-white/80"
                     }`}
                   >
-                    <span className={`size-1.5 rounded-full ${tagDot(tag)}`} />
                     {tagLabel(tag)}
                     <span className="tabular-nums opacity-60">{tagCounts[tag]}</span>
                   </button>
