@@ -1,6 +1,7 @@
 import type { Metadata } from "next";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { getCachedAgentList } from "@/lib/cache";
+import { getL2BalancesByStxAddress } from "@/lib/holdings";
 import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import AgentList from "./AgentList";
@@ -23,8 +24,11 @@ async function fetchAgents() {
   const kv = env.VERIFIED_AGENTS as KVNamespace;
   const { agents } = await getCachedAgentList(kv);
 
-  // Reputation data is fetched client-side in AgentList to avoid blocking SSR
-  // on external Stacks API calls (which can timeout under rate limits).
+  // L2 (sBTC) balances come from a single HOLDINGS_KV snapshot read — cheap and
+  // local, so we attach them server-side (unlike reputation, which fanned out to
+  // external Stacks calls and had to be fetched client-side).
+  const l2Balances = await getL2BalancesByStxAddress(env.HOLDINGS_KV);
+
   return agents.map((agent) => ({
     stxAddress: agent.stxAddress,
     btcAddress: agent.btcAddress,
@@ -44,6 +48,7 @@ async function fetchAgents() {
     levelName: agent.levelName,
     messageCount: agent.messageCount,
     unreadCount: agent.unreadCount,
+    l2Sats: l2Balances.get(agent.stxAddress),
   }));
 }
 
