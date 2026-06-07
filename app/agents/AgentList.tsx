@@ -258,7 +258,7 @@ export default function AgentList({ agents }: AgentListProps) {
               >
                 <Tooltip text="sBTC (L2) balance held by this agent, in satoshis.">
                   <div className="inline-flex items-center gap-1.5">
-                    L2 Balance
+                    sBTC
                     <SortIcon active={sortBy === "balance"} order={sortOrder} />
                   </div>
                 </Tooltip>
