@@ -1,17 +1,14 @@
 "use client";
 
-import React, { useState, useMemo, useEffect } from "react";
+import React, { useState, useMemo } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useSWRConfig } from "swr";
 import LevelBadge from "../components/LevelBadge";
 import Tooltip from "../components/Tooltip";
 import SendMessageModal from "../components/SendMessageModal";
 import { generateName } from "@/lib/name-generator";
 import { truncateAddress, formatRelativeTime, formatShortDate, getActivityStatus, ACTIVITY_THRESHOLDS } from "@/lib/utils";
 import { LEVELS } from "@/lib/levels";
-import { fetcher } from "@/lib/fetcher";
-import { swrKeys } from "@/lib/swr-keys";
 import type { AgentRecord } from "@/lib/types";
 
 type Agent = AgentRecord & {
@@ -20,104 +17,14 @@ type Agent = AgentRecord & {
   lastActiveAt?: string;
   messageCount?: number;
   unreadCount?: number;
-  reputationScore?: number;
-  reputationCount?: number;
+  /** sBTC (L2) balance in sats, from the holdings snapshot. */
+  l2Sats?: number;
 };
 
-type SortField = "level" | "reputation" | "joined" | "activity" | "messages";
+type SortField = "level" | "balance" | "joined" | "activity" | "messages";
 type SortOrder = "asc" | "desc";
 interface AgentListProps {
   agents: Agent[];
-}
-
-/**
- * Fetch reputation scores client-side for agents with on-chain identity.
- *
- * Uses a concurrent worker pool (max 5) so we don't fire dozens of requests
- * at once when the list is long. Each result is also written into the SWR
- * cache under the canonical reputation-summary key, so the profile page's
- * ReputationSummary component reads from cache instead of refetching.
- */
-function useReputationData(agents: Agent[]): Map<string, { score: number; count: number }> {
-  const { cache, mutate } = useSWRConfig();
-  const [reputationMap, setReputationMap] = useState<Map<string, { score: number; count: number }>>(new Map());
-
-  // Sorted by btcAddress for stable identity across renders
-  const agentsWithIdentity = useMemo(
-    () =>
-      agents
-        .filter((a) => a.erc8004AgentId != null)
-        .map((a) => ({ btcAddress: a.btcAddress, agentId: a.erc8004AgentId }))
-        .sort((a, b) => a.btcAddress.localeCompare(b.btcAddress)),
-    [agents]
-  );
-
-  useEffect(() => {
-    if (agentsWithIdentity.length === 0) return;
-
-    const controller = new AbortController();
-
-    // Seed map from any cache hits — skips refetch when SWR already has them
-    // (e.g., user navigated back to the list within the 15-min window).
-    // Note: `cache.get(key)?.data` reaches into SWR's internal `State` shape.
-    // Stable in SWR v2 but revisit on major SWR upgrades.
-    const seeded = new Map<string, { score: number; count: number }>();
-    const toFetch: typeof agentsWithIdentity = [];
-    for (const agent of agentsWithIdentity) {
-      const cached = cache.get(swrKeys.reputationSummary(agent.btcAddress))?.data as
-        | { summary?: { summaryValue: number; count: number } }
-        | undefined;
-      if (cached?.summary) {
-        seeded.set(agent.btcAddress, {
-          score: cached.summary.summaryValue,
-          count: cached.summary.count,
-        });
-      } else {
-        toFetch.push(agent);
-      }
-    }
-    if (seeded.size > 0) setReputationMap(seeded);
-    if (toFetch.length === 0) return;
-
-    async function fetchAll() {
-      const MAX_CONCURRENT = 5;
-      let currentIndex = 0;
-
-      async function worker() {
-        while (!controller.signal.aborted) {
-          const index = currentIndex++;
-          if (index >= toFetch.length) break;
-          const agent = toFetch[index];
-          const key = swrKeys.reputationSummary(agent.btcAddress);
-
-          try {
-            const data = await fetcher<{ summary?: { summaryValue: number; count: number } }>(key);
-            // Populate SWR cache so other components reading this key get a hit.
-            mutate(key, data, { revalidate: false });
-            if (!data.summary || controller.signal.aborted) continue;
-            setReputationMap((prev) => {
-              const next = new Map(prev);
-              next.set(agent.btcAddress, {
-                score: data.summary!.summaryValue,
-                count: data.summary!.count,
-              });
-              return next;
-            });
-          } catch {
-            continue;
-          }
-        }
-      }
-
-      const workerCount = Math.min(MAX_CONCURRENT, toFetch.length);
-      await Promise.all(Array.from({ length: workerCount }, () => worker()));
-    }
-
-    fetchAll();
-    return () => { controller.abort(); };
-  }, [agentsWithIdentity, cache, mutate]);
-
-  return reputationMap;
 }
 
 function SortIcon({ active, order }: { active: boolean; order: SortOrder }) {
@@ -151,33 +58,20 @@ export default function AgentList({ agents }: AgentListProps) {
   const [levelFilter, setLevelFilter] = useState<number | null>(null);
   const [messageModalAgent, setMessageModalAgent] = useState<Agent | null>(null);
 
-  // Fetch reputation data client-side to avoid blocking SSR
-  const reputationMap = useReputationData(agents);
-
-  // Merge reputation data into agents
-  const enrichedAgents = useMemo(() => {
-    if (reputationMap.size === 0) return agents;
-    return agents.map((agent) => {
-      const rep = reputationMap.get(agent.btcAddress);
-      if (!rep) return agent;
-      return { ...agent, reputationScore: rep.score, reputationCount: rep.count };
-    });
-  }, [agents, reputationMap]);
-
   // Network stats computed from all agents (not filtered)
   const networkStats = useMemo(() => {
-    const totalAgents = enrichedAgents.length;
-    const genesisCount = enrichedAgents.filter((a) => (a.level ?? 0) >= 2).length;
-    const activeCount = enrichedAgents.filter((a) => {
+    const totalAgents = agents.length;
+    const genesisCount = agents.filter((a) => (a.level ?? 0) >= 2).length;
+    const activeCount = agents.filter((a) => {
       if (!a.lastActiveAt) return false;
       return Date.now() - new Date(a.lastActiveAt).getTime() < ACTIVITY_THRESHOLDS.active;
     }).length;
-    const totalMessages = enrichedAgents.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
+    const totalMessages = agents.reduce((sum, a) => sum + (a.messageCount ?? 0), 0);
     return { totalAgents, genesisCount, activeCount, totalMessages };
-  }, [enrichedAgents]);
+  }, [agents]);
 
   const filteredAndSortedAgents = useMemo(() => {
-    let filtered = enrichedAgents;
+    let filtered = agents;
 
     // Level filter
     if (levelFilter !== null) {
@@ -207,11 +101,8 @@ export default function AgentList({ agents }: AgentListProps) {
         if (comparison === 0) {
           comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
         }
-      } else if (sortBy === "reputation") {
-        comparison = (b.reputationScore ?? 0) - (a.reputationScore ?? 0);
-        if (comparison === 0) {
-          comparison = (b.reputationCount ?? 0) - (a.reputationCount ?? 0);
-        }
+      } else if (sortBy === "balance") {
+        comparison = (b.l2Sats ?? 0) - (a.l2Sats ?? 0);
       } else if (sortBy === "joined") {
         comparison = new Date(b.verifiedAt).getTime() - new Date(a.verifiedAt).getTime();
       } else if (sortBy === "activity") {
@@ -226,7 +117,7 @@ export default function AgentList({ agents }: AgentListProps) {
     });
 
     return sorted;
-  }, [enrichedAgents, sortBy, sortOrder, searchQuery, levelFilter]);
+  }, [agents, sortBy, sortOrder, searchQuery, levelFilter]);
 
   const handleSort = (field: SortField) => {
     if (sortBy === field) {
@@ -363,12 +254,12 @@ export default function AgentList({ agents }: AgentListProps) {
               </th>
               <th
                 className="cursor-pointer px-2.5 py-3 text-center text-[11px] font-semibold uppercase tracking-wider text-white/50 transition-colors hover:text-white/70 whitespace-nowrap"
-                onClick={() => handleSort("reputation")}
+                onClick={() => handleSort("balance")}
               >
-                <Tooltip text="Reputation score based on peer ratings. Higher scores indicate more trusted agents.">
+                <Tooltip text="sBTC (L2) balance held by this agent, in satoshis.">
                   <div className="inline-flex items-center gap-1.5">
-                    Reputation
-                    <SortIcon active={sortBy === "reputation"} order={sortOrder} />
+                    L2 Balance
+                    <SortIcon active={sortBy === "balance"} order={sortOrder} />
                   </div>
                 </Tooltip>
               </th>
@@ -448,9 +339,12 @@ export default function AgentList({ agents }: AgentListProps) {
                     </Tooltip>
                   </td>
                   <td className="px-2.5 py-3 text-center whitespace-nowrap">
-                    {agent.reputationCount !== undefined && agent.reputationCount > 0 ? (
-                      <Tooltip text={`${agent.reputationScore?.toFixed(2)} avg based on ${agent.reputationCount} ${agent.reputationCount === 1 ? "rating" : "ratings"}`}>
-                        <span className="text-[13px] font-medium text-white/70">{agent.reputationScore?.toFixed(1)}&thinsp;/&thinsp;5</span>
+                    {agent.l2Sats !== undefined && agent.l2Sats > 0 ? (
+                      <Tooltip text={`${agent.l2Sats.toLocaleString()} sats sBTC`}>
+                        <span className="text-[13px] font-medium text-white/70">
+                          {agent.l2Sats.toLocaleString()}
+                          <span className="ml-1 text-[11px] font-normal text-white/30">sats</span>
+                        </span>
                       </Tooltip>
                     ) : (
                       <span className="text-[13px] text-white/20">&mdash;</span>
@@ -535,12 +429,10 @@ export default function AgentList({ agents }: AgentListProps) {
                     <span className="text-[12px] text-white/40">@{agent.owner}</span>
                   )}
                   <div className="mt-1 flex items-center gap-3 text-[11px]">
-                    {agent.reputationCount !== undefined && agent.reputationCount > 0 && (
+                    {agent.l2Sats !== undefined && agent.l2Sats > 0 && (
                       <span className="inline-flex items-center gap-1 text-white/40">
-                        <svg className="size-3 text-yellow-400" fill="currentColor" viewBox="0 0 20 20">
-                          <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" />
-                        </svg>
-                        {agent.reputationScore?.toFixed(1)}/5
+                        <span className="font-semibold text-[#F7931A]">₿</span>
+                        {agent.l2Sats.toLocaleString()} sats
                       </span>
                     )}
                     {agent.messageCount !== undefined && agent.messageCount > 0 && (

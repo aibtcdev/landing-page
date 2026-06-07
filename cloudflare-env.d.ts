@@ -2,6 +2,7 @@ interface CloudflareEnv {
   ASSETS: Fetcher;
   DB: D1Database; // D1 relational database (agents, claims, inbox_messages, vouches, swaps, balances)
   VERIFIED_AGENTS: KVNamespace;
+  HOLDINGS_KV?: KVNamespace; // Read-only agent L2 (sBTC) balances, populated by the aibtc-dashboard holdings scanner (key `holdings:all`)
   RATE_LIMIT_READ: RateLimit;
   RATE_LIMIT_MUTATING: RateLimit;
   RATE_LIMIT_AUTHENTICATED: RateLimit;
