@@ -98,28 +98,30 @@
     ]
   },
 
-  // SchedulerDO: single instance coordinating periodic background work.
-  // Current scope: Tenero price refresh (every ~5 min) writing to
-  // VERIFIED_AGENTS KV under `tenero:price:{tokenId}`, plus the trading
-  // competition Hiro catch-up sweep (every ~15 min). Balance snapshots
-  // land in a follow-up PR. See issue #768.
-  // Singleton resolved via env.SCHEDULER.idFromName("v1") — the instance
-  // name is independent of the migration tag, so it stays "v1" even
-  // though the migration history is up to v3.
-  "durable_objects": {
-    "bindings": [
-      { "name": "SCHEDULER", "class_name": "SchedulerDO" }
-    ]
+  // Cron Trigger drives periodic background work (Tenero price refresh
+  // every tick + competition Hiro catch-up sweep on its longer cadence)
+  // via the worker's scheduled() handler — see lib/scheduler/cron-runner.ts.
+  // This replaced the former SchedulerDO, whose alarm had no independent
+  // trigger: it only stayed armed because /leaderboard SSR poked it on every
+  // render, so a DO storage wipe with no leaderboard visit left all
+  // scheduled work silently stopped. Crons are NOT inherited by named envs,
+  // so env.production below repeats this; env.preview omits it so preview
+  // deploys never run schedulers against the shared production D1/KV quota.
+  "triggers": {
+    "crons": ["*/5 * * * *"]
   },
-  // Migration history reflects what's been applied to CF, not just what
-  // this PR introduces. v1 + v2 happened during the original #743
-  // experimentation (registered, then deleted via hotfix #772). v3
-  // reintroduces the class cleanly. Keep all three declared — wrangler
-  // needs the full history to deploy without errors.
+  // SchedulerDO retired. The v4 deleted_classes migration tears down the
+  // Durable Object and its storage; the binding is removed (empty array).
+  // Earlier tags are kept because wrangler needs the full applied history
+  // to deploy without errors.
+  "durable_objects": {
+    "bindings": []
+  },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
     { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
-    { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
+    { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] },
+    { "tag": "v4", "deleted_classes": ["SchedulerDO"] }
   ],
 
   /**
@@ -220,15 +222,21 @@
         ]
       },
 
+      // Cron Trigger for the named-production deploy path (`--env production`).
+      // Repeated here because wrangler does not inherit top-level triggers.
+      "triggers": {
+        "crons": ["*/5 * * * *"]
+      },
+      // SchedulerDO retired — see top-level note. Empty bindings + v4
+      // deleted_classes migration.
       "durable_objects": {
-        "bindings": [
-          { "name": "SCHEDULER", "class_name": "SchedulerDO" }
-        ]
+        "bindings": []
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
         { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
-        { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
+        { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] },
+        { "tag": "v4", "deleted_classes": ["SchedulerDO"] }
       ]
     },
 
@@ -323,9 +331,10 @@
         ]
       },
 
-      // Preview intentionally has no SchedulerDO binding. It shares
-      // production D1/KV/logging, so a preview scheduler can consume real
-      // upstream quota and write real competition/cache state.
+      // Preview intentionally runs no scheduler: no cron trigger (omitted
+      // above) and no Durable Object. It shares production D1/KV/logging, so
+      // a preview scheduler could consume real upstream quota and write real
+      // competition/cache state.
       "durable_objects": {
         "bindings": []
       },

@@ -9,32 +9,46 @@ vi.mock("@/lib/admin/auth", () => ({
   requireAdmin: vi.fn().mockResolvedValue(null),
 }));
 
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { requireAdmin } from "@/lib/admin/auth";
-import { GET, POST } from "../route";
+vi.mock("@/lib/logging", () => ({
+  isLogsRPC: vi.fn(() => false),
+  createLogger: vi.fn(),
+  createConsoleLogger: vi.fn(() => ({
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    debug: vi.fn(),
+  })),
+}));
 
-const schedulerStub = {
-  status: vi.fn().mockResolvedValue({ now: 123 }),
-  refreshNow: vi.fn().mockResolvedValue({
+vi.mock("@/lib/scheduler/cron-runner", () => ({
+  readSchedulerStatus: vi.fn().mockResolvedValue({ now: 123 }),
+  refreshScheduler: vi.fn().mockResolvedValue({
     tenero: { succeeded: 1 },
     competition: { scanned: 1 },
   }),
-  pauseUntil: vi.fn().mockResolvedValue(undefined),
-  resume: vi.fn().mockResolvedValue(undefined),
-};
+  pauseScheduler: vi.fn().mockResolvedValue(undefined),
+  resumeScheduler: vi.fn().mockResolvedValue(undefined),
+}));
 
-const schedulerNamespace = {
-  idFromName: vi.fn((name: string) => `id:${name}`),
-  get: vi.fn(() => schedulerStub),
-};
+import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { requireAdmin } from "@/lib/admin/auth";
+import {
+  readSchedulerStatus,
+  refreshScheduler,
+  pauseScheduler,
+  resumeScheduler,
+} from "@/lib/scheduler/cron-runner";
+import { GET, POST } from "../route";
+
+const kv = { get: vi.fn(), put: vi.fn(), delete: vi.fn() };
 
 function request(path: string, method = "GET") {
   return new NextRequest(`https://aibtc.com${path}`, { method });
 }
 
-function mockCloudflareContext() {
+function mockCloudflareContext(env: Record<string, unknown> = { VERIFIED_AGENTS: kv }) {
   (getCloudflareContext as Mock).mockResolvedValue({
-    env: { SCHEDULER: schedulerNamespace },
+    env,
     ctx: { waitUntil: vi.fn(), passThroughOnException: vi.fn() },
   });
 }
@@ -64,31 +78,19 @@ describe("GET /api/admin/scheduler", () => {
     expect(response.status).toBe(200);
     expect(response.headers.get("cache-control")).toBe("no-store");
     expect(response.headers.get("x-robots-tag")).toBe("noindex");
-    expect(schedulerNamespace.idFromName).toHaveBeenCalledWith("v2");
-    expect(body).toEqual({ name: "v2", status: { now: 123 } });
+    expect(readSchedulerStatus).toHaveBeenCalledWith(kv);
+    expect(body).toEqual({ status: { now: 123 } });
   });
 
-  it("rejects unknown scheduler names before touching a stub", async () => {
-    const response = await GET(request("/api/admin/scheduler?name=typo"));
-    const body = (await response.json()) as any;
-
-    expect(response.status).toBe(400);
-    expect(body.error).toContain("Unsupported scheduler name");
-    expect(schedulerNamespace.idFromName).not.toHaveBeenCalled();
-  });
-
-  it("returns 503 when the SchedulerDO binding is unavailable", async () => {
-    (getCloudflareContext as Mock).mockResolvedValueOnce({
-      env: {},
-      ctx: { waitUntil: vi.fn(), passThroughOnException: vi.fn() },
-    });
+  it("returns 503 when the KV state store is unavailable", async () => {
+    mockCloudflareContext({});
 
     const response = await GET(request("/api/admin/scheduler"));
     const body = (await response.json()) as any;
 
     expect(response.status).toBe(503);
-    expect(body.error).toContain("Scheduler binding unavailable");
-    expect(schedulerNamespace.idFromName).not.toHaveBeenCalled();
+    expect(body.error).toContain("KV) unavailable");
+    expect(readSchedulerStatus).not.toHaveBeenCalled();
   });
 });
 
@@ -101,14 +103,34 @@ describe("POST /api/admin/scheduler", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toContain("Missing `until`");
-    expect(schedulerStub.pauseUntil).not.toHaveBeenCalled();
+    expect(pauseScheduler).not.toHaveBeenCalled();
   });
 
-  it("returns 503 on writes when the SchedulerDO binding is unavailable", async () => {
-    (getCloudflareContext as Mock).mockResolvedValueOnce({
-      env: {},
-      ctx: { waitUntil: vi.fn(), passThroughOnException: vi.fn() },
-    });
+  it("pauses until a future timestamp", async () => {
+    const until = Date.now() + 60_000;
+    const response = await POST(
+      request(`/api/admin/scheduler?action=pause&until=${until}`, "POST")
+    );
+    const body = (await response.json()) as any;
+
+    expect(response.status).toBe(200);
+    expect(pauseScheduler).toHaveBeenCalledWith(kv, until);
+    expect(body).toEqual({ pausedUntil: until });
+  });
+
+  it("resumes the scheduler", async () => {
+    const response = await POST(
+      request("/api/admin/scheduler?action=resume", "POST")
+    );
+    const body = (await response.json()) as any;
+
+    expect(response.status).toBe(200);
+    expect(resumeScheduler).toHaveBeenCalledWith(kv);
+    expect(body).toEqual({ resumed: true });
+  });
+
+  it("returns 503 on writes when the KV state store is unavailable", async () => {
+    mockCloudflareContext({});
 
     const response = await POST(
       request("/api/admin/scheduler?action=refresh&task=all", "POST")
@@ -116,8 +138,8 @@ describe("POST /api/admin/scheduler", () => {
     const body = (await response.json()) as any;
 
     expect(response.status).toBe(503);
-    expect(body.error).toContain("Scheduler binding unavailable");
-    expect(schedulerStub.refreshNow).not.toHaveBeenCalled();
+    expect(body.error).toContain("KV) unavailable");
+    expect(refreshScheduler).not.toHaveBeenCalled();
   });
 
   it("rejects invalid refresh tasks", async () => {
@@ -128,20 +150,22 @@ describe("POST /api/admin/scheduler", () => {
 
     expect(response.status).toBe(400);
     expect(body.error).toContain("Unsupported task");
-    expect(schedulerStub.refreshNow).not.toHaveBeenCalled();
+    expect(refreshScheduler).not.toHaveBeenCalled();
   });
 
   it("refreshes an allowlisted scheduler task", async () => {
     const response = await POST(
-      request("/api/admin/scheduler?name=v3&action=refresh&task=all", "POST")
+      request("/api/admin/scheduler?action=refresh&task=all", "POST")
     );
     const body = (await response.json()) as any;
 
     expect(response.status).toBe(200);
-    expect(schedulerNamespace.idFromName).toHaveBeenCalledWith("v3");
-    expect(schedulerStub.refreshNow).toHaveBeenCalledWith("all");
+    expect(refreshScheduler).toHaveBeenCalledWith(
+      expect.objectContaining({ VERIFIED_AGENTS: kv }),
+      expect.anything(),
+      "all"
+    );
     expect(body).toEqual({
-      name: "v3",
       task: "all",
       result: { tenero: { succeeded: 1 }, competition: { scanned: 1 } },
     });
@@ -154,7 +178,11 @@ describe("POST /api/admin/scheduler", () => {
     const body = (await response.json()) as any;
 
     expect(response.status).toBe(200);
-    expect(schedulerStub.refreshNow).toHaveBeenCalledWith("competition");
+    expect(refreshScheduler).toHaveBeenCalledWith(
+      expect.anything(),
+      expect.anything(),
+      "competition"
+    );
     expect(body.task).toBe("competition");
   });
 });

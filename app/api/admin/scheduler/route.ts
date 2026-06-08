@@ -1,10 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin/auth";
-import type { SchedulerRpc, SchedulerTask } from "@/lib/scheduler/rpc-types";
+import { createConsoleLogger, createLogger, isLogsRPC } from "@/lib/logging";
+import {
+  readSchedulerStatus,
+  refreshScheduler,
+  pauseScheduler,
+  resumeScheduler,
+} from "@/lib/scheduler/cron-runner";
+import type { SchedulerTask } from "@/lib/scheduler/rpc-types";
 
-const DEFAULT_SCHEDULER_INSTANCE = "v2";
-const ALLOWED_SCHEDULER_INSTANCES = new Set(["v1", "v2", "v3"]);
 const ALLOWED_TASKS = new Set<SchedulerTask>(["tenero", "competition", "all"]);
 
 function json(body: unknown, init: ResponseInit = {}) {
@@ -14,25 +19,10 @@ function json(body: unknown, init: ResponseInit = {}) {
   return NextResponse.json(body, { ...init, headers });
 }
 
-function schedulerName(url: URL): string | NextResponse {
-  const name = url.searchParams.get("name") || DEFAULT_SCHEDULER_INSTANCE;
-  if (!ALLOWED_SCHEDULER_INSTANCES.has(name)) {
-    return json(
-      { error: "Unsupported scheduler name. Use v1, v2, or v3." },
-      { status: 400 }
-    );
-  }
-  return name;
-}
-
-function schedulerStub(env: CloudflareEnv, name: string): SchedulerRpc {
-  return env.SCHEDULER!.get(env.SCHEDULER!.idFromName(name));
-}
-
-function requireSchedulerBinding(env: CloudflareEnv): NextResponse | null {
-  if (env.SCHEDULER) return null;
+function requireKv(env: CloudflareEnv): NextResponse | null {
+  if (env.VERIFIED_AGENTS) return null;
   return json(
-    { error: "Scheduler binding unavailable in this environment." },
+    { error: "Scheduler state store (KV) unavailable in this environment." },
     { status: 503 }
   );
 }
@@ -53,31 +43,23 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
 
   const { env } = await getCloudflareContext();
-  const missingScheduler = requireSchedulerBinding(env);
-  if (missingScheduler) return missingScheduler;
+  const missingKv = requireKv(env);
+  if (missingKv) return missingKv;
 
-  const url = new URL(request.url);
-  const name = schedulerName(url);
-  if (typeof name !== "string") return name;
-
-  const status = await schedulerStub(env, name).status();
-  return json({ name, status });
+  const status = await readSchedulerStatus(env.VERIFIED_AGENTS);
+  return json({ status });
 }
 
 export async function POST(request: NextRequest) {
   const denied = await requireAdmin(request);
   if (denied) return denied;
 
-  const { env } = await getCloudflareContext();
-  const missingScheduler = requireSchedulerBinding(env);
-  if (missingScheduler) return missingScheduler;
+  const { env, ctx } = await getCloudflareContext();
+  const missingKv = requireKv(env);
+  if (missingKv) return missingKv;
 
   const url = new URL(request.url);
-  const name = schedulerName(url);
-  if (typeof name !== "string") return name;
-
   const action = url.searchParams.get("action");
-  const stub = schedulerStub(env, name);
 
   if (action === "pause") {
     const rawUntil = url.searchParams.get("until");
@@ -95,21 +77,25 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    await stub.pauseUntil(until);
-    return json({ name, pausedUntil: until });
+    await pauseScheduler(env.VERIFIED_AGENTS, until);
+    return json({ pausedUntil: until });
   }
 
   if (action === "resume") {
-    await stub.resume();
-    return json({ name, resumed: true });
+    await resumeScheduler(env.VERIFIED_AGENTS);
+    return json({ resumed: true });
   }
 
   if (action === "refresh") {
     const task = schedulerTask(url);
     if (typeof task !== "string") return task;
 
-    const result = await stub.refreshNow(task);
-    return json({ name, task, result });
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, { path: "/api/admin/scheduler", action: "refresh", task })
+      : createConsoleLogger({ path: "/api/admin/scheduler", action: "refresh", task });
+
+    const result = await refreshScheduler(env, logger, task);
+    return json({ task, result });
   }
 
   return json(
