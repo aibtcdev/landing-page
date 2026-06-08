@@ -95,8 +95,8 @@ Without Phase 0, the earnings indexer would inherit the exact fragility that pro
 
 ```
                          ┌────────────────────────────────────────────┐
-   NEW cron heartbeat ──▶│  SchedulerDO  (5-min alarm)                  │
-   (Phase 0, */5)        │  ── runTenero (5m)  ── runCompetition (15m)  │
+   Cron Trigger (*/5) ──▶│  worker.ts scheduled() → runScheduledTasks   │
+   (Phase 0, DONE)       │  ── runTenero (5m)  ── runCompetition (15m)  │
                          │  ── runEarnings (NEW, slow cursor)           │
                          └───────────────────┬──────────────────────────┘
                                              │ batch of N agents per tick
@@ -134,9 +134,9 @@ Without Phase 0, the earnings indexer would inherit the exact fragility that pro
 
 | Component | New file(s) | Reuses |
 |---|---|---|
-| Cron heartbeat (Phase 0) | edit `wrangler.jsonc`, `worker.ts` `scheduled()` | existing `SchedulerDO` |
+| Cron scheduling (Phase 0, DONE) | `wrangler.jsonc` `triggers.crons`, `worker.ts` `scheduled()`, `lib/scheduler/cron-runner.ts` | `aibtc-dashboard` cron pattern |
 | Earnings sweep task | `lib/earnings/indexer.ts` | `runCompetitionScheduler` cursor pattern |
-| Wire into scheduler | edit `worker.ts` `SchedulerDO` | existing 5-min alarm |
+| Wire into scheduler | add `runEarnings()` call in `lib/scheduler/cron-runner.ts` `runScheduledTasks` | the cron tick |
 | Hiro ingestion | `lib/earnings/ingest.ts` | `lib/stacks-api-fetch.ts`, `findSbtcTransferEvent` |
 | Classifier | `lib/earnings/classify.ts` | `inbox_messages`, `bounties` D1 tables |
 | Pricing | `lib/earnings/price.ts` | Tenero KV `tenero:price:{id}` |
@@ -263,14 +263,16 @@ Runs after classification; can flip an earning → excluded:
 
 ## 10. Scheduling
 
-- **Host inside `SchedulerDO`** — `runEarnings()` rides the existing 5-min alarm on a
-  slow internal cadence (process a small batch of agents per tick).
+- **Host in the cron runner** — add a `runEarnings()` call to `runScheduledTasks` in
+  `lib/scheduler/cron-runner.ts`, on a slow internal cadence (process a small batch of
+  agents per tick, gated by a last-run check like competition).
 - **Own cursor** (`earnings_scheduler_cursor`) + **per-agent high-water mark**
   (`earnings_index_state`): the first sweep backfills history (bounded pages/tick to
   avoid a day-one Hiro burst), and steady state processes only **new** txs since each
   agent's last indexed block. Cost decays to ~the rate of new on-chain activity.
+- **Concurrency ≤5** per tick (the verified 6-connection cap, §13).
 - Surfaces in the existing `/api/admin/scheduler` status/pause/resume.
-- Guaranteed to actually run by the Phase 0 cron heartbeat.
+- Guaranteed to actually run by the Phase 0 Cron Trigger.
 
 ---
 
@@ -342,7 +344,8 @@ would multiply Hiro calls by the cadence with no freshness benefit for a 30-day 
   the root; prerequisite + trigger for the earnings indexer.
 - **Phase 1 — Schema + indexer core (backend only).** Migration `020`; `lib/earnings/`
   ingest + classify + index-time pricing + idempotent writes; `runEarnings()` task in
-  `SchedulerDO`. Verify via admin/dry-run. **Indexer-only — no agent-submit/self-report
+  `lib/scheduler/cron-runner.ts` (`runScheduledTasks`). Verify via admin/dry-run.
+  **Indexer-only — no agent-submit/self-report
   path** (unlike competition's `source='agent'` fast-path; earnings tolerate indexing
   lag and a submit endpoint is needless attack surface). **Also: investigate the x402
   payTo catalog here** — if none exists, `x402_endpoint` launches inert (bounty + inbox

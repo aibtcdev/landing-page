@@ -71,7 +71,7 @@ async function readJson<T>(kv: KVNamespace, key: string): Promise<T | null> {
 }
 
 function lookupTeneroApiKey(env: CloudflareEnv): string | undefined {
-  const key = (env as unknown as { TENERO_API_KEY?: string }).TENERO_API_KEY;
+  const key = env.TENERO_API_KEY;
   return typeof key === "string" && key.length > 0 ? key : undefined;
 }
 
@@ -104,7 +104,11 @@ export async function resumeScheduler(kv: KVNamespace): Promise<void> {
  */
 export async function runTeneroNow(
   env: CloudflareEnv,
-  parentLogger: Logger
+  parentLogger: Logger,
+  // Optional pre-read state to avoid a duplicate K_TENERO read when the cron
+  // tick already fetched it for its due-check. `undefined` = read it here;
+  // `null` = caller read it and there was none.
+  prevState?: TeneroState | null
 ): Promise<TeneroRunResult> {
   const logger = parentLogger.child
     ? parentLogger.child({ task: "tenero" })
@@ -138,7 +142,8 @@ export async function runTeneroNow(
     apiKey: lookupTeneroApiKey(env),
   });
 
-  const prev = await readJson<TeneroState>(kv, K_TENERO);
+  const prev =
+    prevState !== undefined ? prevState : await readJson<TeneroState>(kv, K_TENERO);
   const succeededCleanly =
     result.succeeded > 0 && result.failed === 0 && !rateLimited;
   const consecutiveFailures = succeededCleanly
@@ -230,7 +235,7 @@ export async function runScheduledTasks(
     (tenero?.lastRunAt ?? 0) + TENERO_INTERVAL_MS <= now + 1_000;
   if (teneroDue) {
     try {
-      await runTeneroNow(env, logger);
+      await runTeneroNow(env, logger, tenero);
     } catch (error) {
       logger.error("scheduler.tenero_unexpected_error", {
         error: String(error),
