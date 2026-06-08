@@ -27,4 +27,5 @@ interface CloudflareEnv {
   // is no SCHEDULER binding.
   TENERO_REFRESH_ENABLED?: "true"; // Explicit production-only gate for the cron Tenero refresh
   TENERO_API_KEY?: string; // Optional Tenero API key (x-api-key header); raises rate limits above the shared web-ui-ip tier
+  EARNINGS_INDEX_ENABLED?: "true"; // Gate for the cron earnings indexer (issue #978); ships dormant, set "true" to enable
 }
