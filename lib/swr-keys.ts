@@ -54,6 +54,19 @@ export const swrKeys = {
   vouch: (btcAddress: string) =>
     `/api/vouch/${encodeURIComponent(btcAddress)}`,
   leaderboard: (limit: number) => `/api/leaderboard?limit=${limit}`,
+  earnings: (address: string, opts: { limit?: number; offset?: number } = {}) =>
+    `/api/agents/${encodeURIComponent(address)}/earnings${buildQuery({
+      limit: opts.limit,
+      offset: opts.offset,
+    })}`,
+  earningsStats: (
+    opts: { window?: "7d" | "30d" | "lifetime"; limit?: number; offset?: number } = {}
+  ) =>
+    `/api/stats/earnings${buildQuery({
+      window: opts.window,
+      limit: opts.limit,
+      offset: opts.offset,
+    })}`,
   activity: () => "/api/activity",
   statusSummary: () => "/api/status/summary",
 } as const;
