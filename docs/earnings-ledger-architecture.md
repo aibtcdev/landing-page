@@ -372,11 +372,13 @@ would multiply Hiro calls by the cadence with no freshness benefit for a 30-day 
   `agent_peer` earnings, wired into the indexer's `resolveRow`. Known limit: a ring
   whose two legs land in the *same* sweep tick isn't caught (the reverse leg isn't
   persisted yet); cross-tick rings are.
-- **Reprice pass (Phase 3 scope).** Phase 1 stores `amount_usd = NULL`,
-  `price_source = 'none'` for transfers indexed during a Tenero gap. There is **no
-  reprice task yet** — add one in Phase 3 (a bounded sweep over `price_source = 'none'`
-  rows that re-reads the Tenero cache), so the gap doesn't get lost between phases.
-- **Phase 3 — Public API.** `/api/agents/{addr}/earnings`, `/api/stats/earnings`,
+- **Reprice pass (small follow-up, post-Phase 3).** Phase 1 stores `amount_usd = NULL`,
+  `price_source = 'none'` for transfers indexed during a Tenero gap. A bounded reprice
+  sweep (over a `price_source = 'none'` partial index) re-reads the Tenero cache and
+  fills them — deferred to keep the Phase 3 API PR focused; tracked here so it isn't
+  lost.
+- **Phase 3 — Public API. DONE.** `/api/agents/{addr}/earnings` (per-agent rollup +
+  line items), `/api/stats/earnings` (platform totals + ranked earnings leaderboard),
   trading-board earnings ranking (all read-time + edge-cached).
 - **Phase 4 — UI.** leaderboard chip + new default, profile Earnings section, homepage
   hero stat, `$10–$100k` Club badges.
