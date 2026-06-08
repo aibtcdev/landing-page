@@ -32,3 +32,13 @@ CREATE TABLE IF NOT EXISTS earnings_manual_override (
   created_at       INTEGER NOT NULL,
   PRIMARY KEY (tx_id, event_index)
 );
+
+-- ── Ring-detection index ─────────────────────────────────────────────────
+-- Serves findReverseLeg() (lib/earnings/anti-gaming.ts): equality on
+-- recipient + sender + asset, range on block_time. Migration 020's
+-- (recipient_agent_stx, block_time) index covers only the recipient + time
+-- predicates; without this composite, the reverse-leg lookup would filter
+-- sender/asset by scanning a recipient's full history on every agent_peer
+-- transfer.
+CREATE INDEX IF NOT EXISTS idx_agent_earnings_ring
+  ON agent_earnings (recipient_agent_stx, sender_stx, asset, block_time);

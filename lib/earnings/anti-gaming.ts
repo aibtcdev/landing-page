@@ -62,6 +62,9 @@ async function fetchFirstFunderFromChain(
   if (inbound.length === 0) {
     return { firstFunder: null, block: result.tx?.block_height ?? null, status: "none" };
   }
+  // Take the first inbound sender of the genesis tx as the funder. A funding tx
+  // almost always has a single sender; the rare multi-sender genesis just picks
+  // the first, which is good enough for the self-funded shared-origin signal.
   return { firstFunder: inbound[0].senderStx, block: inbound[0].stxBlockHeight, status: "ok" };
 }
 
@@ -208,15 +211,24 @@ export async function applyAntiGaming(
     if (override.action === "include") {
       return { ...classification, excludedReason: null, isEarning: true };
     }
-    if (override.action === "reclassify" && override.new_source_class) {
-      const sc = override.new_source_class as SourceClass;
-      const isEarning = (EARNING_SOURCE_CLASSES as readonly string[]).includes(sc);
-      return {
-        sourceClass: sc,
-        sourceSubclass: classification.sourceSubclass,
-        excludedReason: isEarning ? null : "excluded_manual",
-        isEarning,
-      };
+    if (override.action === "reclassify") {
+      if (!override.new_source_class) {
+        // Malformed override row — don't silently swallow it; fall through to
+        // the heuristics (conservative) but make the misconfig visible.
+        logger.warn("earnings.reclassify_missing_class", {
+          txId: transfer.txId,
+          eventIndex: transfer.eventIndex,
+        });
+      } else {
+        const sc = override.new_source_class as SourceClass;
+        const isEarning = (EARNING_SOURCE_CLASSES as readonly string[]).includes(sc);
+        return {
+          sourceClass: sc,
+          sourceSubclass: classification.sourceSubclass,
+          excludedReason: isEarning ? null : "excluded_manual",
+          isEarning,
+        };
+      }
     }
   }
 
