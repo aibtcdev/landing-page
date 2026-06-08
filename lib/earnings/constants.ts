@@ -23,9 +23,9 @@ export const EARNINGS_HIRO_PAGE_LIMIT = 50;
  *  day-one indexing can't spike Hiro usage; deep history fills over many ticks. */
 export const EARNINGS_MAX_PAGES_PER_AGENT = 4;
 
-/** How often the earnings sweep is due (ms). 5 min during the initial backfill
- *  rollout = every cron tick (fastest the */5 trigger allows) so the roster
- *  backfills quickly. Relax once fully backfilled. */
+// How often the earnings sweep is due (ms). 5 min during the initial backfill
+// rollout = every cron tick (the fastest the every-5-min cron trigger allows)
+// so the roster backfills quickly. Relax once fully backfilled.
 export const EARNINGS_INTERVAL_MS = 5 * 60 * 1000;
 
 /** Source classifications. `is_earning` is derived from these + excluded_reason. */

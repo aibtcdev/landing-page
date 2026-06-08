@@ -12,16 +12,10 @@ import { getEarningsBoard } from "@/lib/earnings/reads";
 export const dynamic = "force-dynamic";
 
 /**
- * Leaderboard SSR cache TTL — 5 minutes. Matches the cron scheduler's
- * Tenero refresh cadence (TENERO_INTERVAL_MS = 5*60*1000).
- * Competition sweep cadence is 15min (`COMPETITION_INTERVAL_MS`) so
- * 5-min TTL is more responsive than the slowest data path; chainhook
- * can deliver between sweeps and that surfaces on the next rebuild.
- *
- * P3B target: collapses ~625K leaderboard renders/day into ≤288 D1
- * aggregate rebuilds/day (1 per cache window, per-colo). The
- * LEADERBOARD_AGGREGATE_SQL scan is the largest known steady-state
- * D1 read surface; see `phases/P3B/plan.md` for attribution.
+ * Leaderboard SSR cache TTL — 5 minutes, matching the earnings sweep cadence
+ * (EARNINGS_INTERVAL_MS) so the board reflects new earnings within one window.
+ * Collapses all leaderboard renders into ≤1 getEarningsBoard scan per window
+ * per colo (the only D1 read on this path).
  */
 const LEADERBOARD_CACHE_TTL_SECONDS = 300; // 5 min — matches the earnings sweep cadence.
 
@@ -51,8 +45,8 @@ function getDefaultCache(): Cache | null {
  * In-flight singleflight for the leaderboard rebuild. Keyed by the
  * cache URL so a future second cached surface in this file would not
  * share the gate. Prevents N concurrent isolates-in-this-colo from all
- * running LEADERBOARD_AGGREGATE_SQL when the cache misses — only the
- * first miss runs the scan; the rest await the same Promise and then
+ * running getEarningsBoard when the cache misses — only the first miss
+ * runs the scan; the rest await the same Promise and then
  * read from the warmed cache. Same shape as `app/api/activity/route.ts`
  * (P1 caches.default + inFlight singleflight pattern).
  */
@@ -76,14 +70,7 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   const { env, ctx } = await getCloudflareContext();
   const db = env.DB as D1Database | undefined;
 
-  // Scheduler liveness no longer depends on this page: periodic work runs
-  // from a Cloudflare Cron Trigger (worker.ts `scheduled()`), so there is
-  // no DO to opportunistically kick on render.
-
-  // P3B cache layer — short-circuit the LEADERBOARD_AGGREGATE_SQL scan +
-  // per-sender rollup on cache hit. The cache is *data-level*, not
-  // page-level: the page itself stays force-dynamic so the scheduler
-  // kick above runs every visit.
+  // Data-level cache: short-circuit the getEarningsBoard scan on a cache hit.
   const cache = getDefaultCache();
   if (cache) {
     const cacheKey = new Request(LEADERBOARD_CACHE_URL, { method: "GET" });
