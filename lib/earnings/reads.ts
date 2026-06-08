@@ -127,26 +127,28 @@ export async function getPlatformEarnings(
   const sevenAgo = windowStart("7d", now);
   const thirtyAgo = windowStart("30d", now);
 
-  const totals = await db
-    .prepare(
-      `SELECT
-         COALESCE(SUM(CASE WHEN block_time >= ?1 THEN amount_usd END), 0) AS e7,
-         COALESCE(SUM(CASE WHEN block_time >= ?2 THEN amount_usd END), 0) AS e30,
-         COALESCE(SUM(amount_usd), 0) AS elife
-       FROM agent_earnings WHERE is_earning = 1`
-    )
-    .bind(sevenAgo, thirtyAgo)
-    .first<{ e7: number; e30: number; elife: number }>();
-
-  const bySource = await db
-    .prepare(
-      `SELECT source_class, COALESCE(SUM(amount_usd), 0) AS total_usd
-       FROM agent_earnings
-       WHERE is_earning = 1 AND block_time >= ?1
-       GROUP BY source_class ORDER BY total_usd DESC`
-    )
-    .bind(thirtyAgo)
-    .all<SourceBreakdownEntry>();
+  // Independent scans — overlap them (consistent with getAgentRollup).
+  const [totals, bySource] = await Promise.all([
+    db
+      .prepare(
+        `SELECT
+           COALESCE(SUM(CASE WHEN block_time >= ?1 THEN amount_usd END), 0) AS e7,
+           COALESCE(SUM(CASE WHEN block_time >= ?2 THEN amount_usd END), 0) AS e30,
+           COALESCE(SUM(amount_usd), 0) AS elife
+         FROM agent_earnings WHERE is_earning = 1`
+      )
+      .bind(sevenAgo, thirtyAgo)
+      .first<{ e7: number; e30: number; elife: number }>(),
+    db
+      .prepare(
+        `SELECT source_class, COALESCE(SUM(amount_usd), 0) AS total_usd
+         FROM agent_earnings
+         WHERE is_earning = 1 AND block_time >= ?1
+         GROUP BY source_class ORDER BY total_usd DESC`
+      )
+      .bind(thirtyAgo)
+      .all<SourceBreakdownEntry>(),
+  ]);
 
   return {
     total_7d_usd: totals?.e7 ?? 0,
