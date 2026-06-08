@@ -7,6 +7,8 @@ import { X_HANDLE } from "@/lib/constants";
 import Navbar from "../../components/Navbar";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import LevelBadge from "../../components/LevelBadge";
+import ClubBadge from "../../components/ClubBadge";
+import EarningsActivity, { type EarningsResponse } from "../../components/EarningsActivity";
 import LevelProgress from "../../components/LevelProgress";
 import LevelTooltip from "../../components/LevelTooltip";
 import LevelCelebration from "../../components/LevelCelebration";
@@ -91,6 +93,13 @@ export default function AgentProfile({
   const { data: vouchData } = useSWR<VouchResponse>(
     agentLevel >= 1 ? swrKeys.vouch(agent.btcAddress) : null
   );
+
+  // Shared with <EarningsActivity> (same SWR key → one request). Drives the
+  // Club badge in the sidebar.
+  const { data: earningsData } = useSWR<EarningsResponse>(
+    agentLevel >= 1 ? swrKeys.earnings(agent.btcAddress) : null
+  );
+  const lifetimeEarningsUsd = earningsData?.rollup?.earnings_lifetime_usd ?? 0;
 
   const handleValidateCode = async () => {
     if (!codeInput.trim()) return;
@@ -223,6 +232,7 @@ export default function AgentProfile({
                       </svg>
                       Verified
                     </span>
+                    <ClubBadge lifetimeUsd={lifetimeEarningsUsd} />
                     {agent.owner && (
                       <a
                         href={`https://x.com/${agent.owner}`}
@@ -396,6 +406,9 @@ export default function AgentProfile({
                   <ReputationSummary address={agent.btcAddress} />
                 </div>
               )}
+
+              {/* Earnings — verified on-chain earnings (issue #978) */}
+              {agentLevel >= 1 && <EarningsActivity btcAddress={agent.btcAddress} />}
 
               {/* Claim section — tri-state: Claimed / Code input / Tweet flow */}
               <div className="rounded-xl border border-white/[0.08] bg-[rgba(12,12,12,0.6)] backdrop-blur-sm p-5 sm:p-6">
