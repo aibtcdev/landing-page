@@ -10,7 +10,12 @@ import {
 } from "@/lib/scheduler/cron-runner";
 import type { SchedulerTask } from "@/lib/scheduler/rpc-types";
 
-const ALLOWED_TASKS = new Set<SchedulerTask>(["tenero", "competition", "all"]);
+const ALLOWED_TASKS = new Set<SchedulerTask>([
+  "tenero",
+  "competition",
+  "earnings",
+  "all",
+]);
 
 function json(body: unknown, init: ResponseInit = {}) {
   const headers = new Headers(init.headers);
@@ -31,7 +36,7 @@ function schedulerTask(url: URL): SchedulerTask | NextResponse {
   const task = url.searchParams.get("task") || "tenero";
   if (!ALLOWED_TASKS.has(task as SchedulerTask)) {
     return json(
-      { error: "Unsupported task. Use tenero, competition, or all." },
+      { error: "Unsupported task. Use tenero, competition, earnings, or all." },
       { status: 400 }
     );
   }

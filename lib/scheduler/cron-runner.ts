@@ -29,6 +29,9 @@ import {
   runCompetitionScheduler,
   type CompetitionSchedulerSummary,
 } from "../competition/scheduler";
+import { runEarningsSweep } from "../earnings/indexer";
+import { EARNINGS_INTERVAL_MS } from "../earnings/constants";
+import type { EarningsSweepSummary } from "../earnings/types";
 import type { Logger } from "../logging";
 import type {
   SchedulerStatus,
@@ -36,14 +39,15 @@ import type {
   SchedulerTask,
 } from "./rpc-types";
 
-// Cadences. The cron fires every TENERO_INTERVAL_MS; competition is gated
-// to its longer interval via a last-run check (mirrors the old DO alarm).
+// Cadences. The cron fires every TENERO_INTERVAL_MS; competition + earnings are
+// gated to their longer intervals via a last-run check (mirrors the old DO alarm).
 export const TENERO_INTERVAL_MS = 5 * 60 * 1000;
 export const COMPETITION_INTERVAL_MS = 15 * 60 * 1000;
 
 // KV keys (VERIFIED_AGENTS namespace).
 const K_TENERO = "scheduler:tenero";
 const K_COMPETITION = "scheduler:competition";
+const K_EARNINGS = "scheduler:earnings";
 const K_PAUSED = "scheduler:paused-until";
 
 interface TeneroState {
@@ -58,6 +62,11 @@ interface CompetitionState {
   lastRunAt: number;
   result: CompetitionSchedulerSummary;
   consecutiveFailures: number;
+}
+
+interface EarningsState {
+  lastRunAt: number;
+  result: EarningsSweepSummary;
 }
 
 async function readJson<T>(kv: KVNamespace, key: string): Promise<T | null> {
@@ -198,6 +207,33 @@ export async function runCompetitionNow(
   return result;
 }
 
+/**
+ * Run one earnings indexer sweep and persist its result to KV. Gated internally
+ * by EARNINGS_INDEX_ENABLED (returns a disabled summary when off); the cursor
+ * lives in D1 so it resumes across ticks. `lastRunAt` is persisted whether or
+ * not the indexer is enabled, so the slow cadence is respected even while dormant.
+ */
+export async function runEarningsNow(
+  env: CloudflareEnv,
+  parentLogger: Logger,
+  // `force` bypasses the EARNINGS_INDEX_ENABLED gate (operator-triggered admin
+  // refresh). The cron tick calls without force, respecting the gate.
+  force: boolean = false
+): Promise<EarningsSweepSummary> {
+  const logger = parentLogger.child
+    ? parentLogger.child({ task: "earnings" })
+    : parentLogger;
+
+  const result = await runEarningsSweep(env, logger, Date.now(), force);
+
+  await env.VERIFIED_AGENTS.put(
+    K_EARNINGS,
+    JSON.stringify({ lastRunAt: Date.now(), result } satisfies EarningsState)
+  );
+
+  return result;
+}
+
 // ─────────────────────────── cron entry point ───────────────────────────
 
 /**
@@ -223,9 +259,10 @@ export async function runScheduledTasks(
     return;
   }
 
-  const [tenero, competition] = await Promise.all([
+  const [tenero, competition, earnings] = await Promise.all([
     readJson<TeneroState>(kv, K_TENERO),
     readJson<CompetitionState>(kv, K_COMPETITION),
+    readJson<EarningsState>(kv, K_EARNINGS),
   ]);
 
   // Tenero — every tick, unless inside a rate-limit backoff window.
@@ -268,6 +305,26 @@ export async function runScheduledTasks(
       lastRunAt: competition?.lastRunAt ?? null,
     });
   }
+
+  // Earnings indexer — on its slow cadence. Internally gated by
+  // EARNINGS_INDEX_ENABLED, so this is a single no-op log while dormant.
+  const earningsDue =
+    (earnings?.lastRunAt ?? 0) + EARNINGS_INTERVAL_MS <= now + 1_000;
+  if (earningsDue) {
+    try {
+      await runEarningsNow(env, logger);
+    } catch (error) {
+      logger.error("scheduler.earnings_unexpected_error", {
+        error: String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      });
+      await bumpFailure(kv, K_EARNINGS);
+    }
+  } else {
+    logger.debug("scheduler.earnings_not_due", {
+      lastRunAt: earnings?.lastRunAt ?? null,
+    });
+  }
 }
 
 async function bumpFailure(kv: KVNamespace, key: string): Promise<void> {
@@ -282,9 +339,10 @@ async function bumpFailure(kv: KVNamespace, key: string): Promise<void> {
 export async function readSchedulerStatus(
   kv: KVNamespace
 ): Promise<SchedulerStatus> {
-  const [tenero, competition, pausedUntil] = await Promise.all([
+  const [tenero, competition, earnings, pausedUntil] = await Promise.all([
     readJson<TeneroState>(kv, K_TENERO),
     readJson<CompetitionState>(kv, K_COMPETITION),
+    readJson<EarningsState>(kv, K_EARNINGS),
     getPausedUntil(kv),
   ]);
 
@@ -295,6 +353,8 @@ export async function readSchedulerStatus(
     lastTeneroResult: tenero?.result ?? null,
     lastCompetitionRunAt: competition?.lastRunAt ?? null,
     lastCompetitionResult: competition?.result ?? null,
+    lastEarningsRunAt: earnings?.lastRunAt ?? null,
+    lastEarningsResult: earnings?.result ?? null,
     consecutiveFailures: {
       tenero: tenero?.consecutiveFailures ?? 0,
       competition: competition?.consecutiveFailures ?? 0,
@@ -320,6 +380,10 @@ export async function refreshScheduler(
   }
   if (task === "competition" || task === "all") {
     out.competition = await runCompetitionNow(env, logger);
+  }
+  if (task === "earnings" || task === "all") {
+    // Operator-triggered: force past the dormant gate so a sweep can be verified.
+    out.earnings = await runEarningsNow(env, logger, true);
   }
   return out;
 }

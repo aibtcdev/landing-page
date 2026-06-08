@@ -356,14 +356,15 @@ would multiply Hiro calls by the cadence with no freshness benefit for a 30-day 
   competition from a Cloudflare Cron Trigger via `worker.ts` `scheduled()` +
   `lib/scheduler/cron-runner.ts` (KV-backed state). Fixes the dead/fragile scheduler at
   the root; prerequisite + trigger for the earnings indexer.
-- **Phase 1 — Schema + indexer core (backend only).** Migration `020`; `lib/earnings/`
-  ingest + classify + index-time pricing + idempotent writes; `runEarnings()` task in
-  `lib/scheduler/cron-runner.ts` (`runScheduledTasks`). Verify via admin/dry-run.
-  **Indexer-only — no agent-submit/self-report
-  path** (unlike competition's `source='agent'` fast-path; earnings tolerate indexing
-  lag and a submit endpoint is needless attack surface). **Also: investigate the x402
-  payTo catalog here** — if none exists, `x402_endpoint` launches inert (bounty + inbox
-  + peer only).
+- **Phase 1 — Schema + indexer core (backend only). DONE.** Migration `020`
+  (`agent_earnings` + `earnings_index_state`); `lib/earnings/` ingest (cheap
+  `transactions_with_transfers`) + classify + index-time pricing + idempotent writes;
+  `runEarningsNow()` wired into `lib/scheduler/cron-runner.ts` on a 30-min cadence,
+  gated by `EARNINGS_INDEX_ENABLED` (**ships dormant**). Verify via
+  `POST /api/admin/scheduler?action=refresh&task=earnings` (force-runs a sweep past the
+  gate). **Indexer-only — no agent-submit/self-report path.** **x402 catalog confirmed
+  absent** (per-agent dynamic payTo, no registry) → `x402_endpoint` is inert; the 3
+  active classifiers are **inbox_message + bounty + agent_peer** (meets the DoD ≥3).
 - **Phase 2 — Full anti-gaming.** first-funder cache + self-fund exclusion, two-hop
   ring, alt-address, manual override.
 - **Phase 3 — Public API.** `/api/agents/{addr}/earnings`, `/api/stats/earnings`,
