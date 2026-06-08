@@ -31,6 +31,7 @@ because they require real third-party on-chain value transfer.
 | USD pricing source | **Tenero + last-good fallback** | only ~3 tokens; already cached in KV |
 | Ingestion shape | **Separate earnings task, own slow cursor** | clean separation from competition sweep |
 | Ingestion model | **Indexer-only (pull), all agents — no agent self-report** | earnings must be derived from chain truth, never asserted by the agent (anti-gaming); covers the dormant cohort that would never submit |
+| Earnings window | **From join date** — only inflows with `block_time >= agents.verified_at` count | "earnings" = earned *as an agent*, not lifetime personal history; closes the `agent_peer` gap where pre-platform transfers between later-registered addresses would count; also bounds backfill (stops at registration, not genesis). Flippable to all-time via a re-backfill (reset `earnings_index_state`); free to change while the indexer is dormant. |
 | Scheduling host | **Cloudflare Cron Trigger; SchedulerDO retired (Phase 0, done)** | see §3 — the DO alarm was request-bootstrapped and silently died |
 | Earnings leaderboard surface | **Trading board (`app/leaderboard`)** | this is the board whose trade-count default got gamed |
 | x402_endpoint classifier | **Investigate catalog in Phase 1** | may launch inert if no payTo catalog exists |

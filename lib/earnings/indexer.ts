@@ -110,6 +110,12 @@ async function mapPool<T, R>(
 async function indexAgent(
   env: EarningsEnv,
   agentStx: string,
+  // Earnings floor: only inflows at/after the agent's registration count.
+  // Excludes pre-platform history (esp. agent_peer transfers between addresses
+  // that only later registered) and lets backfill stop at registration instead
+  // of walking to genesis. 0 = no floor (all-time fallback when verified_at is
+  // missing).
+  verifiedAtSec: number,
   logger: Logger,
   now: number
 ): Promise<AgentResult> {
@@ -127,11 +133,23 @@ async function indexAgent(
     if (!results) return;
     for (const result of results.results) {
       const transfers = extractInboundTransfers(result, agentStx);
-      for (const t of transfers) rows.push(await resolveRow(env, t, now, logger));
-      transfersFound += transfers.length;
+      for (const t of transfers) {
+        if (t.blockTime < verifiedAtSec) continue; // pre-registration → not earnings
+        rows.push(await resolveRow(env, t, now, logger));
+        transfersFound++;
+      }
     }
     maxBlock = Math.max(maxBlock, maxBlockHeight(results.results));
   };
+
+  // True once a page reaches transactions older than registration — since pages
+  // are newest-first, everything beyond is pre-join and can be skipped.
+  const reachedPreJoin = (results: Awaited<ReturnType<typeof fetchTransfersPage>>): boolean =>
+    !!results &&
+    results.results.some((r) => {
+      const t = r.tx?.burn_block_time ?? 0;
+      return t > 0 && t < verifiedAtSec;
+    });
 
   if (!backfillComplete) {
     // Backfill: walk older pages from the saved offset, bounded per tick.
@@ -143,7 +161,7 @@ async function indexAgent(
       await collect(page);
       offset += page.results.length;
       backfillOffset = offset;
-      if (page.exhausted) {
+      if (page.exhausted || reachedPreJoin(page)) {
         backfillComplete = true;
         backfillOffset = 0;
         break;
@@ -233,8 +251,8 @@ export async function runEarningsSweep(
     return emptySummary(true, null);
   }
 
-  const perAgent = await mapPool(agents, EARNINGS_FETCH_CONCURRENCY, (stx) =>
-    indexAgent(env, stx, logger, now)
+  const perAgent = await mapPool(agents, EARNINGS_FETCH_CONCURRENCY, (a) =>
+    indexAgent(env, a.stxAddress, a.verifiedAtSec, logger, now)
   );
 
   const summary = emptySummary(true, null);
@@ -253,7 +271,9 @@ export async function runEarningsSweep(
 
   // Advance the cursor; a short page means we hit the end → wrap next tick.
   const nextCursor =
-    agents.length === EARNINGS_MAX_AGENTS_PER_RUN ? agents[agents.length - 1] : null;
+    agents.length === EARNINGS_MAX_AGENTS_PER_RUN
+      ? agents[agents.length - 1].stxAddress
+      : null;
   await setEarningsCursor(db, nextCursor);
   summary.cursor = nextCursor;
 
