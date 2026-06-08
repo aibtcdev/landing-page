@@ -135,12 +135,21 @@ async function sharesOwner(
   return row != null;
 }
 
-/** Find a prior reverse leg (recipient→sender) within the ring window. */
+/**
+ * Find the reverse leg (recipient→sender) of a potential A→B→A ring.
+ *
+ * The window is SYMMETRIC (±14d around this leg), not backward-only: the two
+ * legs are within 14d *of each other*, and the indexer does not process them in
+ * chronological order (backfill walks newest-first), so the reverse leg may be
+ * either older or newer than the leg currently being indexed. A backward-only
+ * window would silently miss every ring discovered during backfill.
+ */
 async function findReverseLeg(
   db: D1Database,
   transfer: InboundTransfer
 ): Promise<{ tx_id: string; event_index: number } | null> {
   const windowStart = transfer.blockTime - EARNINGS_RING_WINDOW_SECONDS;
+  const windowEnd = transfer.blockTime + EARNINGS_RING_WINDOW_SECONDS;
   const lo = Math.floor(transfer.amountRaw * (1 - EARNINGS_RING_AMOUNT_TOLERANCE));
   const hi = Math.ceil(transfer.amountRaw * (1 + EARNINGS_RING_AMOUNT_TOLERANCE));
   return db
@@ -158,7 +167,7 @@ async function findReverseLeg(
       lo,
       hi,
       windowStart,
-      transfer.blockTime
+      windowEnd
     )
     .first<{ tx_id: string; event_index: number }>();
 }
