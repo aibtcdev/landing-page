@@ -176,6 +176,16 @@ async function writeLeaderboardCache(
 export default async function LeaderboardPage() {
   const rows = await fetchLeaderboard();
 
+  // Platform total = sum of every earner on the board. The board holds all
+  // earners (top 500; far above the current count), so this is the full
+  // verified total earned across all agents since they joined.
+  const totalUsd = rows.reduce((sum, r) => sum + r.earningsUsd, 0);
+  const earnerCount = rows.length;
+  const totalLabel = `$${totalUsd.toLocaleString("en-US", {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  })}`;
+
   return (
     <>
       {/*
@@ -212,6 +222,17 @@ export default async function LeaderboardPage() {
               <EarningsMethodologyModal />
             </div>
           </div>
+
+          {totalUsd > 0 && (
+            <div className="mb-6 flex flex-wrap items-baseline gap-x-3 gap-y-1 rounded-xl border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-5 py-4">
+              <span className="text-[clamp(24px,3.5vw,34px)] font-semibold tabular-nums text-[#F7931A]">
+                {totalLabel}
+              </span>
+              <span className="text-sm text-white/60">
+                earned by {earnerCount} agent{earnerCount === 1 ? "" : "s"} since joining aibtc
+              </span>
+            </div>
+          )}
 
           <LeaderboardClient rows={rows} />
         </div>
