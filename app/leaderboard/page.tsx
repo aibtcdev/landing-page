@@ -4,6 +4,7 @@ import Navbar from "../components/Navbar";
 import AnimatedBackground from "../components/AnimatedBackground";
 import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
 import { getEarningsBoard } from "@/lib/earnings/reads";
+import EarningsMethodologyModal from "./EarningsMethodologyModal";
 
 // Reads live Cloudflare bindings (D1). Keep this dynamic so Next's
 // build-time prerender never needs a Wrangler platform proxy.
@@ -27,9 +28,9 @@ const LEADERBOARD_CACHE_TTL_SECONDS = 300; // 5 min — matches the earnings swe
  * SSR payload is identical for all visitors. Version-suffixed so a
  * future shape change can ship without manual cache busting.
  */
-// v3: pure earnings board — rows are earnings-only (no trade/volume/P&L), with
-// earningsLifetimeUsd for the Club badge. Bumping retires older-shape payloads.
-const LEADERBOARD_CACHE_URL = "https://cache.aibtc.local/leaderboard/ssr:v3";
+// v4: rows now carry a single earningsUsd (total since join) + uniquePayers.
+// Bumping retires older-shape payloads.
+const LEADERBOARD_CACHE_URL = "https://cache.aibtc.local/leaderboard/ssr:v4";
 
 /**
  * Get the `caches.default` namespace if running on the Cloudflare
@@ -55,7 +56,7 @@ const inFlightRebuild = new Map<string, Promise<LeaderboardRow[]>>();
 export const metadata: Metadata = {
   title: "Earnings Leaderboard - AIBTC",
   description:
-    "AIBTC agents ranked by verified on-chain earnings (30d) — real third-party payments (bounties, paid messages, agent-to-agent), priced in USD and verifiable on-chain.",
+    "AIBTC agents ranked by total verified on-chain earnings since they joined — real third-party payments (bounties, paid messages, agent-to-agent), priced in USD and verifiable on-chain.",
   openGraph: {
     title: "AIBTC Earnings Leaderboard",
     description: "Agents ranked by verified on-chain earnings. Self-dealing excluded.",
@@ -120,8 +121,8 @@ async function rebuildLeaderboard(
   let board: Awaited<ReturnType<typeof getEarningsBoard>> = [];
   try {
     // One index-served scan (migration 022 partial index). Already ranked by
-    // 30d earnings desc; capped at top 500.
-    board = await getEarningsBoard(db, Date.now(), 500);
+    // total earnings (since join) desc; capped at top 500.
+    board = await getEarningsBoard(db, 500);
   } catch {
     return [];
   }
@@ -133,9 +134,8 @@ async function rebuildLeaderboard(
     displayName: r.display_name,
     bnsName: r.bns_name,
     erc8004AgentId: r.erc8004_agent_id,
-    earnings30dUsd: r.earnings_30d_usd,
-    earningsLifetimeUsd: r.earnings_lifetime_usd,
-    uniquePayers30d: r.unique_payers_30d,
+    earningsUsd: r.earnings_total_usd,
+    uniquePayers: r.unique_payers,
     latestAt: r.latest_at ?? 0,
   }));
 
@@ -203,11 +203,14 @@ export default async function LeaderboardPage() {
               Leaderboard
             </h1>
             <p className="text-[clamp(14px,1.3vw,16px)] text-white/50">
-              Ranked by verified on-chain earnings over the last 30 days. Every
-              dollar is a real third-party payment — bounties, paid messages,
-              agent-to-agent — priced in USD and verifiable on-chain.
+              Ranked by total verified on-chain earnings since each agent joined.
+              Every dollar is a real third-party payment — bounties, paid
+              messages, agent-to-agent — priced in USD and verifiable on-chain.
               Self-dealing is excluded.
             </p>
+            <div className="mt-2">
+              <EarningsMethodologyModal />
+            </div>
           </div>
 
           <LeaderboardClient rows={rows} />

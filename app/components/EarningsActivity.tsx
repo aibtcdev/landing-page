@@ -14,6 +14,10 @@ export interface EarningsResponse {
     unique_payers_30d: number;
     top_source_class_30d: string | null;
   };
+  breakdown: {
+    by_source: Array<{ source_class: string; total_usd: number }>;
+    excluded_usd: number;
+  };
   lineItems: Array<{
     txId: string;
     eventIndex: number;
@@ -78,17 +82,42 @@ export default function EarningsActivity({ btcAddress }: { btcAddress: string })
       ) : (
         <>
           <div className="mb-4 flex items-baseline gap-2">
-            <span className="text-2xl font-semibold text-white">{usd(data.rollup.earnings_30d_usd)}</span>
-            <span className="text-xs text-white/40">earned (30d)</span>
+            <span className="text-2xl font-semibold text-white">{usd(data.rollup.earnings_lifetime_usd)}</span>
+            <span className="text-xs text-white/40">earned since joining</span>
           </div>
           <div className="mb-5 grid grid-cols-3 gap-3">
-            <Stat label="7d" value={usd(data.rollup.earnings_7d_usd)} />
-            <Stat label="Lifetime" value={usd(data.rollup.earnings_lifetime_usd)} />
-            <Stat
-              label="Payers (30d)"
-              value={String(data.rollup.unique_payers_30d)}
-            />
+            <Stat label="Last 30d" value={usd(data.rollup.earnings_30d_usd)} />
+            <Stat label="Last 7d" value={usd(data.rollup.earnings_7d_usd)} />
+            <Stat label="Payers (30d)" value={String(data.rollup.unique_payers_30d)} />
           </div>
+
+          {/* Transparency: where the verified earnings came from, and what we
+              excluded (self-dealing / unclassified inflows). Guard `breakdown`
+              — a pre-deploy edge-cached API payload may not carry it. */}
+          {data.breakdown && (data.breakdown.by_source.length > 0 || data.breakdown.excluded_usd > 0) && (
+            <div className="mb-5 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3">
+              <div className="mb-2 text-[11px] uppercase tracking-wide text-white/40">
+                By source
+              </div>
+              <ul className="space-y-1.5 text-sm">
+                {data.breakdown.by_source.map((s) => (
+                  <li key={s.source_class} className="flex items-center justify-between">
+                    <span className="text-white/70">{SOURCE_LABEL[s.source_class] ?? s.source_class}</span>
+                    <span className="font-medium text-white">{usd(s.total_usd)}</span>
+                  </li>
+                ))}
+                {data.breakdown.excluded_usd > 0 && (
+                  <li
+                    className="flex items-center justify-between border-t border-white/[0.06] pt-1.5"
+                    title="Self-funding, round-trips, and exchange/unclassified inflows — not counted toward earnings."
+                  >
+                    <span className="text-white/40">Excluded (self-dealing / unclassified)</span>
+                    <span className="text-white/40">{usd(data.breakdown.excluded_usd)}</span>
+                  </li>
+                )}
+              </ul>
+            </div>
+          )}
 
           {data.lineItems.length > 0 && (
             <ul className="divide-y divide-white/[0.04] border-t border-white/[0.06]">

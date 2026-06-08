@@ -7,7 +7,11 @@ import {
   lookupProfileByBtcAddress,
   lookupProfileByAgentId,
 } from "@/lib/cache/agent-profile";
-import { getAgentRollup, getAgentLineItems } from "@/lib/earnings/reads";
+import {
+  getAgentRollup,
+  getAgentLineItems,
+  getAgentEarningsBreakdown,
+} from "@/lib/earnings/reads";
 
 const DEFAULT_LIMIT = 25;
 const MAX_LIMIT = 100;
@@ -38,6 +42,10 @@ function selfDoc() {
           earnings_lifetime_usd: "number",
           unique_payers_30d: "number",
           top_source_class_30d: "string | null",
+        },
+        breakdown: {
+          by_source: "Array<{ source_class, total_usd }> — verified earnings by source",
+          excluded_usd: "number — inbound NOT counted (self-dealing / unclassified)",
         },
         lineItems:
           "Array<{ txId, eventIndex, blockTime, sender, asset, amountRaw, amountUsd, sourceClass, sourceSubclass, explorerUrl }>",
@@ -104,8 +112,9 @@ export async function GET(
     const stxAddress = row.stx_address;
     const now = Date.now();
 
-    const [rollup, items] = await Promise.all([
+    const [rollup, breakdown, items] = await Promise.all([
       getAgentRollup(db, stxAddress, now),
+      getAgentEarningsBreakdown(db, stxAddress),
       getAgentLineItems(db, stxAddress, limit + 1, offset),
     ]);
 
@@ -124,7 +133,7 @@ export async function GET(
     }));
 
     return NextResponse.json(
-      { address, stxAddress, rollup, lineItems, pagination: { limit, offset, hasMore } },
+      { address, stxAddress, rollup, breakdown, lineItems, pagination: { limit, offset, hasMore } },
       {
         headers: {
           "Cache-Control": `public, max-age=${CACHE_TTL_SECONDS}, s-maxage=${CACHE_TTL_SECONDS}`,
