@@ -6,6 +6,7 @@ import LeaderboardClient, { type LeaderboardRow } from "./LeaderboardClient";
 import CompetitionCountdown from "./CompetitionCountdown";
 import { COMP_START_TIMESTAMP } from "@/lib/competition/constants";
 import { LEADERBOARD_AGGREGATE_SQL } from "@/lib/competition/leaderboard-query";
+import { getEarningsLeaderboard, type EarningsLeaderboardRow } from "@/lib/earnings/reads";
 
 // Reads live Cloudflare bindings (D1). Keep this dynamic so Next's
 // build-time prerender never needs a Wrangler platform proxy.
@@ -35,7 +36,9 @@ const LEADERBOARD_CACHE_TTL_SECONDS = 300;
  * SSR payload is identical for all visitors. Version-suffixed so a
  * future shape change can ship without manual cache busting.
  */
-const LEADERBOARD_CACHE_URL = "https://cache.aibtc.local/leaderboard/ssr:v1";
+// v2: rows now carry earnings30dUsd / uniquePayers30d (issue #978). Bumping the
+// key retires v1-shape cached payloads instead of serving them without earnings.
+const LEADERBOARD_CACHE_URL = "https://cache.aibtc.local/leaderboard/ssr:v2";
 
 /**
  * Get the `caches.default` namespace if running on the Cloudflare
@@ -169,6 +172,50 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
  * leaderboard doesn't run the full scan on every visit (Copilot PR #891
  * feedback). Returns `[]` when DB binding is missing (local dev).
  */
+// The earnings overlay changes slowly and its GROUP BY is the cost-relevant
+// scan, so it gets its OWN 1h cache — decoupled from the 5-min swap rebuild, so
+// it runs ~24×/day/colo instead of riding the swap cache's 288×/day cadence.
+const EARNINGS_OVERLAY_CACHE_URL =
+  "https://cache.aibtc.local/leaderboard/earnings-30d:v1";
+const EARNINGS_OVERLAY_TTL_SECONDS = 3600;
+const inFlightEarnings = new Map<string, Promise<EarningsLeaderboardRow[]>>();
+
+async function getCachedEarnings(
+  db: D1Database,
+  cache: Cache | null,
+  ctx: { waitUntil?: (p: Promise<unknown>) => void } | undefined
+): Promise<EarningsLeaderboardRow[]> {
+  if (cache) {
+    const hit = await cache.match(new Request(EARNINGS_OVERLAY_CACHE_URL, { method: "GET" }));
+    if (hit) return (await hit.json()) as EarningsLeaderboardRow[];
+  }
+  const existing = inFlightEarnings.get(EARNINGS_OVERLAY_CACHE_URL);
+  if (existing) return existing;
+
+  const build = (async (): Promise<EarningsLeaderboardRow[]> => {
+    try {
+      const earners = await getEarningsLeaderboard(db, "30d", 500, 0, Date.now());
+      console.log("leaderboard.earnings_overlay_rebuild", { earnerCount: earners.length });
+      if (cache) {
+        const resp = new Response(JSON.stringify(earners), {
+          headers: {
+            "Cache-Control": `public, max-age=${EARNINGS_OVERLAY_TTL_SECONDS}, s-maxage=${EARNINGS_OVERLAY_TTL_SECONDS}`,
+            "Content-Type": "application/json",
+          },
+        });
+        const put = cache.put(new Request(EARNINGS_OVERLAY_CACHE_URL, { method: "GET" }), resp);
+        if (ctx?.waitUntil) ctx.waitUntil(put);
+        else await put;
+      }
+      return earners;
+    } finally {
+      inFlightEarnings.delete(EARNINGS_OVERLAY_CACHE_URL);
+    }
+  })();
+  inFlightEarnings.set(EARNINGS_OVERLAY_CACHE_URL, build);
+  return build;
+}
+
 async function rebuildLeaderboard(
   db: D1Database | undefined,
   cache: Cache | null,
@@ -207,15 +254,6 @@ async function rebuildLeaderboard(
     d1DurationMs: scanMeta?.durationMs,
     totalMs: Date.now() - rebuildStart,
   });
-
-  // Legitimate empty leaderboard (pre-first-trade, off-season, etc.) —
-  // still cache `[]` so the next request in this colo skips the scan
-  // for the TTL window. Without this, the empty case would run the
-  // full aggregate on every visit (Copilot PR #891 feedback).
-  if (rows.length === 0) {
-    await writeLeaderboardCache(cache, ctx, []);
-    return [];
-  }
 
   // Roll up per (sender, pair) rows into per-sender state. For each pair we
   // bump:
@@ -272,13 +310,16 @@ async function rebuildLeaderboard(
   // directly per distinct token id and reads both `price_usd` and
   // `decimals` from the response. No hardcoded decimals table, no KV
   // price-cache dependency on this path.
-  const ranked: LeaderboardRow[] = Array.from(bySender.entries())
-    .map(([sender, agg]) => ({
+  const rowByStx = new Map<string, LeaderboardRow>();
+  for (const [sender, agg] of bySender.entries()) {
+    rowByStx.set(sender, {
       stxAddress: sender,
       btcAddress: agg.display.btcAddress,
       displayName: agg.display.displayName,
       bnsName: agg.display.bnsName,
       erc8004AgentId: agg.display.erc8004AgentId,
+      earnings30dUsd: 0,
+      uniquePayers30d: 0,
       tradeCount: agg.count,
       latestTradeAt: agg.latestAt,
       tokensSpent: Array.from(agg.spent.entries()).map(([tokenId, sumAmount]) => ({
@@ -288,12 +329,46 @@ async function rebuildLeaderboard(
       tokensReceived: Array.from(agg.received.entries()).map(
         ([tokenId, sumAmount]) => ({ tokenId, sumAmount })
       ),
-    }))
-    .sort((a, b) => {
-      // Primary: count desc. Tiebreak: latest trade desc.
-      if (b.tradeCount !== a.tradeCount) return b.tradeCount - a.tradeCount;
-      return b.latestTradeAt - a.latestTradeAt;
     });
+  }
+
+  // Merge verified 30d earnings (top earners + metadata, index-served partial
+  // index, behind this 5-min cache). Overlay onto swap rows; add earnings-only
+  // agents (earned but haven't traded) so the board ranks all earners. Earnings
+  // unavailable (cold start / D1 hiccup) → the board still renders trade rows.
+  try {
+    const earners = await getCachedEarnings(db, cache, ctx);
+    for (const e of earners) {
+      const existing = rowByStx.get(e.stx_address);
+      if (existing) {
+        existing.earnings30dUsd = e.earnings_usd;
+        existing.uniquePayers30d = e.unique_payers;
+      } else {
+        rowByStx.set(e.stx_address, {
+          stxAddress: e.stx_address,
+          btcAddress: e.btc_address,
+          displayName: e.display_name,
+          bnsName: e.bns_name,
+          erc8004AgentId: null,
+          earnings30dUsd: e.earnings_usd,
+          uniquePayers30d: e.unique_payers,
+          tradeCount: 0,
+          latestTradeAt: e.latest_at ?? 0,
+          tokensSpent: [],
+          tokensReceived: [],
+        });
+      }
+    }
+  } catch {
+    // Earnings read failed — leave swap rows with 0 earnings; board still works.
+  }
+
+  const ranked: LeaderboardRow[] = Array.from(rowByStx.values()).sort((a, b) => {
+    // Primary: earnings desc (the default metric, #978). Tiebreaks: trades, latest.
+    if (b.earnings30dUsd !== a.earnings30dUsd) return b.earnings30dUsd - a.earnings30dUsd;
+    if (b.tradeCount !== a.tradeCount) return b.tradeCount - a.tradeCount;
+    return b.latestTradeAt - a.latestTradeAt;
+  });
 
   await writeLeaderboardCache(cache, ctx, ranked);
   return ranked;
