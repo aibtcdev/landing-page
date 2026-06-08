@@ -67,6 +67,9 @@ interface CompetitionState {
 interface EarningsState {
   lastRunAt: number;
   result: EarningsSweepSummary;
+  // Set by bumpFailure() on a thrown sweep; cleared when runEarningsNow()
+  // overwrites the blob on the next successful run.
+  consecutiveFailures?: number;
 }
 
 async function readJson<T>(kv: KVNamespace, key: string): Promise<T | null> {
@@ -224,11 +227,12 @@ export async function runEarningsNow(
     ? parentLogger.child({ task: "earnings" })
     : parentLogger;
 
-  const result = await runEarningsSweep(env, logger, Date.now(), force);
+  const startedAt = Date.now();
+  const result = await runEarningsSweep(env, logger, startedAt, force);
 
   await env.VERIFIED_AGENTS.put(
     K_EARNINGS,
-    JSON.stringify({ lastRunAt: Date.now(), result } satisfies EarningsState)
+    JSON.stringify({ lastRunAt: startedAt, result } satisfies EarningsState)
   );
 
   return result;
@@ -358,6 +362,7 @@ export async function readSchedulerStatus(
     consecutiveFailures: {
       tenero: tenero?.consecutiveFailures ?? 0,
       competition: competition?.consecutiveFailures ?? 0,
+      earnings: earnings?.consecutiveFailures ?? 0,
     },
     nextRunAfter: {
       tenero: tenero?.nextRunAfter ?? null,

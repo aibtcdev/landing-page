@@ -15,6 +15,8 @@ import {
   EARNINGS_FETCH_CONCURRENCY,
   EARNINGS_HIRO_PAGE_LIMIT,
   EARNINGS_MAX_PAGES_PER_AGENT,
+  EARNING_SOURCE_CLASSES,
+  EXCLUDED_SOURCE_CLASSES,
 } from "./constants";
 import {
   fetchTransfersPage,
@@ -31,7 +33,12 @@ import {
   setEarningsCursor,
   fetchAgentPage,
 } from "./d1";
-import type { EarningRow, EarningsSweepSummary, SourceClass } from "./types";
+import type {
+  EarningRow,
+  EarningsSweepSummary,
+  InboundTransfer,
+  SourceClass,
+} from "./types";
 import type { Logger } from "../logging";
 
 interface EarningsEnv {
@@ -52,25 +59,27 @@ interface AgentResult {
   bySourceClass: Record<SourceClass, number>;
 }
 
+// Derived from the source-class constants so a new class added in a later
+// phase is counted automatically instead of being silently dropped.
 function zeroBySource(): Record<SourceClass, number> {
-  return {
-    inbox_message: 0,
-    bounty: 0,
-    x402_endpoint: 0,
-    agent_peer: 0,
-    exchange_or_external: 0,
-    unclassified: 0,
-  };
+  const out = {} as Record<SourceClass, number>;
+  for (const c of [...EARNING_SOURCE_CLASSES, ...EXCLUDED_SOURCE_CLASSES]) {
+    out[c] = 0;
+  }
+  return out;
 }
 
 async function resolveRow(
   db: D1Database,
   kv: KVNamespace,
-  transfer: import("./types").InboundTransfer,
+  transfer: InboundTransfer,
   now: number
 ): Promise<EarningRow> {
-  const classification = await classifyTransfer(db, transfer);
-  const pricing = await priceTransfer(kv, transfer, now);
+  // Classification (D1 reads) and pricing (KV read) are independent — overlap them.
+  const [classification, pricing] = await Promise.all([
+    classifyTransfer(db, transfer),
+    priceTransfer(kv, transfer, now),
+  ]);
   return { ...transfer, ...classification, ...pricing, indexedAt: now };
 }
 

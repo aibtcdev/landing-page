@@ -17,7 +17,7 @@ export interface SchedulerStatus {
   lastCompetitionResult: CompetitionSchedulerSummary | null;
   lastEarningsRunAt: number | null;
   lastEarningsResult: EarningsSweepSummary | null;
-  consecutiveFailures: { tenero: number; competition: number };
+  consecutiveFailures: { tenero: number; competition: number; earnings: number };
   nextRunAfter: { tenero: number | null; competition: number | null };
   // Always null under cron scheduling (no self-scheduled DO alarm); kept
   // for status-shape stability.

@@ -367,6 +367,10 @@ would multiply Hiro calls by the cadence with no freshness benefit for a 30-day 
   active classifiers are **inbox_message + bounty + agent_peer** (meets the DoD ≥3).
 - **Phase 2 — Full anti-gaming.** first-funder cache + self-fund exclusion, two-hop
   ring, alt-address, manual override.
+- **Reprice pass (Phase 3 scope).** Phase 1 stores `amount_usd = NULL`,
+  `price_source = 'none'` for transfers indexed during a Tenero gap. There is **no
+  reprice task yet** — add one in Phase 3 (a bounded sweep over `price_source = 'none'`
+  rows that re-reads the Tenero cache), so the gap doesn't get lost between phases.
 - **Phase 3 — Public API.** `/api/agents/{addr}/earnings`, `/api/stats/earnings`,
   trading-board earnings ranking (all read-time + edge-cached).
 - **Phase 4 — UI.** leaderboard chip + new default, profile Earnings section, homepage
