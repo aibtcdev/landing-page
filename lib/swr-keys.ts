@@ -59,14 +59,8 @@ export const swrKeys = {
       limit: opts.limit,
       offset: opts.offset,
     })}`,
-  earningsStats: (
-    opts: { window?: "7d" | "30d" | "lifetime"; limit?: number; offset?: number } = {}
-  ) =>
-    `/api/stats/earnings${buildQuery({
-      window: opts.window,
-      limit: opts.limit,
-      offset: opts.offset,
-    })}`,
+  earningsStats: (opts: { window?: "7d" | "30d" | "lifetime" } = {}) =>
+    `/api/stats/earnings${buildQuery({ window: opts.window })}`,
   activity: () => "/api/activity",
   statusSummary: () => "/api/status/summary",
 } as const;
