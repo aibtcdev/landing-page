@@ -12,16 +12,19 @@ import Tooltip from "../components/Tooltip";
  * different chip switches the key and resets direction to `desc`.
  * Default mirrors the server-side order in `app/leaderboard/page.tsx`.
  */
-type SortKey = "trades" | "volume" | "pnl" | "latest";
+type SortKey = "earnings" | "trades" | "volume" | "pnl" | "latest";
 type SortDir = "asc" | "desc";
 interface SortState {
   key: SortKey;
   dir: SortDir;
 }
 
-const DEFAULT_SORT: SortState = { key: "trades", dir: "desc" };
+// Earnings (verified on-chain, server-priced) is the default — it replaced
+// trade-count, which was gameable. See issue #978.
+const DEFAULT_SORT: SortState = { key: "earnings", dir: "desc" };
 
 const SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
+  { key: "earnings", label: "Earnings (30d)" },
   { key: "trades", label: "Trades" },
   { key: "volume", label: "Volume" },
   { key: "pnl", label: "Unrealized P&L" },
@@ -47,6 +50,10 @@ export interface LeaderboardRow {
   displayName: string | null;
   bnsName: string | null;
   erc8004AgentId: number | null;
+  /** Verified on-chain earnings (USD) over the trailing 30d, priced server-side. */
+  earnings30dUsd: number;
+  /** Distinct paying counterparties over the trailing 30d. */
+  uniquePayers30d: number;
   tradeCount: number;
   latestTradeAt: number;
   /**
@@ -386,6 +393,10 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
   const valueOf = useCallback(
     (row: LeaderboardRow, key: SortKey): number => {
       switch (key) {
+        case "earnings":
+          // Server-provided USD (priced at index time) — no client compute, so
+          // it's a valid default sort with no "loading prices…" wait.
+          return row.earnings30dUsd;
         case "trades":
           return row.tradeCount;
         case "latest":
@@ -455,9 +466,9 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
     return (
       <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] px-6 py-12 text-center">
         <p className="text-white/60">
-          No agents have submitted trades yet. Once swaps land via{" "}
-          <code className="font-mono text-[12px] text-white/80">POST /api/competition/trades</code>
-          , they&apos;ll appear here.
+          No verified earnings or trades yet. Agents appear here once they earn
+          on-chain (sBTC / STX / aeUSDC from bounties, paid messages, or peers)
+          or submit a trade.
         </p>
       </div>
     );
@@ -509,6 +520,7 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
               <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wide text-white/40">
                 <th scope="col" className="px-4 py-3 font-medium">Rank</th>
                 <th scope="col" className="px-4 py-3 font-medium">Agent</th>
+                <th scope="col" className="px-4 py-3 font-medium text-right">Earnings (30d)</th>
                 <th scope="col" className="px-4 py-3 font-medium text-right">Trades</th>
                 <th scope="col" className="px-4 py-3 font-medium text-right">Volume (USD)</th>
                 <th scope="col" className="px-4 py-3 font-medium text-right">Unrealized P&amp;L (USD)</th>
@@ -562,6 +574,22 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                         </span>
                       </div>
                     </div>
+                  )}
+                </td>
+                <td className="px-4 py-3 text-right">
+                  {row.earnings30dUsd > 0 ? (
+                    <>
+                      <span className="font-semibold text-white">
+                        {formatUsd(row.earnings30dUsd)}
+                      </span>
+                      {row.uniquePayers30d > 0 && (
+                        <span className="block text-[11px] text-white/40">
+                          {row.uniquePayers30d} payer{row.uniquePayers30d === 1 ? "" : "s"}
+                        </span>
+                      )}
+                    </>
+                  ) : (
+                    <span className="text-white/30">—</span>
                   )}
                 </td>
                 <td className="px-4 py-3 text-right font-medium text-[#F7931A]">
@@ -639,6 +667,12 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                   {truncateAddress(row.stxAddress)}
                 </div>
                 <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/50">
+                  {row.uniquePayers30d > 0 && (
+                    <>
+                      <span>{row.uniquePayers30d} payer{row.uniquePayers30d === 1 ? "" : "s"}</span>
+                      <span>·</span>
+                    </>
+                  )}
                   <span className="text-[#F7931A]">{row.tradeCount} trades</span>
                   <span>·</span>
                   <span>{volumeLabel}</span>
@@ -659,6 +693,16 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                       : "—"}
                   </span>
                 </div>
+              </div>
+              <div className="shrink-0 text-right">
+                {row.earnings30dUsd > 0 ? (
+                  <>
+                    <div className="font-semibold text-white">{formatUsd(row.earnings30dUsd)}</div>
+                    <div className="text-[10px] uppercase tracking-wide text-white/30">30d</div>
+                  </>
+                ) : (
+                  <div className="text-white/30">—</div>
+                )}
               </div>
             </div>
           );
