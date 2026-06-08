@@ -365,8 +365,13 @@ would multiply Hiro calls by the cadence with no freshness benefit for a 30-day 
   gate). **Indexer-only — no agent-submit/self-report path.** **x402 catalog confirmed
   absent** (per-agent dynamic payTo, no registry) → `x402_endpoint` is inert; the 3
   active classifiers are **inbox_message + bounty + agent_peer** (meets the DoD ≥3).
-- **Phase 2 — Full anti-gaming.** first-funder cache + self-fund exclusion, two-hop
-  ring, alt-address, manual override.
+- **Phase 2 — Full anti-gaming. DONE.** `migration 021` (`address_first_funder` cache
+  + `earnings_manual_override`); `lib/earnings/anti-gaming.ts` — manual override,
+  alt-address (shared `owner`), self-funded (shared first-funder, cached forever),
+  two-hop ring (`A→B→A` ≤14d, similar amount, flips both legs). Runs only on
+  `agent_peer` earnings, wired into the indexer's `resolveRow`. Known limit: a ring
+  whose two legs land in the *same* sweep tick isn't caught (the reverse leg isn't
+  persisted yet); cross-tick rings are.
 - **Reprice pass (Phase 3 scope).** Phase 1 stores `amount_usd = NULL`,
   `price_source = 'none'` for transfers indexed during a Tenero gap. There is **no
   reprice task yet** — add one in Phase 3 (a bounded sweep over `price_source = 'none'`
