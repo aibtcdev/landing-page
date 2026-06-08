@@ -25,6 +25,7 @@ import {
 } from "./ingest";
 import { classifyTransfer } from "./classify";
 import { priceTransfer } from "./price";
+import { applyAntiGaming } from "./anti-gaming";
 import {
   getIndexState,
   setIndexState,
@@ -70,17 +71,19 @@ function zeroBySource(): Record<SourceClass, number> {
 }
 
 async function resolveRow(
-  db: D1Database,
-  kv: KVNamespace,
+  env: EarningsEnv,
   transfer: InboundTransfer,
-  now: number
+  now: number,
+  logger: Logger
 ): Promise<EarningRow> {
   // Classification (D1 reads) and pricing (KV read) are independent — overlap them.
   const [classification, pricing] = await Promise.all([
-    classifyTransfer(db, transfer),
-    priceTransfer(kv, transfer, now),
+    classifyTransfer(env.DB, transfer),
+    priceTransfer(env.VERIFIED_AGENTS, transfer, now),
   ]);
-  return { ...transfer, ...classification, ...pricing, indexedAt: now };
+  // Anti-gaming (Phase 2) can flip an agent_peer earning → excluded.
+  const finalClassification = await applyAntiGaming(env, transfer, classification, now, logger);
+  return { ...transfer, ...finalClassification, ...pricing, indexedAt: now };
 }
 
 /** Bounded-concurrency map (caps simultaneous outgoing connections at `n`). */
@@ -110,7 +113,7 @@ async function indexAgent(
   logger: Logger,
   now: number
 ): Promise<AgentResult> {
-  const { DB: db, VERIFIED_AGENTS: kv } = env;
+  const { DB: db } = env;
   const state = await getIndexState(db, agentStx);
 
   const rows: EarningRow[] = [];
@@ -124,7 +127,7 @@ async function indexAgent(
     if (!results) return;
     for (const result of results.results) {
       const transfers = extractInboundTransfers(result, agentStx);
-      for (const t of transfers) rows.push(await resolveRow(db, kv, t, now));
+      for (const t of transfers) rows.push(await resolveRow(env, t, now, logger));
       transfersFound += transfers.length;
     }
     maxBlock = Math.max(maxBlock, maxBlockHeight(results.results));

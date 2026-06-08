@@ -39,3 +39,15 @@ export const EXCLUDED_SOURCE_CLASSES = [
   "exchange_or_external",
   "unclassified",
 ] as const;
+
+// ── Anti-gaming (Phase 2) ────────────────────────────────────────────────
+
+/** Two-hop ring window: A→B→A round-trips within 14 days are excluded. */
+export const EARNINGS_RING_WINDOW_SECONDS = 14 * 24 * 60 * 60;
+
+/** Ring legs must be "similar amount" — within ±10% of each other. */
+export const EARNINGS_RING_AMOUNT_TOLERANCE = 0.1;
+
+/** A failed first-funder lookup is re-attempted after this long (ms); 'ok' and
+ *  'none' results are cached permanently (first-funder is immutable). */
+export const FIRST_FUNDER_FAILED_RETRY_MS = 60 * 60 * 1000;
