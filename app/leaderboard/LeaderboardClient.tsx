@@ -24,7 +24,7 @@ interface SortState {
 const DEFAULT_SORT: SortState = { key: "earnings", dir: "desc" };
 
 const SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
-  { key: "earnings", label: "Earnings (30d)" },
+  { key: "earnings", label: "Earnings" },
   { key: "payers", label: "Payers" },
   { key: "latest", label: "Latest" },
 ];
@@ -35,12 +35,11 @@ export interface LeaderboardRow {
   displayName: string | null;
   bnsName: string | null;
   erc8004AgentId: number | null;
-  /** Verified on-chain earnings (USD), trailing 30d — the ranking metric. */
-  earnings30dUsd: number;
-  /** Lifetime verified earnings (USD) — drives the Club tier badge. */
-  earningsLifetimeUsd: number;
-  /** Distinct paying counterparties, trailing 30d. */
-  uniquePayers30d: number;
+  /** Total verified earnings (USD) since the agent joined — the ranking metric
+   *  and the Club tier source. */
+  earningsUsd: number;
+  /** Distinct paying counterparties over the agent's whole history. */
+  uniquePayers: number;
   /** Unix seconds of the latest earning. */
   latestAt: number;
 }
@@ -85,7 +84,7 @@ function AgentCell({ row }: { row: LeaderboardRow }) {
           <span className="truncate font-medium text-white group-hover:text-[#F7931A]">
             {rowDisplayName(row)}
           </span>
-          <ClubBadge lifetimeUsd={row.earningsLifetimeUsd} />
+          <ClubBadge lifetimeUsd={row.earningsUsd} />
         </span>
         <span className="font-mono text-[11px] text-white/40">
           {truncateAddress(row.stxAddress)}
@@ -116,9 +115,9 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
   const valueOf = useCallback((row: LeaderboardRow, key: SortKey): number => {
     switch (key) {
       case "earnings":
-        return row.earnings30dUsd;
+        return row.earningsUsd;
       case "payers":
-        return row.uniquePayers30d;
+        return row.uniquePayers;
       case "latest":
         return row.latestAt;
     }
@@ -131,7 +130,7 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
       const bv = valueOf(b, sort.key);
       if (av !== bv) return sort.dir === "desc" ? bv - av : av - bv;
       // Stable tiebreak: earnings, then address for determinism.
-      if (b.earnings30dUsd !== a.earnings30dUsd) return b.earnings30dUsd - a.earnings30dUsd;
+      if (b.earningsUsd !== a.earningsUsd) return b.earningsUsd - a.earningsUsd;
       return a.stxAddress.localeCompare(b.stxAddress);
     });
     return copy;
@@ -183,7 +182,7 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
               <tr className="border-b border-white/[0.06] text-left text-[11px] uppercase tracking-wide text-white/40">
                 <th scope="col" className="px-4 py-3 font-medium">Rank</th>
                 <th scope="col" className="px-4 py-3 font-medium">Agent</th>
-                <th scope="col" className="px-4 py-3 font-medium text-right">Earnings (30d)</th>
+                <th scope="col" className="px-4 py-3 font-medium text-right">Earnings</th>
                 <th scope="col" className="px-4 py-3 font-medium text-right">Payers</th>
                 <th scope="col" className="px-4 py-3 font-medium text-right">Latest</th>
               </tr>
@@ -197,10 +196,10 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                   <td className="px-4 py-3 text-white/70">#{idx + 1}</td>
                   <td className="px-4 py-3"><AgentCell row={row} /></td>
                   <td className="px-4 py-3 text-right font-semibold text-white">
-                    {formatUsd(row.earnings30dUsd)}
+                    {formatUsd(row.earningsUsd)}
                   </td>
                   <td className="px-4 py-3 text-right text-white/70">
-                    {row.uniquePayers30d > 0 ? row.uniquePayers30d : "—"}
+                    {row.uniquePayers > 0 ? row.uniquePayers : "—"}
                   </td>
                   <td className="px-4 py-3 text-right text-white/50">
                     {row.latestAt > 0
@@ -240,14 +239,14 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center gap-2">
                     <span className="truncate font-medium text-white">{rowDisplayName(row)}</span>
-                    <ClubBadge lifetimeUsd={row.earningsLifetimeUsd} />
+                    <ClubBadge lifetimeUsd={row.earningsUsd} />
                   </div>
                   <div className="truncate font-mono text-[11px] text-white/40">
                     {truncateAddress(row.stxAddress)}
                   </div>
                   <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/50">
-                    {row.uniquePayers30d > 0 && (
-                      <span>{row.uniquePayers30d} payer{row.uniquePayers30d === 1 ? "" : "s"}</span>
+                    {row.uniquePayers > 0 && (
+                      <span>{row.uniquePayers} payer{row.uniquePayers === 1 ? "" : "s"}</span>
                     )}
                     <span>
                       {row.latestAt > 0
@@ -257,8 +256,8 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                   </div>
                 </div>
                 <div className="shrink-0 text-right">
-                  <div className="font-semibold text-white">{formatUsd(row.earnings30dUsd)}</div>
-                  <div className="text-[10px] uppercase tracking-wide text-white/30">30d</div>
+                  <div className="font-semibold text-white">{formatUsd(row.earningsUsd)}</div>
+                  <div className="text-[10px] uppercase tracking-wide text-white/30">total</div>
                 </div>
               </div>
             );

@@ -15,8 +15,10 @@ const LEADERBOARD_SIZE = 100;
 const CACHE_TTL_SECONDS = 3600; // 1h — platform aggregate + ranking change slowly.
 const WINDOWS: ReadonlySet<EarningsWindow> = new Set(["7d", "30d", "lifetime"]);
 
+// Default to lifetime so the public ranking matches the /leaderboard UI, which
+// ranks by total verified earnings since each agent joined.
 function parseWindow(raw: string | null): EarningsWindow {
-  return raw && WINDOWS.has(raw as EarningsWindow) ? (raw as EarningsWindow) : "30d";
+  return raw && WINDOWS.has(raw as EarningsWindow) ? (raw as EarningsWindow) : "lifetime";
 }
 
 function selfDoc() {
@@ -26,10 +28,11 @@ function selfDoc() {
       method: "GET",
       description:
         "Platform-wide verified earnings: total USD earned by all agents over 7d/30d/lifetime, " +
-        "a 30d breakdown by source class, and the top agents ranked by earnings in the chosen window.",
+        "a 30d breakdown by source class, and the top agents ranked by total earnings since they joined " +
+        "(matching the /leaderboard UI). Self-dealing (self-funded / ring) and unclassified inflows are excluded.",
       queryParameters: {
         window:
-          "Leaderboard ranking window: 7d | 30d | lifetime (default 30d). Platform totals always include all three.",
+          "Leaderboard ranking window: 7d | 30d | lifetime (default lifetime — total since join). Platform totals always include all three.",
       },
       responseFormat: {
         platform: {

@@ -113,6 +113,45 @@ export interface SourceBreakdownEntry {
   total_usd: number;
 }
 
+export interface AgentEarningsBreakdown {
+  /** Counted (is_earning=1) verified earnings split by source, since join. */
+  by_source: SourceBreakdownEntry[];
+  /** Total inbound that was NOT counted (is_earning=0): self-funding, rings,
+   *  exchange/external, unclassified. Surfaced for transparency. */
+  excluded_usd: number;
+}
+
+/**
+ * Per-agent transparency breakdown: verified earnings split by source, plus the
+ * total inbound we deliberately excluded (self-dealing / unclassified). Two
+ * cheap reads over the agent's own partition — overlap them.
+ */
+export async function getAgentEarningsBreakdown(
+  db: D1Database,
+  stxAddress: string
+): Promise<AgentEarningsBreakdown> {
+  const [bySource, excluded] = await Promise.all([
+    db
+      .prepare(
+        `SELECT source_class, COALESCE(SUM(amount_usd), 0) AS total_usd
+         FROM agent_earnings
+         WHERE recipient_agent_stx = ?1 AND is_earning = 1
+         GROUP BY source_class HAVING total_usd > 0 ORDER BY total_usd DESC`
+      )
+      .bind(stxAddress)
+      .all<SourceBreakdownEntry>(),
+    db
+      .prepare(
+        `SELECT COALESCE(SUM(amount_usd), 0) AS usd
+         FROM agent_earnings
+         WHERE recipient_agent_stx = ?1 AND is_earning = 0`
+      )
+      .bind(stxAddress)
+      .first<{ usd: number }>(),
+  ]);
+  return { by_source: bySource.results ?? [], excluded_usd: excluded?.usd ?? 0 };
+}
+
 export interface PlatformEarnings {
   total_7d_usd: number;
   total_30d_usd: number;
@@ -174,41 +213,40 @@ export interface EarningsBoardRow {
   display_name: string | null;
   bns_name: string | null;
   erc8004_agent_id: number | null;
-  earnings_30d_usd: number;
-  earnings_lifetime_usd: number;
-  unique_payers_30d: number;
+  /** Total verified earnings (USD) since the agent joined — the indexer floors
+   *  at verified_at, so "lifetime" in the ledger == "since join". */
+  earnings_total_usd: number;
+  /** Distinct paying counterparties over the agent's whole history. */
+  unique_payers: number;
   latest_at: number | null;
 }
 
 /**
- * The earnings leaderboard board: every agent with lifetime earnings > 0, with
- * BOTH the 30d total (the ranking metric) and lifetime (for the Club tier
- * badge), unique 30d payers, latest activity, and agent metadata — in one
- * index-served scan. Ranked by 30d earnings desc. Behind the board's edge cache.
+ * The earnings leaderboard: every agent with verified earnings > 0, ranked by
+ * TOTAL verified earnings since they joined aibtc (the ledger only contains
+ * post-join rows, so the lifetime SUM == since-join). One index-served scan
+ * (migration 022 partial index). Behind the board's edge cache.
  */
 export async function getEarningsBoard(
   db: D1Database,
-  now: number,
   limit: number
 ): Promise<EarningsBoardRow[]> {
-  const thirtyAgo = windowStart("30d", now);
   const res = await db
     .prepare(
       `SELECT e.recipient_agent_stx AS stx_address, a.btc_address, a.display_name,
               a.bns_name, a.erc8004_agent_id,
-              COALESCE(SUM(CASE WHEN e.block_time >= ?1 THEN e.amount_usd END), 0) AS earnings_30d_usd,
-              COALESCE(SUM(e.amount_usd), 0) AS earnings_lifetime_usd,
-              COUNT(DISTINCT CASE WHEN e.block_time >= ?1 THEN e.sender_stx END) AS unique_payers_30d,
+              COALESCE(SUM(e.amount_usd), 0) AS earnings_total_usd,
+              COUNT(DISTINCT e.sender_stx) AS unique_payers,
               MAX(e.block_time) AS latest_at
        FROM agent_earnings e
        LEFT JOIN agents a ON a.stx_address = e.recipient_agent_stx
        WHERE e.is_earning = 1
        GROUP BY e.recipient_agent_stx
-       HAVING earnings_lifetime_usd > 0
-       ORDER BY earnings_30d_usd DESC, earnings_lifetime_usd DESC, latest_at DESC
-       LIMIT ?2`
+       HAVING earnings_total_usd > 0
+       ORDER BY earnings_total_usd DESC, latest_at DESC
+       LIMIT ?1`
     )
-    .bind(thirtyAgo, limit)
+    .bind(limit)
     .all<EarningsBoardRow>();
   return res.results ?? [];
 }
