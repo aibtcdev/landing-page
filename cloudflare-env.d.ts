@@ -22,11 +22,9 @@ interface CloudflareEnv {
   X402_RELAY?: import("./lib/inbox/relay-rpc").RelayRPC; // x402 sponsor relay RPC service binding (undefined in local dev)
   INBOX_RECONCILIATION_QUEUE?: Queue<import("./lib/inbox/reconciliation-queue").InboxReconciliationQueueMessage>;
   // Scheduled background work runs from a Cloudflare Cron Trigger (see
-  // worker.ts `scheduled()` + lib/scheduler/cron-runner.ts). The SchedulerDO
-  // binding is retained but neutered — the class can't be deleted on the
-  // versioned-upload deploy path (CF error 10211) — and nothing in the app
-  // calls it, so it has no RPC surface. Declared as a plain namespace.
-  SCHEDULER?: DurableObjectNamespace;
+  // worker.ts `scheduled()` + lib/scheduler/cron-runner.ts), not a Durable
+  // Object — SchedulerDO is removed (v4 deleted_classes migration), so there
+  // is no SCHEDULER binding.
   TENERO_REFRESH_ENABLED?: "true"; // Explicit production-only gate for the cron Tenero refresh
   TENERO_API_KEY?: string; // Optional Tenero API key (x-api-key header); raises rate limits above the shared web-ui-ip tier
 }

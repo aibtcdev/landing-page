@@ -110,21 +110,25 @@
   "triggers": {
     "crons": ["*/5 * * * *"]
   },
-  // SchedulerDO is RETAINED but neutered (see worker.ts). It no longer drives
-  // any work — the cron trigger above does — but the class + binding stay so
-  // that NO Durable Object migration is applied on deploy. A `deleted_classes`
-  // migration is rejected on the versioned-upload deploy path the CI uses
-  // (Cloudflare error 10211). Full teardown can land later via a one-off
-  // non-versioned `wrangler deploy` that adds a v4 deleted_classes tag.
+  // SchedulerDO fully removed — the cron trigger above drives all scheduled
+  // work. The v4 deleted_classes migration tears down the Durable Object and
+  // its storage; the binding is removed (empty array). Earlier tags are kept
+  // because wrangler needs the full applied history.
+  //
+  // DEPLOY NOTE: DO migrations only apply on the NON-VERSIONED deploy path
+  // (`wrangler deploy`), which is what the production (main) Cloudflare Workers
+  // Build runs — so this lands automatically on merge to main. The per-PR
+  // preview build (`wrangler versions upload`) rejects DO migrations
+  // (Cloudflare error 10211), so this branch's preview check shows red by
+  // design; it does not affect the production deploy.
   "durable_objects": {
-    "bindings": [
-      { "name": "SCHEDULER", "class_name": "SchedulerDO" }
-    ]
+    "bindings": []
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
     { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
-    { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
+    { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] },
+    { "tag": "v4", "deleted_classes": ["SchedulerDO"] }
   ],
 
   /**
@@ -230,17 +234,16 @@
       "triggers": {
         "crons": ["*/5 * * * *"]
       },
-      // SchedulerDO retained but neutered — see top-level note. No DO
-      // migration is applied so the versioned-upload deploy path succeeds.
+      // SchedulerDO fully removed — see top-level note. Applies on the
+      // production (main) non-versioned deploy.
       "durable_objects": {
-        "bindings": [
-          { "name": "SCHEDULER", "class_name": "SchedulerDO" }
-        ]
+        "bindings": []
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
         { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
-        { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
+        { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] },
+        { "tag": "v4", "deleted_classes": ["SchedulerDO"] }
       ]
     },
 
