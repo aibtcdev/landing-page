@@ -120,9 +120,10 @@ async function rebuildLeaderboard(
 
   let board: Awaited<ReturnType<typeof getEarningsBoard>> = [];
   try {
-    // One index-served scan (migration 022 partial index). Already ranked by
-    // total earnings (since join) desc; capped at top 500.
-    board = await getEarningsBoard(db, 500);
+    // One index-served scan (migration 022 partial index), ranked by total
+    // earnings (since join) desc. 5000 is a safety backstop above the
+    // registered-agent ceiling — every earner is loaded; the client paginates.
+    board = await getEarningsBoard(db, 5000);
   } catch {
     return [];
   }
@@ -176,9 +177,9 @@ async function writeLeaderboardCache(
 export default async function LeaderboardPage() {
   const rows = await fetchLeaderboard();
 
-  // Platform total = sum of every earner on the board. The board holds all
-  // earners (top 500; far above the current count), so this is the full
-  // verified total earned across all agents since they joined.
+  // Platform total = sum of every earner on the board. The board holds ALL
+  // earners (5000 backstop, above the agent-count ceiling), so this is the
+  // exact verified total earned across all agents since they joined.
   const totalUsd = rows.reduce((sum, r) => sum + r.earningsUsd, 0);
   const earnerCount = rows.length;
   const totalLabel = `$${totalUsd.toLocaleString("en-US", {

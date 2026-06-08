@@ -23,6 +23,9 @@ interface SortState {
 
 const DEFAULT_SORT: SortState = { key: "earnings", dir: "desc" };
 
+/** Rows per page — keeps the rendered DOM light even with hundreds of earners. */
+const PAGE_SIZE = 50;
+
 const SORT_OPTIONS: readonly { key: SortKey; label: string }[] = [
   { key: "earnings", label: "Earnings" },
   { key: "payers", label: "Payers" },
@@ -103,8 +106,10 @@ function AgentCell({ row }: { row: LeaderboardRow }) {
 
 export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) {
   const [sort, setSort] = useState<SortState>(DEFAULT_SORT);
+  const [page, setPage] = useState(0);
 
   const cycleSort = useCallback((key: SortKey) => {
+    setPage(0); // re-sorting changes the ordering — jump back to the first page
     setSort((prev) =>
       prev.key === key
         ? { key, dir: prev.dir === "desc" ? "asc" : "desc" }
@@ -135,6 +140,11 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
     });
     return copy;
   }, [rows, sort, valueOf]);
+
+  const pageCount = Math.max(1, Math.ceil(sortedRows.length / PAGE_SIZE));
+  const safePage = Math.min(page, pageCount - 1); // clamp if data shrank
+  const pageStart = safePage * PAGE_SIZE;
+  const pageRows = sortedRows.slice(pageStart, pageStart + PAGE_SIZE);
 
   if (rows.length === 0) {
     return (
@@ -188,12 +198,12 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
               </tr>
             </thead>
             <tbody>
-              {sortedRows.map((row, idx) => (
+              {pageRows.map((row, idx) => (
                 <tr
                   key={row.stxAddress}
                   className="border-b border-white/[0.04] last:border-b-0 transition-colors hover:bg-white/[0.03]"
                 >
-                  <td className="px-4 py-3 text-white/70">#{idx + 1}</td>
+                  <td className="px-4 py-3 text-white/70">#{pageStart + idx + 1}</td>
                   <td className="px-4 py-3"><AgentCell row={row} /></td>
                   <td className="px-4 py-3 text-right font-semibold text-white">
                     {formatUsd(row.earningsUsd)}
@@ -214,7 +224,7 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
 
         {/* Mobile list */}
         <ul className="md:hidden divide-y divide-white/[0.04]">
-          {sortedRows.map((row, idx) => {
+          {pageRows.map((row, idx) => {
             const inner = (
               <div className="flex items-start gap-3 px-4 py-3">
                 <div className="relative shrink-0">
@@ -233,7 +243,7 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
                     <div className="h-10 w-10 rounded-full bg-white/[0.06]" aria-hidden="true" />
                   )}
                   <span className="absolute -bottom-1 -right-1 inline-flex size-5 items-center justify-center rounded-full border border-[rgba(15,15,15,0.95)] bg-white/[0.08] text-[10px] font-medium text-white/70">
-                    {idx + 1}
+                    {pageStart + idx + 1}
                   </span>
                 </div>
                 <div className="min-w-0 flex-1">
@@ -273,6 +283,35 @@ export default function LeaderboardClient({ rows }: { rows: LeaderboardRow[] }) 
           })}
         </ul>
       </div>
+
+      {pageCount > 1 && (
+        <div className="mt-4 flex items-center justify-between gap-3 text-sm">
+          <span className="text-white/40">
+            {pageStart + 1}–{pageStart + pageRows.length} of {sortedRows.length} agents
+          </span>
+          <div className="flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+              disabled={safePage === 0}
+              className="rounded-md border border-white/[0.1] px-3 py-1.5 text-white/70 transition-colors hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-white/[0.1]"
+            >
+              ← Prev
+            </button>
+            <span className="tabular-nums text-white/50">
+              Page {safePage + 1} / {pageCount}
+            </span>
+            <button
+              type="button"
+              onClick={() => setPage((p) => Math.min(pageCount - 1, p + 1))}
+              disabled={safePage >= pageCount - 1}
+              className="rounded-md border border-white/[0.1] px-3 py-1.5 text-white/70 transition-colors hover:border-white/25 hover:text-white disabled:cursor-not-allowed disabled:opacity-30 disabled:hover:border-white/[0.1]"
+            >
+              Next →
+            </button>
+          </div>
+        </div>
+      )}
     </>
   );
 }
