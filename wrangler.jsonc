@@ -51,7 +51,11 @@
   // build cannot accidentally consume the production Tenero quota.
   "vars": {
     "DEPLOY_ENV": "production",
-    "TENERO_REFRESH_ENABLED": "true"
+    "TENERO_REFRESH_ENABLED": "true",
+    // Enables the 30-min earnings indexer cron sweep (issue #978). Ships off;
+    // flip to "true" to start indexing. env.preview omits it so a preview build
+    // never indexes against the shared production D1 / Hiro quota.
+    "EARNINGS_INDEX_ENABLED": "true"
   },
   // First-party rate limit bindings. Mirrors the agent-news pattern (agent-news#704/#705).
   // Top-level IDs are the local-dev defaults — they are overridden in each named env
@@ -151,7 +155,8 @@
       // rate-limit binding error handling (env.DEPLOY_ENV !== undefined → fail closed).
       "vars": {
         "DEPLOY_ENV": "production",
-        "TENERO_REFRESH_ENABLED": "true"
+        "TENERO_REFRESH_ENABLED": "true",
+        "EARNINGS_INDEX_ENABLED": "true"
       },
 
       "assets": {
