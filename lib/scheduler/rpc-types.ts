@@ -1,3 +1,7 @@
+// Shared scheduler types. Formerly also declared the SchedulerDO RPC
+// interface; the DO was retired in favour of a Cloudflare Cron Trigger
+// (see lib/scheduler/cron-runner.ts). These shapes are still the contract
+// for the admin status/refresh endpoint.
 import type { TeneroRunResult } from "./tenero-task";
 import type { CompetitionSchedulerSummary } from "../competition/scheduler";
 
@@ -12,17 +16,12 @@ export interface SchedulerStatus {
   lastCompetitionResult: CompetitionSchedulerSummary | null;
   consecutiveFailures: { tenero: number; competition: number };
   nextRunAfter: { tenero: number | null; competition: number | null };
+  // Always null under cron scheduling (no self-scheduled DO alarm); kept
+  // for status-shape stability.
   nextAlarmAt: number | null;
 }
 
 export interface SchedulerRefreshResult {
   tenero?: TeneroRunResult;
   competition?: CompetitionSchedulerSummary;
-}
-
-export interface SchedulerRpc {
-  status(): Promise<SchedulerStatus>;
-  refreshNow(task: SchedulerTask): Promise<SchedulerRefreshResult>;
-  pauseUntil(timestamp: number): Promise<void>;
-  resume(): Promise<void>;
 }

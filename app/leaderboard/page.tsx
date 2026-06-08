@@ -7,17 +7,15 @@ import CompetitionCountdown from "./CompetitionCountdown";
 import { COMP_START_TIMESTAMP } from "@/lib/competition/constants";
 import { LEADERBOARD_AGGREGATE_SQL } from "@/lib/competition/leaderboard-query";
 
-// Reads live Cloudflare bindings (D1, SchedulerDO). Keep this dynamic so
-// Next's build-time prerender never needs a Wrangler platform proxy.
+// Reads live Cloudflare bindings (D1). Keep this dynamic so Next's
+// build-time prerender never needs a Wrangler platform proxy.
 // USD prices + token decimals are fetched client-side from Tenero — this
 // path no longer hardcodes a decimals map or reads the KV price cache.
 export const dynamic = "force-dynamic";
 
-const SCHEDULER_INSTANCE_NAME = "v2";
-
 /**
- * Leaderboard SSR cache TTL — 5 minutes. Matches the scheduler's
- * ALARM_TICK_MS / TENERO_INTERVAL_MS = 5*60*1000 (`worker.ts:55,57`).
+ * Leaderboard SSR cache TTL — 5 minutes. Matches the cron scheduler's
+ * Tenero refresh cadence (TENERO_INTERVAL_MS = 5*60*1000).
  * Competition sweep cadence is 15min (`COMPETITION_INTERVAL_MS`) so
  * 5-min TTL is more responsive than the slowest data path; chainhook
  * can deliver between sweeps and that surfaces on the next rebuild.
@@ -123,29 +121,9 @@ async function fetchLeaderboard(): Promise<LeaderboardRow[]> {
   const { env, ctx } = await getCloudflareContext();
   const db = env.DB as D1Database | undefined;
 
-  // Opportunistic SchedulerDO kick — runs on EVERY visit, including
-  // cache hits, because a DO instance doesn't exist until something
-  // calls a method on it. Skipping the kick on cache hits would let
-  // alarm re-arming/recovery stall for up to the cache TTL after a DO
-  // reset or deploy (Codex PR #891 feedback). Idempotent on warm DOs.
-  // ctx may be undefined in non-Workers test runtimes — the catch
-  // below handles that path.
-  try {
-    if (env.SCHEDULER) {
-      const kick = env.SCHEDULER.get(env.SCHEDULER.idFromName(SCHEDULER_INSTANCE_NAME))
-        .status()
-        .then(() => undefined)
-        .catch(() => undefined);
-      if (ctx?.waitUntil) {
-        ctx.waitUntil(kick);
-      } else {
-        // No ctx (test runtime) — drop the kick rather than block the response.
-        void kick;
-      }
-    }
-  } catch {
-    // Binding access threw — render proceeds without the kick.
-  }
+  // Scheduler liveness no longer depends on this page: periodic work runs
+  // from a Cloudflare Cron Trigger (worker.ts `scheduled()`), so there is
+  // no DO to opportunistically kick on render.
 
   // P3B cache layer — short-circuit the LEADERBOARD_AGGREGATE_SQL scan +
   // per-sender rollup on cache hit. The cache is *data-level*, not
