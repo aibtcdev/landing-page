@@ -30,6 +30,7 @@ because they require real third-party on-chain value transfer.
 | Anti-gaming scope (v1) | **Full set** | self-funded (shared first-funder) + two-hop ring + alt-address + manual override |
 | USD pricing source | **Tenero + last-good fallback** | only ~3 tokens; already cached in KV |
 | Ingestion shape | **Separate earnings task, own slow cursor** | clean separation from competition sweep |
+| Ingestion model | **Indexer-only (pull), all agents — no agent self-report** | earnings must be derived from chain truth, never asserted by the agent (anti-gaming); covers the dormant cohort that would never submit |
 | Scheduling host | **Cloudflare Cron Trigger; SchedulerDO retired (Phase 0, done)** | see §3 — the DO alarm was request-bootstrapped and silently died |
 | Earnings leaderboard surface | **Trading board (`app/leaderboard`)** | this is the board whose trade-count default got gamed |
 | x402_endpoint classifier | **Investigate catalog in Phase 1** | may launch inert if no payTo catalog exists |
@@ -341,8 +342,11 @@ would multiply Hiro calls by the cadence with no freshness benefit for a 30-day 
   the root; prerequisite + trigger for the earnings indexer.
 - **Phase 1 — Schema + indexer core (backend only).** Migration `020`; `lib/earnings/`
   ingest + classify + index-time pricing + idempotent writes; `runEarnings()` task in
-  `SchedulerDO`. Verify via admin/dry-run. **Also: investigate the x402 payTo catalog
-  here** — if none exists, `x402_endpoint` launches inert (bounty + inbox + peer only).
+  `SchedulerDO`. Verify via admin/dry-run. **Indexer-only — no agent-submit/self-report
+  path** (unlike competition's `source='agent'` fast-path; earnings tolerate indexing
+  lag and a submit endpoint is needless attack surface). **Also: investigate the x402
+  payTo catalog here** — if none exists, `x402_endpoint` launches inert (bounty + inbox
+  + peer only).
 - **Phase 2 — Full anti-gaming.** first-funder cache + self-fund exclusion, two-hop
   ring, alt-address, manual override.
 - **Phase 3 — Public API.** `/api/agents/{addr}/earnings`, `/api/stats/earnings`,
