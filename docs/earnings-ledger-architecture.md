@@ -67,19 +67,30 @@ DO-independent and the competition cursor already lives in D1, so the DO only he
 
 - `wrangler.jsonc`: `"triggers": { "crons": ["*/5 * * * *"] }` in top-level **and**
   `env.production` (crons are not inherited by named envs); **omitted** in
-  `env.preview` so preview never runs schedulers against shared prod quota. DO
-  binding emptied + `v4 deleted_classes` migration tears the class down.
-- `worker.ts`: `scheduled(event, env, ctx)` → `runScheduledTasks(env, logger)`.
+  `env.preview` so preview never runs schedulers against shared prod quota.
+- `worker.ts`: `scheduled(event, env, ctx)` → `runScheduledTasks(env, logger)`. The
+  `SchedulerDO` class is **retained but neutered** (no-op `alarm()` that does not
+  re-arm) rather than deleted — see the deploy-path note below.
 - `lib/scheduler/cron-runner.ts`: Tenero every tick (respecting rate-limit backoff),
   competition on its 15-min cadence; KV-backed status/pause/resume.
 - `app/leaderboard/page.tsx`: the per-render DO poke is **removed**.
 - `app/api/admin/scheduler/route.ts`: rewired from DO RPC to the KV state helpers.
 
-Why cron-only beats a DO heartbeat: a heartbeat still keeps the fragile DO in the
-loop. Cron-only removes the DO (and its delete/recreate migration footguns + its
-duration GB-s billing) and makes the trigger Cloudflare-guaranteed, independent of
+**Deploy-path constraint (why the DO is neutered, not deleted):** a `deleted_classes`
+Durable Object migration is rejected on the **versioned-upload** deploy path the CI
+uses (`wrangler versions upload` → Cloudflare error 10211; DO migrations require a
+non-versioned `wrangler deploy`). So this PR keeps the class + its existing
+binding/migration history (v1/v2/v3) — no migration is applied, CI deploys cleanly —
+and neuters the class so any alarm still armed from the DO era drains on its next fire
+instead of double-running with the cron. Nothing in the app pokes the DO anymore, so
+it is never re-instantiated after that drain. Full teardown (a `v4 deleted_classes`
+tag) is a deferred one-off non-versioned `wrangler deploy`.
+
+Why cron beats a DO heartbeat: a heartbeat still keeps the fragile DO in the driving
+loop. Driving from cron makes the trigger Cloudflare-guaranteed, independent of
 `/leaderboard` traffic — fixing the exact "I thought the scheduler is not running"
-failure at the root.
+failure at the root — while the neutered DO sits idle (never re-instantiated) until a
+later non-versioned deploy removes it.
 
 **Concurrency note (verified limit):** Cloudflare caps **6 simultaneous outgoing
 connections** waiting for response headers (both plans). Any sliced fan-out (the
@@ -323,8 +334,11 @@ Cost-relevant facts confirmed from the docs:
 - **Subrequest cap: 10,000/invocation on Paid** (50 on Free) — huge headroom.
 - **6 simultaneous outgoing connections** waiting for headers — the real concurrency
   limit; keep Hiro fan-out ≤5.
-- **Retiring the DO is net cost-negative:** ends its duration billing (400k GB-s incl,
-  then $12.50/M) and the per-`/leaderboard`-view DO request charges.
+- **Neutering the DO is net cost-negative:** the per-`/leaderboard`-view DO request
+  charge is removed outright, and the neutered DO is never re-instantiated after its
+  legacy alarm drains, so its duration billing (400k GB-s incl, then $12.50/M) drops
+  to ~0. The remaining small storage line is reclaimed when the deferred non-versioned
+  deploy formally deletes the class.
 - The only surface that scales with growth is **D1 rows-read on aggregation**; gated by
   the 1h `caches.default` layer + `(is_earning, block_time)` index, with a precomputed
   `agent_earnings_agg` table as the escape hatch (25B/mo included → vast headroom).

@@ -110,18 +110,21 @@
   "triggers": {
     "crons": ["*/5 * * * *"]
   },
-  // SchedulerDO retired. The v4 deleted_classes migration tears down the
-  // Durable Object and its storage; the binding is removed (empty array).
-  // Earlier tags are kept because wrangler needs the full applied history
-  // to deploy without errors.
+  // SchedulerDO is RETAINED but neutered (see worker.ts). It no longer drives
+  // any work — the cron trigger above does — but the class + binding stay so
+  // that NO Durable Object migration is applied on deploy. A `deleted_classes`
+  // migration is rejected on the versioned-upload deploy path the CI uses
+  // (Cloudflare error 10211). Full teardown can land later via a one-off
+  // non-versioned `wrangler deploy` that adds a v4 deleted_classes tag.
   "durable_objects": {
-    "bindings": []
+    "bindings": [
+      { "name": "SCHEDULER", "class_name": "SchedulerDO" }
+    ]
   },
   "migrations": [
     { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
     { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
-    { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] },
-    { "tag": "v4", "deleted_classes": ["SchedulerDO"] }
+    { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
   ],
 
   /**
@@ -227,16 +230,17 @@
       "triggers": {
         "crons": ["*/5 * * * *"]
       },
-      // SchedulerDO retired — see top-level note. Empty bindings + v4
-      // deleted_classes migration.
+      // SchedulerDO retained but neutered — see top-level note. No DO
+      // migration is applied so the versioned-upload deploy path succeeds.
       "durable_objects": {
-        "bindings": []
+        "bindings": [
+          { "name": "SCHEDULER", "class_name": "SchedulerDO" }
+        ]
       },
       "migrations": [
         { "tag": "v1", "new_sqlite_classes": ["SchedulerDO"] },
         { "tag": "v2", "deleted_classes": ["SchedulerDO"] },
-        { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] },
-        { "tag": "v4", "deleted_classes": ["SchedulerDO"] }
+        { "tag": "v3", "new_sqlite_classes": ["SchedulerDO"] }
       ]
     },
 
