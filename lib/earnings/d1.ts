@@ -139,18 +139,30 @@ export async function setEarningsCursor(
     .run();
 }
 
-/** Next page of agent STX addresses, ordered by stx_address for stable cursoring. */
+export interface AgentPageRow {
+  stxAddress: string;
+  /** Registration time as unix seconds — the earnings floor (0 if unknown). */
+  verifiedAtSec: number;
+}
+
+/** Next page of agents (stx + registration time), ordered by stx_address. */
 export async function fetchAgentPage(
   db: D1Database,
   cursor: string | null,
   limit: number
-): Promise<string[]> {
+): Promise<AgentPageRow[]> {
   const sql = cursor
-    ? `SELECT stx_address FROM registered_wallets WHERE stx_address > ?1 ORDER BY stx_address ASC LIMIT ?2`
-    : `SELECT stx_address FROM registered_wallets ORDER BY stx_address ASC LIMIT ?1`;
+    ? `SELECT stx_address, verified_at FROM registered_wallets WHERE stx_address > ?1 ORDER BY stx_address ASC LIMIT ?2`
+    : `SELECT stx_address, verified_at FROM registered_wallets ORDER BY stx_address ASC LIMIT ?1`;
   const stmt = cursor
     ? db.prepare(sql).bind(cursor, limit)
     : db.prepare(sql).bind(limit);
-  const res = await stmt.all<{ stx_address: string }>();
-  return (res.results ?? []).map((r) => r.stx_address);
+  const res = await stmt.all<{ stx_address: string; verified_at: string | null }>();
+  return (res.results ?? []).map((r) => ({
+    stxAddress: r.stx_address,
+    // ISO-8601 → unix seconds; 0 (no floor → all-time) if missing/unparseable.
+    verifiedAtSec: r.verified_at
+      ? Math.floor(Date.parse(r.verified_at) / 1000) || 0
+      : 0,
+  }));
 }
