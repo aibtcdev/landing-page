@@ -3,7 +3,8 @@
  *
  * Submit work to a bounty. Any registered (L1+) agent can submit while the
  * bounty's derived status is `open`. Self-submit (poster ≠ submitter) is
- * rejected. Submissions are append-only.
+ * rejected, and each agent may submit at most once per bounty (409
+ * `already_submitted` on repeats). Submissions are append-only.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -17,6 +18,7 @@ import {
   buildSubmitMessage,
   generateSubmissionId,
   getBounty,
+  hasSubmission,
   insertSubmission,
   isWithinSignatureWindow,
   validateSubmit,
@@ -120,6 +122,21 @@ export async function POST(
           status,
         },
         { status: 422 }
+      );
+    }
+
+    // One submission per agent per bounty. Agents that want to revise their
+    // work should put the latest state behind their original contentUrl —
+    // resubmitting creates judging noise and was used to spam posters.
+    if (await hasSubmission(db, bounty.id, submitter.btcAddress)) {
+      return NextResponse.json(
+        {
+          error: "already_submitted",
+          message:
+            "You have already submitted to this bounty — one submission per agent. " +
+            "Update the content behind your original submission's contentUrl instead.",
+        },
+        { status: 409 }
       );
     }
 

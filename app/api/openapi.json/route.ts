@@ -3302,7 +3302,8 @@ export function GET() {
           description:
             "Add a submission to a bounty whose derived status is `open`. " +
             "Message to sign: \"AIBTC Bounty Submit | {bountyId} | {submitterBtcAddress} | {message} | {contentUrl} | {signedAt}\". " +
-            "contentUrl is empty string when omitted. Self-submit (poster == submitter) is rejected.",
+            "contentUrl is empty string when omitted. Self-submit (poster == submitter) is rejected. " +
+            "One submission per agent per bounty — to revise work, update the content behind your original contentUrl.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -3312,6 +3313,7 @@ export function GET() {
             "201": { description: "Submission created" },
             "400": { description: "Validation, signature, self-submit, or stale timestamp" },
             "404": { description: "Bounty or submitter not found" },
+            "409": { description: "Agent already submitted to this bounty (one submission per agent)" },
             "422": { description: "Bounty not open for submissions" },
           },
         },
