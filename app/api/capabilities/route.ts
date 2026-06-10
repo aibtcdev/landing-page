@@ -4,6 +4,13 @@ import type { AgentRecord } from "@/lib/types";
 import { normalizeAgentRecord } from "@/lib/agents";
 import { getAgentsIndex, type AgentIndexEntry } from "@/lib/agents-index";
 
+// Capability declarations change rarely (signed profile updates); an hour of
+// edge staleness is acceptable and collapses the per-request agents:index KV
+// read + per-agent record fan-out to once per TTL per colo. Mirrors the
+// /api/agents list cadence.
+const CACHE_CONTROL =
+  "public, max-age=300, s-maxage=3600, stale-while-revalidate=86400";
+
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
 
@@ -27,6 +34,8 @@ export async function GET(request: NextRequest) {
         filterByCapability: "/api/capabilities?capability=btc",
         paginateResults: "/api/capabilities?capability=defi&limit=10&offset=20",
       },
+    }, {
+      headers: { "Cache-Control": CACHE_CONTROL },
     });
   }
 
@@ -87,6 +96,8 @@ export async function GET(request: NextRequest) {
           offset,
           hasMore: offset + limit < matching.length,
         },
+      }, {
+        headers: { "Cache-Control": CACHE_CONTROL },
       });
     }
 
@@ -105,6 +116,8 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       capabilities: sorted,
       totalAgentsWithCapabilities: indexed.length,
+    }, {
+      headers: { "Cache-Control": CACHE_CONTROL },
     });
   } catch (err: unknown) {
     return NextResponse.json({ error: (err as Error).message }, { status: 500 });

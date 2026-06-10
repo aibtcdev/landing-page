@@ -12,7 +12,10 @@
  */
 
 import { fetchTokenPriceUsd } from "../external/tenero";
-import { setCachedTokenPrice } from "../external/tenero/kv-cache";
+import {
+  getCachedTokenPrice,
+  setCachedTokenPrice,
+} from "../external/tenero/kv-cache";
 import type { Logger } from "../logging";
 
 export interface TeneroRunResult {
@@ -52,6 +55,16 @@ export interface TeneroTaskOutcome {
 export const TENERO_MINUTE_QUOTA_BACKOFF_MS = 5 * 60 * 1000;
 export const TENERO_MONTH_QUOTA_BACKOFF_MS = 24 * 60 * 60 * 1000;
 
+/**
+ * Skip the KV rewrite when the fetched price equals the cached one and the
+ * cached entry is younger than this. KV writes are the tightest paid-plan
+ * quota (1M/mo; this task alone was ~458k/mo at 53 tokens × 5-min cadence)
+ * while the comparison read costs 10x less than the write it avoids. The
+ * periodic rewrite past this age keeps `fetchedAt` honest for readers and
+ * renews the 24h KV TTL safety net.
+ */
+export const TENERO_UNCHANGED_REWRITE_MS = 60 * 60 * 1000;
+
 export async function runTeneroTask(
   deps: TeneroTaskDeps
 ): Promise<TeneroTaskOutcome> {
@@ -80,12 +93,19 @@ export async function runTeneroTask(
       rateLimited = true;
     } else if (r.status === 200) {
       try {
-        await setCachedTokenPrice(kv, tokenId, {
-          priceUsd: r.priceUsd,
-          fetchedAt: now(),
-          minuteRemaining: r.rateLimit.minuteRemaining,
-          monthRemaining: r.rateLimit.monthRemaining,
-        });
+        const prev = await getCachedTokenPrice(kv, tokenId);
+        const unchanged =
+          prev !== null &&
+          prev.priceUsd === r.priceUsd &&
+          now() - prev.fetchedAt < TENERO_UNCHANGED_REWRITE_MS;
+        if (!unchanged) {
+          await setCachedTokenPrice(kv, tokenId, {
+            priceUsd: r.priceUsd,
+            fetchedAt: now(),
+            minuteRemaining: r.rateLimit.minuteRemaining,
+            monthRemaining: r.rateLimit.monthRemaining,
+          });
+        }
         succeeded++;
       } catch (error) {
         logger.warn("tenero.kv_write_failed", {

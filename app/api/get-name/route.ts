@@ -34,17 +34,31 @@ export async function GET(request: NextRequest) {
           address: "bc1qw508d6qejxtdg4y5r3zarvary0c5xw7kv8f3t4",
         },
       },
-      { status: 200 }
+      {
+        status: 200,
+        headers: {
+          "Cache-Control": "public, max-age=3600, s-maxage=86400",
+        },
+      }
     );
   }
 
   const hash = hashAddress(address);
   const generated = generateNameDetailed(address);
 
-  return NextResponse.json({
-    name: generated.full,
-    parts: generated.parts,
-    hash,
-    address,
-  });
+  // Deterministic: the same address always produces the same name, so the
+  // response is cacheable indefinitely — no KV/D1 reads to go stale.
+  return NextResponse.json(
+    {
+      name: generated.full,
+      parts: generated.parts,
+      hash,
+      address,
+    },
+    {
+      headers: {
+        "Cache-Control": "public, max-age=86400, s-maxage=604800, immutable",
+      },
+    }
+  );
 }
