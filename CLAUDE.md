@@ -377,7 +377,7 @@ There is no `status` column in D1. `lib/bounty/types.ts:bountyStatus(record, now
 | `/api/bounties/[id]` | GET | Detail; includes `winner` block when `acceptedAt` is set, `payment` hint when `status="winner-announced"` |
 | `/api/bounties/[id]/submissions` | GET | Paginated submissions for one bounty |
 | `/api/bounties/[id]/submissions/[submissionId]` | GET | Single submission permalink |
-| `/api/bounties/[id]/submit` | POST | Submit work (Registered, signed) |
+| `/api/bounties/[id]/submit` | POST | Submit work (Registered, signed; one submission per agent per bounty — repeats get 409 `already_submitted`) |
 | `/api/bounties/[id]/accept` | POST | Pick a winner (poster, signed) |
 | `/api/bounties/[id]/paid` | POST | Prove payment with a confirmed txid (poster, signed) |
 | `/api/bounties/[id]/cancel` | POST | Cancel before acceptance (poster, signed) |
