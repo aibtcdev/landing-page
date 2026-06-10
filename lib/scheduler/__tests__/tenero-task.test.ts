@@ -9,6 +9,7 @@ import {
 import {
   runTeneroTask,
   TENERO_MONTH_QUOTA_BACKOFF_MS,
+  TENERO_UNCHANGED_REWRITE_MS,
 } from "../tenero-task";
 
 /** Minimal logger double — captures events without console noise. */
@@ -166,6 +167,113 @@ describe("runTeneroTask", () => {
     expect(
       events.some((e) => e.msg === "tenero.price_stablecoin_fallback_used")
     ).toBe(true);
+  });
+
+  it("unchanged price with a fresh cache entry: skips the KV rewrite", async () => {
+    const { logger } = createCapturingLogger();
+    const { kv, puts, store } = createFakeKv();
+
+    const fixedNow = 1_715_000_000_000;
+    // Pre-seed a fresh cache entry with the same price the fetch returns.
+    store.set(
+      "tenero:price:stx",
+      JSON.stringify({
+        priceUsd: 1.85,
+        fetchedAt: fixedNow - 5 * 60 * 1000,
+        minuteRemaining: 99,
+        monthRemaining: 49_000,
+      })
+    );
+
+    globalThis.fetch = vi.fn(async () =>
+      teneroResponse(200, {
+        priceUsd: 1.85,
+        minuteRemaining: 99,
+        monthRemaining: 49_000,
+      })
+    ) as unknown as typeof fetch;
+
+    const { result } = await runTeneroTask({
+      logger,
+      kv,
+      tokenIds: ["stx"],
+      now: () => fixedNow,
+    });
+
+    expect(result.succeeded).toBe(1);
+    expect(result.failed).toBe(0);
+    expect(puts).toHaveLength(0);
+  });
+
+  it("unchanged price but stale cache entry: rewrites to renew TTL", async () => {
+    const { logger } = createCapturingLogger();
+    const { kv, puts, store } = createFakeKv();
+
+    const fixedNow = 1_715_000_000_000;
+    // Same price, but the entry is past the unchanged-rewrite window.
+    store.set(
+      "tenero:price:stx",
+      JSON.stringify({
+        priceUsd: 1.85,
+        fetchedAt: fixedNow - TENERO_UNCHANGED_REWRITE_MS - 1,
+        minuteRemaining: 99,
+        monthRemaining: 49_000,
+      })
+    );
+
+    globalThis.fetch = vi.fn(async () =>
+      teneroResponse(200, {
+        priceUsd: 1.85,
+        minuteRemaining: 99,
+        monthRemaining: 49_000,
+      })
+    ) as unknown as typeof fetch;
+
+    const { result } = await runTeneroTask({
+      logger,
+      kv,
+      tokenIds: ["stx"],
+      now: () => fixedNow,
+    });
+
+    expect(result.succeeded).toBe(1);
+    expect(puts).toHaveLength(1);
+    expect(JSON.parse(puts[0].value).fetchedAt).toBe(fixedNow);
+  });
+
+  it("changed price: rewrites even when the cache entry is fresh", async () => {
+    const { logger } = createCapturingLogger();
+    const { kv, puts, store } = createFakeKv();
+
+    const fixedNow = 1_715_000_000_000;
+    store.set(
+      "tenero:price:stx",
+      JSON.stringify({
+        priceUsd: 1.8,
+        fetchedAt: fixedNow - 5 * 60 * 1000,
+        minuteRemaining: 99,
+        monthRemaining: 49_000,
+      })
+    );
+
+    globalThis.fetch = vi.fn(async () =>
+      teneroResponse(200, {
+        priceUsd: 1.85,
+        minuteRemaining: 99,
+        monthRemaining: 49_000,
+      })
+    ) as unknown as typeof fetch;
+
+    const { result } = await runTeneroTask({
+      logger,
+      kv,
+      tokenIds: ["stx"],
+      now: () => fixedNow,
+    });
+
+    expect(result.succeeded).toBe(1);
+    expect(puts).toHaveLength(1);
+    expect(JSON.parse(puts[0].value).priceUsd).toBe(1.85);
   });
 
   it("5xx response: bumps `failed`, no KV write", async () => {
