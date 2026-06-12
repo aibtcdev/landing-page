@@ -497,6 +497,25 @@ export interface RebuildAddressResult {
  *
  * Idempotent: safe to call repeatedly. If counters are already correct,
  * `repaired` is false and before === after.
+ *
+ * ## SQL filter alignment with maintained counters
+ *
+ * The filters here mirror rebuildAllStats exactly — they are the single-address
+ * projection of the same aggregate queries:
+ *   - received: `is_reply = 0 AND to_btc_address = ?`  (matches bumpInboundStats call-site)
+ *   - sent:     `is_reply = 1 AND from_btc_address = ?` (matches bumpSentStats call-site)
+ *
+ * All three counters (received, unread, sent) are recomputed defensively —
+ * drift can affect any of them, not just unread. In the common case (issue #995)
+ * only unread drifts, but recount-all-3 is the right repair shape.
+ *
+ * ## Race window note
+ *
+ * The `before` snapshot is captured from agent_inbox_stats immediately before
+ * the live COUNT(*) queries run. A message arriving in that gap is counted in
+ * `after` but not in `before` — `repaired` may fire for what is actually new
+ * normal delivery activity. The repair itself is still correct; only the
+ * `repaired=true` diagnostic can be a false positive in that window.
  */
 export async function rebuildAddressStats(
   db: D1Database,
@@ -504,7 +523,7 @@ export async function rebuildAddressStats(
 ): Promise<RebuildAddressResult> {
   const now = new Date().toISOString();
 
-  // Read current stored values
+  // Read current stored values before repair
   const before = await getAgentInboxStats(db, btcAddress);
   const beforeSnapshot: AddressStatsSnapshot = {
     receivedCount: before.receivedCount,
@@ -512,34 +531,34 @@ export async function rebuildAddressStats(
     sentCount: before.sentCount,
   };
 
-  // Aggregate actual inbound counts (received + unread)
-  const inboundRow = await db
-    .prepare(
-      `SELECT
-         COUNT(*)                                   AS received_count,
-         COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread_count,
-         MAX(sent_at)                               AS last_message_at
-       FROM inbox_messages
-       WHERE is_reply = 0 AND to_btc_address = ?`
-    )
-    .bind(btcAddress)
-    .first<{
-      received_count: number;
-      unread_count: number;
-      last_message_at: string | null;
-    }>();
-
-  // Aggregate actual sent count
-  const sentRow = await db
-    .prepare(
-      `SELECT
-         COUNT(*)  AS sent_count,
-         MAX(sent_at) AS last_sent_at
-       FROM inbox_messages
-       WHERE is_reply = 1 AND from_btc_address = ?`
-    )
-    .bind(btcAddress)
-    .first<{ sent_count: number; last_sent_at: string | null }>();
+  // Aggregate actual inbound + sent counts in parallel — queries are independent
+  const [inboundRow, sentRow] = await Promise.all([
+    db
+      .prepare(
+        `SELECT
+           COUNT(*)                                   AS received_count,
+           COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread_count,
+           MAX(sent_at)                               AS last_message_at
+         FROM inbox_messages
+         WHERE is_reply = 0 AND to_btc_address = ?`
+      )
+      .bind(btcAddress)
+      .first<{
+        received_count: number;
+        unread_count: number;
+        last_message_at: string | null;
+      }>(),
+    db
+      .prepare(
+        `SELECT
+           COUNT(*)     AS sent_count,
+           MAX(sent_at) AS last_sent_at
+         FROM inbox_messages
+         WHERE is_reply = 1 AND from_btc_address = ?`
+      )
+      .bind(btcAddress)
+      .first<{ sent_count: number; last_sent_at: string | null }>(),
+  ]);
 
   const newReceived = inboundRow?.received_count ?? 0;
   const newUnread = inboundRow?.unread_count ?? 0;

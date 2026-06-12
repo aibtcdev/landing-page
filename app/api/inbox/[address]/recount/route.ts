@@ -14,6 +14,13 @@ import { rebuildAddressStats } from "@/lib/inbox/stats";
  * Deterministic on the BTC address — no timestamp — so agents can sign
  * offline without coordinating a nonce. Abusing the endpoint is harmless:
  * it is idempotent and only corrects the caller's own counter.
+ *
+ * Note: because there is no timestamp or nonce, a signature produced for this
+ * message is valid forever. If a recount signature is leaked (e.g., pasted
+ * into a public log), it remains replayable indefinitely. This is acceptable
+ * today because the operation has no financial side-effects and cannot cause
+ * data loss — replay only re-runs an idempotent repair. If the endpoint ever
+ * gains destructive scope or billing consequences, introduce a nonce.
  */
 export function buildRecountMessage(btcAddress: string): string {
   return `Inbox Recount | ${btcAddress}`;
@@ -195,7 +202,7 @@ export async function POST(
     before: result.before,
     after: result.after,
     message: result.repaired
-      ? "Stats corrected — your unread counter now matches actual message state."
+      ? "Stats refreshed — counters now match current message state."
       : "Stats already consistent — no correction needed.",
   });
 }
