@@ -6,7 +6,10 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { shouldFailClosed } from "@/lib/env";
 import { rebuildAddressStats } from "@/lib/inbox/stats";
+
+const RATE_LIMIT_RETRY_AFTER = 60;
 
 /**
  * Build the canonical message an agent must sign to authorize a recount.
@@ -62,6 +65,29 @@ export async function POST(
   const logger = isLogsRPC(env.LOGS)
     ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
     : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
+
+  // IP rate-limit — runs before lookupAgent + verifyBitcoinSignature (the
+  // expensive paths) so a leaked replayable sig can't drive D1 costs from one IP.
+  // Mirrors the inbox-mark-read rate-limit ordering in [messageId]/route.ts.
+  const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for");
+  if (ip) {
+    let ipLimited = false;
+    try {
+      const result = await (env.RATE_LIMIT_MUTATING as RateLimit).limit({ key: `inbox-recount:${ip}` });
+      ipLimited = !result.success;
+    } catch (err) {
+      const failClosed = shouldFailClosed(env);
+      logger.warn("inbox.recount.rate_limit_binding_error", { error: String(err), failClosed });
+      if (failClosed) ipLimited = true;
+    }
+    if (ipLimited) {
+      logger.warn("inbox.recount.rate_limited", { ip });
+      return NextResponse.json(
+        { error: "Too many requests from this IP. Slow down.", retryAfter: RATE_LIMIT_RETRY_AFTER },
+        { status: 429, headers: { "Retry-After": String(RATE_LIMIT_RETRY_AFTER) } }
+      );
+    }
+  }
 
   // D1 required — recount is a write operation
   if (!db) {
