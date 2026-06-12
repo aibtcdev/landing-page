@@ -466,3 +466,115 @@ export async function reconcileStats(
     samples,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Single-address repair
+// ---------------------------------------------------------------------------
+
+/** Snapshot of stats before/after a recount operation. */
+export interface AddressStatsSnapshot {
+  receivedCount: number;
+  unreadCount: number;
+  sentCount: number;
+}
+
+/** Result of rebuildAddressStats() — before/after values for the caller. */
+export interface RebuildAddressResult {
+  before: AddressStatsSnapshot;
+  after: AddressStatsSnapshot;
+  repaired: boolean;
+}
+
+/**
+ * Recompute stats for a single address from live inbox_messages rows and
+ * overwrite the agent_inbox_stats counter.
+ *
+ * Designed for the self-heal endpoint — callers have already authenticated
+ * ownership of the address before invoking this.
+ *
+ * Returns before/after snapshots so the caller can report the delta and
+ * determine whether any counters changed.
+ *
+ * Idempotent: safe to call repeatedly. If counters are already correct,
+ * `repaired` is false and before === after.
+ */
+export async function rebuildAddressStats(
+  db: D1Database,
+  btcAddress: string
+): Promise<RebuildAddressResult> {
+  const now = new Date().toISOString();
+
+  // Read current stored values
+  const before = await getAgentInboxStats(db, btcAddress);
+  const beforeSnapshot: AddressStatsSnapshot = {
+    receivedCount: before.receivedCount,
+    unreadCount: before.unreadCount,
+    sentCount: before.sentCount,
+  };
+
+  // Aggregate actual inbound counts (received + unread)
+  const inboundRow = await db
+    .prepare(
+      `SELECT
+         COUNT(*)                                   AS received_count,
+         COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread_count,
+         MAX(sent_at)                               AS last_message_at
+       FROM inbox_messages
+       WHERE is_reply = 0 AND to_btc_address = ?`
+    )
+    .bind(btcAddress)
+    .first<{
+      received_count: number;
+      unread_count: number;
+      last_message_at: string | null;
+    }>();
+
+  // Aggregate actual sent count
+  const sentRow = await db
+    .prepare(
+      `SELECT
+         COUNT(*)  AS sent_count,
+         MAX(sent_at) AS last_sent_at
+       FROM inbox_messages
+       WHERE is_reply = 1 AND from_btc_address = ?`
+    )
+    .bind(btcAddress)
+    .first<{ sent_count: number; last_sent_at: string | null }>();
+
+  const newReceived = inboundRow?.received_count ?? 0;
+  const newUnread = inboundRow?.unread_count ?? 0;
+  const newSent = sentRow?.sent_count ?? 0;
+  const lastMessageAt = inboundRow?.last_message_at ?? null;
+  const lastSentAt = sentRow?.last_sent_at ?? null;
+
+  // Upsert the corrected row
+  await db
+    .prepare(
+      `INSERT INTO agent_inbox_stats
+         (btc_address, received_count, unread_count, sent_count,
+          last_message_at, last_sent_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(btc_address) DO UPDATE SET
+         received_count  = excluded.received_count,
+         unread_count    = excluded.unread_count,
+         sent_count      = excluded.sent_count,
+         last_message_at = excluded.last_message_at,
+         last_sent_at    = excluded.last_sent_at,
+         updated_at      = excluded.updated_at`
+    )
+    .bind(btcAddress, newReceived, newUnread, newSent, lastMessageAt, lastSentAt, now)
+    .run();
+
+  const afterSnapshot: AddressStatsSnapshot = {
+    receivedCount: newReceived,
+    unreadCount: newUnread,
+    sentCount: newSent,
+  };
+
+  const repaired =
+    beforeSnapshot.unreadCount !== afterSnapshot.unreadCount ||
+    beforeSnapshot.receivedCount !== afterSnapshot.receivedCount ||
+    beforeSnapshot.sentCount !== afterSnapshot.sentCount;
+
+  return { before: beforeSnapshot, after: afterSnapshot, repaired };
+}
