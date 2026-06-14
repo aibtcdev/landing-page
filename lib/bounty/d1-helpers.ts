@@ -9,8 +9,9 @@
  * filter and compiles it to the matching SQL predicate via `statusToSql`.
  */
 
-import type { BountyRecord, BountyStatus, BountySubmission } from "./types";
+import type { BountyRecord, BountyStatus, BountySubmission, BountyWinnerRow } from "./types";
 import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "./constants";
+import { generateWinnerId } from "./id";
 
 // ---------------------------------------------------------------------------
 // Row shapes (snake_case as returned by D1) + mappers
@@ -26,6 +27,12 @@ interface D1BountyRow {
   submission_count: number;
   created_at: string;
   expires_at: string;
+  // Multi-winner fields (migration 023)
+  max_winners: number;
+  winner_count: number;
+  paid_count: number;
+  fully_accepted_at: string | null;
+  // Legacy single-winner fields — kept for backward compat + display; use bounty_winners for logic
   accepted_submission_id: string | null;
   accepted_at: string | null;
   paid_txid: string | null;
@@ -33,6 +40,15 @@ interface D1BountyRow {
   cancelled_at: string | null;
   updated_at: string;
   tags: string | null;
+}
+
+interface D1WinnerRow {
+  id: string;
+  bounty_id: string;
+  submission_id: string;
+  accepted_at: string;
+  paid_txid: string | null;
+  paid_at: string | null;
 }
 
 interface D1SubmissionRow {
@@ -56,6 +72,10 @@ function rowToBounty(row: D1BountyRow): BountyRecord {
     submissionCount: row.submission_count,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
+    maxWinners: row.max_winners ?? 1,
+    winnerCount: row.winner_count ?? 0,
+    paidCount: row.paid_count ?? 0,
+    ...(row.fully_accepted_at != null && { fullyAcceptedAt: row.fully_accepted_at }),
     ...(row.accepted_submission_id != null && {
       acceptedSubmissionId: row.accepted_submission_id,
     }),
@@ -65,6 +85,17 @@ function rowToBounty(row: D1BountyRow): BountyRecord {
     ...(row.cancelled_at != null && { cancelledAt: row.cancelled_at }),
     updatedAt: row.updated_at,
     ...(row.tags != null && safeParseTags(row.tags)),
+  };
+}
+
+function rowToWinner(row: D1WinnerRow): BountyWinnerRow {
+  return {
+    id: row.id,
+    bountyId: row.bounty_id,
+    submissionId: row.submission_id,
+    acceptedAt: row.accepted_at,
+    ...(row.paid_txid != null && { paidTxid: row.paid_txid }),
+    ...(row.paid_at != null && { paidAt: row.paid_at }),
   };
 }
 
@@ -115,41 +146,54 @@ export function statusToSql(
   const acceptCutoffIso = new Date(now.getTime() - ACCEPT_GRACE_MS).toISOString();
   const payCutoffIso = new Date(now.getTime() - PAY_GRACE_MS).toISOString();
 
+  // All predicates use the denormalized counters (winner_count, paid_count,
+  // max_winners, fully_accepted_at) added by migration 023. These are kept in
+  // sync by insertWinner() and setWinnerPaid(). The predicates must mirror the
+  // check order in bountyStatus() in lib/bounty/types.ts so per-record status
+  // and list-filter status agree at every tick (status-boundary parity test).
   switch (status) {
     case "open":
+      // No winners yet, submission window still open.
       return {
-        sql:
-          "cancelled_at IS NULL AND paid_at IS NULL AND accepted_at IS NULL AND expires_at > ?",
+        sql: "cancelled_at IS NULL AND winner_count = 0 AND expires_at > ?",
         bindings: [nowIso],
       };
     case "judging":
+      // No winners, past expiry but within accept grace.
       return {
-        sql:
-          "cancelled_at IS NULL AND paid_at IS NULL AND accepted_at IS NULL AND expires_at <= ? AND expires_at > ?",
+        sql: "cancelled_at IS NULL AND winner_count = 0 AND expires_at <= ? AND expires_at > ?",
         bindings: [nowIso, acceptCutoffIso],
       };
-    case "winner-announced":
+    case "partially-filled":
+      // Some slots accepted, more remain, within accept grace window.
       return {
-        sql:
-          "cancelled_at IS NULL AND paid_at IS NULL AND accepted_at IS NOT NULL AND accepted_at > ?",
+        sql: "cancelled_at IS NULL AND winner_count > 0 AND winner_count < max_winners AND expires_at > ?",
+        bindings: [acceptCutoffIso],
+      };
+    case "winner-announced":
+      // All slots filled, awaiting payment(s), within pay grace.
+      return {
+        sql: "cancelled_at IS NULL AND paid_count < max_winners AND winner_count >= max_winners AND fully_accepted_at > ?",
         bindings: [payCutoffIso],
       };
     case "paid":
-      return { sql: "paid_at IS NOT NULL", bindings: [] };
+      return { sql: "paid_count >= max_winners", bindings: [] };
     case "abandoned":
-      // Half-open intervals: `t >= expires_at + ACCEPT_GRACE_MS` (no winner)
-      // or `t >= accepted_at + PAY_GRACE_MS` (winner picked, no payment).
-      // Rewritten: `expires_at <= acceptCutoff` / `accepted_at <= payCutoff`.
-      // Matches `bountyStatus()` in lib/bounty/types.ts at the exact tick.
+      // Either: not all slots filled and past accept grace,
+      // or: all slots filled but not all paid and past pay grace.
       return {
         sql:
-          "cancelled_at IS NULL AND paid_at IS NULL AND ((accepted_at IS NULL AND expires_at <= ?) OR (accepted_at IS NOT NULL AND accepted_at <= ?))",
+          "cancelled_at IS NULL AND paid_count < max_winners AND (" +
+          "(winner_count < max_winners AND expires_at <= ?) OR " +
+          "(winner_count >= max_winners AND fully_accepted_at IS NOT NULL AND fully_accepted_at <= ?)" +
+          ")",
         bindings: [acceptCutoffIso, payCutoffIso],
       };
     case "cancelled":
       return { sql: "cancelled_at IS NOT NULL", bindings: [] };
     case "active":
-      return { sql: "cancelled_at IS NULL AND paid_at IS NULL", bindings: [] };
+      // All non-terminal states.
+      return { sql: "cancelled_at IS NULL AND paid_count < max_winners", bindings: [] };
     case undefined:
       return { sql: "1=1", bindings: [] };
   }
@@ -162,6 +206,7 @@ export function statusToSql(
 const BOUNTY_COLUMNS = `
   id, poster_btc_address, poster_stx_address, title, description,
   reward_sats, submission_count, created_at, expires_at,
+  max_winners, winner_count, paid_count, fully_accepted_at,
   accepted_submission_id, accepted_at, paid_txid, paid_at,
   cancelled_at, updated_at, tags
 `;
@@ -288,8 +333,9 @@ export async function insertBounty(
     .prepare(
       `INSERT INTO bounties (
         id, poster_btc_address, poster_stx_address, title, description,
-        reward_sats, submission_count, created_at, expires_at, updated_at, tags
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        reward_sats, submission_count, created_at, expires_at, updated_at, tags,
+        max_winners, winner_count, paid_count
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0, 0)`
     )
     .bind(
       bounty.id,
@@ -302,75 +348,132 @@ export async function insertBounty(
       bounty.createdAt,
       bounty.expiresAt,
       bounty.updatedAt,
-      bounty.tags && bounty.tags.length > 0 ? JSON.stringify(bounty.tags) : null
+      bounty.tags && bounty.tags.length > 0 ? JSON.stringify(bounty.tags) : null,
+      bounty.maxWinners ?? 1
     )
     .run();
 }
 
 /**
- * Mark a bounty as accepted with a chosen submission.
+ * Accept a submission as a winner.
  *
- * The WHERE clause guards against concurrent acceptance — only flips a bounty
- * that still has no `accepted_at` and isn't cancelled or paid. The
- * `expires_at > acceptCutoff` predicate closes the TOCTOU window where a
- * request straddling the 14-day accept-grace cutoff could resurrect an
- * `abandoned` bounty (terminal state is now SQL-enforced, not just
- * read-time-derived).
+ * Inserts a row into `bounty_winners` and atomically increments `winner_count`
+ * on the parent bounty (in a single D1 batch). The UPDATE WHERE guard enforces:
+ *   - a slot is available (`winner_count < max_winners`)
+ *   - the bounty is not cancelled or fully paid
+ *   - the accept-grace window has not expired (`expires_at > acceptCutoff`)
  *
- * Returns `true` when the row was updated, `false` when the bounty was not in
- * an acceptable state (race, already accepted, past the abandonment cutoff).
+ * When `winner_count + 1 = max_winners`, also sets `fully_accepted_at` so the
+ * pay-grace window can be computed without a join.
+ *
+ * Returns:
+ *   `"ok"`        — inserted successfully
+ *   `"conflict"`  — no slot available or past accept-grace (race / already full)
+ *   `"duplicate"` — this submission is already a winner (UNIQUE constraint)
  */
-export async function setAccepted(
+export async function insertWinner(
   db: D1Database,
   bountyId: string,
   submissionId: string,
   acceptedAt: string
-): Promise<boolean> {
+): Promise<"ok" | "conflict" | "duplicate"> {
   const acceptCutoff = new Date(Date.parse(acceptedAt) - ACCEPT_GRACE_MS).toISOString();
-  const result = await db
-    .prepare(
-      `UPDATE bounties
-       SET accepted_submission_id = ?, accepted_at = ?, updated_at = ?
-       WHERE id = ?
-         AND accepted_at IS NULL
-         AND cancelled_at IS NULL
-         AND paid_at IS NULL
-         AND expires_at > ?`
-    )
-    .bind(submissionId, acceptedAt, acceptedAt, bountyId, acceptCutoff)
-    .run();
-  return (result.meta?.changes ?? 0) > 0;
+  const winnerId = generateWinnerId();
+
+  try {
+    const [insertResult, updateResult] = await db.batch([
+      // Conditional INSERT — only runs if a slot is available.
+      // Uses SELECT FROM bounties so the guard runs atomically with the INSERT.
+      db
+        .prepare(
+          `INSERT INTO bounty_winners (id, bounty_id, submission_id, accepted_at, created_at)
+           SELECT ?, b.id, ?, ?, ?
+           FROM bounties b
+           WHERE b.id = ?
+             AND b.winner_count < b.max_winners
+             AND b.cancelled_at IS NULL
+             AND b.paid_count < b.max_winners
+             AND b.expires_at > ?`
+        )
+        .bind(winnerId, submissionId, acceptedAt, acceptedAt, bountyId, acceptCutoff),
+
+      // Increment counter; set fully_accepted_at when last slot is filled.
+      db
+        .prepare(
+          `UPDATE bounties
+           SET winner_count = winner_count + 1,
+               fully_accepted_at = CASE
+                 WHEN winner_count + 1 = max_winners THEN ?
+                 ELSE fully_accepted_at
+               END,
+               updated_at = ?
+           WHERE id = ?
+             AND winner_count < max_winners
+             AND cancelled_at IS NULL
+             AND paid_count < max_winners
+             AND expires_at > ?`
+        )
+        .bind(acceptedAt, acceptedAt, bountyId, acceptCutoff),
+    ]);
+
+    const inserted = (insertResult.meta?.changes ?? 0) > 0;
+    const updated = (updateResult.meta?.changes ?? 0) > 0;
+    if (inserted && updated) return "ok";
+    return "conflict"; // slot full, cancelled, or past grace — both returned 0 changes
+  } catch (e) {
+    if (String(e).includes("UNIQUE constraint failed")) return "duplicate";
+    throw e;
+  }
 }
 
 /**
- * Mark a bounty as paid with the verified payout txid.
+ * Mark one winner's payment as proven on-chain.
  *
- * Guarded by `accepted_at IS NOT NULL AND paid_at IS NULL` so a bounty can
- * only be flipped to paid from `winner-announced`. The `accepted_at > payCutoff`
- * predicate closes the TOCTOU window where a request straddling the 7-day
- * pay-grace cutoff could flip an `abandoned` bounty to `paid`. The unique
- * partial index on `paid_txid` enforces one-txid-per-bounty at the DB level.
+ * Updates the `bounty_winners` row and increments `paid_count` on the parent
+ * bounty in a D1 batch. The `bounty_winners` WHERE guard (`paid_at IS NULL`)
+ * prevents double-payment for the same winner. The unique partial index on
+ * `bounty_winners.paid_txid` enforces one-txid-per-winner at the DB level.
+ *
+ * Returns `true` on success, `false` on conflict (already paid or state changed).
  */
-export async function setPaid(
+export async function setWinnerPaid(
   db: D1Database,
   bountyId: string,
+  submissionId: string,
   paidTxid: string,
   paidAt: string
 ): Promise<boolean> {
   const payCutoff = new Date(Date.parse(paidAt) - PAY_GRACE_MS).toISOString();
-  const result = await db
-    .prepare(
-      `UPDATE bounties
-       SET paid_txid = ?, paid_at = ?, updated_at = ?
-       WHERE id = ?
-         AND accepted_at IS NOT NULL
-         AND paid_at IS NULL
-         AND cancelled_at IS NULL
-         AND accepted_at > ?`
-    )
-    .bind(paidTxid, paidAt, paidAt, bountyId, payCutoff)
-    .run();
-  return (result.meta?.changes ?? 0) > 0;
+
+  try {
+    const [winnerResult, bountyResult] = await db.batch([
+      db
+        .prepare(
+          `UPDATE bounty_winners
+           SET paid_txid = ?, paid_at = ?
+           WHERE bounty_id = ? AND submission_id = ? AND paid_at IS NULL`
+        )
+        .bind(paidTxid, paidAt, bountyId, submissionId),
+
+      db
+        .prepare(
+          `UPDATE bounties
+           SET paid_count = paid_count + 1, updated_at = ?
+           WHERE id = ?
+             AND winner_count >= max_winners
+             AND paid_count < max_winners
+             AND cancelled_at IS NULL
+             AND fully_accepted_at > ?`
+        )
+        .bind(paidAt, bountyId, payCutoff),
+    ]);
+
+    return (winnerResult.meta?.changes ?? 0) > 0 && (bountyResult.meta?.changes ?? 0) > 0;
+  } catch (e) {
+    // Unique partial index on bounty_winners.paid_txid fired — txid reused.
+    if (String(e).includes("UNIQUE constraint failed")) return false;
+    throw e;
+  }
 }
 
 /**
@@ -398,6 +501,41 @@ export async function setCancelled(
     .bind(cancelledAt, cancelledAt, bountyId, acceptCutoff)
     .run();
   return (result.meta?.changes ?? 0) > 0;
+}
+
+// ---------------------------------------------------------------------------
+// Winner reads
+// ---------------------------------------------------------------------------
+
+const WINNER_COLUMNS = `id, bounty_id, submission_id, accepted_at, paid_txid, paid_at`;
+
+/** Fetch all winners for a bounty, ordered by accepted_at ASC. */
+export async function getWinners(
+  db: D1Database,
+  bountyId: string
+): Promise<BountyWinnerRow[]> {
+  const rows = await db
+    .prepare(
+      `SELECT ${WINNER_COLUMNS} FROM bounty_winners WHERE bounty_id = ? ORDER BY accepted_at ASC`
+    )
+    .bind(bountyId)
+    .all<D1WinnerRow>();
+  return (rows.results ?? []).map(rowToWinner);
+}
+
+/** Fetch a single winner row by bountyId + submissionId. Returns null if not found. */
+export async function getWinner(
+  db: D1Database,
+  bountyId: string,
+  submissionId: string
+): Promise<BountyWinnerRow | null> {
+  const row = await db
+    .prepare(
+      `SELECT ${WINNER_COLUMNS} FROM bounty_winners WHERE bounty_id = ? AND submission_id = ? LIMIT 1`
+    )
+    .bind(bountyId, submissionId)
+    .first<D1WinnerRow>();
+  return row ? rowToWinner(row) : null;
 }
 
 // ---------------------------------------------------------------------------

@@ -10,6 +10,7 @@ export type {
   BountyRecord,
   BountySubmission,
   BountyWinner,
+  BountyWinnerRow,
   BountyPaymentHint,
 } from "./types";
 export { bountyStatus } from "./types";
@@ -23,6 +24,7 @@ export {
   TAG_LENGTH_MAX,
   MIN_EXPIRY_HOURS,
   MAX_EXPIRY_DAYS,
+  MAX_WINNERS,
   MIN_SUBMITTER_LEVEL,
   SIGNATURE_WINDOW_SECONDS,
   ACCEPT_GRACE_MS,
@@ -59,9 +61,11 @@ export {
   getBounty,
   listBounties,
   insertBounty,
-  setAccepted,
-  setPaid,
+  insertWinner,
+  setWinnerPaid,
   setCancelled,
+  getWinners,
+  getWinner,
   getSubmission,
   listSubmissionsForBounty,
   listSubmissionsBySubmitter,
@@ -71,7 +75,7 @@ export {
 
 export { isTxidRedeemed, reserveTxid } from "./kv-helpers";
 
-export { generateBountyId, generateSubmissionId } from "./id";
+export { generateBountyId, generateSubmissionId, generateWinnerId } from "./id";
 
 export type { TxidVerifyFailureCode, TxidVerifyResult } from "./txid-verify";
 export { buildExpectedMemo, verifyPayoutTxid } from "./txid-verify";

@@ -17,6 +17,7 @@ import {
   TAG_LENGTH_MAX,
   MIN_EXPIRY_HOURS,
   MAX_EXPIRY_DAYS,
+  MAX_WINNERS,
 } from "./constants";
 
 /** Re-exported from the inbox pattern so callers can format error responses uniformly. */
@@ -129,6 +130,7 @@ export function validateCreateBounty(body: unknown):
         description: string;
         rewardSats: number;
         expiresAt: string;
+        maxWinners: number;
         tags?: string[];
         signedAt: string;
         signature: string;
@@ -240,6 +242,27 @@ export function validateCreateBounty(body: unknown):
     }
   }
 
+  // maxWinners is optional; defaults to 1. Validated if present.
+  if (b.maxWinners !== undefined) {
+    if (
+      typeof b.maxWinners !== "number" ||
+      !Number.isInteger(b.maxWinners) ||
+      b.maxWinners < 1 ||
+      b.maxWinners > MAX_WINNERS
+    ) {
+      errors.push({
+        message: `maxWinners must be an integer between 1 and ${MAX_WINNERS}`,
+        hint: {
+          field: "maxWinners",
+          message: `maxWinners must be an integer between 1 and ${MAX_WINNERS}`,
+          hint: `How many winners this bounty accepts (FCFS). Defaults to 1. rewardSats is the total pot — each winner receives rewardSats / maxWinners sats. No platform cap — you decide.`,
+          format: `integer >= 1`,
+          example: "3",
+        },
+      });
+    }
+  }
+
   if (b.tags !== undefined) {
     if (!Array.isArray(b.tags)) {
       errors.push({
@@ -301,6 +324,7 @@ export function validateCreateBounty(body: unknown):
       description: (b.description as string).trim(),
       rewardSats: b.rewardSats as number,
       expiresAt: b.expiresAt as string,
+      maxWinners: typeof b.maxWinners === "number" ? (b.maxWinners as number) : 1,
       ...(Array.isArray(b.tags) && b.tags.length > 0 && { tags: b.tags as string[] }),
       signedAt: b.signedAt as string,
       signature: b.signature as string,
@@ -460,7 +484,7 @@ export function validateAccept(body: unknown):
 
 /** Validate the POST /api/bounties/[id]/paid body. */
 export function validatePaid(body: unknown):
-  | { data: { txid: string; signedAt: string; signature: string }; errors?: never }
+  | { data: { txid: string; submissionId?: string; signedAt: string; signature: string }; errors?: never }
   | { data?: never; errors: ValidationHint[] } {
   if (!body || typeof body !== "object") {
     return {
@@ -468,7 +492,7 @@ export function validatePaid(body: unknown):
         {
           field: "body",
           message: "Request body must be a JSON object",
-          hint: "Send JSON with txid, signedAt, signature.",
+          hint: "Send JSON with txid, signedAt, signature (and submissionId for multi-winner bounties).",
         },
       ],
     };
@@ -488,6 +512,22 @@ export function validatePaid(body: unknown):
     });
   }
 
+  // submissionId is optional for single-winner bounties (derived automatically)
+  // but required when maxWinners > 1. Validation here is format-only; the route
+  // enforces the multi-winner requirement once it knows maxWinners.
+  if (b.submissionId !== undefined) {
+    if (typeof b.submissionId !== "string" || b.submissionId.length === 0) {
+      errors.push({
+        message: "submissionId must be a non-empty string when provided",
+        hint: {
+          field: "submissionId",
+          message: "submissionId must be a non-empty string",
+          hint: "The id of the accepted submission you are paying. Required for multi-winner bounties. Get it from GET /api/bounties/{id} (winners[] array).",
+        },
+      });
+    }
+  }
+
   pushIsoTimestampError(errors, b.signedAt, "signedAt", "ISO timestamp used when signing.");
   pushSignatureError(
     errors,
@@ -500,6 +540,9 @@ export function validatePaid(body: unknown):
   return {
     data: {
       txid: (b.txid as string).trim(),
+      ...(typeof b.submissionId === "string" && b.submissionId.length > 0 && {
+        submissionId: b.submissionId,
+      }),
       signedAt: b.signedAt as string,
       signature: b.signature as string,
     },

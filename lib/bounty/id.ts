@@ -15,3 +15,8 @@ export function generateBountyId(): string {
 export function generateSubmissionId(): string {
   return `${Date.now().toString(36)}${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
+
+/** Generate a new winner row id for the bounty_winners join table. */
+export function generateWinnerId(): string {
+  return `${Date.now().toString(36)}${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
+}
