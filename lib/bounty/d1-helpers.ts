@@ -445,32 +445,49 @@ export async function setWinnerPaid(
 ): Promise<boolean> {
   const payCutoff = new Date(Date.parse(paidAt) - PAY_GRACE_MS).toISOString();
 
+  // Run sequentially, NOT as a D1 batch.
+  //
+  // D1 batches are atomic but statements are not causally linked: statement 2
+  // evaluates its own WHERE clause independently of statement 1's changes count.
+  // If two concurrent requests both read winnerRow.paidAt = null, the second
+  // request's batch would see stmt1 get 0 changes (paid_at already set by the
+  // first request) but stmt2 could still satisfy `paid_count < max_winners` and
+  // increment paid_count past the actual number of paid winners — permanently
+  // stranding an unpaid winner in a terminal "paid" bounty.
+  //
+  // By checking winnerResult.changes before issuing the bounty update we guarantee
+  // paid_count only increments when THIS request actually set paid_at.
+  //
   // Do NOT catch UNIQUE constraint failures here — let them propagate.
   // The unique partial index on bounty_winners.paid_txid is the durable guard
   // against txid reuse; the /paid route's try/catch handles it as txid_already_redeemed.
-  const [winnerResult, bountyResult] = await db.batch([
-    db
-      .prepare(
-        `UPDATE bounty_winners
-         SET paid_txid = ?, paid_at = ?
-         WHERE bounty_id = ? AND submission_id = ? AND paid_at IS NULL`
-      )
-      .bind(paidTxid, paidAt, bountyId, submissionId),
+  const winnerResult = await db
+    .prepare(
+      `UPDATE bounty_winners
+       SET paid_txid = ?, paid_at = ?
+       WHERE bounty_id = ? AND submission_id = ? AND paid_at IS NULL`
+    )
+    .bind(paidTxid, paidAt, bountyId, submissionId)
+    .run();
 
-    db
-      .prepare(
-        `UPDATE bounties
-         SET paid_count = paid_count + 1, updated_at = ?
-         WHERE id = ?
-           AND winner_count >= max_winners
-           AND paid_count < max_winners
-           AND cancelled_at IS NULL
-           AND fully_accepted_at > ?`
-      )
-      .bind(paidAt, bountyId, payCutoff),
-  ]);
+  if ((winnerResult.meta?.changes ?? 0) === 0) {
+    return false;
+  }
 
-  return (winnerResult.meta?.changes ?? 0) > 0 && (bountyResult.meta?.changes ?? 0) > 0;
+  const bountyResult = await db
+    .prepare(
+      `UPDATE bounties
+       SET paid_count = paid_count + 1, updated_at = ?
+       WHERE id = ?
+         AND winner_count >= max_winners
+         AND paid_count < max_winners
+         AND cancelled_at IS NULL
+         AND fully_accepted_at > ?`
+    )
+    .bind(paidAt, bountyId, payCutoff)
+    .run();
+
+  return (bountyResult.meta?.changes ?? 0) > 0;
 }
 
 /**
