@@ -46,6 +46,13 @@ SET
 WHERE 1 = 1;
 
 -- 4. Backfill bounty_winners for already-accepted bounties
+--
+-- NOTE: IDs generated here use `'bw_' || lower(hex(randomblob(8)))` (pure SQL,
+-- 16 hex chars of randomness) rather than the runtime format produced by
+-- generateWinnerId() (base36 ms timestamp + 12-char UUID slice). The formats
+-- differ because the JS runtime is not available inside a migration. Both are
+-- unique and opaque to callers; the discrepancy only surfaces when debugging
+-- pre-023 winner rows by their ID prefix.
 INSERT OR IGNORE INTO bounty_winners (id, bounty_id, submission_id, accepted_at, paid_txid, paid_at, created_at)
 SELECT
   'bw_' || lower(hex(randomblob(8))),
