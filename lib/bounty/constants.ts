@@ -33,6 +33,9 @@ export const MAX_EXPIRY_DAYS = 365;
 /** Minimum participant level (Registered). Applies to both posters and submitters. */
 export const MIN_SUBMITTER_LEVEL = 1;
 
+/** Maximum winners per bounty. Prevents accidental overflow. */
+export const MAX_WINNERS = 10;
+
 /** Replay window for action signatures (±5 minutes). */
 export const SIGNATURE_WINDOW_SECONDS = 300;
 

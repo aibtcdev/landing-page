@@ -96,6 +96,16 @@ export async function verifyPayoutTxid(params: {
   bounty: BountyRecord;
   acceptedSubmission: BountySubmission;
   /**
+   * Per-slot expected amount in sats. Defaults to `bounty.rewardSats` for
+   * single-winner bounties. For multi-winner, pass `bounty.rewardSats / bounty.maxWinners`.
+   */
+  expectedAmountSats?: number;
+  /**
+   * The specific winner's acceptedAt (from bounty_winners row). Overrides
+   * `bounty.acceptedAt` for the TX_TOO_OLD check when paying a specific winner.
+   */
+  winnerAcceptedAt?: string;
+  /**
    * Override the HTTP fetcher. Defaults to `stacksApiFetch()` from
    * `lib/stacks-api-fetch.ts` (the canonical helper with retry + 429
    * handling). Tests pass a stub.
@@ -266,11 +276,12 @@ export async function verifyPayoutTxid(params: {
       message: "Could not determine transfer amount.",
     };
   }
-  if (amount < params.bounty.rewardSats) {
+  const expectedAmount = params.expectedAmountSats ?? params.bounty.rewardSats;
+  if (amount < expectedAmount) {
     return {
       ok: false,
       code: "AMOUNT_TOO_LOW",
-      message: `Transferred ${amount} sats < promised ${params.bounty.rewardSats} sats.`,
+      message: `Transferred ${amount} sats < expected ${expectedAmount} sats (${params.bounty.rewardSats} total / ${params.bounty.maxWinners ?? 1} winner${(params.bounty.maxWinners ?? 1) > 1 ? "s" : ""}).`,
     };
   }
 
@@ -293,7 +304,12 @@ export async function verifyPayoutTxid(params: {
   // landed after `acceptedAt` but were anchored to an older Bitcoin block.
   const blockTimeIso = tx.block_time_iso ?? tx.burn_block_time_iso ?? now.toISOString();
   const blockTimeMs = Date.parse(blockTimeIso);
-  const acceptedMs = params.bounty.acceptedAt ? Date.parse(params.bounty.acceptedAt) : 0;
+  // Prefer the specific winner's acceptedAt over the legacy bounty-level field.
+  const acceptedMs = params.winnerAcceptedAt
+    ? Date.parse(params.winnerAcceptedAt)
+    : params.bounty.acceptedAt
+      ? Date.parse(params.bounty.acceptedAt)
+      : 0;
   if (!Number.isNaN(blockTimeMs) && blockTimeMs + 60_000 < acceptedMs) {
     return {
       ok: false,
