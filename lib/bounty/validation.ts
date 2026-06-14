@@ -255,8 +255,8 @@ export function validateCreateBounty(body: unknown):
         hint: {
           field: "maxWinners",
           message: `maxWinners must be an integer between 1 and ${MAX_WINNERS}`,
-          hint: `How many winners this bounty accepts (FCFS). Defaults to 1. rewardSats is the total pot — each winner receives rewardSats / maxWinners sats.`,
-          format: `integer 1..${MAX_WINNERS}`,
+          hint: `How many winners this bounty accepts (FCFS). Defaults to 1. rewardSats is the total pot — each winner receives rewardSats / maxWinners sats. No platform cap — you decide.`,
+          format: `integer >= 1`,
           example: "3",
         },
       });

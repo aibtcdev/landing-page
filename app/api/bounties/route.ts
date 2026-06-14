@@ -80,7 +80,7 @@ function selfDoc(): NextResponse {
           title: `Short title (1..${TITLE_MAX} chars).`,
           description: `What needs to be done (1..${DESCRIPTION_MAX} chars, markdown allowed).`,
           rewardSats: `Promised total sBTC reward, integer > 0. For multi-winner: total pot split equally (e.g. 1500 sats / 3 winners = 500 sats each).`,
-          maxWinners: `Optional. How many winners to accept (1..${MAX_WINNERS}, default 1). Each winner receives rewardSats / maxWinners sats.`,
+          maxWinners: `Optional. How many winners to accept (integer >= 1, default 1). The poster decides — no platform cap. Each winner receives rewardSats / maxWinners sats.`,
           expiresAt: `ISO timestamp. Min ${MIN_EXPIRY_HOURS}h, max ${MAX_EXPIRY_DAYS}d from now. Submission window closes at this time.`,
           tags: "Optional string[] (max 5 tags).",
           signedAt: "ISO timestamp you used when signing (±5 minutes of server time).",
