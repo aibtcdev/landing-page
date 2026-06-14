@@ -14,18 +14,20 @@
 import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "./constants";
 
 /**
- * The six observable states of a bounty.
+ * The observable states of a bounty.
  *
- * - `open`             — accepting submissions; now < expiresAt
- * - `judging`          — submissions closed, poster reviewing; now >= expiresAt, no winner yet
- * - `winner-announced` — poster accepted a submission; awaiting payment proof
- * - `paid`             — payment txid verified on-chain (terminal)
- * - `abandoned`        — poster ghosted past a grace window (terminal)
- * - `cancelled`        — poster killed it before any acceptance (terminal)
+ * - `open`              — accepting submissions; now < expiresAt
+ * - `judging`           — submissions closed, poster reviewing; now >= expiresAt, no winner yet
+ * - `partially-filled`  — poster accepted 1..n-1 winners; slots still remain (multi-winner only)
+ * - `winner-announced`  — all winner slots filled; awaiting payment proof(s)
+ * - `paid`              — all payments verified on-chain (terminal)
+ * - `abandoned`         — poster ghosted past a grace window (terminal)
+ * - `cancelled`         — poster killed it before any acceptance (terminal)
  */
 export type BountyStatus =
   | "open"
   | "judging"
+  | "partially-filled"
   | "winner-announced"
   | "paid"
   | "abandoned"
@@ -51,11 +53,21 @@ export interface BountyRecord {
   createdAt: string;
   /** ISO. Submissions close at this time. */
   expiresAt: string;
+  /** Max number of winners. Defaults to 1 (single-winner). */
+  maxWinners: number;
+  /** Denormalized count of accepted winners (0..maxWinners). Kept in sync by insertWinner(). */
+  winnerCount: number;
+  /** Denormalized count of paid winners (0..maxWinners). Kept in sync by setWinnerPaid(). */
+  paidCount: number;
+  /** ISO. Set when winnerCount first reaches maxWinners (i.e. all slots filled). Used for pay-grace timing. */
+  fullyAcceptedAt?: string;
+  /** @deprecated Single-winner compat field. Use bounty_winners table via getWinners(). */
   acceptedSubmissionId?: string;
-  /** ISO. Winner announced. */
+  /** @deprecated Single-winner compat field. */
   acceptedAt?: string;
+  /** @deprecated Single-winner compat field. */
   paidTxid?: string;
-  /** ISO. Payment proven on-chain. */
+  /** @deprecated Single-winner compat field. */
   paidAt?: string;
   /** ISO. Poster cancelled before acceptance. */
   cancelledAt?: string;
@@ -95,12 +107,30 @@ export interface BountySubmission {
  */
 export function bountyStatus(b: BountyRecord, now: Date = new Date()): BountyStatus {
   const t = now.getTime();
-  if (b.paidAt) return "paid";
+  const maxWinners = b.maxWinners ?? 1;
+  // Prefer the denormalized counters (set by migration + insertWinner/setWinnerPaid).
+  // Fall back to legacy single-winner fields for any records pre-dating migration 023.
+  const winnerCount = b.winnerCount ?? (b.acceptedAt ? 1 : 0);
+  const paidCount = b.paidCount ?? (b.paidAt ? 1 : 0);
+
+  if (paidCount >= maxWinners) return "paid";
   if (b.cancelledAt) return "cancelled";
-  if (b.acceptedAt) {
-    if (t >= Date.parse(b.acceptedAt) + PAY_GRACE_MS) return "abandoned";
+
+  if (winnerCount >= maxWinners) {
+    // All slots filled — waiting on payment(s).
+    // Use fullyAcceptedAt when available; fall back to single-winner acceptedAt.
+    const fullyAt = b.fullyAcceptedAt ?? b.acceptedAt;
+    if (!fullyAt || t >= Date.parse(fullyAt) + PAY_GRACE_MS) return "abandoned";
     return "winner-announced";
   }
+
+  if (winnerCount > 0) {
+    // Some slots filled, more remain. Accept grace runs from expiresAt.
+    if (t >= Date.parse(b.expiresAt) + ACCEPT_GRACE_MS) return "abandoned";
+    return "partially-filled";
+  }
+
+  // No winners yet.
   if (t >= Date.parse(b.expiresAt) + ACCEPT_GRACE_MS) return "abandoned";
   if (t >= Date.parse(b.expiresAt)) return "judging";
   return "open";
@@ -121,6 +151,22 @@ export interface BountyWinner {
   contentUrl?: string;
   message: string;
   acceptedAt: string;
+  /** Set once the poster proves payment for this winner. */
+  paidAt?: string;
+  paidTxid?: string;
+}
+
+/**
+ * A row from the `bounty_winners` join table (snake_case → camelCase mapped by rowToWinner).
+ * Internal to the lib — not surfaced directly in API responses.
+ */
+export interface BountyWinnerRow {
+  id: string;
+  bountyId: string;
+  submissionId: string;
+  acceptedAt: string;
+  paidTxid?: string;
+  paidAt?: string;
 }
 
 /**

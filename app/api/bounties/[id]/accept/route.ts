@@ -1,8 +1,13 @@
 /**
  * POST /api/bounties/[id]/accept
  *
- * Poster picks a winning submission. Allowed when the bounty's derived
- * status is `open` (accepting early) or `judging` (submission window closed).
+ * Poster picks a winning submission. Allowed when the bounty's derived status
+ * is `open` (accepting early), `judging` (window closed, no winners yet), or
+ * `partially-filled` (some slots taken, more remain — multi-winner only).
+ *
+ * For multi-winner bounties, this endpoint may be called up to `maxWinners`
+ * times (once per winner). Each call requires a fresh signature over the chosen
+ * `submissionId`.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,7 +21,7 @@ import {
   getBounty,
   getSubmission,
   isWithinSignatureWindow,
-  setAccepted,
+  insertWinner,
   validateAccept,
 } from "@/lib/bounty";
 
@@ -82,14 +87,16 @@ export async function POST(
       );
     }
 
-    // Status guard
+    // Status guard — accepting is allowed from open, judging, or partially-filled
     const status = bountyStatus(bounty);
-    if (status !== "open" && status !== "judging") {
+    if (status !== "open" && status !== "judging" && status !== "partially-filled") {
       return NextResponse.json(
         {
           error: "invalid_state",
-          message: `Cannot accept in status "${status}". A winner must be picked while open or judging.`,
+          message: `Cannot accept in status "${status}". Acceptance requires open, judging, or partially-filled status.`,
           status,
+          winnerCount: bounty.winnerCount,
+          maxWinners: bounty.maxWinners,
         },
         { status: 422 }
       );
@@ -105,13 +112,24 @@ export async function POST(
     }
 
     const acceptedAt = new Date().toISOString();
-    const ok = await setAccepted(db, bounty.id, submission.id, acceptedAt);
-    if (!ok) {
-      // Raced with another concurrent accept / cancel / paid.
+    const result = await insertWinner(db, bounty.id, submission.id, acceptedAt);
+    if (result === "duplicate") {
+      return NextResponse.json(
+        {
+          error: "already_a_winner",
+          message: "This submission has already been accepted as a winner.",
+        },
+        { status: 409 }
+      );
+    }
+    if (result === "conflict") {
+      // All slots filled or bounty state changed concurrently.
       return NextResponse.json(
         {
           error: "conflict",
-          message: "Bounty state changed concurrently. Re-fetch the bounty and retry if appropriate.",
+          message: "No winner slots available. The bounty may be full or its state changed concurrently.",
+          winnerCount: bounty.winnerCount,
+          maxWinners: bounty.maxWinners,
         },
         { status: 409 }
       );
@@ -121,6 +139,8 @@ export async function POST(
       bountyId: bounty.id,
       submissionId: submission.id,
       winner: submission.submitterBtcAddress,
+      winnerCount: bounty.winnerCount + 1,
+      maxWinners: bounty.maxWinners,
     });
 
     const fresh = await getBounty(db, bounty.id);

@@ -2,15 +2,20 @@
  * POST /api/bounties/[id]/paid
  *
  * Poster proves payment with an on-chain sBTC txid. Verification chain:
- *   - txid not already redeemed by another bounty (cheap pre-check)
+ *   - txid not already redeemed (cheap KV pre-check)
  *   - tx exists on Hiro, anchored, status=success
  *   - sBTC `transfer` contract call
- *   - sender = poster, recipient = winner, amount >= rewardSats
+ *   - sender = poster, recipient = winner, amount >= rewardSats / maxWinners
  *   - memo = BNTY:{bountyId}  (the anti-fraud binding)
- *   - block_time > acceptedAt - 60s
+ *   - block_time > winnerAcceptedAt - 60s
  *
- * Allowed only when bounty's derived status is `winner-announced`. The
- * canonical txid that Hiro returns is what we store (not the raw input).
+ * Allowed only when bounty's derived status is `winner-announced` (all winner
+ * slots filled, at least one unpaid). For multi-winner bounties, the caller
+ * must supply `submissionId` to indicate which winner this txid pays. For
+ * single-winner bounties `submissionId` is optional (auto-derived).
+ *
+ * The canonical txid that Hiro returns is what we store (not the raw input).
+ * Once all winners are paid, `bountyStatus()` returns `"paid"`.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -23,10 +28,12 @@ import {
   buildPaidMessage,
   getBounty,
   getSubmission,
+  getWinner,
+  getWinners,
   isTxidRedeemed,
   isWithinSignatureWindow,
   reserveTxid,
-  setPaid,
+  setWinnerPaid,
   validatePaid,
   verifyPayoutTxid,
 } from "@/lib/bounty";
@@ -68,7 +75,7 @@ export async function POST(
     const bounty = await getBounty(db, id);
     if (!bounty) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-    // Verify signature against poster
+    // Verify signature against poster — format unchanged for backward compat.
     const message = buildPaidMessage({
       bountyId: bounty.id,
       txid: data.txid,
@@ -93,30 +100,76 @@ export async function POST(
       );
     }
 
-    // Status guard — must be winner-announced
+    // Status guard — must be winner-announced (all slots filled, some unpaid)
     const status = bountyStatus(bounty);
     if (status !== "winner-announced") {
       return NextResponse.json(
         {
           error: "invalid_state",
-          message: `Cannot mark paid in status "${status}". Accept a submission first.`,
+          message: `Cannot mark paid in status "${status}". All winner slots must be filled first.`,
           status,
+          winnerCount: bounty.winnerCount,
+          paidCount: bounty.paidCount,
+          maxWinners: bounty.maxWinners,
         },
         { status: 422 }
       );
     }
 
-    if (!bounty.acceptedSubmissionId) {
+    // Resolve which winner this payment is for.
+    let submissionId = data.submissionId;
+    if (!submissionId) {
+      if (bounty.maxWinners > 1) {
+        // Multi-winner requires explicit submissionId routing.
+        return NextResponse.json(
+          {
+            error: "submission_id_required",
+            message: `This bounty has ${bounty.maxWinners} winners. Provide submissionId to identify which winner this txid pays.`,
+            hint: "Fetch GET /api/bounties/{id} and use the winners[] array to find the submissionId for each unpaid winner.",
+          },
+          { status: 400 }
+        );
+      }
+      // Single-winner: auto-derive from winners table (or legacy field).
+      const winners = await getWinners(db, bounty.id);
+      const unpaid = winners.find((w) => !w.paidAt);
+      submissionId = unpaid?.submissionId ?? bounty.acceptedSubmissionId;
+    }
+
+    if (!submissionId) {
       return NextResponse.json(
-        { error: "invalid_state", message: "Bounty has no accepted submission." },
+        { error: "invalid_state", message: "Bounty has no accepted submission to pay." },
         { status: 422 }
       );
     }
 
-    const acceptedSubmission = await getSubmission(db, bounty.acceptedSubmissionId);
+    // Fetch the winner row and the submission
+    const winnerRow = await getWinner(db, bounty.id, submissionId);
+    if (!winnerRow) {
+      return NextResponse.json(
+        {
+          error: "winner_not_found",
+          message: `Submission ${submissionId} is not a winner of this bounty.`,
+        },
+        { status: 404 }
+      );
+    }
+    if (winnerRow.paidAt) {
+      return NextResponse.json(
+        {
+          error: "already_paid",
+          message: "This winner has already been paid.",
+          paidAt: winnerRow.paidAt,
+          paidTxid: winnerRow.paidTxid,
+        },
+        { status: 409 }
+      );
+    }
+
+    const acceptedSubmission = await getSubmission(db, submissionId);
     if (!acceptedSubmission) {
       return NextResponse.json(
-        { error: "submission_not_found", message: "Accepted submission record missing." },
+        { error: "submission_not_found", message: "Winner submission record missing." },
         { status: 500 }
       );
     }
@@ -134,17 +187,23 @@ export async function POST(
       );
     }
 
+    // Per-slot expected amount: total reward divided equally.
+    const expectedAmountSats = Math.floor(bounty.rewardSats / bounty.maxWinners);
+
     // On-chain verification via Hiro
     const verify = await verifyPayoutTxid({
       txid: data.txid,
       bounty,
       acceptedSubmission,
+      expectedAmountSats,
+      winnerAcceptedAt: winnerRow.acceptedAt,
       logger,
     });
     if (!verify.ok) {
       const statusCode = verify.code === "TX_NOT_CONFIRMED" ? 422 : 400;
       logger.warn("bounty.paid_verification_failed", {
         bountyId: bounty.id,
+        submissionId,
         code: verify.code,
         txid: data.txid,
       });
@@ -158,22 +217,22 @@ export async function POST(
       );
     }
 
-    // Persist — use Hiro's canonical tx_id as the stored value.
+    // Persist — use Hiro's canonical tx_id.
     const paidAt = verify.blockTimeIso ?? new Date().toISOString();
     let ok = false;
     try {
-      ok = await setPaid(db, bounty.id, verify.canonicalTxid, paidAt);
+      ok = await setWinnerPaid(db, bounty.id, submissionId, verify.canonicalTxid, paidAt);
     } catch (e) {
-      // D1 unique partial index conflict — same canonical txid paid another bounty.
       logger.warn("bounty.paid_unique_violation", {
         bountyId: bounty.id,
+        submissionId,
         canonicalTxid: verify.canonicalTxid,
         error: String(e),
       });
       return NextResponse.json(
         {
           error: "txid_already_redeemed",
-          message: "This canonical txid has already paid another bounty.",
+          message: "This canonical txid has already paid a winner.",
         },
         { status: 409 }
       );
@@ -185,11 +244,7 @@ export async function POST(
       );
     }
 
-    // D1 has already committed the paid_txid — the unique partial index is
-    // the durable enforcement. KV reservation is the cheap pre-check for
-    // *future* /paid requests against other bounties; if it fails (KV blip),
-    // log and keep going so the user doesn't see a 500 after a successful
-    // payment.
+    // D1 committed — KV reservation is a best-effort pre-check for future requests.
     try {
       await reserveTxid(kv, verify.canonicalTxid, bounty.id);
     } catch (e) {
@@ -202,8 +257,11 @@ export async function POST(
 
     logger.info("bounty.paid", {
       bountyId: bounty.id,
+      submissionId,
       canonicalTxid: verify.canonicalTxid,
       paidAt,
+      paidCount: bounty.paidCount + 1,
+      maxWinners: bounty.maxWinners,
     });
 
     const fresh = await getBounty(db, bounty.id);
