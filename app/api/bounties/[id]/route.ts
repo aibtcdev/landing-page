@@ -17,7 +17,7 @@ import {
   bountyStatus,
   buildExpectedMemo,
   getBounty,
-  getSubmission,
+  getSubmissionsByIds,
   getWinners,
   listSubmissionsForBounty,
   SBTC_CONTRACT_MAINNET,
@@ -96,7 +96,7 @@ export async function GET(
 }
 
 async function buildWinnersArray(
-  db: Parameters<typeof getSubmission>[0],
+  db: Parameters<typeof getSubmissionsByIds>[0],
   bounty: BountyRecord,
   winnerRows: BountyWinnerRow[],
   submissions: BountySubmission[]
@@ -104,9 +104,9 @@ async function buildWinnersArray(
   if (winnerRows.length === 0) {
     // Pre-023 fallback: synthesize from legacy bounty fields if present.
     if (bounty.acceptedSubmissionId && bounty.acceptedAt) {
-      const sub =
-        submissions.find((s) => s.id === bounty.acceptedSubmissionId) ??
-        (await getSubmission(db, bounty.acceptedSubmissionId));
+      const cached = submissions.find((s) => s.id === bounty.acceptedSubmissionId);
+      const extra = cached ? [] : await getSubmissionsByIds(db, [bounty.acceptedSubmissionId]);
+      const sub = cached ?? extra[0];
       if (sub) {
         return [buildWinner(sub, bounty.acceptedAt, bounty.paidAt, bounty.paidTxid)];
       }
@@ -114,16 +114,21 @@ async function buildWinnersArray(
     return [];
   }
 
-  // Resolve submissions for each winner row.
+  // Batch-fetch any winner submissions not already in the first-page cache.
+  // `submissions` covers at most 20 rows; winners may have submitted later.
   const subMap = new Map(submissions.map((s) => [s.id, s]));
-  const result: BountyWinner[] = [];
-  for (const row of winnerRows) {
-    const sub = subMap.get(row.submissionId) ?? (await getSubmission(db, row.submissionId));
-    if (sub) {
-      result.push(buildWinner(sub, row.acceptedAt, row.paidAt, row.paidTxid));
-    }
+  const missingIds = winnerRows.map((r) => r.submissionId).filter((id) => !subMap.has(id));
+  if (missingIds.length > 0) {
+    const extra = await getSubmissionsByIds(db, missingIds);
+    for (const s of extra) subMap.set(s.id, s);
   }
-  return result;
+
+  return winnerRows
+    .map((row) => {
+      const sub = subMap.get(row.submissionId);
+      return sub ? buildWinner(sub, row.acceptedAt, row.paidAt, row.paidTxid) : null;
+    })
+    .filter((w): w is BountyWinner => w !== null);
 }
 
 function buildWinner(

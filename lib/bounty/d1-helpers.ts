@@ -445,35 +445,32 @@ export async function setWinnerPaid(
 ): Promise<boolean> {
   const payCutoff = new Date(Date.parse(paidAt) - PAY_GRACE_MS).toISOString();
 
-  try {
-    const [winnerResult, bountyResult] = await db.batch([
-      db
-        .prepare(
-          `UPDATE bounty_winners
-           SET paid_txid = ?, paid_at = ?
-           WHERE bounty_id = ? AND submission_id = ? AND paid_at IS NULL`
-        )
-        .bind(paidTxid, paidAt, bountyId, submissionId),
+  // Do NOT catch UNIQUE constraint failures here — let them propagate.
+  // The unique partial index on bounty_winners.paid_txid is the durable guard
+  // against txid reuse; the /paid route's try/catch handles it as txid_already_redeemed.
+  const [winnerResult, bountyResult] = await db.batch([
+    db
+      .prepare(
+        `UPDATE bounty_winners
+         SET paid_txid = ?, paid_at = ?
+         WHERE bounty_id = ? AND submission_id = ? AND paid_at IS NULL`
+      )
+      .bind(paidTxid, paidAt, bountyId, submissionId),
 
-      db
-        .prepare(
-          `UPDATE bounties
-           SET paid_count = paid_count + 1, updated_at = ?
-           WHERE id = ?
-             AND winner_count >= max_winners
-             AND paid_count < max_winners
-             AND cancelled_at IS NULL
-             AND fully_accepted_at > ?`
-        )
-        .bind(paidAt, bountyId, payCutoff),
-    ]);
+    db
+      .prepare(
+        `UPDATE bounties
+         SET paid_count = paid_count + 1, updated_at = ?
+         WHERE id = ?
+           AND winner_count >= max_winners
+           AND paid_count < max_winners
+           AND cancelled_at IS NULL
+           AND fully_accepted_at > ?`
+      )
+      .bind(paidAt, bountyId, payCutoff),
+  ]);
 
-    return (winnerResult.meta?.changes ?? 0) > 0 && (bountyResult.meta?.changes ?? 0) > 0;
-  } catch (e) {
-    // Unique partial index on bounty_winners.paid_txid fired — txid reused.
-    if (String(e).includes("UNIQUE constraint failed")) return false;
-    throw e;
-  }
+  return (winnerResult.meta?.changes ?? 0) > 0 && (bountyResult.meta?.changes ?? 0) > 0;
 }
 
 /**
@@ -652,6 +649,24 @@ export async function insertSubmission(
       )
       .bind(bountyUpdatedAt, submission.bountyId),
   ]);
+}
+
+/**
+ * Fetch multiple submissions by ID in a single IN (?) query.
+ * Used by the detail GET to avoid N+1 when winners submitted outside the
+ * first-page cache (`listSubmissionsForBounty` returns at most 20 rows).
+ */
+export async function getSubmissionsByIds(
+  db: D1Database,
+  ids: string[]
+): Promise<BountySubmission[]> {
+  if (ids.length === 0) return [];
+  const placeholders = ids.map(() => "?").join(", ");
+  const rows = await db
+    .prepare(`SELECT ${SUBMISSION_COLUMNS} FROM bounty_submissions WHERE id IN (${placeholders})`)
+    .bind(...ids)
+    .all<D1SubmissionRow>();
+  return (rows.results ?? []).map(rowToSubmission);
 }
 
 /** Quick existence check used by the self-submit guard. */
