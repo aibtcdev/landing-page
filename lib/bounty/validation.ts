@@ -263,6 +263,31 @@ export function validateCreateBounty(body: unknown):
     }
   }
 
+  // Divisibility check: floor division strands (rewardSats % maxWinners) sats
+  // with no recovery path. Reject at create time so the poster chooses a
+  // divisible total up front.
+  const effectiveMaxWinners = typeof b.maxWinners === "number" && Number.isInteger(b.maxWinners) && b.maxWinners >= 1
+    ? b.maxWinners
+    : 1;
+  if (
+    effectiveMaxWinners > 1 &&
+    typeof b.rewardSats === "number" &&
+    Number.isInteger(b.rewardSats) &&
+    b.rewardSats > 0 &&
+    b.rewardSats % effectiveMaxWinners !== 0
+  ) {
+    const stranded = b.rewardSats % effectiveMaxWinners;
+    errors.push({
+      message: `rewardSats (${b.rewardSats}) must be divisible by maxWinners (${effectiveMaxWinners}) — floor division strands ${stranded} sat${stranded === 1 ? "" : "s"}`,
+      hint: {
+        field: "rewardSats",
+        message: `rewardSats (${b.rewardSats}) must be divisible by maxWinners (${effectiveMaxWinners}) — floor division strands ${stranded} sat${stranded === 1 ? "" : "s"}`,
+        hint: `Each winner receives rewardSats / maxWinners sats. Use a divisible value (e.g. ${effectiveMaxWinners * Math.ceil(b.rewardSats / effectiveMaxWinners)} or ${effectiveMaxWinners * Math.floor(b.rewardSats / effectiveMaxWinners)}).`,
+        example: String(effectiveMaxWinners * Math.ceil(b.rewardSats / effectiveMaxWinners)),
+      },
+    });
+  }
+
   if (b.tags !== undefined) {
     if (!Array.isArray(b.tags)) {
       errors.push({
