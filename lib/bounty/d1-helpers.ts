@@ -487,7 +487,29 @@ export async function setWinnerPaid(
     .bind(paidAt, bountyId, payCutoff)
     .run();
 
-  return (bountyResult.meta?.changes ?? 0) > 0;
+  const bountyUpdated = (bountyResult.meta?.changes ?? 0) > 0;
+
+  if (!bountyUpdated) {
+    // Grace-boundary inconsistency: the winner row was written (paid_at set,
+    // payment is real) but the bounty counter update was rejected. This happens
+    // when the pay grace window expires in the narrow gap between the route's
+    // status check and this write — fully_accepted_at > payCutoff fails.
+    // Result: paid_count under-counts, bountyStatus() may show "abandoned"
+    // while GET /api/bounties/{id} shows the winner as paid.
+    // This state is detectable: bounty_winners.paid_at IS NOT NULL with
+    // paid_count < actual paid rows. Ops can reconcile by re-running:
+    //   UPDATE bounties SET paid_count = (SELECT COUNT(*) FROM bounty_winners
+    //   WHERE bounty_id = ? AND paid_at IS NOT NULL) WHERE id = ?
+    console.error("[setWinnerPaid] grace-boundary inconsistency", {
+      bountyId,
+      submissionId,
+      paidTxid,
+      paidAt,
+      detail: "winner row written but paid_count not incremented — pay grace may have expired mid-request",
+    });
+  }
+
+  return bountyUpdated;
 }
 
 /**
