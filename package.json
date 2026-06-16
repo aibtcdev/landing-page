@@ -55,7 +55,7 @@
     "patch-package": "^8.0.1",
     "tailwindcss": "^4.1.18",
     "typescript": "^5",
-    "vitest": "^4.0.18",
+    "vitest": "^4.1.0",
     "wrangler": "^4.65.0"
   }
 }
