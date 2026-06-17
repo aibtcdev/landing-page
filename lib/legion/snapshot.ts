@@ -1,21 +1,26 @@
 /**
- * Assemble a full Legion snapshot from testnet, and read/write it in KV.
+ * Assemble a full Legion snapshot from testnet.
  *
  * The fan-out (treasury + gov + per-agent stake/balance + per-proposal
- * status/votes) runs server-side, ONCE per cron tick, and the result is stored
- * as a single KV blob. The dashboard endpoint reads that blob — so Hiro read
- * volume is fixed per refresh interval, independent of page traffic.
+ * status/votes) runs server-side and is persisted to D1 (lib/legion/d1.ts) by
+ * the cron; the dashboard reads that row behind caches.default. So Hiro read
+ * volume is bounded, not per page-view.
  *
- * Every read is wrapped so one failed call degrades to a partial snapshot
- * (recorded in `errors`) rather than throwing the whole build away.
+ * Two guards keep the fan-out from breaking under load:
+ *  - an authenticated Hiro key (a Worker shares its colo egress IP, so
+ *    unauthenticated bursts can be throttled), and
+ *  - a concurrency limiter so we never have more than N reads in flight.
+ *
+ * Every read degrades to a partial snapshot (recorded in `errors`) instead of
+ * throwing the whole build away. Concluded proposals are terminal on-chain, so
+ * they're carried forward from `prev` and cost zero reads.
  */
 
-import { principalCV, uintCV } from "@stacks/transactions";
+import { type ClarityValue, principalCV, uintCV } from "@stacks/transactions";
 import { getTestnetTipHeight, legionReadOnly } from "./stacks";
 import {
   GOV_CONTRACT,
   LEGION_AGENTS,
-  LEGION_SNAPSHOT_KV_KEY,
   legionLabelFor,
   SBTC_TOKEN,
   TREASURY_CONTRACT,
@@ -27,6 +32,9 @@ import type {
   LegionVote,
 } from "./types";
 import type { Logger } from "../logging";
+
+/** Max concurrent Hiro reads during a build. Keeps the fan-out from bursting. */
+const LEGION_READ_CONCURRENCY = 6;
 
 /** Coerce a Clarity uint string (or anything) to a finite number, defaulting 0. */
 function toNum(v: unknown): number {
@@ -41,32 +49,57 @@ function get<T = unknown>(obj: unknown, key: string): T | undefined {
   return undefined;
 }
 
+/** Minimal promise-concurrency limiter (pLimit-style). */
+function createLimiter(max: number) {
+  let active = 0;
+  const queue: Array<() => void> = [];
+  const release = () => {
+    active--;
+    queue.shift()?.();
+  };
+  return function limit<T>(task: () => Promise<T>): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const run = () => {
+        active++;
+        task().then(resolve, reject).finally(release);
+      };
+      if (active < max) run();
+      else queue.push(run);
+    });
+  };
+}
+
+/** A bounded, error-trapping read. Returns `fallback` on any failure. */
+type ReadFn = <T>(label: string, task: () => Promise<unknown>, fallback: T) => Promise<T>;
+
 /**
- * Build a fresh snapshot. Pass the previous snapshot (`prev`) to skip re-reading
- * terminal data: a proposal with `concluded == true` can never change on-chain
- * (nor can its vote records), so it's carried forward verbatim and costs zero
- * Hiro reads. Only in-flight proposals — and the always-changing treasury /
- * stake / balance reads — are fetched each tick.
+ * Build a fresh snapshot. Pass the previous snapshot (`prev`) to carry forward
+ * terminal (`concluded`) proposals without re-reading them, and `apiKey` to
+ * authenticate Hiro reads.
  */
 export async function buildLegionSnapshot(
   logger?: Logger,
   prev?: LegionSnapshot | null,
+  apiKey?: string,
 ): Promise<LegionSnapshot> {
   const errors: string[] = [];
+  const limit = createLimiter(LEGION_READ_CONCURRENCY);
 
-  /** Run a read, recording failures and returning a fallback instead of throwing. */
-  async function safe<T>(label: string, fn: () => Promise<T>, fallback: T): Promise<T> {
+  const read: ReadFn = async (label, task, fallback) => {
     try {
-      return await fn();
+      return (await limit(task)) as typeof fallback;
     } catch (e) {
-      const msg = `${label}: ${String(e)}`;
-      errors.push(msg);
+      errors.push(`${label}: ${String(e)}`);
       logger?.warn?.("legion.read_failed", { label, error: String(e) });
       return fallback;
     }
-  }
+  };
 
-  // Top-level reads in parallel.
+  /** A read-only contract call, authenticated + decoded. */
+  const call = (contract: string, fn: string, args: ClarityValue[] = []) =>
+    legionReadOnly(contract, fn, args, apiKey, logger);
+
+  // Top-level reads (the limiter bounds true concurrency despite Promise.all).
   const [
     blockHeight,
     balance,
@@ -76,23 +109,23 @@ export async function buildLegionSnapshot(
     totalStakedRaw,
     proposalCountRaw,
   ] = await Promise.all([
-    getTestnetTipHeight(logger),
-    safe("treasury.get-balance", () => legionReadOnly(TREASURY_CONTRACT, "get-balance", [], logger), null),
-    safe("treasury.get-gov", () => legionReadOnly(TREASURY_CONTRACT, "get-gov", [], logger), null),
-    safe("treasury.get-payout", () => legionReadOnly(TREASURY_CONTRACT, "get-payout", [], logger), null),
-    safe("treasury.get-token", () => legionReadOnly(TREASURY_CONTRACT, "get-token", [], logger), null),
-    safe("gov.get-total-staked", () => legionReadOnly(GOV_CONTRACT, "get-total-staked", [], logger), null),
-    safe("gov.get-proposal-count", () => legionReadOnly(GOV_CONTRACT, "get-proposal-count", [], logger), null),
+    read("info.tip", () => getTestnetTipHeight(apiKey, logger), null),
+    read("treasury.get-balance", () => call(TREASURY_CONTRACT, "get-balance"), null),
+    read("treasury.get-gov", () => call(TREASURY_CONTRACT, "get-gov"), null),
+    read("treasury.get-payout", () => call(TREASURY_CONTRACT, "get-payout"), null),
+    read("treasury.get-token", () => call(TREASURY_CONTRACT, "get-token"), null),
+    read("gov.get-total-staked", () => call(GOV_CONTRACT, "get-total-staked"), null),
+    read("gov.get-proposal-count", () => call(GOV_CONTRACT, "get-proposal-count"), null),
   ]);
 
   const totalStaked = totalStakedRaw != null ? toNum(totalStakedRaw) : null;
 
-  // Members — stake + wallet sBTC balance per agent, in parallel.
+  // Members — stake + wallet sBTC balance per agent.
   const members: LegionMember[] = await Promise.all(
     LEGION_AGENTS.map(async (agent) => {
       const [stakeRaw, balRaw] = await Promise.all([
-        safe(`gov.get-stake.${agent.label}`, () => legionReadOnly(GOV_CONTRACT, "get-stake", [principalCV(agent.address)], logger), null),
-        safe(`sbtc.get-balance.${agent.label}`, () => legionReadOnly(SBTC_TOKEN, "get-balance", [principalCV(agent.address)], logger), null),
+        read(`gov.get-stake.${agent.label}`, () => call(GOV_CONTRACT, "get-stake", [principalCV(agent.address)]), null),
+        read(`sbtc.get-balance.${agent.label}`, () => call(SBTC_TOKEN, "get-balance", [principalCV(agent.address)]), null),
       ]);
       const stake = stakeRaw != null ? toNum(stakeRaw) : 0;
       return {
@@ -106,8 +139,7 @@ export async function buildLegionSnapshot(
   );
   members.sort((a, b) => b.stake - a.stake);
 
-  // Proposals — newest first (id = count .. 1). Concluded proposals are terminal,
-  // so reuse them from the previous snapshot instead of re-reading from Hiro.
+  // Proposals — newest first (id = count .. 1). Reuse concluded ones from prev.
   const concludedById = new Map<number, LegionProposal>();
   for (const p of prev?.proposals ?? []) {
     if (p.status.concluded) concludedById.set(p.id, p);
@@ -120,7 +152,7 @@ export async function buildLegionSnapshot(
     await Promise.all(
       ids.map((id) => {
         const cached = concludedById.get(id);
-        return cached ? Promise.resolve(cached) : buildProposal(id, safe, logger);
+        return cached ? Promise.resolve(cached) : buildProposal(id, read, call);
       }),
     )
   ).filter((p): p is LegionProposal => p !== null);
@@ -128,6 +160,7 @@ export async function buildLegionSnapshot(
   logger?.debug?.("legion.proposals_built", {
     total: proposals.length,
     reused: ids.filter((id) => concludedById.has(id)).length,
+    errors: errors.length,
   });
 
   return {
@@ -148,12 +181,12 @@ export async function buildLegionSnapshot(
 
 async function buildProposal(
   id: number,
-  safe: <T>(label: string, fn: () => Promise<T>, fallback: T) => Promise<T>,
-  logger?: Logger,
+  read: ReadFn,
+  call: (contract: string, fn: string, args?: ClarityValue[]) => Promise<unknown>,
 ): Promise<LegionProposal | null> {
   const [prop, status] = await Promise.all([
-    safe(`gov.get-proposal.${id}`, () => legionReadOnly(GOV_CONTRACT, "get-proposal", [uintCV(id)], logger), null),
-    safe(`gov.get-proposal-status.${id}`, () => legionReadOnly(GOV_CONTRACT, "get-proposal-status", [uintCV(id)], logger), null),
+    read(`gov.get-proposal.${id}`, () => call(GOV_CONTRACT, "get-proposal", [uintCV(id)]), null),
+    read(`gov.get-proposal-status.${id}`, () => call(GOV_CONTRACT, "get-proposal-status", [uintCV(id)]), null),
   ]);
 
   if (!prop || !status) return null;
@@ -161,9 +194,9 @@ async function buildProposal(
   // Per-agent vote records (optional tuple {vote, amount} or null).
   const votes: LegionVote[] = await Promise.all(
     LEGION_AGENTS.map(async (agent) => {
-      const rec = await safe(
+      const rec = await read(
         `gov.get-vote-record.${id}.${agent.label}`,
-        () => legionReadOnly(GOV_CONTRACT, "get-vote-record", [uintCV(id), principalCV(agent.address)], logger),
+        () => call(GOV_CONTRACT, "get-vote-record", [uintCV(id), principalCV(agent.address)]),
         null,
       );
       const voted = rec != null;
@@ -208,25 +241,4 @@ async function buildProposal(
     },
     votes,
   };
-}
-
-// ─────────────────────────── KV persistence ───────────────────────────
-
-export async function readLegionSnapshot(
-  kv: KVNamespace,
-): Promise<LegionSnapshot | null> {
-  const raw = await kv.get(LEGION_SNAPSHOT_KV_KEY);
-  if (!raw) return null;
-  try {
-    return JSON.parse(raw) as LegionSnapshot;
-  } catch {
-    return null;
-  }
-}
-
-export async function writeLegionSnapshot(
-  kv: KVNamespace,
-  snapshot: LegionSnapshot,
-): Promise<void> {
-  await kv.put(LEGION_SNAPSHOT_KV_KEY, JSON.stringify(snapshot));
 }
