@@ -17,7 +17,11 @@
  */
 
 import { type ClarityValue, principalCV, uintCV } from "@stacks/transactions";
-import { getTestnetTipHeight, legionReadOnly } from "./stacks";
+import {
+  getContractTransactions,
+  getTestnetTipHeight,
+  legionReadOnly,
+} from "./stacks";
 import {
   GOV_CONTRACT,
   LEGION_AGENTS,
@@ -148,11 +152,21 @@ export async function buildLegionSnapshot(
   const proposalCount = proposalCountRaw != null ? toNum(proposalCountRaw) : 0;
   const ids = Array.from({ length: proposalCount }, (_, i) => proposalCount - i);
 
+  // Vote txids aren't in the vote record — recover them from the gov contract's
+  // tx history. Only needed when a proposal is still in flight; concluded ones
+  // carry their txids forward, so skip the fetch entirely when all are terminal.
+  const hasInFlight = ids.some((id) => !concludedById.has(id));
+  const voteTxidByKey = hasInFlight
+    ? await read("gov.tx-history", () => buildVoteTxidMap(apiKey, logger), new Map<string, string>())
+    : new Map<string, string>();
+
   const proposals = (
     await Promise.all(
       ids.map((id) => {
         const cached = concludedById.get(id);
-        return cached ? Promise.resolve(cached) : buildProposal(id, read, call);
+        return cached
+          ? Promise.resolve(cached)
+          : buildProposal(id, read, call, voteTxidByKey);
       }),
     )
   ).filter((p): p is LegionProposal => p !== null);
@@ -179,10 +193,29 @@ export async function buildLegionSnapshot(
   };
 }
 
+/**
+ * Map `${proposalId}:${voterAddress}` → the txid of that agent's `vote` call.
+ * Newest-first history + set-if-absent means a re-vote keeps its latest txid.
+ */
+async function buildVoteTxidMap(
+  apiKey: string | undefined,
+  logger: Logger | undefined,
+): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  const txs = await getContractTransactions(GOV_CONTRACT, apiKey, logger);
+  for (const tx of txs) {
+    if (tx.functionName !== "vote" || tx.firstUintArg == null) continue;
+    const key = `${tx.firstUintArg}:${tx.sender}`;
+    if (!map.has(key)) map.set(key, tx.txid);
+  }
+  return map;
+}
+
 async function buildProposal(
   id: number,
   read: ReadFn,
   call: (contract: string, fn: string, args?: ClarityValue[]) => Promise<unknown>,
+  voteTxidByKey: Map<string, string>,
 ): Promise<LegionProposal | null> {
   const [prop, status] = await Promise.all([
     read(`gov.get-proposal.${id}`, () => call(GOV_CONTRACT, "get-proposal", [uintCV(id)]), null),
@@ -206,6 +239,7 @@ async function buildProposal(
         voted,
         vote: voted ? Boolean(get(rec, "vote")) : null,
         amount: voted ? toNum(get(rec, "amount")) : 0,
+        txid: voted ? (voteTxidByKey.get(`${id}:${agent.address}`) ?? null) : null,
       } satisfies LegionVote;
     }),
   );
