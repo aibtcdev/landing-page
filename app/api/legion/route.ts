@@ -74,7 +74,7 @@ export async function GET(request: NextRequest) {
       ? createLogger(env.LOGS, ctx, { rayId, path: "/api/legion" })
       : createConsoleLogger({ rayId, path: "/api/legion" });
 
-    const kv = env.VERIFIED_AGENTS as KVNamespace | undefined;
+    const kv = env.LEGION as KVNamespace | undefined;
     if (!kv) {
       // No KV binding — can't serve or cache. Tell the client to retry, don't pin.
       return NextResponse.json(
