@@ -48,7 +48,7 @@
       // the returned id below (same id is reused across all three env blocks,
       // matching the VERIFIED_AGENTS convention).
       "binding": "LEGION",
-      "id": "REPLACE_WITH_LEGION_KV_ID",
+      "id": "dc6792564d4b4f3e8b197808a3cc4161",
       "remote": true
     }
   ],
@@ -202,7 +202,7 @@
         {
           // Dedicated Legion dashboard snapshot namespace — see top-level block.
           "binding": "LEGION",
-          "id": "REPLACE_WITH_LEGION_KV_ID",
+          "id": "dc6792564d4b4f3e8b197808a3cc4161",
           "remote": true
         }
       ],
@@ -310,7 +310,7 @@
         {
           // Dedicated Legion dashboard snapshot namespace — see top-level block.
           "binding": "LEGION",
-          "id": "REPLACE_WITH_LEGION_KV_ID",
+          "id": "dc6792564d4b4f3e8b197808a3cc4161",
           "remote": true
         }
       ],
