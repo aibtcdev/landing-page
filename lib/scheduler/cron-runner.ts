@@ -260,11 +260,17 @@ export async function runLegionNow(
     ? parentLogger.child({ task: "legion" })
     : parentLogger;
 
+  const kv = env.LEGION;
+  if (!kv) {
+    logger.warn("legion.skipped_no_binding");
+    return;
+  }
+
   // Read the prior snapshot so terminal (concluded) proposals are carried
   // forward without re-reading them from Hiro.
-  const prev = await readLegionSnapshot(env.VERIFIED_AGENTS);
+  const prev = await readLegionSnapshot(kv);
   const snapshot = await buildLegionSnapshot(logger, prev);
-  await writeLegionSnapshot(env.VERIFIED_AGENTS, snapshot);
+  await writeLegionSnapshot(kv, snapshot);
 
   logger.info("legion.snapshot_written", {
     blockHeight: snapshot.blockHeight,
