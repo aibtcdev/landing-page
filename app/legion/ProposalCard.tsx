@@ -1,9 +1,46 @@
-import type { LegionProposal } from "@/lib/legion/types";
+import type { LegionProposal, LegionVote } from "@/lib/legion/types";
 import { deriveLifecycle, isPassing } from "@/lib/legion/lifecycle";
-import { GOV_RULES } from "@/lib/legion/constants";
+import { GOV_RULES, explorerTxUrl } from "@/lib/legion/constants";
 import { formatSbtc } from "@/lib/legion/format";
 import LifecycleTracker from "./LifecycleTracker";
 import AddressLink from "./AddressLink";
+
+/** A single voter: choice + weight, linking to the vote tx when known. */
+function VoteChip({ vote }: { vote: LegionVote }) {
+  const tone = vote.vote
+    ? "border-green-400/30 bg-green-400/[0.08] text-green-300"
+    : "border-red-400/30 bg-red-400/[0.08] text-red-300";
+  const cls = `inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] tabular-nums ${tone} ${
+    vote.txid ? "transition-colors hover:brightness-125" : ""
+  }`;
+  const inner = (
+    <>
+      <span className="font-medium">{vote.label.replace("legion-agent-", "agent-")}</span>
+      <span>{vote.vote ? "YES" : "NO"}</span>
+      <span className="opacity-50">· {formatSbtc(vote.amount)}</span>
+      {vote.txid && <span aria-hidden className="opacity-50">↗</span>}
+    </>
+  );
+
+  if (vote.txid) {
+    return (
+      <a
+        href={explorerTxUrl(vote.txid)}
+        target="_blank"
+        rel="noopener noreferrer"
+        title={`${vote.label} · ${formatSbtc(vote.amount)} sBTC · view vote tx`}
+        className={cls}
+      >
+        {inner}
+      </a>
+    );
+  }
+  return (
+    <span title={vote.address} className={cls}>
+      {inner}
+    </span>
+  );
+}
 
 /** One gate check — the scannable unit. `ok` null = neutral/info. */
 function GateStat({
@@ -192,19 +229,7 @@ export default function ProposalCard({
           </div>
           <div className="flex flex-wrap gap-1.5">
             {votedChips.map((v) => (
-              <span
-                key={v.address}
-                title={v.address}
-                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] tabular-nums ${
-                  v.vote
-                    ? "border-green-400/30 bg-green-400/[0.08] text-green-300"
-                    : "border-red-400/30 bg-red-400/[0.08] text-red-300"
-                }`}
-              >
-                <span className="font-medium">{v.label.replace("legion-agent-", "agent-")}</span>
-                <span>{v.vote ? "YES" : "NO"}</span>
-                <span className="text-white/40">· {formatSbtc(v.amount)}</span>
-              </span>
+              <VoteChip key={v.address} vote={v} />
             ))}
           </div>
         </div>
