@@ -38,7 +38,7 @@ export default async function LegionPage() {
         <Navbar />
 
         <main className="mx-auto max-w-[1200px] px-12 pt-32 pb-24 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-16">
-          <LegionClient initialData={snapshot} />
+          <LegionClient snapshot={snapshot} />
         </main>
 
         <Footer />
