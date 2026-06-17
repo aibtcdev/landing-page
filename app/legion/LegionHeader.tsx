@@ -6,34 +6,26 @@ import {
 } from "@/lib/legion/constants";
 import { formatSbtc, shortAddress } from "@/lib/legion/format";
 
-function StatCard({
-  label,
-  value,
-  sub,
-}: {
-  label: string;
-  value: string;
-  sub?: string;
-}) {
+function Metric({ label, value }: { label: string; value: string }) {
   return (
-    <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
-      <div className="text-xs uppercase tracking-wide text-white/40">{label}</div>
-      <div className="mt-2 text-2xl font-semibold text-white">{value}</div>
-      {sub && <div className="mt-1 text-xs text-white/40">{sub}</div>}
+    <div className="border-l border-white/10 pl-4 first:border-l-0 first:pl-0">
+      <div className="text-[10px] uppercase tracking-[0.08em] text-white/40">
+        {label}
+      </div>
+      <div className="mt-0.5 text-lg font-semibold tabular-nums leading-none text-white">
+        {value}
+      </div>
     </div>
   );
 }
 
-function WiringBadge({ label, ok }: { label: string; ok: boolean }) {
+function WiringDot({ label, ok }: { label: string; ok: boolean }) {
   return (
-    <span
-      className={`inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs ${
-        ok
-          ? "border-green-400/30 bg-green-400/[0.08] text-green-300"
-          : "border-white/10 bg-white/[0.02] text-white/40"
-      }`}
-    >
-      <span aria-hidden>{ok ? "✓" : "—"}</span>
+    <span className="inline-flex items-center gap-1.5 text-[11px] text-white/50">
+      <span
+        className={`h-1.5 w-1.5 rounded-full ${ok ? "bg-green-400" : "bg-white/20"}`}
+        aria-hidden
+      />
       {label}
     </span>
   );
@@ -44,86 +36,50 @@ export default function LegionHeader({ snapshot }: { snapshot: LegionSnapshot })
   const stakedCount = members.filter((m) => m.stake > 0).length;
 
   return (
-    <section className="space-y-5">
-      {/* Treasury identity + live height */}
-      <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-5 py-4">
-        <div className="space-y-1">
-          <div className="text-xs uppercase tracking-wide text-white/40">
-            Treasury contract
-          </div>
+    <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]">
+      {/* Top row: identity + chain + wiring */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-white/[0.06] px-5 py-3">
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
+          <span className="text-white/40">Treasury</span>
           <a
             href={explorerContractUrl(TREASURY_CONTRACT)}
             target="_blank"
             rel="noopener noreferrer"
-            className="font-mono text-sm text-white/80 transition-colors hover:text-[#F7931A]"
+            className="font-mono text-white/70 transition-colors hover:text-[#F7931A]"
             title={TREASURY_CONTRACT}
           >
-            {shortAddress(TREASURY_CONTRACT, 8, 16)}
+            {shortAddress(TREASURY_CONTRACT, 6, 14)}
           </a>
-        </div>
-        <div className="text-right">
-          <div className="text-xs uppercase tracking-wide text-white/40">
-            Block height
-          </div>
-          <div className="font-mono text-lg font-semibold text-white">
+          <span className="text-white/15">·</span>
+          <span className="text-white/40">Block</span>
+          <span className="font-mono text-white/70 tabular-nums">
             {blockHeight != null ? blockHeight.toLocaleString("en-US") : "—"}
-          </div>
+          </span>
+        </div>
+        <div className="flex items-center gap-3">
+          <WiringDot label="gov" ok={treasury.govWired} />
+          <WiringDot label="payout" ok={treasury.payoutWired} />
+          <WiringDot label="token" ok={treasury.tokenWired} />
         </div>
       </div>
 
-      {/* Headline stats */}
-      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-        <StatCard
-          label="Pooled sBTC"
-          value={`${formatSbtc(treasury.balance)} sBTC`}
-          sub="In the shared treasury"
-        />
-        <StatCard
-          label="Total staked"
-          value={`${formatSbtc(totalStaked)} sBTC`}
-          sub="Combined voting weight"
-        />
-        <StatCard
-          label="Members staked"
-          value={`${stakedCount} / ${members.length}`}
-          sub="Agents with voting power"
-        />
-      </div>
-
-      {/* Constitution + wiring */}
-      <div className="grid gap-4 lg:grid-cols-[2fr_1fr]">
-        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
-          <div className="text-xs uppercase tracking-wide text-white/40">
-            Constitution
-          </div>
-          <ul className="mt-3 grid gap-2 text-sm text-white/70 sm:grid-cols-2">
-            <li>
-              <span className="text-white">Quorum:</span> ≥ {GOV_RULES.quorumPct}%
-              of staked weight must vote
-            </li>
-            <li>
-              <span className="text-white">Threshold:</span> ≥{" "}
-              {GOV_RULES.thresholdPct}% of cast votes YES
-            </li>
-            <li>
-              <span className="text-white">Min participants:</span> ≥{" "}
-              {GOV_RULES.minVoters} distinct voters
-            </li>
-            <li>
-              <span className="text-white">Veto:</span> blocked if veto weight ≥{" "}
-              {GOV_RULES.vetoPct}% and exceeds YES
-            </li>
-          </ul>
+      {/* Metrics band + constitution */}
+      <div className="flex flex-wrap items-center justify-between gap-x-8 gap-y-4 px-5 py-4">
+        <div className="flex items-center gap-4">
+          <Metric label="Pooled" value={`${formatSbtc(treasury.balance)} sBTC`} />
+          <Metric label="Staked" value={`${formatSbtc(totalStaked)} sBTC`} />
+          <Metric label="Members" value={`${stakedCount}/${members.length}`} />
         </div>
-        <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5">
-          <div className="text-xs uppercase tracking-wide text-white/40">
-            Wiring
-          </div>
-          <div className="mt-3 flex flex-wrap gap-2">
-            <WiringBadge label="gov" ok={treasury.govWired} />
-            <WiringBadge label="payout" ok={treasury.payoutWired} />
-            <WiringBadge label="token" ok={treasury.tokenWired} />
-          </div>
+
+        <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/45">
+          <span className="text-white/30">Rules</span>
+          <span>quorum ≥{GOV_RULES.quorumPct}%</span>
+          <span className="text-white/15">·</span>
+          <span>threshold ≥{GOV_RULES.thresholdPct}%</span>
+          <span className="text-white/15">·</span>
+          <span>min {GOV_RULES.minVoters} voters</span>
+          <span className="text-white/15">·</span>
+          <span>veto ≥{GOV_RULES.vetoPct}%</span>
         </div>
       </div>
     </section>
