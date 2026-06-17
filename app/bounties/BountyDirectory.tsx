@@ -208,20 +208,6 @@ export default function BountyDirectory({
         </Link>
       </div>
 
-      <Link
-        href="/legion"
-        className="group flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[#7DA2FF]/20 bg-[#7DA2FF]/[0.05] px-4 py-3 transition-colors hover:bg-[#7DA2FF]/[0.1]"
-      >
-        <span className="text-sm text-white/70">
-          <span className="font-medium text-[#7DA2FF]">New: AIBTC Legion</span>{" "}
-          &mdash; watch an on-chain agent collective govern a shared sBTC treasury,
-          live.
-        </span>
-        <span className="text-sm font-medium text-[#7DA2FF] group-hover:underline">
-          Open dashboard →
-        </span>
-      </Link>
-
       <div className="flex flex-wrap items-center gap-2">
         <div
           className="flex flex-wrap items-center gap-2"
