@@ -1,63 +1,86 @@
 import type { LegionProposal } from "@/lib/legion/types";
-import { isPassing } from "@/lib/legion/lifecycle";
+import { deriveLifecycle, isPassing } from "@/lib/legion/lifecycle";
+import { GOV_RULES } from "@/lib/legion/constants";
 import { formatSbtc } from "@/lib/legion/format";
 import LifecycleTracker from "./LifecycleTracker";
 import AddressLink from "./AddressLink";
 
-function Badge({
-  ok,
+/** One gate check — the scannable unit. `ok` null = neutral/info. */
+function GateStat({
   label,
+  value,
+  sub,
+  ok,
 }: {
-  ok: boolean;
   label: string;
+  value: string;
+  sub: string;
+  ok: boolean | null;
 }) {
+  const tone =
+    ok === null
+      ? "border-white/10 bg-white/[0.02] text-white"
+      : ok
+        ? "border-green-400/25 bg-green-400/[0.06] text-green-300"
+        : "border-red-400/20 bg-red-400/[0.05] text-red-300";
   return (
-    <span
-      className={`inline-flex items-center gap-1 rounded-full border px-2.5 py-0.5 text-xs ${
-        ok
-          ? "border-green-400/30 bg-green-400/[0.08] text-green-300"
-          : "border-white/10 bg-white/[0.02] text-white/40"
-      }`}
-    >
-      {ok ? "✓" : "✗"} {label}
-    </span>
+    <div className={`rounded-lg border px-3 py-2 ${tone}`}>
+      <div className="flex items-center justify-between gap-2">
+        <span className="text-[10px] uppercase tracking-[0.08em] text-white/40">
+          {label}
+        </span>
+        {ok !== null && (
+          <span aria-hidden className="text-[11px]">
+            {ok ? "✓" : "✗"}
+          </span>
+        )}
+      </div>
+      <div className="mt-1 text-lg font-semibold tabular-nums leading-none">
+        {value}
+      </div>
+      <div className="mt-1 text-[10px] text-white/35">{sub}</div>
+    </div>
   );
 }
 
-function TallyBar({
-  yes,
-  no,
-  veto,
-  total,
+function StatusPill({
+  passing,
+  outcome,
+  expired,
+  stageLabel,
 }: {
-  yes: number;
-  no: number;
-  veto: number;
-  total: number;
+  passing: boolean;
+  outcome: "executed" | "rejected" | null;
+  expired: boolean;
+  stageLabel: string;
 }) {
-  const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
+  let text = passing ? "Passing" : "Not passing";
+  let tone = passing
+    ? "border-green-400/30 bg-green-400/[0.1] text-green-300"
+    : "border-white/12 bg-white/[0.03] text-white/55";
+
+  if (outcome === "executed") {
+    text = "Passed · paid";
+    tone = "border-green-400/40 bg-green-400/[0.12] text-green-300";
+  } else if (outcome === "rejected") {
+    text = "Rejected";
+    tone = "border-red-400/30 bg-red-400/[0.1] text-red-300";
+  } else if (expired) {
+    text = "Expired";
+    tone = "border-white/12 bg-white/[0.03] text-white/45";
+  }
+
   return (
-    <div className="space-y-1.5">
-      <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-white/10">
-        <div className="h-full bg-green-400/80" style={{ width: `${pct(yes)}%` }} />
-        <div className="h-full bg-red-400/70" style={{ width: `${pct(no)}%` }} />
-        <div className="h-full bg-amber-400/70" style={{ width: `${pct(veto)}%` }} />
-      </div>
-      <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs text-white/60">
-        <span>
-          <span className="text-green-300">YES</span> {formatSbtc(yes)} (
-          {pct(yes).toFixed(0)}%)
-        </span>
-        <span>
-          <span className="text-red-300">NO</span> {formatSbtc(no)} (
-          {pct(no).toFixed(0)}%)
-        </span>
-        <span>
-          <span className="text-amber-300">VETO</span> {formatSbtc(veto)} (
-          {pct(veto).toFixed(0)}%)
-        </span>
-      </div>
-    </div>
+    <span className="flex shrink-0 flex-col items-end gap-0.5">
+      <span
+        className={`rounded-full border px-3 py-1 text-xs font-semibold ${tone}`}
+      >
+        {text}
+      </span>
+      <span className="text-[10px] uppercase tracking-wide text-white/30">
+        {stageLabel}
+      </span>
+    </span>
   );
 }
 
@@ -69,47 +92,91 @@ export default function ProposalCard({
   blockHeight: number | null;
 }) {
   const { status } = proposal;
+  const life = deriveLifecycle(status, blockHeight);
   const passing = isPassing(status);
+
+  // Real participation / approval percentages — the activity the page is about.
+  const total = status.totalStakedSnapshot;
+  const cast = status.yesWeight + status.noWeight + status.vetoWeight;
+  const participationPct = total > 0 ? (cast / total) * 100 : 0;
+  const approvalBase = status.yesWeight + status.noWeight;
+  const approvalPct = approvalBase > 0 ? (status.yesWeight / approvalBase) * 100 : 0;
+
+  const pct = (n: number) => (total > 0 ? (n / total) * 100 : 0);
   const votedChips = proposal.votes.filter((v) => v.voted);
 
   return (
     <article className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 max-md:p-4">
       {/* Header */}
-      <div className="flex flex-wrap items-start justify-between gap-3">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs text-white/40">
-            <span className="rounded bg-white/5 px-2 py-0.5 font-mono">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0 space-y-1.5">
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-[11px] text-white/40">
+            <span className="rounded bg-white/5 px-1.5 py-0.5 font-mono text-white/60">
               #{proposal.id}
             </span>
-            <span>
-              proposed by {proposal.proposerLabel ?? ""}{" "}
-              <AddressLink address={proposal.proposer} />
+            <span>{proposal.proposerLabel ?? "—"}</span>
+            <AddressLink address={proposal.proposer} />
+            <span className="text-white/20">→ pays</span>
+            <span className="font-semibold text-[#F7931A]">
+              {formatSbtc(proposal.amount)} sBTC
             </span>
+            <span className="text-white/20">to</span>
+            <span>{proposal.recipientLabel ?? "—"}</span>
+            <AddressLink address={proposal.recipient} />
           </div>
-          <h3 className="max-w-2xl text-base font-medium leading-snug text-white">
+          <h3 className="text-[15px] font-medium leading-snug text-white">
             {proposal.desc}
           </h3>
         </div>
-        <span
-          className={`shrink-0 rounded-full border px-3 py-1 text-xs font-medium ${
-            passing
-              ? "border-green-400/30 bg-green-400/[0.08] text-green-300"
-              : "border-white/10 bg-white/[0.02] text-white/50"
-          }`}
-        >
-          {passing ? "Passing" : "Not passing"}
-        </span>
+        <StatusPill
+          passing={passing}
+          outcome={life.outcome}
+          expired={life.stage === "expired"}
+          stageLabel={life.label}
+        />
       </div>
 
-      {/* Payout line */}
-      <div className="mt-3 flex flex-wrap items-center gap-x-2 gap-y-1 text-sm text-white/60">
-        <span>Pays</span>
-        <span className="font-semibold text-white">
-          {formatSbtc(proposal.amount)} sBTC
-        </span>
-        <span>to</span>
-        <span className="text-white/80">{proposal.recipientLabel ?? ""}</span>
-        <AddressLink address={proposal.recipient} />
+      {/* Gate activity — the hero row */}
+      <div className="mt-4 grid grid-cols-4 gap-2 max-sm:grid-cols-2">
+        <GateStat
+          label="Quorum"
+          value={`${participationPct.toFixed(0)}%`}
+          sub={`voted · need ≥${GOV_RULES.quorumPct}%`}
+          ok={status.metQuorum}
+        />
+        <GateStat
+          label="Threshold"
+          value={`${approvalPct.toFixed(0)}%`}
+          sub={`YES · need ≥${GOV_RULES.thresholdPct}%`}
+          ok={status.metThreshold}
+        />
+        <GateStat
+          label="Voters"
+          value={`${status.voterCount}`}
+          sub={`need ≥${GOV_RULES.minVoters}`}
+          ok={status.voterCount >= GOV_RULES.minVoters}
+        />
+        <GateStat
+          label="Veto"
+          value={status.vetoActivated ? "Active" : "Clear"}
+          sub={`${pct(status.vetoWeight).toFixed(0)}% veto weight`}
+          ok={status.vetoActivated ? false : null}
+        />
+      </div>
+
+      {/* Tally bar */}
+      <div className="mt-4 space-y-1.5">
+        <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-white/[0.06]">
+          <div className="h-full bg-green-400/80" style={{ width: `${pct(status.yesWeight)}%` }} />
+          <div className="h-full bg-red-400/70" style={{ width: `${pct(status.noWeight)}%` }} />
+          <div className="h-full bg-amber-400/70" style={{ width: `${pct(status.vetoWeight)}%` }} />
+        </div>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-white/50">
+          <span><span className="text-green-300">YES</span> {formatSbtc(status.yesWeight)}</span>
+          <span><span className="text-red-300">NO</span> {formatSbtc(status.noWeight)}</span>
+          <span><span className="text-amber-300">VETO</span> {formatSbtc(status.vetoWeight)}</span>
+          <span className="text-white/30">of {formatSbtc(total)} staked</span>
+        </div>
       </div>
 
       {/* Lifecycle */}
@@ -117,46 +184,26 @@ export default function ProposalCard({
         <LifecycleTracker status={status} blockHeight={blockHeight} />
       </div>
 
-      {/* Tally */}
-      <div className="mt-4">
-        <TallyBar
-          yes={status.yesWeight}
-          no={status.noWeight}
-          veto={status.vetoWeight}
-          total={status.totalStakedSnapshot}
-        />
-      </div>
-
-      {/* Gate badges */}
-      <div className="mt-3 flex flex-wrap gap-2">
-        <Badge ok={status.metQuorum} label="Quorum" />
-        <Badge ok={status.metThreshold} label="Threshold" />
-        <Badge ok={status.voterCount >= 2} label={`${status.voterCount} voters`} />
-        {status.vetoActivated && (
-          <span className="inline-flex items-center gap-1 rounded-full border border-amber-400/30 bg-amber-400/[0.08] px-2.5 py-0.5 text-xs text-amber-300">
-            ⚠ Veto active
-          </span>
-        )}
-      </div>
-
-      {/* Voter chips */}
+      {/* Who voted — each agent's choice + the weight they committed */}
       {votedChips.length > 0 && (
         <div className="mt-4 border-t border-white/[0.06] pt-3">
-          <div className="mb-2 text-xs uppercase tracking-wide text-white/40">
-            Votes cast
+          <div className="mb-2 text-[10px] uppercase tracking-[0.08em] text-white/40">
+            Who voted · {votedChips.length} of {proposal.votes.length}
           </div>
           <div className="flex flex-wrap gap-1.5">
             {votedChips.map((v) => (
               <span
                 key={v.address}
-                title={`${v.label} · ${formatSbtc(v.amount)} sBTC`}
-                className={`rounded-full border px-2 py-0.5 text-xs ${
+                title={v.address}
+                className={`inline-flex items-center gap-1.5 rounded-full border px-2 py-0.5 text-[11px] tabular-nums ${
                   v.vote
                     ? "border-green-400/30 bg-green-400/[0.08] text-green-300"
                     : "border-red-400/30 bg-red-400/[0.08] text-red-300"
                 }`}
               >
-                {v.label.replace("legion-agent-", "#")} {v.vote ? "YES" : "NO"}
+                <span className="font-medium">{v.label.replace("legion-agent-", "agent-")}</span>
+                <span>{v.vote ? "YES" : "NO"}</span>
+                <span className="text-white/40">· {formatSbtc(v.amount)}</span>
               </span>
             ))}
           </div>
