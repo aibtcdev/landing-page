@@ -26,12 +26,15 @@ export async function legionReadOnly(
   contract: string,
   functionName: string,
   args: ClarityValue[] = [],
+  hiroApiKey?: string,
   logger?: Logger,
 ): Promise<unknown> {
   const [contractAddress, contractName] = contract.split(".");
   const url = `${LEGION_API_BASE}/v2/contracts/call-read/${contractAddress}/${contractName}/${functionName}`;
 
-  const headers = buildHiroHeaders();
+  // An authenticated key lifts the per-IP rate limit — important because a
+  // Worker shares its colo egress IP with other tenants hitting Hiro.
+  const headers = buildHiroHeaders(hiroApiKey);
   headers["Content-Type"] = "application/json";
 
   const response = await stacksApiFetch(
@@ -59,11 +62,14 @@ export async function legionReadOnly(
 }
 
 /** Current Stacks testnet tip height, or null if /v2/info is unreachable. */
-export async function getTestnetTipHeight(logger?: Logger): Promise<number | null> {
+export async function getTestnetTipHeight(
+  hiroApiKey?: string,
+  logger?: Logger,
+): Promise<number | null> {
   try {
     const response = await stacksApiFetch(
       `${LEGION_API_BASE}/v2/info`,
-      { method: "GET" },
+      { method: "GET", headers: buildHiroHeaders(hiroApiKey) },
       { retries: 1, retries429: 1, perAttemptTimeoutMs: PER_ATTEMPT_TIMEOUT_MS, logger },
     );
     if (!response.ok) return null;
