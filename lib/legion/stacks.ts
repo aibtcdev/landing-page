@@ -69,8 +69,15 @@ export interface ContractTx {
   functionName: string;
   /** Caller principal. */
   sender: string;
-  /** First uint arg decoded to a number (e.g. proposal id from `vote u4 ...`), or null. */
-  firstUintArg: number | null;
+  /** Decoded function-call argument reprs, e.g. ["u4", "true"]. */
+  argReprs: string[];
+}
+
+/** Parse a Clarity uint repr like "u4" into a number, or null. */
+export function parseUintRepr(repr: string | undefined): number | null {
+  if (typeof repr !== "string" || !repr.startsWith("u")) return null;
+  const n = Number(repr.slice(1));
+  return Number.isFinite(n) ? n : null;
 }
 
 /**
@@ -114,13 +121,11 @@ export async function getContractTransactions(
       };
       const cc = tx.contract_call;
       if (!cc?.function_name || !tx.tx_id) continue;
-      const repr = cc.function_args?.[0]?.repr;
-      const n = typeof repr === "string" && repr.startsWith("u") ? Number(repr.slice(1)) : NaN;
       out.push({
         txid: tx.tx_id,
         functionName: cc.function_name,
         sender: tx.sender_address ?? "",
-        firstUintArg: Number.isFinite(n) ? n : null,
+        argReprs: (cc.function_args ?? []).map((a) => a.repr ?? ""),
       });
     }
 
