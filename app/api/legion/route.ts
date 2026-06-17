@@ -59,6 +59,21 @@ export async function GET(request: NextRequest) {
   if (searchParams.get("docs") === "1") return selfDocResponse();
 
   const { env, ctx } = await getCloudflareContext();
+
+  // Non-sensitive diagnostic: confirms whether the Hiro key + D1 actually reach
+  // this deploy's code (reports presence only, never the value). Lets us tell
+  // "key not set on this env" apart from a code bug without leaking secrets.
+  if (searchParams.get("diag") === "1") {
+    return NextResponse.json(
+      {
+        deployEnv: env.DEPLOY_ENV ?? null,
+        hasHiroApiKey: Boolean(env.HIRO_API_KEY),
+        hiroApiKeyLength: env.HIRO_API_KEY ? env.HIRO_API_KEY.length : 0,
+        hasDb: Boolean(env.DB),
+      },
+      { headers: { "Cache-Control": "no-store" } },
+    );
+  }
   const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
   const logger = isLogsRPC(env.LOGS)
     ? createLogger(env.LOGS, ctx, { rayId, path: "/api/legion" })
