@@ -63,6 +63,7 @@ export const swrKeys = {
     `/api/stats/earnings${buildQuery({ window: opts.window })}`,
   activity: () => "/api/activity",
   statusSummary: () => "/api/status/summary",
+  legion: () => "/api/legion",
 } as const;
 
 /**
