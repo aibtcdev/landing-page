@@ -4,17 +4,33 @@
  * Deliberately separate from `lib/identity/stacks-api.ts` (which is hardcoded to
  * mainnet and sits on the request-critical profile path). This module reuses the
  * shared fetch wrapper and the base-agnostic `parseClarityValue` decoder, and
- * only adds the testnet URL + a small `/v2/info` helper. No key is sent —
- * testnet read-only calls are public.
+ * only adds the testnet URL + a small `/v2/info` helper. The Hiro API key is
+ * sent via `x-api-key` (Hiro's documented header) to lift the per-IP rate limit.
  */
 
 import { type ClarityValue, serializeCV } from "@stacks/transactions";
-import { stacksApiFetch, buildHiroHeaders, detect429 } from "../stacks-api-fetch";
+import { stacksApiFetch, detect429 } from "../stacks-api-fetch";
 import { parseClarityValue } from "../identity/stacks-api";
 import { LEGION_API_BASE } from "./constants";
 import type { Logger } from "../logging";
 
 const PER_ATTEMPT_TIMEOUT_MS = 5_000;
+
+/**
+ * Hiro auth headers. Hiro's current documented header is `x-api-key`; we also
+ * send the legacy `x-hiro-api-key` for compatibility. Without a key the request
+ * goes out anonymous and is capped at 50 RPM per IP — which a Worker (shared
+ * colo egress IP) blows through instantly, so the key is what makes deployed
+ * reads viable.
+ */
+function legionHeaders(apiKey?: string): Record<string, string> {
+  const headers: Record<string, string> = {};
+  if (apiKey) {
+    headers["x-api-key"] = apiKey;
+    headers["x-hiro-api-key"] = apiKey;
+  }
+  return headers;
+}
 
 /**
  * Call a read-only function on a testnet contract and return the unwrapped
@@ -34,7 +50,7 @@ export async function legionReadOnly(
 
   // An authenticated key lifts the per-IP rate limit — important because a
   // Worker shares its colo egress IP with other tenants hitting Hiro.
-  const headers = buildHiroHeaders(hiroApiKey);
+  const headers = legionHeaders(hiroApiKey);
   headers["Content-Type"] = "application/json";
 
   const response = await stacksApiFetch(
@@ -103,7 +119,7 @@ export async function getContractTransactions(
     try {
       const response = await stacksApiFetch(
         `${LEGION_API_BASE}/extended/v1/address/${contractId}/transactions?limit=${pageSize}&offset=${offset}`,
-        { method: "GET", headers: buildHiroHeaders(apiKey) },
+        { method: "GET", headers: legionHeaders(apiKey) },
         { retries: 1, retries429: 1, perAttemptTimeoutMs: PER_ATTEMPT_TIMEOUT_MS, logger },
       );
       if (!response.ok) break;
@@ -147,7 +163,7 @@ export async function getTestnetTipHeight(
   try {
     const response = await stacksApiFetch(
       `${LEGION_API_BASE}/v2/info`,
-      { method: "GET", headers: buildHiroHeaders(hiroApiKey) },
+      { method: "GET", headers: legionHeaders(hiroApiKey) },
       { retries: 1, retries429: 1, perAttemptTimeoutMs: PER_ATTEMPT_TIMEOUT_MS, logger },
     );
     if (!response.ok) return null;
