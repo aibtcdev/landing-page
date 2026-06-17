@@ -4,26 +4,24 @@
  */
 
 export interface LegionMember {
-  label: string;
+  /** STX address (also the staker / voter identity). */
   address: string;
-  /** Staked sBTC (sats) = voting weight. 0 if not yet staked. */
+  /** Staked sBTC (sats) = voting weight. */
   stake: number;
-  /** stake / totalStaked * 100, in [0, 100]. 0 when nothing is staked. */
+  /** stake / totalStaked * 100, in [0, 100]. */
   weightPct: number;
   /** Wallet sBTC balance (sats), independent of stake. */
   sbtcBalance: number;
 }
 
 export interface LegionVote {
-  label: string;
+  /** Voter STX address. */
   address: string;
-  /** Whether this agent has a vote record on the proposal. */
-  voted: boolean;
-  /** true = YES, false = NO, null = has not voted. */
-  vote: boolean | null;
+  /** true = YES, false = NO. */
+  vote: boolean;
   /** Weight committed with the vote (sats). */
   amount: number;
-  /** The on-chain `vote` transaction id, recovered from contract history (null if not found). */
+  /** The on-chain `vote` transaction id (null if not recovered). */
   txid: string | null;
 }
 
@@ -48,15 +46,15 @@ export interface LegionProposalStatus {
 
 export interface LegionProposal {
   id: number;
+  /** Who created the proposal. */
   proposer: string;
-  proposerLabel: string | null;
   desc: string;
+  /** Who the treasury pays if the proposal passes. */
   recipient: string;
-  recipientLabel: string | null;
-  /** Requested payout (sats). */
+  /** Payout amount from the treasury (sats). */
   amount: number;
   status: LegionProposalStatus;
-  /** Per-agent vote records. */
+  /** The agents who actually voted, derived from on-chain vote txs. */
   votes: LegionVote[];
 }
 
