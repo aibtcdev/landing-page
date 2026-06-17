@@ -23,6 +23,8 @@ export interface LegionVote {
   vote: boolean | null;
   /** Weight committed with the vote (sats). */
   amount: number;
+  /** The on-chain `vote` transaction id, recovered from contract history (null if not found). */
+  txid: string | null;
 }
 
 export interface LegionProposalStatus {
