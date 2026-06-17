@@ -63,3 +63,8 @@ export function explorerAddressUrl(address: string): string {
 export function explorerContractUrl(contractId: string): string {
   return `https://explorer.hiro.so/txid/${contractId}?chain=${LEGION_CHAIN}`;
 }
+
+/** Testnet explorer link for a transaction id. */
+export function explorerTxUrl(txid: string): string {
+  return `https://explorer.hiro.so/txid/${txid}?chain=${LEGION_CHAIN}`;
+}
