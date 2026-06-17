@@ -162,22 +162,24 @@ export async function buildLegionSnapshot(
     }
   }
 
-  // Proposals — newest first. Reuse concluded ones from prev (terminal on-chain).
-  const concludedById = new Map<number, LegionProposal>();
-  for (const p of prev?.proposals ?? []) {
-    if (p.status.concluded) concludedById.set(p.id, p);
-  }
+  // Proposals — newest first. Concluded ones are terminal (reuse verbatim); for
+  // the rest, prefer a fresh read but fall back to the prior snapshot's copy if
+  // this build's reads failed (e.g. transient 429), so a partial build never
+  // wipes good data — the snapshot only ever improves.
+  const prevById = new Map<number, LegionProposal>();
+  for (const p of prev?.proposals ?? []) prevById.set(p.id, p);
 
-  const proposalCount = proposalCountRaw != null ? toNum(proposalCountRaw) : 0;
+  const proposalCount =
+    proposalCountRaw != null ? toNum(proposalCountRaw) : (prev?.proposals.length ?? 0);
   const ids = Array.from({ length: proposalCount }, (_, i) => proposalCount - i);
 
   const proposals = (
     await Promise.all(
-      ids.map((id) => {
-        const cached = concludedById.get(id);
-        return cached
-          ? Promise.resolve(cached)
-          : buildProposal(id, read, call, votesByProposal.get(id) ?? new Map());
+      ids.map(async (id) => {
+        const prior = prevById.get(id);
+        if (prior?.status.concluded) return prior; // terminal — never re-read
+        const built = await buildProposal(id, read, call, votesByProposal.get(id) ?? new Map());
+        return built ?? prior ?? null; // fall back to prior on read failure
       }),
     )
   ).filter((p): p is LegionProposal => p !== null);
@@ -185,21 +187,23 @@ export async function buildLegionSnapshot(
   logger?.debug?.("legion.snapshot_built", {
     members: members.length,
     proposals: proposals.length,
-    reused: ids.filter((id) => concludedById.has(id)).length,
+    reused: ids.filter((id) => prevById.get(id)?.status.concluded).length,
     errors: errors.length,
   });
 
+  // Fall back to the prior snapshot for any top-level read that failed this
+  // build, so transient 429s never blank out good data.
   return {
     updatedAt: Date.now(),
-    blockHeight,
+    blockHeight: blockHeight ?? prev?.blockHeight ?? null,
     treasury: {
-      balance: balance != null ? toNum(balance) : null,
-      govWired: govWire != null,
-      payoutWired: payoutWire != null,
-      tokenWired: tokenWire != null,
+      balance: balance != null ? toNum(balance) : (prev?.treasury.balance ?? null),
+      govWired: govWire != null ? true : (prev?.treasury.govWired ?? false),
+      payoutWired: payoutWire != null ? true : (prev?.treasury.payoutWired ?? false),
+      tokenWired: tokenWire != null ? true : (prev?.treasury.tokenWired ?? false),
     },
-    totalStaked,
-    members,
+    totalStaked: totalStaked ?? prev?.totalStaked ?? null,
+    members: members.length > 0 ? members : (prev?.members ?? []),
     proposals,
     errors,
   };
