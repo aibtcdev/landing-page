@@ -40,16 +40,6 @@
       "binding": "HOLDINGS_KV",
       "id": "3e9bbe855e7f46769dfcaa99ae87af5c",
       "remote": true
-    },
-    {
-      // Dedicated namespace for the Legion dashboard snapshot (key
-      // `legion:snapshot`). Written by the 5-min cron, read by /api/legion.
-      // Create once with: `wrangler kv namespace create LEGION`, then paste
-      // the returned id below (same id is reused across all three env blocks,
-      // matching the VERIFIED_AGENTS convention).
-      "binding": "LEGION",
-      "id": "dc6792564d4b4f3e8b197808a3cc4161",
-      "remote": true
     }
   ],
   // Top-level vars: used by bare `wrangler deploy` (without --env), which is
@@ -198,12 +188,6 @@
           "binding": "HOLDINGS_KV",
           "id": "3e9bbe855e7f46769dfcaa99ae87af5c",
           "remote": true
-        },
-        {
-          // Dedicated Legion dashboard snapshot namespace — see top-level block.
-          "binding": "LEGION",
-          "id": "dc6792564d4b4f3e8b197808a3cc4161",
-          "remote": true
         }
       ],
 
@@ -305,12 +289,6 @@
           // Surfaced as the agent L2 (sBTC) balance on /agents.
           "binding": "HOLDINGS_KV",
           "id": "3e9bbe855e7f46769dfcaa99ae87af5c",
-          "remote": true
-        },
-        {
-          // Dedicated Legion dashboard snapshot namespace — see top-level block.
-          "binding": "LEGION",
-          "id": "dc6792564d4b4f3e8b197808a3cc4161",
           "remote": true
         }
       ],
