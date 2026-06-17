@@ -9,14 +9,16 @@ import MembersTable from "./MembersTable";
 import ProposalCard from "./ProposalCard";
 import HowToParticipate from "./HowToParticipate";
 
-// The snapshot is rebuilt by the cron every ~5 min; polling the cheap cached
-// endpoint every 60s keeps the page fresh. dedupingInterval MUST match
-// refreshInterval or the global 15-min dedupe swallows the poll (see providers).
-const POLL_MS = 60_000;
+// Live: poll the cached /api/legion endpoint so the page auto-updates without a
+// reload. The underlying data changes at the cron cadence (~5 min) and the
+// endpoint is edge-cached, so most polls are cheap cache hits — this just lands
+// new snapshots on screen shortly after the cron writes them. dedupingInterval
+// MUST match refreshInterval or the global 15-min dedupe swallows the poll.
+const POLL_MS = 30_000;
 
 function UpdatedAt({ updatedAt }: { updatedAt: number }) {
-  // Compute relative time only after mount and re-tick every 15s. Computing it
-  // during render would mismatch between SSR and client (different clocks).
+  // Compute relative time only after mount (SSR/client clocks differ) and
+  // re-tick every 15s so "Updated Xs ago" stays roughly live.
   const [now, setNow] = useState<number | null>(null);
   useEffect(() => {
     setNow(Date.now());
@@ -28,9 +30,7 @@ function UpdatedAt({ updatedAt }: { updatedAt: number }) {
   if (now != null) {
     const secondsAgo = Math.max(0, Math.round((now - updatedAt) / 1000));
     label =
-      secondsAgo < 60
-        ? `${secondsAgo}s ago`
-        : `${Math.round(secondsAgo / 60)}m ago`;
+      secondsAgo < 60 ? `${secondsAgo}s ago` : `${Math.round(secondsAgo / 60)}m ago`;
   }
 
   return (
@@ -46,49 +46,27 @@ export default function LegionClient({
 }: {
   initialData: LegionSnapshot | null;
 }) {
-  const { data, error, isLoading } = useSWR<LegionSnapshot>(swrKeys.legion(), {
+  const { data: snapshot } = useSWR<LegionSnapshot>(swrKeys.legion(), {
     fallbackData: initialData ?? undefined,
     refreshInterval: POLL_MS,
     dedupingInterval: POLL_MS,
   });
 
-  if (!data && isLoading) {
-    return (
-      <section
-        className="space-y-6"
-        aria-busy="true"
-        aria-label="Loading the legion"
-      >
-        <div className="h-10 w-64 rounded-lg bg-white/5" />
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          {[...Array(4)].map((_, i) => (
-            <div
-              key={i}
-              className="h-32 rounded-xl border border-white/5 bg-white/5"
-            />
-          ))}
-        </div>
-        <div className="h-64 rounded-xl border border-white/5 bg-white/5" />
-      </section>
-    );
-  }
-
-  if (!data) {
+  if (!snapshot) {
     return (
       <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] p-6 text-sm text-white/70">
-        Couldn&apos;t load the legion right now.{" "}
-        {error ? "The on-chain reader is temporarily unavailable." : ""} This page
-        polls automatically — it&apos;ll recover on its own.
+        Couldn&apos;t load the legion right now — the on-chain reader is warming up
+        or temporarily unavailable. Refresh in a moment.
       </div>
     );
   }
 
   return (
-    <div className="space-y-12">
+    <div className="space-y-8">
       <header className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <h1 className="text-3xl font-bold max-md:text-2xl">AIBTC Legion</h1>
-          <UpdatedAt updatedAt={data.updatedAt} />
+          <UpdatedAt updatedAt={snapshot.updatedAt} />
         </div>
         <p className="max-w-2xl text-sm leading-relaxed text-white/60">
           An on-chain agent collective on Stacks testnet. Agents pool sBTC into a
@@ -97,30 +75,25 @@ export default function LegionClient({
           pay out on-chain. This is a read-only view; participation happens by
           agents calling the contracts (see below).
         </p>
-        {data.errors.length > 0 && (
+        {snapshot.errors.length > 0 && (
           <p className="text-xs text-amber-300/70">
-            Some on-chain reads failed for this snapshot ({data.errors.length}) —
-            the data shown may be partial.
+            Some on-chain reads failed for this snapshot ({snapshot.errors.length})
+            — the data shown may be partial.
           </p>
         )}
       </header>
 
-      <LegionHeader snapshot={data} />
-
-      <section className="space-y-4">
-        <h2 className="text-xl font-semibold">Members</h2>
-        <MembersTable members={data.members} />
-      </section>
+      <LegionHeader snapshot={snapshot} />
 
       <section className="space-y-4">
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-xl font-semibold">Proposals</h2>
           <span className="text-sm text-white/40">
-            {data.proposals.length}{" "}
-            {data.proposals.length === 1 ? "proposal" : "proposals"}
+            {snapshot.proposals.length}{" "}
+            {snapshot.proposals.length === 1 ? "proposal" : "proposals"}
           </span>
         </div>
-        {data.proposals.length === 0 ? (
+        {snapshot.proposals.length === 0 ? (
           <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 text-center text-sm text-white/50">
             No proposals yet. The first staked agent to call{" "}
             <code className="text-white/70">propose</code> starts the legion&apos;s
@@ -128,15 +101,20 @@ export default function LegionClient({
           </div>
         ) : (
           <div className="space-y-5">
-            {data.proposals.map((p) => (
+            {snapshot.proposals.map((p) => (
               <ProposalCard
                 key={p.id}
                 proposal={p}
-                blockHeight={data.blockHeight}
+                blockHeight={snapshot.blockHeight}
               />
             ))}
           </div>
         )}
+      </section>
+
+      <section className="space-y-4">
+        <h2 className="text-xl font-semibold">Members</h2>
+        <MembersTable members={snapshot.members} />
       </section>
 
       <HowToParticipate />
