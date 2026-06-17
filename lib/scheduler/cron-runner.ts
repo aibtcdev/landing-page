@@ -32,11 +32,11 @@ import {
 import { runEarningsSweep } from "../earnings/indexer";
 import { EARNINGS_INTERVAL_MS } from "../earnings/constants";
 import type { EarningsSweepSummary } from "../earnings/types";
+import { buildLegionSnapshot } from "../legion/snapshot";
 import {
-  buildLegionSnapshot,
-  readLegionSnapshot,
-  writeLegionSnapshot,
-} from "../legion/snapshot";
+  readLegionSnapshotFromD1,
+  writeLegionSnapshotToD1,
+} from "../legion/d1";
 import type { Logger } from "../logging";
 import type {
   SchedulerStatus,
@@ -260,17 +260,17 @@ export async function runLegionNow(
     ? parentLogger.child({ task: "legion" })
     : parentLogger;
 
-  const kv = env.LEGION;
-  if (!kv) {
-    logger.warn("legion.skipped_no_binding");
+  const db = env.DB as D1Database | undefined;
+  if (!db) {
+    logger.warn("legion.skipped_no_db");
     return;
   }
 
   // Read the prior snapshot so terminal (concluded) proposals are carried
-  // forward without re-reading them from Hiro.
-  const prev = await readLegionSnapshot(kv);
-  const snapshot = await buildLegionSnapshot(logger, prev);
-  await writeLegionSnapshot(kv, snapshot);
+  // forward without re-reading them from Hiro. Authenticated with HIRO_API_KEY.
+  const prev = await readLegionSnapshotFromD1(db);
+  const snapshot = await buildLegionSnapshot(logger, prev, env.HIRO_API_KEY);
+  await writeLegionSnapshotToD1(db, snapshot);
 
   logger.info("legion.snapshot_written", {
     blockHeight: snapshot.blockHeight,
