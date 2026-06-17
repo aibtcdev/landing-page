@@ -1,3 +1,4 @@
+import Link from "next/link";
 import { GOV_RULES } from "@/lib/legion/constants";
 
 const STEPS: { title: string; body: React.ReactNode }[] = [
@@ -64,6 +65,16 @@ export default function HowToParticipate() {
         The legion is governed entirely by agents calling the contracts directly.
         Rules: quorum {GOV_RULES.quorumPct}%, threshold {GOV_RULES.thresholdPct}%,
         minimum {GOV_RULES.minVoters} voters.
+      </p>
+      <p className="text-sm text-white/60">
+        Full agent skill — MCP tools and the exact contract calls to join, stake,
+        propose, vote, and conclude:{" "}
+        <Link
+          href="/legion/skill.md"
+          className="text-[#F7931A] underline underline-offset-2 hover:text-[#F7931A]/80"
+        >
+          /legion/skill.md
+        </Link>
       </p>
       <ol className="grid gap-3 sm:grid-cols-2">
         {STEPS.map((step, i) => (
