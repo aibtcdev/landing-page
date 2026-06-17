@@ -1,34 +1,26 @@
 /**
  * Assemble a full Legion snapshot from testnet.
  *
- * The fan-out (treasury + gov + per-agent stake/balance + per-proposal
- * status/votes) runs server-side and is persisted to D1 (lib/legion/d1.ts) by
- * the cron; the dashboard reads that row behind caches.default. So Hiro read
- * volume is bounded, not per page-view.
+ * Membership is OPEN — anyone who stakes can vote or propose — so the member
+ * and voter sets are discovered from on-chain history (the gov contract's
+ * `stake` / `vote` calls), never a hardcoded roster. The fan-out is persisted
+ * to D1 by the cron and read behind caches.default, so Hiro volume is bounded.
  *
- * Two guards keep the fan-out from breaking under load:
- *  - an authenticated Hiro key (a Worker shares its colo egress IP, so
- *    unauthenticated bursts can be throttled), and
- *  - a concurrency limiter so we never have more than N reads in flight.
- *
- * Every read degrades to a partial snapshot (recorded in `errors`) instead of
- * throwing the whole build away. Concluded proposals are terminal on-chain, so
- * they're carried forward from `prev` and cost zero reads.
+ * Guards: an authenticated Hiro key (a Worker shares its colo egress IP) and a
+ * concurrency limiter. Every read degrades to a partial snapshot (`errors`)
+ * rather than throwing. Concluded proposals are terminal, so they're carried
+ * forward from `prev` and cost zero reads.
  */
 
 import { type ClarityValue, principalCV, uintCV } from "@stacks/transactions";
 import {
+  type ContractTx,
   getContractTransactions,
   getTestnetTipHeight,
   legionReadOnly,
+  parseUintRepr,
 } from "./stacks";
-import {
-  GOV_CONTRACT,
-  LEGION_AGENTS,
-  legionLabelFor,
-  SBTC_TOKEN,
-  TREASURY_CONTRACT,
-} from "./constants";
+import { GOV_CONTRACT, SBTC_TOKEN, TREASURY_CONTRACT } from "./constants";
 import type {
   LegionMember,
   LegionProposal,
@@ -39,8 +31,9 @@ import type { Logger } from "../logging";
 
 /** Max concurrent Hiro reads during a build. Keeps the fan-out from bursting. */
 const LEGION_READ_CONCURRENCY = 6;
+/** How far back through gov history to discover members/voters. */
+const GOV_HISTORY_CAP = 500;
 
-/** Coerce a Clarity uint string (or anything) to a finite number, defaulting 0. */
 function toNum(v: unknown): number {
   const n = Number(v);
   return Number.isFinite(n) ? n : 0;
@@ -73,14 +66,11 @@ function createLimiter(max: number) {
   };
 }
 
-/** A bounded, error-trapping read. Returns `fallback` on any failure. */
 type ReadFn = <T>(label: string, task: () => Promise<unknown>, fallback: T) => Promise<T>;
+type CallFn = (contract: string, fn: string, args?: ClarityValue[]) => Promise<unknown>;
+/** proposalId → (voter → { vote, txid }), newest vote per voter. */
+type VotesByProposal = Map<number, Map<string, { vote: boolean; txid: string }>>;
 
-/**
- * Build a fresh snapshot. Pass the previous snapshot (`prev`) to carry forward
- * terminal (`concluded`) proposals without re-reading them, and `apiKey` to
- * authenticate Hiro reads.
- */
 export async function buildLegionSnapshot(
   logger?: Logger,
   prev?: LegionSnapshot | null,
@@ -99,11 +89,10 @@ export async function buildLegionSnapshot(
     }
   };
 
-  /** A read-only contract call, authenticated + decoded. */
-  const call = (contract: string, fn: string, args: ClarityValue[] = []) =>
+  const call: CallFn = (contract, fn, args = []) =>
     legionReadOnly(contract, fn, args, apiKey, logger);
 
-  // Top-level reads (the limiter bounds true concurrency despite Promise.all).
+  // Top-level reads.
   const [
     blockHeight,
     balance,
@@ -124,26 +113,56 @@ export async function buildLegionSnapshot(
 
   const totalStaked = totalStakedRaw != null ? toNum(totalStakedRaw) : null;
 
-  // Members — stake + wallet sBTC balance per agent.
-  const members: LegionMember[] = await Promise.all(
-    LEGION_AGENTS.map(async (agent) => {
-      const [stakeRaw, balRaw] = await Promise.all([
-        read(`gov.get-stake.${agent.label}`, () => call(GOV_CONTRACT, "get-stake", [principalCV(agent.address)]), null),
-        read(`sbtc.get-balance.${agent.label}`, () => call(SBTC_TOKEN, "get-balance", [principalCV(agent.address)]), null),
-      ]);
-      const stake = stakeRaw != null ? toNum(stakeRaw) : 0;
-      return {
-        label: agent.label,
-        address: agent.address,
-        stake,
-        weightPct: totalStaked && totalStaked > 0 ? (stake / totalStaked) * 100 : 0,
-        sbtcBalance: balRaw != null ? toNum(balRaw) : 0,
-      } satisfies LegionMember;
-    }),
+  // Gov history drives BOTH member discovery (who staked) and voter discovery
+  // (who voted, with txid). One fetch, reused below.
+  const govTxs = await read(
+    "gov.tx-history",
+    () => getContractTransactions(GOV_CONTRACT, apiKey, logger, GOV_HISTORY_CAP),
+    [] as ContractTx[],
   );
-  members.sort((a, b) => b.stake - a.stake);
 
-  // Proposals — newest first (id = count .. 1). Reuse concluded ones from prev.
+  // Candidate members = every distinct principal that has interacted with gov.
+  // We confirm each by reading its current stake and keep only active stakers.
+  const candidates = Array.from(
+    new Set(govTxs.map((t) => t.sender).filter(Boolean)),
+  );
+  const members: LegionMember[] = (
+    await Promise.all(
+      candidates.map(async (address) => {
+        const [stakeRaw, balRaw] = await Promise.all([
+          read(`gov.get-stake.${address}`, () => call(GOV_CONTRACT, "get-stake", [principalCV(address)]), null),
+          read(`sbtc.get-balance.${address}`, () => call(SBTC_TOKEN, "get-balance", [principalCV(address)]), null),
+        ]);
+        const stake = stakeRaw != null ? toNum(stakeRaw) : 0;
+        return {
+          address,
+          stake,
+          weightPct: totalStaked && totalStaked > 0 ? (stake / totalStaked) * 100 : 0,
+          sbtcBalance: balRaw != null ? toNum(balRaw) : 0,
+        } satisfies LegionMember;
+      }),
+    )
+  )
+    .filter((m) => m.stake > 0)
+    .sort((a, b) => b.stake - a.stake);
+
+  // Votes per proposal, derived from `vote` txs (newest-first → keep latest).
+  const votesByProposal: VotesByProposal = new Map();
+  for (const tx of govTxs) {
+    if (tx.functionName !== "vote") continue;
+    const pid = parseUintRepr(tx.argReprs[0]);
+    if (pid == null) continue;
+    let byVoter = votesByProposal.get(pid);
+    if (!byVoter) {
+      byVoter = new Map();
+      votesByProposal.set(pid, byVoter);
+    }
+    if (!byVoter.has(tx.sender)) {
+      byVoter.set(tx.sender, { vote: tx.argReprs[1] === "true", txid: tx.txid });
+    }
+  }
+
+  // Proposals — newest first. Reuse concluded ones from prev (terminal on-chain).
   const concludedById = new Map<number, LegionProposal>();
   for (const p of prev?.proposals ?? []) {
     if (p.status.concluded) concludedById.set(p.id, p);
@@ -152,27 +171,20 @@ export async function buildLegionSnapshot(
   const proposalCount = proposalCountRaw != null ? toNum(proposalCountRaw) : 0;
   const ids = Array.from({ length: proposalCount }, (_, i) => proposalCount - i);
 
-  // Vote txids aren't in the vote record — recover them from the gov contract's
-  // tx history. Only needed when a proposal is still in flight; concluded ones
-  // carry their txids forward, so skip the fetch entirely when all are terminal.
-  const hasInFlight = ids.some((id) => !concludedById.has(id));
-  const voteTxidByKey = hasInFlight
-    ? await read("gov.tx-history", () => buildVoteTxidMap(apiKey, logger), new Map<string, string>())
-    : new Map<string, string>();
-
   const proposals = (
     await Promise.all(
       ids.map((id) => {
         const cached = concludedById.get(id);
         return cached
           ? Promise.resolve(cached)
-          : buildProposal(id, read, call, voteTxidByKey);
+          : buildProposal(id, read, call, votesByProposal.get(id) ?? new Map());
       }),
     )
   ).filter((p): p is LegionProposal => p !== null);
 
-  logger?.debug?.("legion.proposals_built", {
-    total: proposals.length,
+  logger?.debug?.("legion.snapshot_built", {
+    members: members.length,
+    proposals: proposals.length,
     reused: ids.filter((id) => concludedById.has(id)).length,
     errors: errors.length,
   });
@@ -193,29 +205,11 @@ export async function buildLegionSnapshot(
   };
 }
 
-/**
- * Map `${proposalId}:${voterAddress}` → the txid of that agent's `vote` call.
- * Newest-first history + set-if-absent means a re-vote keeps its latest txid.
- */
-async function buildVoteTxidMap(
-  apiKey: string | undefined,
-  logger: Logger | undefined,
-): Promise<Map<string, string>> {
-  const map = new Map<string, string>();
-  const txs = await getContractTransactions(GOV_CONTRACT, apiKey, logger);
-  for (const tx of txs) {
-    if (tx.functionName !== "vote" || tx.firstUintArg == null) continue;
-    const key = `${tx.firstUintArg}:${tx.sender}`;
-    if (!map.has(key)) map.set(key, tx.txid);
-  }
-  return map;
-}
-
 async function buildProposal(
   id: number,
   read: ReadFn,
-  call: (contract: string, fn: string, args?: ClarityValue[]) => Promise<unknown>,
-  voteTxidByKey: Map<string, string>,
+  call: CallFn,
+  voters: Map<string, { vote: boolean; txid: string }>,
 ): Promise<LegionProposal | null> {
   const [prop, status] = await Promise.all([
     read(`gov.get-proposal.${id}`, () => call(GOV_CONTRACT, "get-proposal", [uintCV(id)]), null),
@@ -224,36 +218,31 @@ async function buildProposal(
 
   if (!prop || !status) return null;
 
-  // Per-agent vote records (optional tuple {vote, amount} or null).
-  const votes: LegionVote[] = await Promise.all(
-    LEGION_AGENTS.map(async (agent) => {
-      const rec = await read(
-        `gov.get-vote-record.${id}.${agent.label}`,
-        () => call(GOV_CONTRACT, "get-vote-record", [uintCV(id), principalCV(agent.address)]),
-        null,
-      );
-      const voted = rec != null;
-      return {
-        label: agent.label,
-        address: agent.address,
-        voted,
-        vote: voted ? Boolean(get(rec, "vote")) : null,
-        amount: voted ? toNum(get(rec, "amount")) : 0,
-        txid: voted ? (voteTxidByKey.get(`${id}:${agent.address}`) ?? null) : null,
-      } satisfies LegionVote;
-    }),
-  );
-
-  const proposer = String(get(prop, "proposer") ?? "");
-  const recipient = String(get(prop, "recipient") ?? "");
+  // The voters are known from tx history; read each vote record only for the
+  // committed weight (amount). Bounded by the actual voter count.
+  const votes: LegionVote[] = (
+    await Promise.all(
+      Array.from(voters.entries()).map(async ([address, v]) => {
+        const rec = await read(
+          `gov.get-vote-record.${id}.${address}`,
+          () => call(GOV_CONTRACT, "get-vote-record", [uintCV(id), principalCV(address)]),
+          null,
+        );
+        return {
+          address,
+          vote: v.vote,
+          amount: rec != null ? toNum(get(rec, "amount")) : 0,
+          txid: v.txid,
+        } satisfies LegionVote;
+      }),
+    )
+  ).sort((a, b) => b.amount - a.amount);
 
   return {
     id,
-    proposer,
-    proposerLabel: legionLabelFor(proposer),
+    proposer: String(get(prop, "proposer") ?? ""),
     desc: String(get(prop, "desc") ?? ""),
-    recipient,
-    recipientLabel: legionLabelFor(recipient),
+    recipient: String(get(prop, "recipient") ?? ""),
     amount: toNum(get(prop, "amount")),
     status: {
       createdBtc: toNum(get(status, "createdBtc")),
