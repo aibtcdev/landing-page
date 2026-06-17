@@ -33,7 +33,6 @@ function WiringDot({ label, ok }: { label: string; ok: boolean }) {
 
 export default function LegionHeader({ snapshot }: { snapshot: LegionSnapshot }) {
   const { treasury, totalStaked, members, blockHeight } = snapshot;
-  const stakedCount = members.filter((m) => m.stake > 0).length;
 
   return (
     <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]">
@@ -68,7 +67,7 @@ export default function LegionHeader({ snapshot }: { snapshot: LegionSnapshot })
         <div className="flex items-center gap-4">
           <Metric label="Pooled" value={`${formatSbtc(treasury.balance)} sBTC`} />
           <Metric label="Staked" value={`${formatSbtc(totalStaked)} sBTC`} />
-          <Metric label="Members" value={`${stakedCount}/${members.length}`} />
+          <Metric label="Stakers" value={`${members.length}`} />
         </div>
 
         <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-white/45">
