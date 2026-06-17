@@ -23,7 +23,7 @@ export const metadata: Metadata = {
 async function getInitialSnapshot(): Promise<LegionSnapshot | null> {
   try {
     const { env } = await getCloudflareContext();
-    const kv = env.VERIFIED_AGENTS as KVNamespace | undefined;
+    const kv = env.LEGION as KVNamespace | undefined;
     if (!kv) return null;
     return await readLegionSnapshot(kv);
   } catch {
