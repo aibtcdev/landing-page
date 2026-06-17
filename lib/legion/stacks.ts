@@ -47,7 +47,10 @@ export async function legionReadOnly(
         arguments: args.map((cv) => `0x${serializeCV(cv)}`),
       }),
     },
-    { retries: 1, retries429: 1, perAttemptTimeoutMs: PER_ATTEMPT_TIMEOUT_MS, logger },
+    // Runs on the cron, not a user request, so it can afford to back off and
+    // retry transient 429s (the shared colo IP occasionally trips Hiro's limit
+    // even with a key).
+    { retries: 2, retries429: 3, perAttemptTimeoutMs: PER_ATTEMPT_TIMEOUT_MS, logger },
   );
 
   detect429(response, logger);
@@ -59,6 +62,76 @@ export async function legionReadOnly(
   }
 
   return parseClarityValue(await response.json(), logger);
+}
+
+export interface ContractTx {
+  txid: string;
+  functionName: string;
+  /** Caller principal. */
+  sender: string;
+  /** First uint arg decoded to a number (e.g. proposal id from `vote u4 ...`), or null. */
+  firstUintArg: number | null;
+}
+
+/**
+ * Fetch a contract's recent transaction history (newest first), decoding the
+ * function name, sender, and first uint arg of each contract-call. Used to
+ * recover vote txids — the on-chain vote record itself doesn't store them.
+ *
+ * Bounded by `maxTxs`; if the contract has more than that, the oldest are not
+ * returned (logged, never silently). For the Legion this only matters for
+ * in-flight proposals, whose votes are the newest txs, so the cap is ample.
+ */
+export async function getContractTransactions(
+  contractId: string,
+  apiKey?: string,
+  logger?: Logger,
+  maxTxs = 200,
+): Promise<ContractTx[]> {
+  const out: ContractTx[] = [];
+  const pageSize = 50;
+
+  for (let offset = 0; offset < maxTxs; offset += pageSize) {
+    let data: { results?: unknown[]; total?: number } | null = null;
+    try {
+      const response = await stacksApiFetch(
+        `${LEGION_API_BASE}/extended/v1/address/${contractId}/transactions?limit=${pageSize}&offset=${offset}`,
+        { method: "GET", headers: buildHiroHeaders(apiKey) },
+        { retries: 1, retries429: 1, perAttemptTimeoutMs: PER_ATTEMPT_TIMEOUT_MS, logger },
+      );
+      if (!response.ok) break;
+      data = await response.json();
+    } catch {
+      break;
+    }
+
+    const results = data?.results ?? [];
+    for (const item of results) {
+      const tx = ((item as { tx?: unknown }).tx ?? item) as {
+        tx_id?: string;
+        sender_address?: string;
+        contract_call?: { function_name?: string; function_args?: { repr?: string }[] };
+      };
+      const cc = tx.contract_call;
+      if (!cc?.function_name || !tx.tx_id) continue;
+      const repr = cc.function_args?.[0]?.repr;
+      const n = typeof repr === "string" && repr.startsWith("u") ? Number(repr.slice(1)) : NaN;
+      out.push({
+        txid: tx.tx_id,
+        functionName: cc.function_name,
+        sender: tx.sender_address ?? "",
+        firstUintArg: Number.isFinite(n) ? n : null,
+      });
+    }
+
+    if (results.length < pageSize) break; // last page
+    if (data?.total != null && offset + pageSize >= data.total) break;
+    if (offset + pageSize >= maxTxs && (data?.total ?? 0) > maxTxs) {
+      logger?.warn?.("legion.contract_tx_truncated", { contractId, cap: maxTxs, total: data?.total });
+    }
+  }
+
+  return out;
 }
 
 /** Current Stacks testnet tip height, or null if /v2/info is unreachable. */
