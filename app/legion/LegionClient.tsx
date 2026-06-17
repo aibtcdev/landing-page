@@ -1,20 +1,11 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import useSWR from "swr";
-import { swrKeys } from "@/lib/swr-keys";
 import type { LegionSnapshot } from "@/lib/legion/types";
 import LegionHeader from "./LegionHeader";
 import MembersTable from "./MembersTable";
 import ProposalCard from "./ProposalCard";
 import HowToParticipate from "./HowToParticipate";
-
-// Live: poll the cached /api/legion endpoint so the page auto-updates without a
-// reload. The underlying data changes at the cron cadence (~5 min) and the
-// endpoint is edge-cached, so most polls are cheap cache hits — this just lands
-// new snapshots on screen shortly after the cron writes them. dedupingInterval
-// MUST match refreshInterval or the global 15-min dedupe swallows the poll.
-const POLL_MS = 30_000;
 
 function UpdatedAt({ updatedAt }: { updatedAt: number }) {
   // Compute relative time only after mount (SSR/client clocks differ) and
@@ -42,16 +33,10 @@ function UpdatedAt({ updatedAt }: { updatedAt: number }) {
 }
 
 export default function LegionClient({
-  initialData,
+  snapshot,
 }: {
-  initialData: LegionSnapshot | null;
+  snapshot: LegionSnapshot | null;
 }) {
-  const { data: snapshot } = useSWR<LegionSnapshot>(swrKeys.legion(), {
-    fallbackData: initialData ?? undefined,
-    refreshInterval: POLL_MS,
-    dedupingInterval: POLL_MS,
-  });
-
   if (!snapshot) {
     return (
       <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] p-6 text-sm text-white/70">
