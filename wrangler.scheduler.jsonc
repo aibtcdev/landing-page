@@ -1,0 +1,39 @@
+{
+  // Standalone scheduler Worker — own cron, immune to landing-page deploys.
+  // Binds the SAME D1 + KV as landing-page so its writes are the site's data.
+  // Deploy:  npx wrangler deploy --config wrangler.scheduler.jsonc
+  // Secrets (set once, by you):
+  //   npx wrangler secret put HIRO_API_KEY   --config wrangler.scheduler.jsonc
+  //   npx wrangler secret put TENERO_API_KEY --config wrangler.scheduler.jsonc
+  "name": "aibtc-scheduler",
+  "main": "scheduler-worker.ts",
+  "compatibility_date": "2026-01-08",
+  "compatibility_flags": ["nodejs_compat"],
+
+  "triggers": {
+    "crons": ["*/5 * * * *"]
+  },
+
+  "vars": {
+    "DEPLOY_ENV": "production",
+    "TENERO_REFRESH_ENABLED": "true",
+    "EARNINGS_INDEX_ENABLED": "true"
+  },
+
+  // Same database_id + KV ids as landing-page → one shared store.
+  "d1_databases": [
+    {
+      "binding": "DB",
+      "database_name": "landing-page",
+      "database_id": "89a00080-d1e1-48bd-823a-0fdd93bf0875"
+    }
+  ],
+  "kv_namespaces": [
+    { "binding": "VERIFIED_AGENTS", "id": "f8aab2734e154953a50cabdb87083af3" },
+    { "binding": "HOLDINGS_KV", "id": "3e9bbe855e7f46769dfcaa99ae87af5c" }
+  ],
+  "services": [
+    { "binding": "LOGS", "service": "worker-logs-production", "entrypoint": "LogsRPC" },
+    { "binding": "X402_RELAY", "service": "x402-sponsor-relay-production", "entrypoint": "RelayRPC" }
+  ]
+}

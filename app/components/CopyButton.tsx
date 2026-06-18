@@ -7,6 +7,12 @@ interface CopyButtonProps {
   label?: React.ReactNode;
   variant?: "primary" | "secondary" | "icon" | "inline";
   className?: string;
+  /**
+   * Accessible name for the button. Needed when `label` is empty or a
+   * non-text node (e.g. the inline variant), so screen readers still
+   * announce a meaningful action. Falls back to "Copy".
+   */
+  ariaLabel?: string;
 }
 
 export default function CopyButton({
@@ -14,7 +20,11 @@ export default function CopyButton({
   label = "Copy",
   variant = "secondary",
   className = "",
+  ariaLabel,
 }: CopyButtonProps) {
+  const accessibleName =
+    ariaLabel ??
+    (typeof label === "string" && label.length > 0 ? label : "Copy");
   const [copied, setCopied] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
 
@@ -57,6 +67,7 @@ export default function CopyButton({
     return (
       <button
         onClick={handleCopy}
+        aria-label={accessibleName}
         className={`group relative cursor-pointer transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded-xl ${className}`}
       >
         {label}
@@ -78,6 +89,7 @@ export default function CopyButton({
       return (
         <button
           onClick={handleCopy}
+          aria-label={accessibleName}
           className={`inline-flex items-center justify-center min-w-[44px] min-h-[44px] transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded ${variantStyles.icon} ${className}`}
         >
           <svg

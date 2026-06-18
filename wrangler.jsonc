@@ -102,17 +102,14 @@
     ]
   },
 
-  // Cron Trigger drives periodic background work (Tenero price refresh
-  // every tick + competition Hiro catch-up sweep on its longer cadence)
-  // via the worker's scheduled() handler — see lib/scheduler/cron-runner.ts.
-  // This replaced the former SchedulerDO, whose alarm had no independent
-  // trigger: it only stayed armed because /leaderboard SSR poked it on every
-  // render, so a DO storage wipe with no leaderboard visit left all
-  // scheduled work silently stopped. Crons are NOT inherited by named envs,
-  // so env.production below repeats this; env.preview omits it so preview
-  // deploys never run schedulers against the shared production D1/KV quota.
+  // Scheduling is owned by the standalone `aibtc-scheduler` Worker
+  // (scheduler-worker.ts + wrangler.scheduler.jsonc), which binds the SAME
+  // D1/KV and runs the same `runScheduledTasks`. landing-page's own cron
+  // trigger kept getting silently orphaned by deploys (a fresh worker's cron
+  // fires fine on the same account; this one did not), so this Worker no
+  // longer schedules anything. Empty `crons` removes the trigger on deploy.
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": []
   },
   // SchedulerDO fully removed — the cron trigger above drives all scheduled
   // work. The v4 deleted_classes migration tears down the Durable Object and
@@ -234,10 +231,10 @@
         ]
       },
 
-      // Cron Trigger for the named-production deploy path (`--env production`).
-      // Repeated here because wrangler does not inherit top-level triggers.
+      // Scheduling moved to the standalone `aibtc-scheduler` Worker — see the
+      // top-level note. Empty `crons` removes this worker's trigger on deploy.
       "triggers": {
-        "crons": ["*/5 * * * *"]
+        "crons": []
       },
       // SchedulerDO fully removed — see top-level note. Applies on the
       // production (main) non-versioned deploy.
