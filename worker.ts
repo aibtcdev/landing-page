@@ -49,13 +49,41 @@ export default {
         })
       : createConsoleLogger({ path: "/__cron/scheduler", cron: event.cron });
 
+    // Capture any cron failure straight to KV, independent of the LOGS RPC
+    // path — the cron has been failing with an opaque "Internal Error" and the
+    // dashboard shows no stack. Writing the raw error to `scheduler:last-error`
+    // lets us read the exact exception with `wrangler kv key get`. The capture
+    // is fully self-guarded so it can never itself crash the invocation.
     ctx.waitUntil(
-      runScheduledTasks(env, logger).catch((error) =>
-        logger.error("scheduler.cron_failed", {
-          error: String(error),
-          stack: error instanceof Error ? error.stack : undefined,
-        })
-      )
+      (async () => {
+        try {
+          await runScheduledTasks(env, logger);
+        } catch (error) {
+          const detail = {
+            at: Date.now(),
+            cron: event.cron,
+            name: error instanceof Error ? error.name : undefined,
+            message: error instanceof Error ? error.message : String(error),
+            stack: error instanceof Error ? error.stack : undefined,
+          };
+          try {
+            await env.VERIFIED_AGENTS.put(
+              "scheduler:last-error",
+              JSON.stringify(detail)
+            );
+          } catch {
+            // KV write failed too — nothing more we can safely do here.
+          }
+          try {
+            logger.error("scheduler.cron_failed", {
+              error: detail.message,
+              stack: detail.stack,
+            });
+          } catch {
+            // Logger itself may be the failing dependency; ignore.
+          }
+        }
+      })()
     );
   },
 
