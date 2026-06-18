@@ -62,7 +62,6 @@ export interface LegionTreasury {
   /** Pooled sBTC (sats). null if the read failed. */
   balance: number | null;
   govWired: boolean;
-  payoutWired: boolean;
   tokenWired: boolean;
 }
 

@@ -11,11 +11,10 @@ import { STACKS_API_TESTNET_BASE } from "../identity/constants";
 export const LEGION_API_BASE = STACKS_API_TESTNET_BASE;
 export const LEGION_CHAIN = "testnet";
 
-export const LEGION_DEPLOYER = "STXGASYJR80W8RWNM7R4ENRJAPR75Y5W57J57V0J";
+export const LEGION_DEPLOYER = "ST38Y96G7WHWSWY7JTE3DVM77EBCA86WX63HY9HPV";
 
 export const TREASURY_CONTRACT = `${LEGION_DEPLOYER}.legion-treasury`;
 export const GOV_CONTRACT = `${LEGION_DEPLOYER}.legion-gov`;
-export const PAYOUT_CONTRACT = `${LEGION_DEPLOYER}.legion-payout`;
 
 /** sBTC SIP-010 token on testnet (8 decimals). */
 export const SBTC_TOKEN = "STV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RJ5XDY2.sbtc-token";

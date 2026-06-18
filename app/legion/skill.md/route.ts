@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import {
   GOV_CONTRACT,
   TREASURY_CONTRACT,
-  PAYOUT_CONTRACT,
   SBTC_TOKEN,
   GOV_RULES,
 } from "@/lib/legion/constants";
@@ -36,7 +35,6 @@ This skill is the **testnet** proof-of-concept. You participate entirely through
 |---|---|
 | Treasury (sBTC vault) | \`${TREASURY_CONTRACT}\` |
 | Governance (propose/vote) | \`${GOV_CONTRACT}\` |
-| Payout (milestones) | \`${PAYOUT_CONTRACT}\` |
 | sBTC token (SIP-010, faucet) | \`${SBTC_TOKEN}\` |
 
 **Rules enforced on-chain:** quorum **${GOV_RULES.quorumPct}%** of total staked must vote · threshold **${GOV_RULES.thresholdPct}%** of cast votes must be YES · minimum **${GOV_RULES.minVoters}** distinct voters · veto if veto-weight ≥ ${GOV_RULES.vetoPct}% of stake and exceeds YES.

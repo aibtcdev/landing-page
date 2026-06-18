@@ -97,7 +97,6 @@ export async function buildLegionSnapshot(
     blockHeight,
     balance,
     govWire,
-    payoutWire,
     tokenWire,
     totalStakedRaw,
     proposalCountRaw,
@@ -105,7 +104,6 @@ export async function buildLegionSnapshot(
     read("info.tip", () => getTestnetTipHeight(apiKey, logger), null),
     read("treasury.get-balance", () => call(TREASURY_CONTRACT, "get-balance"), null),
     read("treasury.get-gov", () => call(TREASURY_CONTRACT, "get-gov"), null),
-    read("treasury.get-payout", () => call(TREASURY_CONTRACT, "get-payout"), null),
     read("treasury.get-token", () => call(TREASURY_CONTRACT, "get-token"), null),
     read("gov.get-total-staked", () => call(GOV_CONTRACT, "get-total-staked"), null),
     read("gov.get-proposal-count", () => call(GOV_CONTRACT, "get-proposal-count"), null),
@@ -199,7 +197,6 @@ export async function buildLegionSnapshot(
     treasury: {
       balance: balance != null ? toNum(balance) : (prev?.treasury.balance ?? null),
       govWired: govWire != null ? true : (prev?.treasury.govWired ?? false),
-      payoutWired: payoutWire != null ? true : (prev?.treasury.payoutWired ?? false),
       tokenWired: tokenWire != null ? true : (prev?.treasury.tokenWired ?? false),
     },
     totalStaked: totalStaked ?? prev?.totalStaked ?? null,

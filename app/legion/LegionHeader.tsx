@@ -57,7 +57,6 @@ export default function LegionHeader({ snapshot }: { snapshot: LegionSnapshot })
         </div>
         <div className="flex items-center gap-3">
           <WiringDot label="gov" ok={treasury.govWired} />
-          <WiringDot label="payout" ok={treasury.payoutWired} />
           <WiringDot label="token" ok={treasury.tokenWired} />
         </div>
       </div>

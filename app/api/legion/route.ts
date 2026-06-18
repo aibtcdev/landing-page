@@ -12,7 +12,6 @@ import { getLegionSnapshot } from "@/lib/legion/read";
 import {
   GOV_CONTRACT,
   GOV_RULES,
-  PAYOUT_CONTRACT,
   TREASURY_CONTRACT,
 } from "@/lib/legion/constants";
 
@@ -29,7 +28,6 @@ function selfDocResponse() {
       contracts: {
         treasury: TREASURY_CONTRACT,
         gov: GOV_CONTRACT,
-        payout: PAYOUT_CONTRACT,
       },
       governanceRules: GOV_RULES,
       queryParameters: {
@@ -42,7 +40,7 @@ function selfDocResponse() {
       responseShape: {
         updatedAt: "number (unix ms)",
         blockHeight: "number | null (stacks tip at snapshot time)",
-        treasury: "{ balance (sats), govWired, payoutWired, tokenWired }",
+        treasury: "{ balance (sats), govWired, tokenWired }",
         totalStaked: "number | null (sats)",
         members: "Array<{ label, address, stake, weightPct, sbtcBalance }>",
         proposals:
