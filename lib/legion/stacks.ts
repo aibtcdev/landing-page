@@ -101,6 +101,11 @@ export function parseUintRepr(repr: string | undefined): number | null {
  * function name, sender, and first uint arg of each contract-call. Used to
  * recover vote txids — the on-chain vote record itself doesn't store them.
  *
+ * Only `tx_status === "success"` txs are returned. A reverted call (e.g. a
+ * `vote` that aborts with `(err ...)`) changes no on-chain state, so counting
+ * it would render a phantom vote with no backing vote-record (amount 0). The
+ * endpoint returns confirmed txs of every status, so we filter here.
+ *
  * Bounded by `maxTxs`; if the contract has more than that, the oldest are not
  * returned (logged, never silently). For the Legion this only matters for
  * in-flight proposals, whose votes are the newest txs, so the cap is ample.
@@ -132,11 +137,13 @@ export async function getContractTransactions(
     for (const item of results) {
       const tx = ((item as { tx?: unknown }).tx ?? item) as {
         tx_id?: string;
+        tx_status?: string;
         sender_address?: string;
         contract_call?: { function_name?: string; function_args?: { repr?: string }[] };
       };
       const cc = tx.contract_call;
       if (!cc?.function_name || !tx.tx_id) continue;
+      if (tx.tx_status !== "success") continue; // skip reverted/aborted calls
       out.push({
         txid: tx.tx_id,
         functionName: cc.function_name,
