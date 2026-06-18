@@ -32,11 +32,6 @@ import {
 import { runEarningsSweep } from "../earnings/indexer";
 import { EARNINGS_INTERVAL_MS } from "../earnings/constants";
 import type { EarningsSweepSummary } from "../earnings/types";
-import { buildLegionSnapshot } from "../legion/snapshot";
-import {
-  readLegionSnapshotFromD1,
-  writeLegionSnapshotToD1,
-} from "../legion/d1";
 import type { Logger } from "../logging";
 import type {
   SchedulerStatus,
@@ -48,8 +43,6 @@ import type {
 // gated to their longer intervals via a last-run check (mirrors the old DO alarm).
 export const TENERO_INTERVAL_MS = 5 * 60 * 1000;
 export const COMPETITION_INTERVAL_MS = 15 * 60 * 1000;
-// Legion dashboard snapshot refreshes every cron tick (testnet, low volume).
-export const LEGION_INTERVAL_MS = 5 * 60 * 1000;
 
 // KV keys (VERIFIED_AGENTS namespace).
 const K_TENERO = "scheduler:tenero";
@@ -245,41 +238,6 @@ export async function runEarningsNow(
   return result;
 }
 
-/**
- * Rebuild the Legion dashboard snapshot from testnet and persist it to KV under
- * `legion:snapshot`. This is the only writer of that key; the /api/legion
- * endpoint (and its edge cache) are pure readers. A build never throws — partial
- * outages are recorded in `snapshot.errors` — so this only rejects on an
- * unexpected error, which the caller logs without blocking other tasks.
- */
-export async function runLegionNow(
-  env: CloudflareEnv,
-  parentLogger: Logger,
-): Promise<void> {
-  const logger = parentLogger.child
-    ? parentLogger.child({ task: "legion" })
-    : parentLogger;
-
-  const db = env.DB as D1Database | undefined;
-  if (!db) {
-    logger.warn("legion.skipped_no_db");
-    return;
-  }
-
-  // Read the prior snapshot so terminal (concluded) proposals are carried
-  // forward without re-reading them from Hiro. Authenticated with HIRO_API_KEY.
-  const prev = await readLegionSnapshotFromD1(db);
-  const snapshot = await buildLegionSnapshot(logger, prev, env.HIRO_API_KEY);
-  await writeLegionSnapshotToD1(db, snapshot);
-
-  logger.info("legion.snapshot_written", {
-    blockHeight: snapshot.blockHeight,
-    proposals: snapshot.proposals.length,
-    members: snapshot.members.length,
-    errors: snapshot.errors.length,
-  });
-}
-
 // ─────────────────────────── cron entry point ───────────────────────────
 
 /**
@@ -369,18 +327,6 @@ export async function runScheduledTasks(
   } else {
     logger.debug("scheduler.earnings_not_due", {
       lastRunAt: earnings?.lastRunAt ?? null,
-    });
-  }
-
-  // Legion snapshot — every tick (cron cadence == LEGION_INTERVAL_MS). The
-  // snapshot blob is its own state, so there's no separate state read to gate
-  // on; a slow overrun just overwrites idempotently.
-  try {
-    await runLegionNow(env, logger);
-  } catch (error) {
-    logger.error("scheduler.legion_unexpected_error", {
-      error: String(error),
-      stack: error instanceof Error ? error.stack : undefined,
     });
   }
 }
