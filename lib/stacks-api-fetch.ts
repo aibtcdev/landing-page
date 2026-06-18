@@ -24,7 +24,12 @@ import type { Logger } from "./logging";
 export function buildHiroHeaders(hiroApiKey?: string): Record<string, string> {
   const headers: Record<string, string> = {};
   if (hiroApiKey) {
-    headers["X-Hiro-API-Key"] = hiroApiKey;
+    // Hiro's documented header is `x-api-key`. The legacy `x-hiro-api-key` was
+    // deprecated and stopped authenticating (~June 2026) — sending only it makes
+    // requests anonymous → 429 rate-limiting on the shared Worker IP. Send the
+    // documented header (plus the legacy one for safety).
+    headers["x-api-key"] = hiroApiKey;
+    headers["x-hiro-api-key"] = hiroApiKey;
   }
   return headers;
 }

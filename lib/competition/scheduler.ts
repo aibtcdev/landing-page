@@ -111,7 +111,13 @@ async function fetchAddressTxs(
 ): Promise<AddressTxEntry[]> {
   const url = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/transactions?limit=${HIRO_TX_PAGE_LIMIT}`;
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (env.HIRO_API_KEY) headers["x-hiro-api-key"] = env.HIRO_API_KEY;
+  if (env.HIRO_API_KEY) {
+    // `x-api-key` is Hiro's documented header; `x-hiro-api-key` is deprecated
+    // and stopped authenticating — sending only it makes the sweep anonymous,
+    // which gets 429-rate-limited on the shared Worker IP and stalls the cron.
+    headers["x-api-key"] = env.HIRO_API_KEY;
+    headers["x-hiro-api-key"] = env.HIRO_API_KEY;
+  }
 
   try {
     const response = await stacksApiFetch(url, { method: "GET", headers }, { logger });
