@@ -65,7 +65,11 @@ async function fetchL1Sats(btcAddress: string): Promise<number> {
 async function fetchL2Sats(stxAddress: string, hiroApiKey?: string): Promise<number> {
   const url = `${STACKS_API_BASE}/extended/v1/address/${stxAddress}/balances`;
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (hiroApiKey) headers["x-hiro-api-key"] = hiroApiKey;
+  if (hiroApiKey) {
+    // `x-api-key` is Hiro's documented header; `x-hiro-api-key` is deprecated.
+    headers["x-api-key"] = hiroApiKey;
+    headers["x-hiro-api-key"] = hiroApiKey;
+  }
   const res = await fetch(url, { headers });
   if (!res.ok) return 0;
   const body = (await res.json()) as {

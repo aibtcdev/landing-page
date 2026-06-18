@@ -210,7 +210,11 @@ export async function fetchTxFromHiro(
 > {
   const url = `${STACKS_API_BASE}/extended/v1/tx/${txid}`;
   const headers: Record<string, string> = { Accept: "application/json" };
-  if (env.HIRO_API_KEY) headers["x-hiro-api-key"] = env.HIRO_API_KEY;
+  if (env.HIRO_API_KEY) {
+    // `x-api-key` is Hiro's documented header; `x-hiro-api-key` is deprecated.
+    headers["x-api-key"] = env.HIRO_API_KEY;
+    headers["x-hiro-api-key"] = env.HIRO_API_KEY;
+  }
 
   let response: Response;
   try {
