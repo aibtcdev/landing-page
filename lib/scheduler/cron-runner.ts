@@ -23,6 +23,7 @@ import { getActiveTokenIds } from "../external/tenero";
 import {
   runTeneroTask,
   TENERO_MINUTE_QUOTA_BACKOFF_MS,
+  TENERO_REQUEST_SPACING_MS,
   type TeneroRunResult,
 } from "./tenero-task";
 import {
@@ -46,7 +47,13 @@ import type {
 
 // Cadences. The cron fires every TENERO_INTERVAL_MS; competition + earnings are
 // gated to their longer intervals via a last-run check (mirrors the old DO alarm).
-export const TENERO_INTERVAL_MS = 5 * 60 * 1000;
+// Tenero refresh cadence — HOURLY, sized to the monthly API budget. The Starter
+// plan allows 10,000 req/month; at ~13 active tokens that's 13 × 24 × ~30 ≈
+// 9.4k/mo, safely under. (Was 5 min ≈ 112k/mo — 11× over, which exhausted the
+// month in ~2 days.) If the active-token count grows materially, raise this
+// interval or upgrade the Tenero plan. The minute cap is handled separately by
+// TENERO_REQUEST_SPACING_MS (inter-request spacing within a run).
+export const TENERO_INTERVAL_MS = 60 * 60 * 1000;
 export const COMPETITION_INTERVAL_MS = 15 * 60 * 1000;
 // Legion dashboard snapshot refreshes every cron tick (testnet, low volume).
 export const LEGION_INTERVAL_MS = 5 * 60 * 1000;
@@ -159,6 +166,8 @@ export async function runTeneroNow(
     kv,
     tokenIds,
     apiKey: lookupTeneroApiKey(env),
+    // Pace fetches under the per-minute API cap so a full sweep never 429s.
+    spacingMs: TENERO_REQUEST_SPACING_MS,
   });
 
   const prev =
