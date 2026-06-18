@@ -42,49 +42,41 @@ export default {
     env: CloudflareEnv,
     ctx: ExecutionContext
   ) {
-    const logger = isLogsRPC(env.LOGS)
-      ? createLogger(env.LOGS, ctx, {
-          path: "/__cron/scheduler",
-          cron: event.cron,
-        })
-      : createConsoleLogger({ path: "/__cron/scheduler", cron: event.cron });
-
-    // Capture any cron failure straight to KV, independent of the LOGS RPC
-    // path — the cron has been failing with an opaque "Internal Error" and the
-    // dashboard shows no stack. Writing the raw error to `scheduler:last-error`
-    // lets us read the exact exception with `wrangler kv key get`. The capture
-    // is fully self-guarded so it can never itself crash the invocation.
-    ctx.waitUntil(
-      (async () => {
-        try {
-          await runScheduledTasks(env, logger);
-        } catch (error) {
-          const detail = {
-            at: Date.now(),
-            cron: event.cron,
-            name: error instanceof Error ? error.name : undefined,
-            message: error instanceof Error ? error.message : String(error),
-            stack: error instanceof Error ? error.stack : undefined,
-          };
-          try {
-            await env.VERIFIED_AGENTS.put(
-              "scheduler:last-error",
-              JSON.stringify(detail)
-            );
-          } catch {
-            // KV write failed too — nothing more we can safely do here.
-          }
-          try {
-            logger.error("scheduler.cron_failed", {
-              error: detail.message,
-              stack: detail.stack,
-            });
-          } catch {
-            // Logger itself may be the failing dependency; ignore.
-          }
-        }
-      })()
-    );
+    // Capture ANY cron failure to KV so we can read the exact exception with
+    // `wrangler kv key get scheduler:last-error`. The dashboard only shows an
+    // opaque "Internal Error" with no stack. The prior version (#1000) wrapped
+    // only runScheduledTasks inside ctx.waitUntil and came back EMPTY — so this
+    // hardens it two ways:
+    //   1. The try/catch now wraps the WHOLE handler, including logger creation,
+    //      so a throw in setup (not just the task run) is still captured.
+    //   2. Per the Cloudflare scheduled-handler docs, the work is `await`ed
+    //      directly (the runtime waits on the returned promise) rather than
+    //      detached via ctx.waitUntil — so any rejection propagates to this
+    //      catch instead of escaping as an unobserved waitUntil failure.
+    try {
+      const logger = isLogsRPC(env.LOGS)
+        ? createLogger(env.LOGS, ctx, { path: "/__cron/scheduler", cron: event.cron })
+        : createConsoleLogger({ path: "/__cron/scheduler", cron: event.cron });
+      await runScheduledTasks(env, logger);
+    } catch (error) {
+      const detail = {
+        at: Date.now(),
+        cron: event.cron,
+        name: error instanceof Error ? error.name : undefined,
+        message: error instanceof Error ? error.message : String(error),
+        stack: error instanceof Error ? error.stack : undefined,
+      };
+      // KV first (most reliable readback), then console (shows in `wrangler
+      // tail`). Both guarded so the diagnostic can never itself crash the run.
+      try {
+        await env.VERIFIED_AGENTS.put("scheduler:last-error", JSON.stringify(detail));
+      } catch {
+        // KV write failed too — nothing more we can safely do here.
+      }
+      console.error("scheduler.cron_failed", detail.stack ?? detail.message);
+      // Re-throw so the failure is still recorded in the Cron Past Events table.
+      throw error;
+    }
   },
 
   async queue(
