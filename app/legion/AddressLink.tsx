@@ -26,7 +26,7 @@ export default function AddressLink({
       >
         {label ?? shortAddress(address)}
       </a>
-      <CopyButton text={address} variant="inline" label="" />
+      <CopyButton text={address} variant="inline" label="" ariaLabel="Copy address" />
     </span>
   );
 }

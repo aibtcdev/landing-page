@@ -37,6 +37,11 @@ export default {
     return openNextWorker.fetch(request, env, ctx);
   },
 
+  // INTENTIONALLY INERT: scheduling moved to the standalone `aibtc-scheduler`
+  // Worker (wrangler.scheduler.jsonc), and this Worker's `triggers.crons` is now
+  // empty — so `scheduled()` will never fire here. Kept only so the same
+  // `runScheduledTasks` is reachable if a cron is ever re-attached for debugging;
+  // remove it entirely once that's confirmed unnecessary.
   async scheduled(
     event: ScheduledController,
     env: CloudflareEnv,

@@ -79,7 +79,15 @@ export default function LifecycleTracker({
                 info.outcome === "executed" ? "text-green-300" : "text-red-300"
               }
             >
-              {info.outcome === "executed" ? "Executed ✅" : "Rejected ❌"}
+              {info.outcome === "executed" ? (
+                <>
+                  Executed <span aria-hidden>✅</span>
+                </>
+              ) : (
+                <>
+                  Rejected <span aria-hidden>❌</span>
+                </>
+              )}
             </span>
           ) : (
             <>

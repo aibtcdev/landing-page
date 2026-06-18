@@ -6,6 +6,7 @@
  */
 
 import type { LegionProposalStatus } from "./types";
+import { GOV_RULES } from "./constants";
 
 export type LegionStage =
   | "pending"
@@ -50,7 +51,7 @@ export function isPassing(status: LegionProposalStatus): boolean {
   return (
     status.metQuorum &&
     status.metThreshold &&
-    status.voterCount >= 2 &&
+    status.voterCount >= GOV_RULES.minVoters &&
     !status.vetoActivated
   );
 }
