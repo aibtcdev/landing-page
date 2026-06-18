@@ -35,6 +35,12 @@ export interface TeneroTaskDeps {
   apiKey?: string;
   /** Test injection point. Defaults to `Date.now`. */
   now?: () => number;
+  /**
+   * Delay (ms) between token fetches to stay under Tenero's per-minute cap.
+   * Production passes `TENERO_REQUEST_SPACING_MS`; defaults to 0 (no delay) so
+   * tests run instantly.
+   */
+  spacingMs?: number;
 }
 
 export interface TeneroTaskOutcome {
@@ -56,6 +62,19 @@ export const TENERO_MINUTE_QUOTA_BACKOFF_MS = 5 * 60 * 1000;
 export const TENERO_MONTH_QUOTA_BACKOFF_MS = 24 * 60 * 60 * 1000;
 
 /**
+ * Inter-request spacing to stay under Tenero's per-minute API cap (Starter plan
+ * = 10 req/min). ~6.6s between fetches → ≤~9/min, so a full token sweep never
+ * trips the minute limit — no more `minute_quota_exhausted` mid-run breaks or
+ * 429 backoffs. Production passes this via `deps.spacingMs`; the pure task
+ * defaults to 0 (no delay) so tests stay instant.
+ */
+export const TENERO_REQUEST_SPACING_MS = 6_600;
+
+function sleep(ms: number): Promise<void> {
+  return ms > 0 ? new Promise((resolve) => setTimeout(resolve, ms)) : Promise.resolve();
+}
+
+/**
  * Skip the KV rewrite when the fetched price equals the cached one and the
  * cached entry is younger than this. KV writes are the tightest paid-plan
  * quota (1M/mo; this task alone was ~458k/mo at 53 tokens × 5-min cadence)
@@ -70,6 +89,7 @@ export async function runTeneroTask(
 ): Promise<TeneroTaskOutcome> {
   const { logger, kv, tokenIds, apiKey } = deps;
   const now = deps.now ?? Date.now;
+  const spacingMs = deps.spacingMs ?? 0;
   const startedAt = now();
 
   logger.info("tenero.refresh_started", { tokenCount: tokenIds.length });
@@ -81,7 +101,12 @@ export async function runTeneroTask(
   let rateLimited = false;
   let rateLimitBackoffMs: number | undefined;
 
+  let firstToken = true;
   for (const tokenId of tokenIds) {
+    // Pace requests under the per-minute API cap (see TENERO_REQUEST_SPACING_MS).
+    if (!firstToken) await sleep(spacingMs);
+    firstToken = false;
+
     const r = await fetchTokenPriceUsd(tokenId, logger, apiKey);
     lastMinuteRemaining = r.rateLimit.minuteRemaining ?? lastMinuteRemaining;
     lastMonthRemaining = r.rateLimit.monthRemaining ?? lastMonthRemaining;
