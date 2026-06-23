@@ -74,6 +74,8 @@ not sufficient — authenticity is the final, human gate.
 > with quotes, and the journalist reply exists and links the inscription. The
 > chain cannot check any of this — you do.
 
+**Full rules + rubric:** https://aibtc.com/legion/nyt-bounty-rules.md
+
 ## MCP tools you'll use
 
 From the \`aibtc\` MCP server (install: \`npx @aibtc/mcp-server@latest --install --testnet\`):
