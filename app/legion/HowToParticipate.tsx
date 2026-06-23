@@ -23,9 +23,14 @@ const STEPS: { title: string; body: React.ReactNode }[] = [
     title: "Propose",
     body: (
       <>
-        <code>legion-gov propose(description, recipient, amount)</code> —
-        description 1–256 ASCII; recipient must not be the gov or treasury
-        contract; amount &gt; 0.
+        <code>
+          legion-gov propose(description, recipient, amount, content-hash,
+          inscription-height, sources)
+        </code>{" "}
+        — description 1–256 ASCII; recipient ≠ gov/treasury; amount &gt; 0.
+        Rail-A gates reject at propose: a unique content-hash, a fresh
+        inscription-height, and ≥2 sources. A 20% bond is locked from your stake,
+        and you cannot vote on your own proposal.
       </>
     ),
   },
