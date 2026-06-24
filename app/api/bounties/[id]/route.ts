@@ -80,7 +80,7 @@ export async function GET(
   const payments: BountyPaymentHint[] = status === "winner-announced"
     ? winners
         .filter((w) => !w.paidAt)
-        .map((w) => buildPaymentHint(bounty, w.submitterStxAddress))
+        .map((w) => buildPaymentHint(bounty, w.submissionId, w.submitterStxAddress))
     : [];
 
   // Backward-compat singular fields (first winner / first payment hint).
@@ -161,9 +161,14 @@ function buildWinner(
   };
 }
 
-function buildPaymentHint(bounty: BountyRecord, recipientStxAddress: string): BountyPaymentHint {
+function buildPaymentHint(
+  bounty: BountyRecord,
+  submissionId: string,
+  recipientStxAddress: string
+): BountyPaymentHint {
   const memo = buildExpectedMemo(bounty.id);
   return {
+    submissionId,
     expectedMemo: memo.ascii,
     expectedMemoHex: memo.hex,
     recipientStxAddress,

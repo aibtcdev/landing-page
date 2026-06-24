@@ -175,6 +175,7 @@ export interface BountyWinnerRow {
  * and contract to use when sending the sBTC payout.
  */
 export interface BountyPaymentHint {
+  submissionId: string;
   expectedMemo: string;
   expectedMemoHex: string;
   recipientStxAddress: string;

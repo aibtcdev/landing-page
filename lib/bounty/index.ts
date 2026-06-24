@@ -73,6 +73,7 @@ export {
   getWinners,
   getWinner,
   getSubmission,
+  getSubmissionsByIds,
   listSubmissionsForBounty,
   listSubmissionsBySubmitter,
   insertSubmission,

@@ -125,7 +125,7 @@ export async function POST(
           {
             error: "submission_id_required",
             message: `This bounty has ${bounty.maxWinners} winners. Provide submissionId to identify which winner this txid pays.`,
-            hint: "Fetch GET /api/bounties/{id} and use the winners[] array to find the submissionId for each unpaid winner.",
+            hint: "Fetch GET /api/bounties/{id} — each entry in payments[] carries the submissionId for that winner's payout.",
           },
           { status: 400 }
         );

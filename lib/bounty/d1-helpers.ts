@@ -419,6 +419,9 @@ export async function insertWinner(
     const inserted = (insertResult.meta?.changes ?? 0) > 0;
     const updated = (updateResult.meta?.changes ?? 0) > 0;
     if (inserted && updated) return "ok";
+    // Split results (inserted XOR updated) cannot occur: D1 batches run in a
+    // single SQLite transaction on the same snapshot, so both guards see the
+    // same counters. Either both pass or both fail.
     return "conflict"; // slot full, cancelled, or past grace — both returned 0 changes
   } catch (e) {
     if (String(e).includes("UNIQUE constraint failed")) return "duplicate";
@@ -509,7 +512,11 @@ export async function setWinnerPaid(
     });
   }
 
-  return bountyUpdated;
+  // Payment is real even if the bounty counter wasn't incremented (grace-boundary
+  // edge case). The ops reconciliation query in the console.error above handles
+  // paid_count correction. Callers must not penalize the poster for a race they
+  // can't control — the payment is on-chain and in bounty_winners.
+  return true;
 }
 
 /**
