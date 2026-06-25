@@ -142,6 +142,7 @@ export default function Navbar() {
               { href: "/leaderboard", label: "Leaderboard" },
               { href: "/activity", label: "Activity Feed" },
               { href: "/bounties", label: "Bounties" },
+              { href: "/legions", label: "Legions" },
               { href: "/skills", label: "Skills" },
             ].map((link) => (
               <Link

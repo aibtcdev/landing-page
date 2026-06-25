@@ -20,12 +20,18 @@ import {
   legionReadOnly,
   parseUintRepr,
 } from "./stacks";
-import { GOV_CONTRACT, SBTC_TOKEN, TREASURY_CONTRACT } from "./constants";
+import { SBTC_TOKEN } from "./constants";
+import { get, toNum } from "./format";
+import { demandFallbackEntry, listLegions } from "./registry";
+import { listProviderAddresses } from "./providers";
 import type {
+  LegionEntry,
   LegionMember,
   LegionProposal,
   LegionSnapshot,
+  LegionSummary,
   LegionVote,
+  RegistrySnapshot,
 } from "./types";
 import type { Logger } from "../logging";
 
@@ -33,18 +39,6 @@ import type { Logger } from "../logging";
 const LEGION_READ_CONCURRENCY = 6;
 /** How far back through gov history to discover members/voters. */
 const GOV_HISTORY_CAP = 500;
-
-function toNum(v: unknown): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function get<T = unknown>(obj: unknown, key: string): T | undefined {
-  if (obj && typeof obj === "object") {
-    return (obj as Record<string, unknown>)[key] as T | undefined;
-  }
-  return undefined;
-}
 
 /** Minimal promise-concurrency limiter (pLimit-style). */
 function createLimiter(max: number) {
@@ -75,9 +69,16 @@ export async function buildLegionSnapshot(
   logger?: Logger,
   prev?: LegionSnapshot | null,
   apiKey?: string,
+  entry?: LegionEntry,
 ): Promise<LegionSnapshot> {
   const errors: string[] = [];
   const limit = createLimiter(LEGION_READ_CONCURRENCY);
+
+  // Per-Legion contracts come from the registry entry; fall back to the known
+  // demand deploy so callers that predate multi-Legion keep working.
+  const legion = entry ?? demandFallbackEntry();
+  const TREASURY_CONTRACT = legion.treasury;
+  const GOV_CONTRACT = legion.gov ?? `${legion.owner}.legion-gov`;
 
   const read: ReadFn = async (label, task, fallback) => {
     try {
@@ -176,7 +177,7 @@ export async function buildLegionSnapshot(
       ids.map(async (id) => {
         const prior = prevById.get(id);
         if (prior?.status.concluded) return prior; // terminal — never re-read
-        const built = await buildProposal(id, read, call, votesByProposal.get(id) ?? new Map());
+        const built = await buildProposal(id, GOV_CONTRACT, read, call, votesByProposal.get(id) ?? new Map());
         return built ?? prior ?? null; // fall back to prior on read failure
       }),
     )
@@ -193,6 +194,7 @@ export async function buildLegionSnapshot(
   // build, so transient 429s never blank out good data.
   return {
     updatedAt: Date.now(),
+    entry: legion,
     blockHeight: blockHeight ?? prev?.blockHeight ?? null,
     treasury: {
       balance: balance != null ? toNum(balance) : (prev?.treasury.balance ?? null),
@@ -206,15 +208,93 @@ export async function buildLegionSnapshot(
   };
 }
 
+/**
+ * Build the `/legions` index: every Legion from the registry (plus the fallback
+ * demand entry), each with its treasury balance and a headline count
+ * (#proposals for demand, #providers for provider). Lightweight by design — one
+ * balance read + one count read per Legion — so it stays cheap as Legions grow.
+ * Every read degrades to null rather than throwing.
+ */
+export async function buildRegistrySnapshot(
+  logger?: Logger,
+  apiKey?: string,
+): Promise<RegistrySnapshot> {
+  const errors: string[] = [];
+  const entries = await listLegions(apiKey, logger);
+
+  const read = async <T>(label: string, task: () => Promise<T>, fallback: T): Promise<T> => {
+    try {
+      return await task();
+    } catch (e) {
+      errors.push(`${label}: ${String(e)}`);
+      logger?.warn?.("legion.registry_summary_read_failed", { label, error: String(e) });
+      return fallback;
+    }
+  };
+
+  const legions: LegionSummary[] = await Promise.all(
+    entries.map(async (entry): Promise<LegionSummary> => {
+      const [balanceRaw, count] = await Promise.all([
+        read(
+          `treasury.get-balance.${entry.id}`,
+          () => legionReadOnly(entry.treasury, "get-balance", [], apiKey, logger),
+          null as unknown,
+        ),
+        read(
+          `count.${entry.id}`,
+          async () => {
+            if (entry.kind === "provider") {
+              const addrs = await listProviderAddresses(
+                entry.providers ?? `${entry.owner}.legion-providers`,
+                apiKey,
+                logger,
+              );
+              return addrs.length;
+            }
+            const raw = await legionReadOnly(
+              entry.gov ?? `${entry.owner}.legion-gov`,
+              "get-proposal-count",
+              [],
+              apiKey,
+              logger,
+            );
+            return raw != null ? toNum(raw) : null;
+          },
+          null as number | null,
+        ),
+      ]);
+      return {
+        id: entry.id,
+        kind: entry.kind,
+        owner: entry.owner,
+        model: entry.model,
+        uri: entry.uri,
+        active: entry.active,
+        treasuryBalance: balanceRaw != null ? toNum(balanceRaw) : null,
+        count,
+        source: entry.source,
+      };
+    }),
+  );
+
+  logger?.debug?.("legion.registry_snapshot_built", {
+    legions: legions.length,
+    errors: errors.length,
+  });
+
+  return { updatedAt: Date.now(), legions, errors };
+}
+
 async function buildProposal(
   id: number,
+  govContract: string,
   read: ReadFn,
   call: CallFn,
   voters: Map<string, { vote: boolean; txid: string }>,
 ): Promise<LegionProposal | null> {
   const [prop, status] = await Promise.all([
-    read(`gov.get-proposal.${id}`, () => call(GOV_CONTRACT, "get-proposal", [uintCV(id)]), null),
-    read(`gov.get-proposal-status.${id}`, () => call(GOV_CONTRACT, "get-proposal-status", [uintCV(id)]), null),
+    read(`gov.get-proposal.${id}`, () => call(govContract, "get-proposal", [uintCV(id)]), null),
+    read(`gov.get-proposal-status.${id}`, () => call(govContract, "get-proposal-status", [uintCV(id)]), null),
   ]);
 
   if (!prop || !status) return null;
@@ -226,7 +306,7 @@ async function buildProposal(
       Array.from(voters.entries()).map(async ([address, v]) => {
         const rec = await read(
           `gov.get-vote-record.${id}.${address}`,
-          () => call(GOV_CONTRACT, "get-vote-record", [uintCV(id), principalCV(address)]),
+          () => call(govContract, "get-vote-record", [uintCV(id), principalCV(address)]),
           null,
         );
         return {
