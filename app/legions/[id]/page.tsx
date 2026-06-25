@@ -1,3 +1,4 @@
+import { cache } from "react";
 import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -17,14 +18,17 @@ import type { LegionEntry } from "@/lib/legion/types";
 // never needs a Wrangler platform proxy.
 export const dynamic = "force-dynamic";
 
-async function resolve(id: string): Promise<LegionEntry | null> {
+// Cached per-request: generateMetadata and the page component both resolve the
+// same id in one render pass, so without this they'd each hit D1 (or Hiro). cache()
+// dedupes them into a single lookup.
+const resolve = cache(async (id: string): Promise<LegionEntry | null> => {
   try {
     const { env, ctx } = await getCloudflareContext();
     return await resolveLegionEntry(env, ctx, id);
   } catch {
     return null;
   }
-}
+});
 
 export async function generateMetadata({
   params,
