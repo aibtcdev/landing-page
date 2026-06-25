@@ -162,6 +162,57 @@ export async function getContractTransactions(
   return out;
 }
 
+/**
+ * Fetch a contract's `print` events (smart-contract logs), newest first, and
+ * decode each payload into a plain JS value via `parseClarityValue`. Used to
+ * enumerate provider Legions — the `Providers` map has no on-chain "list all",
+ * so we scan `register` print events and dedupe (brief §3 option (a)).
+ *
+ * Bounded by `maxEvents`; non-`smart_contract_log` events are skipped. Returns
+ * `[]` (never throws) so a build degrades to a partial snapshot.
+ */
+export async function getContractEvents(
+  contractId: string,
+  apiKey?: string,
+  logger?: Logger,
+  maxEvents = 200,
+): Promise<unknown[]> {
+  const out: unknown[] = [];
+  const pageSize = 50;
+
+  for (let offset = 0; offset < maxEvents; offset += pageSize) {
+    let data: { results?: unknown[] } | null = null;
+    try {
+      const response = await stacksApiFetch(
+        `${LEGION_API_BASE}/extended/v1/contract/${contractId}/events?limit=${pageSize}&offset=${offset}`,
+        { method: "GET", headers: legionHeaders(apiKey) },
+        { retries: 1, retries429: 1, perAttemptTimeoutMs: PER_ATTEMPT_TIMEOUT_MS, logger },
+      );
+      if (!response.ok) break;
+      data = await response.json();
+    } catch {
+      break;
+    }
+
+    const results = data?.results ?? [];
+    for (const item of results) {
+      const ev = item as {
+        event_type?: string;
+        contract_log?: { value?: { hex?: string } };
+      };
+      if (ev.event_type !== "smart_contract_log") continue;
+      const hex = ev.contract_log?.value?.hex;
+      if (!hex) continue;
+      const decoded = parseClarityValue({ okay: true, result: hex }, logger);
+      if (decoded != null) out.push(decoded);
+    }
+
+    if (results.length < pageSize) break; // last page
+  }
+
+  return out;
+}
+
 /** Current Stacks testnet tip height, or null if /v2/info is unreachable. */
 export async function getTestnetTipHeight(
   hiroApiKey?: string,
