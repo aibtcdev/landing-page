@@ -3,6 +3,94 @@
  * (divide by 1e8 for display). Block heights are Stacks block numbers.
  */
 
+import type { LegionKind } from "./constants";
+
+/**
+ * A registry entry — one Legion as listed by `legion-registry.get-legion(id)`,
+ * normalized for our use. `id` is the registry's numeric id as a string, or the
+ * reserved slug `"demand"` for the known-but-unregistered demand Legion.
+ */
+export interface LegionEntry {
+  id: string;
+  kind: LegionKind;
+  /** Deployer / admin principal. */
+  owner: string;
+  /** `{owner}.legion-treasury` — shared by both kinds. */
+  treasury: string;
+  /** Governance contract — present for demand Legions, null for provider. */
+  gov: string | null;
+  /** Fee collector — usually present (8% skim → treasury). */
+  fees: string | null;
+  /** `{owner}.legion-providers` — present for provider Legions only. */
+  providers: string | null;
+  /** Advertised model, e.g. "qwen2.5-7b" (provider) or "" (demand). */
+  model: string;
+  /** Human label from the registry `uri` field. */
+  uri: string;
+  active: boolean;
+  /** Where this entry came from: the on-chain registry, or our constant fallback. */
+  source: "registry" | "fallback";
+}
+
+/**
+ * Compact per-Legion row for the `/legions` index. `count` is #providers for a
+ * provider Legion or #proposals for a demand Legion; `treasuryBalance` is sats.
+ */
+export interface LegionSummary {
+  id: string;
+  kind: LegionKind;
+  owner: string;
+  model: string;
+  uri: string;
+  active: boolean;
+  /** Pooled sBTC (sats), or null if the read failed. */
+  treasuryBalance: number | null;
+  /** #providers (provider) or #proposals (demand), or null if unread. */
+  count: number | null;
+  source: "registry" | "fallback";
+}
+
+/** The `/legions` index snapshot — the registry list, cron-built. */
+export interface RegistrySnapshot {
+  updatedAt: number;
+  legions: LegionSummary[];
+  /** Per-read failure notes; partial lists are still served. */
+  errors: string[];
+}
+
+/** One inference provider in a provider Legion (`legion-providers.get-provider`). */
+export interface ProviderRecord {
+  /** Provider STX address. */
+  address: string;
+  /** Model this provider serves, e.g. "qwen2.5-7b". */
+  model: string;
+  /** Advertised inference endpoint URL. */
+  endpoint: string;
+  /** Staked bond (sats). */
+  bond: number;
+  active: boolean;
+  /** Successfully served jobs. */
+  jobsOk: number;
+  /** Failed jobs. */
+  jobsFail: number;
+}
+
+/** Detail snapshot for a provider Legion (mirrors LegionSnapshot for demand). */
+export interface ProviderSnapshot {
+  /** Unix ms when assembled. */
+  updatedAt: number;
+  blockHeight: number | null;
+  /** The registry entry this snapshot was built from. */
+  entry: LegionEntry;
+  /** Pooled sBTC (sats), or null on read failure. */
+  treasuryBalance: number | null;
+  /** Minimum bond to register as a provider (sats), or null. */
+  minBond: number | null;
+  /** Providers sorted by bond descending. */
+  providers: ProviderRecord[];
+  errors: string[];
+}
+
 export interface LegionMember {
   /** STX address (also the staker / voter identity). */
   address: string;
@@ -68,6 +156,12 @@ export interface LegionTreasury {
 export interface LegionSnapshot {
   /** Unix ms when this snapshot was assembled. */
   updatedAt: number;
+  /**
+   * The registry entry this snapshot was built from. Optional for back-compat
+   * with snapshots written before multi-Legion; readers fall back to the demand
+   * constants when absent.
+   */
+  entry?: LegionEntry;
   /** Stacks tip height at snapshot time. null if /v2/info failed. */
   blockHeight: number | null;
   treasury: LegionTreasury;
