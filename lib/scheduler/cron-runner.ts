@@ -33,10 +33,15 @@ import {
 import { runEarningsSweep } from "../earnings/indexer";
 import { EARNINGS_INTERVAL_MS } from "../earnings/constants";
 import type { EarningsSweepSummary } from "../earnings/types";
-import { buildLegionSnapshot } from "../legion/snapshot";
+import { buildLegionSnapshot, buildRegistrySnapshot } from "../legion/snapshot";
+import { buildProviderSnapshot } from "../legion/providers";
+import { listLegions } from "../legion/registry";
 import {
   readLegionSnapshotFromD1,
   writeLegionSnapshotToD1,
+  readProviderSnapshotFromD1,
+  writeProviderSnapshotToD1,
+  writeRegistrySnapshotToD1,
 } from "../legion/d1";
 import type { Logger } from "../logging";
 import type {
@@ -255,11 +260,15 @@ export async function runEarningsNow(
 }
 
 /**
- * Rebuild the Legion dashboard snapshot from testnet and persist it to KV under
- * `legion:snapshot`. This is the only writer of that key; the /api/legion
- * endpoint (and its edge cache) are pure readers. A build never throws — partial
- * outages are recorded in `snapshot.errors` — so this only rejects on an
- * unexpected error, which the caller logs without blocking other tasks.
+ * Rebuild every Legion's dashboard snapshot from testnet and persist them to D1
+ * (table `legion_snapshots`, keyed by legion id). This is the only writer of
+ * those rows; the page + /api/legions endpoints (and their edge cache) are pure
+ * readers. The cron:
+ *   1. reads the registry → builds the `/legions` index snapshot, then
+ *   2. builds one detail snapshot per active Legion, branching on kind
+ *      (demand → proposals/votes; provider → bonds/jobs).
+ * A build never throws — partial outages are recorded in `errors` — so a single
+ * Legion's failure is logged and skipped without blocking the others.
  */
 export async function runLegionNow(
   env: CloudflareEnv,
@@ -274,19 +283,49 @@ export async function runLegionNow(
     logger.warn("legion.skipped_no_db");
     return;
   }
+  const apiKey = env.HIRO_API_KEY;
 
-  // Read the prior snapshot so terminal (concluded) proposals are carried
-  // forward without re-reading them from Hiro. Authenticated with HIRO_API_KEY.
-  const prev = await readLegionSnapshotFromD1(db);
-  const snapshot = await buildLegionSnapshot(logger, prev, env.HIRO_API_KEY);
-  await writeLegionSnapshotToD1(db, snapshot);
-
-  logger.info("legion.snapshot_written", {
-    blockHeight: snapshot.blockHeight,
-    proposals: snapshot.proposals.length,
-    members: snapshot.members.length,
-    errors: snapshot.errors.length,
+  // 1. Registry index — backs the /legions list page.
+  const registry = await buildRegistrySnapshot(logger, apiKey);
+  await writeRegistrySnapshotToD1(db, registry);
+  logger.info("legion.registry_written", {
+    legions: registry.legions.length,
+    errors: registry.errors.length,
   });
+
+  // 2. Per-Legion detail snapshots. Walk every entry (registry + demand
+  // fallback). Skip inactive Legions — they stay listed but aren't refreshed.
+  const entries = await listLegions(apiKey, logger);
+  for (const entry of entries) {
+    if (!entry.active) continue;
+    try {
+      if (entry.kind === "provider") {
+        const prev = await readProviderSnapshotFromD1(db, entry.id);
+        const snap = await buildProviderSnapshot(entry, prev, apiKey, logger);
+        await writeProviderSnapshotToD1(db, entry.id, snap);
+        logger.info("legion.provider_snapshot_written", {
+          id: entry.id,
+          providers: snap.providers.length,
+          errors: snap.errors.length,
+        });
+      } else {
+        // Read the prior snapshot so terminal (concluded) proposals are carried
+        // forward without re-reading them from Hiro.
+        const prev = await readLegionSnapshotFromD1(db, entry.id);
+        const snap = await buildLegionSnapshot(logger, prev, apiKey, entry);
+        await writeLegionSnapshotToD1(db, entry.id, snap);
+        logger.info("legion.snapshot_written", {
+          id: entry.id,
+          blockHeight: snap.blockHeight,
+          proposals: snap.proposals.length,
+          members: snap.members.length,
+          errors: snap.errors.length,
+        });
+      }
+    } catch (e) {
+      logger.warn("legion.snapshot_failed", { id: entry.id, error: String(e) });
+    }
+  }
 }
 
 // ─────────────────────────── cron entry point ───────────────────────────
