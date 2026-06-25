@@ -46,11 +46,11 @@ export default function ProvidersTable({
       <table className="hidden w-full text-sm md:table">
         <thead>
           <tr className="border-b border-white/[0.06] text-left text-xs uppercase tracking-wide text-white/40">
-            <th className="px-5 py-3 font-medium">Provider (STX)</th>
-            <th className="px-5 py-3 font-medium">Model</th>
-            <th className="px-5 py-3 text-right font-medium">Bond</th>
-            <th className="px-5 py-3 font-medium">Status</th>
-            <th className="px-5 py-3 text-right font-medium">Jobs (ok / fail)</th>
+            <th className="px-5 py-3 font-medium" scope="col">Provider (STX)</th>
+            <th className="px-5 py-3 font-medium" scope="col">Model</th>
+            <th className="px-5 py-3 text-right font-medium" scope="col">Bond</th>
+            <th className="px-5 py-3 font-medium" scope="col">Status</th>
+            <th className="px-5 py-3 text-right font-medium" scope="col">Jobs (ok / fail)</th>
           </tr>
         </thead>
         <tbody>
