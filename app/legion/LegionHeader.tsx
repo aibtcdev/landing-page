@@ -33,6 +33,7 @@ function WiringDot({ label, ok }: { label: string; ok: boolean }) {
 
 export default function LegionHeader({ snapshot }: { snapshot: LegionSnapshot }) {
   const { treasury, totalStaked, members, blockHeight } = snapshot;
+  const treasuryContract = snapshot.entry?.treasury ?? TREASURY_CONTRACT;
 
   return (
     <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]">
@@ -41,13 +42,13 @@ export default function LegionHeader({ snapshot }: { snapshot: LegionSnapshot })
         <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px]">
           <span className="text-white/40">Treasury</span>
           <a
-            href={explorerContractUrl(TREASURY_CONTRACT)}
+            href={explorerContractUrl(treasuryContract)}
             target="_blank"
             rel="noopener noreferrer"
             className="font-mono text-white/70 transition-colors hover:text-[#F7931A]"
-            title={TREASURY_CONTRACT}
+            title={treasuryContract}
           >
-            {shortAddress(TREASURY_CONTRACT, 6, 14)}
+            {shortAddress(treasuryContract, 6, 14)}
           </a>
           <span className="text-white/15">·</span>
           <span className="text-white/40">Block</span>
