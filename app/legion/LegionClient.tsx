@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import type { LegionSnapshot } from "@/lib/legion/types";
+import type { LegionEntry, LegionSnapshot } from "@/lib/legion/types";
 import LegionHeader from "./LegionHeader";
 import MembersTable from "./MembersTable";
 import ProposalCard from "./ProposalCard";
@@ -34,8 +34,10 @@ function UpdatedAt({ updatedAt }: { updatedAt: number }) {
 
 export default function LegionClient({
   snapshot,
+  entry,
 }: {
   snapshot: LegionSnapshot | null;
+  entry?: LegionEntry;
 }) {
   if (!snapshot) {
     return (
@@ -50,7 +52,9 @@ export default function LegionClient({
     <div className="space-y-8">
       <header className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <h1 className="text-3xl font-bold max-md:text-2xl">AIBTC Legion</h1>
+          <h1 className="text-3xl font-bold max-md:text-2xl">
+            {entry?.uri || "AIBTC Legion"}
+          </h1>
           <UpdatedAt updatedAt={snapshot.updatedAt} />
         </div>
         <p className="max-w-2xl text-sm leading-relaxed text-white/60">
