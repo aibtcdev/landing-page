@@ -12,21 +12,11 @@
 
 import { principalCV } from "@stacks/transactions";
 import { getContractEvents, getTestnetTipHeight, legionReadOnly } from "./stacks";
+import { get, toNum } from "./format";
 import type { LegionEntry, ProviderRecord, ProviderSnapshot } from "./types";
 import type { Logger } from "../logging";
 
 const PROVIDER_EVENT_CAP = 300;
-
-function toNum(v: unknown): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function get(obj: unknown, key: string): unknown {
-  return obj && typeof obj === "object"
-    ? (obj as Record<string, unknown>)[key]
-    : undefined;
-}
 
 /** One provider's current record, or null if unregistered / read failed. */
 export async function getProvider(

@@ -21,6 +21,7 @@ import {
   parseUintRepr,
 } from "./stacks";
 import { SBTC_TOKEN } from "./constants";
+import { get, toNum } from "./format";
 import { demandFallbackEntry, listLegions } from "./registry";
 import { listProviderAddresses } from "./providers";
 import type {
@@ -38,18 +39,6 @@ import type { Logger } from "../logging";
 const LEGION_READ_CONCURRENCY = 6;
 /** How far back through gov history to discover members/voters. */
 const GOV_HISTORY_CAP = 500;
-
-function toNum(v: unknown): number {
-  const n = Number(v);
-  return Number.isFinite(n) ? n : 0;
-}
-
-function get<T = unknown>(obj: unknown, key: string): T | undefined {
-  if (obj && typeof obj === "object") {
-    return (obj as Record<string, unknown>)[key] as T | undefined;
-  }
-  return undefined;
-}
 
 /** Minimal promise-concurrency limiter (pLimit-style). */
 function createLimiter(max: number) {

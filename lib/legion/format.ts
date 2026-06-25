@@ -21,3 +21,16 @@ export function shortAddress(address: string, head = 5, tail = 4): string {
   if (address.length <= head + tail + 1) return address;
   return `${address.slice(0, head)}…${address.slice(-tail)}`;
 }
+
+/** Coerce a decoded Clarity value (often a uint string) to a finite number, else 0. */
+export function toNum(v: unknown): number {
+  const n = Number(v);
+  return Number.isFinite(n) ? n : 0;
+}
+
+/** Safe property read off a decoded Clarity tuple (plain object), else undefined. */
+export function get(obj: unknown, key: string): unknown {
+  return obj && typeof obj === "object"
+    ? (obj as Record<string, unknown>)[key]
+    : undefined;
+}
