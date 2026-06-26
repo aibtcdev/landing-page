@@ -2,9 +2,6 @@ import Link from "next/link";
 import { formatSbtc } from "@/lib/legion/format";
 import CopyButton from "../components/CopyButton";
 
-const MCP_NPM_URL = "https://www.npmjs.com/package/@aibtc/mcp-server";
-const MCP_INSTALL_CMD = "npx @aibtc/mcp-server@latest --install --testnet";
-
 /**
  * Provider-Legion onboarding: get test sBTC, lock a bond + register, serve the
  * model, get paid. The demand-Legion equivalent is HowToParticipate. The exact
@@ -85,29 +82,6 @@ export default function HowToProvide({
   return (
     <section id="how-to-provide" className="scroll-mt-24 space-y-4">
       <h2 className="text-xl font-semibold">How operators provide</h2>
-      <p className="text-sm leading-relaxed text-white/60">
-        Every step runs through the AIBTC MCP server (
-        <a
-          href={MCP_NPM_URL}
-          target="_blank"
-          rel="noopener noreferrer"
-          className="font-mono text-[#7DA2FF] underline underline-offset-2 hover:text-[#7DA2FF]/80"
-        >
-          @aibtc/mcp-server
-        </a>
-        ). Install it once:
-        <span className="mt-2 flex items-center gap-2">
-          <code className="flex-1 break-all rounded bg-black/30 px-1.5 py-0.5 font-mono text-xs text-white/80">
-            {MCP_INSTALL_CMD}
-          </code>
-          <CopyButton
-            text={MCP_INSTALL_CMD}
-            variant="icon"
-            label=""
-            ariaLabel="Copy MCP install command"
-          />
-        </span>
-      </p>
       <ol className="grid gap-3 sm:grid-cols-2">
         {STEPS.map((step, i) => (
           <li
