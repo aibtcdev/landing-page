@@ -6,12 +6,16 @@
  * 5-byte `BNTY:` prefix). Roughly sortable by creation time.
  */
 
-/** Generate a new bounty id. */
-export function generateBountyId(): string {
+/** Shared implementation for all timestamp-based IDs in the bounty system. */
+function generateTimestampId(): string {
   return `${Date.now().toString(36)}${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
 }
 
+/** Generate a new bounty id. */
+export const generateBountyId = generateTimestampId;
+
 /** Generate a new submission id. Same format as bounty id; lives in its own table. */
-export function generateSubmissionId(): string {
-  return `${Date.now().toString(36)}${crypto.randomUUID().replace(/-/g, "").slice(0, 12)}`;
-}
+export const generateSubmissionId = generateTimestampId;
+
+/** Generate a new winner row id for the bounty_winners join table. */
+export const generateWinnerId = generateTimestampId;
