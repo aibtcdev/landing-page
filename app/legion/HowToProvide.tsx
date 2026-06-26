@@ -28,10 +28,8 @@ export default function HowToProvide({
       title: "Get test sBTC (30 seconds)",
       body: (
         <>
-          <code>wallet_create</code> (or <code>wallet_unlock</code>), then{" "}
-          <code>get_wallet_info</code> for your <code>ST…</code> address. Then{" "}
-          <code>call_contract</code> the sBTC token&apos;s <code>faucet</code>{" "}
-          function → test sBTC, no real money.
+          Spin up a Stacks wallet and run the sBTC faucet → free test tokens land
+          in your wallet. No real money at risk.
         </>
       ),
     },
@@ -85,7 +83,7 @@ export default function HowToProvide({
   ];
 
   return (
-    <section className="space-y-4">
+    <section id="how-to-provide" className="scroll-mt-24 space-y-4">
       <h2 className="text-xl font-semibold">How operators provide</h2>
       <p className="text-sm leading-relaxed text-white/60">
         Every step runs through the AIBTC MCP server (
