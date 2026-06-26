@@ -3,9 +3,16 @@
 import { useEffect, useState } from "react";
 import type { ProviderSnapshot } from "@/lib/legion/types";
 import { formatSbtc, shortAddress } from "@/lib/legion/format";
-import { explorerContractUrl } from "@/lib/legion/constants";
+import {
+  explorerAddressUrl,
+  explorerContractUrl,
+} from "@/lib/legion/constants";
 import ProvidersTable from "./ProvidersTable";
 import HowToProvide from "./HowToProvide";
+
+const SKILL_DOC_URL = "/legion/skill.md";
+const TRY_IT_URL = "/legion/skill.md";
+const SKEPTIC_DOC_URL = "/legion/skill.md";
 
 function UpdatedAt({ updatedAt }: { updatedAt: number }) {
   const [now, setNow] = useState<number | null>(null);
@@ -59,36 +66,63 @@ export default function ProviderClient({
 
   const { entry, treasuryBalance, minBond, providers, blockHeight } = snapshot;
   const activeCount = providers.filter((p) => p.active).length;
+  const totalJobs = providers.reduce((sum, p) => sum + p.jobsOk + p.jobsFail, 0);
+  const model = entry.model || "qwen2.5-7b";
+  const bondLabel = minBond != null ? formatSbtc(minBond) : "the minimum";
+  const pooledLabel = formatSbtc(treasuryBalance);
+  const providerWord = providers.length === 1 ? "provider" : "providers";
 
   return (
     <div className="space-y-8">
-      <header className="space-y-3">
-        <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex flex-wrap items-center gap-2">
-            <span className="inline-flex items-center rounded-full bg-[#7DA2FF]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7DA2FF]">
-              Provider
-            </span>
-            <h1 className="text-3xl font-bold max-md:text-2xl">
-              {entry.uri || "AIBTC Provider Legion"}
-            </h1>
-          </div>
+      <header className="space-y-5">
+        <span className="inline-flex items-center rounded-full bg-[#7DA2FF]/15 px-2 py-0.5 text-[10px] font-semibold uppercase tracking-[0.08em] text-[#7DA2FF]">
+          Provider Legion
+        </span>
+        <h1 className="sr-only">{entry.uri || "AIBTC Provider Legion"}</h1>
+        <p className="max-w-3xl text-2xl font-semibold leading-snug text-white max-md:text-xl">
+          Stake {bondLabel} sBTC. Host{" "}
+          <span className="font-mono text-[#7DA2FF]">{model}</span>. Earn 92% of
+          every call Bitcoin agents send you. The treasury takes 8%.{" "}
+          <span className="text-white/70">Failed responses slash your bond.</span>
+        </p>
+        <p className="max-w-3xl text-sm leading-relaxed text-white/50">
+          Live on Stacks testnet. {providers.length} {providerWord}, {totalJobs}{" "}
+          {totalJobs === 1 ? "job" : "jobs"}, {pooledLabel} sBTC pooled. Real sBTC
+          on mainnet comes after we prove agents actually pay.
+        </p>
+        <div className="flex flex-wrap gap-3">
+          <a
+            href={explorerContractUrl(entry.treasury)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="inline-flex items-center gap-2 rounded-lg border border-[#7DA2FF]/40 bg-[#7DA2FF]/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#7DA2FF]/20"
+          >
+            View treasury + provider on Hiro explorer
+            <span aria-hidden>↗</span>
+          </a>
+        </div>
+      </header>
+
+      <div className="rounded-xl border border-amber-500/30 bg-amber-500/[0.05] p-5">
+        <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
+          <span className="inline-flex items-center gap-2 text-sm font-semibold text-amber-300">
+            <span aria-hidden>⚠</span> Testnet only
+          </span>
           <UpdatedAt updatedAt={snapshot.updatedAt} />
         </div>
-        <p className="max-w-2xl text-sm leading-relaxed text-white/60">
-          A guild of inference operators on Stacks testnet. Each provider stakes a
-          bond and serves{" "}
-          <span className="font-mono text-white/80">{entry.model || "a model"}</span>
-          , earning sBTC per call — the Legion&apos;s treasury skims 8%. This is a
-          read-only view; operators join by calling the{" "}
-          <code className="text-white/70">legion-providers</code> contract.
+        <p className="text-sm leading-relaxed text-white/60">
+          sBTC here is faucet money. Your real bond goes in only after we have 5+
+          providers, visible agent payouts, and public audits. Membership = bond —
+          no votes, no multisig.{" "}
+          <a
+            href={SKILL_DOC_URL}
+            className="text-amber-300/90 underline underline-offset-2 hover:text-amber-200"
+          >
+            Slashing rules
+          </a>
+          . Treasury address and admin are on-chain and clickable right now.
         </p>
-        {snapshot.errors.length > 0 && (
-          <p className="text-xs text-amber-300/70">
-            Some on-chain reads failed for this snapshot ({snapshot.errors.length})
-            — the data shown may be partial.
-          </p>
-        )}
-      </header>
+      </div>
 
       <section className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]">
         <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-2 border-b border-white/[0.06] px-5 py-3 text-[11px]">
@@ -118,8 +152,8 @@ export default function ProviderClient({
         </div>
 
         <div className="flex flex-wrap items-center gap-4 px-5 py-4">
-          <Metric label="Pooled" value={`${formatSbtc(treasuryBalance)} sBTC`} />
-          <Metric label="Min bond" value={`${formatSbtc(minBond)} sBTC`} />
+          <Metric label="Pooled" value={`${pooledLabel} sBTC`} />
+          <Metric label="Min bond" value={`${bondLabel} sBTC`} />
           <Metric label="Providers" value={`${providers.length}`} />
           <Metric label="Active" value={`${activeCount}`} />
         </div>
@@ -129,13 +163,85 @@ export default function ProviderClient({
         <div className="flex items-baseline justify-between gap-3">
           <h2 className="text-xl font-semibold">Providers</h2>
           <span className="text-sm text-white/40">
-            {providers.length} {providers.length === 1 ? "provider" : "providers"}
+            {providers.length} {providerWord}
           </span>
         </div>
         <ProvidersTable providers={providers} />
       </section>
 
+      <div className="grid gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 text-sm sm:grid-cols-3">
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.08em] text-white/40">
+            Last activity
+          </div>
+          <div className="mt-1 text-white/70">
+            {totalJobs === 0 ? "none yet (0 jobs)" : `${totalJobs} jobs settled`}
+          </div>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.08em] text-white/40">
+            Live treasury
+          </div>
+          <a
+            href={explorerContractUrl(entry.treasury)}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mt-1 inline-block font-mono text-white/70 transition-colors hover:text-[#7DA2FF]"
+          >
+            {shortAddress(entry.treasury, 6, 4)} ↗
+          </a>
+        </div>
+        <div>
+          <div className="text-[10px] uppercase tracking-[0.08em] text-white/40">
+            Live {providerWord}
+          </div>
+          {providers.length === 0 ? (
+            <div className="mt-1 text-white/40">none yet</div>
+          ) : (
+            <ul className="mt-1 space-y-1">
+              {providers.map((p) => (
+                <li key={p.address}>
+                  <a
+                    href={explorerAddressUrl(p.address)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    className="font-mono text-white/70 transition-colors hover:text-[#7DA2FF]"
+                  >
+                    {shortAddress(p.address, 6, 4)} ↗
+                  </a>{" "}
+                  <span className="text-white/50">
+                    — {formatSbtc(p.bond)} bonded, {p.jobsOk}/{p.jobsFail}
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </div>
+      </div>
+
       <HowToProvide minBond={minBond} model={entry.model} />
+
+      <div className="flex flex-wrap gap-3 border-t border-white/[0.08] pt-6">
+        <a
+          href={TRY_IT_URL}
+          className="inline-flex flex-1 items-center justify-center rounded-lg border border-[#7DA2FF]/40 bg-[#7DA2FF]/10 px-4 py-3 text-center text-sm font-medium text-white transition-colors hover:bg-[#7DA2FF]/20"
+        >
+          Try it on testnet — faucet + exact commands
+        </a>
+        <a
+          href={SKEPTIC_DOC_URL}
+          className="inline-flex flex-1 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-center text-sm font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
+        >
+          I&apos;m still skeptical — slashing math + mainnet timeline
+        </a>
+      </div>
+
+      {snapshot.errors.length > 0 && (
+        <p className="text-xs text-amber-300/70">
+          Some on-chain reads failed for this snapshot ({snapshot.errors.length}) —
+          the data shown may be partial.
+        </p>
+      )}
     </div>
   );
 }
