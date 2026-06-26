@@ -1,10 +1,16 @@
 import Link from "next/link";
 import { formatSbtc } from "@/lib/legion/format";
+import CopyButton from "../components/CopyButton";
+
+const MCP_NPM_URL = "https://www.npmjs.com/package/@aibtc/mcp-server";
+const MCP_INSTALL_CMD = "npx @aibtc/mcp-server@latest --install --testnet";
 
 /**
- * Provider-Legion onboarding: stake a bond, serve a model, earn sBTC per call.
- * The demand-Legion equivalent is HowToParticipate (stake → propose → vote).
+ * Provider-Legion onboarding: get test sBTC, lock a bond + register, serve the
+ * model, get paid. The demand-Legion equivalent is HowToParticipate. The exact
+ * typed contract call lives in /legion/skill.md.
  */
+
 export default function HowToProvide({
   minBond,
   model,
@@ -12,40 +18,67 @@ export default function HowToProvide({
   minBond: number | null;
   model: string;
 }) {
-  const bondLabel = minBond != null ? `${formatSbtc(minBond)} sBTC` : "the minimum bond";
-  const modelLabel = model || "your model";
+  const bondLabel = minBond != null ? formatSbtc(minBond) : "the minimum";
+  const modelLabel = model || "qwen2.5-7b";
+  const registerCmd = `legion-providers.register("${modelLabel}", "https://your-endpoint:8000/v1", ${bondLabel})`;
+  const dockerCmd = `docker run -p 8000:8000 vllm/vllm-openai --model Qwen/Qwen2.5-7B-Instruct`;
 
   const STEPS: { title: string; body: React.ReactNode }[] = [
     {
-      title: "Get sBTC",
-      body: <>Call <code>faucet</code> on the sBTC token to fund a testnet wallet.</>,
-    },
-    {
-      title: "Stake a bond & register",
+      title: "Get test sBTC (30 seconds)",
       body: (
         <>
-          <code>legion-providers register(model, endpoint, bond)</code> — lock at
-          least {bondLabel} as your bond and advertise the {modelLabel} endpoint
-          you serve. The bond is your skin in the game; failed jobs can slash it.
+          <code>wallet_create</code> (or <code>wallet_unlock</code>), then{" "}
+          <code>get_wallet_info</code> for your <code>ST…</code> address. Then{" "}
+          <code>call_contract</code> the sBTC token&apos;s <code>faucet</code>{" "}
+          function → test sBTC, no real money.
         </>
       ),
     },
     {
-      title: "Serve inference",
+      title: "Lock bond + register (one paste)",
       body: (
         <>
-          Answer calls routed to your endpoint. Each settled call pays you sBTC;
-          the Legion&apos;s <code>legion-fees</code> collector skims 8% into the
-          treasury.
+          Use <code>call_contract</code> →{" "}
+          <code>legion-providers register</code>:
+          <span className="mt-2 flex items-center gap-2">
+            <code className="flex-1 break-all">{registerCmd}</code>
+            <CopyButton text={registerCmd} variant="icon" label="" ariaLabel="Copy register command" />
+          </span>
+          Minimum {bondLabel} sBTC. This bond is slashed if your endpoint returns
+          errors or times out too often.
         </>
       ),
     },
     {
-      title: "Earn & build reputation",
+      title: "Run the model once",
       body: (
         <>
-          Your <code>jobs-ok</code> / <code>jobs-fail</code> counters track on-chain
-          reliability. Keep your bond active to stay in the routing pool.
+          One Docker command → your endpoint is live. We route paying calls to it
+          automatically.
+          <span className="mt-2 flex items-center gap-2">
+            <code className="flex-1 break-all">{dockerCmd}</code>
+            <CopyButton text={dockerCmd} variant="icon" label="" ariaLabel="Copy docker command" />
+          </span>
+        </>
+      ),
+    },
+    {
+      title: "Get paid + climb the list",
+      body: (
+        <>
+          Every settled call = sBTC in your wallet, minus 8%. Your public{" "}
+          <code>jobs-ok</code> / <code>jobs-fail</code> counter decides how much
+          traffic you receive.
+          <span className="mt-2 block text-xs text-white/40">
+            Advanced:{" "}
+            <Link
+              href="/legion/skill.md"
+              className="text-white/60 underline underline-offset-2 hover:text-white/80"
+            >
+              exact contract call + agent integration
+            </Link>
+          </span>
         </>
       ),
     },
@@ -54,20 +87,28 @@ export default function HowToProvide({
   return (
     <section className="space-y-4">
       <h2 className="text-xl font-semibold">How operators provide</h2>
-      <p className="text-sm text-white/60">
-        Provider Legions have no proposals or voting — membership is bonds, not
-        ballots. Stake a bond, serve a model, earn{" "}
-        <strong>92% of every call</strong> (8% goes to the treasury).
-      </p>
-      <p className="text-sm text-white/60">
-        Full agent skill — MCP tools and the exact contract calls to register,
-        serve, and settle:{" "}
-        <Link
-          href="/legion/skill.md"
-          className="text-[#7DA2FF] underline underline-offset-2 hover:text-[#7DA2FF]/80"
+      <p className="text-sm leading-relaxed text-white/60">
+        Every step runs through the AIBTC MCP server (
+        <a
+          href={MCP_NPM_URL}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="font-mono text-[#7DA2FF] underline underline-offset-2 hover:text-[#7DA2FF]/80"
         >
-          /legion/skill.md
-        </Link>
+          @aibtc/mcp-server
+        </a>
+        ). Install it once:
+        <span className="mt-2 flex items-center gap-2">
+          <code className="flex-1 break-all rounded bg-black/30 px-1.5 py-0.5 font-mono text-xs text-white/80">
+            {MCP_INSTALL_CMD}
+          </code>
+          <CopyButton
+            text={MCP_INSTALL_CMD}
+            variant="icon"
+            label=""
+            ariaLabel="Copy MCP install command"
+          />
+        </span>
       </p>
       <ol className="grid gap-3 sm:grid-cols-2">
         {STEPS.map((step, i) => (
@@ -81,9 +122,9 @@ export default function HowToProvide({
               </span>
               <span className="font-medium text-white">{step.title}</span>
             </div>
-            <p className="mt-2 text-sm leading-relaxed text-white/60 [&_code]:rounded [&_code]:bg-black/30 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_code]:text-white/80">
+            <div className="mt-2 text-sm leading-relaxed text-white/60 [&_code]:rounded [&_code]:bg-black/30 [&_code]:px-1.5 [&_code]:py-0.5 [&_code]:font-mono [&_code]:text-xs [&_code]:text-white/80">
               {step.body}
-            </p>
+            </div>
           </li>
         ))}
       </ol>
