@@ -11,7 +11,7 @@ import ProvidersTable from "./ProvidersTable";
 import HowToProvide from "./HowToProvide";
 
 const TRY_IT_HREF = "#how-to-provide";
-const RISKS_HREF = "#risks";
+const RISKS_URL = "/legion/risks";
 
 function UpdatedAt({ updatedAt }: { updatedAt: number }) {
   const [now, setNow] = useState<number | null>(null);
@@ -110,7 +110,7 @@ export default function ProviderClient({
           providers, visible agent payouts, and public audits. Membership = bond —
           no votes, no multisig.{" "}
           <a
-            href={RISKS_HREF}
+            href={RISKS_URL}
             className="text-amber-300/90 underline underline-offset-2 hover:text-amber-200"
           >
             Slashing rules
@@ -230,61 +230,6 @@ export default function ProviderClient({
 
       <HowToProvide minBond={minBond} model={entry.model} />
 
-      <section id="risks" className="scroll-mt-24 space-y-4">
-        <h2 className="text-xl font-semibold">
-          Risks, slashing math &amp; mainnet criteria
-        </h2>
-        <div className="overflow-hidden rounded-xl border border-white/[0.08] bg-white/[0.02]">
-          <dl className="divide-y divide-white/[0.06] text-sm">
-            <div className="grid gap-1 px-5 py-4 sm:grid-cols-[180px_1fr]">
-              <dt className="font-medium text-white/80">What you put at risk</dt>
-              <dd className="text-white/60">
-                Only your bond ({bondLabel} sBTC of testnet faucet money today).
-                It sits in the on-chain treasury contract, not with us — clickable
-                above.
-              </dd>
-            </div>
-            <div className="grid gap-1 px-5 py-4 sm:grid-cols-[180px_1fr]">
-              <dt className="font-medium text-white/80">How slashing works</dt>
-              <dd className="text-white/60">
-                Endpoints that return errors or time out too often get slashed —
-                your public <code className="rounded bg-black/30 px-1 py-0.5 font-mono text-xs">jobs-ok</code>{" "}
-                / <code className="rounded bg-black/30 px-1 py-0.5 font-mono text-xs">jobs-fail</code>{" "}
-                counter is on-chain and decides how much traffic you receive.
-              </dd>
-            </div>
-            <div className="grid gap-1 px-5 py-4 sm:grid-cols-[180px_1fr]">
-              <dt className="font-medium text-white/80">What you earn</dt>
-              <dd className="text-white/60">
-                92% of every settled call; the treasury keeps 8%. Paid in sBTC,
-                per call, to your wallet.
-              </dd>
-            </div>
-            <div className="grid gap-1 px-5 py-4 sm:grid-cols-[180px_1fr]">
-              <dt className="font-medium text-white/80">Mainnet criteria</dt>
-              <dd className="text-white/60">
-                Real sBTC goes live only after 5+ providers, visible agent
-                payouts, and public audits. Until then it is testnet only.
-              </dd>
-            </div>
-            <div className="grid gap-1 px-5 py-4 sm:grid-cols-[180px_1fr]">
-              <dt className="font-medium text-white/80">Why it isn&apos;t a rug</dt>
-              <dd className="text-white/60">
-                Treasury and admin addresses are on-chain and clickable now; the
-                contracts are read-only verifiable. Full mechanics:{" "}
-                <a
-                  href="/legion/skill.md"
-                  className="text-[#7DA2FF] underline underline-offset-2 hover:text-[#7DA2FF]/80"
-                >
-                  legion skill doc
-                </a>
-                .
-              </dd>
-            </div>
-          </dl>
-        </div>
-      </section>
-
       <div className="flex flex-wrap gap-3 border-t border-white/[0.08] pt-6">
         <a
           href={TRY_IT_HREF}
@@ -293,10 +238,10 @@ export default function ProviderClient({
           Try it on testnet — faucet + exact commands
         </a>
         <a
-          href={RISKS_HREF}
+          href={RISKS_URL}
           className="inline-flex flex-1 items-center justify-center rounded-lg border border-white/10 bg-white/[0.03] px-4 py-3 text-center text-sm font-medium text-white/70 transition-colors hover:bg-white/[0.06] hover:text-white"
         >
-          I&apos;m still skeptical — slashing math + mainnet timeline
+          I&apos;m still skeptical — read the 1-page risk/reward + mainnet criteria
         </a>
       </div>
 
