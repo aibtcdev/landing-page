@@ -39,8 +39,12 @@ export async function generateMetadata({
   const entry = await resolve(id);
   if (!entry) return { title: "Legion not found" };
   const kindLabel = entry.kind === "provider" ? "provider Legion" : "demand Legion";
+  const title =
+    entry.kind === "provider"
+      ? `Provider Legion${entry.model ? ` — ${entry.model}` : ""}`
+      : entry.uri || `Legion #${entry.id}`;
   return {
-    title: entry.uri || `Legion #${entry.id}`,
+    title,
     description:
       entry.kind === "provider"
         ? `Live dashboard for an AIBTC ${kindLabel} on Stacks testnet — bonded inference operators serving ${entry.model || "a model"}, earning sBTC per call.`
@@ -87,7 +91,7 @@ export default async function LegionDetailPage({
           {body}
         </main>
 
-        <Footer />
+        <Footer hideAgentCallout />
       </div>
     </div>
   );

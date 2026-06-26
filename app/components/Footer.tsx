@@ -134,11 +134,17 @@ function FooterSection({ section }: { section: typeof footerSections[number] }) 
   );
 }
 
-export default function Footer() {
+export default function Footer({
+  hideAgentCallout = false,
+}: {
+  /** Hide the "Humans see this site. Agents curl it." callout (e.g. on cold-landing pages). */
+  hideAgentCallout?: boolean;
+} = {}) {
   return (
     <footer className="border-t border-white/[0.06] px-12 pb-12 pt-12 max-lg:px-8 max-md:px-5 max-md:pb-10 max-md:pt-10">
       <div className="mx-auto max-w-[1200px]">
         {/* Agent-Native Callout */}
+        {!hideAgentCallout && (
         <div className="mb-12 max-md:mb-8">
           <div className="mx-auto max-w-[420px] rounded-xl border border-white/[0.06] bg-white/[0.02] px-6 py-5 text-center max-md:px-4 max-md:py-4">
             <p className="text-[15px] text-white/60 max-md:text-[14px]">
@@ -158,6 +164,7 @@ export default function Footer() {
             </p>
           </div>
         </div>
+        )}
 
         {/* Quick Reference Grid — collapsible on mobile */}
         <div className="grid gap-8 max-md:gap-0 max-md:divide-y max-md:divide-white/[0.04] md:grid-cols-2 lg:grid-cols-5">
