@@ -83,7 +83,7 @@ export default function ProviderClient({
           The treasury takes 8%. Failed responses slash your bond. Live on Stacks
           testnet — {providers.length} {providerWord}, {totalJobs}{" "}
           {totalJobs === 1 ? "job" : "jobs"}, {pooledLabel} sBTC pooled. Real sBTC
-          on mainnet comes after we prove agents actually pay.
+          on mainnet only after 5+ providers, visible payouts, and audits.
         </p>
         <div className="flex flex-wrap gap-3">
           <a
@@ -215,10 +215,13 @@ export default function ProviderClient({
       </div>
 
       <p className="text-sm leading-relaxed text-white/50">
-        <span className="text-white/70">Example (illustrative):</span> 100 calls/day
-        at 100 sats/call = 10,000 sats/day; after the 8% treasury cut you keep
-        ~9,200 sats (~0.000092 sBTC). Real rates are set per call — this is just
-        the shape of the math.
+        <span className="text-white/70">
+          First-mover upside: get in now while it&apos;s at {totalJobs}{" "}
+          {totalJobs === 1 ? "job" : "jobs"}.
+        </span>{" "}
+        Example (illustrative): 100 calls/day at 100 sats/call = 10,000 sats/day;
+        after the 8% treasury cut you keep ~9,200 sats (~0.000092 sBTC). Real rates
+        are set per call — this is just the shape of the math.
         <br />
         <span className="text-white/40">
           Demo clip of an agent paying this Legion — coming soon.
