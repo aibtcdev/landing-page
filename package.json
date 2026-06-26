@@ -42,7 +42,8 @@
     "flatted": ">=3.4.0",
     "picomatch": ">=4.0.4",
     "path-to-regexp": ">=8.4.0",
-    "axios": ">=1.17.0"
+    "axios": ">=1.17.0",
+    "ws": ">=8.21.0"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260212.0",
