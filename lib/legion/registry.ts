@@ -62,13 +62,16 @@ export function demandFallbackEntry(): LegionEntry {
  * detail page can render without a fresh Hiro round-trip.
  */
 export function entryFromSummary(summary: LegionSummary): LegionEntry {
+  // Prefer the explicit contract ids carried on the summary (per-model legions
+  // use suffixed names under one owner). Fall back to the `{owner}.legion-*`
+  // convention for back-compat with summaries written before those fields.
   return {
     id: summary.id,
     kind: summary.kind,
     owner: summary.owner,
-    treasury: `${summary.owner}.legion-treasury`,
-    gov: summary.kind === "demand" ? `${summary.owner}.legion-gov` : null,
-    fees: `${summary.owner}.legion-fees`,
+    treasury: summary.treasury || `${summary.owner}.legion-treasury`,
+    gov: summary.gov ?? (summary.kind === "demand" ? `${summary.owner}.legion-gov` : null),
+    fees: summary.fees ?? `${summary.owner}.legion-fees`,
     providers: summary.kind === "provider" ? legionProvidersContract(summary.owner) : null,
     model: summary.model,
     uri: summary.uri,
@@ -88,8 +91,12 @@ function parseRegistryEntry(id: number, raw: unknown): LegionEntry | null {
     id: String(id),
     kind,
     owner,
+    // Use the registry's EXPLICIT contract ids — per-model legions are deployed
+    // under one owner with suffixed names (legion-{treasury,gov,fees}-<model>),
+    // so the `{owner}.legion-*` convention no longer holds. gov is honored for
+    // every kind: a provider legion can be governed (stake -> propose/vote).
     treasury: str(t.treasury) || `${owner}.legion-treasury`,
-    gov: kind === "demand" ? str(t.gov) || null : null,
+    gov: str(t.gov) || (kind === "demand" ? `${owner}.legion-gov` : null),
     fees: str(t.fees) || null,
     providers: kind === "provider" ? legionProvidersContract(owner) : null,
     model: str(t.model),

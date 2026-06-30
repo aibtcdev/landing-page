@@ -270,6 +270,11 @@ export async function buildRegistrySnapshot(
         active: entry.active,
         treasuryBalance: balanceRaw != null ? toNum(balanceRaw) : null,
         count,
+        // carry the explicit contract ids so the detail page resolves suffixed
+        // per-model contracts from the cached index (no Hiro round-trip).
+        treasury: entry.treasury,
+        gov: entry.gov,
+        fees: entry.fees,
         source: entry.source,
       };
     }),

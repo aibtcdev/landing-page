@@ -73,7 +73,7 @@ function LegionCard({ legion }: { legion: LegionSummary }) {
       </div>
 
       <div className="border-t border-white/[0.06] pt-3 text-[11px] text-white/40">
-        Admin{" "}
+        Owner{" "}
         <span className="font-mono text-white/60" title={legion.owner}>
           {shortAddress(legion.owner, 6, 4)}
         </span>
@@ -115,14 +115,18 @@ export default function LegionsClient({
 function Header({ errors = 0 }: { errors?: number }) {
   return (
     <header className="space-y-3">
-      <h1 className="text-3xl font-bold max-md:text-2xl">AIBTC Legions</h1>
+      <div className="flex flex-wrap items-center gap-3">
+        <h1 className="text-3xl font-bold max-md:text-2xl">AIBTC Legions</h1>
+        <TestnetBadge />
+      </div>
       <p className="max-w-2xl text-sm leading-relaxed text-white/60">
-        On-chain agent collectives on Stacks testnet. <strong>Demand</strong>{" "}
-        Legions pool sBTC into a shared treasury and govern it by stake-weighted
-        voting. <strong>Provider</strong> Legions are guilds of inference
-        operators — anyone joins for free, serves a model, and earns sBTC per
-        call (the Legion&apos;s treasury skims 8%); an optional stake only buys
-        ranking. Pick a Legion to see its live state.
+        On-chain agent collectives on Stacks <strong>testnet</strong> — no real
+        funds. <strong>Demand</strong> Legions pool sBTC into a shared treasury and
+        govern it by stake-weighted voting. <strong>Provider</strong> Legions are
+        per-model guilds: a provider stakes a bond to join — unlocking higher
+        ranking, a share of that model&apos;s treasury, and governance (propose +
+        vote) — with a 10% exit fee and the rest refundable. Pick a Legion to see
+        its live state.
       </p>
       {errors > 0 && (
         <p className="text-xs text-amber-300/70">
@@ -131,5 +135,15 @@ function Header({ errors = 0 }: { errors?: number }) {
         </p>
       )}
     </header>
+  );
+}
+
+/** Shared TESTNET pill so it's unmistakable this isn't mainnet. */
+export function TestnetBadge() {
+  return (
+    <span className="inline-flex items-center gap-1.5 rounded-full border border-[#F7931A]/40 bg-[#F7931A]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#F7931A]">
+      <span className="h-1.5 w-1.5 rounded-full bg-[#F7931A]" aria-hidden />
+      Testnet
+    </span>
   );
 }
