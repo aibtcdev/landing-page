@@ -301,7 +301,14 @@ export async function runLegionNow(
   for (const entry of entries) {
     if (!entry.active) continue;
     try {
-      if (entry.kind === "provider") {
+      // Build the detail snapshot the page actually reads. The page routes by
+      // governance: a legion WITH a gov contract renders the governance view
+      // (getLegionSnapshot → proposals + members + stake), so the cron must build a
+      // LegionSnapshot for it (which reads the gov contract). Only an UNGOVERNED
+      // provider legion gets the provider-directory snapshot. Keying off `kind`
+      // alone built a provider snapshot for governed model legions, so the gov was
+      // never read and `proposals`/`members` were never written.
+      if (entry.kind === "provider" && !entry.gov) {
         const prev = await readProviderSnapshotFromD1(db, entry.id);
         const snap = await buildProviderSnapshot(entry, prev, apiKey, logger, gatewayBase);
         await writeProviderSnapshotToD1(db, entry.id, snap);
