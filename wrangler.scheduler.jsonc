@@ -11,7 +11,7 @@
   "compatibility_flags": ["nodejs_compat"],
 
   "triggers": {
-    "crons": ["*/5 * * * *"]
+    "crons": ["*/15 * * * *"]
   },
 
   "vars": {
