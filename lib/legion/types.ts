@@ -47,6 +47,16 @@ export interface LegionSummary {
   treasuryBalance: number | null;
   /** #providers (provider) or #proposals (demand), or null if unread. */
   count: number | null;
+  /**
+   * Explicit contract ids from the registry so the detail page can resolve a
+   * Legion from the cached index without a Hiro round-trip. Needed now that
+   * per-model legions use suffixed names (legion-{treasury,gov,fees}-<model>)
+   * under one owner — the `{owner}.legion-*` convention no longer holds.
+   * Optional for back-compat with snapshots written before this field existed.
+   */
+  treasury?: string;
+  gov?: string | null;
+  fees?: string | null;
   source: "registry" | "fallback";
 }
 

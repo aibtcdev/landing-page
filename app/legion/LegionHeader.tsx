@@ -57,6 +57,10 @@ export default function LegionHeader({ snapshot }: { snapshot: LegionSnapshot })
           </span>
         </div>
         <div className="flex items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 rounded-full border border-[#F7931A]/40 bg-[#F7931A]/10 px-2 py-0.5 text-[9px] font-semibold uppercase tracking-[0.12em] text-[#F7931A]">
+            <span className="h-1 w-1 rounded-full bg-[#F7931A]" aria-hidden />
+            Testnet
+          </span>
           <WiringDot label="gov" ok={treasury.govWired} />
           <WiringDot label="token" ok={treasury.tokenWired} />
         </div>

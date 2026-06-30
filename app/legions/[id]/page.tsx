@@ -64,7 +64,11 @@ export default async function LegionDetailPage({
   let body: React.ReactNode;
   try {
     const { env, ctx } = await getCloudflareContext();
-    if (entry.kind === "provider") {
+    // A governed legion (has a gov contract) renders the governance view —
+    // proposals + members + stake. This covers demand clubs AND the new per-model
+    // provider legions (provider kind, but governed: stake -> propose/vote). Only
+    // an ungoverned provider legion falls back to the provider-directory view.
+    if (entry.kind === "provider" && !entry.gov) {
       const snapshot = await getProviderSnapshot(env, ctx, entry);
       body = <ProviderClient snapshot={snapshot} />;
     } else {
@@ -73,7 +77,7 @@ export default async function LegionDetailPage({
     }
   } catch {
     body =
-      entry.kind === "provider" ? (
+      entry.kind === "provider" && !entry.gov ? (
         <ProviderClient snapshot={null} />
       ) : (
         <LegionClient snapshot={null} entry={entry} />
