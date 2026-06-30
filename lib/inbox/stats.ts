@@ -466,3 +466,134 @@ export async function reconcileStats(
     samples,
   };
 }
+
+// ---------------------------------------------------------------------------
+// Single-address repair
+// ---------------------------------------------------------------------------
+
+/** Snapshot of stats before/after a recount operation. */
+export interface AddressStatsSnapshot {
+  receivedCount: number;
+  unreadCount: number;
+  sentCount: number;
+}
+
+/** Result of rebuildAddressStats() — before/after values for the caller. */
+export interface RebuildAddressResult {
+  before: AddressStatsSnapshot;
+  after: AddressStatsSnapshot;
+  repaired: boolean;
+}
+
+/**
+ * Recompute stats for a single address from live inbox_messages rows and
+ * overwrite the agent_inbox_stats counter.
+ *
+ * Designed for the self-heal endpoint — callers have already authenticated
+ * ownership of the address before invoking this.
+ *
+ * Returns before/after snapshots so the caller can report the delta and
+ * determine whether any counters changed.
+ *
+ * Idempotent: safe to call repeatedly. If counters are already correct,
+ * `repaired` is false and before === after.
+ *
+ * ## SQL filter alignment with maintained counters
+ *
+ * The filters here mirror rebuildAllStats exactly — they are the single-address
+ * projection of the same aggregate queries:
+ *   - received: `is_reply = 0 AND to_btc_address = ?`  (matches bumpInboundStats call-site)
+ *   - sent:     `is_reply = 1 AND from_btc_address = ?` (matches bumpSentStats call-site)
+ *
+ * All three counters (received, unread, sent) are recomputed defensively —
+ * drift can affect any of them, not just unread. In the common case (issue #995)
+ * only unread drifts, but recount-all-3 is the right repair shape.
+ *
+ * ## Race window note
+ *
+ * The `before` snapshot is captured from agent_inbox_stats immediately before
+ * the live COUNT(*) queries run. A message arriving in that gap is counted in
+ * `after` but not in `before` — `repaired` may fire for what is actually new
+ * normal delivery activity. The repair itself is still correct; only the
+ * `repaired=true` diagnostic can be a false positive in that window.
+ */
+export async function rebuildAddressStats(
+  db: D1Database,
+  btcAddress: string
+): Promise<RebuildAddressResult> {
+  const now = new Date().toISOString();
+
+  // Read current stored values before repair
+  const before = await getAgentInboxStats(db, btcAddress);
+  const beforeSnapshot: AddressStatsSnapshot = {
+    receivedCount: before.receivedCount,
+    unreadCount: before.unreadCount,
+    sentCount: before.sentCount,
+  };
+
+  // Aggregate actual inbound + sent counts in parallel — queries are independent
+  const [inboundRow, sentRow] = await Promise.all([
+    db
+      .prepare(
+        `SELECT
+           COUNT(*)                                   AS received_count,
+           COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread_count,
+           MAX(sent_at)                               AS last_message_at
+         FROM inbox_messages
+         WHERE is_reply = 0 AND to_btc_address = ?`
+      )
+      .bind(btcAddress)
+      .first<{
+        received_count: number;
+        unread_count: number;
+        last_message_at: string | null;
+      }>(),
+    db
+      .prepare(
+        `SELECT
+           COUNT(*)     AS sent_count,
+           MAX(sent_at) AS last_sent_at
+         FROM inbox_messages
+         WHERE is_reply = 1 AND from_btc_address = ?`
+      )
+      .bind(btcAddress)
+      .first<{ sent_count: number; last_sent_at: string | null }>(),
+  ]);
+
+  const newReceived = inboundRow?.received_count ?? 0;
+  const newUnread = inboundRow?.unread_count ?? 0;
+  const newSent = sentRow?.sent_count ?? 0;
+  const lastMessageAt = inboundRow?.last_message_at ?? null;
+  const lastSentAt = sentRow?.last_sent_at ?? null;
+
+  // Upsert the corrected row
+  await db
+    .prepare(
+      `INSERT INTO agent_inbox_stats
+         (btc_address, received_count, unread_count, sent_count,
+          last_message_at, last_sent_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(btc_address) DO UPDATE SET
+         received_count  = excluded.received_count,
+         unread_count    = excluded.unread_count,
+         sent_count      = excluded.sent_count,
+         last_message_at = excluded.last_message_at,
+         last_sent_at    = excluded.last_sent_at,
+         updated_at      = excluded.updated_at`
+    )
+    .bind(btcAddress, newReceived, newUnread, newSent, lastMessageAt, lastSentAt, now)
+    .run();
+
+  const afterSnapshot: AddressStatsSnapshot = {
+    receivedCount: newReceived,
+    unreadCount: newUnread,
+    sentCount: newSent,
+  };
+
+  const repaired =
+    beforeSnapshot.unreadCount !== afterSnapshot.unreadCount ||
+    beforeSnapshot.receivedCount !== afterSnapshot.receivedCount ||
+    beforeSnapshot.sentCount !== afterSnapshot.sentCount;
+
+  return { before: beforeSnapshot, after: afterSnapshot, repaired };
+}
