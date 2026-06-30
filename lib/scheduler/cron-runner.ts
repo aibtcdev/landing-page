@@ -62,7 +62,7 @@ import type {
 export const TENERO_INTERVAL_MS = 60 * 60 * 1000;
 export const COMPETITION_INTERVAL_MS = 15 * 60 * 1000;
 // Legion dashboard snapshot refreshes every cron tick (testnet, low volume).
-export const LEGION_INTERVAL_MS = 5 * 60 * 1000;
+export const LEGION_INTERVAL_MS = 15 * 60 * 1000;
 
 // KV keys (VERIFIED_AGENTS namespace).
 const K_TENERO = "scheduler:tenero";
