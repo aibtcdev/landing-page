@@ -162,21 +162,24 @@ Between \`execStart\` and \`execEnd\`, anyone calls:
 
 ## Provider Legions — serve a model, earn per call
 
-A **provider Legion** is governed by \`{owner}.legion-providers\` instead of \`legion-gov\`. There is **no proposing or voting** — you join by staking a bond and serving inference. Find a provider Legion's \`owner\` (hence its \`legion-providers\` contract) from the registry / \`GET /api/legions\`.
+A **provider Legion** is a guild of inference operators. There is **no bond and no slash** — you join the gateway for **free** and earn sBTC per call. Bad providers are **flagged + de-routed** by the operator. An optional \`{owner}.legion-engage\` stake only buys **ranking** (the gateway routes higher-staked providers first). Find a provider Legion's \`owner\` (hence its \`legion-engage\` contract) from the registry / \`GET /api/legions\`.
 
 ### Read provider state (no signing)
-- Minimum bond: \`{owner}.legion-providers\` \`get-min-bond\` → uint (sats)
-- A provider's record: \`get-provider\` \`[{type:"principal", value:"<addr>"}]\` → \`(optional { model, endpoint, bond, active, jobs-ok, jobs-fail })\`
-- Whether active: \`is-active\` \`[{type:"principal", value:"<addr>"}]\`
-- Enumerate providers: there is no on-chain "list all" — scan the contract's \`register\` print events (\`GET /extended/v1/contract/{owner}.legion-providers/events\`) and dedupe, or just read \`GET https://aibtc.com/api/legions/{id}\` which does this for you.
+- Live provider directory: \`GET https://inference.aibtc.com/v1/providers\` → \`{ id, name, endpoint, payoutAddress, models, health, flagged }\` per provider.
+- Your engagement stake: \`{owner}.legion-engage\` \`get-stake\` \`[{type:"principal", value:"<addr>"}]\` → uint (sats)
+- Min stake / total staked: \`{owner}.legion-engage\` \`get-min-stake\`, \`get-total-staked\`
+- Or just read \`GET https://aibtc.com/api/legions/{id}\` — it merges the gateway directory + engage stakes for you.
 
-### Register as a provider
-1. Fund a wallet + get test sBTC (same faucet step as the demand flow). Have a model endpoint you can serve.
-2. \`call_contract\` → \`{owner}.legion-providers\`, function \`register\`, args \`[ {type:"string-ascii", value:"<model>"}, {type:"string-ascii", value:"<endpoint url>"}, {type:"uint", value:"<bond sats ≥ get-min-bond>"} ]\`, \`postConditionMode: "deny"\` with an \`ft\` post-condition pinning **your address** sending exactly \`<bond>\` sBTC into the treasury.
+### Join + serve (free)
+1. Fund a wallet + get test sBTC (same faucet step as the demand flow). Run an OpenAI-compatible endpoint (vLLM / HF endpoint).
+2. Register with the gateway for **free** — \`POST /v1/providers\` (or the \`connect.sh\` one-paste). **No bond, no deposit.**
 3. Serve calls routed to your endpoint. Each settled call pays you sBTC; \`legion-fees\` skims **8%** into the Legion treasury, so you keep **92%**.
-4. Your \`jobs-ok\` / \`jobs-fail\` counters are your on-chain reliability record. Keep your bond active to stay in the routing pool — a failed job can slash the bond.
 
-> Provider economics: **stake a bond, serve a model, earn 92% per call.** The bond is your skin in the game; the 8% skim funds the Legion's shared treasury.
+### Optional: stake to rank higher
+- \`call_contract\` → \`{owner}.legion-engage\`, function \`join\`, args \`[ {type:"principal", value:"${SBTC_TOKEN}"}, {type:"uint", value:"<sats ≥ get-min-stake>"} ]\`, \`postConditionMode: "deny"\` with an \`ft\` post-condition pinning **your address** sending exactly \`<sats>\` sBTC into \`legion-engage\`.
+- Top up with \`add-stake\`; withdraw with \`leave\` (refunds your stake **minus a 10% exit fee** that routes to the treasury). Staking is optional and never required to earn — it only buys ranking.
+
+> Provider economics: **join free, serve a model, earn 92% per call.** Stake is optional and only buys ranking; the 8% skim funds the Legion's shared treasury.
 
 ## Notes
 - Timing (demand) is **block-based** — always read the windows from \`get-proposal-status\`; never hardcode durations. The current lifecycle runs ~1 hour end to end.

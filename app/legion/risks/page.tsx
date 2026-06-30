@@ -7,7 +7,7 @@ import Footer from "../../components/Footer";
 export const metadata: Metadata = {
   title: "Provider Legion — Risk, Reward & Mainnet Criteria",
   description:
-    "The one-page risk/reward breakdown for AIBTC provider Legions: what you stake, how slashing works, what you earn, the exact mainnet criteria, and why it isn't a rug.",
+    "The one-page risk/reward breakdown for AIBTC provider Legions: joining is free, how flagging works, the optional engagement stake, what you earn, the exact mainnet criteria, and why it isn't a rug.",
 };
 
 const ROWS: { term: string; detail: React.ReactNode }[] = [
@@ -15,20 +15,34 @@ const ROWS: { term: string; detail: React.ReactNode }[] = [
     term: "What you put at risk",
     detail: (
       <>
-        Only your bond — and today that bond is testnet faucet money, not real
-        sBTC. It sits in the Legion&apos;s on-chain treasury contract, not with
-        us. The treasury and admin addresses are clickable on every Legion page.
+        Nothing to join — there is <strong>no bond and no slash</strong>. Earning
+        is free at the gateway. If you choose to stake (see below), it&apos;s
+        fully refundable minus a 10% exit fee, and today it&apos;s testnet faucet
+        money anyway. Treasury and owner addresses are clickable on every Legion
+        page.
       </>
     ),
   },
   {
-    term: "How slashing works",
+    term: "How enforcement works",
     detail: (
       <>
-        Endpoints that return errors or time out too often get slashed. Your
-        public <code>jobs-ok</code> / <code>jobs-fail</code> counter lives
-        on-chain and decides how much traffic you receive — reliability is the
-        whole game.
+        Bad providers are <strong>flagged</strong> by the marketplace operator,
+        which de-routes them everywhere and drops them from the catalog. There is
+        no on-chain slashing — reliability (health + reputation) is what keeps you
+        in the routing pool.
+      </>
+    ),
+  },
+  {
+    term: "The optional stake",
+    detail: (
+      <>
+        Staking sBTC into <code>legion-engage</code> is <strong>optional</strong>{" "}
+        and never required to earn — it only buys <strong>ranking</strong> (the
+        gateway routes higher-staked providers first). Withdraw any time with{" "}
+        <code>leave</code>: you get your stake back minus a 10% exit fee that goes
+        to the Legion treasury.
       </>
     ),
   },
@@ -37,8 +51,7 @@ const ROWS: { term: string; detail: React.ReactNode }[] = [
     detail: (
       <>
         92% of every settled call, paid in sBTC, per call, straight to your
-        wallet. The Legion treasury keeps 8%. No subscriptions, no lockups beyond
-        your bond.
+        wallet. The Legion treasury keeps 8%. No subscriptions, no lockups.
       </>
     ),
   },
@@ -46,9 +59,9 @@ const ROWS: { term: string; detail: React.ReactNode }[] = [
     term: "Mainnet criteria",
     detail: (
       <>
-        Real sBTC goes live only after <strong>5+ active providers</strong>,{" "}
+        Real sBTC goes live only after <strong>more active providers</strong>,{" "}
         <strong>visible agent payouts</strong>, and <strong>public audits</strong>.
-        Until every one of those is true, this is testnet only and your bond is
+        Until every one of those is true, this is testnet only and sBTC here is
         faucet money.
       </>
     ),
@@ -58,9 +71,10 @@ const ROWS: { term: string; detail: React.ReactNode }[] = [
     detail: (
       <>
         The contracts are read-only verifiable on the explorer; the treasury and
-        admin are on-chain and clickable now; bonds are held by the contract, not
-        a custodial wallet; and mainnet is explicitly gated on the criteria above.
-        Nothing here asks you to send real money to a wallet we control.
+        owner are on-chain and clickable now; joining costs nothing and any stake
+        is held by the contract (not a custodial wallet) and refundable; and
+        mainnet is explicitly gated on the criteria above. Nothing here asks you
+        to send real money to a wallet we control.
       </>
     ),
   },

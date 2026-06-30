@@ -31,6 +31,13 @@ import { DEMAND_LEGION_ID } from "./constants";
 import type { LegionEntry, LegionSnapshot, ProviderSnapshot, RegistrySnapshot } from "./types";
 import type { Logger } from "../logging";
 
+/** Optional per-env override of the inference gateway whose directory backs the
+ * v1 provider list. Unset → the default in lib/legion/constants.ts (which serves
+ * testnet). Set the `LEGION_GATEWAY_URL` Worker var only if the gateway moves. */
+export function legionGatewayUrl(env: CloudflareEnv): string | undefined {
+  return (env as unknown as { LEGION_GATEWAY_URL?: string }).LEGION_GATEWAY_URL;
+}
+
 const CACHE_TTL_SECONDS = 300; // 5 min — matches the cron cadence.
 const STALE_MS = 5 * 60 * 1000; // rebuild from Hiro once the D1 row is older than this.
 
@@ -225,7 +232,8 @@ export function getProviderSnapshot(
     {
       readD1: (db) => readProviderSnapshotFromD1(db, entry.id),
       writeD1: (db, snap) => writeProviderSnapshotToD1(db, entry.id, snap),
-      rebuild: (prev) => buildProviderSnapshot(entry, prev, env.HIRO_API_KEY, logger),
+      rebuild: (prev) =>
+        buildProviderSnapshot(entry, prev, env.HIRO_API_KEY, logger, legionGatewayUrl(env)),
     },
     logger,
   );
@@ -244,7 +252,7 @@ export function getRegistrySnapshot(
     {
       readD1: (db) => readRegistrySnapshotFromD1(db),
       writeD1: (db, snap) => writeRegistrySnapshotToD1(db, snap),
-      rebuild: () => buildRegistrySnapshot(logger, env.HIRO_API_KEY),
+      rebuild: () => buildRegistrySnapshot(logger, env.HIRO_API_KEY, legionGatewayUrl(env)),
     },
     logger,
   );

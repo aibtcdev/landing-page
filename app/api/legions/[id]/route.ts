@@ -39,7 +39,7 @@ function selfDocResponse(id: string) {
         entry:
           "{ id, kind ('demand'|'provider'), owner, treasury, gov, fees, providers, model, uri, active, source }",
         snapshot:
-          "Demand: { updatedAt, blockHeight, treasury, totalStaked, members, proposals, errors }. Provider: { updatedAt, blockHeight, treasuryBalance, minBond, providers, errors }.",
+          "Demand: { updatedAt, blockHeight, treasury, totalStaked, members, proposals, errors }. Provider: { updatedAt, blockHeight, treasuryBalance, minStake, totalStaked, providers: [{ address, name, model, endpoint, stake, health, flagged, active }], errors }.",
       },
       related: { index: "/api/legions", skill: "/legion/skill.md" },
     },

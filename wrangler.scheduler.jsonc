@@ -18,6 +18,10 @@
     "DEPLOY_ENV": "production",
     "TENERO_REFRESH_ENABLED": "true",
     "EARNINGS_INDEX_ENABLED": "true"
+    // Optional: override the inference gateway whose GET /v1/providers backs the
+    // v1 provider list. Unset → the default in lib/legion/constants.ts
+    // (inference.aibtc.com, which serves testnet). Set only if the gateway moves:
+    // "LEGION_GATEWAY_URL": "https://<gateway-host>"
   },
 
   // Same database_id + KV ids as landing-page → one shared store.

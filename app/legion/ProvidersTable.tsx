@@ -2,26 +2,30 @@ import type { ProviderRecord } from "@/lib/legion/types";
 import { formatSbtc } from "@/lib/legion/format";
 import AddressLink from "./AddressLink";
 
-function ActiveDot({ active }: { active: boolean }) {
+function StatusDot({ p }: { p: ProviderRecord }) {
+  const label = p.flagged ? "flagged" : p.active ? "active" : "down";
+  const color = p.flagged
+    ? "bg-red-400"
+    : p.active
+      ? "bg-green-400"
+      : "bg-white/20";
+  const text = p.flagged ? "text-red-400/80" : p.active ? "text-white/70" : "text-white/40";
   return (
     <span className="inline-flex items-center gap-1.5 text-xs">
-      <span
-        className={`h-1.5 w-1.5 rounded-full ${active ? "bg-green-400" : "bg-white/20"}`}
-        aria-hidden
-      />
-      <span className={active ? "text-white/70" : "text-white/40"}>
-        {active ? "active" : "inactive"}
-      </span>
+      <span className={`h-1.5 w-1.5 rounded-full ${color}`} aria-hidden />
+      <span className={text}>{label}</span>
     </span>
   );
 }
 
-function Jobs({ ok, fail }: { ok: number; fail: number }) {
+function Stake({ sats }: { sats: number }) {
   return (
     <span className="tabular-nums text-white/70">
-      <span className="text-green-400/80">{ok}</span>
-      <span className="text-white/30"> / </span>
-      <span className={fail > 0 ? "text-red-400/80" : "text-white/40"}>{fail}</span>
+      {sats > 0 ? (
+        `${formatSbtc(sats)} sBTC`
+      ) : (
+        <span className="text-white/30">unstaked</span>
+      )}
     </span>
   );
 }
@@ -34,8 +38,9 @@ export default function ProvidersTable({
   if (providers.length === 0) {
     return (
       <div className="rounded-xl border border-white/[0.08] bg-white/[0.02] p-8 text-center text-sm text-white/50">
-        No providers yet. Any operator that stakes the minimum bond and calls{" "}
-        <code className="text-white/70">register</code> joins the guild.
+        No providers yet. Anyone can join for <span className="text-white/70">free</span> —
+        register an endpoint with the gateway and start serving. An optional{" "}
+        <code className="text-white/70">legion-engage</code> stake ranks you higher.
       </div>
     );
   }
@@ -48,9 +53,8 @@ export default function ProvidersTable({
           <tr className="border-b border-white/[0.06] text-left text-xs uppercase tracking-wide text-white/40">
             <th className="px-5 py-3 font-medium" scope="col">Provider (STX)</th>
             <th className="px-5 py-3 font-medium" scope="col">Model</th>
-            <th className="px-5 py-3 text-right font-medium" scope="col">Bond</th>
+            <th className="px-5 py-3 text-right font-medium" scope="col">Stake</th>
             <th className="px-5 py-3 font-medium" scope="col">Status</th>
-            <th className="px-5 py-3 text-right font-medium" scope="col">Jobs (ok / fail)</th>
           </tr>
         </thead>
         <tbody>
@@ -62,13 +66,12 @@ export default function ProvidersTable({
               <td className="px-5 py-3">
                 <AddressLink address={p.address} />
               </td>
-              <td className="px-5 py-3 font-mono text-xs text-white/70">{p.model}</td>
-              <td className="px-5 py-3 text-right tabular-nums">{formatSbtc(p.bond)}</td>
-              <td className="px-5 py-3">
-                <ActiveDot active={p.active} />
+              <td className="px-5 py-3 font-mono text-xs text-white/70">{p.model || "—"}</td>
+              <td className="px-5 py-3 text-right tabular-nums">
+                <Stake sats={p.stake} />
               </td>
-              <td className="px-5 py-3 text-right">
-                <Jobs ok={p.jobsOk} fail={p.jobsFail} />
+              <td className="px-5 py-3">
+                <StatusDot p={p} />
               </td>
             </tr>
           ))}
@@ -81,15 +84,11 @@ export default function ProvidersTable({
           <li key={p.address} className="space-y-2 p-4">
             <div className="flex items-center justify-between gap-2">
               <AddressLink address={p.address} />
-              <span className="tabular-nums text-sm">{formatSbtc(p.bond)} sBTC</span>
+              <Stake sats={p.stake} />
             </div>
             <div className="flex items-center justify-between gap-2 text-xs text-white/50">
-              <span className="font-mono">{p.model}</span>
-              <ActiveDot active={p.active} />
-            </div>
-            <div className="flex items-center justify-between gap-2 text-xs text-white/50">
-              <span>jobs</span>
-              <Jobs ok={p.jobsOk} fail={p.jobsFail} />
+              <span className="font-mono">{p.model || "—"}</span>
+              <StatusDot p={p} />
             </div>
           </li>
         ))}

@@ -35,6 +35,7 @@ import { EARNINGS_INTERVAL_MS } from "../earnings/constants";
 import type { EarningsSweepSummary } from "../earnings/types";
 import { buildLegionSnapshot, buildRegistrySnapshot } from "../legion/snapshot";
 import { buildProviderSnapshot } from "../legion/providers";
+import { legionGatewayUrl } from "../legion/read";
 import { listLegions } from "../legion/registry";
 import {
   readLegionSnapshotFromD1,
@@ -284,9 +285,10 @@ export async function runLegionNow(
     return;
   }
   const apiKey = env.HIRO_API_KEY;
+  const gatewayBase = legionGatewayUrl(env);
 
   // 1. Registry index — backs the /legions list page.
-  const registry = await buildRegistrySnapshot(logger, apiKey);
+  const registry = await buildRegistrySnapshot(logger, apiKey, gatewayBase);
   await writeRegistrySnapshotToD1(db, registry);
   logger.info("legion.registry_written", {
     legions: registry.legions.length,
@@ -301,7 +303,7 @@ export async function runLegionNow(
     try {
       if (entry.kind === "provider") {
         const prev = await readProviderSnapshotFromD1(db, entry.id);
-        const snap = await buildProviderSnapshot(entry, prev, apiKey, logger);
+        const snap = await buildProviderSnapshot(entry, prev, apiKey, logger, gatewayBase);
         await writeProviderSnapshotToD1(db, entry.id, snap);
         logger.info("legion.provider_snapshot_written", {
           id: entry.id,

@@ -120,9 +120,9 @@ function Header({ errors = 0 }: { errors?: number }) {
         On-chain agent collectives on Stacks testnet. <strong>Demand</strong>{" "}
         Legions pool sBTC into a shared treasury and govern it by stake-weighted
         voting. <strong>Provider</strong> Legions are guilds of inference
-        operators — each stakes a bond, serves a model, and earns sBTC per call,
-        while the Legion&apos;s treasury skims 8%. Pick a Legion to see its live
-        state.
+        operators — anyone joins for free, serves a model, and earns sBTC per
+        call (the Legion&apos;s treasury skims 8%); an optional stake only buys
+        ranking. Pick a Legion to see its live state.
       </p>
       {errors > 0 && (
         <p className="text-xs text-amber-300/70">
