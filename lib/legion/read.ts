@@ -38,8 +38,8 @@ export function legionGatewayUrl(env: CloudflareEnv): string | undefined {
   return (env as unknown as { LEGION_GATEWAY_URL?: string }).LEGION_GATEWAY_URL;
 }
 
-const CACHE_TTL_SECONDS = 1800; // 30 min — matches the cron cadence.
-const STALE_MS = 30 * 60 * 1000; // rebuild from Hiro once the D1 row is older than this.
+const CACHE_TTL_SECONDS = 300; // 5 min — matches the cron cadence (*/5 in wrangler.scheduler.jsonc).
+const STALE_MS = 5 * 60 * 1000; // rebuild from Hiro once the D1 row is older than this.
 
 type WithUpdatedAt = { updatedAt: number };
 type Ctx = { waitUntil?: (p: Promise<unknown>) => void } | undefined;
