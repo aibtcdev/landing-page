@@ -25,7 +25,7 @@ function LegionCard({ legion }: { legion: LegionSummary }) {
   return (
     <Link
       href={`/legions/${legion.id}`}
-      className="group flex flex-col gap-4 rounded-xl border border-white/[0.08] bg-white/[0.02] p-5 transition-colors hover:border-white/20 hover:bg-white/[0.04]"
+      className="group flex flex-col gap-4 rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] p-5 backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-[#F7931A]/25 hover:from-[#F7931A]/[0.05] hover:shadow-lg hover:shadow-[#F7931A]/[0.05]"
     >
       <div className="flex items-start justify-between gap-3">
         <div className="space-y-1">
