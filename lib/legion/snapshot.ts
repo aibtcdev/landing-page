@@ -23,7 +23,7 @@ import {
 import { SBTC_TOKEN } from "./constants";
 import { get, toNum } from "./format";
 import { demandFallbackEntry, listLegions } from "./registry";
-import { listProviderAddresses } from "./providers";
+import { countProviders } from "./providers";
 import type {
   LegionEntry,
   LegionMember,
@@ -218,6 +218,7 @@ export async function buildLegionSnapshot(
 export async function buildRegistrySnapshot(
   logger?: Logger,
   apiKey?: string,
+  gatewayBase?: string,
 ): Promise<RegistrySnapshot> {
   const errors: string[] = [];
   const entries = await listLegions(apiKey, logger);
@@ -244,12 +245,9 @@ export async function buildRegistrySnapshot(
           `count.${entry.id}`,
           async () => {
             if (entry.kind === "provider") {
-              const addrs = await listProviderAddresses(
-                entry.providers ?? `${entry.owner}.legion-providers`,
-                apiKey,
-                logger,
-              );
-              return addrs.length;
+              // v1: providers come from the gateway directory (free join), not
+              // the on-chain legion-providers bond contract.
+              return await countProviders(entry.model, gatewayBase, logger);
             }
             const raw = await legionReadOnly(
               entry.gov ?? `${entry.owner}.legion-gov`,

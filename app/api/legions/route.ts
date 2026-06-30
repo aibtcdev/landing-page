@@ -19,7 +19,7 @@ function selfDocResponse() {
       endpoint: "/api/legions",
       method: "GET",
       description:
-        "Read-only index of every AIBTC Legion (Stacks testnet): demand Legions (pool + govern an sBTC treasury) and provider Legions (operators stake a bond, serve a model, earn sBTC per call). Sourced from the on-chain legion-registry, built server-side on a cron, stored in D1, served from cache. Fetch /api/legions/{id} for one Legion's full detail.",
+        "Read-only index of every AIBTC Legion (Stacks testnet): demand Legions (pool + govern an sBTC treasury) and provider Legions (operators join the gateway for free, serve a model, earn sBTC per call; an optional legion-engage stake buys ranking). Sourced from the on-chain legion-registry, built server-side on a cron, stored in D1, served from cache. Fetch /api/legions/{id} for one Legion's full detail.",
       network: "stacks-testnet",
       registry: REGISTRY_CONTRACT,
       queryParameters: {

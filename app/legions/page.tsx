@@ -15,7 +15,7 @@ export const dynamic = "force-dynamic";
 export const metadata: Metadata = {
   title: "Legions",
   description:
-    "Every AIBTC Legion on Stacks testnet — demand Legions that pool and govern an sBTC treasury, and provider Legions whose operators stake a bond to serve AI models and earn sBTC per call.",
+    "Every AIBTC Legion on Stacks testnet — demand Legions that pool and govern an sBTC treasury, and provider Legions whose operators join for free to serve AI models and earn sBTC per call (an optional stake only buys ranking).",
 };
 
 async function getInitialRegistry(): Promise<RegistrySnapshot | null> {

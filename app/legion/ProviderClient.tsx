@@ -57,17 +57,18 @@ export default function ProviderClient({
   if (!snapshot) {
     return (
       <div className="rounded-xl border border-red-500/20 bg-red-500/[0.05] p-6 text-sm text-white/70">
-        Couldn&apos;t load this provider Legion right now — the on-chain reader is
-        warming up or temporarily unavailable. Refresh in a moment.
+        Couldn&apos;t load this provider Legion right now — the reader is warming
+        up or temporarily unavailable. Refresh in a moment.
       </div>
     );
   }
 
-  const { entry, treasuryBalance, minBond, providers, blockHeight } = snapshot;
+  const { entry, treasuryBalance, minStake, totalStaked, providers, blockHeight } = snapshot;
   const activeCount = providers.filter((p) => p.active).length;
-  const totalJobs = providers.reduce((sum, p) => sum + p.jobsOk + p.jobsFail, 0);
-  const model = entry.model || "qwen2.5-7b";
-  const bondLabel = minBond != null ? formatSbtc(minBond) : "the minimum";
+  const stakedCount = providers.filter((p) => p.stake > 0).length;
+  const model = entry.model || "open models";
+  const minStakeLabel = minStake != null ? formatSbtc(minStake) : "the minimum";
+  const stakedLabel = formatSbtc(totalStaked);
   const pooledLabel = formatSbtc(treasuryBalance);
   const providerWord = providers.length === 1 ? "provider" : "providers";
 
@@ -75,15 +76,16 @@ export default function ProviderClient({
     <div className="space-y-8">
       <header className="space-y-5">
         <h1 className="max-w-4xl text-4xl font-bold leading-[1.1] tracking-tight text-white max-md:text-3xl">
-          Stake {bondLabel} sBTC. Host{" "}
+          Join for free. Host{" "}
           <span className="text-[#7DA2FF]">{model}</span>. Earn 92% every time an
           autonomous agent pays you sBTC to run a query instead of using OpenAI.
         </h1>
         <p className="max-w-3xl text-base leading-relaxed text-white/70">
-          The treasury takes 8%. Failed responses slash your bond. Live on Stacks
-          testnet — {providers.length} {providerWord}, {totalJobs}{" "}
-          {totalJobs === 1 ? "job" : "jobs"}, {pooledLabel} sBTC pooled. Real sBTC
-          on mainnet only after 5+ providers, visible payouts, and audits.
+          No bond, no deposit — earning is free at the gateway. The treasury takes
+          8%. An optional stake only buys ranking. Live on Stacks testnet —{" "}
+          {providers.length} {providerWord}, {stakedLabel} sBTC staked,{" "}
+          {pooledLabel} sBTC pooled. Real sBTC on mainnet only after more providers,
+          visible payouts, and audits.
         </p>
         <div className="flex flex-wrap gap-3">
           <a
@@ -92,7 +94,7 @@ export default function ProviderClient({
             rel="noopener noreferrer"
             className="inline-flex items-center gap-2 rounded-lg border border-[#7DA2FF]/40 bg-[#7DA2FF]/10 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-[#7DA2FF]/20"
           >
-            View treasury + provider on Hiro explorer
+            View treasury on Hiro explorer
             <span aria-hidden>↗</span>
           </a>
         </div>
@@ -106,16 +108,15 @@ export default function ProviderClient({
           <UpdatedAt updatedAt={snapshot.updatedAt} />
         </div>
         <p className="text-sm leading-relaxed text-white/60">
-          sBTC here is faucet money. Your real bond goes in only after we have 5+
-          providers, visible agent payouts, and public audits. Membership = bond —
-          no votes, no multisig.{" "}
+          sBTC here is faucet money. Joining is free — there is no bond and nothing
+          to slash. Bad providers are flagged and de-routed.{" "}
           <a
             href={RISKS_URL}
             className="text-amber-300/90 underline underline-offset-2 hover:text-amber-200"
           >
-            Slashing rules
+            How flagging + staking work
           </a>
-          . Treasury address and admin are on-chain and clickable right now.
+          . Treasury address is on-chain and clickable right now.
         </p>
       </div>
 
@@ -133,7 +134,7 @@ export default function ProviderClient({
               {shortAddress(entry.treasury, 6, 14)}
             </a>
             <span className="text-white/15">·</span>
-            <span className="text-white/40">Admin</span>
+            <span className="text-white/40">Owner</span>
             <span className="font-mono text-white/70" title={entry.owner}>
               {shortAddress(entry.owner, 6, 4)}
             </span>
@@ -148,7 +149,8 @@ export default function ProviderClient({
 
         <div className="flex flex-wrap items-center gap-4 px-5 py-4">
           <Metric label="Pooled" value={`${pooledLabel} sBTC`} />
-          <Metric label="Min bond" value={`${bondLabel} sBTC`} />
+          <Metric label="Staked" value={`${stakedLabel} sBTC`} />
+          <Metric label="Min stake" value={`${minStakeLabel} sBTC`} />
           <Metric label="Providers" value={`${providers.length}`} />
           <Metric label="Active" value={`${activeCount}`} />
         </div>
@@ -167,10 +169,12 @@ export default function ProviderClient({
       <div className="grid gap-3 rounded-xl border border-white/[0.08] bg-white/[0.02] p-4 text-sm sm:grid-cols-3">
         <div>
           <div className="text-[10px] uppercase tracking-[0.08em] text-white/40">
-            Last activity
+            Staked providers
           </div>
           <div className="mt-1 text-white/70">
-            {totalJobs === 0 ? "none yet (0 jobs)" : `${totalJobs} jobs settled`}
+            {stakedCount === 0
+              ? "none staked yet (staking is optional)"
+              : `${stakedCount} of ${providers.length} staked`}
           </div>
         </div>
         <div>
@@ -205,7 +209,7 @@ export default function ProviderClient({
                     {shortAddress(p.address, 6, 4)} ↗
                   </a>{" "}
                   <span className="text-white/50">
-                    — {formatSbtc(p.bond)} bonded, {p.jobsOk}/{p.jobsFail}
+                    — {p.stake > 0 ? `${formatSbtc(p.stake)} staked` : "unstaked"}
                   </span>
                 </li>
               ))}
@@ -216,8 +220,8 @@ export default function ProviderClient({
 
       <p className="text-sm leading-relaxed text-white/50">
         <span className="text-white/70">
-          First-mover upside: get in now while it&apos;s at {totalJobs}{" "}
-          {totalJobs === 1 ? "job" : "jobs"}.
+          First-mover upside: get in now while it&apos;s at {providers.length}{" "}
+          {providerWord}.
         </span>{" "}
         Example (illustrative): 100 calls/day at 100 sats/call = 10,000 sats/day;
         after the 8% treasury cut you keep ~9,200 sats (~0.000092 sBTC). Real rates
@@ -228,14 +232,14 @@ export default function ProviderClient({
         </span>
       </p>
 
-      <HowToProvide minBond={minBond} model={entry.model} />
+      <HowToProvide minStake={minStake} model={entry.model} />
 
       <div className="flex flex-wrap gap-3 border-t border-white/[0.08] pt-6">
         <a
           href={TRY_IT_HREF}
           className="inline-flex flex-1 items-center justify-center rounded-lg border border-[#7DA2FF]/40 bg-[#7DA2FF]/10 px-4 py-3 text-center text-sm font-medium text-white transition-colors hover:bg-[#7DA2FF]/20"
         >
-          Try it on testnet — faucet + exact commands
+          Join on testnet — faucet + exact commands
         </a>
         <a
           href={RISKS_URL}
@@ -247,8 +251,8 @@ export default function ProviderClient({
 
       {snapshot.errors.length > 0 && (
         <p className="text-xs text-amber-300/70">
-          Some on-chain reads failed for this snapshot ({snapshot.errors.length}) —
-          the data shown may be partial.
+          Some reads failed for this snapshot ({snapshot.errors.length}) — the data
+          shown may be partial.
         </p>
       )}
     </div>

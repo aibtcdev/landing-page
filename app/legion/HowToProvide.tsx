@@ -3,54 +3,31 @@ import { formatSbtc } from "@/lib/legion/format";
 import CopyButton from "../components/CopyButton";
 
 /**
- * Provider-Legion onboarding: get test sBTC, lock a bond + register, serve the
- * model, get paid. The demand-Legion equivalent is HowToParticipate. The exact
+ * Provider-Legion onboarding (v1): run the model, register with the gateway for
+ * FREE, get paid per call, and OPTIONALLY stake legion-engage to rank higher.
+ * No bond, no slash. The demand-Legion equivalent is HowToParticipate. The exact
  * typed contract call lives in /legion/skill.md.
  */
 
 export default function HowToProvide({
-  minBond,
+  minStake,
   model,
 }: {
-  minBond: number | null;
+  minStake: number | null;
   model: string;
 }) {
-  const bondLabel = minBond != null ? formatSbtc(minBond) : "the minimum";
-  const modelLabel = model || "qwen2.5-7b";
-  const registerCmd = `legion-providers.register("${modelLabel}", "https://your-endpoint:8000/v1", ${bondLabel})`;
+  const stakeLabel = minStake != null ? formatSbtc(minStake) : "the minimum";
   const dockerCmd = `docker run -p 8000:8000 vllm/vllm-openai --model Qwen/Qwen2.5-7B-Instruct`;
+  const connectCmd = `curl -fsSL https://<gateway>/connect.sh | WALLET=ST... MODELS=${model || "Qwen/Qwen2.5-7B-Instruct"} bash`;
+  const stakeCmd = `legion-engage.join("<sBTC token>", ${stakeLabel})`;
 
   const STEPS: { title: string; body: React.ReactNode }[] = [
     {
-      title: "Get test sBTC (30 seconds)",
+      title: "Run the model",
       body: (
         <>
-          Spin up a Stacks wallet and run the sBTC faucet → free test tokens land
-          in your wallet. No real money at risk.
-        </>
-      ),
-    },
-    {
-      title: "Lock bond + register (one paste)",
-      body: (
-        <>
-          Use <code>call_contract</code> →{" "}
-          <code>legion-providers register</code>:
-          <span className="mt-2 flex items-center gap-2">
-            <code className="flex-1 break-all">{registerCmd}</code>
-            <CopyButton text={registerCmd} variant="icon" label="" ariaLabel="Copy register command" />
-          </span>
-          Minimum {bondLabel} sBTC. This bond is slashed if your endpoint returns
-          errors or times out too often.
-        </>
-      ),
-    },
-    {
-      title: "Run the model once",
-      body: (
-        <>
-          One Docker command → your endpoint is live. We route paying calls to it
-          automatically.
+          One Docker command → your OpenAI-compatible endpoint is live. The
+          gateway routes paying calls to it automatically.
           <span className="mt-2 flex items-center gap-2">
             <code className="flex-1 break-all">{dockerCmd}</code>
             <CopyButton text={dockerCmd} variant="icon" label="" ariaLabel="Copy docker command" />
@@ -59,12 +36,42 @@ export default function HowToProvide({
       ),
     },
     {
-      title: "Get paid + climb the list",
+      title: "Register for free (one paste)",
       body: (
         <>
-          Every settled call = sBTC in your wallet, minus 8%. Your public{" "}
-          <code>jobs-ok</code> / <code>jobs-fail</code> counter decides how much
-          traffic you receive.
+          Register your endpoint with the gateway — <strong>no bond, no deposit</strong>.
+          Earning is free at the gateway.
+          <span className="mt-2 flex items-center gap-2">
+            <code className="flex-1 break-all">{connectCmd}</code>
+            <CopyButton text={connectCmd} variant="icon" label="" ariaLabel="Copy connect command" />
+          </span>
+        </>
+      ),
+    },
+    {
+      title: "Get paid per call",
+      body: (
+        <>
+          Every settled call = sBTC in your wallet, minus the Legion&apos;s 8%
+          treasury skim (you keep <strong>92%</strong>). Bad actors are{" "}
+          <strong>flagged + de-routed</strong> by the operator — there is no bond
+          to slash.
+        </>
+      ),
+    },
+    {
+      title: "Optional: stake to rank higher",
+      body: (
+        <>
+          Staking is <strong>optional</strong> and never required to earn — it only
+          buys ranking. Stake sBTC into <code>legion-engage</code> and the gateway
+          routes higher-staked providers first.
+          <span className="mt-2 flex items-center gap-2">
+            <code className="flex-1 break-all">{stakeCmd}</code>
+            <CopyButton text={stakeCmd} variant="icon" label="" ariaLabel="Copy stake command" />
+          </span>
+          Min {stakeLabel} sBTC. Fully refundable on <code>leave</code>, minus a
+          10% exit fee that goes to the treasury.
           <span className="mt-2 block text-xs text-white/40">
             Advanced:{" "}
             <Link

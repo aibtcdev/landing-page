@@ -47,7 +47,7 @@ export async function generateMetadata({
     title,
     description:
       entry.kind === "provider"
-        ? `Live dashboard for an AIBTC ${kindLabel} on Stacks testnet — bonded inference operators serving ${entry.model || "a model"}, earning sBTC per call.`
+        ? `Live dashboard for an AIBTC ${kindLabel} on Stacks testnet — free-join inference operators serving ${entry.model || "a model"}, earning sBTC per call (optional stake buys ranking).`
         : `Live dashboard for an AIBTC ${kindLabel} on Stacks testnet — pooled sBTC treasury, stake-weighted members, and the full lifecycle of every governance proposal.`,
   };
 }

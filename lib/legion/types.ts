@@ -58,21 +58,28 @@ export interface RegistrySnapshot {
   errors: string[];
 }
 
-/** One inference provider in a provider Legion (`legion-providers.get-provider`). */
+/**
+ * One inference provider in a provider Legion. In v1 providers join the gateway
+ * for **free** (`GET /v1/providers` on the inference gateway) — there is no bond
+ * and no slash. The optional on-chain `legion-engage` stake only buys ranking.
+ */
 export interface ProviderRecord {
-  /** Provider STX address. */
+  /** Provider STX payout address (joins to `legion-engage get-stake`). */
   address: string;
-  /** Model this provider serves, e.g. "qwen2.5-7b". */
+  /** Human label from the gateway directory, e.g. "biwas qwen model". */
+  name: string;
+  /** Model this provider serves, e.g. "Qwen/Qwen2.5-7B-Instruct". */
   model: string;
   /** Advertised inference endpoint URL. */
   endpoint: string;
-  /** Staked bond (sats). */
-  bond: number;
+  /** Optional engagement stake (sats) from `legion-engage`; 0 if unstaked. */
+  stake: number;
+  /** Gateway health status ("up" | "down" | "unknown"). */
+  health: string;
+  /** Operator-flagged (de-routed everywhere); enforcement is flag, not slash. */
+  flagged: boolean;
+  /** Live + routable: not flagged and healthy. */
   active: boolean;
-  /** Successfully served jobs. */
-  jobsOk: number;
-  /** Failed jobs. */
-  jobsFail: number;
 }
 
 /** Detail snapshot for a provider Legion (mirrors LegionSnapshot for demand). */
@@ -84,9 +91,11 @@ export interface ProviderSnapshot {
   entry: LegionEntry;
   /** Pooled sBTC (sats), or null on read failure. */
   treasuryBalance: number | null;
-  /** Minimum bond to register as a provider (sats), or null. */
-  minBond: number | null;
-  /** Providers sorted by bond descending. */
+  /** Minimum engagement stake to rank (sats) from `legion-engage`, or null. */
+  minStake: number | null;
+  /** Total sBTC staked across all members (sats) from `legion-engage`, or null. */
+  totalStaked: number | null;
+  /** Providers sorted by stake descending (mirrors the gateway's rankByStake). */
   providers: ProviderRecord[];
   errors: string[];
 }

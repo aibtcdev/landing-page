@@ -51,10 +51,32 @@ export type LegionKind = "demand" | "provider";
  * contract: demand uses `legion-gov` (proposals/voting); provider uses
  * `legion-providers` (bonds/members). The registry stores treasury/gov/fees but
  * not the providers contract, so derive it by convention from the owner.
+ *
+ * Kept for back-compat (registry entry shape); v1 no longer reads it for the
+ * provider list — see `legionEngageContract` + the gateway directory.
  */
 export function legionProvidersContract(owner: string): string {
   return `${owner}.legion-providers`;
 }
+
+/**
+ * v1 engagement-stake contract for a provider Legion. Staking is OPTIONAL and
+ * never required to earn — it only buys ranking. Not stored in the registry, so
+ * derived by convention from the owner (only legions whose owner deployed one
+ * will resolve; reads are best-effort and degrade to "unstaked").
+ */
+export function legionEngageContract(owner: string): string {
+  return `${owner}.legion-engage`;
+}
+
+/**
+ * Base URL of the inference gateway whose `GET /v1/providers` directory backs
+ * the v1 provider list (free-join providers + health + flag status). This
+ * gateway serves testnet, so its provider payout addresses match the testnet
+ * `legion-engage` stakes. Overridable per-env via the optional
+ * `LEGION_GATEWAY_URL` Worker var if the gateway ever moves.
+ */
+export const DEFAULT_LEGION_GATEWAY_URL = "https://inference.aibtc.com";
 
 /** sBTC SIP-010 token on testnet (8 decimals). */
 export const SBTC_TOKEN = "STV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RJ5XDY2.sbtc-token";
