@@ -17,6 +17,7 @@ import {
   getAvailableActions,
 } from "@/lib/challenge";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { shouldFailClosed } from "@/lib/env";
 import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
 import {
   publicKeyFromSignatureRsv,
@@ -188,21 +189,38 @@ export async function GET(request: NextRequest) {
     const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
-    // Rate limiting via RATE_LIMIT_STRICT binding (1 req / 60s). Mirrors inbox fail-open/fail-closed.
-    // Semantics change from prior 6/10min KV-RMW documented in PR #769.
-    const ip = request.headers.get("cf-connecting-ip") || request.headers.get("x-forwarded-for") || "unknown";
+    // Rate limiting via RATE_LIMIT_STRICT binding (1 req / 60s). Mirrors the
+    // inbox/outbox fail-open/fail-closed pattern. Semantics change from prior
+    // 6/10min KV-RMW documented in PR #769; hardening from #770.
+    //
+    // IP derivation: on a Cloudflare Worker `cf-connecting-ip` is always injected
+    // by the edge and cannot be client-overridden, so it is the only trustworthy
+    // source. `x-forwarded-for` is client-spoofable and is only honored in local
+    // dev (where cf-connecting-ip is absent) so an attacker can't shard themselves
+    // into fresh buckets. When no IP is available we skip the limit rather than
+    // collapse every caller into one shared "unknown" bucket (self-DoS).
+    const ip =
+      request.headers.get("cf-connecting-ip") ||
+      (shouldFailClosed(env) ? null : request.headers.get("x-forwarded-for"));
     let rateLimited = false;
-    try {
-      const { success } = await env.RATE_LIMIT_STRICT.limit({ key: `challenge:${ip}` });
-      rateLimited = !success;
-    } catch {
-      // Binding unavailable. Fail closed in production/preview to preserve the prior
-      // KV-backed limit's security guarantee; fail open only in local dev (no DEPLOY_ENV).
-      if (env.DEPLOY_ENV) {
-        return NextResponse.json(
-          { error: "Rate limit unavailable. Please try again." },
-          { status: 503 }
-        );
+    if (ip) {
+      try {
+        const { success } = await env.RATE_LIMIT_STRICT.limit({ key: `challenge:${ip}` });
+        rateLimited = !success;
+      } catch {
+        // Binding unavailable. Fail closed in production/preview to preserve the
+        // prior KV-backed limit's security guarantee; fail open only in local dev.
+        // shouldFailClosed() (not `if (env.DEPLOY_ENV)`) so an empty-string
+        // DEPLOY_ENV still fails closed instead of silently failing open.
+        if (shouldFailClosed(env)) {
+          return NextResponse.json(
+            { error: "Rate limit unavailable. Please try again." },
+            {
+              status: 503,
+              headers: { "Retry-After": String(RATE_LIMIT_RETRY_AFTER) },
+            }
+          );
+        }
       }
     }
 

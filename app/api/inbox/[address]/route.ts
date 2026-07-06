@@ -31,7 +31,7 @@ import {
   logPaymentEvent,
 } from "@/lib/inbox/payment-logging";
 import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "@/lib/inbox/d1-dual-write";
-import { bumpInboundStats, getAgentInboxStats } from "@/lib/inbox/stats";
+import { bumpInboundStats, getAgentInboxStats, recomputeAgentStats } from "@/lib/inbox/stats";
 import {
   listInboxMessagesFromD1,
   listSentMessagesFromD1,
@@ -187,9 +187,13 @@ export async function GET(
   { params }: { params: Promise<{ address: string }> }
 ) {
   const { address } = await params;
-  const { env } = await getCloudflareContext();
+  const { env, ctx } = await getCloudflareContext();
   const kv = env.VERIFIED_AGENTS as KVNamespace;
   const db = env.DB as D1Database | undefined;
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
+    : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
 
   // Look up agent
   const agent = await lookupAgent(kv, address, db);
@@ -396,6 +400,40 @@ export async function GET(
     ]);
   } catch (e) {
     return d1TransientResponse("Inbox database temporarily unavailable. Please retry shortly.");
+  }
+
+  // Self-heal unread-counter drift (issue #995). When the unread view is
+  // fetched at offset 0 and the first page is not full, we have enumerated the
+  // entire unread set, so the true unread count is exactly receivedMessages.length
+  // — for free, with no extra query. The maintained unread_count is best-effort
+  // (write-path bump/decrement are fire-and-forget with swallowed errors), so a
+  // dropped decrement leaves it over-counted, surfacing as phantom unreads that
+  // no PATCH can clear (they exist only in the counter, not as message rows).
+  // When we can prove drift, recompute this one agent's stats and use the
+  // corrected values. This runs only on the (rare) drifted request, so it does
+  // not reintroduce a COUNT(*) hot path.
+  if (
+    db &&
+    includeReceived &&
+    statusFilter === "unread" &&
+    offset === 0 &&
+    receivedMessages.length < limit &&
+    agentStats.unreadCount !== receivedMessages.length
+  ) {
+    logger.warn("inbox.unread_counter_drift_detected", {
+      btcAddress: agent.btcAddress,
+      counterUnread: agentStats.unreadCount,
+      actualUnread: receivedMessages.length,
+    });
+    try {
+      agentStats = await recomputeAgentStats(db, agent.btcAddress);
+    } catch (e) {
+      // Fail-open: keep the (possibly drifted) counter rather than 500.
+      logger.error("inbox.unread_counter_recompute_failed", {
+        btcAddress: agent.btcAddress,
+        error: String(e),
+      });
+    }
   }
 
   const unreadCount = agentStats.unreadCount;

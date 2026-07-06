@@ -79,6 +79,24 @@ interface AddressTxEntry {
   };
 }
 
+/**
+ * Zeroed summary returned when the sweep is skipped (e.g. gated off via
+ * COMPETITION_SWEEP_ENABLED). Keeps the disabled path's shape identical to a
+ * real run so callers and KV state don't need to special-case it.
+ */
+export function disabledCompetitionSummary(): CompetitionSchedulerSummary {
+  return {
+    scanned: 0,
+    found: 0,
+    inserted: 0,
+    alreadyKnown: 0,
+    rejected: 0,
+    rejectionReasons: emptyRejectionReasons(),
+    pending: 0,
+    cursor: null,
+  };
+}
+
 function emptyRejectionReasons(): CompetitionSchedulerRejectionReasons {
   return {
     sender_not_registered: 0,

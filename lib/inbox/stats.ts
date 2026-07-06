@@ -236,6 +236,91 @@ export async function decrementUnreadStats(
     .run();
 }
 
+/**
+ * Recompute and persist a single agent's inbox stats from inbox_messages.
+ *
+ * Single-address counterpart to rebuildAllStats(): aggregates the live
+ * received/unread/sent counts for one btc_address and UPSERTs the corrected
+ * row into agent_inbox_stats, returning the corrected stats.
+ *
+ * Used as a read-path self-heal (issue #995) when the maintained unread_count
+ * is proven to have drifted from the actual `read_at IS NULL` row count. The
+ * write-path bump/decrement helpers are best-effort (fire-and-forget with
+ * swallowed errors), so a dropped decrement leaves the counter permanently
+ * over-counted, surfacing as "phantom" unreads that no PATCH can clear because
+ * they exist only in the counter, not as message rows.
+ *
+ * Scoped to one address (predicated on to_btc_address / from_btc_address), so
+ * it does not reintroduce the full-table COUNT(*) hot-path antipattern that the
+ * maintained counters exist to avoid — it only runs when drift is detected.
+ */
+export async function recomputeAgentStats(
+  db: D1Database,
+  btcAddress: string
+): Promise<AgentInboxStats> {
+  const now = new Date().toISOString();
+
+  const inbound = await db
+    .prepare(
+      `SELECT
+         COUNT(*) AS received_count,
+         COUNT(CASE WHEN read_at IS NULL THEN 1 END) AS unread_count,
+         MAX(sent_at) AS last_message_at
+       FROM inbox_messages
+       WHERE is_reply = 0 AND to_btc_address = ?`
+    )
+    .bind(btcAddress)
+    .first<{
+      received_count: number;
+      unread_count: number;
+      last_message_at: string | null;
+    }>();
+
+  const sent = await db
+    .prepare(
+      `SELECT COUNT(*) AS sent_count, MAX(sent_at) AS last_sent_at
+       FROM inbox_messages
+       WHERE is_reply = 1 AND from_btc_address = ?`
+    )
+    .bind(btcAddress)
+    .first<{ sent_count: number; last_sent_at: string | null }>();
+
+  const stats: AgentInboxStats = {
+    receivedCount: inbound?.received_count ?? 0,
+    unreadCount: inbound?.unread_count ?? 0,
+    sentCount: sent?.sent_count ?? 0,
+    lastMessageAt: inbound?.last_message_at ?? null,
+    lastSentAt: sent?.last_sent_at ?? null,
+  };
+
+  await db
+    .prepare(
+      `INSERT INTO agent_inbox_stats
+         (btc_address, received_count, unread_count, sent_count,
+          last_message_at, last_sent_at, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?)
+       ON CONFLICT(btc_address) DO UPDATE SET
+         received_count  = excluded.received_count,
+         unread_count    = excluded.unread_count,
+         sent_count      = excluded.sent_count,
+         last_message_at = excluded.last_message_at,
+         last_sent_at    = excluded.last_sent_at,
+         updated_at      = excluded.updated_at`
+    )
+    .bind(
+      btcAddress,
+      stats.receivedCount,
+      stats.unreadCount,
+      stats.sentCount,
+      stats.lastMessageAt,
+      stats.lastSentAt,
+      now
+    )
+    .run();
+
+  return stats;
+}
+
 // ---------------------------------------------------------------------------
 // Backfill / repair
 // ---------------------------------------------------------------------------
