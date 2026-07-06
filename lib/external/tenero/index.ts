@@ -8,6 +8,7 @@ export {
   MAX_TRACKED_TOKENS,
   getActiveTokenIds,
   isValidTokenId,
+  type ActiveTokenIdsResult,
 } from "./tokens";
 export {
   getStablecoinUsdFallback,

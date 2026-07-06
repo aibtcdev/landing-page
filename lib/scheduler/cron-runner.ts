@@ -28,6 +28,7 @@ import {
 } from "./tenero-task";
 import {
   runCompetitionScheduler,
+  disabledCompetitionSummary,
   type CompetitionSchedulerSummary,
 } from "../competition/scheduler";
 import { runEarningsSweep } from "../earnings/indexer";
@@ -60,7 +61,13 @@ import type {
 // interval or upgrade the Tenero plan. The minute cap is handled separately by
 // TENERO_REQUEST_SPACING_MS (inter-request spacing within a run).
 export const TENERO_INTERVAL_MS = 60 * 60 * 1000;
-export const COMPETITION_INTERVAL_MS = 15 * 60 * 1000;
+// Competition Hiro catch-up sweep — HOURLY. Widened from 15 min (#933): the
+// sweep shares the single HIRO_API_KEY with reputation/identity lookups, and a
+// 15-min cadence monopolized that budget and 429-starved those endpoints. The
+// agent self-submit fast path (POST /api/competition/trades) is the primary
+// ingestion route; this sweep is only catch-up, so 4x fewer Hiro calls is a
+// safe trade. Can be gated off entirely via COMPETITION_SWEEP_ENABLED="false".
+export const COMPETITION_INTERVAL_MS = 60 * 60 * 1000;
 // Legion dashboard snapshot refreshes every cron tick (testnet, low volume).
 export const LEGION_INTERVAL_MS = 15 * 60 * 1000;
 
@@ -164,8 +171,14 @@ export async function runTeneroNow(
     };
   }
 
-  const tokenIds = await getActiveTokenIds(env.DB);
-  logger.info("tenero.token_set_resolved", { count: tokenIds.length });
+  const { tokenIds, degraded } = await getActiveTokenIds(env.DB);
+  if (degraded) {
+    // D1 lookup failed and we fell back to the 3-token static core. Surface it
+    // as an error (#1025) — otherwise the shrunken refresh set is invisible and
+    // every non-core token's price silently goes stale.
+    logger.error("tenero.token_set_d1_failed", { count: tokenIds.length });
+  }
+  logger.info("tenero.token_set_resolved", { count: tokenIds.length, degraded });
 
   const { result, rateLimited, rateLimitBackoffMs } = await runTeneroTask({
     logger,
@@ -214,6 +227,26 @@ export async function runCompetitionNow(
   const logger = parentLogger.child
     ? parentLogger.child({ task: "competition" })
     : parentLogger;
+
+  // Operator kill-switch (#933). Defaults ON — only an explicit "false" disables
+  // the sweep — so the sunset throttle is available without changing behavior on
+  // an unset var. When off, agent self-submit (POST /api/competition/trades)
+  // remains the ingestion path.
+  if (env.COMPETITION_SWEEP_ENABLED === "false") {
+    logger.warn("competition.sweep_skipped_disabled", {
+      deployEnv: env.DEPLOY_ENV ?? "unset",
+    });
+    const result = disabledCompetitionSummary();
+    await env.VERIFIED_AGENTS.put(
+      K_COMPETITION,
+      JSON.stringify({
+        lastRunAt: Date.now(),
+        result,
+        consecutiveFailures: 0,
+      } satisfies CompetitionState)
+    );
+    return result;
+  }
 
   const result = await runCompetitionScheduler(
     { DB: env.DB, HIRO_API_KEY: env.HIRO_API_KEY },

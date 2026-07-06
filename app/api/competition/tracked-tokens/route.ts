@@ -1,5 +1,5 @@
 // CACHE_INVARIANTS:POSTURE=public-only-get
-// Public read of the dynamic token set the SchedulerDO refreshes Tenero
+// Public read of the dynamic token set the cron task refreshes Tenero
 // prices for. Derived from the `swaps` table on each request — see
 // `lib/external/tenero/tokens.ts:getActiveTokenIds`. Read-only, no auth.
 
@@ -17,7 +17,7 @@ function selfDocResponse() {
       endpoint: "/api/competition/tracked-tokens",
       method: "GET",
       description:
-        "The Tenero refresh set the SchedulerDO uses on each tick. Union of the always-include static core and distinct token_in / token_out from successful agent/cron swaps in D1, junk-filtered for shape, ranked by trade count, capped at MAX_TRACKED_TOKENS. Falls back to the static core on D1 query failure.",
+        "The Tenero refresh set the cron task uses on each tick. Union of the always-include static core and distinct token_in / token_out from successful agent/cron swaps in D1, junk-filtered for shape, ranked by trade count, capped at MAX_TRACKED_TOKENS. Falls back to the static core on D1 query failure.",
       queryParameters: {
         docs: {
           type: "string",
@@ -29,7 +29,7 @@ function selfDocResponse() {
         tokens: "string[] — the active set (static core ∪ dynamic discovery)",
         count: "number — length of tokens",
         source:
-          "'dynamic' when D1 derivation succeeded, 'static-fallback' on failure or missing binding",
+          "'dynamic' when D1 derivation added tokens, 'static-fallback' when the core is the whole set (empty table / full dedup / missing binding), 'db-error' when the D1 query threw and we fell back",
         staticCore: "string[] — the always-include core that backs the fallback",
         maxTracked: "number — upper bound on dynamic discovery per tick (MAX_TRACKED_TOKENS)",
       },
@@ -41,7 +41,7 @@ function selfDocResponse() {
       notes: [
         "Dynamic discovery falls back to STATIC_TOKEN_IDS when there's no DB binding or the query throws.",
         "Tokens are ordered with the static core first, then dynamic entries by descending trade count.",
-        "The set is recomputed on each SchedulerDO tick (5 min cadence); this endpoint reports what the *next* tick would use.",
+        "The set is recomputed on each cron refresh tick; this endpoint reports what the *next* tick would use.",
       ],
     },
     {
@@ -59,16 +59,18 @@ export async function GET(request: NextRequest) {
 
   const { env } = await getCloudflareContext({ async: true });
   const db = env.DB as D1Database | undefined;
-  const tokens = await getActiveTokenIds(db);
+  const { tokenIds: tokens, degraded } = await getActiveTokenIds(db);
 
-  // `getActiveTokenIds` falls back to STATIC_TOKEN_IDS on any failure; we
-  // can't distinguish "fallback" from "static core happened to win" without
-  // a side-channel, so the heuristic is: if the result has more tokens than
-  // the static core, dynamic discovery added something; if it equals the
-  // core exactly we couldn't add anything (could be empty table OR DB error
-  // — both are functionally "static-fallback" from a consumer perspective).
-  const source: "dynamic" | "static-fallback" =
-    tokens.length > STATIC_TOKEN_IDS.length ? "dynamic" : "static-fallback";
+  // `getActiveTokenIds` reports `degraded: true` when the D1 lookup threw and it
+  // fell back to the static core (#1025) — that's now distinguishable from a
+  // legitimate static-only result. Otherwise: more tokens than the core means
+  // dynamic discovery added something; exactly the core means an empty table or
+  // full dedup.
+  const source: "dynamic" | "static-fallback" | "db-error" = degraded
+    ? "db-error"
+    : tokens.length > STATIC_TOKEN_IDS.length
+      ? "dynamic"
+      : "static-fallback";
 
   return NextResponse.json(
     {

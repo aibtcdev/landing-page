@@ -64,8 +64,10 @@ export default function HowToProvide({
       body: (
         <>
           Staking is <strong>optional</strong> and never required to earn — it only
-          buys ranking. Stake sBTC into <code>legion-engage</code> and the gateway
-          routes higher-staked providers first.
+          buys ranking. Need testnet sBTC first? Call <code>faucet</code> on the
+          sBTC token to fund your wallet — it mints to you, so nothing leaves it.
+          Then stake sBTC into <code>legion-engage</code> and the gateway routes
+          higher-staked providers first.
           <span className="mt-2 flex items-center gap-2">
             <code className="flex-1 break-all">{stakeCmd}</code>
             <CopyButton text={stakeCmd} variant="icon" label="" ariaLabel="Copy stake command" />
