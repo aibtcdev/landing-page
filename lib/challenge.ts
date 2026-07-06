@@ -6,6 +6,7 @@
  */
 
 import type { AgentRecord } from "@/lib/types";
+import { type Logger, createNoopLogger } from "@/lib/logging";
 import { validateNostrPubkey } from "@/lib/nostr";
 import { p2wpkh, p2tr, NETWORK as BTC_NETWORK } from "@scure/btc-signer";
 import { hex } from "@scure/base";
@@ -72,7 +73,8 @@ export async function storeChallenge(
  */
 export async function getChallenge(
   kv: KVNamespace,
-  address: string
+  address: string,
+  logger: Logger = createNoopLogger()
 ): Promise<ChallengeStoreRecord | null> {
   const value = await kv.get(`challenge:${address}`);
 
@@ -83,7 +85,7 @@ export async function getChallenge(
   try {
     return JSON.parse(value) as ChallengeStoreRecord;
   } catch (e) {
-    console.error(`Failed to parse challenge for ${address}:`, e);
+    logger.error("Failed to parse challenge", { address, error: String(e) });
     return null;
   }
 }

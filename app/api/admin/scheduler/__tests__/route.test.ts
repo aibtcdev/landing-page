@@ -10,6 +10,7 @@ vi.mock("@/lib/admin/auth", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({
+  createNoopLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, child() { return this; } }),
   isLogsRPC: vi.fn(() => false),
   createLogger: vi.fn(),
   createConsoleLogger: vi.fn(() => ({

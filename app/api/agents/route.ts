@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { LEVELS } from "@/lib/levels";
 import { getCachedAgentList } from "@/lib/cache";
+import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 
 export async function GET(request: NextRequest) {
   // Self-documenting: return usage docs when explicitly requested via ?docs=1
@@ -101,8 +102,13 @@ export async function GET(request: NextRequest) {
     : 50;
   const offset = offsetParam ? Math.max(parseInt(offsetParam, 10) || 0, 0) : 0;
 
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
-    const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     const { agents: cachedAgents } = await getCachedAgentList(kv);
@@ -151,7 +157,7 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (e) {
-    console.error("Agents fetch error:", e);
+    logger.error("Agents fetch error", { error: String(e) });
     return NextResponse.json(
       { error: `Failed to fetch agents: ${(e as Error).message}` },
       { status: 500 }

@@ -2,6 +2,13 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { buildActivityData } from "@/lib/activity";
 import type { ActivityResponse } from "@/app/components/activity-shared";
+import {
+  createLogger,
+  createConsoleLogger,
+  createNoopLogger,
+  isLogsRPC,
+  type Logger,
+} from "@/lib/logging";
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +42,7 @@ async function buildAndCache(
   kv: KVNamespace,
   db: D1Database | undefined,
   ctx: { waitUntil(p: Promise<unknown>): void } | undefined,
+  logger: Logger = createNoopLogger(),
 ): Promise<{ response: Response; stash: Promise<unknown> }> {
   const data: ActivityResponse = await buildActivityData(kv, db);
   const response = NextResponse.json(data, {
@@ -54,7 +62,9 @@ async function buildAndCache(
   // build — TTL/freshness costs are bounded by RESPONSE_S_MAXAGE and the
   // next request will rebuild and retry the cache write.
   const stash = cache.put(cacheKey, cachedClone).catch((err) => {
-    console.error("Failed to populate caches.default for /api/activity:", err);
+    logger.error("Failed to populate caches.default for /api/activity", {
+      error: String(err),
+    });
   });
   if (ctx) ctx.waitUntil(stash);
   return { response, stash };
@@ -137,8 +147,13 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
-    const { env, ctx } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const db = env.DB as D1Database | undefined;
 
@@ -154,7 +169,7 @@ export async function GET(request: NextRequest) {
 
     let promise = inFlight.get(CACHE_KEY_URL);
     if (!promise) {
-      promise = buildAndCache(kv, db, ctx);
+      promise = buildAndCache(kv, db, ctx, logger);
       inFlight.set(CACHE_KEY_URL, promise);
       // Hold the inFlight slot until the cache.default put settles — not
       // just until buildActivityData() returns. Otherwise a request arriving
@@ -175,7 +190,7 @@ export async function GET(request: NextRequest) {
       headers: response.headers,
     });
   } catch (error) {
-    console.error("Failed to fetch activity:", error);
+    logger.error("Failed to fetch activity", { error: String(error) });
     return NextResponse.json(
       {
         error: "Failed to fetch network activity",

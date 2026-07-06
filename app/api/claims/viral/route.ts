@@ -6,6 +6,13 @@ import { getNextLevel } from "@/lib/levels";
 import { X_HANDLE } from "@/lib/constants";
 import type { ClaimRecord } from "@/lib/types";
 import { mirrorClaimToD1 } from "@/lib/claims/d1-mirror";
+import {
+  createLogger,
+  createConsoleLogger,
+  createNoopLogger,
+  isLogsRPC,
+  type Logger,
+} from "@/lib/logging";
 
 const MIN_REWARD_SATS = 5000;
 const MAX_REWARD_SATS = 10000;
@@ -14,7 +21,10 @@ function getRandomReward(): number {
   return Math.floor(Math.random() * (MAX_REWARD_SATS - MIN_REWARD_SATS + 1)) + MIN_REWARD_SATS;
 }
 
-function normalizeTweetUrl(url: string): string | null {
+function normalizeTweetUrl(
+  url: string,
+  logger: Logger = createNoopLogger()
+): string | null {
   try {
     const parsed = new URL(url);
     if (parsed.hostname !== "twitter.com" && parsed.hostname !== "x.com" && parsed.hostname !== "www.twitter.com" && parsed.hostname !== "www.x.com") {
@@ -25,12 +35,15 @@ function normalizeTweetUrl(url: string): string | null {
     if (!match) return null;
     return `https://x.com/${match[1]}/status/${match[2]}`;
   } catch (e) {
-    console.error("Failed to parse tweet URL:", e);
+    logger.error("Failed to parse tweet URL", { error: String(e) });
     return null;
   }
 }
 
-async function fetchTweetContent(tweetUrl: string): Promise<{ text: string; authorName: string; authorHandle: string } | null> {
+async function fetchTweetContent(
+  tweetUrl: string,
+  logger: Logger = createNoopLogger()
+): Promise<{ text: string; authorName: string; authorHandle: string } | null> {
   try {
     const oembedUrl = `https://publish.twitter.com/oembed?url=${encodeURIComponent(tweetUrl)}&omit_script=true`;
     const res = await fetch(oembedUrl, { signal: AbortSignal.timeout(8000) });
@@ -56,12 +69,20 @@ async function fetchTweetContent(tweetUrl: string): Promise<{ text: string; auth
 
     return { text, authorName: data.author_name || "", authorHandle };
   } catch (e) {
-    console.error("Failed to fetch tweet content from oEmbed:", e);
+    logger.error("Failed to fetch tweet content from oEmbed", {
+      error: String(e),
+    });
     return null;
   }
 }
 
 export async function POST(request: NextRequest) {
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
     const body = (await request.json()) as {
       btcAddress?: string;
@@ -85,7 +106,7 @@ export async function POST(request: NextRequest) {
     }
 
     // Validate and normalize tweet URL
-    const normalizedUrl = normalizeTweetUrl(tweetUrl);
+    const normalizedUrl = normalizeTweetUrl(tweetUrl, logger);
     if (!normalizedUrl) {
       return NextResponse.json(
         { error: "Invalid post URL. Must be an x.com or twitter.com status link (e.g. https://x.com/user/status/123)." },
@@ -93,7 +114,6 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { env } = await getCloudflareContext();
     const agentsKv = env.VERIFIED_AGENTS as KVNamespace;
 
     // Check agent and existing claim in parallel
@@ -144,7 +164,7 @@ export async function POST(request: NextRequest) {
 
     // Fetch tweet content and claim code in parallel (both independent)
     const [tweet, storedCodeData] = await Promise.all([
-      fetchTweetContent(normalizedUrl),
+      fetchTweetContent(normalizedUrl, logger),
       agentsKv.get(`claim-code:${btcAddress}`),
     ]);
 
@@ -238,7 +258,7 @@ export async function POST(request: NextRequest) {
     try {
       await mirrorClaimToD1(env.DB as D1Database | undefined, claimRecord);
     } catch (e) {
-      console.warn("claims/viral D1 mirror write failed", {
+      logger.warn("claims/viral D1 mirror write failed", {
         btcAddress,
         error: e instanceof Error ? e.message : String(e),
       });
@@ -290,7 +310,7 @@ export async function POST(request: NextRequest) {
       },
     });
   } catch (e) {
-    console.error("Viral claim error:", e);
+    logger.error("Viral claim error", { error: String(e) });
     return NextResponse.json(
       { error: `Claim failed: ${(e as Error).message}` },
       { status: 500 }
@@ -361,8 +381,13 @@ export async function GET(request: NextRequest) {
     });
   }
 
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
-    const { env } = await getCloudflareContext();
     const agentsKv = env.VERIFIED_AGENTS as KVNamespace;
 
     const claimData = await agentsKv.get(`claim:${btcAddress}`);
@@ -405,7 +430,7 @@ export async function GET(request: NextRequest) {
       },
     });
   } catch (e) {
-    console.error("Viral claim GET error:", e);
+    logger.error("Viral claim GET error", { error: String(e) });
     return NextResponse.json(
       { error: `Failed to check claim: ${(e as Error).message}` },
       { status: 500 }

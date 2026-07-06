@@ -11,6 +11,7 @@ import { generateName } from "@/lib/name-generator";
 import { getAgentInboxStats } from "@/lib/inbox/stats";
 import { listBounties } from "@/lib/bounty";
 import { withEdgeCache } from "@/lib/edge-cache";
+import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import {
   CHECK_IN_MESSAGE_FORMAT,
   CHECK_IN_RATE_LIMIT_SECONDS,
@@ -410,6 +411,10 @@ export async function POST(request: NextRequest) {
 
     // Get Cloudflare context (KV, D1, ratelimits binding)
     const { env, ctx } = await getCloudflareContext();
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+      : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const db = env.DB as D1Database | undefined;
 
@@ -469,7 +474,7 @@ export async function POST(request: NextRequest) {
         });
       }
     } catch (e) {
-      console.error("heartbeat.ratelimit_binding_threw", {
+      logger.error("heartbeat.ratelimit_binding_threw", {
         btcAddress,
         error: (e as Error).message,
       });
@@ -491,7 +496,7 @@ export async function POST(request: NextRequest) {
     // if D1 lagged; the timestamp will reconcile on the next successful
     // mutation via the max() expression in updateAgentInD1.
     if (db) {
-      await updateAgentInD1(db, updatedAgent);
+      await updateAgentInD1(db, updatedAgent, logger);
     }
 
     // Write canonical btc: key only; stx: secondary index is no longer

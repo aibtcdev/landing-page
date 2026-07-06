@@ -16,6 +16,7 @@
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { computeLevel, LEVELS } from "@/lib/levels";
+import { type Logger, createNoopLogger } from "@/lib/logging";
 import type { CachedAgent, CachedAgentList } from "./types";
 
 const CACHE_KEY = "cache:agent-list";
@@ -280,7 +281,8 @@ export function mapRowToCachedAgent(row: AgentListRow): CachedAgent {
  * existing pattern in all route files; no new binding parameter needed.
  */
 async function rebuildAgentListCache(
-  kv: KVNamespace
+  kv: KVNamespace,
+  logger: Logger = createNoopLogger()
 ): Promise<CachedAgentList> {
   const { env } = await getCloudflareContext();
   const db = env.DB as D1Database;
@@ -324,8 +326,9 @@ async function rebuildAgentListCache(
   // a library module without request-scoped logger access; raw console is
   // intentional for diagnostic visibility on a path that otherwise swallows.
   if (!result.success) {
-    // eslint-disable-next-line no-console
-    console.error("agent-list rebuild: D1 query failed", result.error);
+    logger.error("agent-list rebuild: D1 query failed", {
+      error: String(result.error),
+    });
   }
 
   const rows = result.results ?? [];

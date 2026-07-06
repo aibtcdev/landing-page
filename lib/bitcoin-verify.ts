@@ -15,6 +15,7 @@ import {
 } from "@scure/btc-signer";
 import type { AgentRecord } from "@/lib/types";
 import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
+import { createNoopLogger, type Logger } from "@/lib/logging";
 
 export { BTC_NETWORK };
 export const BITCOIN_MSG_PREFIX = "\x18Bitcoin Signed Message:\n";
@@ -223,7 +224,8 @@ function bip322BuildToSpendTxId(
 export function bip322VerifyP2WPKH(
   message: string,
   signatureBase64: string,
-  address: string
+  address: string,
+  logger: Logger = createNoopLogger()
 ): { valid: boolean; pubkeyHex: string } {
   const sigBytes = Uint8Array.from(Buffer.from(signatureBase64, "base64"));
   const witnessItems = RawWitness.decode(sigBytes);
@@ -268,8 +270,9 @@ export function bip322VerifyP2WPKH(
     // Fall back to legacy tagged hash (varint prepend) for agents using older signing tools.
     const toSpendTxidLegacy = bip322BuildToSpendTxId(message, scriptPubKey, true);
     if (!verifySighash(toSpendTxidLegacy)) return { valid: false, pubkeyHex: "" };
-    console.warn(
-      "BIP-322 signature uses non-standard tagged hash. Update your signing tool — see aibtcdev/skills or install latest @aibtc/mcp-server."
+    logger.warn(
+      "BIP-322 signature uses non-standard tagged hash. Update your signing tool — see aibtcdev/skills or install latest @aibtc/mcp-server.",
+      { address }
     );
   }
 
@@ -341,7 +344,8 @@ function bip322P2TRSighash(toSpendTxid: Uint8Array, scriptPubKey: Uint8Array): U
 export function bip322VerifyP2TR(
   message: string,
   signatureBase64: string,
-  address: string
+  address: string,
+  logger: Logger = createNoopLogger()
 ): boolean {
   const sigBytes = Uint8Array.from(Buffer.from(signatureBase64, "base64"));
   const witnessItems = RawWitness.decode(sigBytes);
@@ -380,8 +384,9 @@ export function bip322VerifyP2TR(
     if (!schnorr.verify(schnorrSig, bip322P2TRSighash(toSpendTxidLegacy, scriptPubKey), tweakedKey)) {
       return false;
     }
-    console.warn(
-      "BIP-322 signature uses non-standard tagged hash. Update your signing tool — see aibtcdev/skills or install latest @aibtc/mcp-server."
+    logger.warn(
+      "BIP-322 signature uses non-standard tagged hash. Update your signing tool — see aibtcdev/skills or install latest @aibtc/mcp-server.",
+      { address }
     );
   }
 
@@ -550,7 +555,8 @@ export async function persistBtcPubkeyIfMissing(
   db: D1Database | undefined,
   btcAddress: string,
   pubkeyHex: string,
-  agent: AgentRecord
+  agent: AgentRecord,
+  logger: Logger = createNoopLogger()
 ): Promise<void> {
   try {
     if (!pubkeyHex) return;
@@ -567,9 +573,9 @@ export async function persistBtcPubkeyIfMissing(
       kv.put(`stx:${updatedAgent.stxAddress}`, JSON.stringify(updatedAgent)),
     ]);
 
-    console.log(
-      `[btcPublicKey-capture] Persisted pubkey for ${btcAddress} via BIP-322 witness`
-    );
+    logger.info("[btcPublicKey-capture] Persisted pubkey via BIP-322 witness", {
+      btcAddress,
+    });
 
     // D1 UPDATE via the canonical mirror helper (P3A). Different semantics
     // from the prior targeted UPDATE:
@@ -594,8 +600,9 @@ export async function persistBtcPubkeyIfMissing(
     await updateAgentInD1(db, updatedAgent);
   } catch (err) {
     // Never throw — persistence failure must not affect the calling request.
-    console.error(
-      `[btcPublicKey-capture] Failed to persist pubkey for ${btcAddress}: ${(err as Error).message}`
-    );
+    logger.error("[btcPublicKey-capture] Failed to persist pubkey", {
+      btcAddress,
+      error: (err as Error).message,
+    });
   }
 }

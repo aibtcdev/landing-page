@@ -44,6 +44,28 @@ vi.mock("@/lib/bounty", () => ({
   listBounties: vi.fn().mockResolvedValue({ bounties: [], total: 0 }),
 }));
 
+// #551: heartbeat now logs via the structured Logger (and threads it into
+// updateAgentInD1). Capture a shared spy logger so tests assert structured
+// calls instead of the pre-migration console.* output.
+const { heartbeatLogger } = vi.hoisted(() => ({
+  heartbeatLogger: {
+    debug: vi.fn(),
+    info: vi.fn(),
+    warn: vi.fn(),
+    error: vi.fn(),
+    child(): unknown {
+      return this;
+    },
+  },
+}));
+
+vi.mock("@/lib/logging", () => ({
+  createLogger: () => heartbeatLogger,
+  createConsoleLogger: () => heartbeatLogger,
+  createNoopLogger: () => heartbeatLogger,
+  isLogsRPC: () => false,
+}));
+
 vi.mock("@/lib/levels", () => ({
   getAgentLevel: vi.fn().mockReturnValue({ level: 1, levelName: "Registered" }),
   getNextLevel: vi.fn().mockReturnValue(null),
@@ -293,7 +315,6 @@ describe("heartbeat POST — fail-open on binding throw", () => {
     const mockKv = buildMockKv();
     const mock = buildMockD1();
     const limit = vi.fn().mockRejectedValue(new Error("ratelimits transient"));
-    const errorSpy = vi.spyOn(console, "error").mockImplementation(() => {});
 
     (getCloudflareContext as Mock).mockResolvedValue({
       env: {
@@ -308,11 +329,10 @@ describe("heartbeat POST — fail-open on binding throw", () => {
 
     expect(response.status).toBe(200);
     expect(mock.run).toHaveBeenCalledTimes(1);
-    expect(errorSpy).toHaveBeenCalledWith(
+    expect(heartbeatLogger.error).toHaveBeenCalledWith(
       "heartbeat.ratelimit_binding_threw",
       expect.objectContaining({ btcAddress: TEST_BTC })
     );
-    errorSpy.mockRestore();
   });
 });
 
@@ -326,7 +346,6 @@ describe("heartbeat POST — D1 update failure does NOT 500 (P3A: KV-source-of-t
     const mockKv = buildMockKv();
     const mock = buildMockD1(() => Promise.reject(new Error("D1 boom")));
     const limit = vi.fn().mockResolvedValue({ success: true });
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
 
     (getCloudflareContext as Mock).mockResolvedValue({
       env: {
@@ -343,14 +362,17 @@ describe("heartbeat POST — D1 update failure does NOT 500 (P3A: KV-source-of-t
     expect(limit).toHaveBeenCalledTimes(1);
     // KV mirror still writes — that's the authoritative path in P3A.
     expect(mockKv.put).toHaveBeenCalled();
-    // Mirror failure logged via the agents-mirror helper, not heartbeat.
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[agents-mirror]")
+    // Mirror failure logged via the agents-mirror helper (#551: heartbeat now
+    // threads its request logger into updateAgentInD1 so the warning correlates).
+    expect(heartbeatLogger.warn).toHaveBeenCalledWith(
+      "updateAgentInD1 failed",
+      expect.objectContaining({
+        error: expect.stringContaining("D1 boom"),
+      })
     );
     // Response payload still includes the timestamp the caller submitted.
     const body = (await response.json()) as { checkIn: { lastCheckInAt: string } };
     expect(body.checkIn.lastCheckInAt).toBe(TEST_TIMESTAMP);
-    warnSpy.mockRestore();
   });
 });
 

@@ -4,6 +4,7 @@ import { LEVELS } from "@/lib/levels";
 import { ACTIVITY_THRESHOLDS } from "@/lib/utils";
 import { SCORING, computeLevelBonus } from "@/lib/scoring";
 import { getCachedAgentList } from "@/lib/cache";
+import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 
 export async function GET(request: NextRequest) {
   const { searchParams } = new URL(request.url);
@@ -134,8 +135,13 @@ export async function GET(request: NextRequest) {
   const limit = limitParam ? Math.min(parseInt(limitParam, 10) || 100, 100) : 100;
   const offset = offsetParam ? Math.max(parseInt(offsetParam, 10) || 0, 0) : 0;
 
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
-    const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     const { agents: cachedAgents } = await getCachedAgentList(kv);
@@ -296,7 +302,7 @@ export async function GET(request: NextRequest) {
       }
     );
   } catch (e) {
-    console.error("Leaderboard fetch error:", e);
+    logger.error("Leaderboard fetch error", { error: String(e) });
     return NextResponse.json(
       { error: `Failed to fetch leaderboard: ${(e as Error).message}` },
       { status: 500 }

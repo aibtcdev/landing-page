@@ -517,7 +517,12 @@ export async function GET(
       }
     );
   } catch (e) {
-    console.error("Agent resolution error:", e);
+    const { env, ctx } = await getCloudflareContext();
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
+      : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
+    logger.error("Agent resolution error", { error: String(e) });
     return NextResponse.json(
       { error: `Resolution failed: ${(e as Error).message}` },
       { status: 500 }

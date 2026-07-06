@@ -16,6 +16,7 @@ import type {
 import { insertInboundMessageToD1, isPaymentTxidUniqueViolation } from "./d1-dual-write";
 import { getInboxMessageFromD1 } from "./d1-reads";
 import { bumpInboundStats } from "./stats";
+import { createNoopLogger, type Logger } from "@/lib/logging";
 
 /**
  * Build KV key for an individual inbox message.
@@ -70,7 +71,8 @@ function buildStagedPaymentKey(paymentId: string): string {
  */
 export async function getMessage(
   kv: KVNamespace,
-  messageId: string
+  messageId: string,
+  logger: Logger = createNoopLogger()
 ): Promise<InboxMessage | null> {
   const key = buildMessageKey(messageId);
   const data = await kv.get(key);
@@ -79,7 +81,7 @@ export async function getMessage(
   try {
     return JSON.parse(data) as InboxMessage;
   } catch (e) {
-    console.error(`Failed to parse inbox message ${key}:`, e);
+    logger.error("Failed to parse inbox message", { key, error: String(e) });
     return null;
   }
 }
@@ -145,7 +147,8 @@ export async function updateMessage(
  */
 export async function getReply(
   kv: KVNamespace,
-  messageId: string
+  messageId: string,
+  logger: Logger = createNoopLogger()
 ): Promise<OutboxReply | null> {
   const key = buildReplyKey(messageId);
   const data = await kv.get(key);
@@ -154,7 +157,7 @@ export async function getReply(
   try {
     return JSON.parse(data) as OutboxReply;
   } catch (e) {
-    console.error(`Failed to parse outbox reply ${key}:`, e);
+    logger.error("Failed to parse outbox reply", { key, error: String(e) });
     return null;
   }
 }
@@ -203,7 +206,8 @@ export async function storeReply(
  */
 export async function getAgentInbox(
   kv: KVNamespace,
-  btcAddress: string
+  btcAddress: string,
+  logger: Logger = createNoopLogger()
 ): Promise<InboxAgentIndex | null> {
   const key = buildAgentIndexKey(btcAddress);
   const data = await kv.get(key);
@@ -212,7 +216,7 @@ export async function getAgentInbox(
   try {
     return JSON.parse(data) as InboxAgentIndex;
   } catch (e) {
-    console.error(`Failed to parse inbox agent index ${key}:`, e);
+    logger.error("Failed to parse inbox agent index", { key, error: String(e) });
     return null;
   }
 }
@@ -275,7 +279,8 @@ export async function updateAgentInbox(
  */
 export async function getSentIndex(
   kv: KVNamespace,
-  btcAddress: string
+  btcAddress: string,
+  logger: Logger = createNoopLogger()
 ): Promise<SentMessageIndex | null> {
   const key = buildSentIndexKey(btcAddress);
   const data = await kv.get(key);
@@ -284,7 +289,7 @@ export async function getSentIndex(
   try {
     return JSON.parse(data) as SentMessageIndex;
   } catch (e) {
-    console.error(`Failed to parse sent index ${key}:`, e);
+    logger.error("Failed to parse sent index", { key, error: String(e) });
     return null;
   }
 }
@@ -328,7 +333,8 @@ export async function updateSentIndex(
 
 export async function getStagedInboxPayment(
   kv: KVNamespace,
-  paymentId: string
+  paymentId: string,
+  logger: Logger = createNoopLogger()
 ): Promise<StagedInboxMessage | null> {
   const data = await kv.get(buildStagedPaymentKey(paymentId));
   if (!data) return null;
@@ -336,7 +342,7 @@ export async function getStagedInboxPayment(
   try {
     return JSON.parse(data) as StagedInboxMessage;
   } catch (e) {
-    console.error(`Failed to parse staged inbox payment ${paymentId}:`, e);
+    logger.error("Failed to parse staged inbox payment", { paymentId, error: String(e) });
     return null;
   }
 }

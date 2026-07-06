@@ -7,14 +7,25 @@ import { requireAdmin } from "@/lib/admin/auth";
 import { lookupAgent } from "@/lib/agent-lookup";
 import type { InboxAgentIndex } from "@/lib/inbox/types";
 import type { ReferralCodeRecord } from "@/lib/vouch";
+import {
+  createLogger,
+  createConsoleLogger,
+  createNoopLogger,
+  isLogsRPC,
+  type Logger,
+} from "@/lib/logging";
 
 /** Safely parse JSON, returning null on failure. */
-function safeParseJson<T>(data: string | null, label: string): T | null {
+function safeParseJson<T>(
+  data: string | null,
+  label: string,
+  logger: Logger = createNoopLogger()
+): T | null {
   if (!data) return null;
   try {
     return JSON.parse(data) as T;
   } catch (e) {
-    console.error(`Failed to parse ${label}:`, e);
+    logger.error("Failed to parse JSON record", { label, error: String(e) });
     return null;
   }
 }
@@ -108,6 +119,12 @@ export async function DELETE(request: NextRequest) {
   const denied = await requireAdmin(request);
   if (denied) return denied;
 
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
     // Parse request body
     let body: unknown;
@@ -135,7 +152,6 @@ export async function DELETE(request: NextRequest) {
       );
     }
 
-    const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const db = env.DB as D1Database | undefined;
 
@@ -159,7 +175,8 @@ export async function DELETE(request: NextRequest) {
 
     const inboxIndex = safeParseJson<InboxAgentIndex>(
       inboxData,
-      "inbox index"
+      "inbox index",
+      logger
     );
 
     // Fail if any index record exists but is corrupted — partial deletion is worse than no deletion
@@ -177,7 +194,8 @@ export async function DELETE(request: NextRequest) {
     // Parse referral code for reverse lookup cleanup
     const referralCode = safeParseJson<ReferralCodeRecord>(
       referralCodeData,
-      "referral code"
+      "referral code",
+      logger
     );
 
     // Build categorized key lists
@@ -253,7 +271,7 @@ export async function DELETE(request: NextRequest) {
       },
     });
   } catch (e) {
-    console.error("DELETE /api/admin/delete-agent error:", e);
+    logger.error("DELETE /api/admin/delete-agent error", { error: String(e) });
     return NextResponse.json(
       { error: `Failed to delete agent: ${(e as Error).message}` },
       { status: 500 }

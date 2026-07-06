@@ -5,6 +5,7 @@ import { validateGenesisPayoutBody } from "@/lib/admin/validation";
 import { GenesisPayoutRecord } from "@/lib/admin/types";
 import type { ClaimRecord } from "@/lib/types";
 import { mirrorClaimToD1 } from "@/lib/claims/d1-mirror";
+import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 
 /**
  * GET /api/admin/genesis-payout
@@ -17,8 +18,13 @@ export async function GET(request: NextRequest) {
   const denied = await requireAdmin(request);
   if (denied) return denied;
 
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
-    const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     const { searchParams } = new URL(request.url);
@@ -39,10 +45,10 @@ export async function GET(request: NextRequest) {
         const record = JSON.parse(recordData) as GenesisPayoutRecord;
         return NextResponse.json({ success: true, record });
       } catch (e) {
-        console.error(
-          `Failed to parse genesis record for ${btcAddress}:`,
-          e
-        );
+        logger.error("Failed to parse genesis record", {
+          btcAddress,
+          error: String(e),
+        });
         return NextResponse.json(
           { error: `Stored genesis record for ${btcAddress} is corrupted` },
           { status: 500 }
@@ -75,10 +81,10 @@ export async function GET(request: NextRequest) {
                   JSON.parse(recordData) as GenesisPayoutRecord
                 );
               } catch (e) {
-                console.error(
-                  `Failed to parse genesis record ${batch[index].name}:`,
-                  e
-                );
+                logger.error("Failed to parse genesis record", {
+                  key: batch[index].name,
+                  error: String(e),
+                });
               }
             }
           });
@@ -100,7 +106,7 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   } catch (e) {
-    console.error("Genesis payout GET error:", e);
+    logger.error("Genesis payout GET error", { error: String(e) });
     return NextResponse.json(
       { error: `Failed to query genesis payouts: ${(e as Error).message}` },
       { status: 500 }
@@ -141,6 +147,12 @@ export async function POST(request: NextRequest) {
   const denied = await requireAdmin(request);
   if (denied) return denied;
 
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
     let body: unknown;
     try {
@@ -163,7 +175,6 @@ export async function POST(request: NextRequest) {
     const { btcAddress, rewardTxid, rewardSatoshis, paidAt, stxAddress } =
       validation.data;
 
-    const { env } = await getCloudflareContext();
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
     // Check for existing genesis payout and claim record in parallel
@@ -188,7 +199,10 @@ export async function POST(request: NextRequest) {
           });
         }
       } catch (e) {
-        console.error("Failed to parse existing genesis record:", e);
+        logger.error("Failed to parse existing genesis record", {
+          btcAddress,
+          error: String(e),
+        });
       }
       return NextResponse.json(
         { error: "Genesis payout already recorded for this address with different details" },
@@ -208,14 +222,17 @@ export async function POST(request: NextRequest) {
         try {
           await mirrorClaimToD1(env.DB as D1Database | undefined, claimRecord);
         } catch (e) {
-          console.warn("genesis-payout D1 mirror write failed", {
+          logger.warn("genesis-payout D1 mirror write failed", {
             btcAddress,
             error: e instanceof Error ? e.message : String(e),
           });
         }
         claimRecordUpdated = true;
       } catch (e) {
-        console.error("Failed to update claim record:", e);
+        logger.error("Failed to update claim record", {
+          btcAddress,
+          error: String(e),
+        });
       }
     }
 
@@ -237,7 +254,7 @@ export async function POST(request: NextRequest) {
       record: genesisRecord,
     });
   } catch (e) {
-    console.error("Genesis payout POST error:", e);
+    logger.error("Genesis payout POST error", { error: String(e) });
     return NextResponse.json(
       { error: `Failed to record genesis payout: ${(e as Error).message}` },
       { status: 500 }

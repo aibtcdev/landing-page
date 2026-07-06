@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { type Logger, createNoopLogger } from "@/lib/logging";
 
 /**
  * Authenticate an admin request via X-Admin-Key header.
@@ -11,7 +12,8 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
  *   if (denied) return denied;
  */
 export async function requireAdmin(
-  request: NextRequest
+  request: NextRequest,
+  logger: Logger = createNoopLogger()
 ): Promise<NextResponse | null> {
   const adminKey = request.headers.get("X-Admin-Key");
   if (!adminKey) {
@@ -25,7 +27,7 @@ export async function requireAdmin(
   const expectedKey = env.ARC_ADMIN_API_KEY;
 
   if (!expectedKey) {
-    console.error("ARC_ADMIN_API_KEY is not configured");
+    logger.error("ARC_ADMIN_API_KEY is not configured");
     return NextResponse.json(
       { error: "Server configuration error" },
       { status: 500 }

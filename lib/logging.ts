@@ -118,6 +118,31 @@ export function createConsoleLogger(
 }
 
 // =============================================================================
+// Noop Logger (default for shared helpers used in unlogged contexts)
+// =============================================================================
+
+/**
+ * A logger that discards everything.
+ *
+ * Shared server helpers that emit operational logs should accept an optional
+ * `Logger` and default to this, rather than calling `console.*` directly (see
+ * issue #551). Callers that have a request-scoped logger pass it through for
+ * correlated worker-logs output; callers that don't (or unlogged contexts) get
+ * silent no-ops instead of ad hoc console noise.
+ */
+export function createNoopLogger(): Logger {
+  const noop = () => {};
+  const logger: Logger = {
+    debug: noop,
+    info: noop,
+    warn: noop,
+    error: noop,
+    child: () => logger,
+  };
+  return logger;
+}
+
+// =============================================================================
 // RPC Logger (production with worker-logs binding)
 // =============================================================================
 

@@ -879,7 +879,11 @@ export async function POST(request: NextRequest) {
       try {
         await storeVouch(kv, vouchRecord);
       } catch (err) {
-        console.error("Failed to store vouch record:", err);
+        log.error("Failed to store vouch record", {
+          referrer: vouchRecord.referrer,
+          referee: vouchRecord.referee,
+          error: String(err),
+        });
       }
     }
 
@@ -888,7 +892,10 @@ export async function POST(request: NextRequest) {
     try {
       referralCode = await generateAndStoreReferralCode(kv, btcResult.address);
     } catch (err) {
-      console.error("Failed to generate referral code:", err);
+      log.error("Failed to generate referral code", {
+        address: btcResult.address,
+        error: String(err),
+      });
     }
 
     // Mirror the new agent into D1 alongside the KV writes above.
@@ -904,7 +911,10 @@ export async function POST(request: NextRequest) {
         try {
           await insertAgentToD1(db, record, referralCodeForMirror);
         } catch (err) {
-          console.error("Failed to mirror agent to D1:", err);
+          log.error("Failed to mirror agent to D1", {
+            btcAddress: record.btcAddress,
+            error: String(err),
+          });
         }
       });
     }

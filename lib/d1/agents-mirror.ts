@@ -20,6 +20,7 @@
  */
 
 import type { AgentRecord } from "@/lib/types";
+import { type Logger, createNoopLogger } from "@/lib/logging";
 
 /**
  * Mirror a newly-registered agent into D1. Called from the registration
@@ -112,7 +113,8 @@ export async function insertAgentToD1(
  */
 export async function updateAgentInD1(
   db: D1Database | undefined,
-  agent: AgentRecord
+  agent: AgentRecord,
+  logger: Logger = createNoopLogger()
 ): Promise<void> {
   if (!db) return;
 
@@ -186,9 +188,10 @@ export async function updateAgentInD1(
     // FK violations (referrer not yet in D1), schema mismatches, or
     // transient binding errors. Log and continue — P3A is a transition
     // phase, KV is authoritative.
-    console.warn(
-      `[agents-mirror] updateAgentInD1 failed for ${agent.btcAddress}: ${(e as Error).message}`
-    );
+    logger.warn("updateAgentInD1 failed", {
+      btcAddress: agent.btcAddress,
+      error: (e as Error).message,
+    });
   }
 }
 

@@ -368,8 +368,12 @@ export async function GET(
       },
     );
   } catch (e) {
-    // eslint-disable-next-line no-console
-    console.error("Agent profile lookup error:", e);
+    const { env, ctx } = await getCloudflareContext();
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    const logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, { rayId, path: request.nextUrl.pathname })
+      : createConsoleLogger({ rayId, path: request.nextUrl.pathname });
+    logger.error("Agent profile lookup error", { error: String(e) });
     return NextResponse.json(
       { error: `Agent lookup failed: ${(e as Error).message}` },
       { status: 500 }

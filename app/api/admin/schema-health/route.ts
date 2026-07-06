@@ -27,6 +27,12 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { requireAdmin } from "@/lib/admin/auth";
 import { LEADERBOARD_AGGREGATE_SQL } from "@/lib/competition/leaderboard-query";
 import { isScanWithoutIndex } from "./scan-detection";
+import {
+  createLogger,
+  createConsoleLogger,
+  isLogsRPC,
+  type Logger,
+} from "@/lib/logging";
 
 // ---------------------------------------------------------------------------
 // Query definitions
@@ -213,11 +219,22 @@ export async function GET(request: NextRequest) {
   if (denied) return denied;
 
   let db: D1Database | undefined;
+  let logger: Logger;
   try {
-    const { env } = await getCloudflareContext();
+    const { env, ctx } = await getCloudflareContext();
     db = env.DB as D1Database | undefined;
+    const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+    logger = isLogsRPC(env.LOGS)
+      ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+      : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
   } catch (e) {
-    console.error("schema-health: failed to get Cloudflare context", e);
+    // Intentional console fallback (#551): getCloudflareContext() itself threw,
+    // so there is no env.LOGS / ctx to build the RPC logger from. This is the
+    // one path where console is the only option.
+    createConsoleLogger({ path: new URL(request.url).pathname }).error(
+      "schema-health: failed to get Cloudflare context",
+      { error: String(e) }
+    );
     return NextResponse.json(
       { error: "Failed to get runtime context" },
       { status: 500 }
@@ -251,7 +268,9 @@ export async function GET(request: NextRequest) {
       liveIndexNames.add(idx.name);
     }
   } catch (e) {
-    console.error("schema-health: sqlite_master query failed", e);
+    logger.error("schema-health: sqlite_master query failed", {
+      error: String(e),
+    });
     // Non-fatal: continue with empty index set (all expectedIndexes will flag)
   }
 
@@ -315,7 +334,10 @@ export async function GET(request: NextRequest) {
         // EXPLAIN itself failed (e.g. table doesn't exist yet, syntax error).
         // Treat as flagged so missing tables are visible.
         const errMsg = e instanceof Error ? e.message : String(e);
-        console.error(`schema-health: EXPLAIN failed for ${q.name}:`, errMsg);
+        logger.error("schema-health: EXPLAIN failed", {
+          query: q.name,
+          error: errMsg,
+        });
         return {
           name: q.name,
           sql: q.sql,
