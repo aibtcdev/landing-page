@@ -39,7 +39,13 @@ export async function GET(
   const limit = clampInt(url.searchParams.get("limit"), 20, 1, 100);
   const offset = clampInt(url.searchParams.get("offset"), 0, 0, 100_000);
 
-  const { submissions, total } = await listSubmissionsForBounty(db, id, limit, offset);
+  const { submissions, total } = await listSubmissionsForBounty(
+    db,
+    id,
+    limit,
+    offset,
+    bounty.submissionCount
+  );
   const nextOffset = offset + submissions.length < total ? offset + submissions.length : null;
 
   return NextResponse.json(

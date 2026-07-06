@@ -429,15 +429,24 @@ export async function listSubmissionsForBounty(
   db: D1Database,
   bountyId: string,
   limit = 20,
-  offset = 0
+  offset = 0,
+  knownTotal?: number
 ): Promise<ListSubmissionsResult> {
   const cappedLimit = Math.min(Math.max(limit, 1), 100);
   const cappedOffset = Math.max(offset, 0);
 
-  const countRow = await db
-    .prepare(`SELECT COUNT(*) AS cnt FROM bounty_submissions WHERE bounty_id = ?`)
-    .bind(bountyId)
-    .first<{ cnt: number }>();
+  // Prefer the parent bounty's maintained `submission_count` (bumped
+  // transactionally on every insert — see insertSubmission) when the caller
+  // supplies it, avoiding a COUNT(*) scan of all submissions per request.
+  // Every caller already loads the bounty, so this is a pure win.
+  let total = knownTotal;
+  if (total === undefined) {
+    const countRow = await db
+      .prepare(`SELECT COUNT(*) AS cnt FROM bounty_submissions WHERE bounty_id = ?`)
+      .bind(bountyId)
+      .first<{ cnt: number }>();
+    total = countRow?.cnt ?? 0;
+  }
 
   const pageRows = await db
     .prepare(
@@ -451,7 +460,7 @@ export async function listSubmissionsForBounty(
 
   return {
     submissions: (pageRows.results ?? []).map(rowToSubmission),
-    total: countRow?.cnt ?? 0,
+    total,
   };
 }
 

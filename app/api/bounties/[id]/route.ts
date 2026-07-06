@@ -53,7 +53,8 @@ export async function GET(
     db,
     bounty.id,
     20,
-    0
+    0,
+    bounty.submissionCount
   );
 
   // Winner block — populated whenever the bounty has acceptedAt (i.e. on

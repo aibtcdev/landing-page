@@ -82,7 +82,11 @@ export async function GET(request: NextRequest) {
     },
     {
       headers: {
-        "Cache-Control": "public, max-age=60, s-maxage=60",
+        // 5 min. The active set is derived from an unbounded full-scan GROUP BY
+        // over the swaps table (getActiveTokenIds), so cache-misses are the
+        // expensive path; the set only shifts as agents trade new tokens, which
+        // is slow, so a longer TTL cuts scan frequency ~5x with no real staleness.
+        "Cache-Control": "public, max-age=300, s-maxage=300",
       },
     }
   );

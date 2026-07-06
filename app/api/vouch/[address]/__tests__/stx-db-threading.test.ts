@@ -30,11 +30,17 @@ vi.mock("@/lib/name-generator", () => ({
   generateName: vi.fn().mockReturnValue("MockAgent"),
 }));
 
+vi.mock("@/lib/cache", () => ({
+  getCachedAgentList: vi.fn(),
+}));
+
 // ---- imports after mocks ----------------------------------------------------
 
 import { GET } from "../route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
+import { getVouchIndex } from "@/lib/vouch";
+import { getCachedAgentList } from "@/lib/cache";
 
 // ---- fixtures ---------------------------------------------------------------
 
@@ -114,6 +120,55 @@ describe("vouch/[address] GET — STX address db threading (PR #788)", () => {
     expect(response.status).toBe(404);
     // Confirm db was still passed (fail-closed path, not the pre-fix silent null path)
     expect(lookupAgent).toHaveBeenCalledWith(mockKv, TEST_STX, mockDb);
+  });
+
+  it("resolves referees from the cached agent list in one read, not one kv.get per referee (cost)", async () => {
+    const mockKv = buildMockKv();
+    const mockDb = buildMockDb();
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: { VERIFIED_AGENTS: mockKv, DB: mockDb },
+    });
+    (lookupAgent as Mock).mockResolvedValue(makeAgentRecord());
+    (getVouchIndex as Mock).mockResolvedValue({
+      refereeAddresses: ["bc1qreferee1", "bc1qreferee2"],
+    });
+    (getCachedAgentList as Mock).mockResolvedValue({
+      agents: [
+        { btcAddress: "bc1qreferee1", displayName: "Referee One", verifiedAt: "2026-02-01T00:00:00.000Z" },
+        // bc1qreferee2 intentionally absent → falls back to generated name.
+      ],
+      stats: { total: 1, genesisCount: 0, messageCount: 0 },
+    });
+
+    const request = new NextRequest(`http://localhost/api/vouch/${TEST_STX}`);
+    const response = await GET(request, { params: Promise.resolve({ address: TEST_STX }) });
+
+    expect(response.status).toBe(200);
+    // Single batched read regardless of referee count — no N+1.
+    expect(getCachedAgentList).toHaveBeenCalledTimes(1);
+    const body = (await response.json()) as {
+      vouchedFor: { agents: { btcAddress: string; displayName: string; registeredAt: string | null }[] };
+    };
+    expect(body.vouchedFor.agents).toEqual([
+      { btcAddress: "bc1qreferee1", displayName: "Referee One", registeredAt: "2026-02-01T00:00:00.000Z" },
+      { btcAddress: "bc1qreferee2", displayName: "MockAgent", registeredAt: null },
+    ]);
+  });
+
+  it("does not read the cached agent list when the agent has vouched for nobody (cost)", async () => {
+    const mockKv = buildMockKv();
+    const mockDb = buildMockDb();
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: { VERIFIED_AGENTS: mockKv, DB: mockDb },
+    });
+    (lookupAgent as Mock).mockResolvedValue(makeAgentRecord());
+    (getVouchIndex as Mock).mockResolvedValue(null); // no referees
+
+    const request = new NextRequest(`http://localhost/api/vouch/${TEST_STX}`);
+    const response = await GET(request, { params: Promise.resolve({ address: TEST_STX }) });
+
+    expect(response.status).toBe(200);
+    expect(getCachedAgentList).not.toHaveBeenCalled();
   });
 
   it("accepts ST... testnet addresses (ST prefix fix)", async () => {

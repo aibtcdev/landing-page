@@ -11,7 +11,11 @@
   "compatibility_flags": ["nodejs_compat"],
 
   "triggers": {
-    "crons": ["*/15 * * * *"]
+    // Every 30 min. Earnings (30-min cadence) runs on each tick; the hourly
+    // tasks (Tenero / competition / Legion) are gated by their own lastRunAt so
+    // they run every other tick. Widened from */15 once Legion was gated to
+    // hourly — nothing needs a 15-min tick anymore (cost: 2x fewer wakeups).
+    "crons": ["*/30 * * * *"]
   },
 
   "vars": {
