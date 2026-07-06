@@ -73,6 +73,7 @@ vi.mock("@/lib/cache", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({
+  createNoopLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, child() { return this; } }),
   createLogger: () => mocks.logger,
   createConsoleLogger: () => mocks.logger,
   isLogsRPC: () => false,

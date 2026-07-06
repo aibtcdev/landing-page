@@ -19,7 +19,7 @@
  * coalesce to zero/null as appropriate for their response shape.
  */
 
-import type { Logger } from "@/lib/logging";
+import { type Logger, createNoopLogger } from "@/lib/logging";
 
 /** Shape returned by `getSwapStats`; matches the `agent_swap_stats` columns. */
 export interface SwapStatsRow {
@@ -66,7 +66,7 @@ export async function recordSwapInsert(
   stxAddress: string,
   burnBlockTime: number,
   txStatus: string,
-  logger?: Logger
+  logger: Logger = createNoopLogger()
 ): Promise<void> {
   const verifiedDelta = txStatus === "success" ? 1 : 0;
   const updatedAt = new Date().toISOString();
@@ -96,17 +96,10 @@ export async function recordSwapInsert(
     // the caller, and the next successful recordSwapInsert for this
     // sender will reconcile via the ON CONFLICT branch. The fallback
     // path in countSwapsFromD1 also surfaces the drift if it persists.
-    if (logger) {
-      logger.warn("agent_swap_stats.record_failed", {
-        stxAddress,
-        error: (e as Error).message,
-      });
-    } else {
-      // eslint-disable-next-line no-console
-      console.warn(
-        `[agent-swap-stats] recordSwapInsert failed for ${stxAddress}: ${(e as Error).message}`
-      );
-    }
+    logger.warn("agent_swap_stats.record_failed", {
+      stxAddress,
+      error: (e as Error).message,
+    });
   }
 }
 

@@ -206,16 +206,19 @@ describe("updateAgentInD1", () => {
 
   it("swallows D1 errors and logs a warning (KV is source-of-truth in P3A)", async () => {
     const { db, throwOnNextRun, runs } = makeMockDb();
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // #551: the warning now goes through the injected Logger, not console.
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
 
     throwOnNextRun(new Error("FOREIGN KEY constraint failed"));
 
     // Must not throw to the caller even though the underlying D1 op rejected.
-    await expect(updateAgentInD1(db, makeAgent())).resolves.toBeUndefined();
+    await expect(updateAgentInD1(db, makeAgent(), logger)).resolves.toBeUndefined();
     expect(runs).toHaveLength(1);
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("FOREIGN KEY constraint failed")
+    expect(logger.warn).toHaveBeenCalledWith(
+      "updateAgentInD1 failed",
+      expect.objectContaining({
+        error: expect.stringContaining("FOREIGN KEY constraint failed"),
+      })
     );
-    warnSpy.mockRestore();
   });
 });

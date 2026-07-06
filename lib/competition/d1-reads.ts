@@ -15,6 +15,8 @@
  * See: docs/rfc-d1-schema.md `### `swaps``
  */
 
+import { type Logger, createNoopLogger } from "@/lib/logging";
+
 /**
  * A single row from swaps mapped to the API response shape.
  * Field names mirror the migration (sender, token_in, etc.) — not the
@@ -276,7 +278,8 @@ export async function listSwapsFromD1(
  */
 export async function countSwapsFromD1(
   db: D1Database,
-  stxAddress: string
+  stxAddress: string,
+  logger: Logger = createNoopLogger()
 ): Promise<number> {
   // P3B PR 2: was `SELECT COUNT(*) FROM swaps WHERE sender = ?1`
   // (textbook D1 COUNT(*) anti-pattern — pay-per-row-scanned).
@@ -300,10 +303,10 @@ export async function countSwapsFromD1(
     .first<{ cnt: number }>();
   const count = fallback?.cnt ?? 0;
   if (count > 0) {
-    // eslint-disable-next-line no-console
-    console.warn(
-      `[agent-swap-stats] miss for sender ${stxAddress} fell back to COUNT(*) and found ${count} — possible un-backfilled or stale stats row`
-    );
+    logger.warn("agent_swap_stats.miss_fell_back_to_count", {
+      stxAddress,
+      count,
+    });
   }
   return count;
 }

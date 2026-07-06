@@ -13,6 +13,7 @@ import {
   mapRowToAgentRecord,
 } from "@/lib/cache/agent-profile";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
+import { createNoopLogger, type Logger } from "@/lib/logging";
 
 /**
  * Look up an agent by BTC, STX, or taproot address.
@@ -29,7 +30,8 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 export async function lookupAgent(
   kv: KVNamespace,
   address: string,
-  db?: D1Database
+  db?: D1Database,
+  logger: Logger = createNoopLogger()
 ): Promise<AgentRecord | null> {
   // Taproot addresses (bc1p...) use a reverse index
   if (address.startsWith("bc1p")) {
@@ -40,7 +42,10 @@ export async function lookupAgent(
     try {
       return JSON.parse(data) as AgentRecord;
     } catch (e) {
-      console.error(`Failed to parse agent record for taproot ${address}:`, e);
+      logger.error("Failed to parse agent record for taproot address", {
+        address,
+        error: String(e),
+      });
       return null;
     }
   }
@@ -49,7 +54,7 @@ export async function lookupAgent(
   if (address.startsWith("SP") || address.startsWith("SM") || address.startsWith("ST")) {
     try {
       if (!db) {
-        console.error(
+        logger.error(
           "lookupAgent: D1 binding (DB) unavailable for STX lookup; returning null (fail-closed)",
           { stxAddress: address }
         );
@@ -58,7 +63,7 @@ export async function lookupAgent(
       const row = await lookupProfileByStxAddress(db, address);
       return row ? mapRowToAgentRecord(row) : null;
     } catch (d1Err) {
-      console.error("lookupAgent: D1 STX lookup failed; returning null (fail-closed)", {
+      logger.error("lookupAgent: D1 STX lookup failed; returning null (fail-closed)", {
         stxAddress: address,
         error: String(d1Err),
       });
@@ -72,7 +77,10 @@ export async function lookupAgent(
   try {
     return JSON.parse(btcData) as AgentRecord;
   } catch (e) {
-    console.error(`Failed to parse agent record for address ${address}:`, e);
+    logger.error("Failed to parse agent record for address", {
+      address,
+      error: String(e),
+    });
     return null;
   }
 }
@@ -117,7 +125,8 @@ export async function lookupAgentWithLevel(
   kv: KVNamespace,
   address: string,
   minLevel: number = 0,
-  db?: D1Database
+  db?: D1Database,
+  logger: Logger = createNoopLogger()
 ): Promise<LookupWithLevelSuccess | LookupWithLevelError> {
   // Determine address prefix
   const prefix =
@@ -158,7 +167,7 @@ export async function lookupAgentWithLevel(
     // STX path: D1 lookup — fail-closed on D1 error or missing binding.
     try {
       if (!db) {
-        console.error(
+        logger.error(
           "lookupAgentWithLevel: D1 binding (DB) unavailable for STX lookup; returning not-found (fail-closed)",
           { stxAddress: address }
         );
@@ -170,7 +179,7 @@ export async function lookupAgentWithLevel(
       }
       agent = mapRowToAgentRecord(row);
     } catch (d1Err) {
-      console.error(
+      logger.error(
         "lookupAgentWithLevel: D1 STX lookup failed; returning not-found (fail-closed)",
         { stxAddress: address, error: String(d1Err) }
       );

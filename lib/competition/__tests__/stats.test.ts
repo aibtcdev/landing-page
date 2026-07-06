@@ -117,14 +117,17 @@ describe("recordSwapInsert", () => {
     const { db } = createMockD1({
       runError: new Error("FOREIGN KEY constraint failed"),
     });
-    const warnSpy = vi.spyOn(console, "warn").mockImplementation(() => {});
+    // #551: the warning now goes through the injected Logger, not console.
+    const logger = { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() };
     await expect(
-      recordSwapInsert(db, STX_ADDRESS, BURN_BLOCK_TIME, "success")
+      recordSwapInsert(db, STX_ADDRESS, BURN_BLOCK_TIME, "success", logger)
     ).resolves.toBeUndefined();
-    expect(warnSpy).toHaveBeenCalledWith(
-      expect.stringContaining("[agent-swap-stats]")
+    expect(logger.warn).toHaveBeenCalledWith(
+      "agent_swap_stats.record_failed",
+      expect.objectContaining({
+        error: expect.stringContaining("FOREIGN KEY constraint failed"),
+      })
     );
-    warnSpy.mockRestore();
   });
 });
 

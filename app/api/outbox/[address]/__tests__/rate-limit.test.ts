@@ -39,6 +39,7 @@ vi.mock("@/lib/inbox", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({
+  createNoopLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, child() { return this; } }),
   isLogsRPC: vi.fn(() => false),
   createConsoleLogger: vi.fn(() => ({
     info: vi.fn(),

@@ -27,6 +27,7 @@ import { computeRoundResults } from "@/lib/competition/finalize/compute";
 import { persistRoundResults } from "@/lib/competition/finalize/persist";
 import { captureRoundPriceSnapshot } from "@/lib/competition/finalize/snapshot";
 import { getCachedTokenPrices } from "@/lib/external/tenero/kv-cache";
+import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 
 // ── D1 row types (mirroring competition_rounds columns) ───────────────────────
 
@@ -76,8 +77,13 @@ export async function GET(request: NextRequest) {
   const denied = await requireAdmin(request);
   if (denied) return denied;
 
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
-    const { env } = await getCloudflareContext();
     const db = env.DB as D1Database;
 
     const roundsResult = await db
@@ -104,7 +110,7 @@ export async function GET(request: NextRequest) {
       rounds,
     });
   } catch (e) {
-    console.error("competition/finalize GET error:", e);
+    logger.error("competition/finalize GET error", { error: String(e) });
     return NextResponse.json(
       { error: `Failed to list rounds: ${(e as Error).message}` },
       { status: 500 }
@@ -167,8 +173,13 @@ export async function POST(request: NextRequest) {
   const { searchParams } = new URL(request.url);
   const dryRun = searchParams.get("dry-run") === "true";
 
+  const { env, ctx } = await getCloudflareContext();
+  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
+  const logger = isLogsRPC(env.LOGS)
+    ? createLogger(env.LOGS, ctx, { rayId, path: new URL(request.url).pathname })
+    : createConsoleLogger({ rayId, path: new URL(request.url).pathname });
+
   try {
-    const { env } = await getCloudflareContext();
     const db = env.DB as D1Database;
     const kv = env.VERIFIED_AGENTS as KVNamespace;
 
@@ -429,7 +440,7 @@ export async function POST(request: NextRequest) {
     const httpStatus = mapErrorToStatus(message);
 
     if (httpStatus === 500) {
-      console.error("competition/finalize POST error:", e);
+      logger.error("competition/finalize POST error", { error: String(e) });
     }
 
     return NextResponse.json(

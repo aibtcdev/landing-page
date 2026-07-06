@@ -48,6 +48,7 @@ vi.mock("@/lib/bitcoin-verify", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({
+  createNoopLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, child() { return this; } }),
   createLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
   createConsoleLogger: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
   isLogsRPC: () => false,

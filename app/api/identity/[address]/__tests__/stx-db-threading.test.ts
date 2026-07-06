@@ -43,6 +43,7 @@ vi.mock("@/lib/identity/constants", () => ({
 }));
 
 vi.mock("@/lib/logging", () => ({
+  createNoopLogger: () => ({ debug: () => {}, info: () => {}, warn: () => {}, error: () => {}, child() { return this; } }),
   createLogger: vi.fn().mockReturnValue({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
   createConsoleLogger: vi.fn().mockReturnValue({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }),
   isLogsRPC: vi.fn().mockReturnValue(false),

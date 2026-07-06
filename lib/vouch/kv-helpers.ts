@@ -5,6 +5,7 @@
 import { KV_PREFIXES } from "./constants";
 import { generateClaimCode } from "@/lib/claim-code";
 import type { VouchRecord, VouchAgentIndex, ReferralCodeRecord } from "./types";
+import { createNoopLogger, type Logger } from "@/lib/logging";
 
 /**
  * Build KV key for a vouch record.
@@ -26,7 +27,8 @@ function buildAgentIndexKey(btcAddress: string): string {
 export async function getVouchRecord(
   kv: KVNamespace,
   referrerBtc: string,
-  refereeBtc: string
+  refereeBtc: string,
+  logger: Logger = createNoopLogger()
 ): Promise<VouchRecord | null> {
   const key = buildVouchKey(referrerBtc, refereeBtc);
   const data = await kv.get(key);
@@ -34,7 +36,7 @@ export async function getVouchRecord(
   try {
     return JSON.parse(data) as VouchRecord;
   } catch (e) {
-    console.error(`Failed to parse vouch record ${key}:`, e);
+    logger.error("Failed to parse vouch record", { key, error: String(e) });
     return null;
   }
 }
@@ -82,7 +84,8 @@ export async function storeVouch(
  */
 export async function getVouchIndex(
   kv: KVNamespace,
-  btcAddress: string
+  btcAddress: string,
+  logger: Logger = createNoopLogger()
 ): Promise<VouchAgentIndex | null> {
   const key = buildAgentIndexKey(btcAddress);
   const data = await kv.get(key);
@@ -90,7 +93,7 @@ export async function getVouchIndex(
   try {
     return JSON.parse(data) as VouchAgentIndex;
   } catch (e) {
-    console.error(`Failed to parse vouch index ${key}:`, e);
+    logger.error("Failed to parse vouch index", { key, error: String(e) });
     return null;
   }
 }
@@ -154,14 +157,15 @@ export async function storeReferralCode(
  */
 export async function getReferralCode(
   kv: KVNamespace,
-  btcAddress: string
+  btcAddress: string,
+  logger: Logger = createNoopLogger()
 ): Promise<ReferralCodeRecord | null> {
   const data = await kv.get(buildReferralCodeKey(btcAddress));
   if (!data) return null;
   try {
     return JSON.parse(data) as ReferralCodeRecord;
   } catch (e) {
-    console.error(`Failed to parse referral code for ${btcAddress}:`, e);
+    logger.error("Failed to parse referral code", { btcAddress, error: String(e) });
     return null;
   }
 }
