@@ -3,6 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { generateName } from "@/lib/name-generator";
 import { getVouchIndex, MAX_REFERRALS } from "@/lib/vouch";
+import { getCachedAgentList } from "@/lib/cache";
 
 /** Lightweight address format check — must look like a BTC or STX address. */
 function isValidAddressFormat(address: string): boolean {
@@ -76,17 +77,29 @@ export async function GET(
     const totalCount = allReferees.length;
     const paginatedReferees = allReferees.slice(offset, offset + limit);
 
-    const vouchedForAgents = await Promise.all(
-      paginatedReferees.map(async (refereeBtc) => {
-        const referee = await lookupAgent(kv, refereeBtc);
+    // Resolve referee display info from the cached agent list (1 KV read + O(1)
+    // Map lookups) instead of one kv.get(`btc:`) per referee (N+1, up to `limit`
+    // reads). A referee not yet in the snapshot falls back to a generated name —
+    // the same fallback the prior per-key lookup used when the record was missing.
+    // Skip the cache read entirely when the agent has vouched for nobody (the
+    // common case) — no referees to resolve.
+    let vouchedForAgents: {
+      btcAddress: string;
+      displayName: string;
+      registeredAt: string | null;
+    }[] = [];
+    if (paginatedReferees.length > 0) {
+      const { agents: cachedAgents } = await getCachedAgentList(kv);
+      const agentByBtc = new Map(cachedAgents.map((a) => [a.btcAddress, a]));
+      vouchedForAgents = paginatedReferees.map((refereeBtc) => {
+        const referee = agentByBtc.get(refereeBtc);
         return {
           btcAddress: refereeBtc,
-          displayName:
-            referee?.displayName || generateName(refereeBtc),
+          displayName: referee?.displayName || generateName(refereeBtc),
           registeredAt: referee?.verifiedAt || null,
         };
-      })
-    );
+      });
+    }
 
     return NextResponse.json(
       {

@@ -15,6 +15,7 @@ import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import {
   CHECK_IN_MESSAGE_FORMAT,
   CHECK_IN_RATE_LIMIT_SECONDS,
+  HEARTBEAT_KV_WRITE_COALESCE_MS,
   buildCheckInMessage,
   validateCheckInBody,
   type HeartbeatOrientation,
@@ -499,15 +500,28 @@ export async function POST(request: NextRequest) {
       await updateAgentInD1(db, updatedAgent, logger);
     }
 
-    // Write canonical btc: key only; stx: secondary index is no longer
-    // refreshed by heartbeat (P4.2 — drops ~30–40K KV writes/day).
-    // Other writers (vouch / register / identity / challenge / verify) still
-    // refresh stx:, so the secondary index does not stop being updated — just
-    // not on every 5-min check-in. Identical JSON across both sides per
-    // inventory, so this is data-lossless.
-    // Phase 2.5 Step 4 — unreadCount served from D1 live SELECT COUNT(*).
+    // Coalesce the canonical btc: KV write (cost). On a check-in the ONLY
+    // fields that change are lastActiveAt/lastCheckInAt, and D1 (written above)
+    // is the source of truth for every aggregate consumer (agents list /
+    // activity / leaderboard all rebuild from D1). The KV btc: record only
+    // backs direct single-agent lookups, which don't need sub-hour lastActiveAt
+    // freshness. `agent` was read from the KV btc: record above, so its
+    // lastActiveAt is the currently-stored KV value — skip the write while that
+    // value is recent, cutting the highest-volume heartbeat write ~12x (from
+    // once/5min to ~once/hour per agent). A first-ever or unparseable timestamp
+    // forces the write.
+    // (stx: secondary index is not refreshed by heartbeat since P4.2; other
+    // writers keep it current.)
+    const prevActiveMs = agent.lastActiveAt ? Date.parse(agent.lastActiveAt) : NaN;
+    const kvWriteNeeded =
+      !Number.isFinite(prevActiveMs) ||
+      Date.now() - prevActiveMs >= HEARTBEAT_KV_WRITE_COALESCE_MS;
+
+    // Phase 2.5 Step 4 — unreadCount served from D1 maintained counter.
     const [, unreadCount, openBounties] = await Promise.all([
-      kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent)),
+      kvWriteNeeded
+        ? kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent))
+        : Promise.resolve(),
       fetchUnreadCount(db, btcAddress),
       fetchOpenBounties(db),
     ]);

@@ -45,3 +45,16 @@ export const CHECK_IN_TIMESTAMP_WINDOW_MS = 5 * 60 * 1000;
  * the binding's `period` value.
  */
 export const CHECK_IN_RATE_LIMIT_SECONDS = 60;
+
+/**
+ * Coalescing window for the canonical `btc:` KV write on check-in (cost).
+ *
+ * Heartbeat writes the agent record to KV once per check-in, but the only
+ * fields that change are lastActiveAt/lastCheckInAt, and D1 (written every
+ * check-in) is the source of truth for all aggregate consumers. The KV record
+ * only backs direct single-agent lookups, which tolerate ~1h staleness on the
+ * activity timestamp. Skipping the KV write while the stored timestamp is
+ * younger than this window cuts the highest-volume heartbeat write ~12x
+ * (once/5min → ~once/hour per agent).
+ */
+export const HEARTBEAT_KV_WRITE_COALESCE_MS = 60 * 60 * 1000;

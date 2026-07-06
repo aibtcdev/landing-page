@@ -78,6 +78,7 @@ vi.mock("@/lib/name-generator", () => ({
 vi.mock("@/lib/heartbeat", () => ({
   CHECK_IN_MESSAGE_FORMAT: "AIBTC Check-In | {timestamp}",
   CHECK_IN_RATE_LIMIT_SECONDS: 60,
+  HEARTBEAT_KV_WRITE_COALESCE_MS: 60 * 60 * 1000,
   buildCheckInMessage: vi.fn().mockReturnValue("AIBTC Check-In | 2026-01-01T00:00:00.000Z"),
   validateCheckInBody: vi.fn().mockReturnValue({ data: {} }),
 }));
@@ -373,6 +374,56 @@ describe("heartbeat POST — D1 update failure does NOT 500 (P3A: KV-source-of-t
     // Response payload still includes the timestamp the caller submitted.
     const body = (await response.json()) as { checkIn: { lastCheckInAt: string } };
     expect(body.checkIn.lastCheckInAt).toBe(TEST_TIMESTAMP);
+  });
+});
+
+describe("heartbeat POST — btc: KV write coalescing (cost)", () => {
+  function contextWith(mockKv: KVNamespace, db: unknown) {
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: mockKv,
+        DB: db,
+        RATE_LIMIT_CHECKIN: {
+          limit: vi.fn().mockResolvedValue({ success: true }),
+        } as unknown as RateLimit,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+  }
+
+  it("skips the btc: KV write when stored lastActiveAt is recent (D1 still written)", async () => {
+    const mockKv = buildMockKv();
+    const mock = buildMockD1();
+    const recent = new Date(Date.now() - 60_000).toISOString(); // 1 min ago
+    (lookupAgentWithLevel as Mock).mockResolvedValue({
+      ...buildSuccessAgent(),
+      agent: { ...buildSuccessAgent().agent, lastActiveAt: recent },
+    });
+    contextWith(mockKv, mock.db);
+
+    const response = await POST(buildPostRequest());
+
+    expect(response.status).toBe(200);
+    // D1 remains the source of truth — always written.
+    expect(mock.run).toHaveBeenCalled();
+    // The redundant KV write is coalesced away.
+    expect(mockKv.put).not.toHaveBeenCalled();
+  });
+
+  it("writes the btc: KV record when stored lastActiveAt is stale", async () => {
+    const mockKv = buildMockKv();
+    const mock = buildMockD1();
+    const stale = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString(); // 2h ago
+    (lookupAgentWithLevel as Mock).mockResolvedValue({
+      ...buildSuccessAgent(),
+      agent: { ...buildSuccessAgent().agent, lastActiveAt: stale },
+    });
+    contextWith(mockKv, mock.db);
+
+    const response = await POST(buildPostRequest());
+
+    expect(response.status).toBe(200);
+    expect(mockKv.put).toHaveBeenCalled();
   });
 });
 

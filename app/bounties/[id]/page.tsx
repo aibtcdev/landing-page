@@ -34,7 +34,7 @@ async function fetchBountyDetail(id: string): Promise<BountyDetailData | null> {
 
     const now = new Date();
     const status = bountyStatus(bounty, now);
-    const { submissions, total } = await listSubmissionsForBounty(db, id, 20, 0);
+    const { submissions, total } = await listSubmissionsForBounty(db, id, 20, 0, bounty.submissionCount);
 
     let winner: BountyWinner | undefined;
     if (bounty.acceptedSubmissionId && bounty.acceptedAt) {
