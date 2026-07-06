@@ -71,21 +71,26 @@ describe("isValidTokenId", () => {
 });
 
 describe("getActiveTokenIds", () => {
-  it("falls back to STATIC_TOKEN_IDS when no DB binding is provided", async () => {
+  it("falls back to STATIC_TOKEN_IDS (not degraded) when no DB binding is provided", async () => {
     const result = await getActiveTokenIds(undefined);
-    expect(result).toEqual(STATIC_TOKEN_IDS);
+    expect(result.tokenIds).toEqual(STATIC_TOKEN_IDS);
+    // Missing binding is an expected env condition, not a failure worth alerting.
+    expect(result.degraded).toBe(false);
   });
 
-  it("falls back to STATIC_TOKEN_IDS when the D1 query throws", async () => {
+  it("falls back to STATIC_TOKEN_IDS AND flags degraded when the D1 query throws", async () => {
     const db = createFakeDb({ throws: true });
     const result = await getActiveTokenIds(db);
-    expect(result).toEqual(STATIC_TOKEN_IDS);
+    expect(result.tokenIds).toEqual(STATIC_TOKEN_IDS);
+    // #1025: a real DB failure must be observable, not masked as low activity.
+    expect(result.degraded).toBe(true);
   });
 
-  it("returns just the static core when the swaps table is empty", async () => {
+  it("returns just the static core (not degraded) when the swaps table is empty", async () => {
     const db = createFakeDb({ rows: [] });
     const result = await getActiveTokenIds(db);
-    expect(result).toEqual(STATIC_TOKEN_IDS);
+    expect(result.tokenIds).toEqual(STATIC_TOKEN_IDS);
+    expect(result.degraded).toBe(false);
   });
 
   it("unions dynamic rows with the static core, preserving static-first order", async () => {
@@ -97,14 +102,15 @@ describe("getActiveTokenIds", () => {
     });
     const result = await getActiveTokenIds(db);
     // Static core first, then dynamic entries in the order D1 returned them.
-    expect(result.slice(0, STATIC_TOKEN_IDS.length)).toEqual(STATIC_TOKEN_IDS);
-    expect(result).toContain(
+    expect(result.tokenIds.slice(0, STATIC_TOKEN_IDS.length)).toEqual(STATIC_TOKEN_IDS);
+    expect(result.tokenIds).toContain(
       "SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M.usda-token::usda"
     );
-    expect(result).toContain(
+    expect(result.tokenIds).toContain(
       "SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR.aeusdc-token::aeusdc"
     );
-    expect(result.length).toBe(STATIC_TOKEN_IDS.length + 2);
+    expect(result.tokenIds.length).toBe(STATIC_TOKEN_IDS.length + 2);
+    expect(result.degraded).toBe(false);
   });
 
   it("deduplicates when a dynamic row repeats a static core entry", async () => {
@@ -116,8 +122,10 @@ describe("getActiveTokenIds", () => {
     });
     const result = await getActiveTokenIds(db);
     // No duplicates — static-core entries are NOT re-added.
-    expect(result.length).toBe(STATIC_TOKEN_IDS.length);
-    expect(result).toEqual(STATIC_TOKEN_IDS);
+    expect(result.tokenIds.length).toBe(STATIC_TOKEN_IDS.length);
+    expect(result.tokenIds).toEqual(STATIC_TOKEN_IDS);
+    // Full dedup into the core is a legitimate result, not a DB failure.
+    expect(result.degraded).toBe(false);
   });
 
   it("filters out malformed token ids from the dynamic set", async () => {
@@ -131,13 +139,14 @@ describe("getActiveTokenIds", () => {
     });
     const result = await getActiveTokenIds(db);
     // Only `SPABCDE…real-token::real` should join the static core.
-    expect(result).toContain(
+    expect(result.tokenIds).toContain(
       "SPQC38PW542EQJ5M11CR25P7BS1CA6QT4TBXGB3M.real-token::real"
     );
-    expect(result).not.toContain("unknown");
-    expect(result).not.toContain("");
-    expect(result).not.toContain("STX");
-    expect(result.length).toBe(STATIC_TOKEN_IDS.length + 1);
+    expect(result.tokenIds).not.toContain("unknown");
+    expect(result.tokenIds).not.toContain("");
+    expect(result.tokenIds).not.toContain("STX");
+    expect(result.tokenIds.length).toBe(STATIC_TOKEN_IDS.length + 1);
+    expect(result.degraded).toBe(false);
   });
 
   it("uses the MAX_TRACKED_TOKENS bound when calling prepare().bind()", async () => {

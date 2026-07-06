@@ -1,11 +1,12 @@
 /**
- * Token-id source for the SchedulerDO's Tenero price-refresh task.
+ * Token-id source for the cron Tenero price-refresh task
+ * (`lib/scheduler/cron-runner.ts`; the former SchedulerDO was removed).
  *
  * Two sources, in priority order:
  *
  *   1. STATIC_TOKEN_IDS — a small always-include core set (STX + sBTC + stSTX).
  *      Acts as a safe fallback when the swaps table is empty (cold start) or
- *      D1 query fails, so the SchedulerDO can still keep popular tokens warm.
+ *      D1 query fails, so the refresh task can still keep popular tokens warm.
  *
  *   2. Distinct token_in / token_out from the `swaps` table, restricted to
  *      successful agent/cron swaps, junk-filtered (no `"unknown"`, must match
@@ -31,7 +32,7 @@ export const STATIC_TOKEN_IDS: readonly string[] = [
 ];
 
 /**
- * Maximum number of distinct tokens to refresh per SchedulerDO tick. Bounds
+ * Maximum number of distinct tokens to refresh per cron tick. Bounds
  * the Tenero quota cost so a memecoin-trading spree can't blow the monthly
  * budget. At 50 tokens × 12 ticks/hr × 24 × 30 ≈ 432k requests/month — fine
  * once authenticated; the unauthenticated tier (50k/month) would burst the
@@ -62,20 +63,39 @@ interface TrackedTokenRow {
 }
 
 /**
+ * Result of {@link getActiveTokenIds}. `degraded` distinguishes a real D1 query
+ * failure (fell back to the static core, and callers should log/alert) from a
+ * legitimate result that simply resolved to the static core (empty swaps table,
+ * or every dynamic id deduped into the core). Without this flag the two are
+ * byte-identical, which silently masked DB failures as normal low activity
+ * (issue #1025).
+ *
+ * A missing D1 binding is NOT degraded — it's an expected condition in local
+ * dev / preview-without-DB, not a failure worth alerting on.
+ */
+export interface ActiveTokenIdsResult {
+  tokenIds: readonly string[];
+  degraded: boolean;
+}
+
+/**
  * Derive the active token-refresh set from the swaps table. Returns the union
  * of STATIC_TOKEN_IDS (always-include core) and the top-{MAX_TRACKED_TOKENS}
  * tokens by trade count from successful agent/cron swaps, deduplicated.
  *
  * Falls back to STATIC_TOKEN_IDS on:
- *   - missing D1 binding (local dev, preview without DB)
- *   - D1 query failure (transient DB issue shouldn't blow the refresh)
+ *   - missing D1 binding (local dev, preview without DB) — `degraded: false`
+ *   - D1 query failure (transient DB issue shouldn't blow the refresh) —
+ *     `degraded: true` so the caller can surface the degradation
  *
- * Pure async function — no logging, no side effects. Caller wires logging.
+ * Pure async function — no logging, no side effects. The caller inspects
+ * `degraded` and wires logging/alerting. Driven by the cron price-refresh task
+ * (`lib/scheduler/cron-runner.ts`) and read by `/api/competition/tracked-tokens`.
  */
 export async function getActiveTokenIds(
   db: D1Database | undefined
-): Promise<readonly string[]> {
-  if (!db) return STATIC_TOKEN_IDS;
+): Promise<ActiveTokenIdsResult> {
+  if (!db) return { tokenIds: STATIC_TOKEN_IDS, degraded: false };
 
   let dynamic: string[] = [];
   try {
@@ -108,12 +128,14 @@ export async function getActiveTokenIds(
       .map((r) => r.id)
       .filter((id): id is string => typeof id === "string" && isValidTokenId(id));
   } catch {
-    return STATIC_TOKEN_IDS;
+    // Real DB failure — flag it so the caller can log/alert rather than
+    // silently degrading the refresh set to the 3-token core.
+    return { tokenIds: STATIC_TOKEN_IDS, degraded: true };
   }
 
   // Union with the static core. Set semantics; preserve insertion order
   // (static first, then dynamic) so the static tokens lead the refresh loop
   // and stay warm even if the loop is cut short by rate-limiting mid-run.
   const merged = new Set<string>([...STATIC_TOKEN_IDS, ...dynamic]);
-  return Array.from(merged);
+  return { tokenIds: Array.from(merged), degraded: false };
 }

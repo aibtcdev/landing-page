@@ -171,8 +171,14 @@ export async function runTeneroNow(
     };
   }
 
-  const tokenIds = await getActiveTokenIds(env.DB);
-  logger.info("tenero.token_set_resolved", { count: tokenIds.length });
+  const { tokenIds, degraded } = await getActiveTokenIds(env.DB);
+  if (degraded) {
+    // D1 lookup failed and we fell back to the 3-token static core. Surface it
+    // as an error (#1025) — otherwise the shrunken refresh set is invisible and
+    // every non-core token's price silently goes stale.
+    logger.error("tenero.token_set_d1_failed", { count: tokenIds.length });
+  }
+  logger.info("tenero.token_set_resolved", { count: tokenIds.length, degraded });
 
   const { result, rateLimited, rateLimitBackoffMs } = await runTeneroTask({
     logger,
