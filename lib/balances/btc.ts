@@ -3,22 +3,24 @@
  * Stacks). Used on the agent profile page; non-critical, so failures on
  * either side degrade to 0 rather than throwing.
  *
- * Caching: the L1 leg (mempool.space) is genuinely public and off-quota, so
- * it stays uncached. The L2 leg hits Hiro's `/balances` under the shared
- * HIRO_API_KEY, which IS metered — and the profile page is SSR'd on every
- * view (crawlers/OG bots included), so an uncached L2 call is one metered
- * Hiro request per hit. `fetchL2Sats` therefore reads/writes a short-TTL KV
- * cache when a namespace is supplied, collapsing repeat views of the same
- * profile into one upstream call. Balances change slowly relative to crawler
+ * Caching: BOTH legs make an external call on every profile SSR (which runs
+ * on every view, crawlers/OG bots included), so both are cached when a KV
+ * namespace is supplied. The L2 leg hits Hiro's `/balances` under the shared
+ * HIRO_API_KEY (metered against quota); the L1 leg hits mempool.space, which
+ * is public but rate-limited — an uncached call per hit risks throttling and
+ * adds an avoidable round-trip. `fetchL1Sats` / `fetchL2Sats` therefore each
+ * read/write a short-TTL KV cache, collapsing repeat views of the same profile
+ * into one upstream call per leg. Balances change slowly relative to crawler
  * cadence, so a ~90s TTL is a good staleness/quota trade.
  */
 
 import { SBTC_CONTRACTS } from "@/lib/inbox/constants";
 import { STACKS_API_BASE } from "@/lib/identity/constants";
 
-/** KV key prefix + TTL for the L2 (sBTC) balance cache. */
+/** KV key prefixes + shared TTL for the balance caches (one key per leg). */
+const L1_BALANCE_CACHE_PREFIX = "cache:btc-balance:";
 const L2_BALANCE_CACHE_PREFIX = "cache:sbtc-balance:";
-const L2_BALANCE_CACHE_TTL_SECONDS = 90;
+const BALANCE_CACHE_TTL_SECONDS = 90;
 
 export interface BtcBalance {
   /** Native L1 BTC balance in satoshis. 0 if fetch failed or address has no history. */
@@ -51,9 +53,19 @@ function parseSatsString(raw: string): number {
   return big > ceiling ? Number.MAX_SAFE_INTEGER : Number(big);
 }
 
-async function fetchL1Sats(btcAddress: string): Promise<number> {
+async function fetchL1Sats(btcAddress: string, kv?: KVNamespace): Promise<number> {
+  const cacheKey = `${L1_BALANCE_CACHE_PREFIX}${btcAddress}`;
+
+  // Cache hit: one KV read replaces a rate-limited mempool.space call.
+  if (kv) {
+    const cached = await kv.get(cacheKey);
+    if (cached !== null) return parseSatsString(cached);
+  }
+
   const url = `https://mempool.space/api/address/${btcAddress}`;
   const res = await fetch(url, { headers: { Accept: "application/json" } });
+  // Only cache authoritative answers — a transient failure returns 0 uncached
+  // so the next view retries.
   if (!res.ok) return 0;
   // mempool.space returns funded_txo_sum / spent_txo_sum as JSON numbers.
   // JSON.parse loses precision past 2^53 silently, so re-narrow with BigInt
@@ -68,7 +80,19 @@ async function fetchL1Sats(btcAddress: string): Promise<number> {
     typeof fundedRaw === "number" && Number.isFinite(fundedRaw) ? fundedRaw : 0;
   const spent =
     typeof spentRaw === "number" && Number.isFinite(spentRaw) ? spentRaw : 0;
-  return Math.max(0, funded - spent);
+  const sats = Math.max(0, funded - spent);
+
+  if (kv) {
+    // Best-effort write — a cache-write failure must never fail the read.
+    try {
+      await kv.put(cacheKey, String(sats), {
+        expirationTtl: BALANCE_CACHE_TTL_SECONDS,
+      });
+    } catch {
+      // ignore: the balance is still returned; only the cache write was lost.
+    }
+  }
+  return sats;
 }
 
 async function fetchL2Sats(
@@ -105,7 +129,7 @@ async function fetchL2Sats(
     // Best-effort write — a cache-write failure must never fail the read.
     try {
       await kv.put(cacheKey, String(sats), {
-        expirationTtl: L2_BALANCE_CACHE_TTL_SECONDS,
+        expirationTtl: BALANCE_CACHE_TTL_SECONDS,
       });
     } catch {
       // ignore: the balance is still returned; only the cache write was lost.
@@ -121,7 +145,7 @@ export async function fetchBtcBalance(
   kv?: KVNamespace
 ): Promise<BtcBalance> {
   const [l1, l2] = await Promise.allSettled([
-    fetchL1Sats(btcAddress),
+    fetchL1Sats(btcAddress, kv),
     fetchL2Sats(stxAddress, hiroApiKey, kv),
   ]);
   return {
