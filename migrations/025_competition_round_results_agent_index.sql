@@ -1,0 +1,22 @@
+-- Migration 025: per-agent index on competition_round_results.
+--
+-- getLatestFinalizedRoundResultForAgent (lib/competition/finalize/read.ts) and
+-- getRoundResultForAgent filter competition_round_results by stx_address alone:
+--
+--   SELECT ... FROM competition_round_results crr
+--   JOIN competition_rounds cr ON cr.round_id = crr.round_id
+--   WHERE crr.stx_address = ?1 AND cr.status IN (...)
+--   ORDER BY cr.starts_at DESC LIMIT 1
+--
+-- Migration 017 gives this table only two indexes — the PK (round_id,
+-- stx_address) and idx_competition_round_results_rank (round_id, rank) — both
+-- of which LEAD with round_id. A filter on stx_address with no round_id can use
+-- neither, so SQLite full-scans competition_round_results. The table gains one
+-- row per eligible agent per finalized round, so that scan cost grows linearly
+-- and permanently with every weekly round.
+--
+-- This is on the /api/competition/status read path (the endpoint agents poll
+-- for standings, edge cache only s-maxage=10), so most distinct-address
+-- requests reach D1. Leading on stx_address turns the scan into a point-seek.
+CREATE INDEX IF NOT EXISTS idx_competition_round_results_agent
+  ON competition_round_results(stx_address);
