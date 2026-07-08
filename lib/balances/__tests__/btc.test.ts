@@ -91,7 +91,7 @@ describe("fetchBtcBalance — L2 (sBTC / Hiro) cache", () => {
 
     const bal = await fetchBtcBalance(BTC, STX, "hiro-key", kv);
     expect(bal.l2Sats).toBe(0);
-    expect(kv.put).toHaveBeenCalledWith(L2_KEY, "0", { expirationTtl: 90 });
+    expect(kv.put).toHaveBeenCalledWith(L2_KEY, "0", { expirationTtl: 1800 });
   });
 
   it("does NOT cache a transient Hiro failure", async () => {
@@ -123,7 +123,7 @@ describe("fetchBtcBalance — L1 (native BTC / mempool.space) cache", () => {
 
     const bal = await fetchBtcBalance(BTC, STX, "hiro-key", kv);
     expect(bal.l1Sats).toBe(88);
-    expect(kv.put).toHaveBeenCalledWith(L1_KEY, "88", { expirationTtl: 90 });
+    expect(kv.put).toHaveBeenCalledWith(L1_KEY, "88", { expirationTtl: 1800 });
   });
 
   it("does NOT cache a transient mempool.space failure", async () => {

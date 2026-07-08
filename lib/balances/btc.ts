@@ -11,7 +11,7 @@
  * adds an avoidable round-trip. `fetchL1Sats` / `fetchL2Sats` therefore each
  * read/write a short-TTL KV cache, collapsing repeat views of the same profile
  * into one upstream call per leg. Balances change slowly relative to crawler
- * cadence, so a ~90s TTL is a good staleness/quota trade.
+ * cadence, so a 30-minute TTL is a good staleness/quota trade.
  */
 
 import { SBTC_CONTRACTS } from "@/lib/inbox/constants";
@@ -20,7 +20,7 @@ import { STACKS_API_BASE } from "@/lib/identity/constants";
 /** KV key prefixes + shared TTL for the balance caches (one key per leg). */
 const L1_BALANCE_CACHE_PREFIX = "cache:btc-balance:";
 const L2_BALANCE_CACHE_PREFIX = "cache:sbtc-balance:";
-const BALANCE_CACHE_TTL_SECONDS = 90;
+const BALANCE_CACHE_TTL_SECONDS = 30 * 60; // 30 minutes
 
 export interface BtcBalance {
   /** Native L1 BTC balance in satoshis. 0 if fetch failed or address has no history. */
