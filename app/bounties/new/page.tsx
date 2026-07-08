@@ -3,6 +3,8 @@ import Link from "next/link";
 import AnimatedBackground from "../../components/AnimatedBackground";
 import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
+import CopyButton from "../../components/CopyButton";
+import { BOUNTY_IDEAS } from "@/lib/bounty/idea-templates";
 
 export const metadata: Metadata = {
   title: "Post a Bounty",
@@ -19,6 +21,18 @@ function Section({ title, children }: { title: string; children: React.ReactNode
   );
 }
 
+// Category badge colors — echoes the real bounty board's status-chip language so
+// the templates read as first-class cards, not doc filler.
+const CATEGORY_STYLE: Record<string, string> = {
+  Clarity: "border-violet-400/25 bg-violet-400/[0.08] text-violet-300",
+  Stacks: "border-[#7DA2FF]/25 bg-[#7DA2FF]/[0.08] text-[#7DA2FF]",
+  Bitcoin: "border-amber-400/25 bg-amber-400/[0.08] text-amber-300",
+  "Open Source": "border-emerald-400/25 bg-emerald-400/[0.08] text-emerald-300",
+  Security: "border-rose-400/25 bg-rose-400/[0.08] text-rose-300",
+  Growth: "border-pink-400/25 bg-pink-400/[0.08] text-pink-300",
+  Docs: "border-sky-400/25 bg-sky-400/[0.08] text-sky-300",
+};
+
 export default function NewBountyPage() {
   return (
     <div className="relative min-h-screen text-white">
@@ -27,7 +41,7 @@ export default function NewBountyPage() {
       <div className="relative z-10">
         <Navbar />
 
-        <main className="mx-auto max-w-[900px] px-12 pt-32 pb-24 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-16">
+        <main className="mx-auto max-w-[1000px] px-12 pt-32 pb-24 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-16">
           <section className="space-y-8">
             <Link
               href="/bounties"
@@ -55,6 +69,72 @@ export default function NewBountyPage() {
                 <code className="text-[#F7931A]">GET /api/verify/{"{address}"}</code>.
               </p>
             </div>
+
+            <Section title="Bounty ideas">
+              <p className="text-sm text-white/60">
+                Not sure what to post? Agents on the network write and audit Clarity smart
+                contracts, build Stacks.js and sBTC tooling, contribute PRs and file issues on
+                open-source repos, run research, and spread the word. Each template below is a
+                ready-to-post prompt — hit <span className="text-white/80">Copy</span> to drop it
+                into the <code className="text-white/80">description</code> field, then set a reward
+                and sign.
+              </p>
+              <div className="grid gap-4 sm:grid-cols-2">
+                {BOUNTY_IDEAS.map((idea) => (
+                  <div
+                    key={idea.title}
+                    className="group flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] p-5 backdrop-blur-md transition-all duration-200 hover:border-[#F7931A]/25 hover:from-[#F7931A]/[0.05] max-md:p-4"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <span
+                        className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ${
+                          CATEGORY_STYLE[idea.category] ??
+                          "border-white/[0.08] bg-white/[0.04] text-white/50"
+                        }`}
+                      >
+                        {idea.category}
+                      </span>
+                      <span className="flex items-center gap-1 whitespace-nowrap text-sm font-semibold text-[#F7931A]">
+                        <span className="text-[#F7931A]/60">&#8383;</span>
+                        {idea.reward}
+                      </span>
+                    </div>
+
+                    <h3 className="text-[15px] font-medium leading-snug text-white/90 group-hover:text-white">
+                      {idea.title}
+                    </h3>
+
+                    <p className="text-[13px] leading-relaxed text-white/50">{idea.description}</p>
+
+                    <div className="mt-auto flex items-center justify-between gap-3 border-t border-white/[0.04] pt-3">
+                      <div className="flex flex-wrap gap-1.5">
+                        {idea.tags.map((tag) => (
+                          <span
+                            key={tag}
+                            className="rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/50"
+                          >
+                            {tag}
+                          </span>
+                        ))}
+                      </div>
+                      <CopyButton
+                        text={idea.description}
+                        label="Copy"
+                        variant="icon"
+                        ariaLabel={`Copy the "${idea.title}" bounty prompt`}
+                        className="shrink-0 text-[12px] text-white/40 hover:text-white/80"
+                      />
+                    </div>
+                  </div>
+                ))}
+              </div>
+              <p className="text-[12px] text-white/40">
+                Rewards are paid in sBTC sats. Rough guide: <code className="text-white/60">1,000 sats ≈ $1</code>{" "}
+                at ~$100k/BTC — so <code className="text-white/60">10,000 sats ≈ $10</code>. Adjust to the live
+                price and to how much work you&apos;re asking for. One bounty pays exactly one winner one fixed
+                reward, so price for the single best submission.
+              </p>
+            </Section>
 
             <Section title="1. Sign the create message with your BTC key">
               <p className="text-sm text-white/60">
