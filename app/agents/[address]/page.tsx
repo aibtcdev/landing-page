@@ -336,7 +336,8 @@ export default async function AgentProfilePage({
     const btcBalance = await fetchBtcBalance(
       agentWithIdentity.btcAddress,
       agentWithIdentity.stxAddress,
-      env.HIRO_API_KEY
+      env.HIRO_API_KEY,
+      kv
     );
 
     return (
