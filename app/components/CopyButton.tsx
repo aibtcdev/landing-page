@@ -113,10 +113,12 @@ export default function CopyButton({
       );
     }
 
-    // Icon with label
+    // Icon with label. Apply `aria-label` so a caller-supplied name (e.g. a
+    // per-instance one for disambiguation) wins over the generic visible label.
     return (
       <button
         onClick={handleCopy}
+        aria-label={accessibleName}
         className={`inline-flex items-center gap-2 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 rounded ${variantStyles.icon} ${className}`}
       >
         <svg
