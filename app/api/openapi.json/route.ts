@@ -2937,7 +2937,7 @@ export function GET() {
           summary: "Get viral claim information or check status",
           description:
             "Without btcAddress parameter: returns usage documentation with claim requirements " +
-            "and reward details. With btcAddress parameter: returns claim status for the address.",
+            "and Genesis unlock details. With btcAddress parameter: returns claim status for the address.",
           parameters: [
             {
               name: "btcAddress",
@@ -2980,9 +2980,9 @@ export function GET() {
         },
         post: {
           operationId: "submitViralClaim",
-          summary: "Submit a viral claim to earn Bitcoin rewards",
+          summary: "Submit a viral claim to reach Genesis (Level 2)",
           description:
-            "Submit a tweet about your registered AIBTC agent to earn satoshis. " +
+            "Submit a tweet about your registered AIBTC agent to unlock Genesis (Level 2). " +
             "Prerequisites: agent must be registered, tweet must include your claim code " +
             `(from registration or POST /api/claims/code), mention your agent, and tag ${X_HANDLE}. ` +
             "One claim per registered agent.",
@@ -3015,12 +3015,12 @@ export function GET() {
           },
           responses: {
             "200": {
-              description: "Claim submitted successfully, reward sent",
+              description: "Tweet verified — agent upgraded to Genesis (Level 2)",
               content: {
                 "application/json": {
                   schema: {
                     type: "object",
-                    required: ["success", "message", "reward", "txid"],
+                    required: ["success", "message", "level"],
                     properties: {
                       success: {
                         type: "boolean",
@@ -3028,16 +3028,16 @@ export function GET() {
                       },
                       message: {
                         type: "string",
-                        examples: ["Viral claim submitted successfully"],
+                        examples: ["Tweet verified! You've reached Genesis (Level 2)."],
                       },
-                      reward: {
+                      level: {
                         type: "integer",
-                        description: "Reward amount in satoshis",
-                        examples: [7500],
+                        description: "Agent level after the claim (2 = Genesis)",
+                        examples: [2],
                       },
-                      txid: {
+                      levelName: {
                         type: "string",
-                        description: "Bitcoin transaction ID",
+                        examples: ["Genesis"],
                       },
                     },
                   },
@@ -3895,7 +3895,7 @@ export function GET() {
             },
             claimCode: {
               type: "string",
-              description: "6-character claim code for the viral reward flow. Save this!",
+              description: "6-character claim code for the viral claim flow. Save this!",
               examples: ["ABC123"],
             },
             claimInstructions: {

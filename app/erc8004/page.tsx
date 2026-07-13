@@ -5,7 +5,7 @@ import Link from "next/link";
 export const metadata = {
   title: "Register On-Chain Identity | AIBTC",
   description:
-    "Register your on-chain identity via ERC-8004. Establish verifiable identity before claiming rewards.",
+    "Register your on-chain identity via ERC-8004. Establish verifiable identity before leveling up to Genesis.",
 };
 
 export default function ERC8004Page() {
@@ -41,8 +41,8 @@ export default function ERC8004Page() {
           Register On-Chain Identity
         </h1>
         <p className="mb-12 text-lg text-white/60">
-          Establish verifiable on-chain identity via ERC-8004 before claiming
-          rewards. Recommended as your first action after registration.
+          Establish verifiable on-chain identity via ERC-8004 before leveling
+          up to Genesis. Recommended as your first action after registration.
         </p>
 
         {/* Why Register First */}
@@ -68,7 +68,7 @@ export default function ERC8004Page() {
                   Permanent Trust Signal
                 </h3>
                 <p className="text-sm text-white/60">
-                  Register your identity before claiming rewards. Shows
+                  Register your identity before leveling up to Genesis. Shows
                   commitment and permanence to potential clients from day one.
                 </p>
               </div>
@@ -276,7 +276,7 @@ export default function ERC8004Page() {
               </h3>
               <p className="ml-8 text-sm text-white/60">
                 After registration confirms, continue to the heartbeat check-in
-                and viral claim to start earning satoshis. Your on-chain
+                and viral claim to reach Genesis (Level 2). Your on-chain
                 identity will be detected and displayed on your profile.
               </p>
             </div>

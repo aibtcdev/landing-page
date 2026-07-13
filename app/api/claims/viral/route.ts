@@ -14,13 +14,6 @@ import {
   type Logger,
 } from "@/lib/logging";
 
-const MIN_REWARD_SATS = 5000;
-const MAX_REWARD_SATS = 10000;
-
-function getRandomReward(): number {
-  return Math.floor(Math.random() * (MAX_REWARD_SATS - MIN_REWARD_SATS + 1)) + MIN_REWARD_SATS;
-}
-
 function normalizeTweetUrl(
   url: string,
   logger: Logger = createNoopLogger()
@@ -134,29 +127,16 @@ export async function POST(request: NextRequest) {
     if (existingClaim) {
       const claim = JSON.parse(existingClaim) as ClaimRecord;
 
-      if (claim.status === "rewarded") {
+      if (claim.status === "rewarded" || claim.status === "verified" || claim.status === "pending") {
         return NextResponse.json({
           claimed: true,
-          message: "Reward already sent!",
+          eligible: false,
+          message: "Claim already submitted — you're at Genesis (Level 2).",
           claim: {
             displayName: claim.displayName,
-            rewardSatoshis: claim.rewardSatoshis,
-            rewardTxid: claim.rewardTxid,
-            claimedAt: claim.claimedAt,
-            status: claim.status,
-          },
-        });
-      }
-
-      if (claim.status === "verified" || claim.status === "pending") {
-        return NextResponse.json({
-          eligible: true,
-          message: "Claim already submitted. Reward will be sent shortly.",
-          claim: {
-            displayName: claim.displayName,
-            rewardSatoshis: claim.rewardSatoshis,
             status: claim.status,
             tweetUrl: claim.tweetUrl,
+            claimedAt: claim.claimedAt,
           },
         });
       }
@@ -242,14 +222,13 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const rewardAmount = getRandomReward();
     const claimRecord: ClaimRecord = {
       btcAddress,
       displayName,
       tweetUrl: normalizedUrl,
       tweetAuthor: ownerHandle,
       claimedAt: new Date().toISOString(),
-      rewardSatoshis: rewardAmount,
+      rewardSatoshis: 0,
       rewardTxid: null,
       status: "verified",
     };
@@ -280,14 +259,13 @@ export async function POST(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      eligible: true,
-      message: "Tweet verified! Your reward will be sent shortly.",
+      eligible: false,
+      message: "Tweet verified! You've reached Genesis (Level 2).",
       claim: {
         displayName,
         btcAddress,
         tweetUrl: normalizedUrl,
         tweetAuthor: ownerHandle,
-        rewardSatoshis: rewardAmount,
         status: "verified",
       },
       level: 2,
@@ -325,14 +303,13 @@ export async function GET(request: NextRequest) {
   if (!btcAddress) {
     return NextResponse.json({
       endpoint: "/api/claims/viral",
-      description: "Viral claim system: tweet about your AIBTC agent to earn a Bitcoin reward.",
+      description: "Viral claim system: tweet about your AIBTC agent to unlock Genesis (Level 2).",
       methods: {
         GET: {
           description: "Check claim status for an agent. Pass btcAddress as query parameter.",
           example: "GET /api/claims/viral?btcAddress=bc1q...",
           responseFields: {
-            claimed: "true if a claim has been submitted (pending, verified, or rewarded)",
-            rewarded: "true if the Bitcoin reward has been paid out",
+            claimed: "true if a claim has been submitted (pending or verified)",
             eligible: "true if the agent can submit a new claim",
             claim: "Claim details (only present if a claim exists)",
           },
@@ -354,13 +331,13 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      rewardInfo: "Genesis badge + vouching + trading competition eligibility + leaderboard bonus",
+      unlocks: "Genesis badge + vouching + trading competition eligibility + leaderboard bonus",
       documentation: {
         registerFirst: "https://aibtc.com/api/register",
         fullDocs: "https://aibtc.com/llms-full.txt",
       },
       nextStep: {
-        title: "After Claiming Your Viral Reward",
+        title: "After Reaching Genesis (Level 2)",
         description: "Continue earning through projects.",
         heartbeat: {
           endpoint: "POST /api/heartbeat",
@@ -413,17 +390,13 @@ export async function GET(request: NextRequest) {
 
     const claim = JSON.parse(claimData) as ClaimRecord;
     const isClaimed = claim.status === "verified" || claim.status === "rewarded" || claim.status === "pending";
-    const isRewarded = claim.status === "rewarded";
 
     return NextResponse.json({
       claimed: isClaimed,
-      rewarded: isRewarded,
       eligible: !isClaimed,
       claim: {
         displayName: claim.displayName,
         status: claim.status,
-        rewardSatoshis: claim.rewardSatoshis,
-        rewardTxid: claim.rewardTxid,
         tweetUrl: claim.tweetUrl,
         tweetAuthor: claim.tweetAuthor,
         claimedAt: claim.claimedAt,
