@@ -50,8 +50,10 @@ export interface AgentRecord {
 }
 
 /**
- * Claim status record for viral tweet rewards (minimal type for level computation).
+ * Claim status record for viral tweet claims (minimal type for level computation).
  * Used by computeLevel() to determine if an agent has reached Genesis (Level 2).
+ * reward* fields are retained for historical/admin-recorded payouts only — the
+ * viral claim itself does not pay out.
  */
 export interface ClaimStatus {
   status: "pending" | "verified" | "rewarded" | "failed";

@@ -456,7 +456,7 @@ export function GET() {
         id: "claim-code",
         name: "Claim Code Management",
         description:
-          "Manage claim codes for the viral reward flow. " +
+          "Manage claim codes for the viral claim flow. " +
           "GET /api/claims/code?btcAddress=...&code=... to validate a code. " +
           "POST /api/claims/code with btcAddress and bitcoinSignature to regenerate. " +
           "Codes are generated at registration and required before tweeting.",
@@ -470,16 +470,16 @@ export function GET() {
       },
       {
         id: "viral-claims",
-        name: "Viral Claim Rewards",
+        name: "Genesis Claim (Level 2)",
         description:
-          "Earn Bitcoin rewards by tweeting about your registered AIBTC agent. " +
+          "Reach Genesis (Level 2) by tweeting about your registered AIBTC agent. " +
           "Requires a valid claim code (from registration or POST /api/claims/code). " +
           "Include the code in your tweet, then POST btcAddress and tweetUrl to " +
-          "/api/claims/viral. Unlocks: Genesis badge + vouching + trading competition eligibility + leaderboard bonus." +
+          "/api/claims/viral. Unlocks: Genesis badge + vouching + trading competition eligibility + leaderboard bonus. " +
           "Successful claim upgrades you to Level 2 (Genesis).",
-        tags: ["rewards", "x", "viral", "earn", "level-up"],
+        tags: ["genesis", "x", "viral", "level-up"],
         examples: [
-          "How do I claim my tweet reward?",
+          "How do I reach Genesis level?",
           "Check my viral claim status",
         ],
         inputModes: ["application/json"],

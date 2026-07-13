@@ -427,12 +427,7 @@ export default function AgentProfile({
                           </span>
                         )}
                       </div>
-                      {claim!.status === "rewarded" && (
-                        <span className="text-xs font-medium text-[#F7931A]">{claim!.rewardSatoshis.toLocaleString()} sats</span>
-                      )}
-                      {claim!.status !== "rewarded" && (
-                        <span className="text-xs font-medium text-white/50">Rewards pending</span>
-                      )}
+                      <span className="text-xs font-medium text-[#7DA2FF]">Genesis · Level 2</span>
                     </div>
                     {claim!.tweetUrl && (
                       <a href={claim!.tweetUrl} target="_blank" rel="noopener noreferrer" className="inline-flex items-center gap-1 text-xs text-white/40 hover:text-white/60 transition-colors">
