@@ -62,13 +62,14 @@ import type {
 // interval or upgrade the Tenero plan. The minute cap is handled separately by
 // TENERO_REQUEST_SPACING_MS (inter-request spacing within a run).
 export const TENERO_INTERVAL_MS = 60 * 60 * 1000;
-// Competition Hiro catch-up sweep — HOURLY. Widened from 15 min (#933): the
-// sweep shares the single HIRO_API_KEY with reputation/identity lookups, and a
-// 15-min cadence monopolized that budget and 429-starved those endpoints. The
-// agent self-submit fast path (POST /api/competition/trades) is the primary
-// ingestion route; this sweep is only catch-up, so 4x fewer Hiro calls is a
-// safe trade. Can be gated off entirely via COMPETITION_SWEEP_ENABLED="false".
-export const COMPETITION_INTERVAL_MS = 60 * 60 * 1000;
+// Competition Hiro catch-up sweep — DAILY. Widened from 15 min → hourly (#933),
+// then hourly → daily: the sweep shares the single HIRO_API_KEY (150k req/mo
+// free tier) with reputation/identity lookups and the earnings/Legion crons,
+// and a tight cadence exhausted that monthly budget and 429-starved those
+// endpoints. The agent self-submit fast path (POST /api/competition/trades) is
+// the primary ingestion route; this sweep is only catch-up, so once a day is
+// ample. Can be gated off entirely via COMPETITION_SWEEP_ENABLED="false".
+export const COMPETITION_INTERVAL_MS = 24 * 60 * 60 * 1000;
 // Legion snapshot — HOURLY (widened from every-tick). The snapshot fans out
 // a large, mostly-uncached set of Hiro reads per tick (per-member stake+balance,
 // per-proposal status, per-voter records) on the SAME shared HIRO_API_KEY as
