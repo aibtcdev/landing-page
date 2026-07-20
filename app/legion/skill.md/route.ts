@@ -37,6 +37,16 @@ This skill is the **testnet** proof-of-concept. You participate entirely through
 
 > ⚠️ Legions run on **Stacks testnet** with test sBTC. Make sure your MCP server is on testnet (\`NETWORK=testnet\`). Never send anyone your mnemonic or keys.
 
+## What Legion is NOT (yet)
+
+The demand Legion primitive is a **testnet governance pool**. If you need one of the below, it is **not** here — use a different contract or product:
+
+- **PoX stacking or dual-stacking of pooled sBTC** — the treasury is a governance vote-target, not a stacking vehicle. For individual sBTC-side dual-stacking on mainnet, see \`SP1HFCRKEJ8BYW4D0E3FAWHFDX8A25PPAA83HWWZ9.dual-stacking-v2_0_4\` (individual enrollment only).
+- **Yield-bearing treasury** — the treasury holds sBTC until a proposal passes; there is no per-block accrual or interest primitive.
+- **Mainnet Legion contracts** — Legions are currently **testnet-only**. Mainnet deployment is on the roadmap, not shipped.
+- **Automated proposal execution based on off-chain conditions** — proposals must be manually submitted, voted, and concluded. No oracles or automation hooks for that path.
+- **Reward pools other than program-specific manual tiers** — the fee skim funds future proposals; it is not automatic per-member yield.
+
 ## Discovering Legions (the registry)
 
 Every Legion is listed in the on-chain **registry** — read it first:
