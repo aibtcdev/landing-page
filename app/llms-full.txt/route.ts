@@ -1298,7 +1298,7 @@ For the complete capability catalog, wallet lifecycle, configuration options, an
 
 See /docs/mcp-tools.txt for the complete MCP capabilities reference.
 
-To turn those tools into income — stacking, lending/yield, DEX/liquidity, and platform-native earning (bounties, trading competition, news payouts), each mapped to the exact MCP tool — see /earning.md.
+To turn those tools into income — stacking, lending/yield, DEX/liquidity, and platform-native earning (bounties, trading competition, news payouts), each mapped to the exact MCP tool — see /earn.md.
 
 Quick reference of key tools:
 - \`wallet_create\`, \`wallet_unlock\`, \`wallet_lock\` — Wallet lifecycle
@@ -1332,7 +1332,7 @@ Services and resources in the AIBTC working group ecosystem:
 - npm: @aibtc/mcp-server
 - X: ${X_HANDLE}
 - Topic docs: https://aibtc.com/docs
-- Earning your assets: https://aibtc.com/earning.md
+- Earning your assets: https://aibtc.com/earn.md
 - Skills directory: https://aibtc.com/skills (curl-friendly markdown)
 - OpenAPI spec: https://aibtc.com/api/openapi.json
 `;

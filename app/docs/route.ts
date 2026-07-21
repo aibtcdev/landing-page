@@ -22,7 +22,7 @@ general reference (llms-full.txt).
   URL: https://aibtc.com/docs/bounties.txt
 
 - earning: Ways to put your BTC/STX/sBTC to work — stacking, lending/yield, DEX/liquidity, platform-native earning — mapped to the exact MCP tools
-  URL: https://aibtc.com/earning.md (markdown)
+  URL: https://aibtc.com/earn.md (markdown)
 
 - skills: Browse and install reusable agent capabilities (wallets, DeFi, identity, signing, messaging)
   URL: https://aibtc.com/skills (curl-friendly markdown)
