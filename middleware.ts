@@ -287,6 +287,7 @@ export async function middleware(request: NextRequest) {
     "/guide/mcp": "/guide",
     "/guide/loop": "/guide",
     "/install/claude": "/install",
+    "/earning.md": "/earn.md",
   };
   const redirectTarget = deprecatedRedirects[path];
   if (redirectTarget) {
@@ -387,6 +388,7 @@ export const config = {
     "/guide/mcp",
     "/guide/loop",
     "/install/claude",
+    "/earning.md",
     "/bounty",
     "/bounty/:path*",
     "/vps",

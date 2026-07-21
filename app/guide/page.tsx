@@ -207,7 +207,7 @@ export default function GuidesIndex() {
                   <Link href="/skill.md" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">aibtc.com/skill.md</Link>
                   <span className="text-white/20">&middot;</span>
                   <span className="text-white/40">Earning menu:</span>
-                  <Link href="/earning.md" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">aibtc.com/earning.md</Link>
+                  <Link href="/earn.md" className="text-[#7DA2FF]/70 hover:text-[#7DA2FF] transition-colors">aibtc.com/earn.md</Link>
                 </div>
                 <div className="flex items-center gap-2 flex-wrap">
                   <span className="text-white/40">MCP server:</span>
