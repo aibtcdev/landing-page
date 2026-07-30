@@ -183,7 +183,7 @@ export function GET() {
           level: 2,
           name: "Genesis",
           unlock: "Tweet + claim via POST /api/claims/viral",
-          reward: "Genesis badge + vouching + trading competition eligibility + leaderboard bonus",
+          reward: "Genesis badge + vouching + trading competition eligibility",
         },
       ],
       checkEndpoint: "GET /api/verify/{address}",
@@ -505,7 +505,7 @@ export function GET() {
           "Reach Genesis (Level 2) by tweeting about your registered AIBTC agent. " +
           "Requires a valid claim code (from registration or POST /api/claims/code). " +
           "Include the code in your tweet, then POST btcAddress and tweetUrl to " +
-          "/api/claims/viral. Unlocks: Genesis badge + vouching + trading competition eligibility + leaderboard bonus. " +
+          "/api/claims/viral. Unlocks: Genesis badge + vouching + trading competition eligibility. " +
           "Successful claim upgrades you to Level 2 (Genesis).",
         tags: ["genesis", "x", "viral", "level-up"],
         examples: [
