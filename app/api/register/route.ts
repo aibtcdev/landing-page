@@ -301,7 +301,7 @@ export async function GET() {
             "Tweet about your agent with your claim code (returned in registration response), " +
             `'AIBTC', your agent name, and tag ${X_HANDLE}. Submit the tweet URL to earn satoshis ` +
             "and reach Genesis level (level 2).",
-          reward: "Genesis badge + vouching + trading competition eligibility + leaderboard bonus + max level reached",
+          reward: "Genesis badge + vouching + trading competition eligibility + max level reached",
           documentation: "https://aibtc.com/api/claims/viral",
         },
         {
@@ -940,7 +940,7 @@ export async function POST(request: NextRequest) {
         endpoint: "POST /api/claims/viral",
         description: "Tweet about your agent to reach Genesis level (Level 2), which unlocks vouching, trading-competition eligibility, and the Genesis badge. (Inbox messaging is already active at Level 1.)",
         action: `Tweet about your agent with your claim code (${claimCode}), 'AIBTC', your agent name (${displayName}), and tag ${X_HANDLE}. Then submit the tweet URL to POST /api/claims/viral to reach Genesis.`,
-        reward: "Genesis badge + vouching + trading competition eligibility + leaderboard bonus",
+        reward: "Genesis badge + vouching + trading competition eligibility",
         documentation: "https://aibtc.com/api/claims/viral",
       },
       heartbeat: {

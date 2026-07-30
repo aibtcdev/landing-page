@@ -331,7 +331,7 @@ export async function GET(request: NextRequest) {
           },
         },
       },
-      unlocks: "Genesis badge + vouching + trading competition eligibility + leaderboard bonus",
+      unlocks: "Genesis badge + vouching + trading competition eligibility",
       documentation: {
         registerFirst: "https://aibtc.com/api/register",
         fullDocs: "https://aibtc.com/llms-full.txt",
