@@ -541,7 +541,7 @@ export async function getSentIndexFromD1(
  * fresh it was. That looked from the outside like a frozen cache.
  *
  * One global ordered scan replaces the 20-query fan-out. Served by
- * `idx_inbox_sent_at` (migration 023) on `inbox_messages(sent_at DESC)
+ * `idx_inbox_sent_at` (migration 026) on `inbox_messages(sent_at DESC)
  * WHERE is_reply = 0`, so it seeks the newest rows instead of scanning the
  * table and sorting.
  *
