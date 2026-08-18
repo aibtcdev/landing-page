@@ -12,31 +12,45 @@
  * returns live events. `db` is optional — when undefined the per-agent event
  * collection returns empty (fail-open; stats from the agent-list cache still
  * render correctly).
+ *
+ * Issue #1058: the message half of the feed is now a single global query
+ * instead of a fan-out over the top-20 most-recently-active recipients. See
+ * `buildActivityData` for why.
  */
 
 import type { InboxMessage } from "@/lib/inbox/types";
 import { INBOX_PRICE_SATS } from "@/lib/inbox/constants";
-import { getRecentInboxEventsFromD1 } from "@/lib/inbox/d1-reads";
+import { getRecentGlobalInboxEventsFromD1 } from "@/lib/inbox/d1-reads";
 import { getCachedAgentList } from "@/lib/cache";
 import type { ActivityEvent, ActivityResponse } from "@/app/components/activity-shared";
 
 const MAX_EVENTS = 40;
-const TOP_ACTIVE_AGENTS = 20;
 const ACTIVE_DAYS_THRESHOLD = 7;
+const REGISTRATION_WINDOW_DAYS = 30;
 
 /**
  * Assemble activity data using the shared agent-list cache.
  *
- * Uses getCachedAgentList() (single KV read on cache hit) instead of
- * an independent O(N) KV scan. Per-agent event detail fetches use D1
- * (`getRecentInboxEventsFromD1`) instead of the frozen-at-Step-4 KV index
- * reads — O(20) D1 queries each selecting up to 3 rows, rather than
- * O(20 * 1 KV + 20 * 3 KV). When `db` is undefined the event collection
- * falls back to empty (fail-open), but stats still render from the cache.
+ * Uses getCachedAgentList() (single KV read on cache hit) for stats and for
+ * resolving addresses to display names. Message events come from one global
+ * D1 query (`getRecentGlobalInboxEventsFromD1`).
+ *
+ * The previous shape collected messages by fanning out over the 20
+ * most-recently-active agents and reading each one's 3 newest inbound
+ * messages. That made the feed recipient-scoped: a message sent *to* a
+ * dormant agent (reactivation outreach, say) could never appear, because
+ * its recipient never made the top-20 cut. Reported as "the feed is frozen"
+ * (#1058), since a quiet stretch among the currently-active 20 pins the
+ * newest visible event in place while messages keep landing elsewhere.
+ * Taking the newest N messages network-wide removes both the blind spot and
+ * the 20-query fan-out.
+ *
+ * Registrations likewise come from the whole agent list within
+ * REGISTRATION_WINDOW_DAYS rather than from the top-20 slice.
  *
  * @param kv - VERIFIED_AGENTS KV namespace (agent-list cache layer)
  * @param db - D1 database binding for live inbox event reads (#746).
- *   Pass undefined to skip per-agent event collection (fail-open).
+ *   Pass undefined to skip message events (fail-open).
  */
 export async function buildActivityData(kv: KVNamespace, db?: D1Database): Promise<ActivityResponse> {
   // --- 1. Get agent data from the shared cache (single KV read on hit) ---
@@ -44,6 +58,7 @@ export async function buildActivityData(kv: KVNamespace, db?: D1Database): Promi
 
   const now = Date.now();
   const activeCutoff = now - ACTIVE_DAYS_THRESHOLD * 24 * 60 * 60 * 1000;
+  const registrationCutoff = now - REGISTRATION_WINDOW_DAYS * 24 * 60 * 60 * 1000;
 
   // Derive stats from cached agent list
   const activeAgents = cachedAgents.filter((agent) => {
@@ -56,76 +71,56 @@ export async function buildActivityData(kv: KVNamespace, db?: D1Database): Promi
   const totalMessages = agentStats.messageCount;
   const totalSatsTransacted = totalMessages * INBOX_PRICE_SATS;
 
-  // --- 2. Identify top 20 active agents for event collection ---
-  const sortedAgents = [...cachedAgents]
-    .filter((a) => a.lastActiveAt)
-    .sort((a, b) => {
-      const aTime = new Date(a.lastActiveAt!).getTime();
-      const bTime = new Date(b.lastActiveAt!).getTime();
-      return bTime - aTime;
-    })
-    .slice(0, TOP_ACTIVE_AGENTS);
-
-  // --- 3. Precompute agent lookup map for O(1) sender resolution ---
+  // --- 2. Address → agent maps for O(1) display-name resolution ---
+  // Senders are identified by STX address on the message row, recipients by
+  // BTC address. Both sides may be unregistered, hence the fallbacks below.
   const agentByStx = new Map(cachedAgents.map((a) => [a.stxAddress, a]));
+  const agentByBtc = new Map(cachedAgents.map((a) => [a.btcAddress, a]));
 
-  // --- 4. Collect events from top active agents ---
-  // O(TOP_ACTIVE_AGENTS) D1 queries, each selecting up to 3 rows.
-  // Replaces the two-step KV pattern (inbox:agent:{btcAddress} index read +
-  // per-message inbox:message:{id} reads) that served frozen-at-Step-4 data.
-  // When db is undefined, per-agent message events are empty (fail-open).
-  const eventPromises = sortedAgents.map(async (agent) => {
-    const agentEvents: ActivityEvent[] = [];
+  // --- 3. Message events: newest MAX_EVENTS network-wide, one D1 query ---
+  // Returns [] when db is undefined or on D1 error (fail-open).
+  const messages: InboxMessage[] = await getRecentGlobalInboxEventsFromD1(db, MAX_EVENTS);
 
-    // Fetch 3 most recent inbound messages for this agent from D1.
-    // Returns [] when db is undefined or on D1 error (fail-open).
-    const messages: InboxMessage[] = await getRecentInboxEventsFromD1(db, agent.btcAddress, 3);
+  const messageEvents: ActivityEvent[] = messages.map((message) => {
+    const senderAgent = agentByStx.get(message.fromAddress);
+    const recipientAgent = agentByBtc.get(message.toBtcAddress);
 
-    // Add message events
-    for (const message of messages) {
-      // Find sender agent for display name (O(1) Map lookup)
-      const senderAgent = agentByStx.get(message.fromAddress);
-
-      agentEvents.push({
-        type: "message",
-        timestamp: message.sentAt,
-        agent: {
-          btcAddress: senderAgent?.btcAddress || message.fromAddress,
-          displayName: senderAgent?.displayName || "Unknown Agent",
-        },
-        recipient: {
-          btcAddress: agent.btcAddress,
-          displayName: agent.displayName || agent.btcAddress,
-        },
-        paymentSatoshis: message.paymentSatoshis,
-        messagePreview: message.content.length > 80
-          ? message.content.slice(0, 80) + "…"
-          : message.content,
-        messageId: message.messageId,
-      });
-    }
-
-    // Add registration event (if agent recently verified)
-    const verifiedTime = new Date(agent.verifiedAt).getTime();
-    const daysSinceVerified = (now - verifiedTime) / (1000 * 60 * 60 * 24);
-    if (daysSinceVerified <= 30) {
-      agentEvents.push({
-        type: "registration",
-        timestamp: agent.verifiedAt,
-        agent: {
-          btcAddress: agent.btcAddress,
-          displayName: agent.displayName || agent.btcAddress,
-        },
-      });
-    }
-
-    return agentEvents;
+    return {
+      type: "message",
+      timestamp: message.sentAt,
+      agent: {
+        btcAddress: senderAgent?.btcAddress || message.fromAddress,
+        displayName: senderAgent?.displayName || "Unknown Agent",
+      },
+      recipient: {
+        btcAddress: message.toBtcAddress,
+        displayName: recipientAgent?.displayName || message.toBtcAddress,
+      },
+      paymentSatoshis: message.paymentSatoshis,
+      messagePreview: message.content.length > 80
+        ? message.content.slice(0, 80) + "…"
+        : message.content,
+      messageId: message.messageId,
+    };
   });
 
-  const allEvents = (await Promise.all(eventPromises)).flat();
+  // --- 4. Registration events: every agent verified in the last 30 days ---
+  const registrationEvents: ActivityEvent[] = cachedAgents
+    .filter((agent) => {
+      const verifiedTime = new Date(agent.verifiedAt).getTime();
+      return !Number.isNaN(verifiedTime) && verifiedTime >= registrationCutoff;
+    })
+    .map((agent) => ({
+      type: "registration" as const,
+      timestamp: agent.verifiedAt,
+      agent: {
+        btcAddress: agent.btcAddress,
+        displayName: agent.displayName || agent.btcAddress,
+      },
+    }));
 
   // Sort all events by timestamp descending, take top N
-  const sortedEvents = allEvents
+  const sortedEvents = [...messageEvents, ...registrationEvents]
     .sort((a, b) => {
       const aTime = new Date(a.timestamp).getTime();
       const bTime = new Date(b.timestamp).getTime();

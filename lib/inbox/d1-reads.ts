@@ -579,3 +579,51 @@ export async function getRecentInboxEventsFromD1(
     return [];
   }
 }
+
+/**
+ * Fetch the N most recent inbound messages across the whole network.
+ *
+ * Issue #1058: the activity feed used to fan out `getRecentInboxEventsFromD1`
+ * over the top-20 most-recently-active agents, which made it a
+ * "recent messages to currently-active recipients" feed rather than a network
+ * feed: a message sent to a dormant agent could never appear, no matter how
+ * fresh it was. That looked from the outside like a frozen cache.
+ *
+ * One global ordered scan replaces the 20-query fan-out. Served by
+ * `idx_inbox_sent_at` (migration 023) on `inbox_messages(sent_at DESC)
+ * WHERE is_reply = 0`, so it seeks the newest rows instead of scanning the
+ * table and sorting.
+ *
+ * Returns empty array when `db` is undefined or on D1 error (fail-open:
+ * the activity feed degrades to stats-only).
+ *
+ * SQL:
+ *   SELECT … FROM inbox_messages
+ *   WHERE is_reply = 0
+ *   ORDER BY sent_at DESC
+ *   LIMIT ?
+ */
+export async function getRecentGlobalInboxEventsFromD1(
+  db: D1Database | undefined,
+  limit: number
+): Promise<InboxMessage[]> {
+  if (!db) return [];
+  try {
+    const sql = `
+      SELECT
+        message_id, from_stx_address, to_btc_address, to_stx_address,
+        content, payment_txid, payment_satoshis, payment_status,
+        payment_id, receipt_id, recovered_via_txid, authenticated,
+        bitcoin_signature, sender_btc_address,
+        sent_at, read_at, replied_at, reply_to_message_id
+      FROM inbox_messages
+      WHERE is_reply = 0
+      ORDER BY sent_at DESC
+      LIMIT ?
+    `;
+    const result = await db.prepare(sql).bind(limit).all<D1InboxRow>();
+    return (result.results ?? []).map(rowToInboxMessage);
+  } catch {
+    return [];
+  }
+}
