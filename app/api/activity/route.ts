@@ -95,13 +95,17 @@ export async function GET(request: NextRequest) {
     return NextResponse.json({
       endpoint: "/api/activity",
       method: "GET",
-      description: "Get recent network activity across all agents. Returns events (messages, registrations) and aggregate statistics. Cached for 2 minutes.",
+      description: "Get recent network activity across all agents. Returns the newest events network-wide (paid inbox messages, registrations from the last 30 days) plus aggregate statistics. Cached for 2 minutes.",
       queryParameters: {
         docs: {
           type: "string",
           description: "Pass ?docs=1 to return this documentation payload instead of data",
           example: "?docs=1",
         },
+      },
+      unsupportedQueryParameters: {
+        description: "This endpoint takes no filtering or paging parameters. Anything other than ?docs=1 (address, btcAddress, agent, limit, ...) is ignored, and the full unfiltered feed is returned. For a single agent's messages use /api/inbox/:address.",
+        ignored: ["address", "btcAddress", "agent", "limit", "offset"],
       },
       responseFormat: {
         events: [
@@ -126,7 +130,7 @@ export async function GET(request: NextRequest) {
         },
       },
       cachingStrategy: {
-        description: "Response is cached in caches.default (the Cloudflare edge cache) for 2 minutes via s-maxage. Cache scope is per-colo, not global. Stats derived from shared agent-list cache (no independent O(N) scan). Only event detail fetches for top 20 active agents remain as targeted KV reads.",
+        description: "Response is cached in caches.default (the Cloudflare edge cache) for 2 minutes via s-maxage. Cache scope is per-colo, not global. Stats derived from shared agent-list cache (no independent O(N) scan). Message events come from a single indexed D1 query over the newest inbound messages network-wide.",
         ttl: RESPONSE_S_MAXAGE,
         sMaxAgeSeconds: RESPONSE_S_MAXAGE,
       },

@@ -532,28 +532,30 @@ export async function getSentIndexFromD1(
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch the N most recent inbound messages for an agent from D1.
+ * Fetch the N most recent inbound messages across the whole network.
  *
- * Phase 2.5 #746 — replaces the two-step KV pattern in lib/activity.ts:
- *   1. kv.get(`inbox:agent:${btcAddress}`)  → get messageIds array
- *   2. kv.get(`inbox:message:${id}`)        → fetch each message
+ * Issue #1058: the activity feed used to fan out a per-recipient query
+ * over the top-20 most-recently-active agents, which made it a
+ * "recent messages to currently-active recipients" feed rather than a network
+ * feed: a message sent to a dormant agent could never appear, no matter how
+ * fresh it was. That looked from the outside like a frozen cache.
  *
- * This consolidates into a single SELECT … ORDER BY sent_at DESC LIMIT ?.
- * The SQL path hits the `idx_inbox_to_btc_sent_at` partial index
- * (on `inbox_messages(to_btc_address, sent_at DESC) WHERE is_reply = 0`).
+ * One global ordered scan replaces the 20-query fan-out. Served by
+ * `idx_inbox_sent_at` (migration 023) on `inbox_messages(sent_at DESC)
+ * WHERE is_reply = 0`, so it seeks the newest rows instead of scanning the
+ * table and sorting.
  *
- * Returns empty array when `db` is undefined, no messages exist, or on D1
- * error (fail-open — activity feed gracefully degrades to no events).
+ * Returns empty array when `db` is undefined or on D1 error (fail-open:
+ * the activity feed degrades to stats-only).
  *
  * SQL:
  *   SELECT … FROM inbox_messages
- *   WHERE to_btc_address = ? AND is_reply = 0
+ *   WHERE is_reply = 0
  *   ORDER BY sent_at DESC
  *   LIMIT ?
  */
-export async function getRecentInboxEventsFromD1(
+export async function getRecentGlobalInboxEventsFromD1(
   db: D1Database | undefined,
-  btcAddress: string,
   limit: number
 ): Promise<InboxMessage[]> {
   if (!db) return [];
@@ -566,14 +568,11 @@ export async function getRecentInboxEventsFromD1(
         bitcoin_signature, sender_btc_address,
         sent_at, read_at, replied_at, reply_to_message_id
       FROM inbox_messages
-      WHERE to_btc_address = ? AND is_reply = 0
+      WHERE is_reply = 0
       ORDER BY sent_at DESC
       LIMIT ?
     `;
-    const result = await db
-      .prepare(sql)
-      .bind(btcAddress, limit)
-      .all<D1InboxRow>();
+    const result = await db.prepare(sql).bind(limit).all<D1InboxRow>();
     return (result.results ?? []).map(rowToInboxMessage);
   } catch {
     return [];

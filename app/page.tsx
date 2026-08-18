@@ -111,9 +111,9 @@ async function fetchHomeData() {
     }));
 
     // Build activity data for server-side rendering.
-    // buildActivityData() reads the warm agent-list cache for the top-agent
-    // set, then fans out to D1 via getRecentInboxEventsFromD1 (one indexed
-    // SELECT per agent on idx_inbox_to_btc_sent_at) — not an O(N) scan.
+    // buildActivityData() reads the warm agent-list cache for stats and
+    // display names, then runs one indexed D1 SELECT for the newest messages
+    // network-wide (idx_inbox_sent_at), not an O(N) scan.
     let activityData: ActivityResponse | undefined;
     try {
       activityData = await buildActivityData(kv, db);
