@@ -1,4 +1,4 @@
--- Migration 023: global activity-feed index on inbox_messages (issue #1058).
+-- Migration 026: global activity-feed index on inbox_messages (issue #1058).
 --
 -- /api/activity now takes the N newest inbound messages network-wide in one
 -- query instead of fanning out over the top-20 most-recently-active
