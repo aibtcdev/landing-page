@@ -532,58 +532,9 @@ export async function getSentIndexFromD1(
 // ---------------------------------------------------------------------------
 
 /**
- * Fetch the N most recent inbound messages for an agent from D1.
- *
- * Phase 2.5 #746 — replaces the two-step KV pattern in lib/activity.ts:
- *   1. kv.get(`inbox:agent:${btcAddress}`)  → get messageIds array
- *   2. kv.get(`inbox:message:${id}`)        → fetch each message
- *
- * This consolidates into a single SELECT … ORDER BY sent_at DESC LIMIT ?.
- * The SQL path hits the `idx_inbox_to_btc_sent_at` partial index
- * (on `inbox_messages(to_btc_address, sent_at DESC) WHERE is_reply = 0`).
- *
- * Returns empty array when `db` is undefined, no messages exist, or on D1
- * error (fail-open — activity feed gracefully degrades to no events).
- *
- * SQL:
- *   SELECT … FROM inbox_messages
- *   WHERE to_btc_address = ? AND is_reply = 0
- *   ORDER BY sent_at DESC
- *   LIMIT ?
- */
-export async function getRecentInboxEventsFromD1(
-  db: D1Database | undefined,
-  btcAddress: string,
-  limit: number
-): Promise<InboxMessage[]> {
-  if (!db) return [];
-  try {
-    const sql = `
-      SELECT
-        message_id, from_stx_address, to_btc_address, to_stx_address,
-        content, payment_txid, payment_satoshis, payment_status,
-        payment_id, receipt_id, recovered_via_txid, authenticated,
-        bitcoin_signature, sender_btc_address,
-        sent_at, read_at, replied_at, reply_to_message_id
-      FROM inbox_messages
-      WHERE to_btc_address = ? AND is_reply = 0
-      ORDER BY sent_at DESC
-      LIMIT ?
-    `;
-    const result = await db
-      .prepare(sql)
-      .bind(btcAddress, limit)
-      .all<D1InboxRow>();
-    return (result.results ?? []).map(rowToInboxMessage);
-  } catch {
-    return [];
-  }
-}
-
-/**
  * Fetch the N most recent inbound messages across the whole network.
  *
- * Issue #1058: the activity feed used to fan out `getRecentInboxEventsFromD1`
+ * Issue #1058: the activity feed used to fan out a per-recipient query
  * over the top-20 most-recently-active agents, which made it a
  * "recent messages to currently-active recipients" feed rather than a network
  * feed: a message sent to a dormant agent could never appear, no matter how

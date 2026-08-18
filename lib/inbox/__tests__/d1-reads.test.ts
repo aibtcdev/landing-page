@@ -30,7 +30,7 @@ import {
   getReplyForMessageFromD1,
   getAgentInboxFromD1,
   getSentIndexFromD1,
-  getRecentInboxEventsFromD1,
+  getRecentGlobalInboxEventsFromD1,
   checkRedeemedTxidInD1,
 } from "../d1-reads";
 
@@ -761,17 +761,17 @@ describe("getSentIndexFromD1", () => {
   });
 });
 
-// ── getRecentInboxEventsFromD1 (Phase 2.5 #746) ───────────────────────────────
+// ── getRecentGlobalInboxEventsFromD1 (activity feed, #1058) ────────────────
 
-describe("getRecentInboxEventsFromD1", () => {
+describe("getRecentGlobalInboxEventsFromD1", () => {
   it("returns empty array immediately when db is undefined (fail-open)", async () => {
-    const result = await getRecentInboxEventsFromD1(undefined, BTC_ADDRESS, 3);
+    const result = await getRecentGlobalInboxEventsFromD1(undefined, 40);
     expect(result).toEqual([]);
   });
 
-  it("returns InboxMessage[] for the agent when rows exist", async () => {
+  it("returns InboxMessage[] when rows exist", async () => {
     const db = createMockD1([INBOUND_ROW]);
-    const result = await getRecentInboxEventsFromD1(db, BTC_ADDRESS, 3);
+    const result = await getRecentGlobalInboxEventsFromD1(db, 40);
     expect(result).toHaveLength(1);
     expect(result[0].messageId).toBe(INBOUND_ROW.message_id);
     expect(result[0].content).toBe(INBOUND_ROW.content);
@@ -779,7 +779,7 @@ describe("getRecentInboxEventsFromD1", () => {
 
   it("returns empty array when no rows", async () => {
     const db = createMockD1([]);
-    const result = await getRecentInboxEventsFromD1(db, BTC_ADDRESS, 3);
+    const result = await getRecentGlobalInboxEventsFromD1(db, 40);
     expect(result).toEqual([]);
   });
 
@@ -788,27 +788,28 @@ describe("getRecentInboxEventsFromD1", () => {
       prepare: vi.fn().mockImplementation(() => { throw new Error("D1 unavailable"); }),
       batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
     } as unknown as D1Database;
-    const result = await getRecentInboxEventsFromD1(db, BTC_ADDRESS, 3);
+    const result = await getRecentGlobalInboxEventsFromD1(db, 40);
     expect(result).toEqual([]);
   });
 
-  it("SQL queries to_btc_address = ? AND is_reply = 0 ORDER BY sent_at DESC LIMIT ?", async () => {
+  it("SQL is unscoped by recipient: WHERE is_reply = 0 ORDER BY sent_at DESC LIMIT ?", async () => {
     const stmtMock = createPreparedStatement([INBOUND_ROW]);
     const db = {
       prepare: vi.fn().mockReturnValue(stmtMock),
       batch: vi.fn(), dump: vi.fn(), exec: vi.fn(),
     } as unknown as D1Database;
 
-    await getRecentInboxEventsFromD1(db, BTC_ADDRESS, 3);
+    await getRecentGlobalInboxEventsFromD1(db, 40);
     const sql: string = (db.prepare as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(sql).toContain("WHERE to_btc_address = ?");
-    expect(sql).toContain("AND is_reply = 0");
+    // The #1058 regression guard: no recipient predicate, so a message to a
+    // dormant agent is as visible as one to an active agent.
+    expect(sql).not.toContain("to_btc_address = ?");
+    expect(sql).toContain("WHERE is_reply = 0");
     expect(sql).toContain("ORDER BY sent_at DESC");
     expect(sql).toContain("LIMIT ?");
 
     const bindArgs: unknown[] = stmtMock.bind.mock.calls[0];
-    expect(bindArgs[0]).toBe(BTC_ADDRESS);
-    expect(bindArgs[1]).toBe(3); // limit
+    expect(bindArgs[0]).toBe(40); // limit is the only bound param
   });
 });
 
@@ -880,7 +881,7 @@ describe("cache-key invariants (structural verification)", () => {
     // Phase 2.5 #746 enrichment helpers (db is optional — fail-open when undefined)
     expect(getAgentInboxFromD1.length).toBe(2);       // (db, btcAddress)
     expect(getSentIndexFromD1.length).toBe(2);         // (db, btcAddress)
-    expect(getRecentInboxEventsFromD1.length).toBe(3); // (db, btcAddress, limit)
+    expect(getRecentGlobalInboxEventsFromD1.length).toBe(2); // (db, limit)
     // Phase 2.5 Step 4 double-redemption guard
     expect(checkRedeemedTxidInD1.length).toBe(2);      // (db, paymentTxid)
   });
