@@ -5,9 +5,10 @@ import Link from "next/link";
 import type { BountyDetailData } from "../types";
 import type { BountySubmission } from "@/lib/bounty";
 import {
-  statusStyle,
+  statusText,
   statusLabel,
   formatSats,
+  formatSatsFull,
   truncAddr,
   formatDate,
   formatDateOnly,
@@ -15,6 +16,7 @@ import {
 } from "../utils";
 import AgentBadge from "../AgentBadge";
 import BountyMarkdown from "../BountyMarkdown";
+import BitcoinMark from "../../components/BitcoinMark";
 
 function CheckIcon({ className = "size-3.5" }: { className?: string }) {
   return (
@@ -237,47 +239,57 @@ function BountyDetailView({
       {/* HEADER — reward sits top-right beside the status, above the title (highest
           in the hierarchy); submissions + deadline follow below. */}
       <div className="rounded-md border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] backdrop-blur-md p-5 max-md:p-4">
-        <div className="flex items-center justify-between gap-3">
-          <span
-            className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-[10px] font-semibold uppercase tracking-wider ${statusStyle(bounty.status)}`}
-          >
-            <span className="size-1.5 rounded-full bg-current" />
-            {statusLabel(bounty.status)}
-          </span>
-          <div className="flex items-baseline gap-1 text-base font-bold text-[#F7931A]">
-            <span className="text-[#F7931A]/60">&#8383;</span>
-            {formatSats(bounty.rewardSats)}
-            <span className="ml-1 text-[11px] font-medium uppercase tracking-wider text-white/30">
-              sats
+        {/* Title and reward share the row: the title takes the space that is
+            left, rather than stopping at its intrinsic width. */}
+        <div className="flex flex-wrap items-start justify-between gap-x-7 gap-y-4">
+          <div className="min-w-0 flex-1 basis-[460px]">
+            <span
+              className={`inline-flex items-center gap-1.5 text-[13.5px] ${statusText(bounty.status)}`}
+            >
+              <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+              {statusLabel(bounty.status)}
             </span>
+            <h1 className="mt-3 break-words text-[30px] font-medium leading-[1.28] tracking-[-0.015em] text-pretty text-white max-md:text-2xl">
+              {bounty.title}
+            </h1>
+          </div>
+          <div className="shrink-0 text-right">
+            <div className="flex items-center justify-end gap-2 tabular-nums">
+              <BitcoinMark size={34} />
+              <span className="text-[40px] font-medium leading-none tracking-[-0.022em] text-[#F7931A]">
+                {formatSatsFull(bounty.rewardSats)}
+              </span>
+            </div>
+            <div className="mt-2 text-[12px] uppercase tracking-[0.1em] text-white/45">
+              sats reward
+            </div>
           </div>
         </div>
 
-        <h1 className="mt-3 break-words text-xl font-semibold leading-snug tracking-tight text-white max-md:text-lg">
-          {bounty.title}
-        </h1>
-
         {/* Secondary metrics — submissions + deadline (reward is up top). */}
-        <div className="mt-4 flex flex-col gap-4 sm:flex-row sm:gap-10">
+        <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:gap-10">
           {/* Submissions */}
           <div>
-            <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Submissions</div>
-            <div className="mt-1 text-sm font-medium text-white/85">{submissionCount}</div>
+            <div className="text-[11.5px] uppercase tracking-[0.11em] text-white/45">Submissions</div>
+            <div className="mt-1.5 text-[16.5px] tabular-nums text-white/85">{submissionCount}</div>
           </div>
 
           {/* Deadline — single countdown value (exact date on hover), kept to two
               lines so it matches Reward and Submissions. */}
           <div>
-            <div className="text-[9px] font-medium uppercase tracking-wider text-white/40">Deadline</div>
+            <div className="text-[11.5px] uppercase tracking-[0.11em] text-white/45">Deadline</div>
             {windowLabel ? (
               <div
-                className={`mt-1 text-sm font-medium ${submissionsClosed ? "text-red-400/80" : "text-emerald-400"}`}
+                className={`mt-1.5 text-[16.5px] ${submissionsClosed ? "text-rose-400/80" : "text-emerald-400"}`}
                 title={new Date(bounty.expiresAt).toLocaleString()}
               >
                 {windowLabel}
               </div>
             ) : (
-              <div className="mt-1 text-sm text-white/85" title={new Date(bounty.expiresAt).toLocaleString()}>
+              <div
+                className="mt-1.5 text-[16.5px] text-white/85"
+                title={new Date(bounty.expiresAt).toLocaleString()}
+              >
                 {formatDateOnly(bounty.expiresAt)}
               </div>
             )}

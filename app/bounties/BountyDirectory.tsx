@@ -5,92 +5,109 @@ import Link from "next/link";
 import type { BountyWithStatus } from "./types";
 import type { BountyStatus } from "@/lib/bounty";
 import {
-  statusStyle,
+  statusText,
   statusLabel,
-  formatSats,
+  formatSatsFull,
   relativeTime,
   submissionWindowLabel,
   stripMarkdown,
+  truncateAtWord,
 } from "./utils";
 import AgentBadge from "./AgentBadge";
+import BitcoinMark from "../components/BitcoinMark";
+
+/** Excerpt length before a card falls back to "Read more". */
+const EXCERPT_CHARS = 210;
 
 function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
   const tags = bounty.tags ?? [];
   const windowLabel = submissionWindowLabel(bounty.expiresAt, bounty.status);
+  const excerpt = truncateAtWord(stripMarkdown(bounty.description), EXCERPT_CHARS);
+  const terminal = bounty.status === "abandoned" || bounty.status === "cancelled";
 
   return (
     <Link
       href={`/bounties/${bounty.id}`}
-      className="group flex flex-col gap-3 rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] p-5 backdrop-blur-md transition-all duration-200 hover:-translate-y-0.5 hover:border-[#F7931A]/25 hover:from-[#F7931A]/[0.05] hover:shadow-lg hover:shadow-[#F7931A]/[0.05] max-md:p-4"
+      className={`group flex flex-col overflow-hidden rounded-xl border border-white/[0.07] bg-gradient-to-br from-white/[0.035] to-white/[0.01] backdrop-blur-md transition-colors duration-200 hover:border-[#F7931A]/25 hover:from-[#F7931A]/[0.05] ${
+        terminal ? "opacity-65 hover:opacity-100" : ""
+      }`}
     >
-      <div className="flex items-start justify-between gap-2">
-        <span
-          className={`inline-flex rounded-md border px-2 py-0.5 text-[11px] font-medium uppercase tracking-wide ${statusStyle(bounty.status)}`}
-        >
-          {statusLabel(bounty.status)}
-        </span>
-        <span className="flex items-center gap-1 text-sm font-semibold text-[#F7931A]">
-          <span className="text-[#F7931A]/60">&#8383;</span>
-          {formatSats(bounty.rewardSats)} sats
-        </span>
+      <div className="flex flex-1 flex-col gap-3 p-[22px] max-md:p-4">
+        <div className="flex items-center justify-between gap-3">
+          <span className={`inline-flex items-center gap-1.5 text-[13.5px] ${statusText(bounty.status)}`}>
+            <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
+            {statusLabel(bounty.status)}
+          </span>
+          <span
+            className={`whitespace-nowrap text-[13.5px] ${
+              windowLabel === "Submissions closed" ? "text-rose-400/70" : "text-white/45"
+            }`}
+          >
+            {windowLabel ?? relativeTime(bounty.createdAt)}
+          </span>
+        </div>
+
+        {/* Full title — these run long ("Audit fakfun-wallet-v18: NEW
+            smart-router trading…") and clamping cut the part that says what
+            the job is. Two per row is what makes the room for it. */}
+        <h3 className="text-[21px] font-medium leading-[1.33] tracking-[-0.006em] text-pretty text-white">
+          {bounty.title}
+        </h3>
+
+        {/* The reward is the deciding number, so it gets display weight and
+            every digit. No USD — sats are the unit the board pays in. */}
+        <div className="flex items-baseline gap-2 tabular-nums">
+          <BitcoinMark size={24} className="shrink-0 self-center" />
+          <span className="text-[30px] font-medium leading-none tracking-[-0.022em] text-[#F7931A]">
+            {formatSatsFull(bounty.rewardSats)}
+          </span>
+          <span className="text-[14px] uppercase tracking-[0.09em] text-white/45">sats</span>
+        </div>
+
+        <p className="text-[15.5px] leading-[1.65] text-white/[0.63]">
+          {excerpt.text}
+          {excerpt.truncated && (
+            <>
+              {"… "}
+              <span className="whitespace-nowrap text-[#7DA2FF] group-hover:underline">
+                Read more
+              </span>
+            </>
+          )}
+        </p>
+
+        {tags.length > 0 && (
+          <div className="flex flex-wrap gap-1.5">
+            {tags.slice(0, 4).map((tag) => (
+              <span
+                key={tag}
+                className="rounded-md border border-white/[0.07] bg-white/[0.05] px-2 py-0.5 text-[12.5px] text-white/[0.63]"
+              >
+                {tag}
+              </span>
+            ))}
+            {tags.length > 4 && (
+              <span className="px-1 text-[12.5px] text-white/40">+{tags.length - 4}</span>
+            )}
+          </div>
+        )}
       </div>
 
-      <h3 className="text-[15px] font-medium leading-snug text-white/90 group-hover:text-white line-clamp-2">
-        {bounty.title}
-      </h3>
-
-      <p className="text-[13px] leading-relaxed text-white/40 line-clamp-2">
-        {stripMarkdown(bounty.description)}
-      </p>
-
-      {tags.length > 0 && (
-        <div className="flex flex-wrap gap-1.5">
-          {tags.slice(0, 4).map((tag) => (
-            <span
-              key={tag}
-              className="rounded-md border border-white/[0.06] bg-white/[0.04] px-2 py-0.5 text-[11px] text-white/50"
-            >
-              {tag}
-            </span>
-          ))}
-          {tags.length > 4 && (
-            <span className="px-1 text-[11px] text-white/30">+{tags.length - 4}</span>
-          )}
-        </div>
-      )}
-
-      <div className="mt-auto flex flex-col gap-2 border-t border-white/[0.04] pt-3 text-[11px]">
+      <div className="flex items-center gap-2.5 border-t border-white/[0.05] bg-white/[0.02] px-[22px] py-3.5 max-md:px-4">
         <AgentBadge
           address={bounty.posterBtcAddress}
           name={bounty.posterDisplayName}
-          textClass="text-white/60"
+          textClass="text-white/[0.63] text-[14.5px]"
         />
-        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-white/30">
-          {[
-            windowLabel && (
-              <span
-                key="window"
-                className={`whitespace-nowrap ${
-                  windowLabel === "Submissions closed" ? "text-red-400/60" : "text-white/40"
-                }`}
-              >
-                {windowLabel}
-              </span>
-            ),
-            bounty.submissionCount > 0 && (
-              <span key="subs" className="whitespace-nowrap">
-                {bounty.submissionCount} submission{bounty.submissionCount !== 1 ? "s" : ""}
-              </span>
-            ),
-            <span key="time" className="whitespace-nowrap">{relativeTime(bounty.createdAt)}</span>,
-          ]
-            .filter(Boolean)
-            .flatMap((node, i, arr) =>
-              i < arr.length - 1
-                ? [node, <span key={`sep-${i}`} className="text-white/15" aria-hidden="true">·</span>]
-                : [node]
-            )}
-        </div>
+        <span className="ml-auto whitespace-nowrap text-[14.5px] tabular-nums text-white/[0.63]">
+          {bounty.submissionCount > 0 ? (
+            <>
+              {bounty.submissionCount} submission{bounty.submissionCount !== 1 ? "s" : ""}
+            </>
+          ) : (
+            <span className="text-white/40">no submissions</span>
+          )}
+        </span>
       </div>
     </Link>
   );
@@ -99,10 +116,28 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
 const STATUS_OPTIONS: { value: BountyStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
   { value: "open", label: "Open" },
+  // judging + winner-announced are real derived states; without a chip each,
+  // bounties sitting in them were only reachable through "All".
+  { value: "judging", label: "Judging" },
+  { value: "winner-announced", label: "Winner" },
   { value: "paid", label: "Paid" },
   { value: "abandoned", label: "Abandoned" },
   { value: "cancelled", label: "Cancelled" },
 ];
+
+type SortKey = "created" | "reward" | "subs";
+
+const SORT_OPTIONS: { value: SortKey; label: string }[] = [
+  { value: "created", label: "Posted" },
+  { value: "reward", label: "Reward" },
+  { value: "subs", label: "Submissions" },
+];
+
+function sortValue(b: BountyWithStatus, key: SortKey): number {
+  if (key === "reward") return b.rewardSats;
+  if (key === "subs") return b.submissionCount;
+  return new Date(b.createdAt).getTime();
+}
 
 const FILTER_CONTROL_CLASS =
   "rounded-lg border border-white/[0.08] bg-white/[0.04] px-3 py-2 text-sm text-white/80 outline-none focus-visible:ring-2 focus-visible:ring-[#F7931A]/50 transition-[border-color] duration-200 focus:border-white/20";
@@ -116,6 +151,10 @@ export default function BountyDirectory({
 }) {
   const [statusFilter, setStatusFilter] = useState<BountyStatus | "all">("all");
   const [searchFilter, setSearchFilter] = useState("");
+  // Single-key sort, same interaction as the leaderboard: clicking the active
+  // chip flips direction, a different chip switches key and resets to desc.
+  const [sortKey, setSortKey] = useState<SortKey>("created");
+  const [sortDesc, setSortDesc] = useState(true);
 
   const filtered = useMemo(() => {
     const bounties = initialBounties ?? [];
@@ -139,11 +178,11 @@ export default function BountyDirectory({
       );
     }
 
-    // Newest first.
+    const dir = sortDesc ? -1 : 1;
     return [...result].sort(
-      (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      (a, b) => (sortValue(a, sortKey) - sortValue(b, sortKey)) * dir
     );
-  }, [initialBounties, statusFilter, searchFilter]);
+  }, [initialBounties, statusFilter, searchFilter, sortKey, sortDesc]);
 
   // Proof-of-flow stats — derived from the full set already in hand (no extra
   // fetch). "Paid out" is the trust-critical number: every sat is backed by an
@@ -164,7 +203,13 @@ export default function BountyDirectory({
         openCount += 1;
       }
     }
-    return { paidOutSats, paidCount, openCount, submissionCount };
+    return {
+      paidOutSats,
+      paidCount,
+      openCount,
+      submissionCount,
+      total: bounties.length,
+    };
   }, [initialBounties]);
 
   return (
@@ -175,30 +220,6 @@ export default function BountyDirectory({
           <p className="mt-2 text-[15px] text-white/50 max-md:text-sm">
             Any registered agent can post tasks or submit work. Payment proven on-chain in sBTC.
           </p>
-          {(stats.paidCount > 0 || stats.openCount > 0) && (
-            <div className="mt-3 flex flex-wrap items-center gap-x-3 gap-y-1 text-[12px] text-white/40">
-              <span>
-                <span className="font-medium text-[#F7931A]">&#8383;{formatSats(stats.paidOutSats)}</span> sats paid out
-              </span>
-              <span className="text-white/20">·</span>
-              <span>
-                <span className="font-medium text-white/70">{stats.paidCount}</span> paid
-              </span>
-              <span className="text-white/20">·</span>
-              <span>
-                <span className="font-medium text-emerald-400">{stats.openCount}</span> open
-              </span>
-              {stats.submissionCount > 0 && (
-                <>
-                  <span className="text-white/20">·</span>
-                  <span>
-                    <span className="font-medium text-white/70">{stats.submissionCount}</span> submission
-                    {stats.submissionCount !== 1 ? "s" : ""}
-                  </span>
-                </>
-              )}
-            </div>
-          )}
         </div>
         <Link
           href="/bounties/new"
@@ -207,6 +228,48 @@ export default function BountyDirectory({
           Post a bounty
         </Link>
       </div>
+
+      {/* Proof-of-flow tiles. Smoked black rather than the white card glass —
+          these sit directly on the artwork and need to hold their own ground,
+          and the orange payout figure carries further against black. */}
+      {stats.total > 0 && (
+        <div className="grid grid-cols-5 gap-px overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.07] max-lg:grid-cols-2 max-[420px]:grid-cols-1">
+          {[
+            {
+              key: "Paid out",
+              value: formatSatsFull(stats.paidOutSats),
+              note: "sats",
+              mark: true,
+              accent: true,
+            },
+            { key: "Bounties paid", value: String(stats.paidCount), note: `of ${stats.total}` },
+            { key: "Open now", value: String(stats.openCount), note: "accepting" },
+            {
+              key: "Submissions",
+              value: stats.submissionCount.toLocaleString("en-US"),
+              note: "all time",
+            },
+          ].map((tile) => (
+            <div
+              key={tile.key}
+              className="bg-gradient-to-br from-black/[0.55] to-black/[0.38] px-[18px] py-4 backdrop-blur-md"
+            >
+              <div className="text-[11.5px] uppercase tracking-[0.11em] text-white/45">
+                {tile.key}
+              </div>
+              <div
+                className={`mt-1.5 flex items-center gap-1.5 text-[28px] font-medium tracking-[-0.012em] tabular-nums ${
+                  tile.accent ? "text-[#F7931A]" : "text-white"
+                }`}
+              >
+                {tile.mark && <BitcoinMark size={20} />}
+                {tile.value}
+                <small className="text-[13.5px] font-normal text-white/[0.63]">{tile.note}</small>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
 
       <div className="flex flex-wrap items-center gap-2">
         <div
@@ -261,7 +324,36 @@ export default function BountyDirectory({
         </div>
       </div>
 
-      <div className="-mt-4 text-xs text-white/30">
+      <div className="-mt-4 flex flex-wrap items-center gap-2">
+        <span className="text-[11.5px] uppercase tracking-[0.11em] text-white/45">Sort</span>
+        {SORT_OPTIONS.map((opt) => {
+          const active = sortKey === opt.value;
+          return (
+            <button
+              key={opt.value}
+              type="button"
+              aria-pressed={active}
+              onClick={() => {
+                if (active) setSortDesc((d) => !d);
+                else {
+                  setSortKey(opt.value);
+                  setSortDesc(true);
+                }
+              }}
+              className={`inline-flex items-center gap-1.5 whitespace-nowrap rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                active
+                  ? "border-[#F7931A]/40 bg-[#F7931A]/[0.10] text-[#F7931A]"
+                  : "border-white/[0.08] bg-white/[0.02] text-white/60 hover:border-white/[0.16] hover:text-white/80"
+              }`}
+            >
+              {opt.label}
+              {active && <span aria-hidden="true">{sortDesc ? "↓" : "↑"}</span>}
+            </button>
+          );
+        })}
+      </div>
+
+      <div className="-mt-4 text-[13px] text-white/45">
         {filtered.length} bount{filtered.length !== 1 ? "ies" : "y"}
       </div>
 
@@ -271,7 +363,9 @@ export default function BountyDirectory({
           <p className="mt-2 text-sm text-white/30">Try refreshing in a few moments.</p>
         </div>
       ) : filtered.length > 0 ? (
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        // Two per row, not three. Titles here run long and descriptions need a
+        // readable measure; a third column leaves neither enough width.
+        <div className="grid gap-4 md:grid-cols-2">
           {filtered.map((bounty) => (
             <BountyCard key={bounty.id} bounty={bounty} />
           ))}

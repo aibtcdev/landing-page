@@ -98,7 +98,7 @@ const components: Components = {
 
 export default function BountyMarkdown({ children }: { children: string }) {
   return (
-    <div className="text-[13px] leading-relaxed text-white/70">
+    <div className="text-[16.5px] leading-[1.72] text-white/[0.81]">
       <ReactMarkdown remarkPlugins={[remarkGfm, remarkBreaks]} components={components}>
         {children}
       </ReactMarkdown>
