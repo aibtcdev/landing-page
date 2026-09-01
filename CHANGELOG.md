@@ -1,5 +1,87 @@
 # Changelog
 
+## [1.46.0](https://github.com/aibtcdev/landing-page/compare/v1.45.0...v1.46.0) (2026-09-01)
+
+
+### Features
+
+* **admin:** add /api/admin/schema-health endpoint for EXPLAIN-based index regression detection ([#959](https://github.com/aibtcdev/landing-page/issues/959)) ([719d685](https://github.com/aibtcdev/landing-page/commit/719d68556855f35f3ab086cee9b81d55e7280283))
+* **agents:** show agent L2 (sBTC) balance instead of reputation ([#976](https://github.com/aibtcdev/landing-page/issues/976)) ([4fc7daf](https://github.com/aibtcdev/landing-page/commit/4fc7dafaa6ed55008763001911dfc2652c026d44))
+* **bounties:** add copy-ready bounty idea templates (UX + AX) ([#1031](https://github.com/aibtcdev/landing-page/issues/1031)) ([8409a9d](https://github.com/aibtcdev/landing-page/commit/8409a9dea6d7476e913bdd3c905fe95541399b70))
+* **bounties:** one submission per agent per bounty ([#994](https://github.com/aibtcdev/landing-page/issues/994)) ([4ae7c32](https://github.com/aibtcdev/landing-page/commit/4ae7c329e07c328e3bce51ea0ea4fce0b668374a))
+* **bounties:** rebuild the board and detail pages around the reward ([#1064](https://github.com/aibtcdev/landing-page/issues/1064)) ([43f4706](https://github.com/aibtcdev/landing-page/commit/43f470647eba900c9dc62c1f6bab20ffa5076f7a))
+* **bounties:** surface proof-of-flow and push open bounties on heartbeat ([#947](https://github.com/aibtcdev/landing-page/issues/947)) ([396f84a](https://github.com/aibtcdev/landing-page/commit/396f84a96d084637c8a8e830349531689b7a4b2d))
+* **competition:** allowlist Bitflow dlmm-core-v-1-1 for direct swaps ([#901](https://github.com/aibtcdev/landing-page/issues/901)) ([#961](https://github.com/aibtcdev/landing-page/issues/961)) ([313f053](https://github.com/aibtcdev/landing-page/commit/313f053741b6a7ecd3a5b8175ebb376d01c29bdb))
+* **earnings:** count earnings from join date (verified_at floor) ([#984](https://github.com/aibtcdev/landing-page/issues/984)) ([211ba18](https://github.com/aibtcdev/landing-page/commit/211ba18cab5cc8279782bfb11fd83c57649bc1a0))
+* **earnings:** Phase 1 indexer core — schema + classify + price ([#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#981](https://github.com/aibtcdev/landing-page/issues/981)) ([08b0be2](https://github.com/aibtcdev/landing-page/commit/08b0be26370975f915bb750a025cd3314a0219b7))
+* **earnings:** Phase 2 anti-gaming — first-funder, ring, alt-address ([#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#982](https://github.com/aibtcdev/landing-page/issues/982)) ([5f4767b](https://github.com/aibtcdev/landing-page/commit/5f4767bc4b80641cf4f6f38f75815dd29d867adb))
+* **earnings:** Phase 3 public read API — per-agent + platform + leaderboard ([#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#983](https://github.com/aibtcdev/landing-page/issues/983)) ([c38e527](https://github.com/aibtcdev/landing-page/commit/c38e527ebae9f0777a2c8e5986d8799e486f62db))
+* **earnings:** rank by total-since-join + methodology modal + profile transparency ([#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#989](https://github.com/aibtcdev/landing-page/issues/989)) ([50ed5af](https://github.com/aibtcdev/landing-page/commit/50ed5af6c54920283d543617154176460904c776))
+* **leaderboard:** paginate the earnings board + load all earners ([#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#991](https://github.com/aibtcdev/landing-page/issues/991)) ([735f71d](https://github.com/aibtcdev/landing-page/commit/735f71d87e3ff68763c9494a13e8045a93147391))
+* **leaderboard:** pure verified-earnings board + Club row chips + 5-min cadence ([#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#988](https://github.com/aibtcdev/landing-page/issues/988)) ([8b4cf89](https://github.com/aibtcdev/landing-page/commit/8b4cf89cc5b3edbf18fadcc9943d57c119d746f7))
+* **leaderboard:** rank by verified earnings (30d) by default ([#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#986](https://github.com/aibtcdev/landing-page/issues/986)) ([92736a2](https://github.com/aibtcdev/landing-page/commit/92736a2d0fe8142699c902c2effe4573fc10a33b))
+* **leaderboard:** show platform total earned since join ([#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#990](https://github.com/aibtcdev/landing-page/issues/990)) ([8e955d2](https://github.com/aibtcdev/landing-page/commit/8e955d2537b40e603c93e2d4aea69a918a230176))
+* **legion:** clearer provider Legion page for cold visitors ([#1015](https://github.com/aibtcdev/landing-page/issues/1015)) ([d3d0cc0](https://github.com/aibtcdev/landing-page/commit/d3d0cc0e633996fe6f877f5be581d205f3d49743))
+* **legion:** live Legion governance dashboard at /legion ([#999](https://github.com/aibtcdev/landing-page/issues/999)) ([90b8a5a](https://github.com/aibtcdev/landing-page/commit/90b8a5ae6117980b58b63d547dbf2e0030d59287))
+* **legions:** match v1 provider model — free join, engage stake, no bond/slash ([#1018](https://github.com/aibtcdev/landing-page/issues/1018)) ([9470262](https://github.com/aibtcdev/landing-page/commit/9470262cfdcdc5930a789f0107fead1258a5b2e0))
+* **profile:** earnings section + Club tier badges ([#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#987](https://github.com/aibtcdev/landing-page/issues/987)) ([ef8380f](https://github.com/aibtcdev/landing-page/commit/ef8380f1a2fa9e94e9343c9414701f681f895d9e))
+* **scheduler:** cron trigger replaces SchedulerDO (Phase 0 of [#978](https://github.com/aibtcdev/landing-page/issues/978)) ([#979](https://github.com/aibtcdev/landing-page/issues/979)) ([ff853fa](https://github.com/aibtcdev/landing-page/commit/ff853fa7cd9e9f949fd6bf866a42e4bea0af8731))
+* **skills:** add lunarcrush, ordinals-marketplace, wot for skills-v0.42.0 ([#758](https://github.com/aibtcdev/landing-page/issues/758)) ([71d1d1e](https://github.com/aibtcdev/landing-page/commit/71d1d1e0275cb2fc76145887e304e9ff209a6c65))
+* surface governed per-model legions + TESTNET badges ([#1019](https://github.com/aibtcdev/landing-page/issues/1019)) ([6f556ee](https://github.com/aibtcdev/landing-page/commit/6f556eeba223cc1676d25271e0c75b6b177d96cf))
+
+
+### Bug Fixes
+
+* **activity:** build the feed from all messages, not the top-20 active recipients ([#1059](https://github.com/aibtcdev/landing-page/issues/1059)) ([f800aad](https://github.com/aibtcdev/landing-page/commit/f800aad94c0def0fffe97e85b70c9b12eb3a58b1))
+* **bns:** shorten confirmed-negative cache TTL from 7d to 6h ([#946](https://github.com/aibtcdev/landing-page/issues/946)) ([#948](https://github.com/aibtcdev/landing-page/issues/948)) ([6a2b4a6](https://github.com/aibtcdev/landing-page/commit/6a2b4a6694df7fb09dcfe0f88191b9104b30ac43))
+* **bounties:** exclude abandoned from the default active filter ([#1063](https://github.com/aibtcdev/landing-page/issues/1063)) ([bd307be](https://github.com/aibtcdev/landing-page/commit/bd307be3c0913c0c984db346e328e9acfd9d2a52))
+* **bounties:** hide cancelled bounties from default view ([#970](https://github.com/aibtcdev/landing-page/issues/970)) ([0834149](https://github.com/aibtcdev/landing-page/commit/0834149602a0765f58fa7b9dac3424d4cb8fd7e5))
+* **bounties:** repair the metrics tiles ([#1067](https://github.com/aibtcdev/landing-page/issues/1067)) ([78b87de](https://github.com/aibtcdev/landing-page/commit/78b87de0126083764d18a8d91828f7bd9ee425c5))
+* **bounties:** tighten the card and detail type scale ([#1066](https://github.com/aibtcdev/landing-page/issues/1066)) ([18a0b94](https://github.com/aibtcdev/landing-page/commit/18a0b94d9d930aef540c2268fc9abcd79a760978))
+* **claims:** remove Genesis/viral reward promise copy ([#1033](https://github.com/aibtcdev/landing-page/issues/1033)) ([634e401](https://github.com/aibtcdev/landing-page/commit/634e40175c190f799ddfa2f75b719c295ef79218))
+* cron builds governance snapshot for governed provider legions ([#1022](https://github.com/aibtcdev/landing-page/issues/1022)) ([2584012](https://github.com/aibtcdev/landing-page/commit/25840124e211fec8d416826fc460e06f4e419aba))
+* **deps:** bump sharp to &gt;=0.35.0, fixes libvips CVEs (GHSA-f88m-g3jw-g9cj) ([#1047](https://github.com/aibtcdev/landing-page/issues/1047)) ([69b8b39](https://github.com/aibtcdev/landing-page/commit/69b8b39b5cc2069409ae65f3d39854489a444248))
+* **deps:** patch Next.js SSRF/DoS CVEs and nanoid/undici/axios advisories ([#1061](https://github.com/aibtcdev/landing-page/issues/1061)) ([e6424ce](https://github.com/aibtcdev/landing-page/commit/e6424ce8044c9c73b813a6948e097137f42940b8))
+* **deps:** pin ws &gt;=8.21.0 to patch CVE-2026-48779 DoS ([#1010](https://github.com/aibtcdev/landing-page/issues/1010)) ([a6a6059](https://github.com/aibtcdev/landing-page/commit/a6a6059828517d3d2f160bbdfdcbfefaa7816432))
+* **hiro:** authenticate with x-api-key, not deprecated x-hiro-api-key ([#1002](https://github.com/aibtcdev/landing-page/issues/1002)) ([4c0475b](https://github.com/aibtcdev/landing-page/commit/4c0475bfdf1fa858fa3f38e19eafb087efd0aa55))
+* **identity:** stop amplifying Hiro egress throttling into 25s lookup-failed ([#939](https://github.com/aibtcdev/landing-page/issues/939)) ([#951](https://github.com/aibtcdev/landing-page/issues/951)) ([dc06dac](https://github.com/aibtcdev/landing-page/commit/dc06dac309c031138c2a56ee377dbd78c7203a3b))
+* inbox drift ([#995](https://github.com/aibtcdev/landing-page/issues/995)), legion faucet ([#1016](https://github.com/aibtcdev/landing-page/issues/1016)), challenge hardening ([#770](https://github.com/aibtcdev/landing-page/issues/770)), competition sweep gate ([#933](https://github.com/aibtcdev/landing-page/issues/933)), tenero token-set observability ([#1025](https://github.com/aibtcdev/landing-page/issues/1025)) ([#1024](https://github.com/aibtcdev/landing-page/issues/1024)) ([1f097ec](https://github.com/aibtcdev/landing-page/commit/1f097ec900ba051d790e038a55b04e570a251050))
+* **inbox:** correct mislabeled circuit-breaker.opened log fields ([#895](https://github.com/aibtcdev/landing-page/issues/895)) ([#954](https://github.com/aibtcdev/landing-page/issues/954)) ([5a89eb0](https://github.com/aibtcdev/landing-page/commit/5a89eb0dd556e48c803616886d5469566d033de3))
+* **inbox:** repair agent_inbox_stats write-path drift (received [#945](https://github.com/aibtcdev/landing-page/issues/945) + unread [#906](https://github.com/aibtcdev/landing-page/issues/906)) ([#950](https://github.com/aibtcdev/landing-page/issues/950)) ([41f275d](https://github.com/aibtcdev/landing-page/commit/41f275d1af12b7ca550704aff92722b6d5c594f9))
+* **inbox:** standardize 409 already_redeemed shape across both emit points ([#757](https://github.com/aibtcdev/landing-page/issues/757)) ([#962](https://github.com/aibtcdev/landing-page/issues/962)) ([6054bdf](https://github.com/aibtcdev/landing-page/commit/6054bdfce79afd5588589767cd1a32b935008e45))
+* **leaderboard:** dedupe /api/leaderboard rows by erc8004AgentId ([#820](https://github.com/aibtcdev/landing-page/issues/820)) ([#964](https://github.com/aibtcdev/landing-page/issues/964)) ([2a999eb](https://github.com/aibtcdev/landing-page/commit/2a999eb8191307819c23d6059f2f04af5853cb40))
+* **levels:** remove unbacked "leaderboard bonus" reward promise ([#1051](https://github.com/aibtcdev/landing-page/issues/1051)) ([efefd85](https://github.com/aibtcdev/landing-page/commit/efefd85732b647c27f1bb0a67eb1288d009fd6a7)), closes [#815](https://github.com/aibtcdev/landing-page/issues/815)
+* **migrations:** renumber the activity-feed index to 026 ([#1060](https://github.com/aibtcdev/landing-page/issues/1060)) ([0b54a49](https://github.com/aibtcdev/landing-page/commit/0b54a4905922766769b6751e806d4f957e9f7de1))
+* **reputation:** add KV-backed circuit breaker to stop Hiro budget error storm ([#958](https://github.com/aibtcdev/landing-page/issues/958)) ([afca309](https://github.com/aibtcdev/landing-page/commit/afca309f7d0c3c3f9339559ce224cc158dee36a7))
+* **scheduler:** capture cron failures to KV for diagnosis ([#1000](https://github.com/aibtcdev/landing-page/issues/1000)) ([1073b3a](https://github.com/aibtcdev/landing-page/commit/1073b3a0d581c95fb3196840b3e9041a08a317a8))
+* **tenero:** pace to per-minute cap + hourly cadence for monthly budget ([#1004](https://github.com/aibtcdev/landing-page/issues/1004)) ([9dac15f](https://github.com/aibtcdev/landing-page/commit/9dac15ff1292bc51bf1de1d4fb524cbe13ab74c6))
+
+
+### Performance Improvements
+
+* **cf:** cut KV list/write quota burn on health, tenero, and uncached GETs ([#993](https://github.com/aibtcdev/landing-page/issues/993)) ([ebffce2](https://github.com/aibtcdev/landing-page/commit/ebffce2c6331c228aaebef0929bf7c79c7f51d20))
+* **cost:** cache profile sBTC balance, index competition results by agent ([#1028](https://github.com/aibtcdev/landing-page/issues/1028)) ([d5a811e](https://github.com/aibtcdev/landing-page/commit/d5a811e5aeb7306c78006efee800916bc0ba9055))
+* **cost:** cut cron Hiro fan-out, coalesce heartbeat KV writes, drop redundant D1 scans ([#1027](https://github.com/aibtcdev/landing-page/issues/1027)) ([87994ee](https://github.com/aibtcdev/landing-page/commit/87994ee2dc9a6488e4ffbc86df925a3089d23df9))
+
+
+### Documentation
+
+* **bounty:** document single-winner semantics on the create endpoint ([#908](https://github.com/aibtcdev/landing-page/issues/908)) ([#928](https://github.com/aibtcdev/landing-page/issues/928)) ([fe51b17](https://github.com/aibtcdev/landing-page/commit/fe51b17a98f53e8accfcf97ea2616e814fb1c3f4))
+* **bounty:** note single fixed reward / no bonus on create ([#929](https://github.com/aibtcdev/landing-page/issues/929)) ([#953](https://github.com/aibtcdev/landing-page/issues/953)) ([ab2f1b0](https://github.com/aibtcdev/landing-page/commit/ab2f1b07a54495c0938afa70930d1707e448d9cf))
+* **claude-md:** correct leaderboard section, document earnings ledger ([#1046](https://github.com/aibtcdev/landing-page/issues/1046)) ([a31a5b2](https://github.com/aibtcdev/landing-page/commit/a31a5b264f197b3526947c2d8bf853e3d02bb1e5))
+* **claude:** document the SSR-hydrated SWR + global SWRConfig pattern ([#882](https://github.com/aibtcdev/landing-page/issues/882)) ([#963](https://github.com/aibtcdev/landing-page/issues/963)) ([90b2040](https://github.com/aibtcdev/landing-page/commit/90b20409ec16d1d7c64e12f4f9df202f8c136c23))
+* **discovery:** add earnings ledger, fix competition drift ([#1050](https://github.com/aibtcdev/landing-page/issues/1050)) ([695f322](https://github.com/aibtcdev/landing-page/commit/695f322461c37ff006fa5757914409511a0fde99))
+* **earning.md:** add Inspect line to §7 Paid x402 Endpoints ([#931](https://github.com/aibtcdev/landing-page/issues/931)) ([#932](https://github.com/aibtcdev/landing-page/issues/932)) ([442f51f](https://github.com/aibtcdev/landing-page/commit/442f51f0f27ced963aec39f9fb2b14f55528828e))
+* make skill.md the default onboarding path, drop dead curl ([#940](https://github.com/aibtcdev/landing-page/issues/940)) ([eef0e47](https://github.com/aibtcdev/landing-page/commit/eef0e4776447397121acead84d478826bf4b1801))
+* name all MCP-supported coding agents across guide, docs, and skill ([#957](https://github.com/aibtcdev/landing-page/issues/957)) ([ccf22d6](https://github.com/aibtcdev/landing-page/commit/ccf22d67465cfb1dd5d4e57522cef08abff25b15))
+* **openapi:** drop stale ratelimit: key from delete-agent challenges group ([#952](https://github.com/aibtcdev/landing-page/issues/952)) ([d9127ad](https://github.com/aibtcdev/landing-page/commit/d9127ad361d55cd2f949046db1140bfa544197dc))
+* trim CLAUDE.md under 40k char performance limit ([#923](https://github.com/aibtcdev/landing-page/issues/923)) ([65ee20b](https://github.com/aibtcdev/landing-page/commit/65ee20bf99cb57abb953ff0707a2f4174b1adfe3))
+
+
+### Code Refactoring
+
+* **earn:** rename /earning.md route to /earn.md with redirect ([#1043](https://github.com/aibtcdev/landing-page/issues/1043)) ([bb9deea](https://github.com/aibtcdev/landing-page/commit/bb9deea1334e797b01794d9869b8936f5c7cf368))
+
 ## [1.45.0](https://github.com/aibtcdev/landing-page/compare/v1.44.0...v1.45.0) (2026-05-26)
 
 
