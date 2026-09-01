@@ -25,6 +25,25 @@ export const STATUS_LABELS: Record<BountyStatus, string> = {
   cancelled: "Cancelled",
 };
 
+/**
+ * Text colour for the status dot + word treatment used on cards, where the hue
+ * carries the state and there is no bordered badge competing with the title.
+ * `STATUS_STYLES` above is the boxed-badge variant, still used where a status
+ * needs to read as a discrete chip.
+ */
+export const STATUS_TEXT: Record<BountyStatus, string> = {
+  open: "text-emerald-400",
+  judging: "text-amber-400",
+  "winner-announced": "text-[#7DA2FF]",
+  paid: "text-[#F7931A]",
+  abandoned: "text-rose-400",
+  cancelled: "text-white/45",
+};
+
+export function statusText(status: BountyStatus | string): string {
+  return STATUS_TEXT[status as BountyStatus] ?? STATUS_TEXT.cancelled;
+}
+
 export function statusStyle(status: BountyStatus | string): string {
   return STATUS_STYLES[status as BountyStatus] ?? STATUS_STYLES.cancelled;
 }
@@ -37,6 +56,37 @@ export function formatSats(n: number): string {
   if (n >= 1_000_000) return `${(n / 1_000_000).toFixed(1)}M`;
   if (n >= 1_000) return `${(n / 1_000).toFixed(n >= 10_000 ? 0 : 1)}k`;
   return n.toLocaleString();
+}
+
+/**
+ * Every digit, grouped — "21,000", not "21k".
+ *
+ * The reward is the number a reader is deciding on, so the display figure on a
+ * card or a detail header shows it in full. `formatSats` stays for the places
+ * that are summing rather than quoting, where the abbreviation is the point.
+ */
+export function formatSatsFull(n: number): string {
+  return n.toLocaleString("en-US");
+}
+
+/**
+ * Cut `input` to at most `max` characters on a word boundary, so a "Read more"
+ * affordance lands after a whole word instead of mid-token.
+ *
+ * Returns `truncated: false` when the text already fits, which is the caller's
+ * signal to render no affordance at all. Falls back to a hard cut when the
+ * window holds no space (a single long token), and drops a trailing separator
+ * so the ellipsis doesn't read as ",…".
+ */
+export function truncateAtWord(
+  input: string,
+  max: number
+): { text: string; truncated: boolean } {
+  if (input.length <= max) return { text: input, truncated: false };
+  const window = input.slice(0, max);
+  const lastSpace = window.lastIndexOf(" ");
+  const cut = lastSpace > max * 0.4 ? window.slice(0, lastSpace) : window;
+  return { text: cut.replace(/[\s.,;:—-]+$/, ""), truncated: true };
 }
 
 export function truncAddr(addr: string): string {
