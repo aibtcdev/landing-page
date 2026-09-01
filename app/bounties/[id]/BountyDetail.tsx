@@ -244,23 +244,23 @@ function BountyDetailView({
         <div className="flex flex-wrap items-start justify-between gap-x-7 gap-y-4">
           <div className="min-w-0 flex-1 basis-[460px]">
             <span
-              className={`inline-flex items-center gap-1.5 text-[13.5px] ${statusText(bounty.status)}`}
+              className={`inline-flex items-center gap-1.5 text-[12.5px] ${statusText(bounty.status)}`}
             >
               <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
               {statusLabel(bounty.status)}
             </span>
-            <h1 className="mt-3 break-words text-[30px] font-medium leading-[1.28] tracking-[-0.015em] text-pretty text-white max-md:text-2xl">
+            <h1 className="mt-2.5 break-words text-[23px] font-medium leading-[1.3] tracking-[-0.012em] text-pretty text-white max-md:text-xl">
               {bounty.title}
             </h1>
           </div>
           <div className="shrink-0 text-right">
             <div className="flex items-center justify-end gap-2 tabular-nums">
-              <BitcoinMark size={34} />
-              <span className="text-[40px] font-medium leading-none tracking-[-0.022em] text-[#F7931A]">
+              <BitcoinMark size={24} />
+              <span className="text-[28px] font-medium leading-none tracking-[-0.02em] text-[#F7931A]">
                 {formatSatsFull(bounty.rewardSats)}
               </span>
             </div>
-            <div className="mt-2 text-[12px] uppercase tracking-[0.1em] text-white/45">
+            <div className="mt-1.5 text-[11px] uppercase tracking-[0.1em] text-white/45">
               sats reward
             </div>
           </div>
@@ -270,24 +270,24 @@ function BountyDetailView({
         <div className="mt-5 flex flex-col gap-4 sm:flex-row sm:gap-10">
           {/* Submissions */}
           <div>
-            <div className="text-[11.5px] uppercase tracking-[0.11em] text-white/45">Submissions</div>
-            <div className="mt-1.5 text-[16.5px] tabular-nums text-white/85">{submissionCount}</div>
+            <div className="text-[10.5px] uppercase tracking-[0.11em] text-white/45">Submissions</div>
+            <div className="mt-1.5 text-[15px] tabular-nums text-white/85">{submissionCount}</div>
           </div>
 
           {/* Deadline — single countdown value (exact date on hover), kept to two
               lines so it matches Reward and Submissions. */}
           <div>
-            <div className="text-[11.5px] uppercase tracking-[0.11em] text-white/45">Deadline</div>
+            <div className="text-[10.5px] uppercase tracking-[0.11em] text-white/45">Deadline</div>
             {windowLabel ? (
               <div
-                className={`mt-1.5 text-[16.5px] ${submissionsClosed ? "text-rose-400/80" : "text-emerald-400"}`}
+                className={`mt-1.5 text-[15px] ${submissionsClosed ? "text-rose-400/80" : "text-emerald-400"}`}
                 title={new Date(bounty.expiresAt).toLocaleString()}
               >
                 {windowLabel}
               </div>
             ) : (
               <div
-                className="mt-1.5 text-[16.5px] text-white/85"
+                className="mt-1.5 text-[15px] text-white/85"
                 title={new Date(bounty.expiresAt).toLocaleString()}
               >
                 {formatDateOnly(bounty.expiresAt)}
