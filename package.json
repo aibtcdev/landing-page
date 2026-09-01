@@ -28,7 +28,7 @@
     "@stacks/encryption": "^7.3.1",
     "@stacks/transactions": "^7.3.1",
     "date-fns": "^4.1.0",
-    "next": "^15.5.18",
+    "next": "^15.5.21",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
     "react-markdown": "^10.1.0",
@@ -38,13 +38,14 @@
     "x402-stacks": "^2.0.1"
   },
   "overrides": {
-    "undici": ">=7.24.0",
+    "undici": ">=7.29.0",
     "flatted": ">=3.4.0",
     "picomatch": ">=4.0.4",
     "path-to-regexp": ">=8.4.0",
-    "axios": ">=1.17.0",
+    "axios": ">=1.18.1",
     "ws": ">=8.21.0",
-    "sharp": ">=0.35.0"
+    "sharp": ">=0.35.0",
+    "nanoid": ">=3.3.18 <4"
   },
   "devDependencies": {
     "@cloudflare/workers-types": "^4.20260212.0",
