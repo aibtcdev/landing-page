@@ -17,7 +17,7 @@ import AgentBadge from "./AgentBadge";
 import BitcoinMark from "../components/BitcoinMark";
 
 /** Excerpt length before a card falls back to "Read more". */
-const EXCERPT_CHARS = 210;
+const EXCERPT_CHARS = 165;
 
 function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
   const tags = bounty.tags ?? [];
@@ -32,14 +32,14 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
         terminal ? "opacity-65 hover:opacity-100" : ""
       }`}
     >
-      <div className="flex flex-1 flex-col gap-3 p-[22px] max-md:p-4">
+      <div className="flex flex-1 flex-col gap-2.5 p-[18px] max-md:p-4">
         <div className="flex items-center justify-between gap-3">
-          <span className={`inline-flex items-center gap-1.5 text-[13.5px] ${statusText(bounty.status)}`}>
+          <span className={`inline-flex items-center gap-1.5 text-[12.5px] ${statusText(bounty.status)}`}>
             <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
             {statusLabel(bounty.status)}
           </span>
           <span
-            className={`whitespace-nowrap text-[13.5px] ${
+            className={`whitespace-nowrap text-[12.5px] ${
               windowLabel === "Submissions closed" ? "text-rose-400/70" : "text-white/45"
             }`}
           >
@@ -50,21 +50,21 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
         {/* Full title — these run long ("Audit fakfun-wallet-v18: NEW
             smart-router trading…") and clamping cut the part that says what
             the job is. Two per row is what makes the room for it. */}
-        <h3 className="text-[21px] font-medium leading-[1.33] tracking-[-0.006em] text-pretty text-white">
+        <h3 className="text-[17px] font-medium leading-[1.35] tracking-[-0.004em] text-pretty text-white">
           {bounty.title}
         </h3>
 
         {/* The reward is the deciding number, so it gets display weight and
             every digit. No USD — sats are the unit the board pays in. */}
         <div className="flex items-baseline gap-2 tabular-nums">
-          <BitcoinMark size={24} className="shrink-0 self-center" />
-          <span className="text-[30px] font-medium leading-none tracking-[-0.022em] text-[#F7931A]">
+          <BitcoinMark size={18} className="shrink-0 self-center" />
+          <span className="text-[22px] font-medium leading-none tracking-[-0.018em] text-[#F7931A]">
             {formatSatsFull(bounty.rewardSats)}
           </span>
-          <span className="text-[14px] uppercase tracking-[0.09em] text-white/45">sats</span>
+          <span className="text-[12px] uppercase tracking-[0.08em] text-white/45">sats</span>
         </div>
 
-        <p className="text-[15.5px] leading-[1.65] text-white/[0.63]">
+        <p className="text-[14px] leading-[1.6] text-white/[0.63]">
           {excerpt.text}
           {excerpt.truncated && (
             <>
@@ -81,25 +81,25 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
             {tags.slice(0, 4).map((tag) => (
               <span
                 key={tag}
-                className="rounded-md border border-white/[0.07] bg-white/[0.05] px-2 py-0.5 text-[12.5px] text-white/[0.63]"
+                className="rounded-md border border-white/[0.07] bg-white/[0.05] px-2 py-0.5 text-[11.5px] text-white/[0.63]"
               >
                 {tag}
               </span>
             ))}
             {tags.length > 4 && (
-              <span className="px-1 text-[12.5px] text-white/40">+{tags.length - 4}</span>
+              <span className="px-1 text-[11.5px] text-white/40">+{tags.length - 4}</span>
             )}
           </div>
         )}
       </div>
 
-      <div className="flex items-center gap-2.5 border-t border-white/[0.05] bg-white/[0.02] px-[22px] py-3.5 max-md:px-4">
+      <div className="flex items-center gap-2.5 border-t border-white/[0.05] bg-white/[0.02] px-[18px] py-3 max-md:px-4">
         <AgentBadge
           address={bounty.posterBtcAddress}
           name={bounty.posterDisplayName}
-          textClass="text-white/[0.63] text-[14.5px]"
+          textClass="text-white/[0.63] text-[13px]"
         />
-        <span className="ml-auto whitespace-nowrap text-[14.5px] tabular-nums text-white/[0.63]">
+        <span className="ml-auto whitespace-nowrap text-[13px] tabular-nums text-white/[0.63]">
           {bounty.submissionCount > 0 ? (
             <>
               {bounty.submissionCount} submission{bounty.submissionCount !== 1 ? "s" : ""}
@@ -252,19 +252,19 @@ export default function BountyDirectory({
           ].map((tile) => (
             <div
               key={tile.key}
-              className="bg-gradient-to-br from-black/[0.55] to-black/[0.38] px-[18px] py-4 backdrop-blur-md"
+              className="bg-gradient-to-br from-black/[0.55] to-black/[0.38] px-4 py-3.5 backdrop-blur-md"
             >
-              <div className="text-[11.5px] uppercase tracking-[0.11em] text-white/45">
+              <div className="text-[10.5px] uppercase tracking-[0.11em] text-white/45">
                 {tile.key}
               </div>
               <div
-                className={`mt-1.5 flex items-center gap-1.5 text-[28px] font-medium tracking-[-0.012em] tabular-nums ${
+                className={`mt-1 flex items-center gap-1.5 text-[22px] font-medium tracking-[-0.012em] tabular-nums ${
                   tile.accent ? "text-[#F7931A]" : "text-white"
                 }`}
               >
-                {tile.mark && <BitcoinMark size={20} />}
+                {tile.mark && <BitcoinMark size={16} />}
                 {tile.value}
-                <small className="text-[13.5px] font-normal text-white/[0.63]">{tile.note}</small>
+                <small className="text-[12px] font-normal text-white/[0.63]">{tile.note}</small>
               </div>
             </div>
           ))}
