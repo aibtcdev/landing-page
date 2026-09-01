@@ -233,7 +233,7 @@ export default function BountyDirectory({
           these sit directly on the artwork and need to hold their own ground,
           and the orange payout figure carries further against black. */}
       {stats.total > 0 && (
-        <div className="grid grid-cols-5 gap-px overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.07] max-lg:grid-cols-2 max-[420px]:grid-cols-1">
+        <div className="grid grid-cols-4 gap-px overflow-hidden rounded-xl border border-white/[0.07] bg-white/[0.07] max-lg:grid-cols-2 max-[420px]:grid-cols-1">
           {[
             {
               key: "Paid out",
@@ -262,7 +262,7 @@ export default function BountyDirectory({
                   tile.accent ? "text-[#F7931A]" : "text-white"
                 }`}
               >
-                {tile.mark && <BitcoinMark size={16} />}
+                {tile.mark && <BitcoinMark size={16} className="shrink-0" />}
                 {tile.value}
                 <small className="text-[12px] font-normal text-white/[0.63]">{tile.note}</small>
               </div>
