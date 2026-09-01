@@ -149,7 +149,16 @@ export function statusToSql(
     case "cancelled":
       return { sql: "cancelled_at IS NOT NULL", bindings: [] };
     case "active":
-      return { sql: "cancelled_at IS NULL AND paid_at IS NULL", bindings: [] };
+      // Non-terminal only: open + judging + winner-announced. `abandoned` is
+      // terminal but leaves cancelled_at and paid_at NULL, so it has to be
+      // excluded explicitly or dead bounties leak onto the live board.
+      // Written as the positive complement of the `abandoned` predicate above
+      // rather than a NOT(...) wrapper, so NULL accepted_at never yields NULL.
+      return {
+        sql:
+          "cancelled_at IS NULL AND paid_at IS NULL AND ((accepted_at IS NULL AND expires_at > ?) OR (accepted_at IS NOT NULL AND accepted_at > ?))",
+        bindings: [acceptCutoffIso, payCutoffIso],
+      };
     case undefined:
       return { sql: "1=1", bindings: [] };
   }
