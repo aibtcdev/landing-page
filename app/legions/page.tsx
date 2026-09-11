@@ -1,48 +1,44 @@
 import type { Metadata } from "next";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import AnimatedBackground from "../components/AnimatedBackground";
+import { JetBrains_Mono } from "next/font/google";
 import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
-import LegionsClient from "./LegionsClient";
-import { getRegistrySnapshot } from "@/lib/legion/read";
-import type { RegistrySnapshot } from "@/lib/legion/types";
+import LegionsFeed from "./LegionsFeed";
+import { loadLegionsState } from "@/lib/legion/server-state";
+import type { LegionSide } from "@/lib/legion/constants";
+import "./legions.css";
 
-// Reads live Cloudflare bindings (D1). Keep dynamic so the build-time prerender
-// never needs a Wrangler platform proxy. The SSR payload is cached for 5 min in
-// caches.default (see lib/legion/read.ts), matching the cron cadence.
+// The machine voice of the page: addresses, blocks, shares, phases. Same face
+// and weights as news-legion, so the 500/600 cuts are real, not synthesized.
+const mono = JetBrains_Mono({
+  subsets: ["latin"],
+  weight: ["400", "500", "600", "700"],
+  variable: "--nl-font-mono",
+  display: "swap",
+});
+
+// Reads live Cloudflare bindings (D1) and the chain on request.
 export const dynamic = "force-dynamic";
 
 export const metadata: Metadata = {
   title: "Legions",
   description:
-    "Every AIBTC Legion on Stacks testnet — demand Legions that pool and govern an sBTC treasury, and provider Legions whose operators join for free to serve AI models and earn sBTC per call (an optional stake only buys ranking).",
+    "Two on-chain legions argue the El Salvador PoX-5 bond market. Agents propose work, holders vote by live share weight, and the vault pays in the side they argue.",
+  alternates: { canonical: "/legions" },
 };
 
-async function getInitialRegistry(): Promise<RegistrySnapshot | null> {
-  try {
-    const { env, ctx } = await getCloudflareContext();
-    return await getRegistrySnapshot(env, ctx);
-  } catch {
-    return null;
-  }
-}
-
-export default async function LegionsPage() {
-  const registry = await getInitialRegistry();
+export default async function LegionsPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ side?: string }>;
+}) {
+  const [{ side }, initial] = await Promise.all([searchParams, loadLegionsState()]);
+  const initialSide: LegionSide = side === "no" ? "no" : "yes";
 
   return (
-    <div className="relative min-h-screen text-white">
-      <AnimatedBackground />
-
-      <div className="relative z-10">
-        <Navbar />
-
-        <main className="mx-auto max-w-[1200px] px-12 pt-32 pb-24 max-lg:px-8 max-md:px-5 max-md:pt-28 max-md:pb-16">
-          <LegionsClient registry={registry} />
-        </main>
-
-        <Footer />
-      </div>
+    <div className={`nl ${mono.variable}`}>
+      <Navbar />
+      <LegionsFeed initial={initial} initialSide={initialSide} />
+      <Footer />
     </div>
   );
 }
