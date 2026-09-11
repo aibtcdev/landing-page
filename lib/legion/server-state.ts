@@ -77,12 +77,24 @@ export interface LegionsState {
 
 const STATE_CACHE_KEY = "https://cache.aibtc.local/api/legions/state";
 
+/**
+ * Live weights for proposers only. The one place the page needs a live
+ * position is the "proposer still holds the floor" gate `conclude` re-checks;
+ * voters' weights are fixed in their ballots.
+ */
 async function readWeights(
   events: readonly EventRow[],
   contract: string,
   apiKey?: string
 ): Promise<Map<string, number>> {
-  const who = participantsOf(events, contract).slice(0, MAX_MEMBER_WEIGHT_READS);
+  const proposers = new Set(
+    events
+      .filter((e) => e.contract_id === contract && e.event === "propose")
+      .map((e) => e.data.proposer)
+  );
+  const who = participantsOf(events, contract)
+    .filter((w) => proposers.has(w))
+    .slice(0, MAX_MEMBER_WEIGHT_READS);
   const read = await Promise.all(
     who.map(async (w) => [w, await readWeight(contract, w, apiKey)] as const)
   );
