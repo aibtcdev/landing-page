@@ -633,7 +633,7 @@ Contract source and agent skill: `github.com/aibtcdev/legions/tree/main/stake`. 
 
 ### Event-driven, no cron
 
-Hiro Chainhooks 2.0 → `POST /api/legions/chainhook` → D1 `legion_events` (migration `028`). That route is the only writer. `propose` does not print its description, so the route reads `get-proposal-meta` once per new proposal and stores it in the payload. Reads fold the events (`lib/legion/state.ts`) plus a few live reads (burn tip, market, vaults, settlement, up to 20 member weights per side) behind a 5-min edge cache that each delivery purges. Do not backfill from `/extended/v1/contract/{id}/events`: it numbers `event_index` differently from the hook, so every event would land twice. Replay past blocks through the hook instead.
+Hiro Chainhooks 2.0 → `POST /api/legions/chainhook` → D1 `legion_events` (migration `028`). That route is the only writer. `propose` does not print its description, so the route reads `get-proposal-meta` once per new proposal and stores it in the payload. Reads fold the events (`lib/legion/state.ts`) plus a few live reads (burn tip, market, vaults, settlement, live weight of up to 20 proposers per side for the "proposer still holds" gate) behind a 5-min edge cache that each delivery purges. Do not backfill from `/extended/v1/contract/{id}/events`: it numbers `event_index` differently from the hook, so every event would land twice. Replay past blocks through the hook instead.
 
 **Chainhook ops:** `scripts/legion-chainhook.sh` (mirrors news-legion's `chainhook/register.sh`). Hook name `aibtc-legions-mainnet`. Needs `HIRO_API_KEY` plus the account consumer secret; `VARS=<news-legion>/.dev.vars.mainnet` works as-is. The site authenticates deliveries with the same secret as the `LEGION_CHAINHOOK_SECRET` wrangler secret.
 
@@ -648,7 +648,7 @@ Hiro Chainhooks 2.0 → `POST /api/legions/chainhook` → D1 `legion_events` (mi
 - `lib/legion/chain.ts`: read-only calls (`get-params` cached per isolate)
 - `lib/legion/state.ts`: fold, phase, bucket, predicted outcome (mirrors `conclude`)
 - `lib/legion/server-state.ts`: build + edge cache + purge
-- `app/legions/LegionsFeed.tsx`: the page (side switch, clock, dossiers, members, wire)
+- `app/legions/LegionsFeed.tsx`: the page (side switch, clock, market band, dossiers, wire)
 
 ## KV Storage Patterns
 
