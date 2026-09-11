@@ -10,8 +10,9 @@
       is objection and a rejection.
    3. LIGHT IS EXPENSIVE. Panels are washes and hairlines, never opaque tiles.
 
-   The site Navbar is fixed over the top of this page, so everything that sticks
-   (the side switch, the filter bar) sticks under it at --nl-nav-h. */
+   The site Navbar is fixed over the top of this page and is its only
+   navigation; the one thing here that sticks (the filter bar) sticks under it
+   at --nl-nav-h. */
 
 /* The text face and the wide display cut are registered as two FAMILIES, not
    two weights of one: the site's own @font-face maps the wide cut to weight 500
@@ -72,11 +73,9 @@
 
 	/* The fixed site Navbar's height once scrolled (pt-4 + 32px logo + pb-4 +
 	   1px border), which is when anything here is stuck under it; the unscrolled
-	   height (pt-5/pb-5) is what the masthead clears; and the side switch's own
-	   height below the Navbar. */
+	   height (pt-5/pb-5) is what the top of the page clears. */
 	--nl-nav-h: 65px;
 	--nl-nav-top: 73px;
-	--nl-switch-h: 50px;
 
 	position: relative;
 	min-height: 100vh;
@@ -111,13 +110,14 @@
 
 .nl .content {
 	width: 100%;
-	padding: 16px var(--gutter) var(--space-6);
+	/* Clear of the fixed site Navbar, at its unscrolled height. */
+	padding: calc(var(--nl-nav-top) + 24px) var(--gutter) var(--space-6);
 }
 
 /* ── The Legions bar ── */
 .nl .legion-bar {
 	position: sticky;
-	top: calc(var(--nl-nav-h) + var(--nl-switch-h));
+	top: var(--nl-nav-h);
 	z-index: 20;
 	margin: 0 0 var(--space-5);
 	background: transparent;
@@ -182,7 +182,7 @@
 
 /* ── The dossier: one proposal, opened out ── */
 .nl .dossier {
-	scroll-margin-top: calc(var(--nl-nav-h) + var(--nl-switch-h) + 132px);
+	scroll-margin-top: calc(var(--nl-nav-h) + 132px);
 	border: 1px solid var(--rule-faint);
 	background: var(--bg-card);
 	border-left: 2px solid var(--rule);
@@ -551,102 +551,13 @@
 }
 .nl .sk { display: inline-block; height: 1em; background: var(--rule-light); animation: nl-pulse 1.6s ease-in-out infinite; }
 
-/* ── Masthead: top bar + nameplate + ticker ── */
-.nl .masthead {
-	/* Clear of the fixed site Navbar, at its unscrolled height. */
-	padding-top: var(--nl-nav-top);
-	background: linear-gradient(180deg, rgba(247, 147, 26, 0.07) 0%, transparent 100%);
-}
-.nl .topbar {
-	display: flex;
-	align-items: center;
-	justify-content: space-between;
-	gap: 12px;
-	flex-wrap: wrap;
-	padding: 8px var(--gutter);
-	font-family: var(--mono);
-	font-size: 13px;
-	letter-spacing: 0.08em;
-	text-transform: uppercase;
-	color: var(--text-secondary);
-}
-.nl .topbar-live { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); }
-
-.nl .masthead-mid { text-align: center; padding: 16px var(--gutter); }
-/* A misregistered press plate on the nameplate alone: cyan left, warm red right. */
-.nl .masthead-title {
-	font-family: var(--display);
-	font-size: clamp(19px, 2.9vw, 30px);
-	font-weight: 500;
-	letter-spacing: 0.06em;
-	text-transform: uppercase;
-	line-height: 1;
-	color: #f6f2ec;
-	text-shadow:
-		-0.035em 0 rgba(72, 214, 236, 0.5),
-		0.035em 0 rgba(240, 78, 68, 0.5);
-}
-@media (prefers-reduced-motion: reduce) { .nl .masthead-title { text-shadow: none; } }
-.nl .masthead-tagline {
-	font-family: var(--mono);
-	font-size: 13.5px;
-	font-weight: 500;
-	letter-spacing: 0.1em;
-	text-transform: uppercase;
-	color: var(--text-secondary);
-	margin-top: 10px;
-}
-
-.nl .ticker {
-	overflow: hidden;
-	border-top: 1px solid var(--rule-faint);
-	background: var(--bg-sunken);
-}
-.nl .ticker-track {
-	-webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
-	mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
-	display: inline-flex;
-	align-items: center;
-	gap: 44px;
-	white-space: nowrap;
-	padding: 9px 0;
-	will-change: transform;
-	animation: nl-marquee 45s linear infinite;
-}
-.nl .ticker:hover .ticker-track { animation-play-state: paused; }
-.nl .ticker-item {
-	display: inline-flex;
-	align-items: center;
-	gap: 9px;
-	font-family: var(--mono);
-	font-size: 11.5px;
-	text-transform: uppercase;
-	letter-spacing: 0.07em;
-	color: var(--text-secondary);
-}
-.nl .ticker-static {
-	font-family: var(--mono);
-	font-size: 12.5px;
-	font-weight: 500;
-	text-transform: uppercase;
-	letter-spacing: 0.08em;
-	color: var(--text-secondary);
-	padding: 8px var(--gutter);
-}
-@keyframes nl-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
-@media (prefers-reduced-motion: reduce) { .nl .ticker-track { animation: none; } }
-
-/* ── The side switch: news-legion's tab nav, holding the top under the Navbar ── */
+/* ── The side switch: Yes / No, the first thing in the page's column ──
+   Plain tabs in the flow, not a second sticky bar: the site Navbar is the only
+   navigation that holds the top of the window. */
 .nl .tabs-nav {
-	position: sticky;
-	top: var(--nl-nav-h);
-	z-index: 40;
 	display: flex;
-	height: var(--nl-switch-h);
-	padding: 0 var(--gutter);
+	gap: 32px;
 	overflow-x: auto;
-	background: var(--bg-solid);
-	border-top: 1px solid var(--rule-faint);
 	border-bottom: 1px solid var(--rule);
 }
 .nl .tabs-nav button {
@@ -654,7 +565,7 @@
 	display: inline-flex;
 	align-items: baseline;
 	gap: 10px;
-	padding: 0 24px;
+	padding: 14px 0;
 	font-family: var(--mono);
 	font-size: 12.5px;
 	font-weight: 500;
@@ -664,7 +575,6 @@
 	background: none;
 	border: none;
 	cursor: pointer;
-	line-height: var(--nl-switch-h);
 	transition: color 0.15s;
 }
 .nl .tabs-nav button:hover { color: var(--text); }
@@ -672,7 +582,7 @@
 .nl .tabs-nav-sub { font-size: 11px; letter-spacing: 0.08em; color: var(--text-faint); }
 .nl .tabs-nav button[aria-current="page"] .tabs-nav-sub { color: var(--accent); }
 @media (max-width: 480px) {
-	.nl .tabs-nav button { padding: 0 14px; }
+	.nl .tabs-nav { gap: 20px; }
 }
 
 /* ── Legions hero: the claim on the left, the clock that backs it on the right ── */
