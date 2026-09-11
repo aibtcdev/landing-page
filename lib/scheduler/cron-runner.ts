@@ -34,17 +34,6 @@ import {
 import { runEarningsSweep } from "../earnings/indexer";
 import { EARNINGS_INTERVAL_MS } from "../earnings/constants";
 import type { EarningsSweepSummary } from "../earnings/types";
-import { buildLegionSnapshot, buildRegistrySnapshot } from "../legion/snapshot";
-import { buildProviderSnapshot } from "../legion/providers";
-import { legionGatewayUrl } from "../legion/read";
-import { entryFromSummary } from "../legion/registry";
-import {
-  readLegionSnapshotFromD1,
-  writeLegionSnapshotToD1,
-  readProviderSnapshotFromD1,
-  writeProviderSnapshotToD1,
-  writeRegistrySnapshotToD1,
-} from "../legion/d1";
 import type { Logger } from "../logging";
 import type {
   SchedulerStatus,
@@ -54,7 +43,7 @@ import type {
 
 // Cadences. The cron fires every 30 min (wrangler.scheduler.jsonc); every task
 // is gated to its own interval via a last-run check (mirrors the old DO alarm) —
-// Tenero / competition / Legion hourly, earnings every 30 min.
+// Tenero hourly, competition daily, earnings every 30 min.
 // Tenero refresh cadence — HOURLY, sized to the monthly API budget. The Starter
 // plan allows 10,000 req/month; at ~13 active tokens that's 13 × 24 × ~30 ≈
 // 9.4k/mo, safely under. (Was 5 min ≈ 112k/mo — 11× over, which exhausted the
@@ -70,20 +59,11 @@ export const TENERO_INTERVAL_MS = 60 * 60 * 1000;
 // the primary ingestion route; this sweep is only catch-up, so once a day is
 // ample. Can be gated off entirely via COMPETITION_SWEEP_ENABLED="false".
 export const COMPETITION_INTERVAL_MS = 24 * 60 * 60 * 1000;
-// Legion snapshot — HOURLY (widened from every-tick). The snapshot fans out
-// a large, mostly-uncached set of Hiro reads per tick (per-member stake+balance,
-// per-proposal status, per-voter records) on the SAME shared HIRO_API_KEY as
-// identity/reputation and the competition sweep. Running it every 15 min
-// dominated the Hiro budget; the underlying state (stakes/proposals/votes) moves
-// on-chain slowly, so hourly is ample. The /legions pages read the D1 snapshot
-// behind caches.default, so freshness is unchanged for readers within that TTL.
-export const LEGION_INTERVAL_MS = 60 * 60 * 1000;
 
 // KV keys (VERIFIED_AGENTS namespace).
 const K_TENERO = "scheduler:tenero";
 const K_COMPETITION = "scheduler:competition";
 const K_EARNINGS = "scheduler:earnings";
-const K_LEGION = "scheduler:legion";
 const K_PAUSED = "scheduler:paused-until";
 
 interface TeneroState {
@@ -302,86 +282,6 @@ export async function runEarningsNow(
   return result;
 }
 
-/**
- * Rebuild every Legion's dashboard snapshot from testnet and persist them to D1
- * (table `legion_snapshots`, keyed by legion id). This is the only writer of
- * those rows; the page + /api/legions endpoints (and their edge cache) are pure
- * readers. The cron:
- *   1. reads the registry → builds the `/legions` index snapshot, then
- *   2. builds one detail snapshot per active Legion, branching on kind
- *      (demand → proposals/votes; provider → bonds/jobs).
- * A build never throws — partial outages are recorded in `errors` — so a single
- * Legion's failure is logged and skipped without blocking the others.
- */
-export async function runLegionNow(
-  env: CloudflareEnv,
-  parentLogger: Logger,
-): Promise<void> {
-  const logger = parentLogger.child
-    ? parentLogger.child({ task: "legion" })
-    : parentLogger;
-
-  const db = env.DB as D1Database | undefined;
-  if (!db) {
-    logger.warn("legion.skipped_no_db");
-    return;
-  }
-  const apiKey = env.HIRO_API_KEY;
-  const gatewayBase = legionGatewayUrl(env);
-
-  // 1. Registry index — backs the /legions list page.
-  const registry = await buildRegistrySnapshot(logger, apiKey, gatewayBase);
-  await writeRegistrySnapshotToD1(db, registry);
-  logger.info("legion.registry_written", {
-    legions: registry.legions.length,
-    errors: registry.errors.length,
-  });
-
-  // 2. Per-Legion detail snapshots. Reuse the entries buildRegistrySnapshot
-  // already resolved (via entryFromSummary) instead of re-walking the registry
-  // with a second listLegions() call — that duplicate walk was a full
-  // get-count + N×get-legion Hiro round-trip per tick for zero added data.
-  // Skip inactive Legions — they stay listed but aren't refreshed.
-  const entries = registry.legions.map(entryFromSummary);
-  for (const entry of entries) {
-    if (!entry.active) continue;
-    try {
-      // Build the detail snapshot the page actually reads. The page routes by
-      // governance: a legion WITH a gov contract renders the governance view
-      // (getLegionSnapshot → proposals + members + stake), so the cron must build a
-      // LegionSnapshot for it (which reads the gov contract). Only an UNGOVERNED
-      // provider legion gets the provider-directory snapshot. Keying off `kind`
-      // alone built a provider snapshot for governed model legions, so the gov was
-      // never read and `proposals`/`members` were never written.
-      if (entry.kind === "provider" && !entry.gov) {
-        const prev = await readProviderSnapshotFromD1(db, entry.id);
-        const snap = await buildProviderSnapshot(entry, prev, apiKey, logger, gatewayBase);
-        await writeProviderSnapshotToD1(db, entry.id, snap);
-        logger.info("legion.provider_snapshot_written", {
-          id: entry.id,
-          providers: snap.providers.length,
-          errors: snap.errors.length,
-        });
-      } else {
-        // Read the prior snapshot so terminal (concluded) proposals are carried
-        // forward without re-reading them from Hiro.
-        const prev = await readLegionSnapshotFromD1(db, entry.id);
-        const snap = await buildLegionSnapshot(logger, prev, apiKey, entry);
-        await writeLegionSnapshotToD1(db, entry.id, snap);
-        logger.info("legion.snapshot_written", {
-          id: entry.id,
-          blockHeight: snap.blockHeight,
-          proposals: snap.proposals.length,
-          members: snap.members.length,
-          errors: snap.errors.length,
-        });
-      }
-    } catch (e) {
-      logger.warn("legion.snapshot_failed", { id: entry.id, error: String(e) });
-    }
-  }
-}
-
 // ─────────────────────────── cron entry point ───────────────────────────
 
 /**
@@ -407,11 +307,10 @@ export async function runScheduledTasks(
     return;
   }
 
-  const [tenero, competition, earnings, legion] = await Promise.all([
+  const [tenero, competition, earnings] = await Promise.all([
     readJson<TeneroState>(kv, K_TENERO),
     readJson<CompetitionState>(kv, K_COMPETITION),
     readJson<EarningsState>(kv, K_EARNINGS),
-    readJson<{ lastRunAt?: number }>(kv, K_LEGION),
   ]);
 
   // Tenero — every tick, unless inside a rate-limit backoff window.
@@ -472,28 +371,6 @@ export async function runScheduledTasks(
   } else {
     logger.debug("scheduler.earnings_not_due", {
       lastRunAt: earnings?.lastRunAt ?? null,
-    });
-  }
-
-  // Legion snapshot — on its (now hourly) cadence, gated like the other tasks
-  // so it no longer runs on every tick. `scheduler:legion` carries only
-  // `lastRunAt` (the D1 snapshots are the real output); a slow overrun still
-  // overwrites idempotently.
-  const legionDue =
-    (legion?.lastRunAt ?? 0) + LEGION_INTERVAL_MS <= now + 1_000;
-  if (legionDue) {
-    try {
-      await runLegionNow(env, logger);
-      await kv.put(K_LEGION, JSON.stringify({ lastRunAt: now }));
-    } catch (error) {
-      logger.error("scheduler.legion_unexpected_error", {
-        error: String(error),
-        stack: error instanceof Error ? error.stack : undefined,
-      });
-    }
-  } else {
-    logger.debug("scheduler.legion_not_due", {
-      lastRunAt: legion?.lastRunAt ?? null,
     });
   }
 }
