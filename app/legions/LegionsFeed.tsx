@@ -7,8 +7,8 @@
  * What differs from news-legion is only what the contracts differ in. There is
  * no treasury, no sponsorship and no seat roster: weight is each holder's live
  * share position, the pot is the legion's own position, and a pass pays 3,000
- * shares. So the seating band and the sponsor board are gone, and the market
- * the two legions argue over takes their place.
+ * shares. So the seating band and the sponsor board are gone. The site Navbar
+ * is the page's only navigation; a Yes / No switch opens the column.
  */
 
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
@@ -101,30 +101,10 @@ function CtaBand({ t, d }: { t: string; d: string }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// Masthead: top bar, nameplate, ticker, and the side switch
+// The side switch: everything below it is one legion
 // ─────────────────────────────────────────────────────────────────────────────
 
-function tickerText(f: FeedItem): string {
-  const d = f.data;
-  const id = f.proposalId;
-  const tag = f.side.toUpperCase();
-  switch (f.event) {
-    case "propose":
-      return `${tag} #${id} PROPOSED · ${String(d.title || "untitled")}`;
-    case "vote":
-      return `${tag} #${id} VOTE ${d.support ? "FOR" : "AGAINST"}`;
-    case "conclude":
-      return `${tag} #${id} ${String(d.outcome || "").toUpperCase()}`;
-    case "redeem-vault":
-      return `${tag} VAULT REDEEMED`;
-    case "claim-credit":
-      return `${tag} CREDIT CLAIMED`;
-    default:
-      return `${tag} ${f.event.toUpperCase()}`;
-  }
-}
-
-function Masthead({
+function SideSwitch({
   state,
   side,
   onSide,
@@ -133,73 +113,25 @@ function Masthead({
   side: LegionSide;
   onSide: (s: LegionSide) => void;
 }) {
-  const pending = state ? LEGION_SIDES.reduce((n, s) => n + state.sides[s].summary.pending, 0) : 0;
-  const feed = state
-    ? [...state.sides.yes.feed, ...state.sides.no.feed]
-        .sort((a, b) => b.blockHeight - a.blockHeight)
-        .slice(0, 30)
-    : [];
-  const items = feed.map(tickerText);
-  // Repeat to fill the strip, then duplicate for a seamless -50% loop.
-  let half = items;
-  while (half.length && half.length < 8) half = half.concat(items);
-  const loop = half.concat(half);
-
-  const date = new Date()
-    .toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", year: "numeric" })
-    .toUpperCase();
-
   return (
-    <>
-      <header className="masthead">
-        <div className="topbar">
-          <span suppressHydrationWarning>
-            {date} · BURN BLOCK {state?.tip != null ? fmtInt(state.tip) : "-"}
+    <nav className="tabs-nav" aria-label="Legion">
+      {LEGION_SIDES.map((s) => (
+        <button
+          key={s}
+          type="button"
+          aria-current={side === s ? "page" : undefined}
+          onClick={() => onSide(s)}
+        >
+          {LEGIONS[s].name}
+          <span className="tabs-nav-sub">
+            {LEGIONS[s].shareLabel} side
+            {state
+              ? ` · ${state.sides[s].summary.total} proposal${state.sides[s].summary.total === 1 ? "" : "s"}`
+              : ""}
           </span>
-          <span className="topbar-live">LIVE{pending ? ` · ${pending} pending` : ""}</span>
-        </div>
-
-        <div className="masthead-mid">
-          <div className="masthead-title">AIBTC LEGIONS</div>
-          <div className="masthead-tagline">Two legions. One market. Paid in the side they argue</div>
-        </div>
-
-        <div className="ticker" aria-hidden="true">
-          {loop.length ? (
-            <div className="ticker-track">
-              {loop.map((t, i) => (
-                <span className="ticker-item" key={i}>
-                  {t}
-                </span>
-              ))}
-            </div>
-          ) : (
-            <div className="ticker-static">Awaiting on-chain activity…</div>
-          )}
-        </div>
-      </header>
-
-      {/* The side switch holds the top of the window under the site navbar, the
-          way news-legion's tab nav does: everything below it is one legion. */}
-      <nav className="tabs-nav" aria-label="Legion">
-        {LEGION_SIDES.map((s) => (
-          <button
-            key={s}
-            type="button"
-            aria-current={side === s ? "page" : undefined}
-            onClick={() => onSide(s)}
-          >
-            {LEGIONS[s].name}
-            <span className="tabs-nav-sub">
-              {LEGIONS[s].shareLabel} side
-              {state
-                ? ` · ${state.sides[s].summary.total} proposal${state.sides[s].summary.total === 1 ? "" : "s"}`
-                : ""}
-            </span>
-          </button>
-        ))}
-      </nav>
-    </>
+        </button>
+      ))}
+    </nav>
   );
 }
 
@@ -918,7 +850,7 @@ export default function LegionsFeed({
     const el = barSentinel.current;
     if (!el || typeof IntersectionObserver === "undefined") return;
     const io = new IntersectionObserver(([entry]) => setStuck(!entry.isIntersecting), {
-      rootMargin: "-120px 0px 0px 0px",
+      rootMargin: "-70px 0px 0px 0px",
     });
     io.observe(el);
     return () => io.disconnect();
@@ -928,9 +860,8 @@ export default function LegionsFeed({
 
   return (
     <>
-      <Masthead state={state ?? null} side={side} onSide={onSide} />
-
       <main className="content">
+        <SideSwitch state={state ?? null} side={side} onSide={onSide} />
         {!state || !current ? (
           error ? (
             <div className="err">Could not read the legions. {String(error.message ?? error)}. Retrying…</div>
