@@ -30,7 +30,6 @@ import {
   OUTCOME_LABEL,
   PHASE_LABEL,
   REASON_LABEL,
-  addrLink,
   contractLink,
   fmtBlocksLeft,
   fmtClock,
@@ -194,8 +193,10 @@ function Masthead({
           >
             {LEGIONS[s].name}
             <span className="tabs-nav-sub">
-              {LEGIONS[s].shareLabel}
-              {state ? ` · ${state.sides[s].summary.total}` : ""}
+              {LEGIONS[s].shareLabel} side
+              {state
+                ? ` · ${state.sides[s].summary.total} proposal${state.sides[s].summary.total === 1 ? "" : "s"}`
+                : ""}
             </span>
           </button>
         ))}
@@ -854,61 +855,6 @@ function MarketBand({
   );
 }
 
-/**
- * Who has acted. There is no roster on chain: any wallet holding the floor is a
- * member. So this is every principal that has proposed or voted on this side,
- * with its weight read live, which is the only weight that counts.
- */
-function Members({ side }: { side: SideState }) {
-  if (side.members.length === 0) return null;
-  return (
-    <section className="members" id={`members-${side.side}`}>
-      <div className="members-head">
-        <h2>Legion members</h2>
-        <span>{fmtInt(side.members.length)} active</span>
-      </div>
-
-      <table className="members-table">
-        <thead>
-          <tr>
-            <th>Agent</th>
-            <th>Weight now</th>
-            <th>Proposals</th>
-            <th>Votes</th>
-            <th>First acted</th>
-          </tr>
-        </thead>
-        <tbody>
-          {side.members.map((m) => (
-            <tr key={m.who}>
-              <td>
-                <a href={addrLink(m.who)} target="_blank" rel="noopener">
-                  {shortAddr(m.who)}
-                </a>
-              </td>
-              <td className={m.weight != null && m.weight >= side.rules.minPosition ? "seat" : ""}>
-                {m.weight == null ? "-" : fmtInt(m.weight)}
-              </td>
-              <td>{fmtInt(m.proposals)}</td>
-              <td>{fmtInt(m.votes)}</td>
-              <td>
-                <a href={txLink(m.firstTxid)} target="_blank" rel="noopener">
-                  block {fmtInt(m.firstBlock)}
-                </a>
-              </td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-
-      <p className="members-left">
-        Membership is a position, not a seat. Any wallet holding {fmtInt(side.rules.minPosition)}{" "}
-        {side.shareLabel} shares can propose and vote, and stops being a member the moment it sells.
-      </p>
-    </section>
-  );
-}
-
 function wireLine(e: FeedItem): React.ReactNode {
   const d = e.data;
   const id = e.proposalId;
@@ -1143,8 +1089,6 @@ function SideView({
 
       <MarketBand market={state.market} tip={state.tip} blockSeconds={state.blockSeconds} />
 
-      <Members side={side} />
-
       {side.summary.total || side.vault ? (
         <div className="stat-row">
           <div className="stat-tile">
@@ -1166,10 +1110,6 @@ function SideView({
           <div className="stat-tile wide">
             <span className="v">{fmtInt(side.vault)}</span>
             <span className="l">Vault (shares)</span>
-          </div>
-          <div className="stat-tile wide">
-            <span className="v">{fmtInt(side.winsLeft)}</span>
-            <span className="l">Wins left</span>
           </div>
         </div>
       ) : null}
