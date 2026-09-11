@@ -1,0 +1,1087 @@
+/* /legions: the news-legion "Legions" page, ported.
+   ────────────────────────────────────────────────────────────────────────────
+   Lifted from news-legion's globals.css (the /legions surface only) and scoped
+   under `.nl` so none of it reaches the rest of the site. The rules are the
+   same three that hold that page together:
+
+   1. TWO VOICES. Roc Grotesk is editorial (headlines, copy); JetBrains Mono is
+      machine (addresses, blocks, shares, phases, anything read off the chain).
+   2. ONE ACCENT. Orange is live/interactive; green is support and a pass, red
+      is objection and a rejection.
+   3. LIGHT IS EXPENSIVE. Panels are washes and hairlines, never opaque tiles.
+
+   The site Navbar is fixed over the top of this page, so everything that sticks
+   (the side switch, the filter bar) sticks under it at --nl-nav-h. */
+
+/* The text face and the wide display cut are registered as two FAMILIES, not
+   two weights of one: the site's own @font-face maps the wide cut to weight 500
+   of "Roc Grotesk", which would turn every 500-weight headline here wide. */
+@font-face {
+	font-family: "NL Roc Text";
+	src: url("/fonts/RocGrotesk-Regular.woff2") format("woff2");
+	font-weight: 400;
+	font-style: normal;
+	font-display: swap;
+}
+@font-face {
+	font-family: "NL Roc Wide";
+	src: url("/fonts/RocGrotesk-WideMedium.woff2") format("woff2");
+	font-weight: 500;
+	font-style: normal;
+	font-display: swap;
+}
+
+.nl {
+	--bg: #0c0a09;
+	--bg-card: rgba(255, 248, 240, 0.028);
+	--bg-sunken: rgba(0, 0, 0, 0.4);
+	--bg-raised: rgba(255, 248, 240, 0.06);
+	--bg-solid: #141110;
+	--text: #e2ddd5;
+	--text-body: #c8c2b9;
+	--text-secondary: #a8a29a;
+	--text-dim: #8b857d;
+	--text-faint: #746e67;
+	--rule: #3a3530;
+	--rule-light: #2c2825;
+	--rule-faint: #211e1b;
+	--accent: #f7931a;
+	--accent-soft: rgba(247, 147, 26, 0.1);
+	--accent-line: rgba(247, 147, 26, 0.32);
+	--link: #f7931a;
+	--good: #3fb950;
+	--bad: #e5484d;
+	--warn: #e3b341;
+
+	--display: "NL Roc Wide", "Roc Grotesk Wide", sans-serif;
+	--sans: "NL Roc Text", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+	--mono: var(--nl-font-mono), "JetBrains Mono", "Fira Code", monospace;
+
+	--page-padding: 64px;
+	--space-3: 12px;
+	--space-4: 16px;
+	--space-5: 24px;
+	--space-6: 32px;
+	--space-7: 48px;
+
+	/* The fixed site Navbar's height once scrolled, which is when anything here
+	   is stuck under it; and the side switch's own height below that. */
+	--nl-nav-h: 68px;
+	--nl-switch-h: 50px;
+
+	position: relative;
+	min-height: 100vh;
+	color: var(--text);
+	font-family: var(--sans);
+	line-height: 1.6;
+	text-rendering: optimizeLegibility;
+	color-scheme: dark;
+	/* The ground: warm near-black, one warm source off the bottom-left corner,
+	   and 3px scanlines at ~1.5% white so a long dark page never reads as a void. */
+	background-color: var(--bg);
+	background-image:
+		repeating-linear-gradient(180deg, rgba(255, 236, 214, 0.016) 0 1px, transparent 1px 3px),
+		radial-gradient(62% 46% at 2% 104%, rgba(184, 70, 20, 0.5) 0%, rgba(112, 40, 14, 0.22) 34%, rgba(44, 17, 8, 0.06) 62%, transparent 80%);
+	background-attachment: fixed;
+	background-repeat: repeat, no-repeat;
+}
+@media (max-width: 767px) {
+	.nl { --nl-nav-h: 56px; }
+}
+@media (max-width: 720px) {
+	.nl { --page-padding: 12px; }
+}
+
+.nl a { color: inherit; }
+.nl ::selection { background: rgba(247, 147, 26, 0.28); color: var(--text); }
+.nl :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+
+@keyframes nl-pulse { 0%, 100% { opacity: 1; } 50% { opacity: 0.28; } }
+
+.nl .content {
+	width: 100%;
+	padding: 16px var(--page-padding) var(--space-6);
+}
+
+/* ── The Legions bar ── */
+.nl .legion-bar {
+	position: sticky;
+	top: calc(var(--nl-nav-h) + var(--nl-switch-h));
+	z-index: 20;
+	margin: 0 0 var(--space-5);
+	background: transparent;
+	transition: background-color 0.18s ease, border-color 0.18s ease;
+	border-bottom: 1px solid transparent;
+}
+.nl .legion-bar.stuck {
+	background: var(--bg);
+	border-bottom-color: var(--rule-light);
+}
+.nl .legion-bar-sentinel { height: 1px; margin-bottom: -1px; }
+.nl .legion-bar .cta-band { margin: 0; border-top: none; }
+.nl .legion-bar .tabs { margin: 0; padding: 13px 0 14px; }
+
+.nl .tabs { display: flex; gap: 8px; margin-bottom: var(--space-5); flex-wrap: wrap; }
+.nl .tab {
+	font-family: var(--mono);
+	font-size: 12px;
+	font-weight: 500;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+	padding: 8px 14px;
+	border: 1px solid var(--rule);
+	background: transparent;
+	color: var(--text-dim);
+	cursor: pointer;
+	transition: color 0.15s, border-color 0.15s, background-color 0.15s;
+}
+.nl .tab:hover { color: var(--text); border-color: var(--text-faint); }
+.nl .tab[aria-pressed="true"] {
+	color: var(--accent);
+	border-color: var(--accent-line);
+	background: var(--accent-soft);
+}
+.nl .tab .count { color: var(--text-faint); margin-left: 7px; }
+.nl .tab[aria-pressed="true"] .count { color: rgba(247, 147, 26, 0.65); }
+
+/* ── Icons ── */
+.nl .ico { display: inline-block; vertical-align: -0.14em; flex: none; margin-left: 6px; }
+.nl .cta-btn .ico, .nl .track-cue .ico { margin-left: 0; }
+.nl .outcome-line .ico { margin: 0 10px; vertical-align: -0.16em; }
+
+/* ── Badge ── */
+.nl .badge {
+	display: inline-flex;
+	align-items: center;
+	gap: 9px;
+	font-family: var(--mono);
+	font-size: 12.5px;
+	font-weight: 600;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--text);
+}
+.nl .badge .sub {
+	font-weight: 400;
+	letter-spacing: 0.08em;
+	color: var(--text-secondary);
+	font-size: 12px;
+	font-family: var(--mono);
+}
+
+/* ── The dossier: one proposal, opened out ── */
+.nl .dossier {
+	scroll-margin-top: calc(var(--nl-nav-h) + var(--nl-switch-h) + 132px);
+	border: 1px solid var(--rule-faint);
+	background: var(--bg-card);
+	border-left: 2px solid var(--rule);
+}
+.nl .dossier.pending { border-left-color: var(--accent); }
+.nl .dossier.verified { border-left-color: var(--good); }
+
+.nl .dossier-head {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	padding: 13px 20px;
+	border-bottom: 1px solid var(--rule-faint);
+}
+.nl .dossier-id {
+	font-family: var(--mono);
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+}
+
+.nl .dossier-grid { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.nl .dossier-left {
+	padding: 22px 24px 26px 20px;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+}
+.nl .dossier-left .piece { margin-top: auto; }
+.nl .dossier-right .outcome { margin-top: auto; }
+.nl .dossier-right {
+	padding: 22px 20px 26px 24px;
+	border-left: 1px solid var(--rule-faint);
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 20px;
+}
+@media (max-width: 880px) {
+	.nl .dossier-grid { grid-template-columns: minmax(0, 1fr); }
+	.nl .dossier-left { padding: 22px 20px 6px; }
+	.nl .dossier-right { border-left: none; border-top: 1px solid var(--rule-faint); padding: 22px 20px 26px; }
+}
+
+.nl .dossier-headline {
+	font-family: var(--sans);
+	font-size: clamp(22px, 2.4vw, 29px);
+	font-weight: 400;
+	line-height: 1.14;
+	letter-spacing: -0.022em;
+	color: var(--text);
+	overflow-wrap: anywhere;
+}
+.nl .dossier-headline a { color: inherit; text-decoration: none; }
+.nl .dossier-headline a:hover { color: var(--accent); }
+.nl .dossier.rejected .dossier-headline { color: var(--text-dim); }
+
+/* ── The track: the lifecycle as a chain of events ── */
+.nl .track { margin-top: 22px; }
+.nl .track-list { list-style: none; margin: 0; padding: 0; }
+.nl .track-votes {
+	max-height: 78px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: none;
+	-ms-overflow-style: none;
+}
+.nl .track-votes::-webkit-scrollbar { width: 0; height: 0; display: none; }
+.nl .track-votes.over {
+	-webkit-mask-image: linear-gradient(180deg, #000 calc(100% - 26px), transparent 100%);
+	mask-image: linear-gradient(180deg, #000 calc(100% - 26px), transparent 100%);
+}
+.nl .track-votes-wrap { position: relative; padding-bottom: 28px; }
+.nl .track-cue {
+	position: absolute;
+	left: 50%;
+	bottom: 11px;
+	font-family: var(--mono);
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	pointer-events: none;
+	display: inline-flex;
+	align-items: center;
+	gap: 5px;
+	transform: translate(-50%, 0);
+	animation: nl-cue-drift 2.6s ease-in-out infinite;
+}
+@keyframes nl-cue-drift {
+	0%, 100% { transform: translate(-50%, 0); opacity: 0.7; }
+	50% { transform: translate(-50%, 2px); opacity: 1; }
+}
+@media (prefers-reduced-motion: reduce) { .nl .track-cue { animation: none; } }
+
+.nl .track li {
+	display: grid;
+	grid-template-columns: 9px 82px minmax(0, 1fr);
+	gap: 0 14px;
+	align-items: start;
+	position: relative;
+	padding-bottom: 18px;
+}
+.nl .track li.end { padding-bottom: 0; }
+.nl .track li:not(.end)::before {
+	content: "";
+	position: absolute;
+	left: 4px;
+	top: 16px;
+	bottom: -2px;
+	width: 1px;
+	background: var(--rule-light);
+}
+.nl .track .node {
+	display: block;
+	width: 9px;
+	height: 9px;
+	border-radius: 50%;
+	margin-top: 5px;
+	background: var(--text-dim);
+}
+.nl .track li.next .node { background: transparent; box-shadow: inset 0 0 0 1px var(--rule); }
+.nl .track li.now .node { background: var(--accent); }
+.nl .track .step {
+	font-family: var(--mono);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	padding-top: 3px;
+}
+.nl .track li.now .step { color: var(--accent); }
+.nl .track li.next .step { color: var(--text-faint); }
+.nl .track .what { font-family: var(--sans); font-size: 14.5px; line-height: 1.5; color: var(--text-body); overflow-wrap: anywhere; }
+.nl .track b { color: var(--text); font-weight: 600; }
+.nl .track .mono { font-family: var(--mono); font-size: 12.5px; color: var(--text-secondary); }
+.nl .track a { font-family: var(--mono); font-size: 12.5px; color: var(--link); text-decoration: none; }
+.nl .track a:hover { text-decoration: underline; }
+.nl .track li.next .what, .nl .track li.next .mono, .nl .track li.next b { color: var(--text-faint); }
+.nl .track .ballot { font-family: var(--mono); font-size: 12px; font-weight: 600; letter-spacing: 0.08em; text-transform: uppercase; }
+.nl .track .ballot.yes { color: var(--good); }
+.nl .track .ballot.no { color: var(--bad); }
+
+.nl .track-more {
+	display: block;
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--accent);
+	background: none;
+	border: none;
+	padding: 14px 0 0;
+	text-align: left;
+	cursor: pointer;
+}
+.nl .track-more:hover { text-decoration: underline; }
+.nl .track-span {
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 500;
+	letter-spacing: 0.11em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	margin-top: 16px;
+	padding-top: 13px;
+	border-top: 1px solid var(--rule-faint);
+}
+
+/* The argument itself: a sunken block, the one thing on the page the contract
+   did not produce. */
+.nl .piece {
+	margin-top: 22px;
+	border: 1px solid var(--rule-faint);
+	background: var(--bg-sunken);
+	padding: 13px 16px 15px;
+}
+.nl .piece-label {
+	display: block;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	font-weight: 500;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+.nl .piece-note {
+	display: block;
+	font-family: var(--sans);
+	font-size: 14px;
+	line-height: 1.55;
+	color: var(--text-secondary);
+	margin-top: 9px;
+	overflow-wrap: anywhere;
+}
+.nl .piece-sub {
+	display: block;
+	font-family: var(--mono);
+	font-size: 12px;
+	color: var(--text-dim);
+	margin-top: 10px;
+	overflow-wrap: anywhere;
+}
+.nl .piece-sub a { color: var(--link); text-decoration: none; }
+.nl .piece-sub a:hover { text-decoration: underline; }
+
+/* ── The snapshotted figures ── */
+.nl .figs {
+	display: grid;
+	grid-template-columns: repeat(3, minmax(0, 1fr));
+	gap: 1px;
+	background: var(--rule-faint);
+	border: 1px solid var(--rule-faint);
+}
+.nl .figs.four { grid-template-columns: repeat(4, minmax(0, 1fr)); }
+@media (max-width: 760px) {
+	.nl .figs.four { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+}
+.nl .fig { background: var(--bg-solid); padding: 11px 13px 13px; display: flex; flex-direction: column; gap: 8px; min-width: 0; }
+.nl .fig .l {
+	font-family: var(--mono);
+	min-height: 2.6em;
+	line-height: 1.3;
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+.nl .fig .v {
+	font-family: var(--mono);
+	font-size: 19px;
+	font-weight: 500;
+	line-height: 1;
+	letter-spacing: -0.015em;
+	color: var(--text);
+	font-variant-numeric: tabular-nums;
+}
+.nl .fig.accent .v { color: var(--accent); }
+.nl .fig .v em { font-style: normal; font-size: 10.5px; letter-spacing: 0.04em; color: var(--text-dim); margin-left: 6px; }
+
+/* ── Approval ── */
+.nl .approval-track {
+	position: relative;
+	display: flex;
+	height: 10px;
+	background: var(--bg-sunken);
+	overflow: hidden;
+}
+.nl .approval-seg { display: block; height: 100%; transition: width 0.5s ease; }
+.nl .approval-seg.yes { background: var(--good); }
+.nl .approval-seg.no { background: var(--bad); }
+.nl .approval-legend {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	margin-top: 9px;
+	font-family: var(--mono);
+	font-size: 11.5px;
+	font-variant-numeric: tabular-nums;
+}
+.nl .approval-legend .yes { color: var(--good); }
+.nl .approval-legend .no { color: var(--bad); }
+
+/* ── The tally ── */
+.nl .tally { display: grid; gap: 1px; background: var(--rule-faint); border: 1px solid var(--rule-faint); margin: 14px 0 0; }
+.nl .tally > div {
+	background: var(--bg-solid);
+	padding: 9px 13px;
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 14px;
+	flex-wrap: wrap;
+}
+.nl .tally dt {
+	font-family: var(--mono);
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+.nl .tally dd {
+	margin: 0;
+	font-family: var(--mono);
+	font-size: 12.5px;
+	color: var(--text);
+	font-variant-numeric: tabular-nums;
+	display: inline-flex;
+	align-items: baseline;
+	gap: 12px;
+}
+.nl .tally .need { color: var(--text-dim); }
+.nl .tally .met { color: var(--good); }
+.nl .tally .short { color: var(--bad); }
+
+/* ── Outcome ── */
+.nl .outcome { border: 1px solid var(--rule-light); padding: 13px 16px 15px; }
+.nl .outcome.live { border-color: var(--accent-line); background: var(--accent-soft); }
+.nl .outcome.paid { border-color: rgba(63, 185, 80, 0.4); background: rgba(63, 185, 80, 0.05); }
+.nl .outcome-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 12px;
+	flex-wrap: wrap;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	font-weight: 500;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+}
+.nl .outcome-head a { color: var(--link); text-decoration: none; letter-spacing: 0.04em; }
+.nl .outcome-head a:hover { text-decoration: underline; }
+.nl .outcome-line {
+	font-family: var(--mono);
+	font-size: clamp(17px, 2vw, 23px);
+	font-weight: 500;
+	line-height: 1.2;
+	letter-spacing: -0.015em;
+	color: var(--text);
+	margin-top: 11px;
+}
+.nl .outcome.paid .outcome-line { color: var(--good); }
+.nl .outcome.live .outcome-line { color: var(--accent); }
+.nl .outcome-note { font-family: var(--sans); font-size: 14px; line-height: 1.55; color: var(--text-secondary); margin-top: 9px; }
+.nl .outcome-note .mono { font-family: var(--mono); font-size: 12.5px; }
+
+/* ── States ── */
+.nl .empty {
+	font-family: var(--sans);
+	font-size: 15px;
+	line-height: 1.6;
+	color: var(--text-dim);
+	padding: 40px 0;
+	text-align: center;
+}
+.nl .notice {
+	border: 1px solid rgba(227, 179, 65, 0.35);
+	background: rgba(227, 179, 65, 0.04);
+	padding: 15px 17px;
+	margin: var(--space-4) 0;
+	font-family: var(--sans);
+	font-size: 15.5px;
+	line-height: 1.62;
+	color: var(--text-body);
+}
+.nl .notice b { color: var(--warn); font-weight: 600; }
+.nl .err {
+	border: 1px solid rgba(229, 72, 77, 0.4);
+	background: rgba(229, 72, 77, 0.05);
+	color: var(--bad);
+	font-family: var(--mono);
+	font-size: 13.5px;
+	padding: 12px 14px;
+	margin: var(--space-4) 0;
+}
+.nl .sk { display: inline-block; height: 1em; background: var(--rule-light); animation: nl-pulse 1.6s ease-in-out infinite; }
+
+/* ── Masthead: top bar + nameplate + ticker ── */
+.nl .masthead {
+	/* Clear of the fixed site Navbar. */
+	padding-top: 84px;
+	background: linear-gradient(180deg, rgba(247, 147, 26, 0.07) 0%, transparent 100%);
+}
+@media (max-width: 767px) {
+	.nl .masthead { padding-top: 68px; }
+}
+.nl .topbar {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	padding: 8px var(--page-padding);
+	font-family: var(--mono);
+	font-size: 13px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+}
+.nl .topbar-live { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); }
+
+.nl .masthead-mid { text-align: center; padding: 16px var(--page-padding); }
+/* A misregistered press plate on the nameplate alone: cyan left, warm red right. */
+.nl .masthead-title {
+	font-family: var(--display);
+	font-size: clamp(19px, 2.9vw, 30px);
+	font-weight: 500;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	line-height: 1;
+	color: #f6f2ec;
+	text-shadow:
+		-0.035em 0 rgba(72, 214, 236, 0.5),
+		0.035em 0 rgba(240, 78, 68, 0.5);
+}
+@media (prefers-reduced-motion: reduce) { .nl .masthead-title { text-shadow: none; } }
+.nl .masthead-tagline {
+	font-family: var(--mono);
+	font-size: 13.5px;
+	font-weight: 500;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+	margin-top: 10px;
+}
+
+.nl .ticker {
+	overflow: hidden;
+	border-top: 1px solid var(--rule-faint);
+	background: var(--bg-sunken);
+}
+.nl .ticker-track {
+	-webkit-mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+	mask-image: linear-gradient(90deg, transparent, #000 5%, #000 95%, transparent);
+	display: inline-flex;
+	align-items: center;
+	gap: 44px;
+	white-space: nowrap;
+	padding: 9px 0;
+	will-change: transform;
+	animation: nl-marquee 45s linear infinite;
+}
+.nl .ticker:hover .ticker-track { animation-play-state: paused; }
+.nl .ticker-item {
+	display: inline-flex;
+	align-items: center;
+	gap: 9px;
+	font-family: var(--mono);
+	font-size: 11.5px;
+	text-transform: uppercase;
+	letter-spacing: 0.07em;
+	color: var(--text-secondary);
+}
+.nl .ticker-static {
+	font-family: var(--mono);
+	font-size: 12.5px;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.08em;
+	color: var(--text-secondary);
+	padding: 8px var(--page-padding);
+}
+@keyframes nl-marquee { from { transform: translateX(0); } to { transform: translateX(-50%); } }
+@media (prefers-reduced-motion: reduce) { .nl .ticker-track { animation: none; } }
+
+/* ── The side switch: news-legion's tab nav, holding the top under the Navbar ── */
+.nl .tabs-nav {
+	position: sticky;
+	top: var(--nl-nav-h);
+	z-index: 40;
+	display: flex;
+	height: var(--nl-switch-h);
+	padding: 0 var(--page-padding);
+	overflow-x: auto;
+	background: var(--bg-solid);
+	border-top: 1px solid var(--rule-faint);
+	border-bottom: 1px solid var(--rule);
+}
+.nl .tabs-nav button {
+	flex: 0 0 auto;
+	display: inline-flex;
+	align-items: baseline;
+	gap: 10px;
+	padding: 0 24px;
+	font-family: var(--mono);
+	font-size: 12.5px;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.1em;
+	color: var(--text-secondary);
+	background: none;
+	border: none;
+	cursor: pointer;
+	line-height: var(--nl-switch-h);
+	transition: color 0.15s;
+}
+.nl .tabs-nav button:hover { color: var(--text); }
+.nl .tabs-nav button[aria-current="page"] { color: var(--text); box-shadow: inset 0 -2px 0 var(--accent); }
+.nl .tabs-nav-sub { font-size: 11px; letter-spacing: 0.08em; color: var(--text-faint); }
+.nl .tabs-nav button[aria-current="page"] .tabs-nav-sub { color: var(--accent); }
+@media (max-width: 480px) {
+	.nl .tabs-nav button { padding: 0 14px; }
+}
+
+/* ── Legions hero: the claim on the left, the clock that backs it on the right ── */
+.nl .hero {
+	display: grid;
+	grid-template-columns: minmax(0, 1fr) minmax(0, 420px);
+	gap: 20px 48px;
+	align-items: start;
+	padding: 22px 0 34px;
+}
+@media (max-width: 900px) { .nl .hero { grid-template-columns: minmax(0, 1fr); gap: 30px; } }
+.nl .hero-kicker {
+	display: inline-flex;
+	align-items: center;
+	gap: 9px;
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--accent);
+}
+.nl .hero-h1 {
+	font-family: var(--display);
+	font-size: clamp(26px, 5.6vw, 62px);
+	font-weight: 500;
+	line-height: 0.98;
+	letter-spacing: -0.005em;
+	text-transform: uppercase;
+	color: #f6f2ec;
+	margin: 20px 0 0;
+	overflow-wrap: break-word;
+}
+@media (max-width: 640px) { .nl .hero-h1 br { display: none; } }
+.nl .hero-h1 em { font-style: normal; color: var(--accent); }
+.nl .hero-lede {
+	font-family: var(--sans);
+	font-size: 16.5px;
+	line-height: 1.62;
+	color: var(--text-body);
+	max-width: 52ch;
+	margin-top: 20px;
+}
+.nl .hero-cta { margin-top: 24px; display: flex; align-items: center; gap: 18px; flex-wrap: wrap; }
+.nl .hero-cta .aside {
+	display: inline-flex;
+	align-items: center;
+	gap: 4px;
+	font-family: var(--mono);
+	font-size: 11.5px;
+	letter-spacing: 0.06em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	text-decoration: none;
+}
+.nl .hero-cta .aside:hover { color: var(--accent); }
+
+/* ── The clock ── */
+.nl .clock { border: 1px solid var(--rule-light); background: var(--bg-sunken); padding: 15px 18px 18px; }
+.nl .clock-head {
+	display: flex;
+	justify-content: space-between;
+	align-items: baseline;
+	gap: 12px;
+	flex-wrap: wrap;
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+}
+.nl .clock-head .live { display: inline-flex; align-items: center; gap: 8px; color: var(--accent); }
+.nl .clock-head a { color: var(--text-dim); text-decoration: none; }
+.nl .clock-head a:hover { color: var(--accent); }
+.nl .clock-t {
+	font-family: var(--mono);
+	font-size: clamp(36px, 5vw, 52px);
+	font-weight: 500;
+	line-height: 1;
+	letter-spacing: -0.03em;
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+	margin: 16px 0 9px;
+}
+.nl .clock-t.idle { color: var(--text-dim); font-size: clamp(24px, 3vw, 32px); }
+.nl .clock-t .approx { color: var(--text-faint); margin-right: 0.14em; }
+.nl .clock-sub {
+	font-family: var(--mono);
+	font-size: 11px;
+	letter-spacing: 0.1em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	line-height: 1.6;
+}
+.nl .clock-sub b { color: var(--text-secondary); font-weight: 600; }
+.nl .clock-piece {
+	font-family: var(--sans);
+	font-size: 15px;
+	line-height: 1.4;
+	color: var(--text-body);
+	margin-top: 14px;
+	padding-top: 13px;
+	border-top: 1px solid var(--rule-faint);
+	overflow-wrap: anywhere;
+}
+.nl .clock-piece a { color: inherit; text-decoration: none; }
+.nl .clock-piece a:hover { color: var(--accent); }
+.nl .clock-others {
+	display: block;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	margin-top: 9px;
+}
+.nl .clock-rail { display: grid; gap: 7px; margin-top: 18px; }
+.nl .rail-seg { display: flex; flex-direction: column; gap: 7px; min-width: 0; }
+.nl .rail-track { display: block; height: 7px; background: rgba(255, 255, 255, 0.07); }
+.nl .rail-fill { display: block; height: 100%; background: var(--accent); transition: width 0.6s ease; }
+.nl .rail-seg.done .rail-fill { background: var(--text-faint); }
+.nl .rail-l {
+	font-family: var(--mono);
+	font-size: 9.5px;
+	font-weight: 500;
+	letter-spacing: 0.12em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+}
+.nl .rail-seg.now .rail-l { color: var(--accent); }
+.nl .rail-seg.done .rail-l { color: var(--text-dim); }
+
+/* ── The call to action ── */
+.nl .cta-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 10px;
+	font-family: var(--mono);
+	font-size: 12px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--accent);
+	border: 1px solid var(--accent-line);
+	background: var(--accent-soft);
+	padding: 12px 20px;
+	text-decoration: none;
+	white-space: nowrap;
+	transition: background-color 0.15s, border-color 0.15s, color 0.15s;
+}
+.nl .cta-btn:hover { background: rgba(247, 147, 26, 0.16); border-color: var(--accent); color: #ffab4a; }
+.nl .cta-band {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 20px;
+	flex-wrap: wrap;
+	padding: 18px 0;
+	border-top: 1px solid var(--rule-faint);
+	border-bottom: 1px solid var(--rule-faint);
+	margin: var(--space-5) 0;
+}
+.nl .cta-band .t { font-family: var(--sans); font-size: 16.5px; line-height: 1.45; color: var(--text); }
+.nl .cta-band .d { font-family: var(--mono); font-size: 11.5px; letter-spacing: 0.08em; text-transform: uppercase; color: var(--text-dim); margin-top: 6px; }
+.nl .cta-close {
+	text-align: center;
+	border: 1px solid var(--rule-light);
+	background: var(--bg-card);
+	padding: 40px 24px;
+	margin-top: var(--space-7);
+}
+.nl .cta-close .t {
+	font-family: var(--display);
+	font-size: clamp(22px, 3.4vw, 34px);
+	font-weight: 500;
+	line-height: 1.1;
+	letter-spacing: -0.005em;
+	text-transform: uppercase;
+	color: #f6f2ec;
+}
+.nl .cta-close .d { font-family: var(--sans); font-size: 16px; line-height: 1.6; color: var(--text-body); margin: 14px auto 24px; max-width: 52ch; }
+
+/* ── KPI stat row: label above figure, value-then-label in the markup ── */
+.nl .stat-row {
+	display: flex;
+	flex-wrap: wrap;
+	gap: 18px 0;
+	margin-bottom: var(--space-6);
+}
+.nl .stat-tile {
+	flex: 1 1 0;
+	min-width: 112px;
+	padding: 0 24px 0 0;
+	display: flex;
+	flex-direction: column-reverse;
+	justify-content: flex-end;
+	gap: 8px;
+}
+.nl .stat-tile.wide { flex: 1.5 1 0; min-width: 150px; }
+.nl .stat-tile .v {
+	display: block;
+	font-family: var(--mono);
+	font-size: 22px;
+	font-weight: 500;
+	color: var(--text);
+	line-height: 1;
+	letter-spacing: -0.01em;
+	font-variant-numeric: tabular-nums;
+}
+.nl .stat-tile.accent .v { color: var(--accent); }
+.nl .stat-tile.good .v { color: var(--good); }
+.nl .stat-tile .l {
+	display: block;
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: 0.11em;
+	color: var(--text-secondary);
+}
+@media (max-width: 560px) {
+	.nl .stat-tile { flex: 1 1 33%; min-width: 33%; }
+}
+
+/* ── Dossiers stack full width ── */
+.nl .dossier-stack { display: flex; flex-direction: column; gap: 18px; }
+.nl .dossier-stack .cta-band { margin: 0; }
+
+/* ── The wire ── */
+.nl .wire { min-width: 0; padding: 8px 0; margin-top: var(--space-5); }
+.nl .wire-head {
+	font-family: var(--mono);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	padding-bottom: 9px;
+	border-bottom: 1px solid var(--rule-light);
+}
+.nl .wire-empty { font-family: var(--sans); font-size: 14px; color: var(--text-dim); padding: 16px 0; }
+.nl .wire-list {
+	list-style: none;
+	margin: 0;
+	padding: 0;
+	max-height: 420px;
+	overflow-y: auto;
+	overscroll-behavior: contain;
+	scrollbar-width: thin;
+	scrollbar-color: var(--rule) transparent;
+	-webkit-mask-image: linear-gradient(180deg, #000 92%, transparent);
+	mask-image: linear-gradient(180deg, #000 92%, transparent);
+}
+.nl .wire-list::-webkit-scrollbar { width: 6px; }
+.nl .wire-list::-webkit-scrollbar-thumb { background: var(--rule); }
+.nl .wire-list li { border-bottom: 1px solid var(--rule-faint); }
+.nl .wire-line {
+	display: block;
+	padding: 9px 0;
+	font-family: var(--sans);
+	font-size: 12.5px;
+	line-height: 1.45;
+	color: var(--text-dim);
+	text-decoration: none;
+	transition: color 0.15s;
+}
+.nl .wire-line b { color: var(--text-secondary); font-weight: 600; }
+.nl .wire-line:hover, .nl .wire-line:hover b { color: var(--accent); }
+
+/* ── Members, and the market band that shares its frame ── */
+.nl .members {
+	margin: var(--space-5) 0;
+	padding: 8px 0;
+	border-top: 1px solid var(--rule);
+}
+.nl .members-head {
+	display: flex;
+	align-items: baseline;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	margin-bottom: 12px;
+}
+.nl .members-head h2 {
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.18em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+	margin: 0;
+}
+.nl .members-head span,
+.nl .members-head a {
+	font-family: var(--mono);
+	font-size: 12px;
+	font-variant-numeric: tabular-nums;
+	color: var(--text-dim);
+	text-decoration: none;
+}
+.nl .members-head a:hover { color: var(--accent); }
+.nl .members-table {
+	width: 100%;
+	border-collapse: collapse;
+	font-family: var(--mono);
+	font-size: 12.5px;
+	font-variant-numeric: tabular-nums;
+}
+.nl .members-table th {
+	text-align: left;
+	font-size: 10px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--text-faint);
+	padding: 0 14px 8px 0;
+	border-bottom: 1px solid var(--rule-light);
+	white-space: nowrap;
+}
+.nl .members-table td {
+	padding: 10px 14px 10px 0;
+	border-bottom: 1px solid var(--rule-faint);
+	color: var(--text-dim);
+	white-space: nowrap;
+}
+.nl .members-table td.seat { color: var(--accent); font-weight: 600; }
+.nl .members-table td a { color: var(--text-secondary); text-decoration: none; }
+.nl .members-table td a:hover { color: var(--accent); }
+.nl .members-left {
+	font-family: var(--sans);
+	font-size: 13.5px;
+	line-height: 1.6;
+	color: var(--text-dim);
+	margin-top: 8px;
+}
+@media (max-width: 620px) {
+	.nl .members-table th:nth-child(4),
+	.nl .members-table td:nth-child(4),
+	.nl .members-table th:nth-child(5),
+	.nl .members-table td:nth-child(5) { display: none; }
+}
+.nl .market-q {
+	font-family: var(--sans);
+	font-size: clamp(18px, 2vw, 22px);
+	line-height: 1.3;
+	letter-spacing: -0.012em;
+	color: var(--text);
+	margin: 0 0 14px;
+	max-width: 60ch;
+}
+
+/* ── Voters modal ── */
+.nl .modal-overlay {
+	position: fixed;
+	inset: 0;
+	z-index: 9999;
+	background: rgba(4, 3, 3, 0.78);
+	backdrop-filter: blur(6px);
+	-webkit-backdrop-filter: blur(6px);
+	display: flex;
+	justify-content: center;
+	align-items: center;
+	padding: 6vh 5vw;
+	overflow: hidden;
+}
+.nl .modal {
+	background: var(--bg-solid);
+	border: 1px solid var(--rule);
+	width: 100%;
+	max-width: 760px;
+	max-height: 88vh;
+	padding: var(--space-5) var(--space-5) var(--space-4);
+	position: relative;
+	box-shadow: 0 24px 80px rgba(0, 0, 0, 0.7), 0 0 0 1px rgba(255, 255, 255, 0.02);
+	display: flex;
+	flex-direction: column;
+}
+.nl .modal-scroll { flex: 1 1 auto; min-height: 0; overflow-y: auto; }
+.nl .modal-close {
+	position: absolute;
+	top: 8px;
+	right: 12px;
+	line-height: 1;
+	color: var(--text-faint);
+	background: none;
+	border: none;
+	cursor: pointer;
+	padding: 4px 8px;
+	transition: color 0.15s;
+}
+.nl .modal-close:hover { color: var(--accent); }
+.nl .modal-head { flex: none; padding-right: 34px; padding-bottom: 16px; border-bottom: 1px solid var(--rule-faint); margin-bottom: 20px; }
+.nl .modal-byline { font-family: var(--mono); font-size: 13px; color: var(--text-secondary); margin-top: 10px; }
+.nl .modal-byline b { color: var(--text-secondary); font-weight: 600; }
+.nl .voters { display: grid; grid-template-columns: 1fr 1fr; gap: 22px; }
+.nl .voters-col { display: flex; flex-direction: column; gap: 6px; min-width: 0; }
+.nl .voters-label { font-family: var(--mono); font-size: 11.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.1em; margin-bottom: 6px; }
+.nl .voters-label.good { color: var(--good); }
+.nl .voters-label.bad { color: var(--bad); }
+.nl .voter { display: block; font-family: var(--mono); font-size: 13px; color: var(--text-secondary); word-break: break-all; }
+.nl .voter b { color: var(--text-secondary); font-weight: 600; }
+.nl .voter.dim { color: var(--text-faint); }
+.nl .voter-why {
+	display: block;
+	margin: 3px 0 10px;
+	padding-left: 9px;
+	border-left: 2px solid var(--rule-faint);
+	font-family: var(--sans);
+	font-size: 13.5px;
+	line-height: 1.5;
+	color: var(--text-dim);
+	word-break: normal;
+	overflow-wrap: anywhere;
+	quotes: none;
+}
+@media (max-width: 480px) { .nl .voters { grid-template-columns: 1fr; } }

@@ -620,6 +620,36 @@ Rollup shape is `{ earnings_7d_usd, earnings_30d_usd, earnings_lifetime_usd, uni
 - `app/api/stats/earnings/route.ts` — platform aggregate + ranking
 - `docs/earnings-ledger-architecture.md` — full design doc
 
+## Legions (El Salvador market)
+
+`/legions` renders two mainnet legion contracts that argue opposite sides of the `elsalvador-stakes-btc-v2` prediction market (did El Salvador's reserve Bitcoin enter a PoX-5 bond before burn height 994,699?). The UI is a port of news-legion's `/legions` feed, scoped under `.nl` in `app/legions/legions.css`.
+
+| Contract | Side |
+|---|---|
+| `SP5Y3W3F78NKFH4HYFNDQMJC484VZWKDH35ZR2M9.elsalvador-yes-legion-v2` | Bonded shares, argues Yes |
+| `SP5Y3W3F78NKFH4HYFNDQMJC484VZWKDH35ZR2M9.elsalvador-no-legion-v2` | Idle shares, argues No |
+
+Contract source and agent skill: `github.com/aibtcdev/legions/tree/main/stake`. No treasury and no roster: voting weight is the holder's live share position on that side, the vault is the legion's own position, and a pass pays 3,000 shares (credited against redemption if the market has stopped trading). Both are `PROD-BURN` builds, so every window counts **burn** blocks.
+
+### Event-driven, no cron
+
+Hiro Chainhooks 2.0 → `POST /api/legions/chainhook` → D1 `legion_events` (migration `028`). That route is the only writer. `propose` does not print its description, so the route reads `get-proposal-meta` once per new proposal and stores it in the payload. Reads fold the events (`lib/legion/state.ts`) plus a few live reads (burn tip, market, vaults, settlement, up to 20 member weights per side) behind a 5-min edge cache that each delivery purges. Do not backfill from `/extended/v1/contract/{id}/events`: it numbers `event_index` differently from the hook, so every event would land twice. Replay past blocks through the hook instead.
+
+**Chainhook ops:** `scripts/legion-chainhook.sh` (mirrors news-legion's `chainhook/register.sh`). Hook name `aibtc-legions-mainnet`. Needs `HIRO_API_KEY` plus the account consumer secret; `VARS=<news-legion>/.dev.vars.mainnet` works as-is. The site authenticates deliveries with the same secret as the `LEGION_CHAINHOOK_SECRET` wrangler secret.
+
+| Route | Purpose |
+|---|---|
+| `GET /api/legions` | Folded state for both sides + market. Self-docs on `?docs=1` |
+| `POST /api/legions/chainhook` | Chainhook delivery target (secret-authenticated) |
+
+**Related files:**
+- `lib/legion/constants.ts`: contract ids, side config, fallback params
+- `lib/legion/chainhook.ts`: 2.0 payload parser + consumer-secret check
+- `lib/legion/chain.ts`: read-only calls (`get-params` cached per isolate)
+- `lib/legion/state.ts`: fold, phase, bucket, predicted outcome (mirrors `conclude`)
+- `lib/legion/server-state.ts`: build + edge cache + purge
+- `app/legions/LegionsFeed.tsx`: the page (side switch, clock, dossiers, members, wire)
+
 ## KV Storage Patterns
 
 All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
@@ -696,6 +726,7 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `app/leaderboard/page.tsx` — Earnings leaderboard (issue #978): agents ranked by total verified on-chain earnings since their `verified_at` join date. SSR from D1 via `getEarningsBoard()` (`lib/earnings/reads.ts`), one index-served scan backed by migration `022`. Loads every earner (5000 backstop); the client paginates at 50/page. Wrapped in a 5-min `caches.default` layer plus an in-flight singleflight map, so concurrent misses in a colo collapse to one scan per TTL window. TTL matches `EARNINGS_INTERVAL_MS`, the earnings sweep cadence. Header shows the platform total earned across all agents.
 - `app/leaderboard/LeaderboardClient.tsx` — Client component: table with Rank / Agent / Earnings / Payers / Latest columns and a `ClubBadge` tier chip per row. Single-key sort via chip selector (Earnings / Payers / Latest, default Earnings desc; click the active chip to flip direction). All rows arrive from SSR, so sorting and paging are pure client-side and need no fetch.
 - `app/leaderboard/EarningsMethodologyModal.tsx` — Explains what counts as earnings, what is excluded as self-dealing, and how to verify each figure on-chain.
+- `app/legions/page.tsx` + `LegionsFeed.tsx`: El Salvador legions (see Legions section). SSR from `loadLegionsState()`, SWR-polled every 60s against the edge-cached `/api/legions`; `?side=no` opens the Idle side.
 - `app/guide/` — Guide pages (loop starter kit, Claude Code, OpenClaw)
 - `app/install/` — MCP server installation guide with CLI routes
 - `app/inbox/[address]/page.tsx` — Standalone inbox page

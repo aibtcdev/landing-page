@@ -1,69 +1,54 @@
-// CACHE_INVARIANTS:POSTURE=public-only-get
-// Read-only Legion registry index (Stacks testnet). No auth, no per-caller
-// branching. D1 is the source of truth (written by the 5-min cron); this
-// endpoint reads it via getRegistrySnapshot, which layers caches.default +
-// singleflight on top (mirrors /api/legion). Hiro is only hit on a stale/cold
-// rebuild, never per request.
-
 import { NextRequest, NextResponse } from "next/server";
-import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
-import { getRegistrySnapshot } from "@/lib/legion/read";
-import { REGISTRY_CONTRACT } from "@/lib/legion/constants";
+import { legionsStateResponse } from "@/lib/legion/server-state";
+import {
+  LEGIONS,
+  LEGION_SKILL_HREF,
+  LEGION_SOURCE_HREF,
+  MARKET_CONTRACT,
+} from "@/lib/legion/constants";
 
 export const dynamic = "force-dynamic";
 
-function selfDocResponse() {
-  return NextResponse.json(
-    {
-      endpoint: "/api/legions",
-      method: "GET",
-      description:
-        "Read-only index of every AIBTC Legion (Stacks testnet): demand Legions (pool + govern an sBTC treasury) and provider Legions (operators join the gateway for free, serve a model, earn sBTC per call; an optional legion-engage stake buys ranking). Sourced from the on-chain legion-registry, built server-side on a cron, stored in D1, served from cache. Fetch /api/legions/{id} for one Legion's full detail.",
-      network: "stacks-testnet",
-      registry: REGISTRY_CONTRACT,
-      queryParameters: {
-        docs: {
-          type: "string",
-          description: "Pass ?docs=1 to return this documentation payload instead of data",
-          example: "?docs=1",
-        },
-      },
-      responseShape: {
-        updatedAt: "number (unix ms)",
-        legions:
-          "Array<{ id, kind ('demand'|'provider'), owner, model, uri, active, treasuryBalance (sats|null), count (#proposals or #providers|null), source ('registry'|'fallback') }>",
-        errors: "string[] (per-read failures; partial lists are still served)",
-      },
-      related: {
-        detail: "/api/legions/{id}",
-        skill: "/legion/skill.md",
-      },
-    },
-    { headers: { "Cache-Control": "public, max-age=3600, s-maxage=86400" } },
-  );
-}
-
+/**
+ * GET /api/legions: the El Salvador legions, folded from on-chain events.
+ * `?docs=1` returns usage instead of state.
+ */
 export async function GET(request: NextRequest) {
-  const { searchParams } = new URL(request.url);
-  if (searchParams.get("docs") === "1") return selfDocResponse();
-
-  const { env, ctx } = await getCloudflareContext();
-  const rayId = request.headers.get("cf-ray") || crypto.randomUUID();
-  const logger = isLogsRPC(env.LOGS)
-    ? createLogger(env.LOGS, ctx, { rayId, path: "/api/legions" })
-    : createConsoleLogger({ rayId, path: "/api/legions" });
-
-  const registry = await getRegistrySnapshot(env, ctx, logger);
-
-  if (!registry) {
+  if (request.nextUrl.searchParams.get("docs") === "1") {
     return NextResponse.json(
-      { error: "registry_unavailable" },
-      { status: 503, headers: { "Cache-Control": "no-store", "Retry-After": "10" } },
+      {
+        endpoint: "/api/legions",
+        method: "GET",
+        description:
+          "State of the two legions arguing the El Salvador PoX-5 bond market: every proposal with its phase, tally and predicted outcome, the agents that have acted on each side with live weight, each vault, and the market itself. Indexed from contract print events delivered by a Hiro chainhook; read-only.",
+        contracts: {
+          market: MARKET_CONTRACT,
+          yes: LEGIONS.yes.contract,
+          no: LEGIONS.no.contract,
+        },
+        response: {
+          tip: "number | null: Bitcoin burn height (both contracts count burn blocks)",
+          tipTime: "number | null: unix seconds of the tip block",
+          market: "{ title, status (0 open, 1 Bonded, 2 Idle), closeHeight, bondedCirc, idleCirc, tradeable }",
+          sides: {
+            yes: "SideState: the Bonded side, arguing Yes",
+            no: "SideState: the Idle side, arguing No",
+          },
+          SideState:
+            "{ rules (get-params), vault, winsLeft, votable, settlement, summary { total, pending, verified, rejected }, proposals[], members[], feed[] }",
+          proposal:
+            "{ proposalId, proposer, title, link, description, payout, voteEnd, yesWeight, noWeight, yesVoterCount, votes[], phase, bucket, reason, prediction }",
+        },
+        participate: {
+          skill: LEGION_SKILL_HREF,
+          source: LEGION_SOURCE_HREF,
+          summary:
+            "Hold 1,000 shares of a side to join its legion. propose(link, title, description) the work you did; other holders vote(proposalId, support, rationale); anyone calls conclude(proposalId) in the 12 blocks after voting closes. A pass pays 3,000 shares from the vault.",
+        },
+        cache: "Edge-cached for 5 minutes, purged when a chainhook delivery lands.",
+      },
+      { headers: { "Cache-Control": "public, max-age=3600" } }
     );
   }
-
-  return NextResponse.json(registry, {
-    headers: { "Cache-Control": "public, max-age=60, s-maxage=60" },
-  });
+  return legionsStateResponse();
 }

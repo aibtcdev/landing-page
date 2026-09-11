@@ -1,99 +1,105 @@
 /**
- * D1 persistence for Legion snapshots — one JSON document per Legion in
- * `legion_snapshots` (migration 024), keyed by `legion_id`. The cron is the
- * writer; the read path (lib/legion/read.ts) is the reader. D1 is the durable
- * source of truth; caches.default is the hot layer on top, like the leaderboard.
+ * D1 event store for the legions (table `legion_events`, migration 028).
  *
- * Keys: the registry's numeric id as text ("1", …), the slug "demand" for the
- * known demand Legion, or REGISTRY_ROW_ID ("__registry__") for the index that
- * backs the `/legions` list page.
+ * The write path is the chainhook webhook; the read path folds every stored
+ * event into proposals on read. Raw events are the source of truth, idempotent
+ * by (txid, event_index).
+ *
+ * One ingest source only. A chainhook delivery and Hiro's
+ * `/extended/v1/contract/{id}/events` number the same print DIFFERENTLY, so a
+ * backfill that read the events API would land every event twice under the
+ * primary key and double-count every vote. Past blocks are replayed through the
+ * hook itself (`scripts/legion-chainhook.sh evaluate <block>`).
  */
 
-import type {
-  LegionSnapshot,
-  ProviderSnapshot,
-  RegistrySnapshot,
-} from "./types";
+import type { EventRow } from "./chainhook";
 
-/** Reserved legion_id for the `/legions` registry-index snapshot. */
-export const REGISTRY_ROW_ID = "__registry__";
-
-async function readRow<T>(db: D1Database, legionId: string): Promise<T | null> {
-  const row = await db
-    .prepare("SELECT snapshot_json FROM legion_snapshots WHERE legion_id = ?1")
-    .bind(legionId)
-    .first<{ snapshot_json: string }>();
-  if (!row?.snapshot_json) return null;
-  try {
-    return JSON.parse(row.snapshot_json) as T;
-  } catch {
-    return null;
-  }
+interface StoredRow {
+  txid: string;
+  event_index: number;
+  contract_id: string;
+  proposal_id: number | null;
+  block_height: number;
+  block_time: number | null;
+  event: string;
+  payload: string;
+  recorded_at: number;
 }
 
-async function writeRow(
-  db: D1Database,
-  legionId: string,
-  json: unknown,
-  updatedAt: number,
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT INTO legion_snapshots (legion_id, snapshot_json, updated_at)
-       VALUES (?1, ?2, ?3)
-       ON CONFLICT(legion_id) DO UPDATE SET
-         snapshot_json = excluded.snapshot_json,
-         updated_at = excluded.updated_at`,
+/** Upsert decoded events. Returns how many rows were in the batch. */
+export async function recordLegionEvents(db: D1Database, events: readonly EventRow[]): Promise<number> {
+  if (events.length === 0) return 0;
+  const now = Date.now();
+  const stmt = db.prepare(`
+    INSERT INTO legion_events
+      (txid, event_index, contract_id, proposal_id, block_height, block_time, event, payload, recorded_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+    ON CONFLICT(txid, event_index) DO UPDATE SET
+      contract_id  = excluded.contract_id,
+      proposal_id  = excluded.proposal_id,
+      block_height = excluded.block_height,
+      block_time   = excluded.block_time,
+      event        = excluded.event,
+      payload      = excluded.payload
+  `);
+  await db.batch(
+    events.map((e) =>
+      stmt.bind(
+        e.txid,
+        e.event_index,
+        e.contract_id,
+        e.proposal_id,
+        e.block_height,
+        e.block_time,
+        e.event,
+        JSON.stringify(e.data),
+        now
+      )
     )
-    .bind(legionId, JSON.stringify(json), updatedAt)
-    .run();
+  );
+  return events.length;
 }
 
-// ── Demand Legion snapshot ─────────────────────────────────────────────────
-
-export function readLegionSnapshotFromD1(
-  db: D1Database,
-  legionId: string,
-): Promise<LegionSnapshot | null> {
-  return readRow<LegionSnapshot>(db, legionId);
+/** Drop every event from the given transactions (reorg rollback). */
+export async function rollbackLegionEvents(db: D1Database, txids: readonly string[]): Promise<number> {
+  if (txids.length === 0) return 0;
+  const stmt = db.prepare(`DELETE FROM legion_events WHERE txid = ?`);
+  const results = await db.batch(txids.map((t) => stmt.bind(t)));
+  return results.reduce((n, r) => n + (r.meta?.changes ?? 0), 0);
 }
 
-export function writeLegionSnapshotToD1(
+/**
+ * Newest-first events across the given contracts. Each id is an equality match
+ * on the leading column of idx_legion_events_contract, so the IN is one index
+ * seek per contract, not a scan.
+ */
+export async function listLegionEvents(
   db: D1Database,
-  legionId: string,
-  snapshot: LegionSnapshot,
-): Promise<void> {
-  return writeRow(db, legionId, snapshot, snapshot.updatedAt);
-}
+  contracts: readonly string[],
+  limit = 2_000
+): Promise<EventRow[]> {
+  if (contracts.length === 0) return [];
+  const placeholders = contracts.map(() => "?").join(", ");
+  const { results } = await db
+    .prepare(
+      `SELECT txid, event_index, contract_id, proposal_id, block_height, block_time, event, payload, recorded_at
+         FROM legion_events
+        WHERE contract_id IN (${placeholders})
+        ORDER BY block_height DESC, event_index DESC
+        LIMIT ?`
+    )
+    .bind(...contracts, limit)
+    .all<StoredRow>();
 
-// ── Provider Legion snapshot ───────────────────────────────────────────────
-
-export function readProviderSnapshotFromD1(
-  db: D1Database,
-  legionId: string,
-): Promise<ProviderSnapshot | null> {
-  return readRow<ProviderSnapshot>(db, legionId);
-}
-
-export function writeProviderSnapshotToD1(
-  db: D1Database,
-  legionId: string,
-  snapshot: ProviderSnapshot,
-): Promise<void> {
-  return writeRow(db, legionId, snapshot, snapshot.updatedAt);
-}
-
-// ── Registry index snapshot (backs /legions) ───────────────────────────────
-
-export function readRegistrySnapshotFromD1(
-  db: D1Database,
-): Promise<RegistrySnapshot | null> {
-  return readRow<RegistrySnapshot>(db, REGISTRY_ROW_ID);
-}
-
-export function writeRegistrySnapshotToD1(
-  db: D1Database,
-  snapshot: RegistrySnapshot,
-): Promise<void> {
-  return writeRow(db, REGISTRY_ROW_ID, snapshot, snapshot.updatedAt);
+  return (results ?? []).map((r) => ({
+    txid: r.txid,
+    event_index: r.event_index,
+    contract_id: r.contract_id,
+    proposal_id: r.proposal_id,
+    block_height: r.block_height,
+    block_time: r.block_time,
+    event: r.event,
+    data: JSON.parse(r.payload) as Record<string, unknown>,
+    recorded_at: r.recorded_at,
+  }));
 }

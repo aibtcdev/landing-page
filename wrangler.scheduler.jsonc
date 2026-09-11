@@ -11,10 +11,9 @@
   "compatibility_flags": ["nodejs_compat"],
 
   "triggers": {
-    // Every 30 min. Earnings (30-min cadence) runs on each tick; the hourly
-    // tasks (Tenero / competition / Legion) are gated by their own lastRunAt so
-    // they run every other tick. Widened from */15 once Legion was gated to
-    // hourly — nothing needs a 15-min tick anymore (cost: 2x fewer wakeups).
+    // Every 30 min. Earnings (30-min cadence) runs on each tick; the slower
+    // tasks (Tenero hourly, competition daily) are gated by their own lastRunAt.
+    // Nothing needs a 15-min tick (cost: 2x fewer wakeups than */15).
     "crons": ["*/30 * * * *"]
   },
 
@@ -25,10 +24,6 @@
     // Competition Hiro catch-up sweep (issue #933). Defaults ON; set "false" to
     // disable the sweep during competition sunset without a redeploy of code.
     "COMPETITION_SWEEP_ENABLED": "true"
-    // Optional: override the inference gateway whose GET /v1/providers backs the
-    // v1 provider list. Unset → the default in lib/legion/constants.ts
-    // (inference.aibtc.com, which serves testnet). Set only if the gateway moves:
-    // "LEGION_GATEWAY_URL": "https://<gateway-host>"
   },
 
   // Same database_id + KV ids as landing-page → one shared store.
