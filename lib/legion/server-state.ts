@@ -1,8 +1,14 @@
 /**
- * The public legions state, built once and shared by `GET /api/legions` and the
- * server-rendered `/legions` page. Both go through the SAME edge-cache entry,
- * so SSR and the client's revalidation collapse to one D1 read and one round
- * of Hiro reads per TTL window per colo. A chainhook delivery purges it.
+ * The public legions state, shared by `GET /api/legions` and the
+ * server-rendered `/legions` page.
+ *
+ * Two layers with two lifetimes. The EVENTS are read from D1 on every request,
+ * so a vote the chainhook just delivered shows on the next poll in every colo.
+ * The CHAIN reads (burn tip, market, params, vaults, settlement, proposer
+ * weights) are the Hiro-quota part, so they are edge-cached per colo for
+ * LEGION_STATE_TTL_SECONDS and purged when a delivery lands. The response
+ * itself is `no-store`: Cloudflare's zone Browser Cache TTL rewrites a
+ * `max-age=0` to four hours, which pinned stale votes in the browser and CDN.
  */
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
@@ -15,6 +21,8 @@ import {
   readSettlement,
   readVault,
   readWeight,
+  type BurnTip,
+  type MarketSnapshot,
   type Settlement,
 } from "./chain";
 import {
@@ -75,7 +83,18 @@ export interface LegionsState {
   sides: Record<LegionSide, SideState>;
 }
 
-const STATE_CACHE_KEY = "https://cache.aibtc.local/api/legions/state";
+/** Everything read from Hiro, per side in LEGION_SIDES order. */
+interface ChainSnapshot {
+  tip: BurnTip;
+  market: MarketSnapshot | null;
+  params: (LegionParams | null)[];
+  vaults: (number | null)[];
+  settlements: (Settlement | null)[];
+  /** Live proposer weights, by principal. */
+  weights: Record<string, number>[];
+}
+
+const CHAIN_CACHE_KEY = "https://cache.aibtc.local/api/legions/chain";
 
 /**
  * Live weights for proposers only. The one place the page needs a live
@@ -86,7 +105,7 @@ async function readWeights(
   events: readonly EventRow[],
   contract: string,
   apiKey?: string
-): Promise<Map<string, number>> {
+): Promise<Record<string, number>> {
   const proposers = new Set(
     events
       .filter((e) => e.contract_id === contract && e.event === "propose")
@@ -98,33 +117,49 @@ async function readWeights(
   const read = await Promise.all(
     who.map(async (w) => [w, await readWeight(contract, w, apiKey)] as const)
   );
-  const out = new Map<string, number>();
-  for (const [w, weight] of read) if (weight != null) out.set(w, weight);
+  const out: Record<string, number> = {};
+  for (const [w, weight] of read) if (weight != null) out[w] = weight;
   return out;
 }
 
-/** Read the chain and the store, and fold them into the display state. */
-export async function buildLegionsState(env: CloudflareEnv): Promise<LegionsState> {
-  const db = env.DB as D1Database | undefined;
-  const apiKey = env.HIRO_API_KEY;
-
-  const [events, tip, market, params, vaults, settlements] = await Promise.all([
-    db
-      ? listLegionEvents(db, LEGION_CONTRACTS).catch((err) => {
-          log.error("legions.events_read_failed", { error: String(err) });
-          return [] as EventRow[];
-        })
-      : Promise.resolve([] as EventRow[]),
+async function buildChainSnapshot(events: readonly EventRow[], apiKey?: string): Promise<ChainSnapshot> {
+  const [tip, market, params, vaults, settlements, weights] = await Promise.all([
     readBurnTip(apiKey),
     readMarket(apiKey),
     Promise.all(LEGION_SIDES.map((s) => readParams(LEGIONS[s].contract, apiKey))),
     Promise.all(LEGION_SIDES.map((s) => readVault(LEGIONS[s].contract, apiKey))),
     Promise.all(LEGION_SIDES.map((s) => readSettlement(LEGIONS[s].contract, apiKey))),
+    Promise.all(LEGION_SIDES.map((s) => readWeights(events, LEGIONS[s].contract, apiKey))),
   ]);
+  return { tip, market, params, vaults, settlements, weights };
+}
 
-  const weights = await Promise.all(
-    LEGION_SIDES.map((s) => readWeights(events, LEGIONS[s].contract, apiKey))
-  );
+/**
+ * The chain reads, edge-cached per colo. A snapshot that could not read the
+ * tip is used but not cached, so a Hiro blip is not pinned for the whole TTL.
+ */
+async function readChainSnapshot(events: readonly EventRow[], apiKey?: string): Promise<ChainSnapshot> {
+  const res = await withEdgeCache(CHAIN_CACHE_KEY, LEGION_STATE_TTL_SECONDS, async () => {
+    const snap = await buildChainSnapshot(events, apiKey);
+    const cacheControl =
+      snap.tip.height == null ? "no-store" : `public, s-maxage=${LEGION_STATE_TTL_SECONDS}`;
+    return Response.json(snap, { headers: { "Cache-Control": cacheControl } });
+  });
+  return (await res.json()) as ChainSnapshot;
+}
+
+/** Read the store fresh, the chain through its cache, and fold them together. */
+export async function buildLegionsState(env: CloudflareEnv): Promise<LegionsState> {
+  const db = env.DB as D1Database | undefined;
+  const apiKey = env.HIRO_API_KEY;
+
+  const events = db
+    ? await listLegionEvents(db, LEGION_CONTRACTS).catch((err) => {
+        log.error("legions.events_read_failed", { error: String(err) });
+        return [] as EventRow[];
+      })
+    : [];
+  const { tip, market, params, vaults, settlements, weights } = await readChainSnapshot(events, apiKey);
 
   const tradeable =
     market?.status == null
@@ -145,7 +180,7 @@ export async function buildLegionsState(env: CloudflareEnv): Promise<LegionsStat
     const fold = foldSide(events, side, cfg.contract, {
       tip: tip.height,
       rules,
-      weights: weights[i],
+      weights: new Map(Object.entries(weights[i] ?? {})),
       vault,
       totalCredits: settlement?.totalCredits ?? null,
     });
@@ -184,18 +219,11 @@ export async function buildLegionsState(env: CloudflareEnv): Promise<LegionsStat
   };
 }
 
-/**
- * The cached response. A build that could not read the tip is served but not
- * cached, so a Hiro blip is not pinned at the edge for the whole TTL.
- */
+/** The state as a response. Never cached by the browser or the CDN. */
 export async function legionsStateResponse(): Promise<Response> {
-  return withEdgeCache(STATE_CACHE_KEY, LEGION_STATE_TTL_SECONDS, async () => {
-    const { env } = await getCloudflareContext();
-    const state = await buildLegionsState(env);
-    const cacheControl =
-      state.tip == null ? "no-store" : `public, max-age=0, s-maxage=${LEGION_STATE_TTL_SECONDS}`;
-    return Response.json(state, { headers: { "Cache-Control": cacheControl } });
-  });
+  const { env } = await getCloudflareContext();
+  const state = await buildLegionsState(env);
+  return Response.json(state, { headers: { "Cache-Control": "no-store" } });
 }
 
 /**
@@ -204,16 +232,15 @@ export async function legionsStateResponse(): Promise<Response> {
  */
 export async function loadLegionsState(): Promise<LegionsState | null> {
   try {
-    const res = await legionsStateResponse();
-    if (!res.ok) return null;
-    return (await res.json()) as LegionsState;
+    const { env } = await getCloudflareContext();
+    return await buildLegionsState(env);
   } catch (err) {
     log.error("legions.state_build_failed", { error: String(err) });
     return null;
   }
 }
 
-/** Drop the cached state in this colo. Called after a chainhook delivery. */
+/** Drop the cached chain reads in this colo. Called after a chainhook delivery. */
 export async function purgeLegionsState(): Promise<void> {
-  await invalidateEdgeCache(STATE_CACHE_KEY);
+  await invalidateEdgeCache(CHAIN_CACHE_KEY);
 }

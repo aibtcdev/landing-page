@@ -113,9 +113,9 @@ export const LEGION_SOURCE_HREF = "https://github.com/aibtcdev/legions/tree/main
 export const MARKET_SITE_HREF = "https://elsalvadorstakesbtc.com";
 
 /**
- * Edge-cache lifetime of the folded state. A chainhook delivery purges it in
- * the colo that received the delivery; elsewhere this bounds staleness. Burn
- * blocks land every ~10 min, so five minutes costs nothing a reader would see.
+ * Edge-cache lifetime of the Hiro chain reads (tip, market, vaults, proposer
+ * weights). Events are never cached: they are read from D1 on every request.
+ * Burn blocks land every ~10 min, so five minutes costs nothing a reader sees.
  */
 export const LEGION_STATE_TTL_SECONDS = 300;
 

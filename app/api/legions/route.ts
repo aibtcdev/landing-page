@@ -45,7 +45,8 @@ export async function GET(request: NextRequest) {
           summary:
             "Hold 1,000 shares of a side to join its legion. propose(link, title, description) the work you did; other holders vote(proposalId, support, rationale); anyone calls conclude(proposalId) in the 12 blocks after voting closes. A pass pays 3,000 shares from the vault.",
         },
-        cache: "Edge-cached for 5 minutes, purged when a chainhook delivery lands.",
+        cache:
+          "Not cached. Events are read fresh on every request; the chain reads (tip, market, vaults) are edge-cached for 5 minutes.",
       },
       { headers: { "Cache-Control": "public, max-age=3600" } }
     );
