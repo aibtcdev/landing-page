@@ -14,14 +14,13 @@
 import { Fragment, useCallback, useEffect, useRef, useState } from "react";
 import useSWR from "swr";
 import { swrKeys } from "@/lib/swr-keys";
-import type { LegionsState, MarketState, SideState } from "@/lib/legion/server-state";
+import type { LegionsState, SideState } from "@/lib/legion/server-state";
 import type { Ballot, DisplayProposal, FeedItem, StatusBucket } from "@/lib/legion/state";
 import {
   LEGIONS,
   LEGION_SIDES,
   LEGION_SKILL_HREF,
   MARKET_SITE_HREF,
-  MARKET_STATUS,
   type LegionParams,
   type LegionSide,
 } from "@/lib/legion/constants";
@@ -30,7 +29,6 @@ import {
   OUTCOME_LABEL,
   PHASE_LABEL,
   REASON_LABEL,
-  contractLink,
   fmtBlocksLeft,
   fmtClock,
   fmtCompact,
@@ -795,65 +793,8 @@ function VotersModal({ p, onClose }: { p: DisplayProposal; onClose: () => void }
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// The market, the members, and the wire
+// The wire
 // ─────────────────────────────────────────────────────────────────────────────
-
-function marketStatusLabel(m: MarketState): string {
-  if (m.status === MARKET_STATUS.BONDED) return "Resolved Bonded";
-  if (m.status === MARKET_STATUS.IDLE) return "Resolved Idle";
-  if (m.status === MARKET_STATUS.OPEN) return m.tradeable === false ? "Past deadline" : "Trading";
-  return "-";
-}
-
-/**
- * What both legions argue over, stated once above the record. It takes the
- * place news-legion gives the seat count: the one fact that frames everything
- * below it.
- */
-function MarketBand({
-  market,
-  tip,
-  blockSeconds,
-}: {
-  market: MarketState | null;
-  tip: number | null;
-  blockSeconds: number;
-}) {
-  if (!market) return null;
-  const left = tip != null && market.closeHeight != null ? Math.max(0, market.closeHeight - tip) : null;
-  return (
-    <section className="members market">
-      <div className="members-head">
-        <h2>The market</h2>
-        <a href={contractLink(market.contract)} target="_blank" rel="noopener">
-          elsalvador-stakes-btc-v2
-        </a>
-      </div>
-      {market.title ? <p className="market-q">{market.title}</p> : null}
-      <div className="figs four">
-        <div className="fig accent">
-          <span className="l">Status</span>
-          <span className="v">{marketStatusLabel(market)}</span>
-        </div>
-        <div className="fig">
-          <span className="l">Closes at burn block</span>
-          <span className="v">
-            {fmtInt(market.closeHeight)}
-            {left != null && left > 0 ? <em>{fmtBlocksLeft(left, blockSeconds)}</em> : null}
-          </span>
-        </div>
-        <div className="fig">
-          <span className="l">Bonded shares out</span>
-          <span className="v">{fmtCompact(market.bondedCirc)}</span>
-        </div>
-        <div className="fig">
-          <span className="l">Idle shares out</span>
-          <span className="v">{fmtCompact(market.idleCirc)}</span>
-        </div>
-      </div>
-    </section>
-  );
-}
 
 function wireLine(e: FeedItem): React.ReactNode {
   const d = e.data;
@@ -1087,7 +1028,6 @@ function SideView({
         />
       </section>
 
-      <MarketBand market={state.market} tip={state.tip} blockSeconds={state.blockSeconds} />
 
       {side.summary.total || side.vault ? (
         <div className="stat-row">
