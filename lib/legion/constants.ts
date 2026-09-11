@@ -1,112 +1,123 @@
 /**
- * AIBTC Legion dashboard — on-chain constants.
+ * The El Salvador legions: two contracts arguing opposite sides of one
+ * prediction market, `elsalvador-stakes-btc-v2`.
  *
- * The Legion contracts live on Stacks *testnet*, deliberately separate from the
- * rest of the platform (which reads mainnet). All reads here are public
- * read-only calls; no key is required for testnet.
+ *   yes-legion  argues BONDED: El Salvador's reserve Bitcoin entered a PoX-5
+ *               protocol bond in periods 2 through 7 before burn height 994,699
+ *   no-legion   argues IDLE: it did not
  *
- * The platform is now **multi-Legion**: a shared on-chain `legion-registry`
- * lists every Legion (see REGISTRY_CONTRACT). Per-Legion contract addresses come
- * from the registry entry, not from constants — the single demand deploy below
- * is kept only as a known fallback so `/legions` lists it even before it is
- * registered on-chain.
+ * Neither contract holds a treasury or a member roster. Voting weight is read
+ * live off the market (your shares on that side), and each vault is the
+ * legion's own share position, paid out 3,000 shares per approved proposal.
+ * Source: https://github.com/aibtcdev/legions/tree/main/stake
  */
 
-import { STACKS_API_TESTNET_BASE } from "../identity/constants";
+export const LEGION_DEPLOYER = "SP5Y3W3F78NKFH4HYFNDQMJC484VZWKDH35ZR2M9";
+export const MARKET_CONTRACT = `${LEGION_DEPLOYER}.elsalvador-stakes-btc-v2`;
 
-export const LEGION_API_BASE = STACKS_API_TESTNET_BASE;
-export const LEGION_CHAIN = "testnet";
+export type LegionSide = "yes" | "no";
 
-/**
- * The directory. Read this first: `get-count` → uint, then `get-legion(id)` →
- * `(optional { owner, kind, treasury, gov, fees, model, uri, active })`. Every
- * other per-Legion address is discovered from a registry entry.
- */
-export const REGISTRY_CONTRACT =
-  "STXGASYJR80W8RWNM7R4ENRJAPR75Y5W57J57V0J.legion-registry";
+export interface LegionConfig {
+  side: LegionSide;
+  contract: string;
+  /** What the legion is called on the page. */
+  name: string;
+  /** The market outcome this side argues for. */
+  argues: "Yes" | "No";
+  /** The market's name for this side's shares. */
+  shareLabel: "Bonded" | "Idle";
+  /** The market's side index (`u1` Bonded, `u0` Idle). */
+  marketSide: 1 | 0;
+  /** The market status that means this side won (`u1` Bonded, `u2` Idle). */
+  winStatus: 1 | 2;
+}
 
-// v3.0 Phase-1 demand deploy (legion-agent-03). Supersedes the agent-02
-// 2-contract deploy (ST38Y96G…): adds legion-fees, Rail-A prechecks on propose,
-// bond-lock, unstake, and proposer-exclusion (quorum measured against eligible
-// stake). NOT yet in the registry — surfaced via the fallback demand entry.
-export const LEGION_DEPLOYER = "STBEMQQVSS3K3SQTF2NRZMF82JHMNTHQKQ2J7DW5";
+export const LEGIONS: Record<LegionSide, LegionConfig> = {
+  yes: {
+    side: "yes",
+    contract: `${LEGION_DEPLOYER}.elsalvador-yes-legion-v2`,
+    name: "Yes legion",
+    argues: "Yes",
+    shareLabel: "Bonded",
+    marketSide: 1,
+    winStatus: 1,
+  },
+  no: {
+    side: "no",
+    contract: `${LEGION_DEPLOYER}.elsalvador-no-legion-v2`,
+    name: "No legion",
+    argues: "No",
+    shareLabel: "Idle",
+    marketSide: 0,
+    winStatus: 2,
+  },
+};
 
-export const TREASURY_CONTRACT = `${LEGION_DEPLOYER}.legion-treasury`;
-export const GOV_CONTRACT = `${LEGION_DEPLOYER}.legion-gov`;
-/** Protocol fee collector — 8% skim of routed sBTC into the treasury. */
-export const FEES_CONTRACT = `${LEGION_DEPLOYER}.legion-fees`;
+export const LEGION_SIDES: readonly LegionSide[] = ["yes", "no"];
 
-/**
- * Reserved id for the known demand Legion in our routing (`/legions/demand`).
- * It is not numerically in the registry yet, so a string slug avoids colliding
- * with the registry's numeric ids ("1", "2", …).
- */
-export const DEMAND_LEGION_ID = "demand";
+/** Every contract the chainhook watches. Keep in step with scripts/legion-chainhook.sh. */
+export const LEGION_CONTRACTS: readonly string[] = LEGION_SIDES.map((s) => LEGIONS[s].contract);
 
-/** The two Legion kinds. `demand` governs a treasury; `provider` serves models. */
-export type LegionKind = "demand" | "provider";
+export function sideOfContract(contractId: string): LegionSide | null {
+  return LEGION_SIDES.find((s) => LEGIONS[s].contract === contractId) ?? null;
+}
 
-/**
- * Both kinds share `legion-treasury` + `legion-fees`. They differ in the third
- * contract: demand uses `legion-gov` (proposals/voting); provider uses
- * `legion-providers` (bonds/members). The registry stores treasury/gov/fees but
- * not the providers contract, so derive it by convention from the owner.
- *
- * Kept for back-compat (registry entry shape); v1 no longer reads it for the
- * provider list — see `legionEngageContract` + the gateway directory.
- */
-export function legionProvidersContract(owner: string): string {
-  return `${owner}.legion-providers`;
+/** Governance parameters, as `get-params` returns them. */
+export interface LegionParams {
+  minPosition: number;
+  payout: number;
+  minVoters: number;
+  proposerCooldown: number;
+  votingThreshold: number;
+  voteDelay: number;
+  voteWindow: number;
+  concludeWindow: number;
+  globalProposeInterval: number;
 }
 
 /**
- * v1 engagement-stake contract for a provider Legion. Staking is OPTIONAL and
- * never required to earn — it only buys ranking. Not stored in the registry, so
- * derived by convention from the owner (only legions whose owner deployed one
- * will resolve; reads are best-effort and degrade to "unstaked").
+ * The source-file constants. Only a fallback: the live values come from each
+ * contract's `get-params`, read once per isolate (lib/legion/chain.ts).
  */
-export function legionEngageContract(owner: string): string {
-  return `${owner}.legion-engage`;
-}
-
-/**
- * Base URL of the inference gateway whose `GET /v1/providers` directory backs
- * the v1 provider list (free-join providers + health + flag status). This
- * gateway serves testnet, so its provider payout addresses match the testnet
- * `legion-engage` stakes. Overridable per-env via the optional
- * `LEGION_GATEWAY_URL` Worker var if the gateway ever moves.
- */
-export const DEFAULT_LEGION_GATEWAY_URL = "https://inference.aibtc.com";
-
-/** sBTC SIP-010 token on testnet (8 decimals). */
-export const SBTC_TOKEN = "STV9K21TBFAK4KNRJXF5DFP8N7W46G4V9RJ5XDY2.sbtc-token";
-export const SBTC_DECIMALS = 8;
-
-/** Governance "constitution" — display-only rules. */
-export const GOV_RULES = {
-  quorumPct: 15,
-  thresholdPct: 66,
+export const FALLBACK_PARAMS: LegionParams = {
+  minPosition: 1_000,
+  payout: 3_000,
   minVoters: 2,
-  vetoPct: 15,
-} as const;
+  proposerCooldown: 144,
+  votingThreshold: 66,
+  voteDelay: 2,
+  voteWindow: 30,
+  concludeWindow: 12,
+  globalProposeInterval: 6,
+};
+
+/** Proposal status uint (`Proposals.status`). */
+export const STATUS = { OPEN: 0, PASSED: 1, FAILED: 2, EXPIRED: 3 } as const;
+
+/** Market status uint (`get-market`.status). */
+export const MARKET_STATUS = { OPEN: 0, BONDED: 1, IDLE: 2 } as const;
 
 /**
- * KV key for the cron-built snapshot (VERIFIED_AGENTS namespace). The dashboard
- * reads this; the cron writes it. Decouples Hiro read volume from page traffic.
+ * Both contracts are `PROD-BURN` builds: every window counts Bitcoin blocks.
+ * Used only for countdown estimates; a phase is always a height comparison.
  */
-export const LEGION_SNAPSHOT_KV_KEY = "legion:snapshot";
+export const BURN_BLOCK_SECONDS = 600;
 
-/** Testnet explorer link for an address. */
-export function explorerAddressUrl(address: string): string {
-  return `https://explorer.hiro.so/address/${address}?chain=${LEGION_CHAIN}`;
-}
+/** The repo's one mainnet Hiro base, so every Stacks read shares one host. */
+export { STACKS_API_BASE as HIRO_API } from "../identity/constants";
 
-/** Testnet explorer link for a contract id (`addr.name`). */
-export function explorerContractUrl(contractId: string): string {
-  return `https://explorer.hiro.so/txid/${contractId}?chain=${LEGION_CHAIN}`;
-}
+/** The agent-facing specification: how to join, propose, vote and conclude. */
+export const LEGION_SKILL_HREF = "https://github.com/aibtcdev/legions/blob/main/stake/skill.md";
+export const LEGION_SOURCE_HREF = "https://github.com/aibtcdev/legions/tree/main/stake";
+/** Where the market itself trades. */
+export const MARKET_SITE_HREF = "https://elsalvadorstakesbtc.com";
 
-/** Testnet explorer link for a transaction id. */
-export function explorerTxUrl(txid: string): string {
-  return `https://explorer.hiro.so/txid/${txid}?chain=${LEGION_CHAIN}`;
-}
+/**
+ * Edge-cache lifetime of the folded state. A chainhook delivery purges it in
+ * the colo that received the delivery; elsewhere this bounds staleness. Burn
+ * blocks land every ~10 min, so five minutes costs nothing a reader would see.
+ */
+export const LEGION_STATE_TTL_SECONDS = 300;
+
+/** Live `get-weight` reads per side per rebuild, most recent participants first. */
+export const MAX_MEMBER_WEIGHT_READS = 20;
