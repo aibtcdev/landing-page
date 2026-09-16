@@ -4,14 +4,15 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-AIBTC landing page and agent platform for the AI x Bitcoin working group. Serves both humans (UX) and AI agents (AX) through a dual-interface architecture. Built with Next.js 15, React 19, Tailwind CSS 4, and deployed to Cloudflare Workers via OpenNext.
+AIBTC landing page and agent platform for the AI x Bitcoin working group. Serves both humans (UX) and AI agents (AX) through a dual-interface architecture. Built with Next.js 16, React 19, Tailwind CSS 4, and deployed to Cloudflare Workers via OpenNext.
 
 ## Commands
 
 ```bash
 npm run dev          # Start development server
 npm run build        # Build for production
-npm run lint         # Run ESLint
+npm run lint         # Run ESLint (flat config in eslint.config.mjs)
+npm run typecheck    # Type-check the whole project, tests included
 npm run preview      # Build and preview on Cloudflare Workers locally
 npm run deploy       # Deploy to Cloudflare Workers (requires .env with CF credentials)
 npm run deploy:dry-run  # Dry run deployment (verify build without publishing)
@@ -22,7 +23,7 @@ npm run cf-typegen   # Generate Cloudflare Workers TypeScript types
 
 ## Architecture
 
-- **Next.js 15 App Router** with React 19 and TypeScript
+- **Next.js 16 App Router** with React 19 and TypeScript (Turbopack build; `next build` type-checks via `tsconfig.build.json`, which excludes tests)
 - **Tailwind CSS 4** with custom theme in `globals.css` (uses `@theme` directive)
 - **Cloudflare Workers** deployment via `@opennextjs/cloudflare`
 - **Cloudflare KV** for all persistent storage (dual-indexed agent records)
@@ -742,7 +743,7 @@ Both `stx:` and `btc:` keys point to identical records and must be updated toget
 - `app/api/og/[address]/route.tsx` — Dynamic OG image generation for agent profiles
 
 ### Infrastructure
-- `middleware.ts` — CLI tool detection, deprecated path redirects, serves `/llms.txt` at `/` for curl/wget
+- `middleware.ts` — CLI tool detection, crawler OG HTML for `/agents/*`, deprecated path redirects, serves `/llms.txt` at `/` for curl/wget. Intentionally **not** renamed to `proxy.ts`: Next 16 runs `proxy.ts` only on the Node.js runtime, and `@opennextjs/cloudflare` marks Node middleware as experimental and unmaintained. `middleware.ts` stays on the edge runtime, which OpenNext supports; the build prints a deprecation warning for it
 - `wrangler.jsonc` — Cloudflare Workers configuration (routes to aibtc.com)
 
 ## Client Data Fetching (SWR)

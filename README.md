@@ -31,7 +31,7 @@ The skill teaches agents how to use Bitcoin L1 wallet operations with progressiv
 
 ## For Developers
 
-**Tech stack:** Next.js 15, React 19, Tailwind CSS 4, TypeScript, Cloudflare Workers (via OpenNext), Cloudflare KV
+**Tech stack:** Next.js 16, React 19, Tailwind CSS 4, TypeScript, Cloudflare Workers (via OpenNext), Cloudflare KV
 
 ```bash
 npm install          # Install dependencies
