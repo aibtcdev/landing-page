@@ -136,21 +136,13 @@ export async function GET(
           ? createLogger(env.LOGS, ctx, baseCtx)
           : createConsoleLogger(baseCtx);
 
-        // Resolve to an AgentRecord via the appropriate D1 branch.
-        // Taproot and BNS still use KV for the reverse-lookup step only —
-        // those KV keys are not being migrated in Phase 2.2.
-        //
-        // kvFallbackKey: when D1 misses but the resolver produced a candidate
-        // BTC/STX address, we try the KV record at that key as a last resort.
-        // This preserves pre-flip 200 behavior for the ~708 validation-excluded
-        // agents documented in docs/d1-reconcile-baseline.md (Phase 1.4 baseline).
-        // Tracked for cleanup at #691; this fallback is transitional scaffolding.
+        // Resolve to an AgentRecord via the appropriate D1 branch. D1 is the
+        // only source for the record itself. Taproot and BNS still use KV for
+        // the reverse-lookup step only.
         let agent: AgentRecord | null = null;
-        // D1-joined claim record: set when the agent row comes from D1 (claim
-        // is available from the LEFT JOIN). Left as undefined when the KV fallback
-        // path is used — undefined signals enrichAgentProfile to fall back to KV.
+        // D1-joined claim record (from the LEFT JOIN), set whenever the agent
+        // row is found.
         let d1Claim: ClaimRecord | null | undefined = undefined;
-        let kvFallbackKey: string | null = null;
 
         if (branch === "btc") {
           // Branch 1: BTC address → D1 WHERE btc_address = ?
@@ -158,17 +150,16 @@ export async function GET(
           if (row) {
             agent = mapRowToAgentRecord(row);
             d1Claim = mapRowToClaimRecord(row);
-          } else kvFallbackKey = `btc:${address}`;
+          }
         } else if (branch === "stx") {
           // Branch 2: STX address → D1 WHERE stx_address = ?
           const row = await lookupProfileByStxAddress(db, address);
           if (row) {
             agent = mapRowToAgentRecord(row);
             d1Claim = mapRowToClaimRecord(row);
-          } else kvFallbackKey = `stx:${address}`;
+          }
         } else if (branch === "numeric") {
           // Branch 3: ERC-8004 agent-id → D1 WHERE erc8004_agent_id = ?
-          // No KV fallback: agents are not indexed by erc8004_agent_id in KV.
           const agentId = parseInt(address, 10);
           if (!Number.isNaN(agentId)) {
             const row = await lookupProfileByAgentId(db, agentId);
@@ -186,7 +177,7 @@ export async function GET(
             if (row) {
               agent = mapRowToAgentRecord(row);
               d1Claim = mapRowToClaimRecord(row);
-            } else kvFallbackKey = `btc:${canonicalBtcAddress}`;
+            }
           }
         } else {
           // Branch 5: BNS name → KV/BNS resolution → D1 WHERE stx_address = ?
@@ -219,9 +210,6 @@ export async function GET(
                 d1Claim = mapRowToClaimRecord(row);
                 stxAddress = row.stx_address;
               }
-            } else {
-              // D1 missed for the BNS-resolved BTC address — set fallback key
-              kvFallbackKey = `btc:${btcAddress}`;
             }
           }
 
@@ -236,22 +224,7 @@ export async function GET(
               if (row) {
                 agent = mapRowToAgentRecord(row);
                 d1Claim = mapRowToClaimRecord(row);
-              } else if (!kvFallbackKey) kvFallbackKey = `stx:${resolvedStx}`;
-            }
-          }
-        }
-
-        // KV fallback for validation-excluded agents (708 records per
-        // docs/d1-reconcile-baseline.md). Transitional — see #691 for cleanup.
-        // d1Claim stays undefined here — enrichAgentProfile will fall back to KV.
-        if (!agent && kvFallbackKey) {
-          const kvValue = await kv.get(kvFallbackKey);
-          if (kvValue) {
-            try {
-              agent = JSON.parse(kvValue) as AgentRecord;
-              logger.info("profile.kv_fallback_hit", { key: kvFallbackKey });
-            } catch {
-              // Malformed KV record — leave agent null
+              }
             }
           }
         }
@@ -312,9 +285,8 @@ export async function GET(
           d1Claim = undefined;
         }
 
-        // Pass d1Claim so enrichAgentProfile skips the redundant KV read when the
-        // agent came from D1 (covers all non-KV-fallback paths). When d1Claim is
-        // undefined (KV fallback agents OR the #771-unblock recovery above),
+        // Pass d1Claim so enrichAgentProfile skips the redundant KV claim read.
+        // When d1Claim is undefined (the #771-unblock recovery above),
         // enrichAgentProfile falls back to KV.
         // Pass db so inbox/sent metrics are read from live D1 counts (#746).
         const enrichment = await enrichAgentProfile(

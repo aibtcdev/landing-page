@@ -1,4 +1,4 @@
-import { defineConfig } from "vitest/config";
+import { configDefaults, defineConfig } from "vitest/config";
 import path from "path";
 
 export default defineConfig({
@@ -18,5 +18,7 @@ export default defineConfig({
   },
   test: {
     include: ["**/__tests__/**/*.test.ts"],
+    // Agent worktrees live under .claude/ (gitignored); never collect their copies.
+    exclude: [...configDefaults.exclude, ".claude/**"],
   },
 });

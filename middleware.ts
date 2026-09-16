@@ -107,13 +107,9 @@ async function handleCrawlerAgentPage(
     const kv = env.VERIFIED_AGENTS as KVNamespace;
     const db = env.DB as D1Database;
 
-    // Phase 2.3: D1-first lookup — single SELECT + LEFT JOIN claims.
-    // For validation-excluded agents (~708 records, #691) that are not yet in D1,
-    // fall back to the KV btc:/stx: key to avoid 404ing crawler bots (which would
-    // cause search engines to deindex those agent pages).
+    // D1 lookup: single SELECT + LEFT JOIN claims.
     let agent: AgentRecord | null = null;
     let claim: ClaimStatus | null = null;
-    let kvFallbackKey: string | null = null;
 
     if (branch === "btc") {
       const row = await lookupProfileByBtcAddress(db, address);
@@ -121,8 +117,6 @@ async function handleCrawlerAgentPage(
         agent = mapRowToAgentRecord(row);
         const claimRecord = mapRowToClaimRecord(row);
         if (claimRecord) claim = claimRecordToStatus(claimRecord);
-      } else {
-        kvFallbackKey = `btc:${address}`;
       }
     } else if (branch === "taproot") {
       // Taproot bc1p* — reverse-lookup canonical btc via KV `taproot:{addr}`
@@ -134,8 +128,6 @@ async function handleCrawlerAgentPage(
           agent = mapRowToAgentRecord(row);
           const claimRecord = mapRowToClaimRecord(row);
           if (claimRecord) claim = claimRecordToStatus(claimRecord);
-        } else {
-          kvFallbackKey = `btc:${canonicalBtc}`;
         }
       }
     } else {
@@ -145,32 +137,6 @@ async function handleCrawlerAgentPage(
         agent = mapRowToAgentRecord(row);
         const claimRecord = mapRowToClaimRecord(row);
         if (claimRecord) claim = claimRecordToStatus(claimRecord);
-      } else {
-        kvFallbackKey = `stx:${address}`;
-      }
-    }
-
-    // KV fallback for validation-excluded agents (transitional per #691).
-    // Crawlers MUST NOT 404 these — it would deindex them from search engines.
-    // Validation-excluded agents likely don't have D1 claims, so we mirror
-    // pre-flip behavior: one KV read for agent, one for claim.
-    if (!agent && kvFallbackKey) {
-      const kvValue = await kv.get(kvFallbackKey);
-      if (kvValue) {
-        try {
-          agent = JSON.parse(kvValue) as AgentRecord;
-          // Also attempt claim KV read on fallback path (mirrors pre-flip behavior).
-          const claimData = await kv.get(`claim:${agent.btcAddress}`);
-          if (claimData) {
-            try {
-              claim = JSON.parse(claimData) as ClaimStatus;
-            } catch {
-              /* malformed claim — leave null */
-            }
-          }
-        } catch {
-          // Malformed KV record — leave agent null, fall through to next()
-        }
       }
     }
 

@@ -19,6 +19,28 @@ The route at `app/api/admin/reconcile/route.ts` regenerates these numbers on dem
 
 Reconcile route's response shape includes a per-table `explained_categories` field that surfaces this breakdown on demand. Numbers above are the operational run output; expected to remain stable absent net-new agent registrations or inbox writes.
 
+## Agents: invalid-excluded drift resolved (2026-09-16)
+
+The 708 `kv_count_invalid_excluded` agent records above were repaired in place by #713 (NULLable `btc_public_key` plus backfill). Measured read-only against production on 2026-09-16:
+
+| Source | Records |
+|---|---:|
+| KV `btc:` keys | 1107 |
+| KV `stx:` keys | 1107 |
+| D1 `agents` rows | 1107 |
+
+The BTC and STX address sets are identical in both directions (0 in KV but not D1, 0 in D1 but not KV). No D1 row has a NULL `stx_public_key` or `verified_at`. 635 rows have a NULL `btc_public_key`, which is expected for BIP-322 registrations.
+
+With no KV-only agents left, the transitional KV fallback in `app/api/agents/[address]/route.ts` was removed (#691). The table above is kept as the historical Phase 1.4 baseline.
+
+Reproduce:
+
+```bash
+npx wrangler kv key list --namespace-id <VERIFIED_AGENTS id> --prefix "btc:" --remote | jq length
+npx wrangler kv key list --namespace-id <VERIFIED_AGENTS id> --prefix "stx:" --remote | jq length
+npx wrangler d1 execute landing-page --remote --command "SELECT COUNT(*) FROM agents;"
+```
+
 ## Inbox drift breakdown (2538)
 
 The 2538 inbox_messages drift is fully accounted for by three Phase-1.3-design-time skip categories:
