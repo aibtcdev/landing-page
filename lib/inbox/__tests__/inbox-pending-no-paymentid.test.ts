@@ -16,10 +16,7 @@ const mocks = vi.hoisted(() => ({
   validateInboxMessage: vi.fn(),
   verifyInboxPayment: vi.fn(),
   verifyTxidPayment: vi.fn(),
-  storeMessage: vi.fn(),
   storeStagedInboxPayment: vi.fn(),
-  updateAgentInbox: vi.fn(),
-  updateSentIndex: vi.fn(),
   buildInboxPaymentRequirements: vi.fn(),
   buildSenderAuthMessage: vi.fn(),
   enqueueInboxReconciliation: vi.fn(),
@@ -51,10 +48,7 @@ vi.mock("@/lib/inbox", () => ({
   validateInboxMessage: mocks.validateInboxMessage,
   verifyInboxPayment: mocks.verifyInboxPayment,
   verifyTxidPayment: mocks.verifyTxidPayment,
-  storeMessage: mocks.storeMessage,
   storeStagedInboxPayment: mocks.storeStagedInboxPayment,
-  updateAgentInbox: mocks.updateAgentInbox,
-  updateSentIndex: mocks.updateSentIndex,
   buildInboxPaymentRequirements: mocks.buildInboxPaymentRequirements,
   buildSenderAuthMessage: mocks.buildSenderAuthMessage,
   enqueueInboxReconciliation: mocks.enqueueInboxReconciliation,
@@ -157,9 +151,6 @@ describe("inbox POST canonical staged-payment semantics", () => {
       paymentStatus: "pending",
       // NOTE: no paymentId — canonical identity is missing
     });
-
-    mocks.storeMessage.mockResolvedValue(undefined);
-    mocks.updateAgentInbox.mockResolvedValue(undefined);
     mocks.invalidateAgentListCache.mockResolvedValue(undefined);
     mocks.getPaymentRepoVersion.mockReturnValue("0.3.0");
     mocks.queueSend.mockResolvedValue(undefined);
@@ -214,15 +205,6 @@ describe("inbox POST canonical staged-payment semantics", () => {
     });
 
     expect(mocks.storeStagedInboxPayment).not.toHaveBeenCalled();
-  });
-
-  it("does not store the message for delivery when canonical identity is missing", async () => {
-    await POST(buildRequest(), {
-      params: Promise.resolve({ address: RECIPIENT_BTC }),
-    });
-
-    expect(mocks.storeMessage).not.toHaveBeenCalled();
-    expect(mocks.updateAgentInbox).not.toHaveBeenCalled();
   });
 
   it("returns a fail-closed error body when canonical identity is missing", async () => {
@@ -322,6 +304,5 @@ describe("inbox POST canonical staged-payment semantics", () => {
         workerStage: "http_inbox_post",
       })
     );
-    expect(mocks.storeMessage).not.toHaveBeenCalled();
   });
 });

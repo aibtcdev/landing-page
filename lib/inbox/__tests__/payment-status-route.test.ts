@@ -1,6 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { NextRequest } from "next/server";
-import { getMessage, getStagedInboxPayment, storeStagedInboxPayment } from "@/lib/inbox";
+import { getStagedInboxPayment, storeStagedInboxPayment } from "@/lib/inbox";
 import { createMockKV } from "./kv-mock";
 import { GET } from "@/app/api/payment-status/[paymentId]/route";
 
@@ -326,7 +326,7 @@ describe("payment-status route", () => {
     );
     expect(await getStagedInboxPayment(kv, "pay_finalize_case")).toBeNull();
     // Post-#760: confirmed messages land in D1, not legacy KV.
-    expect(await getMessage(kv, "msg_finalize_case")).toBeNull();
+    expect(await kv.get("inbox:message:msg_finalize_case")).toBeNull();
     expect(d1Rows["msg_finalize_case"]).toEqual(
       expect.objectContaining({
         messageId: "msg_finalize_case",
@@ -397,7 +397,7 @@ describe("payment-status route", () => {
       })
     );
     expect(await getStagedInboxPayment(kv, "pay_discard_case")).toBeNull();
-    expect(await getMessage(kv, "msg_discard_case")).toBeNull();
+    expect(await kv.get("inbox:message:msg_discard_case")).toBeNull();
     expect(mocks.logger.info).toHaveBeenCalledWith(
       "payment.delivery_discarded",
       expect.objectContaining({
@@ -450,7 +450,7 @@ describe("payment-status route", () => {
       })
     );
     expect(await getStagedInboxPayment(kv, "pay_sender_gap_case")).toBeNull();
-    expect(await getMessage(kv, "msg_sender_gap_case")).toBeNull();
+    expect(await kv.get("inbox:message:msg_sender_gap_case")).toBeNull();
     expect(mocks.logger.info).toHaveBeenCalledWith(
       "payment.delivery_discarded",
       expect.objectContaining({
@@ -550,7 +550,7 @@ describe("payment-status route", () => {
 
     expect(response.status).toBe(404);
     expect(await getStagedInboxPayment(kv, "pay_not_found_case")).toBeNull();
-    expect(await getMessage(kv, "msg_not_found_case")).toBeNull();
+    expect(await kv.get("inbox:message:msg_not_found_case")).toBeNull();
     expect(mocks.logger.info).toHaveBeenCalledWith(
       "payment.delivery_discarded",
       expect.objectContaining({
@@ -600,7 +600,7 @@ describe("payment-status route", () => {
       })
     );
     expect(await getStagedInboxPayment(kv, "pay_not_found_terminal_case")).toBeNull();
-    expect(await getMessage(kv, "msg_not_found_terminal_case")).toBeNull();
+    expect(await kv.get("inbox:message:msg_not_found_terminal_case")).toBeNull();
     expect(mocks.logger.info).toHaveBeenCalledWith(
       "payment.delivery_discarded",
       expect.objectContaining({
@@ -693,7 +693,7 @@ describe("payment-status route", () => {
     );
 
     expect(await getStagedInboxPayment(kv, "pay_once_case")).toBeNull();
-    expect(await getMessage(kv, "msg_once_case")).toBeNull();
+    expect(await kv.get("inbox:message:msg_once_case")).toBeNull();
     expect(d1Rows["msg_once_case"]).toEqual(
       expect.objectContaining({
         messageId: "msg_once_case",

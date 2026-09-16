@@ -32,10 +32,7 @@ vi.mock("@/lib/agent-lookup", () => ({
 
 vi.mock("@/lib/inbox", () => ({
   validateOutboxReply: vi.fn(),
-  storeReply: vi.fn(),
-  updateMessage: vi.fn(),
   buildReplyMessage: vi.fn(() => "Inbox Reply | msg_test | hello"),
-  decrementUnreadCount: vi.fn(),
 }));
 
 vi.mock("@/lib/inbox/d1-reads", () => ({
@@ -93,9 +90,6 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
   validateOutboxReply,
-  storeReply,
-  updateMessage,
-  decrementUnreadCount,
 } from "@/lib/inbox";
 import {
   getInboxMessageFromD1,
@@ -208,10 +202,6 @@ beforeEach(() => {
     valid: true,
     address: ADDR_A,
   });
-
-  (storeReply as Mock).mockResolvedValue(undefined);
-  (updateMessage as Mock).mockResolvedValue(undefined);
-  (decrementUnreadCount as Mock).mockResolvedValue(undefined);
 });
 
 // ---- tests ------------------------------------------------------------------

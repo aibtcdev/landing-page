@@ -33,10 +33,7 @@ vi.mock("@/lib/inbox", () => ({
   validateInboxMessage: vi.fn(),
   verifyInboxPayment: vi.fn(),
   verifyTxidPayment: vi.fn(),
-  storeMessage: vi.fn(),
   storeStagedInboxPayment: vi.fn(),
-  updateAgentInbox: vi.fn(),
-  updateSentIndex: vi.fn(),
   INBOX_PRICE_SATS: 100,
   REDEEMED_TXID_TTL_SECONDS: 7776000,
   RELAY_CIRCUIT_BREAKER_RETRY_AFTER_SECONDS: 300,
@@ -45,10 +42,7 @@ vi.mock("@/lib/inbox", () => ({
   DEFAULT_RELAY_URL: "https://x402-relay.aibtc.com",
   enqueueInboxReconciliation: vi.fn(),
   validateOutboxReply: vi.fn(),
-  storeReply: vi.fn(),
-  updateMessage: vi.fn(),
   buildReplyMessage: vi.fn(),
-  decrementUnreadCount: vi.fn(),
 }));
 
 vi.mock("@/lib/inbox/payment-logging", () => ({
@@ -138,14 +132,10 @@ vi.mock("@/lib/env", () => ({
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
-  updateAgentInbox,
   validateInboxMessage,
   verifyInboxPayment,
-  storeReply,
-  updateMessage,
   validateOutboxReply,
   buildReplyMessage,
-  decrementUnreadCount,
 } from "@/lib/inbox";
 import {
   getInboxMessageFromD1,
@@ -234,7 +224,6 @@ describe("POST /api/inbox/[address] — D1 sole-source-of-truth (Phase 2.5 Step 
   beforeEach(() => {
     vi.clearAllMocks();
     (lookupAgent as Mock).mockResolvedValue(AGENT);
-    (updateAgentInbox as Mock).mockResolvedValue(undefined);
     // P3: insertInboundMessageToD1 returns D1WriteResult {changes}
     (insertInboundMessageToD1 as Mock).mockResolvedValue({ changes: 1 });
   });
@@ -406,9 +395,6 @@ describe("POST /api/outbox/[address] — D1 sole-source-of-truth (Phase 2.5 Step
   beforeEach(() => {
     vi.clearAllMocks();
     (lookupAgent as Mock).mockResolvedValue(AGENT);
-    (storeReply as Mock).mockResolvedValue(undefined);
-    (updateMessage as Mock).mockResolvedValue(undefined);
-    (decrementUnreadCount as Mock).mockResolvedValue(undefined);
     // Phase 2.5 Step 3.5: auth reads now use D1 helpers
     (getInboxMessageFromD1 as Mock).mockResolvedValue(INBOX_MESSAGE); // original message
     (getReplyForMessageFromD1 as Mock).mockResolvedValue(null); // no existing reply
@@ -560,9 +546,6 @@ describe("POST /api/outbox/[address] — parent message D1 state update (still b
   beforeEach(() => {
     vi.clearAllMocks();
     (lookupAgent as Mock).mockResolvedValue(AGENT);
-    (storeReply as Mock).mockResolvedValue(undefined);
-    (updateMessage as Mock).mockResolvedValue(undefined);
-    (decrementUnreadCount as Mock).mockResolvedValue(undefined);
     // Phase 2.5 Step 3.5: auth reads now use D1 helpers
     (getReplyForMessageFromD1 as Mock).mockResolvedValue(null); // no existing reply
     (buildReplyMessage as Mock).mockReturnValue("Inbox Reply | msg_123 | hello");

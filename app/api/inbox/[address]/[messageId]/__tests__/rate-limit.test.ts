@@ -30,13 +30,8 @@ vi.mock("@/lib/agent-lookup", () => ({
 }));
 
 vi.mock("@/lib/inbox", () => ({
-  getMessage: vi.fn(),
-  getReply: vi.fn(),
-  updateMessage: vi.fn(),
-  getAgentInbox: vi.fn(),
   validateMarkRead: vi.fn(),
   buildMarkReadMessage: vi.fn(() => "Mark as Read | msg_123"),
-  decrementUnreadCount: vi.fn(),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -56,7 +51,7 @@ vi.mock("@/lib/logging", () => ({
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
-import { getMessage, validateMarkRead } from "@/lib/inbox";
+import { validateMarkRead } from "@/lib/inbox";
 
 // ---- helpers -------------------------------------------------------------
 
@@ -122,7 +117,6 @@ beforeEach(() => {
   // Default stubs so tests that only care about IP-bucket behavior
   // don't need to stub every downstream path.
   (lookupAgent as Mock).mockResolvedValue(null);
-  (getMessage as Mock).mockResolvedValue(null);
   (validateMarkRead as Mock).mockReturnValue({
     errors: null,
     data: { messageId: "msg_123_abc", signature: "sig123" },

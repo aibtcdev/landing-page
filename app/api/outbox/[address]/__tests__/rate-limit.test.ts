@@ -30,12 +30,7 @@ vi.mock("@/lib/agent-lookup", () => ({
 
 vi.mock("@/lib/inbox", () => ({
   validateOutboxReply: vi.fn(),
-  getMessage: vi.fn(),
-  getReply: vi.fn(),
-  storeReply: vi.fn(),
-  updateMessage: vi.fn(),
   buildReplyMessage: vi.fn(),
-  decrementUnreadCount: vi.fn(),
 }));
 
 vi.mock("@/lib/logging", () => ({
@@ -58,7 +53,6 @@ vi.mock("@/lib/validation/address", () => ({
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgent } from "@/lib/agent-lookup";
-import { getMessage } from "@/lib/inbox";
 
 // ---- helpers -------------------------------------------------------------
 
@@ -123,7 +117,6 @@ beforeEach(() => {
   // Default: lookupAgent returns null (unregistered) so tests that only care
   // about IP-bucket behavior don't need to stub further downstream paths.
   (lookupAgent as Mock).mockResolvedValue(null);
-  (getMessage as Mock).mockResolvedValue(null);
 });
 
 describe("outbox rate limit — IP bucket blocks before address-keyed buckets", () => {

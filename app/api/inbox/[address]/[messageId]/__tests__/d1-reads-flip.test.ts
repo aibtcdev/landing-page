@@ -32,11 +32,8 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
 }));
 
 vi.mock("@/lib/inbox", () => ({
-  getMessage: vi.fn(),
-  updateMessage: vi.fn(),
   validateMarkRead: vi.fn(),
   buildMarkReadMessage: vi.fn(() => "Mark as Read | msg_test"),
-  decrementUnreadCount: vi.fn(),
 }));
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({

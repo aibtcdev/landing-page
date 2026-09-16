@@ -100,20 +100,10 @@ export {
 
 // KV Helpers
 export {
-  getMessage,
-  storeMessage,
-  updateMessage,
-  getReply,
-  storeReply,
-  getAgentInbox,
-  updateAgentInbox,
-  getSentIndex,
-  updateSentIndex,
   getStagedInboxPayment,
   storeStagedInboxPayment,
   deleteStagedInboxPayment,
   finalizeStagedInboxPayment,
-  decrementUnreadCount,
 } from "./kv-helpers";
 
 export type { InboxReconciliationQueueMessage } from "./reconciliation-queue";
