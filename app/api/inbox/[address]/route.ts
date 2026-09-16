@@ -229,10 +229,14 @@ export async function GET(
   const statusParam = url.searchParams.get("status") || "all";
   const includePartners = url.searchParams.get("include")?.includes("partners") ?? false;
 
-  const limit = limitParam
-    ? Math.min(Math.max(parseInt(limitParam, 10), 1), 100)
+  // Non-numeric values (e.g. ?limit=abc) fall back to the defaults rather
+  // than sending NaN to D1.
+  const parsedLimit = limitParam ? parseInt(limitParam, 10) : NaN;
+  const parsedOffset = offsetParam ? parseInt(offsetParam, 10) : NaN;
+  const limit = Number.isFinite(parsedLimit)
+    ? Math.min(Math.max(parsedLimit, 1), 100)
     : 20;
-  const offset = offsetParam ? Math.max(parseInt(offsetParam, 10), 0) : 0;
+  const offset = Number.isFinite(parsedOffset) ? Math.max(parsedOffset, 0) : 0;
 
   // Validate view param
   if (!["sent", "received", "all"].includes(viewParam)) {
@@ -357,7 +361,9 @@ export async function GET(
         // Lower-bound total — exact counts of old sent messages aren't tracked.
         totalCount: offset + sentOriginals.length,
         view,
-        status: statusFilter,
+        // Read state belongs to the recipient, so the status filter only
+        // applies to received messages. Report the filter actually applied.
+        status: "all",
         pagination: {
           limit,
           offset,
@@ -450,10 +456,10 @@ export async function GET(
         ? Math.max(0, receivedCount - unreadCount)
         : receivedCount; // "all"
 
-  // sentCount: prefer stats table for accuracy. Fall back to sentMessages.length
-  // when include=partners (already fetched for the partner graph). If includePartners
-  // is false, sentMessages is [] but stats still returns the correct total.
-  const sentCount = includePartners ? sentMessages.length : agentStats.sentCount;
+  // sentCount always comes from the stats table, so it does not change with
+  // include=partners. sentMessages is capped at 100 rows for the partner graph
+  // and would undercount past that.
+  const sentCount = agentStats.sentCount;
 
   // Build inline replies map for the returned page
   const visibleMessageIds = receivedMessages.map((m) => m.messageId);
@@ -628,8 +634,9 @@ export async function GET(
   // If the agent has truly never had any inbox activity (no received messages
   // AND no sent replies), return the self-documenting response. An agent that
   // has only sent replies (sentCount > 0, totalCount === 0) falls through to
-  // the normal envelope so sentCount/economics/partners are exposed.
-  if (totalCount === 0 && sentCount === 0) {
+  // the normal envelope so sentCount/economics/partners are exposed. Fetched
+  // replies also count, so a lagging stats row never hides sent partners.
+  if (totalCount === 0 && sentCount === 0 && sentMessages.length === 0) {
     return NextResponse.json({
       endpoint: "/api/inbox/[address]",
       description:
@@ -674,7 +681,7 @@ export async function GET(
       },
       parameters: {
         view: "Filter messages: 'sent', 'received', or 'all' (default: 'all')",
-        status: "Filter by read status: 'unread', 'read', or 'all' (default: 'all'). When 'unread', only received messages without readAt are returned.",
+        status: "Filter by read status: 'unread', 'read', or 'all' (default: 'all'). Applies to received messages only; view=sent always returns status 'all'.",
         limit: "Max messages per page (1-100, default: 20)",
         offset: "Number of messages to skip (default: 0)",
       },

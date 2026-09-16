@@ -1,13 +1,13 @@
 /**
  * Phase 2.5 Step 3.3 — sentCount restoration + partners-with-sent tests.
  *
- * Updated by perf/d1-inbox-count-4to2: sentCount is now derived from
- * sentMessages.length (listOutboxRepliesFromD1 result) rather than from
- * countOutboxRepliesFromD1. This removes one COUNT(*) per request.
+ * sentCount always comes from the agent_inbox_stats row, so it is the same
+ * with or without include=partners (the reply list used for the partner
+ * graph is capped at 100 and would undercount).
  *
  * Covers:
- *  1. sentCount derivation: inbox-list GET returns sentCount > 0 when
- *       listOutboxRepliesFromD1 returns reply objects (sentCount = replies.length)
+ *  1. sentCount derivation: inbox-list GET returns stats.sentCount regardless
+ *       of include=partners
  *  2. partners-with-sent: partner graph includes both inbound senders (received)
  *       AND addresses this agent has replied to (sent)
  *  3. partners-received-only: when no sent replies exist, partners still computed
@@ -37,6 +37,7 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
   // agent_inbox_stats table.
   fetchRepliesForMessages: vi.fn(),
   listOutboxRepliesFromD1: vi.fn(),
+  listSentMessagesFromD1: vi.fn(),
 }));
 
 vi.mock("@/lib/cache", () => ({
@@ -103,6 +104,7 @@ import {
   listInboxMessagesFromD1,
   fetchRepliesForMessages,
   listOutboxRepliesFromD1,
+  listSentMessagesFromD1,
 } from "@/lib/inbox/d1-reads";
 import { getAgentInboxStats } from "@/lib/inbox/stats";
 
@@ -174,7 +176,13 @@ function setupDefaultMocks() {
   (listInboxMessagesFromD1 as Mock).mockResolvedValue([RECEIVED_MESSAGE]);
   (fetchRepliesForMessages as Mock).mockResolvedValue(new Map());
   (listOutboxRepliesFromD1 as Mock).mockResolvedValue([]);
-  // countOutboxRepliesFromD1 is no longer called (perf/d1-inbox-count-4to2)
+  (getAgentInboxStats as Mock).mockResolvedValue({
+    receivedCount: 1,
+    unreadCount: 1,
+    sentCount: 0,
+    lastMessageAt: null,
+    lastSentAt: null,
+  });
 }
 
 beforeEach(() => {
@@ -182,14 +190,23 @@ beforeEach(() => {
   setupDefaultMocks();
 });
 
-// ---- sentCount derivation tests (perf/d1-inbox-count-4to2) ------------------
-// sentCount is now derived from sentMessages.length (listOutboxRepliesFromD1),
-// not from a separate countOutboxRepliesFromD1 call.
+type InboxListBody = {
+  inbox: {
+    sentCount: number;
+    view: string;
+    status: string;
+    economics: { satsSent: number };
+    pagination: { limit: number; offset: number };
+  };
+};
+
+// ---- sentCount derivation tests ---------------------------------------------
+// sentCount comes from the stats table, independent of include=partners.
 
 describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => {
-  it("returns sentCount > 0 when listOutboxRepliesFromD1 returns reply objects", async () => {
-    // sentCount is now sentMessages.length — requires ?include=partners to get replies.
-    // Without include=partners, listOutboxRepliesFromD1 returns [] so sentCount=0.
+  it("returns stats.sentCount, not the length of the capped reply list", async () => {
+    // 150 replies sent overall; the partner graph only fetches the latest 100.
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 1, unreadCount: 1, sentCount: 150, lastMessageAt: null, lastSentAt: null });
     const replies = [SENT_REPLY, { ...SENT_REPLY, messageId: "msg_2" }, { ...SENT_REPLY, messageId: "msg_3" }];
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue(replies);
 
@@ -199,10 +216,24 @@ describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => 
     );
 
     expect(res.status).toBe(200);
-    const body = await res.json();
-    // sentCount comes from sentMessages.length, not countOutboxRepliesFromD1
-    expect(body.inbox.sentCount).toBe(3);
-    expect(body.inbox.sentCount).toBeGreaterThan(0);
+    const body = (await res.json()) as InboxListBody;
+    expect(body.inbox.sentCount).toBe(150);
+  });
+
+  it("reports the same sentCount with and without include=partners", async () => {
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 1, unreadCount: 1, sentCount: 7, lastMessageAt: null, lastSentAt: null });
+    (listOutboxRepliesFromD1 as Mock).mockResolvedValue([SENT_REPLY]);
+
+    const plain = (await (
+      await GET(buildGetRequest(AGENT_ADDR), buildContext(AGENT_ADDR))
+    ).json()) as InboxListBody;
+    const withPartners = (await (
+      await GET(buildGetRequest(AGENT_ADDR, "?include=partners"), buildContext(AGENT_ADDR))
+    ).json()) as InboxListBody;
+
+    expect(plain.inbox.sentCount).toBe(7);
+    expect(withPartners.inbox.sentCount).toBe(7);
+    expect(withPartners.inbox.economics.satsSent).toBe(plain.inbox.economics.satsSent);
   });
 
   it("returns sentCount = 0 when agent has sent no replies", async () => {
@@ -215,6 +246,7 @@ describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => 
   });
 
   it("includes sentCount in economics.satsSent calculation", async () => {
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 1, unreadCount: 1, sentCount: 2, lastMessageAt: null, lastSentAt: null });
     const replies = [SENT_REPLY, { ...SENT_REPLY, messageId: "msg_2" }];
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue(replies);
 
@@ -245,9 +277,8 @@ describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => 
 
   it("sent-only inbox (totalCount===0 but sentCount>0) returns sentCount in normal envelope, not self-doc", async () => {
     // Regression fix: agent has sent replies but has never received a message.
-    // sentCount comes from listOutboxRepliesFromD1 (via include=partners).
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 0, lastMessageAt: null, lastSentAt: null });
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 3, lastMessageAt: null, lastSentAt: null });
     const replies = [SENT_REPLY, { ...SENT_REPLY, messageId: "msg_2" }, { ...SENT_REPLY, messageId: "msg_3" }];
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue(replies);
 
@@ -274,7 +305,7 @@ describe("Phase 2.5 Step 3.3 — sentCount derivation in inbox-list GET", () => 
       return Promise.resolve(null);
     });
     (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
-    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 0, lastMessageAt: null, lastSentAt: null });
+    (getAgentInboxStats as Mock).mockResolvedValue({ receivedCount: 0, unreadCount: 0, sentCount: 1, lastMessageAt: null, lastSentAt: null });
     (listOutboxRepliesFromD1 as Mock).mockResolvedValue([SENT_REPLY]);
 
     const res = await GET(
@@ -562,5 +593,38 @@ describe("D1-throws fallback still works after COUNT reduction", () => {
     expect(res.status).toBe(503);
     const body = await res.json();
     expect(body.error).toBe("transient_d1_unavailable");
+  });
+});
+
+// ---- query param handling ---------------------------------------------------
+
+describe("inbox-list GET query params", () => {
+  it("falls back to default limit/offset for non-numeric values", async () => {
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?limit=abc&offset=xyz"),
+      buildContext(AGENT_ADDR)
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as InboxListBody;
+    expect(body.inbox.pagination.limit).toBe(20);
+    expect(body.inbox.pagination.offset).toBe(0);
+    const [, , limit, offset] = (listInboxMessagesFromD1 as Mock).mock.calls[0];
+    expect(limit).toBe(20);
+    expect(offset).toBe(0);
+  });
+
+  it("view=sent reports status 'all' because the read filter only applies to received messages", async () => {
+    (listSentMessagesFromD1 as Mock).mockResolvedValue([]);
+
+    const res = await GET(
+      buildGetRequest(AGENT_ADDR, "?view=sent&status=unread"),
+      buildContext(AGENT_ADDR)
+    );
+
+    expect(res.status).toBe(200);
+    const body = (await res.json()) as InboxListBody;
+    expect(body.inbox.view).toBe("sent");
+    expect(body.inbox.status).toBe("all");
   });
 });
