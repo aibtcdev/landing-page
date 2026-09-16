@@ -20,6 +20,7 @@
  */
 
 import { getCloudflareContext } from "@opennextjs/cloudflare";
+import { classifyAddress } from "@/lib/cache/agent-profile";
 
 const CACHE_HOST = "https://cache.aibtc.local";
 
@@ -165,4 +166,26 @@ export async function purgeMiddlewareOgCache(address: string): Promise<void> {
   } catch {
     // Best-effort — TTL expiry will heal naturally.
   }
+}
+
+/**
+ * Invalidate every OG cache layer for a set of agent address forms.
+ *
+ * `/api/og` resolves any form (btc, stx, taproot, BNS name), so each one is
+ * busted there. The middleware crawler cache only keys btc/stx/taproot
+ * (see `middleware.ts`), so other forms are skipped instead of issuing
+ * deletes that can never match.
+ */
+export async function invalidateOgCaches(
+  addresses: Iterable<string>,
+): Promise<void> {
+  const all = [...addresses];
+  const middlewareForms = all.filter((a) => {
+    const branch = classifyAddress(a);
+    return branch === "btc" || branch === "stx" || branch === "taproot";
+  });
+  await Promise.all([
+    invalidateEdgeCache(...all.map((a) => buildEdgeCacheKey("/api/og", a))),
+    ...middlewareForms.map((a) => purgeMiddlewareOgCache(a)),
+  ]);
 }

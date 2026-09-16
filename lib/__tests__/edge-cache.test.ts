@@ -3,6 +3,8 @@ import {
   buildEdgeCacheKey,
   withEdgeCache,
   invalidateEdgeCache,
+  invalidateOgCaches,
+  buildMiddlewareOgCacheKey,
 } from "../edge-cache";
 
 // ---------------------------------------------------------------------------
@@ -290,5 +292,33 @@ describe("invalidateEdgeCache", () => {
     ).resolves.toBeUndefined();
 
     (globalThis as unknown as { caches?: unknown }).caches = original;
+  });
+});
+
+describe("invalidateOgCaches", () => {
+  let cache: MockCache;
+
+  beforeEach(() => {
+    cache = createMockCache();
+  });
+
+  it("busts /api/og for every form and the middleware cache for btc/stx/taproot only", async () => {
+    const forms = ["bc1qagent", "SP2AGENT", "bc1pagent", "agent.btc"];
+    for (const a of forms) {
+      cache.store.set(buildEdgeCacheKey("/api/og", a), new Response());
+      cache.store.set(buildMiddlewareOgCacheKey(a), new Response());
+    }
+
+    await invalidateOgCaches(new Set(forms));
+
+    for (const a of forms) {
+      expect(cache.store.has(buildEdgeCacheKey("/api/og", a))).toBe(false);
+    }
+    expect(cache.store.has(buildMiddlewareOgCacheKey("bc1qagent"))).toBe(false);
+    expect(cache.store.has(buildMiddlewareOgCacheKey("SP2AGENT"))).toBe(false);
+    expect(cache.store.has(buildMiddlewareOgCacheKey("bc1pagent"))).toBe(false);
+    // The middleware never caches BNS names, so no delete is issued for one.
+    expect(cache.store.has(buildMiddlewareOgCacheKey("agent.btc"))).toBe(true);
+    expect(cache.stats.deletes).toBe(7);
   });
 });

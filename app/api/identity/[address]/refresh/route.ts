@@ -13,7 +13,7 @@ import {
 import {
   buildEdgeCacheKey,
   invalidateEdgeCache,
-  purgeMiddlewareOgCache,
+  invalidateOgCaches,
 } from "@/lib/edge-cache";
 import {
   createLogger,
@@ -222,19 +222,13 @@ export async function POST(
       urlsToInvalidate.push(
         buildEdgeCacheKey("/api/identity", addr, "/reputation?type=feedback"),
       );
-      // Bust OG image cache — display name / BNS name changes should
-      // surface in unfurls immediately after a forced refresh.
-      urlsToInvalidate.push(buildEdgeCacheKey("/api/og", addr));
     }
-    await invalidateEdgeCache(...urlsToInvalidate);
-
-    // Purge middleware OG cache for all address forms — profile data changed
-    // (bnsName, erc8004AgentId) and crawlers must see fresh OG HTML immediately.
-    const middlewarePurges: Promise<void>[] = [];
-    for (const addr of cachedAddresses) {
-      middlewarePurges.push(purgeMiddlewareOgCache(addr));
-    }
-    await Promise.all(middlewarePurges);
+    // OG caches too: display name / BNS name changes should surface in
+    // unfurls and crawler HTML immediately after a forced refresh.
+    await Promise.all([
+      invalidateEdgeCache(...urlsToInvalidate),
+      invalidateOgCaches(cachedAddresses),
+    ]);
 
     return NextResponse.json({
       stxAddress,
