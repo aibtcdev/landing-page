@@ -42,12 +42,7 @@ vi.mock("@/lib/inbox/d1-reads", () => ({
 
 vi.mock("@/lib/inbox", () => ({
   validateOutboxReply: vi.fn(),
-  getMessage: vi.fn(),
-  getReply: vi.fn(),
-  storeReply: vi.fn(),
-  updateMessage: vi.fn(),
   buildReplyMessage: vi.fn(() => "Inbox Reply | msg_test | reply"),
-  decrementUnreadCount: vi.fn(),
 }));
 
 vi.mock("@/lib/inbox/d1-dual-write", () => ({

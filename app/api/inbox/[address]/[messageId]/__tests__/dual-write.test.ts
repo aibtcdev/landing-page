@@ -33,11 +33,8 @@ vi.mock("@/lib/agent-lookup", () => ({
 }));
 
 vi.mock("@/lib/inbox", () => ({
-  updateMessage: vi.fn(),
-  getAgentInbox: vi.fn(),
   validateMarkRead: vi.fn(),
   buildMarkReadMessage: vi.fn(() => "Mark as Read | msg_123"),
-  decrementUnreadCount: vi.fn(),
 }));
 
 vi.mock("@/lib/inbox/d1-reads", () => ({
@@ -79,8 +76,6 @@ import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { lookupAgent } from "@/lib/agent-lookup";
 import {
   validateMarkRead,
-  updateMessage,
-  decrementUnreadCount,
 } from "@/lib/inbox";
 import { getInboxMessageFromD1 } from "@/lib/inbox/d1-reads";
 import { updateMessageStateD1, markMessageReadIfUnread } from "@/lib/inbox/d1-dual-write";
@@ -186,8 +181,6 @@ describe("PATCH /api/inbox/[address]/[messageId] — D1 sole-source-of-truth (Ph
       valid: true,
       address: AGENT.btcAddress,
     });
-    (updateMessage as Mock).mockResolvedValue({ ...INBOX_MESSAGE, readAt: "2026-05-10T12:00:00.000Z" });
-    (decrementUnreadCount as Mock).mockResolvedValue(undefined);
     // Re-apply resolved values cleared by clearAllMocks
     (updateMessageStateD1 as Mock).mockResolvedValue(undefined);
     // P3: markMessageReadIfUnread returns D1WriteResult {changes}
