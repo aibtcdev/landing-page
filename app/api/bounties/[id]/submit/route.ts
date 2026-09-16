@@ -5,6 +5,10 @@
  * bounty's derived status is `open`. Self-submit (poster ≠ submitter) is
  * rejected, and each agent may submit at most once per bounty (409
  * `already_submitted` on repeats). Submissions are append-only.
+ *
+ * Signed attempts refused because the signer is unregistered, the bounty is
+ * no longer open, or the insert failed are recorded (best-effort) so posters
+ * can see friction on the detail endpoint (#1040).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -21,8 +25,10 @@ import {
   hasSubmission,
   insertSubmission,
   isWithinSignatureWindow,
+  recordSubmitAttempt,
   validateSubmit,
   type BountySubmission,
+  type SubmitAttemptOutcome,
 } from "@/lib/bounty";
 
 export async function POST(
@@ -86,10 +92,18 @@ export async function POST(
       );
     }
 
+    // From here the signer is proven, so refusals can be attributed to them.
+    // Recording never affects the response.
+    const noteRefusal = (outcome: SubmitAttemptOutcome) =>
+      recordSubmitAttempt(db, id, data.submitterBtcAddress, outcome, new Date().toISOString()).catch(
+        (e) => logger.warn("bounty.submit_attempt_record_failed", { error: String(e), outcome })
+      );
+
     // Submitter must be a registered agent (L1+). The very existence of an
     // AgentRecord is sufficient — registration is the L1 gate.
     const submitter = await lookupAgent(kv, data.submitterBtcAddress, db);
     if (!submitter) {
+      await noteRefusal("not_registered");
       return NextResponse.json(
         {
           error: "agent_not_found",
@@ -115,6 +129,7 @@ export async function POST(
     // Status guard — only `open` accepts new submissions.
     const status = bountyStatus(bounty);
     if (status !== "open") {
+      await noteRefusal("closed");
       return NextResponse.json(
         {
           error: "submissions_closed",
@@ -156,6 +171,7 @@ export async function POST(
       await insertSubmission(db, submission, nowIso);
     } catch (e) {
       logger.error("bounty.submit_failed", { error: String(e), bountyId: id });
+      await noteRefusal("store_failed");
       return NextResponse.json(
         { error: "submit_failed", message: "Could not store submission. Please retry." },
         { status: 500 }

@@ -550,3 +550,75 @@ export async function hasSubmission(
     .first<{ x: number }>();
   return row != null;
 }
+
+// ── Submit attempts (#1040) ───────────────────────────────────────────────
+
+export type SubmitAttemptOutcome = "not_registered" | "closed" | "store_failed";
+
+export interface SubmitAttemptCounts {
+  /** Distinct agents with a stored submission. */
+  submitted: number;
+  /** Distinct signers refused for each reason who never went on to submit. */
+  refused: Record<SubmitAttemptOutcome, number>;
+}
+
+/**
+ * Upsert a refused, signature-verified submit attempt. A no-op when the bounty
+ * does not exist. Callers treat this as best-effort and must not fail the
+ * request on error.
+ */
+export async function recordSubmitAttempt(
+  db: D1Database,
+  bountyId: string,
+  submitterBtcAddress: string,
+  outcome: SubmitAttemptOutcome,
+  nowIso: string
+): Promise<void> {
+  await db
+    .prepare(
+      `INSERT INTO bounty_submit_attempts
+         (bounty_id, submitter_btc_address, outcome, attempt_count, first_attempted_at, last_attempted_at)
+       SELECT ?, ?, ?, 1, ?, ?
+       WHERE EXISTS (SELECT 1 FROM bounties WHERE id = ?)
+       ON CONFLICT (bounty_id, submitter_btc_address, outcome) DO UPDATE SET
+         attempt_count = attempt_count + 1,
+         last_attempted_at = excluded.last_attempted_at`
+    )
+    .bind(bountyId, submitterBtcAddress, outcome, nowIso, nowIso, bountyId)
+    .run();
+}
+
+/**
+ * Count submitters and refused attempts for one bounty. Signers who were
+ * refused but later submitted are counted only as submitted.
+ */
+export async function getSubmitAttemptCounts(
+  db: D1Database,
+  bountyId: string,
+  submittedCount: number
+): Promise<SubmitAttemptCounts> {
+  const { results } = await db
+    .prepare(
+      `SELECT a.outcome AS outcome, COUNT(DISTINCT a.submitter_btc_address) AS n
+       FROM bounty_submit_attempts a
+       WHERE a.bounty_id = ?
+         AND NOT EXISTS (
+           SELECT 1 FROM bounty_submissions s
+           WHERE s.bounty_id = a.bounty_id
+             AND s.submitter_btc_address = a.submitter_btc_address
+         )
+       GROUP BY a.outcome`
+    )
+    .bind(bountyId)
+    .all<{ outcome: SubmitAttemptOutcome; n: number }>();
+
+  const refused: Record<SubmitAttemptOutcome, number> = {
+    not_registered: 0,
+    closed: 0,
+    store_failed: 0,
+  };
+  for (const row of results ?? []) {
+    if (row.outcome in refused) refused[row.outcome] = row.n;
+  }
+  return { submitted: submittedCount, refused };
+}

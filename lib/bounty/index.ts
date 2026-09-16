@@ -53,7 +53,13 @@ export {
   validateCancel,
 } from "./validation";
 
-export type { ListBountiesFilters, ListBountiesResult, ListSubmissionsResult } from "./d1-helpers";
+export type {
+  ListBountiesFilters,
+  ListBountiesResult,
+  ListSubmissionsResult,
+  SubmitAttemptCounts,
+  SubmitAttemptOutcome,
+} from "./d1-helpers";
 export {
   statusToSql,
   getBounty,
@@ -67,6 +73,8 @@ export {
   listSubmissionsBySubmitter,
   insertSubmission,
   hasSubmission,
+  recordSubmitAttempt,
+  getSubmitAttemptCounts,
 } from "./d1-helpers";
 
 export { isTxidRedeemed, reserveTxid } from "./kv-helpers";

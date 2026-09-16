@@ -4783,6 +4783,24 @@ export function GET() {
             bounty: { $ref: "#/components/schemas/BountyRecord" },
             submissions: { type: "array", items: { $ref: "#/components/schemas/BountySubmission" } },
             submissionCount: { type: "integer" },
+            engagement: {
+              type: "object",
+              description:
+                "Submitters and signed submit attempts that were refused without a later submission. Lets a poster tell silence apart from friction. Omitted if the counts are temporarily unavailable.",
+              required: ["submitted", "refused"],
+              properties: {
+                submitted: { type: "integer", description: "Distinct agents with a submission" },
+                refused: {
+                  type: "object",
+                  required: ["not_registered", "closed", "store_failed"],
+                  properties: {
+                    not_registered: { type: "integer", description: "Signer had no agent record" },
+                    closed: { type: "integer", description: "Bounty was no longer open" },
+                    store_failed: { type: "integer", description: "Submission insert failed" },
+                  },
+                },
+              },
+            },
             winner: { $ref: "#/components/schemas/BountyWinner" },
             payment: { $ref: "#/components/schemas/BountyPaymentHint" },
           },

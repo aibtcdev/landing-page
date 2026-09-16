@@ -24,6 +24,7 @@ vi.mock("@/lib/bitcoin-verify", () => ({
 const getBountyMock = vi.fn();
 const hasSubmissionMock = vi.fn();
 const insertSubmissionMock = vi.fn();
+const recordSubmitAttemptMock = vi.fn();
 vi.mock("@/lib/bounty", async (importOriginal) => {
   // Keep the pure helpers (validation, message building, status derivation,
   // id generation) real — only the D1 readers/writers are stubbed.
@@ -33,6 +34,7 @@ vi.mock("@/lib/bounty", async (importOriginal) => {
     getBounty: (...args: unknown[]) => getBountyMock(...args),
     hasSubmission: (...args: unknown[]) => hasSubmissionMock(...args),
     insertSubmission: (...args: unknown[]) => insertSubmissionMock(...args),
+    recordSubmitAttempt: (...args: unknown[]) => recordSubmitAttemptMock(...args),
   };
 });
 
@@ -89,6 +91,7 @@ beforeEach(() => {
   getBountyMock.mockResolvedValue(openBounty());
   hasSubmissionMock.mockResolvedValue(false);
   insertSubmissionMock.mockResolvedValue(undefined);
+  recordSubmitAttemptMock.mockResolvedValue(undefined);
 });
 
 // ---------------------------------------------------------------------------
@@ -134,5 +137,61 @@ describe("POST /api/bounties/[id]/submit — one submission per agent", () => {
     expect(res.status).toBe(422);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("submissions_closed");
+  });
+});
+
+describe("POST /api/bounties/[id]/submit — refused attempts are recorded (#1040)", () => {
+  const call = () => POST(submitRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
+
+  it("does not record anything on a successful submission", async () => {
+    const res = await call();
+    expect(res.status).toBe(201);
+    expect(recordSubmitAttemptMock).not.toHaveBeenCalled();
+  });
+
+  it("records not_registered when the signer has no agent record", async () => {
+    lookupAgentMock.mockResolvedValue(null);
+    const res = await call();
+    expect(res.status).toBe(404);
+    expect(recordSubmitAttemptMock).toHaveBeenCalledWith(
+      {}, BOUNTY_ID, SUBMITTER_BTC, "not_registered", expect.any(String)
+    );
+  });
+
+  it("records closed when the bounty is no longer open", async () => {
+    getBountyMock.mockResolvedValue({
+      ...openBounty(),
+      expiresAt: new Date(Date.now() - 1000).toISOString(),
+    });
+    const res = await call();
+    expect(res.status).toBe(422);
+    expect(recordSubmitAttemptMock).toHaveBeenCalledWith(
+      {}, BOUNTY_ID, SUBMITTER_BTC, "closed", expect.any(String)
+    );
+  });
+
+  it("records store_failed when the insert throws", async () => {
+    insertSubmissionMock.mockRejectedValue(new Error("D1 down"));
+    const res = await call();
+    expect(res.status).toBe(500);
+    expect(recordSubmitAttemptMock).toHaveBeenCalledWith(
+      {}, BOUNTY_ID, SUBMITTER_BTC, "store_failed", expect.any(String)
+    );
+  });
+
+  it("does not record when the signature fails (signer is unproven)", async () => {
+    verifySignatureMock.mockReturnValue({ valid: false, address: "bc1qsomeoneelse" });
+    const res = await call();
+    expect(res.status).toBe(400);
+    expect(recordSubmitAttemptMock).not.toHaveBeenCalled();
+  });
+
+  it("still returns the original refusal when recording fails", async () => {
+    lookupAgentMock.mockResolvedValue(null);
+    recordSubmitAttemptMock.mockRejectedValue(new Error("table missing"));
+    const res = await call();
+    expect(res.status).toBe(404);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toBe("agent_not_found");
   });
 });
