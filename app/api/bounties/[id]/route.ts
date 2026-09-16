@@ -5,6 +5,10 @@
  * page of submissions, and — when applicable — denormalized `winner` and
  * `payment` blocks so the poster sees exactly who they picked and exactly
  * what memo + recipient + amount to use for payout.
+ *
+ * `engagement` shows how many agents submitted and how many signed attempts
+ * were refused (unregistered, closed, store failure) without a later
+ * submission, so posters can tell silence apart from friction (#1040).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -14,6 +18,7 @@ import {
   buildExpectedMemo,
   getBounty,
   getSubmission,
+  getSubmitAttemptCounts,
   listSubmissionsForBounty,
   SBTC_CONTRACT_MAINNET,
   type BountyPaymentHint,
@@ -56,6 +61,12 @@ export async function GET(
     0,
     bounty.submissionCount
   );
+  // One submission per agent, so submissionCount is also distinct submitters.
+  // Omitted rather than failing the detail read if the attempts table is
+  // unavailable (e.g. migration 029 not yet applied).
+  const engagement = await getSubmitAttemptCounts(db, bounty.id, submissionCount).catch(
+    () => undefined
+  );
 
   // Winner block — populated whenever the bounty has acceptedAt (i.e. on
   // winner-announced, paid, and abandoned-after-accept).
@@ -80,6 +91,7 @@ export async function GET(
       bounty: { ...bounty, status },
       submissions,
       submissionCount,
+      ...(engagement && { engagement }),
       ...(winner && { winner }),
       ...(payment && { payment }),
     },
