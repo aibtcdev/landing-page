@@ -742,6 +742,15 @@ export async function POST(request: NextRequest) {
     // This replaces the previous kv.get(`stx:${addr}`) lookup; D1 is the authoritative store.
     // Fail-closed rationale: D1 UNIQUE constraint would reject the INSERT anyway, but surfacing
     // a clear 409 here gives better UX and avoids a wasted relay call.
+    // The BTC KV read (below) doesn't depend on the STX result, so start it now
+    // and let it run alongside the D1 query. Its outcome is captured rather than
+    // left as a bare rejected promise, so a KV error is ignored when STX is taken
+    // and otherwise rethrown at the same point it used to surface.
+    const existingBtcRead = kv.get(`btc:${btcResult.address}`).then(
+      (value) => ({ ok: true as const, value }),
+      (error: unknown) => ({ ok: false as const, error }),
+    );
+
     let stxAlreadyExists: boolean;
     try {
       if (!db) {
@@ -768,7 +777,9 @@ export async function POST(request: NextRequest) {
     }
 
     // BTC duplicate check: KV (btc: key) remains unchanged pending P4.3 migration.
-    const existingBtc = await kv.get(`btc:${btcResult.address}`);
+    const btcRead = await existingBtcRead;
+    if (!btcRead.ok) throw btcRead.error;
+    const existingBtc = btcRead.value;
 
     if (existingBtc) {
       let existingRecord;

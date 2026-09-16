@@ -290,3 +290,59 @@ describe("STX duplicate-check: D1 throws → fail-closed → 409 STX_ADDRESS_TAK
     expect(body.code).toBe("STX_ADDRESS_TAKEN");
   });
 });
+
+describe("duplicate checks run in parallel (#777)", () => {
+  function withEnv(mockKv: KVNamespace) {
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        DB: buildMockD1(),
+        VERIFIED_AGENTS: mockKv,
+        X402_RELAY_URL: "https://x402-relay.aibtc.com",
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+  }
+
+  it("starts the BTC KV read before the D1 STX lookup resolves", async () => {
+    const mockKv = buildMockKv(null);
+    withEnv(mockKv);
+
+    let btcReadStartedFirst = false;
+    (lookupProfileByStxAddress as Mock).mockImplementation(async () => {
+      btcReadStartedFirst = (mockKv.get as Mock).mock.calls.some(
+        ([key]) => key === `btc:${TEST_BTC_ADDRESS}`,
+      );
+      return makeProfileRow();
+    });
+
+    await POST(buildRequest());
+
+    expect(btcReadStartedFirst).toBe(true);
+  });
+
+  it("still returns 409 STX_ADDRESS_TAKEN when STX is taken and the BTC read fails", async () => {
+    const mockKv = buildMockKv(null);
+    (mockKv.get as Mock).mockRejectedValue(new Error("KV unavailable"));
+    withEnv(mockKv);
+    (lookupProfileByStxAddress as Mock).mockResolvedValue(makeProfileRow());
+
+    const res = await POST(buildRequest());
+
+    expect(res.status).toBe(409);
+    const body = await res.json() as { code: string };
+    expect(body.code).toBe("STX_ADDRESS_TAKEN");
+  });
+
+  it("returns 500 INTERNAL_ERROR when STX is free and the BTC read fails", async () => {
+    const mockKv = buildMockKv(null);
+    (mockKv.get as Mock).mockRejectedValue(new Error("KV unavailable"));
+    withEnv(mockKv);
+    (lookupProfileByStxAddress as Mock).mockResolvedValue(null);
+
+    const res = await POST(buildRequest());
+
+    expect(res.status).toBe(500);
+    const body = await res.json() as { code: string };
+    expect(body.code).toBe("INTERNAL_ERROR");
+  });
+});
