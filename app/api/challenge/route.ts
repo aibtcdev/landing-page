@@ -2,11 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
-import {
-  buildEdgeCacheKey,
-  invalidateEdgeCache,
-  purgeMiddlewareOgCache,
-} from "@/lib/edge-cache";
+import { invalidateOgCaches } from "@/lib/edge-cache";
 import {
   generateChallenge,
   storeChallenge,
@@ -462,10 +458,7 @@ export async function POST(request: NextRequest) {
     await Promise.all([
       invalidateAgentListCache(kv),
       invalidateAgentsIndex(kv),
-      invalidateEdgeCache(
-        ...[...addressesToBust].map((a) => buildEdgeCacheKey("/api/og", a)),
-      ),
-      ...[...addressesToBust].map((a) => purgeMiddlewareOgCache(a)),
+      invalidateOgCaches(addressesToBust),
     ]);
 
     return NextResponse.json({
