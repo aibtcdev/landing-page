@@ -273,13 +273,12 @@ describe("middleware handleCrawlerAgentPage — Phase 2.3 D1 flip", () => {
     });
   });
 
-  describe("crawler UA + D1 miss + KV fallback hit (validation-excluded agents)", () => {
-    it("falls back to KV btc: key and returns OG HTML when D1 misses", async () => {
+  describe("crawler UA + D1 miss → falls through without reading KV agent records", () => {
+    it("ignores a KV btc: record when D1 has no row (D1 is the only agent source)", async () => {
       (lookupProfileByBtcAddress as Mock).mockResolvedValue(null);
 
-      const agentRecord = makeAgentRecord();
       const kv = buildKvMock({
-        [`btc:${SAMPLE_BTC_ADDRESS}`]: JSON.stringify(agentRecord),
+        [`btc:${SAMPLE_BTC_ADDRESS}`]: JSON.stringify(makeAgentRecord()),
       });
       const db = buildD1Mock();
       (getCloudflareContext as Mock).mockResolvedValue({
@@ -289,47 +288,16 @@ describe("middleware handleCrawlerAgentPage — Phase 2.3 D1 flip", () => {
       const req = makeRequest(SAMPLE_BTC_ADDRESS, CRAWLER_UA);
       const res = await middleware(req);
 
-      expect(res.status).toBe(200);
-      const body = await res.text();
-      expect(body).toContain('<meta property="og:title"');
-      expect(body).toContain("Verified Agent"); // level 1 (no claim in KV)
-
-      // KV btc: read happened as fallback
-      expect(kv.get).toHaveBeenCalledWith(`btc:${SAMPLE_BTC_ADDRESS}`);
+      const contentType = res.headers.get("content-type");
+      expect(contentType === null || !contentType.includes("text/html")).toBe(true);
+      expect(kv.get).not.toHaveBeenCalledWith(`btc:${SAMPLE_BTC_ADDRESS}`);
     });
 
-    it("reads claim from KV on fallback path and uses it for level", async () => {
-      (lookupProfileByBtcAddress as Mock).mockResolvedValue(null);
-
-      const agentRecord = makeAgentRecord();
-      const claimStatus: ClaimStatus = {
-        status: "verified",
-        claimedAt: "2026-02-01T00:00:00.000Z",
-        rewardSatoshis: 9250,
-      };
-      const kv = buildKvMock({
-        [`btc:${SAMPLE_BTC_ADDRESS}`]: JSON.stringify(agentRecord),
-        [`claim:${SAMPLE_BTC_ADDRESS}`]: JSON.stringify(claimStatus),
-      });
-      const db = buildD1Mock();
-      (getCloudflareContext as Mock).mockResolvedValue({
-        env: { VERIFIED_AGENTS: kv, DB: db },
-      });
-
-      const req = makeRequest(SAMPLE_BTC_ADDRESS, CRAWLER_UA);
-      const res = await middleware(req);
-
-      expect(res.status).toBe(200);
-      const body = await res.text();
-      expect(body).toContain("Genesis"); // level 2 via KV claim
-    });
-
-    it("falls back to KV stx: key for STX address when D1 misses", async () => {
+    it("ignores a KV stx: record when D1 has no row", async () => {
       (lookupProfileByStxAddress as Mock).mockResolvedValue(null);
 
-      const agentRecord = makeAgentRecord();
       const kv = buildKvMock({
-        [`stx:${SAMPLE_STX_ADDRESS}`]: JSON.stringify(agentRecord),
+        [`stx:${SAMPLE_STX_ADDRESS}`]: JSON.stringify(makeAgentRecord()),
       });
       const db = buildD1Mock();
       (getCloudflareContext as Mock).mockResolvedValue({
@@ -339,13 +307,14 @@ describe("middleware handleCrawlerAgentPage — Phase 2.3 D1 flip", () => {
       const req = makeRequest(SAMPLE_STX_ADDRESS, CRAWLER_UA);
       const res = await middleware(req);
 
-      expect(res.status).toBe(200);
-      expect(kv.get).toHaveBeenCalledWith(`stx:${SAMPLE_STX_ADDRESS}`);
+      const contentType = res.headers.get("content-type");
+      expect(contentType === null || !contentType.includes("text/html")).toBe(true);
+      expect(kv.get).not.toHaveBeenCalledWith(`stx:${SAMPLE_STX_ADDRESS}`);
     });
   });
 
-  describe("crawler UA + D1 miss + KV miss → falls through", () => {
-    it("returns NextResponse.next() when neither D1 nor KV has the agent", async () => {
+  describe("crawler UA + D1 miss → falls through", () => {
+    it("returns NextResponse.next() when D1 has no agent", async () => {
       (lookupProfileByBtcAddress as Mock).mockResolvedValue(null);
 
       const kv = buildKvMock({});
