@@ -140,7 +140,7 @@ describe("POST /api/bounties/[id]/submit — one submission per agent", () => {
   });
 });
 
-describe("POST /api/bounties/[id]/submit — refused attempts are recorded (#1040)", () => {
+describe("POST /api/bounties/[id]/submit: refused attempts are recorded (#1040)", () => {
   const call = () => POST(submitRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
 
   it("does not record anything on a successful submission", async () => {

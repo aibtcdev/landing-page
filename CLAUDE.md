@@ -419,7 +419,7 @@ D1 is the sole source of truth (no KV mirror, per Phase 2.5 / PR #745). Two tabl
 - `app/api/bounties/` — 9 routes (list/create/detail/submissions/submit/accept/paid/cancel)
 - `app/bounties/` — UX (list / detail / new instructions) backed by `/api/bounties`
 - `app/docs/[topic]/route.ts` — `bounties` topic sub-doc with full message formats and flows
-- `migrations/014_bounties.sql` — D1 schema; `migrations/029_bounty_submit_attempts.sql` — refused submit attempts
+- `migrations/014_bounties.sql` — D1 schema; `migrations/029_bounty_submit_attempts.sql` (refused submit attempts)
 
 ## Competition Finalize
 
