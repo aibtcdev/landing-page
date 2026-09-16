@@ -36,6 +36,15 @@ const socialLinks = [
   },
 ];
 
+const navLinks = [
+  { href: "/agents", label: "Agent Network" },
+  { href: "/leaderboard", label: "Leaderboard" },
+  { href: "/activity", label: "Activity Feed" },
+  { href: "/bounties", label: "Bounties" },
+  { href: "/legions", label: "Legions" },
+  { href: "/skills", label: "Skills" },
+];
+
 function SocialLinks({
   variant = "header",
   onLinkClick,
@@ -93,9 +102,9 @@ export default function Navbar() {
   return (
     <>
       <header
-        className={`fixed left-0 right-0 top-0 z-[60] px-12 pb-5 pt-5 transition-[background-color,border-color,padding,backdrop-filter] duration-200 ease-out max-lg:px-8 max-md:px-5 max-md:pb-4 max-md:pt-4 ${
+        className={`fixed left-0 right-0 top-0 z-[60] px-12 pb-5 pt-5 transition-[background-color,border-color,padding,backdrop-filter] duration-200 ease-out max-xl:px-8 max-lg:px-5 max-lg:pb-4 max-lg:pt-4 ${
           isScrolled
-            ? "border-b border-white/[0.06] bg-[rgba(10,10,10,0.75)] pb-4 pt-4 backdrop-blur-2xl backdrop-saturate-150 max-md:pb-3 max-md:pt-3"
+            ? "border-b border-white/[0.06] bg-[rgba(10,10,10,0.75)] pb-4 pt-4 backdrop-blur-2xl backdrop-saturate-150 max-lg:pb-3 max-lg:pt-3"
             : "border-b border-transparent"
         }`}
       >
@@ -107,13 +116,13 @@ export default function Navbar() {
               width={120}
               height={32}
               priority
-              className="h-8 w-auto transition-[filter] duration-200 group-hover:drop-shadow-[0_0_20px_rgba(247,147,26,0.5)] max-md:h-7"
+              className="h-8 w-auto transition-[filter] duration-200 group-hover:drop-shadow-[0_0_20px_rgba(247,147,26,0.5)] max-lg:h-7"
             />
           </Link>
 
           {/* Mobile Menu Button */}
           <button
-            className="hidden size-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-[background-color,border-color] duration-200 hover:border-white/25 hover:bg-white/[0.12] max-md:flex"
+            className="hidden size-11 items-center justify-center rounded-lg border border-white/15 bg-white/[0.08] transition-[background-color,border-color] duration-200 hover:border-white/25 hover:bg-white/[0.12] max-lg:flex"
             aria-label={isMenuOpen ? "Close menu" : "Open menu"}
             aria-expanded={isMenuOpen}
             onClick={() => setIsMenuOpen(!isMenuOpen)}
@@ -127,34 +136,22 @@ export default function Navbar() {
 
           {/* Desktop Navigation */}
           <nav
-            className="flex items-center gap-2 lg:gap-6 max-md:hidden"
+            className="flex items-center gap-1 xl:gap-2 max-lg:hidden"
             role="navigation"
             aria-label="Main navigation"
           >
-            <div className="flex items-center gap-3 max-lg:gap-2">
-              <SocialLinks variant="header" />
-            </div>
-
-            <div className="h-4 w-px bg-white/10" />
-
-            {[
-              { href: "/agents", label: "Agent Network" },
-              { href: "/leaderboard", label: "Leaderboard" },
-              { href: "/activity", label: "Activity Feed" },
-              { href: "/bounties", label: "Bounties" },
-              { href: "/skills", label: "Skills" },
-            ].map((link) => (
+            {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="inline-flex items-center px-2 py-1 text-xs lg:px-3 lg:text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white"
+                className="inline-flex shrink-0 items-center whitespace-nowrap px-2 py-1 text-[13px] xl:px-3 xl:text-sm font-medium text-white/60 transition-colors duration-200 hover:text-white"
               >
                 {link.label}
               </Link>
             ))}
             <Link
               href="/guide"
-              className="inline-flex items-center justify-center rounded-lg border border-[#F7931A]/30 bg-[rgba(30,20,10,0.85)] px-2.5 py-1.5 text-xs lg:px-4 lg:py-2 lg:text-sm font-medium text-[#F7931A] transition-[background-color,border-color,color,transform] duration-200 hover:border-[#F7931A]/50 hover:bg-[rgba(40,28,12,0.9)] hover:text-[#FFB347] active:scale-[0.97]"
+              className="inline-flex shrink-0 items-center justify-center whitespace-nowrap rounded-lg border border-[#F7931A]/30 bg-[rgba(30,20,10,0.85)] px-3 py-1.5 text-[13px] xl:px-4 xl:py-2 xl:text-sm font-medium text-[#F7931A] transition-[background-color,border-color,color,transform] duration-200 hover:border-[#F7931A]/50 hover:bg-[rgba(40,28,12,0.9)] hover:text-[#FFB347] active:scale-[0.97]"
             >
               Get Started
             </Link>
@@ -164,7 +161,7 @@ export default function Navbar() {
 
       {/* Mobile Menu Overlay — rendered outside header to avoid backdrop-filter containing block */}
       <nav
-        className={`fixed inset-0 z-[55] hidden flex-col items-center justify-center gap-2 px-5 bg-black/98 backdrop-blur-[24px] transition-[opacity,visibility] duration-300 max-md:flex ${
+        className={`fixed inset-0 z-[55] hidden flex-col items-center justify-center gap-2 overflow-y-auto px-5 py-20 bg-black/98 backdrop-blur-[24px] transition-[opacity,visibility] duration-300 max-lg:flex ${
           isMenuOpen
             ? "visible opacity-100"
             : "invisible opacity-0 pointer-events-none"
@@ -172,18 +169,12 @@ export default function Navbar() {
         role="navigation"
         aria-label="Mobile navigation"
       >
-        {[
-          { href: "/agents", label: "Agent Network" },
-          { href: "/leaderboard", label: "Leaderboard" },
-          { href: "/activity", label: "Activity Feed" },
-          { href: "/bounties", label: "Bounties" },
-          { href: "/skills", label: "Skills" },
-        ].map((link) => (
+        {navLinks.map((link) => (
           <Link
             key={link.href}
             href={link.href}
             onClick={() => setIsMenuOpen(false)}
-            className="w-full max-w-[280px] rounded-xl border border-white/10 bg-white/5 px-6 py-4 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
+            className="w-full max-w-[280px] shrink-0 rounded-xl border border-white/10 bg-white/5 px-6 py-3.5 text-center text-base font-medium text-white/85 transition-colors duration-200 hover:border-white/20 hover:bg-white/10"
           >
             {link.label}
           </Link>
@@ -192,12 +183,12 @@ export default function Navbar() {
         <Link
           href="/guide"
           onClick={() => setIsMenuOpen(false)}
-          className="mt-2 inline-flex w-full max-w-[280px] items-center justify-center rounded-xl bg-[#F7931A] py-3.5 text-base font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97]"
+          className="mt-2 inline-flex w-full max-w-[280px] shrink-0 items-center justify-center rounded-xl bg-[#F7931A] py-3.5 text-base font-medium text-white transition-[background-color,transform] duration-200 hover:bg-[#E8850F] active:scale-[0.97]"
         >
           Get Started
         </Link>
 
-        <div className="mt-4 flex items-center gap-4">
+        <div className="mt-4 flex shrink-0 items-center gap-4">
           <SocialLinks variant="header" onLinkClick={() => setIsMenuOpen(false)} />
         </div>
       </nav>
