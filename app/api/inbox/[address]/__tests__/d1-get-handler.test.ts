@@ -485,8 +485,8 @@ describe("GET /api/inbox/[address] include=partners shape", () => {
         direction: "sent",
       },
     ]);
-    // Under include=partners sentCount is the fetched outbox length, not stats.sentCount
-    expect(body.inbox.sentCount).toBe(1);
+    // sentCount comes from the stats row, not the capped outbox list fetched for partners
+    expect(body.inbox.sentCount).toBe(4);
   });
 
   it("partners are built from the returned page only, so status=read shows only read-message senders", async () => {
@@ -537,7 +537,7 @@ describe("GET /api/inbox/[address] view=sent", () => {
     ]);
   });
 
-  it("echoes status and ignores include=partners (no filter, no partners, no counts)", async () => {
+  it("reports status 'all' and ignores include=partners (no filter, no partners, no counts)", async () => {
     (listSentMessagesFromD1 as Mock).mockResolvedValue([]);
 
     const res = await GET(
@@ -548,7 +548,8 @@ describe("GET /api/inbox/[address] view=sent", () => {
     expect(res.status).toBe(200);
     expect(listOutboxRepliesFromD1).not.toHaveBeenCalled();
     const body = await readBody(res);
-    expect(body.inbox.status).toBe("unread");
+    // The read filter applies to received messages only
+    expect(body.inbox.status).toBe("all");
     expect(body.inbox.messages).toEqual([]);
     expect(body.inbox.partners).toBeUndefined();
     expect(body.inbox.sentCount).toBeUndefined();
