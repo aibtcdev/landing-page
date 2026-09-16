@@ -137,6 +137,7 @@ describe("inbox reconciliation queue", () => {
     await processInboxReconciliationQueue(
       {
         queue: "landing-page-inbox-reconciliation",
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
         messages: [
           {
             id: "queue-message-1",
@@ -169,6 +170,7 @@ describe("inbox reconciliation queue", () => {
         INBOX_RECONCILIATION_QUEUE: {
           send: queueSend,
           sendBatch: vi.fn(),
+          metrics: vi.fn(),
         },
       },
       mocks.logger,
@@ -211,6 +213,7 @@ describe("inbox reconciliation queue", () => {
     await processInboxReconciliationQueue(
       {
         queue: "landing-page-inbox-reconciliation",
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
         messages: [
           {
             id: "queue-message-2",
@@ -243,6 +246,7 @@ describe("inbox reconciliation queue", () => {
         INBOX_RECONCILIATION_QUEUE: {
           send: queueSend,
           sendBatch: vi.fn(),
+          metrics: vi.fn(),
         },
       },
       mocks.logger,
@@ -273,6 +277,7 @@ describe("inbox reconciliation queue", () => {
     await processInboxReconciliationQueue(
       {
         queue: "landing-page-inbox-reconciliation",
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
         messages: [
           {
             id: "queue-message-3",
@@ -305,6 +310,7 @@ describe("inbox reconciliation queue", () => {
         INBOX_RECONCILIATION_QUEUE: {
           send: queueSend,
           sendBatch: vi.fn(),
+          metrics: vi.fn(),
         },
       },
       mocks.logger,
@@ -344,6 +350,7 @@ describe("inbox reconciliation queue", () => {
     await processInboxReconciliationQueue(
       {
         queue: "landing-page-inbox-reconciliation",
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
         messages: [
           {
             id: "queue-message-4",
@@ -422,6 +429,7 @@ describe("inbox reconciliation queue", () => {
     await processInboxReconciliationQueue(
       {
         queue: "landing-page-inbox-reconciliation",
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
         messages: [
           {
             id: "queue-msg-ttl-1",
@@ -447,7 +455,7 @@ describe("inbox reconciliation queue", () => {
           submitPayment,
           checkPayment: vi.fn(), // should NOT be called
         },
-        INBOX_RECONCILIATION_QUEUE: { send: vi.fn(), sendBatch: vi.fn() },
+        INBOX_RECONCILIATION_QUEUE: { send: vi.fn(), sendBatch: vi.fn(), metrics: vi.fn() },
       },
       mocks.logger,
       "test-version"
@@ -507,6 +515,7 @@ describe("inbox reconciliation queue", () => {
     await processInboxReconciliationQueue(
       {
         queue: "landing-page-inbox-reconciliation",
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
         messages: [
           {
             id: "queue-msg-ttl-2",
@@ -532,7 +541,7 @@ describe("inbox reconciliation queue", () => {
           submitPayment,
           checkPayment: vi.fn(), // should NOT be called (TTL already expired)
         },
-        INBOX_RECONCILIATION_QUEUE: { send: queueSend, sendBatch: vi.fn() },
+        INBOX_RECONCILIATION_QUEUE: { send: queueSend, sendBatch: vi.fn(), metrics: vi.fn() },
       },
       mocks.logger,
       "test-version"
@@ -604,6 +613,7 @@ describe("inbox reconciliation queue", () => {
     await processInboxReconciliationQueue(
       {
         queue: "landing-page-inbox-reconciliation",
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
         messages: [
           {
             id: "queue-msg-ttl-3",
@@ -633,7 +643,7 @@ describe("inbox reconciliation queue", () => {
           }),
           checkPayment: vi.fn(),
         },
-        INBOX_RECONCILIATION_QUEUE: { send: vi.fn(), sendBatch: vi.fn() },
+        INBOX_RECONCILIATION_QUEUE: { send: vi.fn(), sendBatch: vi.fn(), metrics: vi.fn() },
       },
       mocks.logger,
       "test-version"
@@ -687,6 +697,7 @@ describe("inbox reconciliation queue", () => {
     await processInboxReconciliationQueue(
       {
         queue: "landing-page-inbox-reconciliation",
+        metadata: { metrics: { backlogCount: 0, backlogBytes: 0 } },
         messages: [
           {
             id: "queue-msg-ttl-4",
@@ -709,7 +720,7 @@ describe("inbox reconciliation queue", () => {
         VERIFIED_AGENTS: kv,
         DB: db,
         X402_RELAY: { submitPayment, checkPayment },
-        INBOX_RECONCILIATION_QUEUE: { send: queueSend, sendBatch: vi.fn() },
+        INBOX_RECONCILIATION_QUEUE: { send: queueSend, sendBatch: vi.fn(), metrics: vi.fn() },
       },
       mocks.logger,
       "test-version"
