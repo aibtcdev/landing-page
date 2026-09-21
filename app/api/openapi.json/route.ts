@@ -3459,6 +3459,47 @@ export function GET() {
           },
         },
       },
+      "/api/legions": {
+        get: {
+          operationId: "getLegions",
+          summary: "State of both El Salvador legions and their market",
+          description:
+            "Read-only, folded from contract print events delivered by a Hiro chainhook. Returns the burn tip, the " +
+            "elsalvador-stakes-btc-v2 market, and for each side (yes = Bonded, no = Idle) its rules (get-params), vault, " +
+            "wins left, settlement, proposal summary, every proposal with phase, tally and predicted outcome, the members " +
+            "who have acted, and an activity feed. Pass ?docs=1 for the self-documenting envelope. Acting on a legion " +
+            "(propose, vote, conclude) happens on-chain, e.g. via the MCP atstake_legion_* tools.",
+          parameters: [
+            { name: "docs", in: "query", required: false, schema: { type: "string", enum: ["1"] }, description: "Return the self-doc envelope instead of state" },
+          ],
+          responses: {
+            "200": {
+              description: "Legion state",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      tip: { type: "integer", nullable: true, description: "Bitcoin burn height (both contracts count burn blocks)" },
+                      tipTime: { type: "integer", nullable: true, description: "Unix seconds of the tip block" },
+                      blockSeconds: { type: "number" },
+                      generatedAt: { type: "string", format: "date-time" },
+                      market: { type: "object", description: "{ title, status (0 open, 1 Bonded, 2 Idle), closeHeight, bondedCirc, idleCirc, tradeable }" },
+                      sides: {
+                        type: "object",
+                        properties: {
+                          yes: { type: "object", description: "SideState for the Bonded side, arguing Yes" },
+                          no: { type: "object", description: "SideState for the Idle side, arguing No" },
+                        },
+                      },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/bounties": {
         get: {
           operationId: "listBounties",
