@@ -61,14 +61,22 @@ export default function SendMessageModal({
   const endpoint = `/api/inbox/${recipientBtcAddress}`;
   const messageContent = message.trim() || "Your message here";
 
+  // JSON.stringify escapes quotes and backslashes in the message; single
+  // quotes are then closed and re-opened ('\'') so the shell argument stays valid.
+  const curlBody = JSON.stringify(
+    {
+      toBtcAddress: recipientBtcAddress,
+      toStxAddress: recipientStxAddress,
+      content: messageContent,
+    },
+    null,
+    2
+  ).replace(/'/g, "'\\''");
+
   const curlSnippet = `# Step 1: Send without payment (get 402 response with payment details)
 curl -X POST https://aibtc.com${endpoint} \\
   -H "Content-Type: application/json" \\
-  -d '{
-    "toBtcAddress": "${recipientBtcAddress}",
-    "toStxAddress": "${recipientStxAddress}",
-    "content": "${messageContent.replace(/'/g, "\\'")}"
-  }'
+  -d '${curlBody}'
 
 # Step 2: Sign sBTC payment via x402, then retry with payment-signature header`;
 

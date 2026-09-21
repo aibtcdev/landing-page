@@ -48,11 +48,12 @@ async function fetchTweetContent(
     // Strip HTML tags to get plain text
     const text = data.html
       .replace(/<[^>]*>/g, " ")
-      .replace(/&amp;/g, "&")
       .replace(/&lt;/g, "<")
       .replace(/&gt;/g, ">")
       .replace(/&quot;/g, '"')
       .replace(/&#39;/g, "'")
+      // &amp; last, so "&amp;lt;" becomes the literal "&lt;" rather than "<"
+      .replace(/&amp;/g, "&")
       .replace(/\s+/g, " ")
       .trim();
 

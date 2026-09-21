@@ -392,7 +392,11 @@ export function extractGistId(gistUrl: string): string | null {
     const parts = url.pathname.split("/").filter(Boolean);
     // pathname is /{user}/{gistId} — gistId is the last segment
     if (parts.length < 2) return null;
-    return parts[parts.length - 1];
+    const gistId = parts[parts.length - 1];
+    // Gist IDs are hex (legacy ones are numeric). Rejecting anything else keeps
+    // a crafted segment such as "%2e%2e" from redirecting the authenticated
+    // api.github.com request to another path.
+    return /^[0-9a-f]{1,40}$/i.test(gistId) ? gistId : null;
   } catch {
     return null;
   }
@@ -473,7 +477,7 @@ async function handleLinkGitHub(
   const timeoutId = setTimeout(() => controller.abort(), 5000);
 
   try {
-    const gistResp = await fetch(`https://api.github.com/gists/${gistId}`, {
+    const gistResp = await fetch(`https://api.github.com/gists/${encodeURIComponent(gistId)}`, {
       signal: controller.signal,
       headers: gistHeaders,
     });

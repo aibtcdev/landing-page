@@ -9,6 +9,7 @@ import {
   getAvailableActions,
   validateTaprootAddress,
   type ChallengeStoreRecord,
+  extractGistId,
 } from "../challenge";
 
 // Mock KV namespace
@@ -627,5 +628,32 @@ describe("getAvailableActions", () => {
     expect(names).toContain("update-owner");
     expect(names).toContain("update-taproot");
     expect(names).toContain("update-pubkey");
+  });
+});
+
+describe("extractGistId", () => {
+  it("returns the hex id from a gist URL", () => {
+    expect(extractGistId("https://gist.github.com/alice/0123456789abcdef0123456789abcdef")).toBe(
+      "0123456789abcdef0123456789abcdef"
+    );
+  });
+
+  it("accepts legacy numeric ids", () => {
+    expect(extractGistId("https://gist.github.com/alice/1234567")).toBe("1234567");
+  });
+
+  it("rejects other hosts", () => {
+    expect(extractGistId("https://example.com/alice/0123456789abcdef")).toBeNull();
+  });
+
+  it("rejects ids that are not hex, including encoded path traversal", () => {
+    expect(extractGistId("https://gist.github.com/alice/%2e%2e")).toBeNull();
+    expect(extractGistId("https://gist.github.com/alice/..%2Fuser")).toBeNull();
+    expect(extractGistId("https://gist.github.com/alice/not-a-gist")).toBeNull();
+    expect(extractGistId("https://gist.github.com/alice/abc?x=1")).toBe("abc");
+  });
+
+  it("rejects URLs without a user and id", () => {
+    expect(extractGistId("https://gist.github.com/0123456789abcdef")).toBeNull();
   });
 });
