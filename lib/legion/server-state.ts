@@ -17,6 +17,7 @@ import { createConsoleLogger } from "../logging";
 import {
   readBurnTip,
   readMarket,
+  readMarketPrincipals,
   readParams,
   readSettlement,
   readVault,
@@ -27,6 +28,7 @@ import {
 } from "./chain";
 import {
   BURN_BLOCK_SECONDS,
+  ELIGIBLE_READ_CONCURRENCY,
   FALLBACK_PARAMS,
   LEGIONS,
   LEGION_CONTRACTS,
@@ -34,6 +36,8 @@ import {
   LEGION_STATE_TTL_SECONDS,
   MARKET_CONTRACT,
   MARKET_STATUS,
+  MAX_ELIGIBLE_WEIGHT_READS,
+  MAX_MARKET_EVENT_PAGES,
   MAX_MEMBER_WEIGHT_READS,
   type LegionParams,
   type LegionSide,
@@ -56,6 +60,21 @@ export interface MarketState {
   tradeable: boolean | null;
 }
 
+/**
+ * Principals holding at least `minPosition` of this side right now, i.e. who
+ * could vote today whether or not they have ever acted. `members` only lists
+ * principals that have proposed or voted.
+ */
+export interface Eligibility {
+  /** Null when the holder set could not be read. */
+  count: number | null;
+  minPosition: number;
+  /** Principals whose balance was checked. */
+  checked: number;
+  /** False if the holder walk or the balance reads were cut short. */
+  complete: boolean;
+}
+
 export interface SideState extends SideFold {
   side: LegionSide;
   contract: string;
@@ -70,6 +89,7 @@ export interface SideState extends SideFold {
   /** Circulating shares on this side, less the vault. */
   votable: number | null;
   settlement: Settlement | null;
+  eligible: Eligibility;
 }
 
 export interface LegionsState {
@@ -92,6 +112,10 @@ interface ChainSnapshot {
   settlements: (Settlement | null)[];
   /** Live proposer weights, by principal. */
   weights: Record<string, number>[];
+  /** Live weight of every known holder, by principal, per side. Null when the holder walk failed. */
+  holderWeights: (Record<string, number> | null)[];
+  /** Per side: every candidate found and every balance read succeeded. */
+  holdersComplete: boolean[];
 }
 
 const CHAIN_CACHE_KEY = "https://cache.aibtc.local/api/legions/chain";
@@ -122,16 +146,73 @@ async function readWeights(
   return out;
 }
 
+/** Run `fn` over `items` with at most `limit` in flight. */
+async function mapPooled<T, R>(items: readonly T[], limit: number, fn: (item: T) => Promise<R>): Promise<R[]> {
+  const out = new Array<R>(items.length);
+  let next = 0;
+  const workers = Array.from({ length: Math.min(limit, items.length) }, async () => {
+    while (next < items.length) {
+      const i = next++;
+      out[i] = await fn(items[i]);
+    }
+  });
+  await Promise.all(workers);
+  return out;
+}
+
+/**
+ * Live weight on each side for every principal that could hold a position:
+ * everyone the market has printed, plus everyone who has acted in a legion.
+ */
+async function readHolderWeights(
+  events: readonly EventRow[],
+  apiKey?: string
+): Promise<{ weights: (Record<string, number> | null)[]; complete: boolean[] }> {
+  const market = await readMarketPrincipals(MAX_MARKET_EVENT_PAGES, apiKey);
+  if (market.principals.length === 0 && !market.complete) {
+    return { weights: LEGION_SIDES.map(() => null), complete: LEGION_SIDES.map(() => false) };
+  }
+  const candidates = [
+    ...new Set([
+      ...market.principals,
+      ...LEGION_SIDES.flatMap((s) => participantsOf(events, LEGIONS[s].contract)),
+    ]),
+  ];
+  const checked = candidates.slice(0, MAX_ELIGIBLE_WEIGHT_READS);
+  const walkedAll = market.complete && checked.length === candidates.length;
+  const perSide = await Promise.all(
+    LEGION_SIDES.map(async (s) => {
+      const read = await mapPooled(checked, ELIGIBLE_READ_CONCURRENCY, async (who) =>
+        [who, await readWeight(LEGIONS[s].contract, who, apiKey)] as const
+      );
+      const out: Record<string, number> = {};
+      for (const [who, w] of read) if (w != null) out[who] = w;
+      return { out, complete: walkedAll && Object.keys(out).length === checked.length };
+    })
+  );
+  return { weights: perSide.map((p) => p.out), complete: perSide.map((p) => p.complete) };
+}
+
 async function buildChainSnapshot(events: readonly EventRow[], apiKey?: string): Promise<ChainSnapshot> {
-  const [tip, market, params, vaults, settlements, weights] = await Promise.all([
+  const [tip, market, params, vaults, settlements, weights, holders] = await Promise.all([
     readBurnTip(apiKey),
     readMarket(apiKey),
     Promise.all(LEGION_SIDES.map((s) => readParams(LEGIONS[s].contract, apiKey))),
     Promise.all(LEGION_SIDES.map((s) => readVault(LEGIONS[s].contract, apiKey))),
     Promise.all(LEGION_SIDES.map((s) => readSettlement(LEGIONS[s].contract, apiKey))),
     Promise.all(LEGION_SIDES.map((s) => readWeights(events, LEGIONS[s].contract, apiKey))),
+    readHolderWeights(events, apiKey),
   ]);
-  return { tip, market, params, vaults, settlements, weights };
+  return {
+    tip,
+    market,
+    params,
+    vaults,
+    settlements,
+    weights,
+    holderWeights: holders.weights,
+    holdersComplete: holders.complete,
+  };
 }
 
 /**
@@ -159,7 +240,8 @@ export async function buildLegionsState(env: CloudflareEnv): Promise<LegionsStat
         return [] as EventRow[];
       })
     : [];
-  const { tip, market, params, vaults, settlements, weights } = await readChainSnapshot(events, apiKey);
+  const { tip, market, params, vaults, settlements, weights, holderWeights, holdersComplete } =
+    await readChainSnapshot(events, apiKey);
 
   const tradeable =
     market?.status == null
@@ -196,6 +278,7 @@ export async function buildLegionsState(env: CloudflareEnv): Promise<LegionsStat
       winsLeft: vault != null ? Math.floor(vault / rules.payout) : null,
       votable: circ != null && vault != null ? Math.max(0, circ - vault) : null,
       settlement,
+      eligible: eligibilityOf(holderWeights?.[i] ?? null, rules.minPosition, holdersComplete?.[i] ?? false),
     };
   });
 
@@ -216,6 +299,21 @@ export async function buildLegionsState(env: CloudflareEnv): Promise<LegionsStat
         }
       : null,
     sides,
+  };
+}
+
+export function eligibilityOf(
+  weights: Record<string, number> | null,
+  minPosition: number,
+  complete: boolean
+): Eligibility {
+  if (!weights) return { count: null, minPosition, checked: 0, complete: false };
+  const values = Object.values(weights);
+  return {
+    count: values.filter((w) => w >= minPosition).length,
+    minPosition,
+    checked: values.length,
+    complete,
   };
 }
 
