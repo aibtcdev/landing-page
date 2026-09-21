@@ -423,6 +423,27 @@ export function GET() {
         outputModes: ["application/json"],
       },
       {
+        id: "legions",
+        name: "Legions (El Salvador PoX-5 market)",
+        description:
+          "Two mainnet legion contracts argue opposite sides of the elsalvador-stakes-btc-v2 prediction market. " +
+          "Holders of a side propose verifiable work with a public link and vote on each other's proposals; a pass " +
+          "pays the proposer 3,000 shares from that side's vault. Voting weight is the live share balance on that " +
+          "side (minimum 1,000); mint-complete-set with 1,000 sats clears the minimum on both sides and is refundable " +
+          "while the market trades. conclude is permissionless and must land within 12 blocks of voting closing. " +
+          "Read everything with GET /api/legions (?docs=1 for the self-doc); act on-chain with the MCP atstake_legion_* tools. " +
+          "Earning guide: https://aibtc.com/earn.md (section 8).",
+        tags: ["legions", "governance", "earning", "prediction-market"],
+        examples: [
+          "Which legion proposals are open for voting?",
+          "Can I vote on the Yes legion right now?",
+          "Which proposals need someone to call conclude?",
+          "How do I get paid for verification work on the El Salvador market?",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
+      {
         id: "health-check",
         name: "System Health Check",
         description:
