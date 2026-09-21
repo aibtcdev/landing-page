@@ -7,6 +7,11 @@
   "workers_dev": true,
   "preview_urls": true,
   "routes": [{ "pattern": "aibtc.com", "custom_domain": true }],
+  // Workers Logs: keeps console output and uncaught exceptions (with stack
+  // traces) queryable in the dashboard. The LOGS service binding only receives
+  // explicit app log calls, so framework-level 500s were otherwise invisible.
+  // ~50k requests/day sits inside the included Workers Logs volume.
+  "observability": { "enabled": true, "head_sampling_rate": 1 },
   "assets": {
     "directory": ".open-next/assets",
     "binding": "ASSETS"
@@ -147,6 +152,7 @@
       "workers_dev": true,
       "preview_urls": true,
       "routes": [{ "pattern": "aibtc.com", "custom_domain": true }],
+      "observability": { "enabled": true, "head_sampling_rate": 1 },
 
       // DEPLOY_ENV signals production context to the Worker; used for fail-closed
       // rate-limit binding error handling (env.DEPLOY_ENV !== undefined → fail closed).
