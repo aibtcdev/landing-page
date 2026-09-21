@@ -18,6 +18,11 @@
 #
 #   VARS=~/repos/private/news-legion/.dev.vars.mainnet ./scripts/legion-chainhook.sh list
 #
+# HOOK=exchange runs every command below against the Legion Exchange hook
+# (aibtc-legion-exchange-mainnet → /api/meta-legion/chainhook) instead:
+#
+#   HOOK=exchange ./scripts/legion-chainhook.sh create https://aibtc.com
+#
 #   create <base-url> [--enable]   register (DISABLED unless --enable)
 #   list                           every hook on the account, secrets stripped
 #   status                         this hook's state
@@ -39,13 +44,29 @@ fi
 SECRET="${LEGION_CHAINHOOK_SECRET:-${CHAINHOOK_SECRET:-}}"
 : "${HIRO_API_KEY:?set HIRO_API_KEY (environment or \$VARS file)}"
 
-# Keep in step with LEGION_CONTRACTS in lib/legion/constants.ts.
-CONTRACTS=(
-  "SP5Y3W3F78NKFH4HYFNDQMJC484VZWKDH35ZR2M9.elsalvador-yes-legion-v2"
-  "SP5Y3W3F78NKFH4HYFNDQMJC484VZWKDH35ZR2M9.elsalvador-no-legion-v2"
-)
+# HOOK=exchange manages the second hook, which feeds /meta-legion from the
+# Legion Exchange (EXCHANGE_CONTRACT in lib/meta-legion/constants.ts).
+case "${HOOK:-legions}" in
+  legions)
+    # Keep in step with LEGION_CONTRACTS in lib/legion/constants.ts.
+    CONTRACTS=(
+      "SP5Y3W3F78NKFH4HYFNDQMJC484VZWKDH35ZR2M9.elsalvador-yes-legion-v2"
+      "SP5Y3W3F78NKFH4HYFNDQMJC484VZWKDH35ZR2M9.elsalvador-no-legion-v2"
+    )
+    NAME="aibtc-legions-mainnet"
+    ROUTE="/api/legions/chainhook"
+    ;;
+  exchange)
+    CONTRACTS=("SP3ZXQV0BV07PH24ZWETHWM6MPQRHSYWPGAZAX2PR.legion-exchange")
+    NAME="aibtc-legion-exchange-mainnet"
+    ROUTE="/api/meta-legion/chainhook"
+    ;;
+  *)
+    echo "HOOK must be legions or exchange" >&2
+    exit 1
+    ;;
+esac
 API="https://api.hiro.so/chainhooks/me"
-NAME="aibtc-legions-mainnet"
 HDR=(-H "x-api-key: ${HIRO_API_KEY}" -H "content-type: application/json")
 
 # The list summary has name=null; the real name is under .definition.name.
@@ -102,7 +123,7 @@ case "${1:-}" in
       exit 1
     fi
     ENABLE=false; [ "${3:-}" = "--enable" ] && ENABLE=true
-    URL="${BASE}/api/legions/chainhook?t=${SECRET}"
+    URL="${BASE}${ROUTE}?t=${SECRET}"
     BODY="$(jq -n --arg name "$NAME" --arg url "$URL" --argjson enable "$ENABLE" --args '{
       name: $name,
       version: "1",
@@ -112,7 +133,7 @@ case "${1:-}" in
       action:  { type: "http_post", url: $url },
       options: { enable_on_registration: $enable }
     }' "${CONTRACTS[@]}")"
-    echo "Creating chainhook '$NAME' → ${BASE}/api/legions/chainhook (enabled: $ENABLE)"
+    echo "Creating chainhook '$NAME' → ${BASE}${ROUTE} (enabled: $ENABLE)"
     for c in "${CONTRACTS[@]}"; do echo "  watching: $c"; done
     RESP="$(curl -s -X POST "${HDR[@]}" "$API" -d "$BODY")"
     echo "$RESP" | jq '{uuid, name: .definition.name, enabled: .status.enabled, status: .status.status, error, message}' 2>/dev/null \
