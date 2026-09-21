@@ -64,6 +64,7 @@ export const swrKeys = {
   activity: () => "/api/activity",
   statusSummary: () => "/api/status/summary",
   legions: () => "/api/legions",
+  metaLegion: () => "/api/meta-legion",
 } as const;
 
 /**

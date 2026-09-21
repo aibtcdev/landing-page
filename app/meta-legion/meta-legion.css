@@ -1,0 +1,207 @@
+/* /meta-legion: the pieces the /legions `.nl` system has no use for
+   (scoreboard cards, legion table, order book, call table). Loaded after
+   legions.css and scoped the same way. */
+
+.nl .ml-section code, .nl .hero code, .nl .cta-close code {
+	font-family: var(--mono);
+	font-size: 0.88em;
+	color: var(--text);
+	background: var(--bg-raised);
+	padding: 1px 5px;
+}
+.nl .ml-mono { font-family: var(--mono); }
+.nl .ml-dim { color: var(--text-faint); }
+.nl .ml-accent { color: var(--accent); }
+
+.nl .ml-section { margin-top: var(--space-7); }
+.nl .ml-h2 {
+	font-family: var(--display);
+	font-size: clamp(20px, 2.6vw, 28px);
+	font-weight: 500;
+	text-transform: uppercase;
+	letter-spacing: -0.005em;
+	color: #f6f2ec;
+	padding-bottom: 12px;
+	border-bottom: 1px solid var(--rule);
+}
+.nl .ml-h3 {
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	margin: var(--space-6) 0 10px;
+}
+.nl .ml-lede {
+	font-size: 15px;
+	line-height: 1.6;
+	color: var(--text-body);
+	max-width: 72ch;
+	margin: 14px 0 var(--space-5);
+}
+.nl .ml-foot {
+	font-size: 13.5px;
+	margin-bottom: var(--space-6);
+	line-height: 1.6;
+	color: var(--text-dim);
+	max-width: 80ch;
+	margin-top: var(--space-4);
+}
+
+/* ── Epoch cards ── */
+.nl .ml-epochs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+@media (max-width: 760px) { .nl .ml-epochs { grid-template-columns: minmax(0, 1fr); } }
+.nl .ml-epoch {
+	border: 1px solid var(--rule-faint);
+	background: var(--bg-card);
+	padding: 14px 16px 16px;
+	display: flex;
+	flex-direction: column;
+	gap: 12px;
+}
+.nl .ml-epoch.live { border-color: var(--accent-line); background: var(--accent-soft); }
+.nl .ml-epoch.done .rail-fill { background: var(--text-faint); }
+.nl .ml-epoch-head {
+	display: flex;
+	justify-content: space-between;
+	gap: 10px;
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+}
+.nl .ml-epoch-state { color: var(--text-faint); font-weight: 500; }
+.nl .ml-epoch.live .ml-epoch-state { color: var(--accent); }
+.nl .ml-epoch-v {
+	font-family: var(--mono);
+	font-size: 30px;
+	font-weight: 500;
+	line-height: 1;
+	letter-spacing: -0.02em;
+	font-variant-numeric: tabular-nums;
+	color: var(--text);
+}
+.nl .ml-epoch-v em { font-style: normal; font-size: 12px; letter-spacing: 0.04em; color: var(--text-dim); margin-left: 8px; }
+.nl .ml-epoch-sub { font-family: var(--mono); font-size: 11px; color: var(--text-dim); letter-spacing: 0.04em; }
+
+/* ── Tables ── */
+.nl .ml-table-wrap { overflow-x: auto; border: 1px solid var(--rule-faint); }
+.nl .ml-table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+.nl .ml-table th {
+	text-align: left;
+	font-family: var(--mono);
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	padding: 10px 12px;
+	border-bottom: 1px solid var(--rule-light);
+	white-space: nowrap;
+	background: var(--bg-solid);
+}
+.nl .ml-table td {
+	padding: 11px 12px;
+	border-bottom: 1px solid var(--rule-faint);
+	color: var(--text-body);
+	vertical-align: top;
+}
+.nl .ml-table tr:last-child td { border-bottom: none; }
+.nl .ml-table td.ml-mono { font-size: 12.5px; white-space: nowrap; }
+.nl .ml-table .num { text-align: right; font-variant-numeric: tabular-nums; }
+.nl .ml-table td.q { min-width: 280px; max-width: 520px; line-height: 1.45; color: var(--text); overflow-wrap: anywhere; }
+.nl .ml-table a { color: var(--link); text-decoration: none; }
+.nl .ml-table a:hover { text-decoration: underline; }
+.nl .ml-calls td { font-size: 13px; }
+
+.nl .ml-flag {
+	display: block;
+	margin-top: 6px;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	letter-spacing: 0.08em;
+	text-transform: uppercase;
+	color: var(--warn);
+}
+.nl .ml-pill {
+	display: inline-block;
+	font-family: var(--mono);
+	font-size: 10.5px;
+	font-weight: 600;
+	letter-spacing: 0.09em;
+	text-transform: uppercase;
+	white-space: nowrap;
+	padding: 3px 8px;
+	border: 1px solid var(--rule);
+	color: var(--text-dim);
+}
+.nl .ml-pill.live { color: var(--accent); border-color: var(--accent-line); background: var(--accent-soft); }
+.nl .ml-pill.good { color: var(--good); border-color: rgba(63, 185, 80, 0.4); }
+.nl .ml-pill.bad { color: var(--bad); border-color: rgba(229, 72, 77, 0.4); }
+.nl .ml-pill.warn { color: var(--warn); border-color: rgba(227, 179, 65, 0.4); }
+
+/* ── Order book ── */
+.nl .ml-book { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; margin-top: 12px; }
+@media (max-width: 760px) { .nl .ml-book { grid-template-columns: minmax(0, 1fr); } }
+.nl .ml-book-side { border: 1px solid var(--rule-faint); background: var(--bg-card); }
+.nl .ml-book-title {
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.14em;
+	text-transform: uppercase;
+	color: var(--text-secondary);
+	padding: 11px 14px;
+	border-bottom: 1px solid var(--rule-faint);
+}
+.nl .ml-book-grid { display: grid; grid-template-columns: 1fr 1fr; }
+.nl .ml-book-col { padding: 10px 14px 14px; min-width: 0; }
+.nl .ml-book-col + .ml-book-col { border-left: 1px solid var(--rule-faint); }
+.nl .ml-book-label {
+	font-family: var(--mono);
+	font-size: 10px;
+	font-weight: 500;
+	letter-spacing: 0.13em;
+	text-transform: uppercase;
+	margin-bottom: 8px;
+}
+.nl .ml-book-label.ask { color: var(--bad); }
+.nl .ml-book-label.bid { color: var(--good); }
+.nl .ml-book-empty { font-size: 13px; color: var(--text-faint); }
+.nl .ml-book-list { list-style: none; margin: 0; padding: 0; }
+.nl .ml-book-list li {
+	display: grid;
+	grid-template-columns: auto 1fr auto;
+	gap: 10px;
+	align-items: baseline;
+	font-family: var(--mono);
+	font-size: 12.5px;
+	font-variant-numeric: tabular-nums;
+	padding: 4px 0;
+}
+.nl .ml-book-list .p { color: var(--text); }
+.nl .ml-book-list .s { color: var(--text-secondary); text-align: right; }
+.nl .ml-book-list .id { color: var(--text-faint); font-size: 11px; }
+
+/* ── How to trade ── */
+.nl .ml-howto { margin-top: var(--space-6); }
+.nl .ml-howto-head {
+	display: flex;
+	justify-content: space-between;
+	gap: 12px;
+	flex-wrap: wrap;
+	font-family: var(--mono);
+	font-size: 11px;
+	font-weight: 600;
+	letter-spacing: 0.16em;
+	text-transform: uppercase;
+	color: var(--text-dim);
+	padding-bottom: 9px;
+	border-bottom: 1px solid var(--rule-light);
+}
+.nl .ml-howto-head a { color: var(--link); text-decoration: none; letter-spacing: 0.04em; }
+.nl .ml-howto-note { font-size: 14px; line-height: 1.65; color: var(--text-secondary); margin: 14px 0; max-width: 90ch; }
+.nl .ml-howto-note b { color: var(--text); }
