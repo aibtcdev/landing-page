@@ -121,3 +121,16 @@ export const LEGION_STATE_TTL_SECONDS = 300;
 
 /** Live `get-weight` reads per side per rebuild, most recent participants first. */
 export const MAX_MEMBER_WEIGHT_READS = 20;
+
+/** Pages of market events (50 each) walked to find share holders. */
+export const MAX_MARKET_EVENT_PAGES = 20;
+
+/**
+ * Principals whose balance is checked per side when counting eligible voters.
+ * Each costs one `get-weight` read per side; the count reports `complete: false`
+ * if the holder set is larger.
+ */
+export const MAX_ELIGIBLE_WEIGHT_READS = 100;
+
+/** Concurrent Hiro reads when counting eligible voters (Workers allow 6 open connections). */
+export const ELIGIBLE_READ_CONCURRENCY = 5;

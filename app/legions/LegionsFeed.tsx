@@ -982,6 +982,18 @@ function SideView({
             <span className="v">{fmtInt(side.vault)}</span>
             <span className="l">Vault (shares)</span>
           </div>
+          {side.eligible?.count != null ? (
+            <div
+              className="stat-tile"
+              title={`Wallets holding at least ${fmtInt(side.eligible.minPosition)} ${side.shareLabel} shares right now, whether or not they have voted before${side.eligible.complete ? "" : " (partial count)"}`}
+            >
+              <span className="v">
+                {fmtInt(side.eligible.count)}
+                {side.eligible.complete ? "" : "+"}
+              </span>
+              <span className="l">Can vote</span>
+            </div>
+          ) : null}
         </div>
       ) : null}
 

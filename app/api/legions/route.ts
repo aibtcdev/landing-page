@@ -35,7 +35,9 @@ export async function GET(request: NextRequest) {
             no: "SideState: the Idle side, arguing No",
           },
           SideState:
-            "{ rules (get-params), vault, winsLeft, votable, settlement, summary { total, pending, verified, rejected }, proposals[], members[], feed[] }",
+            "{ rules (get-params), vault, winsLeft, votable, settlement, eligible, summary { total, pending, verified, rejected }, proposals[], members[], feed[] }",
+          eligible:
+            "{ count, minPosition, checked, complete }: principals holding at least minPosition of this side right now, i.e. who could vote today. count is null if the holder set could not be read; complete is false if the walk or balance reads were cut short. Differs from members[], which only lists principals that have proposed or voted.",
           proposal:
             "{ proposalId, proposer, title, link, description, payout, voteEnd, yesWeight, noWeight, yesVoterCount, votes[], phase, bucket, reason, prediction }",
         },

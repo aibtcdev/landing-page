@@ -158,6 +158,52 @@ export async function readSettlement(contractId: string, apiKey?: string): Promi
   };
 }
 
+/** Standard (non-contract) principals printed in a Clarity repr, e.g. `'SP2...`. */
+const STANDARD_PRINCIPAL_RE = /'(S[PMTN][0-9A-HJKMNP-TV-Z]{37,40})(?![0-9A-Za-z.])/g;
+
+export function standardPrincipalsIn(repr: string): string[] {
+  return [...repr.matchAll(STANDARD_PRINCIPAL_RE)].map((m) => m[1]);
+}
+
+export interface MarketPrincipals {
+  principals: string[];
+  /** False when the walk stopped early (read failure or page cap). */
+  complete: boolean;
+}
+
+/**
+ * Every standard principal the market has printed (minters, traders, transfer
+ * senders and recipients). Share positions only move through the market, so
+ * anyone who can hold a position appears here. Contract principals (the
+ * legion vaults) are excluded.
+ */
+export async function readMarketPrincipals(
+  maxPages: number,
+  apiKey?: string
+): Promise<MarketPrincipals> {
+  const PAGE = 50;
+  const seen = new Set<string>();
+  for (let page = 0; page < maxPages; page++) {
+    let results: { contract_log?: { value?: { repr?: string } } }[];
+    try {
+      const res = await fetch(
+        `${HIRO_API}/extended/v1/contract/${MARKET_CONTRACT}/events?limit=${PAGE}&offset=${page * PAGE}`,
+        { headers: buildHiroHeaders(apiKey), signal: AbortSignal.timeout(READ_TIMEOUT_MS) }
+      );
+      if (!res.ok) return { principals: [...seen], complete: false };
+      results = ((await res.json()) as { results?: typeof results }).results ?? [];
+    } catch {
+      return { principals: [...seen], complete: false };
+    }
+    for (const r of results) {
+      const repr = r.contract_log?.value?.repr;
+      if (repr) for (const who of standardPrincipalsIn(repr)) seen.add(who);
+    }
+    if (results.length < PAGE) return { principals: [...seen], complete: true };
+  }
+  return { principals: [...seen], complete: false };
+}
+
 /** A principal's live voting weight: its shares on this legion's side. */
 export async function readWeight(contractId: string, who: string, apiKey?: string): Promise<number | null> {
   return asNumber(await callRead(contractId, "get-weight", [principalArg(who)], apiKey));
