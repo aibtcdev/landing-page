@@ -17,8 +17,8 @@ import type { MetaLegionState } from "@/lib/meta-legion/server-state";
 import {
   EXCHANGE_CONTRACT,
   EXCHANGE_SOURCE_HREF,
+  LEGION_STATUS,
   SIDE,
-  VOID_GRACE_BLOCKS,
   type Side,
 } from "@/lib/meta-legion/constants";
 import {
@@ -33,8 +33,8 @@ import {
   type LegionRow,
   type Order,
 } from "@/lib/meta-legion/state";
+import { describeScript } from "@/lib/meta-legion/scripts";
 import {
-  addrLink,
   contractLink,
   fmtBlocksLeft,
   fmtClock,
@@ -46,22 +46,20 @@ import {
 
 const PHASE_LABEL: Record<LegionPhase, string> = {
   trading: "Trading",
-  "awaiting-resolver": "Awaiting resolver",
-  voidable: "Voidable",
+  proving: "Proof window",
+  idle: "Awaiting resolve-idle",
   resolvable: "Resolvable",
-  yes: "Resolved YES",
-  no: "Resolved NO",
-  void: "Void",
+  yes: "Bonded, YES",
+  no: "Idle, NO",
 };
 
 const PHASE_TONE: Record<LegionPhase, string> = {
   trading: "live",
-  "awaiting-resolver": "warn",
-  voidable: "warn",
+  proving: "warn",
+  idle: "warn",
   resolvable: "warn",
   yes: "good",
   no: "bad",
-  void: "dim",
 };
 
 const SIDE_LABEL: Record<Side, string> = { [SIDE.YES]: "YES", [SIDE.NO]: "NO" };
@@ -164,8 +162,52 @@ function EpochCard({ e, target }: { e: EpochWindow; target: number }) {
   );
 }
 
+/** The addresses a legion asks about. They, not the label, decide the answer. */
+function Addresses({ scripts }: { scripts: string[] }) {
+  return (
+    <ul className="ml-addrs">
+      {scripts.map((sc) => {
+        const v = describeScript(sc);
+        return (
+          <li key={sc} title={sc}>
+            {v.address ? (
+              <a href={`https://mempool.space/address/${v.address}`} target="_blank" rel="noopener">
+                {v.address}
+              </a>
+            ) : (
+              v.label
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
+
+/** The deadline cell: trading countdown, then the proof window's. */
+function DeadlineCell({ l, state }: { l: LegionRow; state: MetaLegionState }) {
+  const { tip, terms, blockSeconds } = state;
+  const toDeadline = tip == null ? null : l.deadline - tip;
+  const proofEnd = l.deadline + terms.proofGrace;
+  const toProofEnd = tip == null ? null : proofEnd - tip;
+  return (
+    <td className="ml-mono">
+      {fmtInt(l.deadline)}
+      {toDeadline != null && toDeadline > 0 ? (
+        <span className="ml-dim"> {fmtBlocksLeft(toDeadline, blockSeconds)}</span>
+      ) : null}
+      <span className="ml-sub-line">
+        YES provable to {fmtInt(proofEnd)}
+        {toDeadline != null && toDeadline <= 0 && toProofEnd != null && toProofEnd >= 0
+          ? ` (${fmtBlocksLeft(toProofEnd, blockSeconds)})`
+          : ""}
+      </span>
+    </td>
+  );
+}
+
 function LegionTable({ state, legions }: { state: MetaLegionState; legions: LegionRow[] }) {
-  const { tip, terms, currentEpoch, blockSeconds } = state;
+  const { tip, terms, currentEpoch } = state;
   return (
     <div className="ml-table-wrap">
       <table className="ml-table">
@@ -173,8 +215,7 @@ function LegionTable({ state, legions }: { state: MetaLegionState; legions: Legi
           <tr>
             <th>#</th>
             <th>Question</th>
-            <th>Resolver</th>
-            <th>Resolves</th>
+            <th>Deadline</th>
             <th>Status</th>
             <th className="num">Epoch {currentEpoch ?? "-"} volume</th>
             <th className="num">Traders</th>
@@ -183,41 +224,34 @@ function LegionTable({ state, legions }: { state: MetaLegionState; legions: Legi
         </thead>
         <tbody>
           {legions.map((l) => {
-            const phase = legionPhase(l, tip);
+            const phase = legionPhase(l, tip, terms.proofGrace);
             const now = l.stats.find((s) => s.epoch === currentEpoch);
-            const left = tip == null ? null : l.resolveHeight - tip;
-            const stopsEarly = l.resolveHeight < terms.closeHeight;
+            const stopsEarly = l.deadline < terms.closeHeight;
             return (
               <tr key={l.id}>
                 <td className="ml-mono ml-dim">{l.id}</td>
                 <td className="q">
-                  {l.subject}
+                  <span className="ml-q-label">{l.label}</span>
+                  <span className="ml-q-sub">
+                    Any of these bonds in pox-5 after burn {fmtInt(l.createdAt)}, by the deadline:
+                  </span>
+                  <Addresses scripts={l.scripts} />
                   {stopsEarly && phase === "trading" ? (
                     <span className="ml-flag" title={`Trading stops before burn ${fmtInt(terms.closeHeight - 1)}`}>
-                      Stops before the close
+                      Stops before the close, does not count toward the meta legion
                     </span>
                   ) : null}
                 </td>
-                <td className="ml-mono">
-                  <a href={addrLink(l.resolver)} target="_blank" rel="noopener">
-                    {shortAddr(l.resolver)}
-                  </a>
-                </td>
-                <td className="ml-mono">
-                  {fmtInt(l.resolveHeight)}
-                  {left != null && left > 0 ? (
-                    <span className="ml-dim"> {fmtBlocksLeft(left, blockSeconds)}</span>
-                  ) : null}
-                </td>
+                <DeadlineCell l={l} state={state} />
                 <td>
                   <span className={`ml-pill ${PHASE_TONE[phase]}`}>{PHASE_LABEL[phase]}</span>
                 </td>
                 <td className="ml-mono num">
-                  {now ? fmtInt(now.volume) : "-"}
+                  {fmtInt(now?.volume ?? 0)}
                   <span className="ml-dim"> / {fmtInt(terms.minVolume)}</span>
                 </td>
                 <td className="ml-mono num">
-                  {now ? fmtInt(now.traders) : "-"}
+                  {fmtInt(now?.traders ?? 0)}
                   <span className="ml-dim"> / {terms.minTraders}</span>
                 </td>
                 <td>
@@ -265,7 +299,7 @@ function MetaMarket({ state }: { state: MetaLegionState }) {
   const { meta, orders, terms, tip } = state;
   const quote = yesQuote(orders, 0);
   const room = Math.max(0, terms.maxCollateral - meta.collateral);
-  const phase = legionPhase(meta, tip);
+  const phase = legionPhase(meta, tip, terms.proofGrace);
   const sides: Side[] = [SIDE.YES, SIDE.NO];
 
   return (
@@ -373,6 +407,12 @@ function HowToTrade({ state }: { state: MetaLegionState }) {
       what: "After resolution, collect the winning side",
       pc: "Exchange sends exactly claimable(u0, you)",
     },
+    {
+      fn: "resolve-meta",
+      args: "none",
+      what: "After the close, settle legion 0 from the scoreboard (anyone)",
+      pc: "None",
+    },
   ];
   return (
     <div className="ml-howto">
@@ -478,16 +518,16 @@ function wireLine(e: FeedItem): React.ReactNode {
           <b>legion #{Number(d.legion)}</b> cleared the bar in epoch {Number(d.epoch)} ({Number(d.count)} this epoch)
         </>
       );
-    case "resolve":
+    case "resolve-bonded":
       return (
         <>
-          {who("by")} resolved {legionRef(d)} {Number(d.outcome) === 1 ? "YES" : "NO"}
+          {who("by")} proved a bond: {legionRef(d)} settled <b>YES</b>
         </>
       );
-    case "void-legion":
+    case "resolve-idle":
       return (
         <>
-          {who("by")} voided {legionRef(d)}
+          {who("by")} settled {legionRef(d)} <b>NO</b>, no bond proven
         </>
       );
     case "resolve-meta":
@@ -610,9 +650,9 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
   const qualifiedNow = (l: LegionRow) => l.stats.some((s) => s.epoch === currentEpoch && s.qualified);
   const groups: Record<Filter, LegionRow[]> = {
     all: legions,
-    trading: legions.filter((l) => legionPhase(l, tip) === "trading"),
+    trading: legions.filter((l) => legionPhase(l, tip, terms.proofGrace) === "trading"),
     qualified: legions.filter(qualifiedNow),
-    settled: legions.filter((l) => ["yes", "no", "void"].includes(legionPhase(l, tip))),
+    settled: legions.filter((l) => l.status !== LEGION_STATUS.OPEN),
   };
   const shown = groups[filter];
   const counting = data.epochs.some((e) => e.state !== "upcoming");
@@ -641,7 +681,7 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
             trade?
           </h1>
           <p className="hero-lede">
-            {meta.subject}. A legion clears the bar in an epoch with {fmtSats(terms.minVolume)} traded among{" "}
+            {meta.label} A legion clears the bar in an epoch with {fmtSats(terms.minVolume)} traded among{" "}
             {terms.minTraders} distinct traders. Nobody resolves this one: after burn block{" "}
             {fmtInt(terms.closeHeight)} anyone calls <code>resolve-meta</code> and the contract reads its own
             scoreboard. No admin key, no upgrade path.
@@ -732,10 +772,12 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
         <LegionTable state={data} legions={shown} />
       )}
       <p className="ml-foot">
-        Every legion is only as honest as its resolver. If the resolver misses the {fmtInt(VOID_GRACE_BLOCKS)}-block
-        grace after the resolve date, anyone can void it and every share, either side, redeems at half. Trades with
-        the treasury (<span className="ml-mono">{shortAddr(terms.feeSink)}</span>) never count toward the bar. To
-        count, a legion has to still be trading through burn block {fmtInt(terms.closeHeight - 1)}.
+        Nobody decides answers. A legion asks whether any of its Bitcoin addresses bonds in pox-5 after it was
+        created and by its deadline; the label binds nothing. YES settles when anyone submits a Bitcoin proof of the
+        bond with <code>resolve-bonded</code>, accepted until {fmtInt(terms.proofGrace)} blocks after the deadline.
+        After that, anyone calls <code>resolve-idle</code> for NO. Trades with the treasury (
+        <span className="ml-mono">{shortAddr(terms.feeSink)}</span>) never count toward the bar. To count, a legion
+        has to still be trading through burn block {fmtInt(terms.closeHeight - 1)}.
       </p>
 
       <MetaMarket state={data} />

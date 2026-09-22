@@ -19,7 +19,7 @@
 #   VARS=~/repos/private/news-legion/.dev.vars.mainnet ./scripts/legion-chainhook.sh list
 #
 # HOOK=exchange runs every command below against the Legion Exchange hook
-# (aibtc-legion-exchange-mainnet → /api/meta-legion/chainhook) instead:
+# (aibtc-legion-exchange-v2-mainnet → /api/meta-legion/chainhook) instead:
 #
 #   HOOK=exchange ./scripts/legion-chainhook.sh create https://aibtc.com
 #
@@ -57,8 +57,8 @@ case "${HOOK:-legions}" in
     ROUTE="/api/legions/chainhook"
     ;;
   exchange)
-    CONTRACTS=("SP3ZXQV0BV07PH24ZWETHWM6MPQRHSYWPGAZAX2PR.legion-exchange")
-    NAME="aibtc-legion-exchange-mainnet"
+    CONTRACTS=("SP3EF02CC2CGWJ327TXXW7JD4B9K9F1R0FSVY3659.legion-exchange-v2")
+    NAME="aibtc-legion-exchange-v2-mainnet"
     ROUTE="/api/meta-legion/chainhook"
     ;;
   *)

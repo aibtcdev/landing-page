@@ -11,10 +11,10 @@ import {
   EXCHANGE_CONTRACT,
   LEGION_STATUS,
   META_LEGION_ID,
-  META_SUBJECT,
+  META_CREATED_AT,
+  META_LABEL,
   PRICE_SCALE,
   SIDE,
-  VOID_GRACE_BLOCKS,
   type MetaTerms,
   type Side,
 } from "./constants";
@@ -30,10 +30,15 @@ export interface EpochStat {
 
 export interface LegionRow {
   id: number;
-  subject: string;
+  /** Free text. Binds nothing: only the scripts and the deadline decide the answer. */
+  label: string;
   creator: string;
-  resolver: string;
-  resolveHeight: number;
+  /** Bitcoin output scripts as 0x hex, ascending. Empty for the meta legion. */
+  scripts: string[];
+  /** Burn height trading stops at; a bond must be mined by it to count. */
+  deadline: number;
+  /** Burn height of creation; only bonds after it count. */
+  createdAt: number;
   status: number;
   /** sBTC locked in complete sets, in sats. */
   collateral: number;
@@ -66,13 +71,16 @@ export interface EpochWindow {
 }
 
 export type LegionPhase =
+  /** Before the deadline: trading. */
   | "trading"
-  | "awaiting-resolver"
-  | "voidable"
+  /** Deadline passed: a YES proof is still accepted until the grace ends. */
+  | "proving"
+  /** Grace over with no proof: anyone may call `resolve-idle`. */
+  | "idle"
+  /** The meta legion past its close: anyone may call `resolve-meta`. */
   | "resolvable"
   | "yes"
-  | "no"
-  | "void";
+  | "no";
 
 export function epochOf(height: number, epochBlocks: number): number {
   return Math.floor(height / epochBlocks);
@@ -97,14 +105,22 @@ export function epochWindows(
   });
 }
 
-/** Where a legion stands at `tip`. The meta legion settles by `resolve-meta`, never by void. */
-export function legionPhase(row: Pick<LegionRow, "id" | "status" | "resolveHeight">, tip: number | null): LegionPhase {
+/**
+ * Where a legion stands at `tip`. Mirrors the contract: trading stops at the
+ * deadline, `resolve-bonded` is accepted through `deadline + proofGrace`, and
+ * `resolve-idle` from the block after. The meta legion only settles by
+ * `resolve-meta`, at or after its close.
+ */
+export function legionPhase(
+  row: Pick<LegionRow, "id" | "status" | "deadline">,
+  tip: number | null,
+  proofGrace: number
+): LegionPhase {
   if (row.status === LEGION_STATUS.YES) return "yes";
   if (row.status === LEGION_STATUS.NO) return "no";
-  if (row.status === LEGION_STATUS.VOID) return "void";
-  if (tip == null || tip < row.resolveHeight) return "trading";
+  if (tip == null || tip < row.deadline) return "trading";
   if (row.id === META_LEGION_ID) return "resolvable";
-  return tip >= row.resolveHeight + VOID_GRACE_BLOCKS ? "voidable" : "awaiting-resolver";
+  return tip <= row.deadline + proofGrace ? "proving" : "idle";
 }
 
 export interface SideBook {
@@ -195,10 +211,11 @@ const num = (v: unknown): number => asNumber(v) ?? 0;
 export function metaRow(terms: MetaTerms): LegionRow {
   return {
     id: META_LEGION_ID,
-    subject: META_SUBJECT,
+    label: META_LABEL,
     creator: EXCHANGE_CONTRACT,
-    resolver: EXCHANGE_CONTRACT,
-    resolveHeight: terms.closeHeight,
+    scripts: [],
+    deadline: terms.closeHeight,
+    createdAt: META_CREATED_AT,
     status: LEGION_STATUS.OPEN,
     collateral: 0,
     supply: 0,
@@ -222,8 +239,8 @@ const BLOCK_RANK: Record<string, number> = {
   "post-offer": 2,
   "post-bid": 2,
   qualified: 4,
-  resolve: 5,
-  "void-legion": 5,
+  "resolve-bonded": 5,
+  "resolve-idle": 5,
   "resolve-meta": 5,
   redeem: 6,
 };
@@ -268,10 +285,11 @@ export function foldExchange(events: readonly EventRow[], terms: MetaTerms): Exc
       case "create-legion":
         legions.set(legion, {
           id: legion,
-          subject: str(d.subject),
+          label: str(d.label),
           creator: str(d.creator),
-          resolver: str(d.resolver),
-          resolveHeight: num(d["resolve-height"]),
+          scripts: Array.isArray(d.scripts) ? d.scripts.map(str).filter(Boolean) : [],
+          deadline: num(d.deadline),
+          createdAt: num(d["created-at"]),
           status: LEGION_STATUS.OPEN,
           collateral: 0,
           supply: 0,
@@ -293,11 +311,11 @@ export function foldExchange(events: readonly EventRow[], terms: MetaTerms): Exc
       case "redeem":
         if (row) row.collateral -= num(d.payout);
         break;
-      case "resolve":
-        if (row) row.status = num(d.outcome);
+      case "resolve-bonded":
+        if (row) row.status = LEGION_STATUS.YES;
         break;
-      case "void-legion":
-        if (row) row.status = LEGION_STATUS.VOID;
+      case "resolve-idle":
+        if (row) row.status = LEGION_STATUS.NO;
         break;
       case "resolve-meta":
         legions.get(META_LEGION_ID)!.status = num(d.outcome);

@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { costOf, epochWindows, fmtPct, foldExchange, legionPhase, yesQuote, type Order } from "../state";
-import { EXCHANGE_CONTRACT, TERMS, LEGION_STATUS, SIDE, VOID_GRACE_BLOCKS } from "../constants";
+import { EXCHANGE_CONTRACT, TERMS, LEGION_STATUS, SIDE, PROOF_GRACE_BLOCKS } from "../constants";
 import type { EventRow } from "../../legion/chainhook";
 
 const terms = TERMS;
@@ -27,21 +27,24 @@ describe("epochWindows", () => {
 });
 
 describe("legionPhase", () => {
-  const row = { id: 1, status: LEGION_STATUS.OPEN, resolveHeight: 1_000 };
+  const row = { id: 1, status: LEGION_STATUS.OPEN, deadline: 1_000 };
+  const g = PROOF_GRACE_BLOCKS;
 
-  it("walks trading, awaiting resolver, then voidable", () => {
-    expect(legionPhase(row, 999)).toBe("trading");
-    expect(legionPhase(row, 1_000)).toBe("awaiting-resolver");
-    expect(legionPhase(row, 1_000 + VOID_GRACE_BLOCKS)).toBe("voidable");
+  it("walks trading, the proof window, then resolve-idle", () => {
+    expect(legionPhase(row, 999, g)).toBe("trading");
+    expect(legionPhase(row, 1_000, g)).toBe("proving");
+    // resolve-bonded is accepted through deadline + grace, inclusive.
+    expect(legionPhase(row, 1_000 + g, g)).toBe("proving");
+    expect(legionPhase(row, 1_000 + g + 1, g)).toBe("idle");
   });
 
-  it("never lets the meta legion go voidable", () => {
-    expect(legionPhase({ ...row, id: 0 }, 1_000 + VOID_GRACE_BLOCKS)).toBe("resolvable");
+  it("settles the meta legion only by resolve-meta", () => {
+    expect(legionPhase({ ...row, id: 0 }, 1_000 + g + 1, g)).toBe("resolvable");
   });
 
   it("reports settled outcomes", () => {
-    expect(legionPhase({ ...row, status: LEGION_STATUS.YES }, 0)).toBe("yes");
-    expect(legionPhase({ ...row, status: LEGION_STATUS.VOID }, 0)).toBe("void");
+    expect(legionPhase({ ...row, status: LEGION_STATUS.YES }, 0, g)).toBe("yes");
+    expect(legionPhase({ ...row, status: LEGION_STATUS.NO }, 0, g)).toBe("no");
   });
 });
 
@@ -94,11 +97,16 @@ describe("foldExchange", () => {
       data: { event, ...data },
     };
   };
-  const create = ev("create-legion", { legion: 1, subject: "Q?", creator: A, resolver: B, "resolve-height": 995_000 }, 10);
+  const P2PKH = "0x76a91462e907b15cbf27d5425399ebf6f0fb50ebb88f1888ac";
+  const create = ev(
+    "create-legion",
+    { legion: 1, label: "Q?", scripts: [P2PKH], deadline: 995_000, "created-at": 968_124, creator: A },
+    10
+  );
 
   it("starts from legion 0 alone", () => {
     const f = foldExchange([], TERMS);
-    expect(f.meta).toMatchObject({ id: 0, resolveHeight: TERMS.closeHeight, status: LEGION_STATUS.OPEN });
+    expect(f.meta).toMatchObject({ id: 0, deadline: TERMS.closeHeight, scripts: [], status: LEGION_STATUS.OPEN });
     expect(f.legions).toEqual([]);
   });
 
@@ -115,7 +123,15 @@ describe("foldExchange", () => {
       TERMS
     );
     const l = f.legions[0];
-    expect(l).toMatchObject({ id: 1, subject: "Q?", resolver: B, collateral: 90_000, supply: 90_000 });
+    expect(l).toMatchObject({
+      id: 1,
+      label: "Q?",
+      scripts: [P2PKH],
+      deadline: 995_000,
+      createdAt: 968_124,
+      collateral: 90_000,
+      supply: 90_000,
+    });
     expect(f.orders).toEqual([expect.objectContaining({ id: 0, kind: "offer", remaining: 5_000 })]);
     // The fee-sink fill moves the book but never the bar.
     expect(l.stats).toEqual([{ epoch: 490, volume: 25_000, traders: 2, qualified: false }]);
@@ -136,12 +152,20 @@ describe("foldExchange", () => {
     expect(f.orders).toEqual([expect.objectContaining({ id: 3, kind: "bid", remaining: 3_000 })]);
   });
 
+  it("settles YES on a bond proof", () => {
+    const f = foldExchange(
+      [create, ev("resolve-bonded", { legion: 1, outcome: 1, staker: B, "bond-index": 0, sats: 100_000, by: C }, 30)],
+      TERMS
+    );
+    expect(f.legions[0].status).toBe(LEGION_STATUS.YES);
+  });
+
   it("takes qualification, counts and settlement from the prints", () => {
     const f = foldExchange(
       [
         create,
         ev("qualified", { legion: 1, epoch: 490, count: 1 }, 30),
-        ev("resolve", { legion: 1, outcome: 2, by: B }, 40),
+        ev("resolve-idle", { legion: 1, outcome: 2, by: B }, 40),
         ev("resolve-meta", { count: 1, target: 50, outcome: 2, by: A }, 50),
         ev("cancel-offer", { offer: 9 }, 51),
       ],
@@ -151,6 +175,6 @@ describe("foldExchange", () => {
     expect(f.legions[0].stats[0]).toMatchObject({ epoch: 490, qualified: true });
     expect(f.legions[0].status).toBe(LEGION_STATUS.NO);
     expect(f.meta.status).toBe(LEGION_STATUS.NO);
-    expect(f.feed.map((e) => e.event)).toEqual(["cancel-offer", "resolve-meta", "resolve", "qualified", "create-legion"]);
+    expect(f.feed.map((e) => e.event)).toEqual(["cancel-offer", "resolve-meta", "resolve-idle", "qualified", "create-legion"]);
   });
 });
