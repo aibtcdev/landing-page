@@ -19,19 +19,19 @@ export async function GET(request: NextRequest) {
         endpoint: "/api/meta-legion",
         method: "GET",
         description:
-          "State of the Legion Exchange: every legion is a yes/no question with its own YES/NO share market paid in sBTC. Legion 0, the meta legion, asks whether at least `target` legions clear the trading bar in each of the three counted epochs before the close. The contract settles it from its own scoreboard. Folded from the exchange's print events, delivered by a Hiro chainhook; read-only.",
+          "State of the Legion Exchange v2: every legion asks whether any of a set of Bitcoin addresses bonds in pox-5 before a deadline, with its own YES/NO share market paid in sBTC. YES settles by an on-chain Bitcoin proof (resolve-bonded), NO by resolve-idle after the proof grace. Legion 0, the meta legion, asks whether at least `target` legions clear the trading bar in each of the three counted epochs before the close. The contract settles it from its own scoreboard. Folded from the exchange's print events, delivered by a Hiro chainhook; read-only.",
         contracts: { exchange: EXCHANGE_CONTRACT, collateral: SBTC_TOKEN },
         response: {
           tip: "number | null: Bitcoin burn height (epochs and resolve dates count burn blocks)",
           tipTime: "number | null: unix seconds of the tip block",
-          terms: "meta-terms: { target, closeHeight, epochs[], epochBlocks, minVolume, minTraders, feeBps, maxCollateral, feeSink }",
+          terms: "meta-terms: { target, closeHeight, epochs[], epochBlocks, minVolume, minTraders, feeBps, maxCollateral, feeSink, proofGrace, maxScripts }",
           score: "meta-count: the lowest qualified count across the counted epochs",
           currentEpoch: "floor(tip / epochBlocks)",
           epochs: "[{ epoch, start, end, state (upcoming | live | done), qualifiedCount }] for the counted epochs",
           meta: "LegionRow for legion 0",
           legions: "LegionRow[] for every other legion, newest first",
           LegionRow:
-            "{ id, subject, creator, resolver, resolveHeight, status (0 open, 1 YES, 2 NO, 3 void), collateral, supply, stats[{ epoch, volume, traders, qualified }] }",
+            "{ id, label, creator, scripts (Bitcoin output scripts, 0x hex; the question is whether any bonds in pox-5 after createdAt and by deadline), deadline, createdAt, status (0 open, 1 YES bonded, 2 NO idle), collateral, supply, stats[{ epoch, volume, traders, qualified }] }",
           orders:
             "Orders with shares left, across every legion: { id, kind (offer | bid), legion, side (1 YES, 0 NO), maker, price (ten-thousandths of a sat per share), remaining }",
           feed: "The 60 most recent exchange events, newest first: { txid, event, blockHeight, data }",

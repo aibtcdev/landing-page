@@ -14,6 +14,7 @@
 .nl .ml-accent { color: var(--accent); }
 
 .nl .ml-section { margin-top: var(--space-7); }
+.nl .ml-section > .figs { margin-top: var(--space-5); }
 .nl .ml-h2 {
 	font-family: var(--display);
 	font-size: clamp(20px, 2.6vw, 28px);
@@ -24,33 +25,9 @@
 	padding-bottom: 12px;
 	border-bottom: 1px solid var(--rule);
 }
-.nl .ml-h3 {
-	font-family: var(--mono);
-	font-size: 11px;
-	font-weight: 600;
-	letter-spacing: 0.16em;
-	text-transform: uppercase;
-	color: var(--text-dim);
-	margin: var(--space-6) 0 10px;
-}
-.nl .ml-lede {
-	font-size: 15px;
-	line-height: 1.6;
-	color: var(--text-body);
-	max-width: 72ch;
-	margin: 14px 0 var(--space-5);
-}
-.nl .ml-foot {
-	font-size: 13.5px;
-	margin-bottom: var(--space-6);
-	line-height: 1.6;
-	color: var(--text-dim);
-	max-width: 80ch;
-	margin-top: var(--space-4);
-}
 
 /* ── Epoch cards ── */
-.nl .ml-epochs { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+.nl .ml-epochs { margin-top: var(--space-5); display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
 @media (max-width: 760px) { .nl .ml-epochs { grid-template-columns: minmax(0, 1fr); } }
 .nl .ml-epoch {
 	border: 1px solid var(--rule-faint);
@@ -116,6 +93,17 @@
 .nl .ml-table a { color: var(--link); text-decoration: none; }
 .nl .ml-table a:hover { text-decoration: underline; }
 .nl .ml-calls td { font-size: 13px; }
+
+.nl .ml-q-label { display: block; }
+.nl .ml-addrs { list-style: none; margin: 4px 0 0; padding: 0; }
+.nl .ml-addrs li {
+	font-family: var(--mono);
+	font-size: 12px;
+	color: var(--text-secondary);
+	overflow-wrap: anywhere;
+	padding: 1px 0;
+}
+.nl .ml-sub-line { display: block; margin-top: 4px; font-size: 11px; color: var(--text-dim); }
 
 .nl .ml-flag {
 	display: block;
