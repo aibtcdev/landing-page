@@ -23,7 +23,6 @@ import {
 } from "@/lib/meta-legion/constants";
 import {
   bookFor,
-  costOf,
   fmtPct,
   legionPhase,
   yesQuote,
@@ -232,13 +231,10 @@ function LegionTable({ state, legions }: { state: MetaLegionState; legions: Legi
                 <td className="ml-mono ml-dim">{l.id}</td>
                 <td className="q">
                   <span className="ml-q-label">{l.label}</span>
-                  <span className="ml-q-sub">
-                    Any of these bonds in pox-5 after burn {fmtInt(l.createdAt)}, by the deadline:
-                  </span>
                   <Addresses scripts={l.scripts} />
                   {stopsEarly && phase === "trading" ? (
                     <span className="ml-flag" title={`Trading stops before burn ${fmtInt(terms.closeHeight - 1)}`}>
-                      Stops before the close, does not count toward the meta legion
+                      Closes before the meta legion, does not count
                     </span>
                   ) : null}
                 </td>
@@ -305,10 +301,6 @@ function MetaMarket({ state }: { state: MetaLegionState }) {
   return (
     <section className="ml-section">
       <h2 className="ml-h2">The meta market</h2>
-      <p className="ml-lede">
-        Legion 0 trades like any other legion: mint a complete set, sell the side you don&apos;t believe in,
-        or buy the side you do. Its own trades never count toward the bar, so the market cannot settle itself.
-      </p>
 
       <div className="figs four">
         <div className="fig accent">
@@ -363,7 +355,6 @@ function MetaMarket({ state }: { state: MetaLegionState }) {
 
 function HowToTrade({ state }: { state: MetaLegionState }) {
   const { terms } = state;
-  const example = { shares: 10_000, price: 5_000 };
   const calls: { fn: string; args: string; what: string; pc: string }[] = [
     {
       fn: "mint-set",
@@ -423,12 +414,8 @@ function HowToTrade({ state }: { state: MetaLegionState }) {
         </a>
       </div>
       <p className="ml-howto-note">
-        Call the contract directly, e.g. with the AIBTC MCP server&apos;s <code>call_contract</code>. Always use
-        post-condition <b>deny</b> mode: shares are balances inside the contract, so only sBTC needs a
-        post-condition. <code>side</code> is <code>u1</code> YES, <code>u0</code> NO. <code>price</code> is
-        ten-thousandths of a sat per share, so <code>u5000</code> is 50%: {fmtInt(example.shares)} shares at 50%
-        cost {fmtSats(costOf(example.shares, example.price))}. Each fill pays a {terms.feeBps / 100}% fee to the
-        treasury, taken from the maker&apos;s side. Minimum trade is 1,000 sats.
+        Post-condition <b>deny</b> mode. <code>side</code> <code>u1</code> YES, <code>u0</code> NO.{" "}
+        <code>price</code> <code>u5000</code> = 50%. {terms.feeBps / 100}% fee from the maker, 1,000 sat minimum.
       </p>
       <div className="ml-table-wrap">
         <table className="ml-table ml-calls">
@@ -655,8 +642,6 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
     settled: legions.filter((l) => l.status !== LEGION_STATUS.OPEN),
   };
   const shown = groups[filter];
-  const counting = data.epochs.some((e) => e.state !== "upcoming");
-  const firstCounted = data.epochs[0];
 
   return (
     <main className="content">
@@ -681,10 +666,8 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
             trade?
           </h1>
           <p className="hero-lede">
-            {meta.label} A legion clears the bar in an epoch with {fmtSats(terms.minVolume)} traded among{" "}
-            {terms.minTraders} distinct traders. Nobody resolves this one: after burn block{" "}
-            {fmtInt(terms.closeHeight)} anyone calls <code>resolve-meta</code> and the contract reads its own
-            scoreboard. No admin key, no upgrade path.
+            YES if {terms.target} legions each trade {fmtSats(terms.minVolume)} among {terms.minTraders} traders in
+            all three counted epochs. The contract settles it from its own scoreboard.
           </p>
           <div className="hero-cta">
             <a className="cta-btn" href={EXCHANGE_SOURCE_HREF} target="_blank" rel="noopener">
@@ -725,12 +708,6 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
 
       <section className="ml-section">
         <h2 className="ml-h2">Scoreboard</h2>
-        <p className="ml-lede">
-          The score is the lowest of the three counted epochs, so the bar has to be cleared in each of them.
-          {!counting && firstCounted
-            ? ` Counting starts at burn block ${fmtInt(firstCounted.start)} (epoch ${firstCounted.epoch}); until then every count is zero.`
-            : ""}
-        </p>
         <div className="ml-epochs">
           {data.epochs.map((e) => (
             <EpochCard key={e.epoch} e={e} target={terms.target} />
@@ -741,8 +718,8 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
       <div ref={barSentinel} className="legion-bar-sentinel" aria-hidden="true" />
       <div className={`legion-bar ${stuck ? "stuck" : ""}`}>
         <CtaBand
-          t="Anyone can create a legion. Each one that clears the bar moves the meta score."
-          d={`no signup, no admin, ${fmtSats(terms.minVolume)} among ${terms.minTraders} traders per epoch`}
+          t="Anyone can create a legion."
+          d={`${fmtSats(terms.minVolume)} among ${terms.minTraders} traders per epoch to qualify`}
         />
         {legions.length ? (
           <div className="tabs">
@@ -771,14 +748,6 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
       ) : (
         <LegionTable state={data} legions={shown} />
       )}
-      <p className="ml-foot">
-        Nobody decides answers. A legion asks whether any of its Bitcoin addresses bonds in pox-5 after it was
-        created and by its deadline; the label binds nothing. YES settles when anyone submits a Bitcoin proof of the
-        bond with <code>resolve-bonded</code>, accepted until {fmtInt(terms.proofGrace)} blocks after the deadline.
-        After that, anyone calls <code>resolve-idle</code> for NO. Trades with the treasury (
-        <span className="ml-mono">{shortAddr(terms.feeSink)}</span>) never count toward the bar. To count, a legion
-        has to still be trading through burn block {fmtInt(terms.closeHeight - 1)}.
-      </p>
 
       <MetaMarket state={data} />
 
@@ -787,8 +756,7 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
       <div className="cta-close">
         <div className="t">Put a legion on the board</div>
         <p className="d">
-          Call <code>create-legion</code> with a question, a resolver and a resolve date, seed both sides, and let
-          it trade. Fifty of them clearing the bar in each counted epoch is what resolves this market YES.
+          Up to {terms.maxScripts} Bitcoin addresses and a deadline. Call <code>create-legion</code> and let it trade.
         </p>
         <a className="cta-btn" href={EXCHANGE_SOURCE_HREF} target="_blank" rel="noopener">
           Read the contract
