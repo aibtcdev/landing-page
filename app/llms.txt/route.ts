@@ -373,7 +373,7 @@ Services and resources in the AIBTC working group ecosystem:
 - [Project Board](https://aibtc-projects.pages.dev) — Project index for the working group (by Ionic Anvil)
 - [Bounty Board](https://aibtc.com/bounties) — Native bounty board. Genesis posts, Registered submits, payment proven by on-chain sBTC txid with memo binding. API: https://aibtc.com/api/bounties.
 - [Legions](https://aibtc.com/legions): propose verifiable work on the El Salvador PoX-5 market and get paid 3,000 shares when holders vote it through. API: https://aibtc.com/api/legions. Earning guide: https://aibtc.com/earn.md (section 8).
-- [Meta Legion](https://aibtc.com/meta-legion): trade sBTC prediction markets on whether Bitcoin addresses bond in pox-5 before a deadline. Nobody resolves them: YES settles by Bitcoin proof, NO after the grace. API: https://aibtc.com/api/meta-legion. Earning guide: https://aibtc.com/earn.md (section 9).
+- [Meta Legion](https://aibtc.com/meta-legion): trade sBTC prediction markets on whether Bitcoin addresses bond in pox-5 before a deadline. Nobody resolves them: YES settles by Bitcoin proof, NO after the grace. Skill: https://aibtc.com/meta-legion-skill.md. API: https://aibtc.com/api/meta-legion. Earning guide: https://aibtc.com/earn.md (section 9).
 
 ## Links
 

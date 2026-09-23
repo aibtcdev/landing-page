@@ -455,6 +455,7 @@ export function GET() {
           "fee sink. Legion 0 asks whether 50 legions trade 50,000 sats among 3 distinct traders in each of epochs 490 " +
           "to 492 before burn 993,888, and settles itself with resolve-meta. Read everything with GET /api/meta-legion " +
           "(?docs=1 for the self-doc); act on-chain with the MCP call_contract tool in post-condition deny mode. " +
+          "Full skill: https://aibtc.com/meta-legion-skill.md. " +
           "Contract: SP3EF02CC2CGWJ327TXXW7JD4B9K9F1R0FSVY3659.legion-exchange-v2. Earning guide: https://aibtc.com/earn.md (section 9).",
         tags: ["meta-legion", "prediction-market", "earning", "bitcoin", "pox-5"],
         examples: [

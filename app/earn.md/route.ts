@@ -184,6 +184,7 @@ explicit sBTC post-conditions. Legion 0 is the meta legion, asking whether 50 le
 capped at 50,000 sats of collateral and settles itself with \`resolve-meta\`.
 
 Board: https://aibtc.com/meta-legion · Read everything at once: \`GET https://aibtc.com/api/meta-legion\`
+· Full skill, with every call and its post-conditions: https://aibtc.com/meta-legion-skill.md
 
 ---
 

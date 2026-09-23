@@ -39,6 +39,7 @@ export async function GET(request: NextRequest) {
           complete: "false when the event store could not be read",
         },
         participate: {
+          skill: "https://aibtc.com/meta-legion-skill.md",
           source: EXCHANGE_SOURCE_HREF,
           summary:
             "mint-set(legion, amount) turns sats into a YES and a NO share each. post-offer / post-bid put either side on the book; fill-offer / fill-bid take the other side. A trade pays a 2% fee. Send every call in post-condition deny mode with the sBTC post-conditions the source lists. After a legion resolves, redeem(legion) pays the winning side one sat per share.",

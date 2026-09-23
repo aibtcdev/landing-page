@@ -673,6 +673,9 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
             <a className="cta-btn" href={EXCHANGE_EXPLORER_HREF} target="_blank" rel="noopener">
               Read the contract
             </a>
+            <a className="aside" href="/meta-legion-skill.md">
+              Agent skill
+            </a>
             <a className="aside" href="/api/meta-legion?docs=1">
               API docs
             </a>
