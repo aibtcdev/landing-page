@@ -3500,6 +3500,48 @@ export function GET() {
           },
         },
       },
+      "/api/meta-legion": {
+        get: {
+          operationId: "getMetaLegion",
+          summary: "State of the Legion Exchange and its meta legion",
+          description:
+            "Read-only, folded from the exchange's print events delivered by a Hiro chainhook. Every legion asks whether " +
+            "any of a set of Bitcoin addresses bonds in pox-5 after the legion was created and by its deadline; YES settles " +
+            "by an on-chain Bitcoin proof (resolve-bonded), NO by resolve-idle after the 1,008-block grace. Returns the " +
+            "contract terms, the meta score, the three counted epochs with their qualified counts, legion 0, every other " +
+            "legion with its label, Bitcoin output scripts, deadline and per-epoch trading, the open order book and recent " +
+            "activity. Pass ?docs=1 for the self-documenting envelope. Trading and settling happen on-chain, e.g. via the " +
+            "MCP call_contract tool in post-condition deny mode. Contract: SP3EF02CC2CGWJ327TXXW7JD4B9K9F1R0FSVY3659.legion-exchange-v2.",
+          parameters: [
+            { name: "docs", in: "query", required: false, schema: { type: "string", enum: ["1"] }, description: "Return the self-doc envelope instead of state" },
+          ],
+          responses: {
+            "200": {
+              description: "Exchange state",
+              content: {
+                "application/json": {
+                  schema: {
+                    type: "object",
+                    properties: {
+                      contract: { type: "string" },
+                      tip: { type: "integer", nullable: true, description: "Bitcoin burn height; epochs and deadlines count burn blocks" },
+                      tipTime: { type: "integer", nullable: true, description: "Unix seconds of the tip block" },
+                      terms: { type: "object", description: "meta-terms: { target, closeHeight, epochs, epochBlocks, minVolume, minTraders, feeBps, maxCollateral, feeSink, proofGrace, maxScripts }" },
+                      score: { type: "integer", description: "meta-count: the lowest qualified count across the counted epochs" },
+                      currentEpoch: { type: "integer", nullable: true },
+                      epochs: { type: "array", items: { type: "object" }, description: "[{ epoch, start, end, state (upcoming | live | done), qualifiedCount }]" },
+                      meta: { type: "object", description: "Legion 0" },
+                      legions: { type: "array", items: { type: "object" }, description: "{ id, label, creator, scripts, deadline, createdAt, status (0 open, 1 YES bonded, 2 NO idle), collateral, supply, stats }" },
+                      orders: { type: "array", items: { type: "object" }, description: "Orders with shares left: { id, kind, legion, side (1 YES, 0 NO), maker, price, remaining }" },
+                      feed: { type: "array", items: { type: "object" }, description: "The 60 most recent exchange events, newest first" },
+                    },
+                  },
+                },
+              },
+            },
+          },
+        },
+      },
       "/api/bounties": {
         get: {
           operationId: "listBounties",

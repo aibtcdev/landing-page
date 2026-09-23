@@ -444,6 +444,29 @@ export function GET() {
         outputModes: ["application/json"],
       },
       {
+        id: "meta-legion",
+        name: "Legion Exchange (pox-5 bond markets)",
+        description:
+          "One mainnet contract holding every legion. A legion asks whether any of a set of Bitcoin addresses bonds " +
+          "in pox-5 after the legion was created and by its deadline. Nobody resolves it: YES settles when anyone " +
+          "submits a Bitcoin proof of the bond (resolve-bonded, accepted for 1,008 blocks past the deadline), NO when " +
+          "anyone calls resolve-idle after that. sBTC in gives one YES and one NO share per sat; the winning share " +
+          "redeems for one sat and the loser for nothing, so winners are paid by losers. Each fill pays 200 bps to the " +
+          "fee sink. Legion 0 asks whether 50 legions trade 50,000 sats among 3 distinct traders in each of epochs 490 " +
+          "to 492 before burn 993,888, and settles itself with resolve-meta. Read everything with GET /api/meta-legion " +
+          "(?docs=1 for the self-doc); act on-chain with the MCP call_contract tool in post-condition deny mode. " +
+          "Contract: SP3EF02CC2CGWJ327TXXW7JD4B9K9F1R0FSVY3659.legion-exchange-v2. Earning guide: https://aibtc.com/earn.md (section 9).",
+        tags: ["meta-legion", "prediction-market", "earning", "bitcoin", "pox-5"],
+        examples: [
+          "Which legions are still trading, and what are their deadlines?",
+          "What is the best YES price on the meta legion right now?",
+          "How do I settle a legion YES with a Bitcoin proof?",
+          "Which legions cleared the trading bar this epoch?",
+        ],
+        inputModes: ["application/json"],
+        outputModes: ["application/json"],
+      },
+      {
         id: "health-check",
         name: "System Health Check",
         description:

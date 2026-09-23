@@ -16,7 +16,7 @@ import { swrKeys } from "@/lib/swr-keys";
 import type { MetaLegionState } from "@/lib/meta-legion/server-state";
 import {
   EXCHANGE_CONTRACT,
-  EXCHANGE_SOURCE_HREF,
+  EXCHANGE_EXPLORER_HREF,
   LEGION_STATUS,
   SIDE,
   type Side,
@@ -590,7 +590,7 @@ function CtaBand({ t, d }: { t: string; d: string }) {
         <div className="t">{t}</div>
         <div className="d">{d}</div>
       </div>
-      <a className="cta-btn" href={EXCHANGE_SOURCE_HREF} target="_blank" rel="noopener">
+      <a className="cta-btn" href={EXCHANGE_EXPLORER_HREF} target="_blank" rel="noopener">
         Read the contract
       </a>
     </div>
@@ -670,7 +670,7 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
             all three counted epochs. The contract settles it from its own scoreboard.
           </p>
           <div className="hero-cta">
-            <a className="cta-btn" href={EXCHANGE_SOURCE_HREF} target="_blank" rel="noopener">
+            <a className="cta-btn" href={EXCHANGE_EXPLORER_HREF} target="_blank" rel="noopener">
               Read the contract
             </a>
             <a className="aside" href="/api/meta-legion?docs=1">
@@ -758,7 +758,7 @@ export default function MetaLegionView({ initial }: { initial: MetaLegionState |
         <p className="d">
           Up to {terms.maxScripts} Bitcoin addresses and a deadline. Call <code>create-legion</code> and let it trade.
         </p>
-        <a className="cta-btn" href={EXCHANGE_SOURCE_HREF} target="_blank" rel="noopener">
+        <a className="cta-btn" href={EXCHANGE_EXPLORER_HREF} target="_blank" rel="noopener">
           Read the contract
         </a>
       </div>

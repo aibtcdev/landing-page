@@ -18,6 +18,9 @@
 export const EXCHANGE_DEPLOYER = "SP3EF02CC2CGWJ327TXXW7JD4B9K9F1R0FSVY3659";
 export const EXCHANGE_CONTRACT = `${EXCHANGE_DEPLOYER}.legion-exchange-v2`;
 export const SBTC_TOKEN = "SM3VDXK3WZZSA84XXFKAFAF15NNZX32CTSG82JFQ4.sbtc-token";
+/** The contract on the explorer: what "read the contract" points at today. */
+export const EXCHANGE_EXPLORER_HREF = `https://explorer.hiro.so/txid/${EXCHANGE_CONTRACT}?chain=mainnet`;
+/** Source and design notes. Published with the meta directory. */
 export const EXCHANGE_SOURCE_HREF = "https://github.com/aibtcdev/legions/tree/main/meta";
 
 export const META_LEGION_ID = 0;
