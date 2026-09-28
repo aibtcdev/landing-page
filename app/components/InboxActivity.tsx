@@ -26,6 +26,8 @@ interface InboxResponse {
     totalCount: number;
     receivedCount?: number;
     sentCount?: number;
+    replyCount?: number;
+    excludes?: string[];
     economics?: {
       satsReceived: number;
       satsSent: number;

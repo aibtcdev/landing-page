@@ -116,6 +116,8 @@ interface InboxGetBody {
     totalCount: number;
     receivedCount?: number;
     sentCount?: number;
+    replyCount?: number;
+    excludes?: ("sent" | "received")[];
     economics?: { satsReceived: number; satsSent: number; satsNet: number };
     view: "sent" | "received" | "all";
     status: "unread" | "read" | "all";
@@ -127,7 +129,8 @@ interface InboxGetBody {
     };
     partners?: InboxPartner[];
   };
-  howToSend?: { endpoint: string; price: string };
+  howToSend?: { endpoint: string; price: string; documentation?: string };
+  parameters?: Record<string, string>;
 }
 
 async function readBody(res: Response): Promise<InboxGetBody> {
@@ -618,3 +621,63 @@ describe("GET /api/inbox/[address] unreadCount witness", () => {
     }
   );
 });
+
+// ---- issue #1098 discoverability and naming witness -------------------------
+
+describe("GET /api/inbox/[address] issue #1098 discoverability & naming", () => {
+  it("view=all explicitly declares excludes: ['sent'] and exposes replyCount", async () => {
+    const res = await GET(buildGetRequest("?view=all"), buildContext());
+    expect(res.status).toBe(200);
+    const body = await readBody(res);
+
+    expect(body.inbox.view).toBe("all");
+    expect(body.inbox.excludes).toEqual(["sent"]);
+    expect(body.inbox.replyCount).toBe(body.inbox.sentCount);
+    expect(body.parameters?.view).toContain("view=sent");
+    expect(body.howToSend?.documentation).toBe("https://aibtc.com/llms-full.txt");
+  });
+
+  it("view=received explicitly declares excludes: ['sent'] and exposes replyCount", async () => {
+    const res = await GET(buildGetRequest("?view=received"), buildContext());
+    expect(res.status).toBe(200);
+    const body = await readBody(res);
+
+    expect(body.inbox.view).toBe("received");
+    expect(body.inbox.excludes).toEqual(["sent"]);
+    expect(body.inbox.replyCount).toBe(body.inbox.sentCount);
+    expect(body.parameters?.view).toContain("view=sent");
+    expect(body.howToSend?.documentation).toBe("https://aibtc.com/llms-full.txt");
+  });
+
+  it("view=sent explicitly declares excludes: ['received'] and includes documentation", async () => {
+    (listSentMessagesFromD1 as Mock).mockResolvedValue([]);
+    const res = await GET(buildGetRequest("?view=sent"), buildContext());
+    expect(res.status).toBe(200);
+    const body = await readBody(res);
+
+    expect(body.inbox.view).toBe("sent");
+    expect(body.inbox.excludes).toEqual(["received"]);
+    expect(body.parameters?.view).toContain("view=sent");
+    expect(body.howToSend?.documentation).toBe("https://aibtc.com/llms-full.txt");
+  });
+
+  it("empty inbox self-doc envelope declares excludes: ['sent'] and exposes replyCount: 0", async () => {
+    (getAgentInboxStats as Mock).mockResolvedValue({
+      ...FIXTURE_STATS,
+      receivedCount: 0,
+      unreadCount: 0,
+      sentCount: 0,
+    });
+    (listInboxMessagesFromD1 as Mock).mockResolvedValue([]);
+
+    const res = await GET(buildGetRequest(), buildContext());
+    expect(res.status).toBe(200);
+    const body = await readBody(res);
+
+    expect(body.inbox.excludes).toEqual(["sent"]);
+    expect(body.inbox.replyCount).toBe(0);
+    expect(body.inbox.sentCount).toBe(0);
+    expect(body.parameters?.view).toContain("view=sent");
+  });
+});
+
