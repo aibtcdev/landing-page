@@ -116,7 +116,7 @@ export async function GET(request: NextRequest) {
   }
 
   const rawStatus = url.searchParams.get("status");
-  if (rawStatus !== null && !STATUS_FILTER_VALUES.has(rawStatus)) {
+  if (rawStatus !== null && rawStatus !== "" && !STATUS_FILTER_VALUES.has(rawStatus)) {
     return NextResponse.json(
       {
         error: "invalid_status",
@@ -125,7 +125,10 @@ export async function GET(request: NextRequest) {
       { status: 400 }
     );
   }
-  const status = (rawStatus as BountyStatus | "active") ?? "active";
+  const status =
+    rawStatus && STATUS_FILTER_VALUES.has(rawStatus)
+      ? (rawStatus as BountyStatus | "active")
+      : "active";
   const poster = url.searchParams.get("poster") ?? undefined;
   const submitter = url.searchParams.get("submitter") ?? undefined;
   const tag = url.searchParams.get("tag") ?? undefined;

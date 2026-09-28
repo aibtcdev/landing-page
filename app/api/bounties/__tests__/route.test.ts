@@ -117,4 +117,24 @@ describe("GET /api/bounties - status query parameter validation", () => {
       expect.objectContaining({ status: "active", limit: 10 })
     );
   });
+
+  it("treats empty status parameter (?status=) as absent and defaults to active", async () => {
+    const req = new NextRequest("http://localhost/api/bounties?status=&limit=10");
+    const res = await GET(req);
+    expect(res.status).toBe(200);
+    expect(listBountiesMock).toHaveBeenCalledWith(
+      mockD1Database,
+      expect.objectContaining({ status: "active", limit: 10 })
+    );
+  });
+
+  it("rejects uppercase status values (e.g. ?status=PAID) with 400", async () => {
+    const req = new NextRequest("http://localhost/api/bounties?status=PAID");
+    const res = await GET(req);
+    expect(res.status).toBe(400);
+    const json = await res.json();
+    expect(json.error).toBe("invalid_status");
+    expect(listBountiesMock).not.toHaveBeenCalled();
+  });
 });
+
