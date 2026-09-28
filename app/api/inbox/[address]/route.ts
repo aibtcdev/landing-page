@@ -364,12 +364,24 @@ export async function GET(
         // Read state belongs to the recipient, so the status filter only
         // applies to received messages. Report the filter actually applied.
         status: "all",
+        excludes: ["received"],
         pagination: {
           limit,
           offset,
           hasMore,
           nextOffset: hasMore ? offset + limit : null,
         },
+      },
+      howToSend: {
+        endpoint: `POST /api/inbox/${address}`,
+        price: `${INBOX_PRICE_SATS} satoshis (sBTC)`,
+        documentation: "https://aibtc.com/llms-full.txt",
+      },
+      parameters: {
+        view: "Filter messages: 'sent' (messages authored by this agent), 'received' (messages sent to this agent), or 'all' (default: 'all', currently returns received messages; use view=sent for sent messages)",
+        status: "Filter by read status: 'unread', 'read', or 'all' (default: 'all'). Applies to received messages only; view=sent always returns status 'all'.",
+        limit: "Max messages per page (1-100, default: 20)",
+        offset: "Number of messages to skip (default: 0)",
       },
     });
   }
@@ -653,6 +665,7 @@ export async function GET(
         totalCount: 0,
         receivedCount: 0,
         sentCount: 0,
+        replyCount: 0,
         economics: {
           satsReceived: 0,
           satsSent: 0,
@@ -660,6 +673,7 @@ export async function GET(
         },
         view,
         status: statusFilter,
+        excludes: ["sent"],
         pagination: {
           limit,
           offset,
@@ -680,7 +694,7 @@ export async function GET(
         documentation: "https://aibtc.com/llms-full.txt",
       },
       parameters: {
-        view: "Filter messages: 'sent', 'received', or 'all' (default: 'all')",
+        view: "Filter messages: 'sent' (messages authored by this agent), 'received' (messages sent to this agent), or 'all' (default: 'all', currently returns received messages; use view=sent for sent messages)",
         status: "Filter by read status: 'unread', 'read', or 'all' (default: 'all'). Applies to received messages only; view=sent always returns status 'all'.",
         limit: "Max messages per page (1-100, default: 20)",
         offset: "Number of messages to skip (default: 0)",
@@ -702,6 +716,7 @@ export async function GET(
       totalCount,
       receivedCount,
       sentCount,
+      replyCount: sentCount,
       economics: {
         satsReceived,
         satsSent,
@@ -709,6 +724,7 @@ export async function GET(
       },
       view,
       status: statusFilter,
+      excludes: ["sent"],
       pagination: {
         limit,
         offset,
@@ -720,6 +736,13 @@ export async function GET(
     howToSend: {
       endpoint: `POST /api/inbox/${address}`,
       price: `${INBOX_PRICE_SATS} satoshis (sBTC)`,
+      documentation: "https://aibtc.com/llms-full.txt",
+    },
+    parameters: {
+      view: "Filter messages: 'sent' (messages authored by this agent), 'received' (messages sent to this agent), or 'all' (default: 'all', currently returns received messages; use view=sent for sent messages)",
+      status: "Filter by read status: 'unread', 'read', or 'all' (default: 'all'). Applies to received messages only; view=sent always returns status 'all'.",
+      limit: "Max messages per page (1-100, default: 20)",
+      offset: "Number of messages to skip (default: 0)",
     },
   });
 }

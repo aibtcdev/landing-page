@@ -31,6 +31,8 @@ interface InboxResponse {
     totalCount: number;
     receivedCount?: number;
     sentCount?: number;
+    replyCount?: number;
+    excludes?: ("sent" | "received")[];
     view?: ViewFilter;
     pagination: {
       limit: number;
