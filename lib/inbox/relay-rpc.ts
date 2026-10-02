@@ -97,7 +97,13 @@ function extractRelayWireExtras(raw: unknown): RelayWireExtras {
  * Typed interface for the X402_RELAY service binding RPC methods.
  * Must match the actual relay WorkerEntrypoint method signatures.
  */
+/** Result of RelayRPC.sponsorPayment() — sponsored + broadcast now, or refused with a reason. */
+export type RelaySponsorPaymentResult =
+  | { success: true; txid: string; payer: string; fee: string }
+  | { success: false; code: string; error: string; retryable: boolean };
+
 export interface RelayRPC {
+  sponsorPayment(txHex: string, settle: RelaySettleOptions): Promise<RelaySponsorPaymentResult>;
   submitPayment(txHex: string, settle?: RelaySettleOptions, paymentIdentifier?: string): Promise<RelaySubmitResult>;
   checkPayment(paymentId: string): Promise<RelayCheckResult>;
   getSponsorStatus?(): Promise<SponsorStatusResult>;
@@ -120,10 +126,15 @@ const RPC_ERROR_CODE_MAP: Record<string, InboxPaymentErrorCode> = {
   BROADCAST_RATE_LIMITED: "BROADCAST_FAILED",
   // Settlement
   SETTLEMENT_FAILED: "SETTLEMENT_FAILED",
+  // sponsorPayment refusals
+  PAYMENT_MISMATCH: "PAYMENT_REJECTED",
+  RATE_LIMITED: "RATE_LIMITED",
+  SENDER_NONCE_CONFLICT: "NONCE_CONFLICT",
   // Insufficient funds
   INSUFFICIENT_FUNDS: "INSUFFICIENT_FUNDS",
   BALANCE_ERROR: "INSUFFICIENT_FUNDS",
-  SPONSOR_EXHAUSTED: "INSUFFICIENT_FUNDS",
+  // Relay's sponsor is out of STX or at its daily budget — relay-side, not the sender's funds
+  SPONSOR_EXHAUSTED: "RELAY_ERROR",
   // Nonce conflicts (retryable)
   NONCE_CONFLICT: "NONCE_CONFLICT",
   CLIENT_NONCE_CONFLICT: "NONCE_CONFLICT",

@@ -1506,6 +1506,20 @@ export async function POST(
       );
     }
 
+    // RATE_LIMITED — the relay caps sponsored payments per sender.
+    if (errorCode === "RATE_LIMITED") {
+      return NextResponse.json(
+        {
+          error: paymentResult.error ?? "Too many sponsored payments from this sender",
+          code: errorCode,
+          retryable: true,
+          retryAfter: 60,
+          nextSteps: "Wait a minute, then re-sign and resend the payment",
+        },
+        { status: 429, headers: { "Retry-After": "60" } }
+      );
+    }
+
     // INSUFFICIENT_FUNDS — not enough sBTC.
     if (errorCode === "INSUFFICIENT_FUNDS") {
       return NextResponse.json(
