@@ -899,7 +899,8 @@ export async function POST(
   const paymentRequirements = buildInboxPaymentRequirements(
     agent.stxAddress,
     network,
-    networkCAIP2
+    networkCAIP2,
+    env.X402_SPONSOR_FEE_PAYER?.trim() || undefined
   );
   const paymentRequiredBody = {
     x402Version: 2 as const,
