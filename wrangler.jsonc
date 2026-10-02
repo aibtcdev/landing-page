@@ -159,7 +159,10 @@
       "vars": {
         "DEPLOY_ENV": "production",
         "TENERO_REFRESH_ENABLED": "true",
-        "EARNINGS_INDEX_ENABLED": "true"
+        "EARNINGS_INDEX_ENABLED": "true",
+        // Relay payment sponsor advertised as 402 extra.feePayer — enables gasless inbox sends.
+        // Remove to turn sponsorship off (senders then pay their own gas).
+        "X402_SPONSOR_FEE_PAYER": "SP3F6ZPHAR5D0YT0CTPJST7H3NBZ43A5FW226FMYP"
       },
 
       "assets": {
