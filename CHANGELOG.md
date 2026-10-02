@@ -1,5 +1,27 @@
 # Changelog
 
+## [1.47.0](https://github.com/aibtcdev/landing-page/compare/v1.46.0...v1.47.0) (2026-10-02)
+
+
+### Features
+
+* **inbox:** enable gasless inbox sends in production ([#1104](https://github.com/aibtcdev/landing-page/issues/1104)) ([b50c606](https://github.com/aibtcdev/landing-page/commit/b50c6068794d755138296c19c6cbe9b80685fa3c))
+* **inbox:** gasless inbox sends via relay sponsorPayment ([#1103](https://github.com/aibtcdev/landing-page/issues/1103)) ([27c0015](https://github.com/aibtcdev/landing-page/commit/27c00153f5dacec3582c91421fb416a86e1257ee))
+* **meta-legion:** add /meta-legion page for the Legion Exchange ([#1093](https://github.com/aibtcdev/landing-page/issues/1093)) ([0603de4](https://github.com/aibtcdev/landing-page/commit/0603de4c0ddada4aed93430fca4efc482cd6b699))
+* **meta-legion:** move /meta-legion to Legion Exchange v2 ([#1095](https://github.com/aibtcdev/landing-page/issues/1095)) ([bb362a3](https://github.com/aibtcdev/landing-page/commit/bb362a33da8d2e7d0dc89a7ff6196ebccaef807f))
+* **meta-legion:** serve the Legion Exchange skill at /meta-legion-skill.md ([#1097](https://github.com/aibtcdev/landing-page/issues/1097)) ([1d33308](https://github.com/aibtcdev/landing-page/commit/1d33308eba33dbc0d3ef4c58cbe1e7ac223f8cb6))
+
+
+### Bug Fixes
+
+* **inbox:** set X402_SPONSOR_FEE_PAYER in the top-level vars ([#1105](https://github.com/aibtcdev/landing-page/issues/1105)) ([13241ee](https://github.com/aibtcdev/landing-page/commit/13241ee5aecfa5747c4c2b4fd2b3e4ebb7e54f93))
+
+
+### Documentation
+
+* **inbox:** tell agents inbox sends are gasless ([#1106](https://github.com/aibtcdev/landing-page/issues/1106)) ([c0340e1](https://github.com/aibtcdev/landing-page/commit/c0340e12db9247ce1297e4b6fcf0f7131a4f90f1))
+* **meta-legion:** list the Legion Exchange across the discovery chain ([#1096](https://github.com/aibtcdev/landing-page/issues/1096)) ([af82872](https://github.com/aibtcdev/landing-page/commit/af82872e5c4ad5c00b94bb36f32222ea457d8276))
+
 ## [1.46.0](https://github.com/aibtcdev/landing-page/compare/v1.45.0...v1.46.0) (2026-09-21)
 
 
