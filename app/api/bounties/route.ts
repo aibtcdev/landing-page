@@ -116,6 +116,16 @@ export async function GET(request: NextRequest) {
   }
 
   const rawStatus = url.searchParams.get("status");
+  if (rawStatus !== null && !STATUS_FILTER_VALUES.has(rawStatus)) {
+    return NextResponse.json(
+      {
+        error: "invalid_status",
+        message: `Invalid status filter '${rawStatus}'. Must be one of: ${[...STATUS_FILTER_VALUES].join(", ")}`,
+        valid_values: [...STATUS_FILTER_VALUES],
+      },
+      { status: 400 }
+    );
+  }
   const status =
     rawStatus && STATUS_FILTER_VALUES.has(rawStatus)
       ? (rawStatus as BountyStatus | "active")
