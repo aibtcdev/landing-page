@@ -27,7 +27,7 @@ interface D1BountyRow {
   submission_count: number;
   created_at: string;
   expires_at: string;
-  // Multi-winner fields (migration 023)
+  // Multi-winner fields (migration 030)
   max_winners: number;
   winner_count: number;
   paid_count: number;
@@ -147,7 +147,7 @@ export function statusToSql(
   const payCutoffIso = new Date(now.getTime() - PAY_GRACE_MS).toISOString();
 
   // All predicates use the denormalized counters (winner_count, paid_count,
-  // max_winners, fully_accepted_at) added by migration 023. These are kept in
+  // max_winners, fully_accepted_at) added by migration 030. These are kept in
   // sync by insertWinner() and setWinnerPaid(). The predicates must mirror the
   // check order in bountyStatus() in lib/bounty/types.ts so per-record status
   // and list-filter status agree at every tick (status-boundary parity test).

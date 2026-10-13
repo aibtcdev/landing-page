@@ -109,7 +109,7 @@ export function bountyStatus(b: BountyRecord, now: Date = new Date()): BountySta
   const t = now.getTime();
   const maxWinners = b.maxWinners ?? 1;
   // Prefer the denormalized counters (set by migration + insertWinner/setWinnerPaid).
-  // Fall back to legacy single-winner fields for any records pre-dating migration 023.
+  // Fall back to legacy single-winner fields for any records pre-dating migration 030.
   const winnerCount = b.winnerCount ?? (b.acceptedAt ? 1 : 0);
   const paidCount = b.paidCount ?? (b.paidAt ? 1 : 0);
 
