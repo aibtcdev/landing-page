@@ -10,9 +10,9 @@
  * `abandoned` (terminal, but both fields NULL).
  */
 
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { bountyStatus, type BountyRecord, type BountyStatus } from "../types";
-import { statusToSql } from "../d1-helpers";
+import { setPaid, statusToSql } from "../d1-helpers";
 import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "../constants";
 
 const NOW = new Date("2026-09-01T00:00:00.000Z");
@@ -143,3 +143,28 @@ describe("active", () => {
     expect(evalSql(sql, bindings, fresh)).toBe(true);
   });
 });
+
+describe("setPaid pay-grace cutoff (#1110)", () => {
+  it("computes payCutoff from the on-chain paidAt timestamp rather than wall-clock arrival", async () => {
+    const bindMock = vi.fn().mockReturnValue({
+      run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
+    });
+    const db = {
+      prepare: vi.fn().mockReturnValue({ bind: bindMock }),
+    } as unknown as D1Database;
+
+    const paidAt = "2026-10-09T14:43:24.000Z";
+    const ok = await setPaid(db, "mukrrrze1aaffcc1ff00", "0x5b60", paidAt);
+
+    expect(ok).toBe(true);
+    const expectedCutoff = new Date(Date.parse(paidAt) - PAY_GRACE_MS).toISOString();
+    expect(bindMock).toHaveBeenCalledWith(
+      "0x5b60",
+      paidAt,
+      paidAt,
+      "mukrrrze1aaffcc1ff00",
+      expectedCutoff
+    );
+  });
+});
+

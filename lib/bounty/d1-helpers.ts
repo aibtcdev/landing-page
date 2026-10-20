@@ -354,11 +354,13 @@ export async function setAccepted(
 /**
  * Mark a bounty as paid with the verified payout txid.
  *
- * Guarded by `accepted_at IS NOT NULL AND paid_at IS NULL` so a bounty can
- * only be flipped to paid from `winner-announced`. The `accepted_at > payCutoff`
- * predicate closes the TOCTOU window where a request straddling the 7-day
- * pay-grace cutoff could flip an `abandoned` bounty to `paid`. The unique
- * partial index on `paid_txid` enforces one-txid-per-bounty at the DB level.
+ * Guarded by `accepted_at IS NOT NULL AND paid_at IS NULL` so only an accepted,
+ * unpaid bounty can be flipped to paid. `payCutoff` is computed from `paidAt`
+ * (the verified on-chain block time, not wall-clock arrival time) so a payment
+ * that landed inside `[accepted_at - 60s, accepted_at + PAY_GRACE_MS)` is
+ * accepted even if the proof arrives after `PAY_GRACE_MS` elapsed (#1110).
+ * The unique partial index on `paid_txid` enforces one-txid-per-bounty at the
+ * DB level.
  */
 export async function setPaid(
   db: D1Database,
