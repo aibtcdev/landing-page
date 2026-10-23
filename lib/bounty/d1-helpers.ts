@@ -359,6 +359,9 @@ export async function setAccepted(
  * (the verified on-chain block time, not wall-clock arrival time) so a payment
  * that landed inside `[accepted_at - 60s, accepted_at + PAY_GRACE_MS)` is
  * accepted even if the proof arrives after `PAY_GRACE_MS` elapsed (#1110).
+ * `updated_at` is wall-clock time (not `paidAt`): a late proof can flip an
+ * abandoned row to paid days after the on-chain block time, and clients that
+ * sync on `updatedAt` must still see that transition.
  * The unique partial index on `paid_txid` enforces one-txid-per-bounty at the
  * DB level.
  */
@@ -369,6 +372,7 @@ export async function setPaid(
   paidAt: string
 ): Promise<boolean> {
   const payCutoff = new Date(Date.parse(paidAt) - PAY_GRACE_MS).toISOString();
+  const nowIso = new Date().toISOString();
   const result = await db
     .prepare(
       `UPDATE bounties
@@ -379,7 +383,7 @@ export async function setPaid(
          AND cancelled_at IS NULL
          AND accepted_at > ?`
     )
-    .bind(paidTxid, paidAt, paidAt, bountyId, payCutoff)
+    .bind(paidTxid, paidAt, nowIso, bountyId, payCutoff)
     .run();
   return (result.meta?.changes ?? 0) > 0;
 }

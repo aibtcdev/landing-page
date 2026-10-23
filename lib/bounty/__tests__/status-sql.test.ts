@@ -154,17 +154,24 @@ describe("setPaid pay-grace cutoff (#1110)", () => {
     } as unknown as D1Database;
 
     const paidAt = "2026-10-09T14:43:24.000Z";
+    const before = Date.now();
     const ok = await setPaid(db, "mukrrrze1aaffcc1ff00", "0x5b60", paidAt);
+    const after = Date.now();
 
     expect(ok).toBe(true);
     const expectedCutoff = new Date(Date.parse(paidAt) - PAY_GRACE_MS).toISOString();
     expect(bindMock).toHaveBeenCalledWith(
       "0x5b60",
       paidAt,
-      paidAt,
+      expect.any(String),
       "mukrrrze1aaffcc1ff00",
       expectedCutoff
     );
+    // updated_at is wall-clock so a late abandoned -> paid flip is visible to
+    // clients syncing on updatedAt, while paid_at keeps the on-chain time.
+    const updatedAt = Date.parse(bindMock.mock.calls[0][2] as string);
+    expect(updatedAt).toBeGreaterThanOrEqual(before);
+    expect(updatedAt).toBeLessThanOrEqual(after);
   });
 });
 
