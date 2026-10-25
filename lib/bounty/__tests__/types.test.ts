@@ -87,6 +87,30 @@ describe("bountyStatus", () => {
     expect(bountyStatus(b, new Date(expires))).toBe("judging");
     expect(bountyStatus(b, new Date(Date.parse(expires) + 1))).toBe("judging");
   });
+
+  it("returns 'scheduled' before opensAt", () => {
+    const opens = "2026-05-18T00:00:00Z";
+    const b = base({ opensAt: opens, expiresAt: "2026-05-25T00:00:00Z" });
+    expect(bountyStatus(b, new Date("2026-05-17T00:00:00Z"))).toBe("scheduled");
+  });
+
+  it("transitions from scheduled to open at exact opensAt boundary", () => {
+    const opens = "2026-05-18T00:00:00Z";
+    const b = base({ opensAt: opens, expiresAt: "2026-05-25T00:00:00Z" });
+    expect(bountyStatus(b, new Date(Date.parse(opens) - 1))).toBe("scheduled");
+    expect(bountyStatus(b, new Date(opens))).toBe("open");
+    expect(bountyStatus(b, new Date(Date.parse(opens) + 1))).toBe("open");
+  });
+
+  it("returns 'cancelled' when cancelledAt is set even if before opensAt", () => {
+    const opens = "2026-05-18T00:00:00Z";
+    const b = base({
+      opensAt: opens,
+      expiresAt: "2026-05-25T00:00:00Z",
+      cancelledAt: "2026-05-15T00:00:00Z",
+    });
+    expect(bountyStatus(b, new Date("2026-05-16T00:00:00Z"))).toBe("cancelled");
+  });
 });
 
 /**
@@ -115,12 +139,21 @@ describe("status boundary parity (TS vs SQL)", () => {
     const some = (v: unknown) => v != null;
 
     switch (status) {
+      case "scheduled":
+        return (
+          not(record.cancelledAt) &&
+          not(record.paidAt) &&
+          not(record.acceptedAt) &&
+          some(record.opensAt) &&
+          (record.opensAt ?? "") > nowIso
+        );
       case "open":
         return (
           not(record.cancelledAt) &&
           not(record.paidAt) &&
           not(record.acceptedAt) &&
-          record.expiresAt > nowIso
+          record.expiresAt > nowIso &&
+          (not(record.opensAt) || (record.opensAt ?? "") <= nowIso)
         );
       case "judging":
         return (
@@ -156,6 +189,41 @@ describe("status boundary parity (TS vs SQL)", () => {
   const expires = "2026-05-21T00:00:00.000Z";
   const acceptedAt = "2026-05-16T00:00:00.000Z";
   const samples: Sample[] = [
+    // scheduled → open boundary
+    {
+      label: "1ms before opensAt",
+      record: {
+        id: "b1",
+        posterBtcAddress: "bc",
+        posterStxAddress: "SP",
+        title: "t",
+        description: "d",
+        rewardSats: 1,
+        submissionCount: 0,
+        createdAt: "2026-05-14T00:00:00Z",
+        opensAt: "2026-05-16T00:00:00.000Z",
+        expiresAt: expires,
+        updatedAt: "2026-05-14T00:00:00Z",
+      },
+      now: new Date(Date.parse("2026-05-16T00:00:00.000Z") - 1),
+    },
+    {
+      label: "exact opensAt",
+      record: {
+        id: "b1",
+        posterBtcAddress: "bc",
+        posterStxAddress: "SP",
+        title: "t",
+        description: "d",
+        rewardSats: 1,
+        submissionCount: 0,
+        createdAt: "2026-05-14T00:00:00Z",
+        opensAt: "2026-05-16T00:00:00.000Z",
+        expiresAt: expires,
+        updatedAt: "2026-05-14T00:00:00Z",
+      },
+      now: new Date("2026-05-16T00:00:00.000Z"),
+    },
     // open → judging boundary
     {
       label: "1ms before expiresAt",
@@ -268,6 +336,7 @@ describe("status boundary parity (TS vs SQL)", () => {
       expect(sqlMatchesAtMoment(sample.record, sample.now, tsStatus)).toBe(true);
       // And no OTHER non-terminal status's SQL predicate may match.
       const others: BountyStatus[] = [
+        "scheduled",
         "open",
         "judging",
         "winner-announced",

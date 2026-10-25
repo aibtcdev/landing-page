@@ -8,6 +8,7 @@
 import type { BountyStatus } from "@/lib/bounty";
 
 export const STATUS_STYLES: Record<BountyStatus, string> = {
+  scheduled: "text-sky-400/90 bg-sky-400/[0.08] border-sky-400/20",
   open: "text-emerald-400/90 bg-emerald-400/[0.08] border-emerald-400/20",
   judging: "text-amber-400/90 bg-amber-400/[0.08] border-amber-400/20",
   "winner-announced": "text-[#7DA2FF]/90 bg-[#7DA2FF]/[0.08] border-[#7DA2FF]/20",
@@ -17,6 +18,7 @@ export const STATUS_STYLES: Record<BountyStatus, string> = {
 };
 
 export const STATUS_LABELS: Record<BountyStatus, string> = {
+  scheduled: "Scheduled",
   open: "Open",
   judging: "Judging",
   "winner-announced": "Winner",
@@ -32,6 +34,7 @@ export const STATUS_LABELS: Record<BountyStatus, string> = {
  * needs to read as a discrete chip.
  */
 export const STATUS_TEXT: Record<BountyStatus, string> = {
+  scheduled: "text-sky-400",
   open: "text-emerald-400",
   judging: "text-amber-400",
   "winner-announced": "text-[#7DA2FF]",
@@ -107,8 +110,23 @@ export function relativeTime(iso: string): string {
 }
 
 /** Label shown on a card describing the submission window. */
-export function submissionWindowLabel(expiresAt: string, status: BountyStatus): string | null {
+export function submissionWindowLabel(
+  expiresAt: string,
+  status: BountyStatus,
+  opensAt?: string
+): string | null {
   if (status === "paid" || status === "cancelled" || status === "abandoned") return null;
+  if (status === "scheduled" && opensAt) {
+    const diff = new Date(opensAt).getTime() - Date.now();
+    if (diff <= 0) return "Opens now";
+    const days = Math.floor(diff / 86400000);
+    if (days === 0) {
+      const hours = Math.max(1, Math.floor(diff / 3600000));
+      return `Opens in ${hours}h`;
+    }
+    if (days === 1) return "Opens in 1 day";
+    return `Opens in ${days} days`;
+  }
   const diff = new Date(expiresAt).getTime() - Date.now();
   if (diff < 0) return "Submissions closed";
   const days = Math.floor(diff / 86400000);

@@ -35,8 +35,12 @@ function rec(over: Partial<BountyRecord>): BountyRecord {
   };
 }
 
-/** The six canonical records, one per derived status. */
+/** The seven canonical records, one per derived status. */
 const FIXTURES: Record<BountyStatus, BountyRecord> = {
+  scheduled: rec({
+    opensAt: iso(t + 86_400_000),
+    expiresAt: iso(t + 2 * 86_400_000),
+  }),
   open: rec({ expiresAt: iso(t + 86_400_000) }),
   judging: rec({ expiresAt: iso(t - 86_400_000) }),
   "winner-announced": rec({
@@ -65,6 +69,7 @@ function evalSql(sql: string, bindings: string[], b: BountyRecord): boolean {
     paid_at: b.paidAt ?? null,
     accepted_at: b.acceptedAt ?? null,
     expires_at: b.expiresAt,
+    opens_at: b.opensAt ?? null,
   };
   let i = 0;
   const js = sql
@@ -85,6 +90,7 @@ function evalSql(sql: string, bindings: string[], b: BountyRecord): boolean {
 }
 
 const ALL: BountyStatus[] = [
+  "scheduled",
   "open",
   "judging",
   "winner-announced",

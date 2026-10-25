@@ -3548,11 +3548,11 @@ export function GET() {
           summary: "List bounties (self-doc on no params)",
           description:
             "Returns a page of bounties with derived status. Filters: " +
-            "status (open|judging|winner-announced|paid|abandoned|cancelled|active), " +
+            "status (scheduled|open|judging|winner-announced|paid|abandoned|cancelled|active), " +
             "poster (BTC address), submitter (BTC address — also adds yourSubmissions to each row), " +
             "tag, limit (1..100, default 20), offset (default 0). Returns the self-doc envelope when called without params.",
           parameters: [
-            { name: "status", in: "query", schema: { type: "string", enum: ["open", "judging", "winner-announced", "paid", "abandoned", "cancelled", "active"] } },
+            { name: "status", in: "query", schema: { type: "string", enum: ["scheduled", "open", "judging", "winner-announced", "paid", "abandoned", "cancelled", "active"] } },
             { name: "poster", in: "query", schema: { type: "string" } },
             { name: "submitter", in: "query", schema: { type: "string" } },
             { name: "tag", in: "query", schema: { type: "string" } },
@@ -4763,7 +4763,7 @@ export function GET() {
         BountyStatus: {
           type: "string",
           description: "Derived from timestamps via bountyStatus(record, now). Terminal: paid, cancelled, abandoned.",
-          enum: ["open", "judging", "winner-announced", "paid", "abandoned", "cancelled"],
+          enum: ["scheduled", "open", "judging", "winner-announced", "paid", "abandoned", "cancelled"],
         },
         BountyRecord: {
           type: "object",
@@ -4790,6 +4790,7 @@ export function GET() {
             submissionCount: { type: "integer", minimum: 0 },
             createdAt: { type: "string", format: "date-time" },
             expiresAt: { type: "string", format: "date-time" },
+            opensAt: { type: "string", format: "date-time", nullable: true },
             acceptedSubmissionId: { type: "string", nullable: true },
             acceptedAt: { type: "string", format: "date-time", nullable: true },
             paidTxid: { type: "string", nullable: true },

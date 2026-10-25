@@ -21,7 +21,7 @@ const EXCERPT_CHARS = 165;
 
 function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
   const tags = bounty.tags ?? [];
-  const windowLabel = submissionWindowLabel(bounty.expiresAt, bounty.status);
+  const windowLabel = submissionWindowLabel(bounty.expiresAt, bounty.status, bounty.opensAt);
   const excerpt = truncateAtWord(stripMarkdown(bounty.description), EXCERPT_CHARS);
   const terminal = bounty.status === "abandoned" || bounty.status === "cancelled";
 
@@ -115,6 +115,7 @@ function BountyCard({ bounty }: { bounty: BountyWithStatus }) {
 
 const STATUS_OPTIONS: { value: BountyStatus | "all"; label: string }[] = [
   { value: "all", label: "All" },
+  { value: "scheduled", label: "Scheduled" },
   { value: "open", label: "Open" },
   // judging + winner-announced are real derived states; without a chip each,
   // bounties sitting in them were only reachable through "All".

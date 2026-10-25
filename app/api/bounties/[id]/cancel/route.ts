@@ -77,7 +77,7 @@ export async function POST(
     }
 
     const status = bountyStatus(bounty);
-    if (status !== "open" && status !== "judging") {
+    if (status !== "open" && status !== "judging" && status !== "scheduled") {
       return NextResponse.json(
         {
           error: "invalid_state",

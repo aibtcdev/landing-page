@@ -17,6 +17,8 @@ import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "./constants";
  * The six observable states of a bounty.
  *
  * - `open`             — accepting submissions; now < expiresAt
+ * - `scheduled`        — announced, submissions not open yet; now < opensAt
+ * - `open`             — accepting submissions; now >= opensAt and now < expiresAt
  * - `judging`          — submissions closed, poster reviewing; now >= expiresAt, no winner yet
  * - `winner-announced` — poster accepted a submission; awaiting payment proof
  * - `paid`             — payment txid verified on-chain (terminal)
@@ -24,6 +26,7 @@ import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "./constants";
  * - `cancelled`        — poster killed it before any acceptance (terminal)
  */
 export type BountyStatus =
+  | "scheduled"
   | "open"
   | "judging"
   | "winner-announced"
@@ -33,10 +36,10 @@ export type BountyStatus =
 
 /**
  * A bounty record. The set of timestamp fields is the canonical state — the
- * `bountyStatus()` function maps them to one of the six BountyStatus values.
+ * `bountyStatus()` function maps them to one of the seven BountyStatus values.
  *
  * No stored `status` column: setting `acceptedAt`, `paidAt`, or `cancelledAt`
- * flips the derived status. Time-based flips (`open → judging`, → `abandoned`)
+ * flips the derived status. Time-based flips (`scheduled → open → judging`, → `abandoned`)
  * happen automatically as `Date.now()` advances past the grace windows.
  */
 export interface BountyRecord {
@@ -51,6 +54,8 @@ export interface BountyRecord {
   createdAt: string;
   /** ISO. Submissions close at this time. */
   expiresAt: string;
+  /** ISO. Submissions open at this time. When omitted, equals createdAt. */
+  opensAt?: string;
   acceptedSubmissionId?: string;
   /** ISO. Winner announced. */
   acceptedAt?: string;
@@ -103,6 +108,7 @@ export function bountyStatus(b: BountyRecord, now: Date = new Date()): BountySta
   }
   if (t >= Date.parse(b.expiresAt) + ACCEPT_GRACE_MS) return "abandoned";
   if (t >= Date.parse(b.expiresAt)) return "judging";
+  if (b.opensAt && t < Date.parse(b.opensAt)) return "scheduled";
   return "open";
 }
 

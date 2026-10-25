@@ -452,7 +452,7 @@ describe("CACHE_INVARIANTS structural enforcement", () => {
       ...discoverRouteFiles(join(cwd, "app/api/inbox")),
       ...discoverRouteFiles(join(cwd, "app/api/outbox")),
     ]
-      .map((p) => relative(cwd, p))
+      .map((p) => relative(cwd, p).replace(/\\/g, "/"))
       .sort();
 
     const allowlist = new Set(INBOX_ROUTE_FILES);

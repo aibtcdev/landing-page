@@ -129,6 +129,7 @@ export function validateCreateBounty(body: unknown):
         description: string;
         rewardSats: number;
         expiresAt: string;
+        opensAt?: string;
         tags?: string[];
         signedAt: string;
         signature: string;
@@ -240,6 +241,29 @@ export function validateCreateBounty(body: unknown):
     }
   }
 
+  if (b.opensAt !== undefined) {
+    pushIsoTimestampError(
+      errors,
+      b.opensAt,
+      "opensAt",
+      "When submissions open. Must satisfy createdAt <= opensAt < expiresAt."
+    );
+    if (typeof b.opensAt === "string" && typeof b.expiresAt === "string") {
+      const opensMs = Date.parse(b.opensAt);
+      const expiresMs = Date.parse(b.expiresAt);
+      if (!Number.isNaN(opensMs) && !Number.isNaN(expiresMs) && opensMs >= expiresMs) {
+        errors.push({
+          message: "opensAt must be before expiresAt",
+          hint: {
+            field: "opensAt",
+            message: "opensAt must be before expiresAt",
+            hint: "Submissions must open before the bounty expires.",
+          },
+        });
+      }
+    }
+  }
+
   if (b.tags !== undefined) {
     if (!Array.isArray(b.tags)) {
       errors.push({
@@ -301,6 +325,7 @@ export function validateCreateBounty(body: unknown):
       description: (b.description as string).trim(),
       rewardSats: b.rewardSats as number,
       expiresAt: b.expiresAt as string,
+      ...(typeof b.opensAt === "string" && { opensAt: b.opensAt }),
       ...(Array.isArray(b.tags) && b.tags.length > 0 && { tags: b.tags as string[] }),
       signedAt: b.signedAt as string,
       signature: b.signature as string,

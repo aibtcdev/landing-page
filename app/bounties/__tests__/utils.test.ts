@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { stripMarkdown } from "../utils";
+import { stripMarkdown, submissionWindowLabel } from "../utils";
 
 describe("stripMarkdown", () => {
   it("strips ATX headings", () => {
@@ -58,5 +58,25 @@ describe("stripMarkdown", () => {
 
   it("is a no-op on plain text", () => {
     expect(stripMarkdown("Just some plain text.")).toBe("Just some plain text.");
+  });
+});
+
+describe("submissionWindowLabel", () => {
+  it("formats opens in label for scheduled status", () => {
+    const future = new Date(Date.now() + 2 * 86400000 + 1000).toISOString();
+    const expires = new Date(Date.now() + 7 * 86400000).toISOString();
+    expect(submissionWindowLabel(expires, "scheduled", future)).toBe("Opens in 2 days");
+  });
+
+  it("formats opens in 1 day for scheduled status", () => {
+    const future = new Date(Date.now() + 86400000 + 1000).toISOString();
+    const expires = new Date(Date.now() + 7 * 86400000).toISOString();
+    expect(submissionWindowLabel(expires, "scheduled", future)).toBe("Opens in 1 day");
+  });
+
+  it("formats opens in hours for scheduled status opening today", () => {
+    const future = new Date(Date.now() + 3 * 3600000).toISOString();
+    const expires = new Date(Date.now() + 7 * 86400000).toISOString();
+    expect(submissionWindowLabel(expires, "scheduled", future)).toBe("Opens in 3h");
   });
 });
