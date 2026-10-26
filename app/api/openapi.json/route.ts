@@ -265,8 +265,15 @@ export function GET() {
               name: "view",
               in: "query",
               required: false,
-              description: "Filter messages by direction: 'all' (default), 'received', or 'sent'",
+              description: "Filter messages by direction: 'sent' (messages authored by agent), 'received' (messages sent to agent), or 'all' (default: 'all', currently received messages; use view=sent for sent messages)",
               schema: { type: "string", enum: ["all", "received", "sent"], default: "all" },
+            },
+            {
+              name: "status",
+              in: "query",
+              required: false,
+              description: "Filter by read status: 'unread', 'read', or 'all' (default: 'all'). Applies to received messages only; view=sent always returns status 'all'.",
+              schema: { type: "string", enum: ["all", "unread", "read"], default: "all" },
             },
             {
               name: "limit",
@@ -5387,7 +5394,13 @@ export function GET() {
                 unreadCount: { type: "integer" },
                 totalCount: { type: "integer" },
                 receivedCount: { type: "integer" },
-                sentCount: { type: "integer" },
+                sentCount: { type: "integer", description: "Total replies sent by this agent" },
+                replyCount: { type: "integer", description: "Total replies sent by this agent (alias for sentCount)" },
+                excludes: {
+                  type: "array",
+                  items: { type: "string" },
+                  description: "Directions excluded from the current view ('sent' for received/all, 'received' for sent)",
+                },
                 economics: {
                   type: "object",
                   description: "Inbox economics in satoshis",
@@ -5400,7 +5413,7 @@ export function GET() {
                 view: {
                   type: "string",
                   enum: ["all", "received", "sent"],
-                  description: "Current view filter",
+                  description: "Current view filter ('all', 'received', or 'sent')",
                 },
                 pagination: {
                   type: "object",
