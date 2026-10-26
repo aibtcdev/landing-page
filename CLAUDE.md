@@ -373,7 +373,7 @@ There is no `status` column in D1. `lib/bounty/types.ts:bountyStatus(record, now
 | `judging` | Submission window closed; poster reviewing |
 | `winner-announced` | Poster accepted a submission; awaiting payment |
 | `paid` | Payment txid verified on-chain (terminal) |
-| `abandoned` | Poster ghosted past a grace window — 14d past `expiresAt` with no winner, or 7d past `acceptedAt` with no payment (terminal) |
+| `abandoned` | Poster ghosted past a grace window — 14d past `expiresAt` with no winner, or 7d past `acceptedAt` with no payment (terminal, except that a late `/paid` proof still flips it to `paid` when the payment tx's block time is within 7d of `acceptedAt`) |
 | `cancelled` | Poster killed it before any acceptance (terminal) |
 
 ### Endpoints
