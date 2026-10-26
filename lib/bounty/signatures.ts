@@ -23,7 +23,9 @@ function joinTags(tags: string[] | undefined): string {
  * Build the message a poster signs to create a bounty.
  *
  * All body fields are included in the signed message so the signature is
- * bound to the exact bounty content.
+ * bound to the exact bounty content. `opensAt` is appended as a final
+ * ` | {opensAt}` segment only when present, so creates without it sign the
+ * same message as before.
  */
 export function buildCreateMessage(params: {
   posterBtcAddress: string;
@@ -33,8 +35,9 @@ export function buildCreateMessage(params: {
   expiresAt: string;
   tags?: string[];
   signedAt: string;
+  opensAt?: string;
 }): string {
-  return SIGNATURE_MESSAGE_FORMATS.CREATE
+  const message = SIGNATURE_MESSAGE_FORMATS.CREATE
     .replace("{posterBtc}", params.posterBtcAddress)
     .replace("{title}", params.title)
     .replace("{description}", params.description)
@@ -42,6 +45,7 @@ export function buildCreateMessage(params: {
     .replace("{expiresAt}", params.expiresAt)
     .replace("{tags}", joinTags(params.tags))
     .replace("{signedAt}", params.signedAt);
+  return params.opensAt ? `${message} | ${params.opensAt}` : message;
 }
 
 /**

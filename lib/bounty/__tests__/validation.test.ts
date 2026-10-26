@@ -52,7 +52,27 @@ describe("validateCreateBounty with optional opensAt (#1113)", () => {
     expect("errors" in res && res.errors).toBeTruthy();
     if ("errors" in res && res.errors) {
       const err = res.errors.find((e) => e.field === "opensAt");
-      expect(err?.message).toContain("opensAt must be before expiresAt");
+      expect(err?.message).toContain("expiresAt must be at least 1h after opensAt");
     }
+  });
+
+  it("rejects a submission window under 1h measured from opensAt", () => {
+    const now = Date.now();
+    const expiresAt = new Date(now + 7 * 86400000).toISOString();
+    const opensAt = new Date(now + 7 * 86400000 - 1000).toISOString();
+    const res = validateCreateBounty(validBody({ opensAt, expiresAt }));
+    expect("errors" in res && res.errors).toBeTruthy();
+    if ("errors" in res && res.errors) {
+      const err = res.errors.find((e) => e.field === "opensAt");
+      expect(err?.message).toContain("expiresAt must be at least 1h after opensAt");
+    }
+  });
+
+  it("accepts a window of exactly 1h after opensAt", () => {
+    const now = Date.now();
+    const opensAt = new Date(now + 2 * 86400000).toISOString();
+    const expiresAt = new Date(now + 2 * 86400000 + 3600000).toISOString();
+    const res = validateCreateBounty(validBody({ opensAt, expiresAt }));
+    expect("data" in res && res.data).toBeTruthy();
   });
 });

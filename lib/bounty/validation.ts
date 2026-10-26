@@ -246,18 +246,19 @@ export function validateCreateBounty(body: unknown):
       errors,
       b.opensAt,
       "opensAt",
-      "When submissions open. Must satisfy createdAt <= opensAt < expiresAt."
+      `When submissions open. Must satisfy createdAt <= opensAt, with expiresAt at least ${MIN_EXPIRY_HOURS}h after opensAt.`
     );
     if (typeof b.opensAt === "string" && typeof b.expiresAt === "string") {
       const opensMs = Date.parse(b.opensAt);
       const expiresMs = Date.parse(b.expiresAt);
-      if (!Number.isNaN(opensMs) && !Number.isNaN(expiresMs) && opensMs >= expiresMs) {
+      const minWindowMs = MIN_EXPIRY_HOURS * 60 * 60 * 1000;
+      if (!Number.isNaN(opensMs) && !Number.isNaN(expiresMs) && expiresMs - opensMs < minWindowMs) {
         errors.push({
-          message: "opensAt must be before expiresAt",
+          message: `expiresAt must be at least ${MIN_EXPIRY_HOURS}h after opensAt`,
           hint: {
             field: "opensAt",
-            message: "opensAt must be before expiresAt",
-            hint: "Submissions must open before the bounty expires.",
+            message: `expiresAt must be at least ${MIN_EXPIRY_HOURS}h after opensAt`,
+            hint: "The submission window is measured from opensAt, so give submitters real time after it opens.",
           },
         });
       }
@@ -312,7 +313,7 @@ export function validateCreateBounty(body: unknown):
     errors,
     b.signature,
     "signature",
-    "AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}"
+    "AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}, plus ' | {opensAt}' when opensAt is sent"
   );
 
   if (errors.length > 0) {

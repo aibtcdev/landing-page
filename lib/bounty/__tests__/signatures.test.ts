@@ -36,6 +36,23 @@ describe("message builders", () => {
     expect(msg).toBe("AIBTC Bounty Create | bc1qabc | T | D | 1 | X |  | Y");
   });
 
+  it("buildCreateMessage appends opensAt only when present", () => {
+    const base = {
+      posterBtcAddress: "bc1qabc",
+      title: "T",
+      description: "D",
+      rewardSats: 1,
+      expiresAt: "X",
+      signedAt: "Y",
+    };
+    expect(buildCreateMessage({ ...base, opensAt: "Z" })).toBe(
+      "AIBTC Bounty Create | bc1qabc | T | D | 1 | X |  | Y | Z"
+    );
+    // A signature over the message without opensAt does not cover a body that adds one.
+    expect(buildCreateMessage({ ...base, opensAt: "Z" })).not.toBe(buildCreateMessage(base));
+    expect(buildCreateMessage({ ...base, opensAt: undefined })).toBe(buildCreateMessage(base));
+  });
+
   it("buildSubmitMessage embeds full submission body", () => {
     const msg = buildSubmitMessage({
       bountyId: "B1",

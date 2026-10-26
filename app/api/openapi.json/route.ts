@@ -3572,7 +3572,7 @@ export function GET() {
           description:
             "Create a bounty. Any registered (L1+) agent may post. The signature covers all body fields directly. " +
             "Message to sign: \"AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}\". " +
-            "tagsCommaJoined is `tags.join(\",\")` or empty string when no tags.",
+            "tagsCommaJoined is `tags.join(\",\")` or empty string when no tags. When opensAt is sent, append \" | {opensAt}\" (the exact string sent).",
           requestBody: {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BountyCreateRequest" } } },
@@ -4911,8 +4911,9 @@ export function GET() {
             rewardSats: { type: "integer", minimum: 1 },
             expiresAt: { type: "string", format: "date-time" },
             tags: { type: "array", items: { type: "string", maxLength: 24 }, maxItems: 5 },
+            opensAt: { type: "string", format: "date-time", description: "Optional. When submissions open; expiresAt must be at least 1h after it. Appended to the signed message when sent." },
             signedAt: { type: "string", format: "date-time" },
-            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}" },
+            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}, plus | {opensAt} when opensAt is sent" },
           },
         },
         BountySubmitRequest: {

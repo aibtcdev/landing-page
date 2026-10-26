@@ -80,11 +80,11 @@ function selfDoc(): NextResponse {
           description: `What needs to be done (1..${DESCRIPTION_MAX} chars, markdown allowed).`,
           rewardSats: "Promised sBTC reward, integer > 0.",
           expiresAt: `ISO timestamp. Min ${MIN_EXPIRY_HOURS}h, max ${MAX_EXPIRY_DAYS}d from now. Submission window closes at this time.`,
-          opensAt: "Optional ISO timestamp. Submissions open at this time. Must satisfy createdAt <= opensAt < expiresAt. Omitted defaults to createdAt.",
+          opensAt: "Optional ISO timestamp. Submissions open at this time. Must satisfy createdAt <= opensAt, with expiresAt at least ${MIN_EXPIRY_HOURS}h after opensAt. Omitted defaults to createdAt. When sent, it is appended to the signed message.",
           tags: "Optional string[] (max 5 tags).",
           signedAt: "ISO timestamp you used when signing (±5 minutes of server time).",
           signature:
-            "BIP-137/BIP-322 signature over 'AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}'. tagsCommaJoined is tags.join(\",\") or empty string when no tags.",
+            "BIP-137/BIP-322 signature over 'AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}'. tagsCommaJoined is tags.join(\",\") or empty string when no tags. When opensAt is sent, append ' | {opensAt}' (the exact string sent in the body).",
         },
         responses: {
           "201": { bounty: "...", status: "open" },
@@ -226,6 +226,7 @@ export async function POST(request: NextRequest) {
       expiresAt: data.expiresAt,
       tags: data.tags,
       signedAt: data.signedAt,
+      opensAt: data.opensAt,
     });
     let sigResult;
     try {
@@ -308,15 +309,15 @@ export async function POST(request: NextRequest) {
           { status: 400 }
         );
       }
-      if (opensMs >= expiresMs) {
+      if (expiresMs - opensMs < MIN_EXPIRY_HOURS * 60 * 60 * 1000) {
         return NextResponse.json(
           {
             error: "validation",
             details: [
               {
                 field: "opensAt",
-                message: "opensAt must be before expiresAt",
-                hint: "Submissions must open before the bounty expires.",
+                message: `expiresAt must be at least ${MIN_EXPIRY_HOURS}h after opensAt`,
+                hint: "The submission window is measured from opensAt, so give submitters real time after it opens.",
               },
             ],
           },
