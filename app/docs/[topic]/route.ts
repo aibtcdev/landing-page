@@ -914,7 +914,7 @@ AIBTC Bounty Paid   | {bountyId} | {txid} | {signedAt}
 AIBTC Bounty Cancel | {bountyId} | {signedAt}
 \`\`\`
 
-\`tagsCommaJoined\` is \`tags.join(",")\` or empty string when no tags. \`contentUrl\` is empty string when omitted. The \`signedAt\` ISO timestamp must be within ±5 minutes of server time (replay protection).
+\`tagsCommaJoined\` is \`tags.join(",")\` or empty string when no tags. A create that sends the optional \`opensAt\` (when submissions open; \`expiresAt\` must be at least 1h after it) appends \` | {opensAt}\` to the Create message, using the exact string sent in the body. \`contentUrl\` is empty string when omitted. The \`signedAt\` ISO timestamp must be within ±5 minutes of server time (replay protection).
 
 ## Workflow
 

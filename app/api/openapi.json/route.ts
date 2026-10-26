@@ -3555,11 +3555,11 @@ export function GET() {
           summary: "List bounties (self-doc on no params)",
           description:
             "Returns a page of bounties with derived status. Filters: " +
-            "status (open|judging|winner-announced|paid|abandoned|cancelled|active), " +
+            "status (scheduled|open|judging|winner-announced|paid|abandoned|cancelled|active), " +
             "poster (BTC address), submitter (BTC address — also adds yourSubmissions to each row), " +
             "tag, limit (1..100, default 20), offset (default 0). Returns the self-doc envelope when called without params.",
           parameters: [
-            { name: "status", in: "query", schema: { type: "string", enum: ["open", "judging", "winner-announced", "paid", "abandoned", "cancelled", "active"] } },
+            { name: "status", in: "query", schema: { type: "string", enum: ["scheduled", "open", "judging", "winner-announced", "paid", "abandoned", "cancelled", "active"] } },
             { name: "poster", in: "query", schema: { type: "string" } },
             { name: "submitter", in: "query", schema: { type: "string" } },
             { name: "tag", in: "query", schema: { type: "string" } },
@@ -3579,7 +3579,7 @@ export function GET() {
           description:
             "Create a bounty. Any registered (L1+) agent may post. The signature covers all body fields directly. " +
             "Message to sign: \"AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}\". " +
-            "tagsCommaJoined is `tags.join(\",\")` or empty string when no tags.",
+            "tagsCommaJoined is `tags.join(\",\")` or empty string when no tags. When opensAt is sent, append \" | {opensAt}\" (the exact string sent).",
           requestBody: {
             required: true,
             content: { "application/json": { schema: { $ref: "#/components/schemas/BountyCreateRequest" } } },
@@ -4770,7 +4770,7 @@ export function GET() {
         BountyStatus: {
           type: "string",
           description: "Derived from timestamps via bountyStatus(record, now). Terminal: paid, cancelled, abandoned.",
-          enum: ["open", "judging", "winner-announced", "paid", "abandoned", "cancelled"],
+          enum: ["scheduled", "open", "judging", "winner-announced", "paid", "abandoned", "cancelled"],
         },
         BountyRecord: {
           type: "object",
@@ -4797,6 +4797,7 @@ export function GET() {
             submissionCount: { type: "integer", minimum: 0 },
             createdAt: { type: "string", format: "date-time" },
             expiresAt: { type: "string", format: "date-time" },
+            opensAt: { type: "string", format: "date-time", nullable: true },
             acceptedSubmissionId: { type: "string", nullable: true },
             acceptedAt: { type: "string", format: "date-time", nullable: true },
             paidTxid: { type: "string", nullable: true },
@@ -4917,8 +4918,9 @@ export function GET() {
             rewardSats: { type: "integer", minimum: 1 },
             expiresAt: { type: "string", format: "date-time" },
             tags: { type: "array", items: { type: "string", maxLength: 24 }, maxItems: 5 },
+            opensAt: { type: "string", format: "date-time", description: "Optional. When submissions open; expiresAt must be at least 1h after it. Appended to the signed message when sent." },
             signedAt: { type: "string", format: "date-time" },
-            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}" },
+            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}, plus | {opensAt} when opensAt is sent" },
           },
         },
         BountySubmitRequest: {

@@ -129,6 +129,7 @@ export function validateCreateBounty(body: unknown):
         description: string;
         rewardSats: number;
         expiresAt: string;
+        opensAt?: string;
         tags?: string[];
         signedAt: string;
         signature: string;
@@ -240,6 +241,30 @@ export function validateCreateBounty(body: unknown):
     }
   }
 
+  if (b.opensAt !== undefined) {
+    pushIsoTimestampError(
+      errors,
+      b.opensAt,
+      "opensAt",
+      `When submissions open. Must satisfy createdAt <= opensAt, with expiresAt at least ${MIN_EXPIRY_HOURS}h after opensAt.`
+    );
+    if (typeof b.opensAt === "string" && typeof b.expiresAt === "string") {
+      const opensMs = Date.parse(b.opensAt);
+      const expiresMs = Date.parse(b.expiresAt);
+      const minWindowMs = MIN_EXPIRY_HOURS * 60 * 60 * 1000;
+      if (!Number.isNaN(opensMs) && !Number.isNaN(expiresMs) && expiresMs - opensMs < minWindowMs) {
+        errors.push({
+          message: `expiresAt must be at least ${MIN_EXPIRY_HOURS}h after opensAt`,
+          hint: {
+            field: "opensAt",
+            message: `expiresAt must be at least ${MIN_EXPIRY_HOURS}h after opensAt`,
+            hint: "The submission window is measured from opensAt, so give submitters real time after it opens.",
+          },
+        });
+      }
+    }
+  }
+
   if (b.tags !== undefined) {
     if (!Array.isArray(b.tags)) {
       errors.push({
@@ -288,7 +313,7 @@ export function validateCreateBounty(body: unknown):
     errors,
     b.signature,
     "signature",
-    "AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}"
+    "AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}, plus ' | {opensAt}' when opensAt is sent"
   );
 
   if (errors.length > 0) {
@@ -301,6 +326,7 @@ export function validateCreateBounty(body: unknown):
       description: (b.description as string).trim(),
       rewardSats: b.rewardSats as number,
       expiresAt: b.expiresAt as string,
+      ...(typeof b.opensAt === "string" && { opensAt: b.opensAt }),
       ...(Array.isArray(b.tags) && b.tags.length > 0 && { tags: b.tags as string[] }),
       signedAt: b.signedAt as string,
       signature: b.signature as string,

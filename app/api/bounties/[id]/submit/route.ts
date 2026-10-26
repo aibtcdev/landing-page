@@ -133,8 +133,12 @@ export async function POST(
       return NextResponse.json(
         {
           error: "submissions_closed",
-          message: `Submissions are closed (bounty status: ${status}).`,
+          message:
+            status === "scheduled" && bounty.opensAt
+              ? `Submissions have not opened yet (opens at ${bounty.opensAt}).`
+              : `Submissions are closed (bounty status: ${status}).`,
           status,
+          ...(status === "scheduled" && bounty.opensAt ? { opensAt: bounty.opensAt } : {}),
         },
         { status: 422 }
       );

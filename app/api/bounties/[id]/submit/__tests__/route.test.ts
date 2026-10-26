@@ -138,6 +138,31 @@ describe("POST /api/bounties/[id]/submit — one submission per agent", () => {
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("submissions_closed");
   });
+
+  it("scheduled bounty refuses entries (422) and returns opening time (#1113)", async () => {
+    const opensAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+    getBountyMock.mockResolvedValue({
+      ...openBounty(),
+      opensAt,
+    });
+
+    const res = await POST(submitRequest(), {
+      params: Promise.resolve({ id: BOUNTY_ID }),
+    });
+
+    expect(res.status).toBe(422);
+    const body = (await res.json()) as {
+      error: string;
+      status: string;
+      opensAt?: string;
+      message: string;
+    };
+    expect(body.error).toBe("submissions_closed");
+    expect(body.status).toBe("scheduled");
+    expect(body.opensAt).toBe(opensAt);
+    expect(body.message).toContain(opensAt);
+    expect(insertSubmissionMock).not.toHaveBeenCalled();
+  });
 });
 
 describe("POST /api/bounties/[id]/submit: refused attempts are recorded (#1040)", () => {

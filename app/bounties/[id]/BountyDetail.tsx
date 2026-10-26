@@ -176,7 +176,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
 
   const { bounty, submissions, submissionCount, winner, payment, agentNames } = data;
   const tags = bounty.tags ?? [];
-  const windowLabel = submissionWindowLabel(bounty.expiresAt, bounty.status);
+  const windowLabel = submissionWindowLabel(bounty.expiresAt, bounty.status, bounty.opensAt);
   const submissionsClosed = windowLabel === "Submissions closed";
   const explorerUrl = bounty.paidTxid
     ? `https://explorer.hiro.so/txid/${bounty.paidTxid}?chain=mainnet`

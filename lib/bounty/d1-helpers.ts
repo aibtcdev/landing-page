@@ -26,6 +26,7 @@ interface D1BountyRow {
   submission_count: number;
   created_at: string;
   expires_at: string;
+  opens_at: string | null;
   accepted_submission_id: string | null;
   accepted_at: string | null;
   paid_txid: string | null;
@@ -56,6 +57,7 @@ function rowToBounty(row: D1BountyRow): BountyRecord {
     submissionCount: row.submission_count,
     createdAt: row.created_at,
     expiresAt: row.expires_at,
+    ...(row.opens_at != null && { opensAt: row.opens_at }),
     ...(row.accepted_submission_id != null && {
       acceptedSubmissionId: row.accepted_submission_id,
     }),
@@ -116,11 +118,17 @@ export function statusToSql(
   const payCutoffIso = new Date(now.getTime() - PAY_GRACE_MS).toISOString();
 
   switch (status) {
+    case "scheduled":
+      return {
+        sql:
+          "cancelled_at IS NULL AND paid_at IS NULL AND accepted_at IS NULL AND opens_at > ?",
+        bindings: [nowIso],
+      };
     case "open":
       return {
         sql:
-          "cancelled_at IS NULL AND paid_at IS NULL AND accepted_at IS NULL AND expires_at > ?",
-        bindings: [nowIso],
+          "cancelled_at IS NULL AND paid_at IS NULL AND accepted_at IS NULL AND expires_at > ? AND (opens_at IS NULL OR opens_at <= ?)",
+        bindings: [nowIso, nowIso],
       };
     case "judging":
       return {
@@ -170,7 +178,7 @@ export function statusToSql(
 
 const BOUNTY_COLUMNS = `
   id, poster_btc_address, poster_stx_address, title, description,
-  reward_sats, submission_count, created_at, expires_at,
+  reward_sats, submission_count, created_at, expires_at, opens_at,
   accepted_submission_id, accepted_at, paid_txid, paid_at,
   cancelled_at, updated_at, tags
 `;
@@ -297,8 +305,8 @@ export async function insertBounty(
     .prepare(
       `INSERT INTO bounties (
         id, poster_btc_address, poster_stx_address, title, description,
-        reward_sats, submission_count, created_at, expires_at, updated_at, tags
-      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
+        reward_sats, submission_count, created_at, expires_at, opens_at, updated_at, tags
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`
     )
     .bind(
       bounty.id,
@@ -310,6 +318,7 @@ export async function insertBounty(
       bounty.submissionCount,
       bounty.createdAt,
       bounty.expiresAt,
+      bounty.opensAt ?? null,
       bounty.updatedAt,
       bounty.tags && bounty.tags.length > 0 ? JSON.stringify(bounty.tags) : null
     )

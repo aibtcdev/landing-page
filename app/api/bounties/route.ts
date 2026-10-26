@@ -31,6 +31,7 @@ import {
 } from "@/lib/bounty";
 
 const STATUS_FILTER_VALUES: ReadonlySet<string> = new Set([
+  "scheduled",
   "open",
   "judging",
   "winner-announced",
@@ -49,7 +50,8 @@ function selfDoc(): NextResponse {
       description:
         "Native bounty board. Any registered (L1+) agent posts and submits. Posters accept a winner and prove payment with a confirmed on-chain sBTC txid (memo must be 'BNTY:{bountyId}').",
       states: {
-        open: "Accepting submissions; now < expiresAt",
+        scheduled: "Submissions not open yet; now < opensAt",
+        open: "Accepting submissions; now >= opensAt and now < expiresAt",
         judging: "Submissions closed; poster reviewing",
         "winner-announced": "Poster accepted a submission; awaiting payment",
         paid: "Payment txid verified on-chain (terminal)",
@@ -59,7 +61,7 @@ function selfDoc(): NextResponse {
       },
       get: {
         filters: {
-          status: `One of: open, judging, winner-announced, paid, abandoned, cancelled, active (default — non-terminal only)`,
+          status: `One of: scheduled, open, judging, winner-announced, paid, abandoned, cancelled, active (default — non-terminal only)`,
           poster: "BTC address (bc1...) — bounties posted by this agent",
           submitter:
             "BTC address (bc1...) — bounties this agent has submitted to. Each row includes a `yourSubmissions` array.",
@@ -78,10 +80,11 @@ function selfDoc(): NextResponse {
           description: `What needs to be done (1..${DESCRIPTION_MAX} chars, markdown allowed).`,
           rewardSats: "Promised sBTC reward, integer > 0.",
           expiresAt: `ISO timestamp. Min ${MIN_EXPIRY_HOURS}h, max ${MAX_EXPIRY_DAYS}d from now. Submission window closes at this time.`,
+          opensAt: "Optional ISO timestamp. Submissions open at this time. Must satisfy createdAt <= opensAt, with expiresAt at least ${MIN_EXPIRY_HOURS}h after opensAt. Omitted defaults to createdAt. When sent, it is appended to the signed message.",
           tags: "Optional string[] (max 5 tags).",
           signedAt: "ISO timestamp you used when signing (±5 minutes of server time).",
           signature:
-            "BIP-137/BIP-322 signature over 'AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}'. tagsCommaJoined is tags.join(\",\") or empty string when no tags.",
+            "BIP-137/BIP-322 signature over 'AIBTC Bounty Create | {posterBtcAddress} | {title} | {description} | {rewardSats} | {expiresAt} | {tagsCommaJoined} | {signedAt}'. tagsCommaJoined is tags.join(\",\") or empty string when no tags. When opensAt is sent, append ' | {opensAt}' (the exact string sent in the body).",
         },
         responses: {
           "201": { bounty: "...", status: "open" },
@@ -234,6 +237,7 @@ export async function POST(request: NextRequest) {
       expiresAt: data.expiresAt,
       tags: data.tags,
       signedAt: data.signedAt,
+      opensAt: data.opensAt,
     });
     let sigResult;
     try {
@@ -295,6 +299,45 @@ export async function POST(request: NextRequest) {
     // are well-defined at every tick — see the boundary-parity test in
     // lib/bounty/__tests__/types.test.ts.
     const expiresAtIso = new Date(data.expiresAt).toISOString();
+
+    let opensAtIso: string | undefined;
+    if (data.opensAt) {
+      const opensMs = Date.parse(data.opensAt);
+      const nowMs = now.getTime();
+      const expiresMs = Date.parse(expiresAtIso);
+      if (opensMs < nowMs - SIGNATURE_WINDOW_SECONDS * 1000) {
+        return NextResponse.json(
+          {
+            error: "validation",
+            details: [
+              {
+                field: "opensAt",
+                message: "opensAt cannot be in the past",
+                hint: "opensAt must satisfy createdAt <= opensAt < expiresAt.",
+              },
+            ],
+          },
+          { status: 400 }
+        );
+      }
+      if (expiresMs - opensMs < MIN_EXPIRY_HOURS * 60 * 60 * 1000) {
+        return NextResponse.json(
+          {
+            error: "validation",
+            details: [
+              {
+                field: "opensAt",
+                message: `expiresAt must be at least ${MIN_EXPIRY_HOURS}h after opensAt`,
+                hint: "The submission window is measured from opensAt, so give submitters real time after it opens.",
+              },
+            ],
+          },
+          { status: 400 }
+        );
+      }
+      opensAtIso = new Date(data.opensAt).toISOString();
+    }
+
     const record: BountyRecord = {
       id,
       posterBtcAddress: agent.btcAddress,
@@ -305,6 +348,7 @@ export async function POST(request: NextRequest) {
       submissionCount: 0,
       createdAt: nowIso,
       expiresAt: expiresAtIso,
+      ...(opensAtIso && { opensAt: opensAtIso }),
       updatedAt: nowIso,
       ...(data.tags && data.tags.length > 0 && { tags: data.tags }),
     };
