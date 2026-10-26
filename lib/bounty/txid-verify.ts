@@ -23,6 +23,7 @@ import type { BountyRecord, BountySubmission } from "./types";
 import { MEMO_PREFIX, SBTC_CONTRACTS, SBTC_CONTRACT_MAINNET } from "./constants";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "@/lib/identity/constants";
 import { stacksApiFetch } from "@/lib/stacks-api-fetch";
+import { loadRemainingTxEvents, txEventsQuery } from "@/lib/stacks-tx-events";
 import type { Logger } from "@/lib/logging";
 import {
   ClarityType,
@@ -45,6 +46,7 @@ export type TxidVerifyFailureCode =
   | "AMOUNT_TOO_LOW"
   | "MEMO_MISMATCH"
   | "TX_TOO_OLD"
+  | "EVENTS_TRUNCATED"
   | "HIRO_UNREACHABLE";
 
 export type TxidVerifyResult =
@@ -121,11 +123,11 @@ export async function verifyPayoutTxid(params: {
     params.fetchFn ?? ((url, init) => stacksApiFetch(url, init, { logger }));
 
   // Pass the txid to Hiro as-is — Hiro accepts both 0x-prefixed and bare hex.
+  const txUrl = `${apiBase}/extended/v1/tx/${encodeURIComponent(params.txid)}`;
+  const fetchJson = (url: string) => fetchFn(url, { headers: { accept: "application/json" } });
   let res: Response;
   try {
-    res = await fetchFn(`${apiBase}/extended/v1/tx/${encodeURIComponent(params.txid)}`, {
-      headers: { accept: "application/json" },
-    });
+    res = await fetchJson(`${txUrl}${txEventsQuery(0)}`);
   } catch {
     return { ok: false, code: "HIRO_UNREACHABLE", message: "Could not reach Hiro." };
   }
@@ -192,6 +194,20 @@ export async function verifyPayoutTxid(params: {
       ok: false,
       code: "WRONG_FUNCTION",
       message: `Expected function "transfer", got "${tx.contract_call.function_name}".`,
+    };
+  }
+
+  // The payment checks below read the events; one missing from the first page would
+  // look like a payment to the wrong person.
+  const events = await loadRemainingTxEvents(tx, txUrl, fetchJson);
+  if (events.state === "unreachable") {
+    return { ok: false, code: "HIRO_UNREACHABLE", message: "Could not read the transaction events." };
+  }
+  if (events.state === "truncated") {
+    return {
+      ok: false,
+      code: "EVENTS_TRUNCATED",
+      message: `Transaction has ${tx.event_count} events, too many to verify. Pay the bounty in a transaction of its own.`,
     };
   }
 
@@ -351,6 +367,7 @@ interface HiroTxResponse {
   tx_type: "contract_call" | string;
   sender_address: string;
   is_unanchored: boolean;
+  event_count?: number;
   block_time_iso?: string;
   burn_block_time_iso?: string;
   contract_call?: {
@@ -434,6 +451,7 @@ function findSbtcTransferEvents(
   const found = [];
   for (const ev of events ?? []) {
     if (ev.event_type !== "fungible_token_asset") continue;
+    if ((ev.asset?.asset_event_type ?? ev.asset_event_type) !== "transfer") continue;
     const sender = ev.asset?.sender ?? ev.sender;
     const recipient = ev.asset?.recipient ?? ev.recipient;
     const amount = parseAmount(ev.asset?.amount ?? ev.amount);
