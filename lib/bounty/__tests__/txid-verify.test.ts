@@ -114,6 +114,75 @@ function mockFetch(response: { status?: number; json: () => unknown }): typeof f
   })) as unknown as typeof fetch;
 }
 
+// A payout routed through a contract that forwards to `sbtc-token.transfer`.
+// Event order modeled on a mainnet gasless transfer: fee to the wrapper, the
+// wrapper's own print, the transfer to the winner, then the memo printed by
+// `sbtc-token` right after it.
+const WRAPPER = "SP229F3KDGJJ79DMAPHKYQD6KF6DXM2NPAKHZ51HR.gasless-transfer";
+
+function ftEvent(event_index: number, sender: string, recipient: string, amount: number) {
+  return {
+    event_index,
+    event_type: "fungible_token_asset",
+    asset: {
+      asset_event_type: "transfer",
+      asset_id: `${SBTC_CONTRACT_MAINNET}::sbtc-token`,
+      sender,
+      recipient,
+      amount: String(amount),
+    },
+  };
+}
+
+function memoPrint(event_index: number, contract_id: string, bountyId: string = BOUNTY_ID) {
+  const expected = buildExpectedMemo(bountyId);
+  return {
+    event_index,
+    event_type: "smart_contract_log",
+    contract_log: {
+      contract_id,
+      topic: "print",
+      value: { hex: argHex(bufferCV(expected.bytes)), repr: expected.hex },
+    },
+  };
+}
+
+function makeRoutedTx(events?: unknown[]) {
+  return makeHiroTx({
+    contract_call: {
+      contract_id: WRAPPER,
+      function_name: "transfer-stacks-to-stacks",
+      function_args: [
+        { name: "amount", type: "uint", hex: argHex(uintCV(5000)), repr: "u5000" },
+        {
+          name: "recipient",
+          type: "principal",
+          hex: argHex(standardPrincipalCV(SUBMITTER_STX)),
+          repr: `'${SUBMITTER_STX}`,
+        },
+        memoArg(),
+        { name: "fee", type: "uint", hex: argHex(uintCV(10)), repr: "u10" },
+      ],
+    },
+    events: events ?? [
+      ftEvent(0, POSTER_STX, WRAPPER, 10),
+      memoPrint(1, WRAPPER, "fee-receipt"),
+      ftEvent(2, POSTER_STX, SUBMITTER_STX, 5000),
+      memoPrint(3, SBTC_CONTRACT_MAINNET),
+      memoPrint(4, WRAPPER),
+    ],
+  });
+}
+
+async function verifyRouted(events?: unknown[], bounty: BountyRecord = makeBounty()) {
+  return verifyPayoutTxid({
+    txid: "0xabc",
+    bounty,
+    acceptedSubmission: makeSubmission(),
+    fetchFn: mockFetch({ json: () => makeRoutedTx(events) }),
+  });
+}
+
 describe("buildExpectedMemo", () => {
   it("encodes BNTY: + bountyId as ASCII bytes with 0x hex form", () => {
     const memo = buildExpectedMemo("01HNX7");
@@ -191,7 +260,24 @@ describe("verifyPayoutTxid", () => {
     if (!r.ok) expect(r.code).toBe("TX_FAILED");
   });
 
-  it("returns WRONG_CONTRACT on a non-sBTC contract", async () => {
+  it("returns WRONG_CONTRACT on a non-sBTC contract that moves no sBTC", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn: mockFetch({
+        json: () =>
+          makeHiroTx({
+            contract_call: { contract_id: "SP000.other", function_name: "transfer", function_args: [] },
+            events: [],
+          }),
+      }),
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("WRONG_CONTRACT");
+  });
+
+  it("returns MEMO_MISMATCH on a non-sBTC contract whose sBTC transfer carries no memo", async () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
@@ -204,7 +290,47 @@ describe("verifyPayoutTxid", () => {
       }),
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("WRONG_CONTRACT");
+    if (!r.ok) expect(r.code).toBe("MEMO_MISMATCH");
+  });
+
+  it("returns ok for a payout routed through a contract that forwards to sbtc-token.transfer", async () => {
+    const r = await verifyRouted();
+    expect(r).toMatchObject({ ok: true, canonicalTxid: "0xabc123" });
+  });
+
+  it("routed: returns MEMO_MISMATCH when only the wrapper prints the bounty memo", async () => {
+    const r = await verifyRouted([
+      ftEvent(0, POSTER_STX, SUBMITTER_STX, 5000),
+      memoPrint(1, SBTC_CONTRACT_MAINNET, "something-else"),
+      memoPrint(2, WRAPPER),
+    ]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("MEMO_MISMATCH");
+  });
+
+  it("routed: returns MEMO_MISMATCH when the sbtc-token memo belongs to another transfer", async () => {
+    const r = await verifyRouted([
+      ftEvent(0, POSTER_STX, SUBMITTER_STX, 5000),
+      ftEvent(1, POSTER_STX, OTHER_STX, 1),
+      memoPrint(2, SBTC_CONTRACT_MAINNET),
+    ]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("MEMO_MISMATCH");
+  });
+
+  it("routed: returns WRONG_RECIPIENT when the wrapper pays from its own balance", async () => {
+    const r = await verifyRouted([
+      ftEvent(0, WRAPPER, SUBMITTER_STX, 5000),
+      memoPrint(1, SBTC_CONTRACT_MAINNET),
+    ]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("WRONG_RECIPIENT");
+  });
+
+  it("routed: returns AMOUNT_TOO_LOW when the transfer to the winner is below the reward", async () => {
+    const r = await verifyRouted(undefined, makeBounty({ rewardSats: 10000 }));
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("AMOUNT_TOO_LOW");
   });
 
   it("returns WRONG_FUNCTION when function_name is not 'transfer'", async () => {

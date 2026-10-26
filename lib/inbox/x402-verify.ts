@@ -75,6 +75,15 @@ interface StacksTxData {
       repr: string;
     }>;
   };
+  events?: Array<{
+    event_type: string;
+    asset?: {
+      asset_id?: string;
+      sender?: string;
+      recipient?: string;
+      amount?: string;
+    };
+  }>;
 }
 
 /**
@@ -629,7 +638,8 @@ export async function verifyInboxPayment(
  *
  * Recovery path for when x402 settlement times out but the sBTC transfer
  * succeeded on-chain. Validates the tx is a confirmed sBTC SIP-010 transfer
- * with sufficient amount to the expected recipient.
+ * with sufficient amount to the expected recipient, made directly or through
+ * a contract that forwards to it.
  */
 export async function verifyTxidPayment(
   txid: string,
@@ -788,11 +798,53 @@ export async function verifyTxidPayment(
   const sbtcContract = SBTC_CONTRACTS[network];
   const expectedContractId = `${sbtcContract.address}.${sbtcContract.name}`;
 
+  // A call to another contract is accepted when it forwards to the sBTC
+  // transfer (e.g. a gasless transfer): the payment is then read from the sBTC
+  // FT events, which the calling contract cannot forge, not from its args.
   if (txData.contract_call.contract_id !== expectedContractId) {
+    const payerStxAddress = txData.sender_address;
+    const fromPayer = (txData.events ?? []).filter(
+      (ev) =>
+        ev.event_type === "fungible_token_asset" &&
+        ev.asset?.asset_id?.startsWith(`${expectedContractId}::`) &&
+        ev.asset.sender === payerStxAddress
+    );
+    if (fromPayer.length === 0) {
+      return {
+        success: false,
+        error: `Transaction is not an sBTC transfer (contract: ${txData.contract_call.contract_id})`,
+        errorCode: "NOT_SBTC_TRANSFER",
+      };
+    }
+    // Search every transfer, not the first: a fee may move before the payment.
+    const toRecipient = fromPayer.filter((ev) => ev.asset?.recipient === recipientStxAddress);
+    if (toRecipient.length === 0) {
+      return {
+        success: false,
+        error: `No sBTC transfer to expected recipient ${recipientStxAddress}`,
+        errorCode: "RECIPIENT_MISMATCH",
+      };
+    }
+    const transferAmount = Math.max(...toRecipient.map((ev) => Number(ev.asset?.amount)));
+    if (!(transferAmount >= INBOX_PRICE_SATS)) {
+      return {
+        success: false,
+        error: `Transfer amount ${transferAmount} sats is below minimum ${INBOX_PRICE_SATS} sats`,
+        errorCode: "INSUFFICIENT_AMOUNT",
+      };
+    }
+
+    log.info("Txid payment verified", {
+      txid: fullTxid,
+      payerStxAddress,
+      transferAmount,
+      recipientStxAddress,
+    });
+
     return {
-      success: false,
-      error: `Transaction is not an sBTC transfer (contract: ${txData.contract_call.contract_id})`,
-      errorCode: "NOT_SBTC_TRANSFER",
+      success: true,
+      payerStxAddress,
+      paymentTxid: normalizedTxid,
     };
   }
 

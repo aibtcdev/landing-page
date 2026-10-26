@@ -116,6 +116,17 @@ export async function GET(request: NextRequest) {
   }
 
   const rawStatus = url.searchParams.get("status");
+  if (rawStatus !== null && rawStatus !== "" && !STATUS_FILTER_VALUES.has(rawStatus)) {
+    return NextResponse.json(
+      {
+        error: "invalid_status",
+        message: `Invalid status '${rawStatus}'. Must be one of: ${Array.from(STATUS_FILTER_VALUES).join(", ")}.`,
+      },
+      { status: 400 }
+    );
+  }
+  // Load-bearing ternary: "" must fall back to "active" (rawStatus && ... is falsy for ""),
+  // unlike nullish coalescing (??) which would preserve an empty string into the query.
   const status =
     rawStatus && STATUS_FILTER_VALUES.has(rawStatus)
       ? (rawStatus as BountyStatus | "active")
