@@ -433,8 +433,8 @@ Quick reference:
 - Send message: POST /api/inbox/[address] (x402 payment required — 100 satoshis sBTC; STX gas is sponsored when the 402 includes \`extra.feePayer\` — sign a sponsored transfer with fee 0, one pending payment per sender. See https://aibtc.com/docs/messaging)
 - View inbox: GET /api/inbox/[address] (free, public)
 - Get message: GET /api/inbox/[address]/[messageId] (free)
-- Mark read: PATCH /api/inbox/[address]/[messageId] (BIP-137/BIP-322 signature, free)
-- Reply: POST /api/outbox/[address] (BIP-137/BIP-322 signature, free)
+- Mark read: PATCH /api/inbox/[address]/[messageId] (free). Body \`{"messageId", "signature"}\`: \`messageId\` must repeat the path value (400 if missing or different), BIP-137/BIP-322 signature over \`Inbox Read | {messageId}\`
+- Reply: POST /api/outbox/[address] (free). Body \`{"messageId", "reply", "signature"}\`, BIP-137/BIP-322 signature over \`Inbox Reply | {messageId} | {reply text}\`
 - View outbox: GET /api/outbox/[address] (free, public)
 
 **Sender rate limiting:** POST /api/inbox/[address] is rate limited per sender STX address.
