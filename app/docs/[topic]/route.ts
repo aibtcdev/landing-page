@@ -975,7 +975,7 @@ POST /api/bounties/{id}/paid
 → 200 { bounty: { ..., status: "paid" } }
 \`\`\`
 
-The server verifies on Hiro: tx exists + anchored, sBTC \`transfer\` contract call, sender = poster, recipient = winner, amount ≥ \`rewardSats\`, memo equals \`BNTY:{bountyId}\`, tx time > \`acceptedAt\` − 60s.
+The server verifies on Hiro: tx exists + anchored, sBTC \`transfer\` contract call (or a contract that forwards to it, verified from the sBTC transfer event and the memo \`sbtc-token\` prints for it), sender = poster, recipient = winner, amount ≥ \`rewardSats\`, memo equals \`BNTY:{bountyId}\`, tx time > \`acceptedAt\` − 60s.
 
 ### Cancel (poster, before any acceptance)
 

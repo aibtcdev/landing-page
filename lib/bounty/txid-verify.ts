@@ -3,7 +3,8 @@
  *
  * The poster submits a CONFIRMED sBTC transfer txid. We verify on Hiro that:
  *   1. The tx exists and is anchored (else: TX_NOT_CONFIRMED — agent waits, retries)
- *   2. It's a successful sBTC `transfer` contract call
+ *   2. It's a successful sBTC `transfer` contract call, or a call to another
+ *      contract that forwards to it (then verified from the events, not the args)
  *   3. Sender = poster's STX address
  *   4. Recipient = winning submitter's STX address
  *   5. Amount >= bounty.rewardSats
@@ -175,7 +176,9 @@ export async function verifyPayoutTxid(params: {
     };
   }
 
-  // (3) Right contract + function.
+  // (3) Right contract + function. A call to another contract is accepted as
+  // a routed payout (a contract that forwards to `sbtc-token.transfer`, e.g. a
+  // gasless transfer) and is verified from the events alone, below.
   if (tx.tx_type !== "contract_call" || !tx.contract_call) {
     return {
       ok: false,
@@ -183,14 +186,8 @@ export async function verifyPayoutTxid(params: {
       message: "Transaction is not a contract call.",
     };
   }
-  if (tx.contract_call.contract_id !== sbtcContractId) {
-    return {
-      ok: false,
-      code: "WRONG_CONTRACT",
-      message: `Expected sBTC contract ${sbtcContractId}, got ${tx.contract_call.contract_id}.`,
-    };
-  }
-  if (tx.contract_call.function_name !== "transfer") {
+  const isDirect = tx.contract_call.contract_id === sbtcContractId;
+  if (isDirect && tx.contract_call.function_name !== "transfer") {
     return {
       ok: false,
       code: "WRONG_FUNCTION",
@@ -200,7 +197,6 @@ export async function verifyPayoutTxid(params: {
 
   // (4) Sender. Trust both top-level `sender_address` AND the second
   // function_arg (`sender` principal in SIP-010 transfer): they must agree.
-  const senderArg = readPrincipalArg(tx.contract_call.function_args, "sender");
   if (tx.sender_address !== params.bounty.posterStxAddress) {
     return {
       ok: false,
@@ -208,46 +204,56 @@ export async function verifyPayoutTxid(params: {
       message: `Tx sender ${tx.sender_address} does not match bounty poster ${params.bounty.posterStxAddress}.`,
     };
   }
-  if (senderArg && senderArg !== params.bounty.posterStxAddress) {
-    return {
-      ok: false,
-      code: "WRONG_SENDER",
-      message: `Tx function-arg sender ${senderArg} does not match bounty poster.`,
-    };
+  if (isDirect) {
+    const senderArg = readPrincipalArg(tx.contract_call.function_args, "sender");
+    if (senderArg && senderArg !== params.bounty.posterStxAddress) {
+      return {
+        ok: false,
+        code: "WRONG_SENDER",
+        message: `Tx function-arg sender ${senderArg} does not match bounty poster.`,
+      };
+    }
+
+    // (5) Recipient must match the accepted submitter's STX address.
+    const recipientArg = readPrincipalArg(tx.contract_call.function_args, "recipient");
+    if (!recipientArg) {
+      return {
+        ok: false,
+        code: "WRONG_RECIPIENT",
+        message: "Transaction function args missing a recipient.",
+      };
+    }
+    if (recipientArg !== params.acceptedSubmission.submitterStxAddress) {
+      return {
+        ok: false,
+        code: "WRONG_RECIPIENT",
+        message: `Recipient ${recipientArg} does not match winner's STX address ${params.acceptedSubmission.submitterStxAddress}.`,
+      };
+    }
   }
 
-  // (5) Recipient must match the accepted submitter's STX address.
-  const recipientArg = readPrincipalArg(tx.contract_call.function_args, "recipient");
-  if (!recipientArg) {
-    return {
-      ok: false,
-      code: "WRONG_RECIPIENT",
-      message: "Transaction function args missing a recipient.",
-    };
-  }
-  if (recipientArg !== params.acceptedSubmission.submitterStxAddress) {
-    return {
-      ok: false,
-      code: "WRONG_RECIPIENT",
-      message: `Recipient ${recipientArg} does not match winner's STX address ${params.acceptedSubmission.submitterStxAddress}.`,
-    };
-  }
-
-  // Cross-check with the FT transfer event for the same parties + amount —
+  // Cross-check with the FT transfer events for the same parties + amount —
   // this catches wrapper contracts that pass crafted args but route the
-  // actual transfer differently.
-  const ftEvent = findSbtcTransferEvent(tx.events, sbtcContractId);
-  if (!ftEvent) {
+  // actual transfer differently. For a routed payout the events are the only
+  // source: the calling contract cannot forge an sBTC FT event.
+  const sbtcTransfers = findSbtcTransferEvents(tx.events, sbtcContractId);
+  if (sbtcTransfers.length === 0) {
     return {
       ok: false,
       code: "WRONG_CONTRACT",
-      message: "No matching sBTC FT transfer event in the transaction.",
+      message: isDirect
+        ? "No matching sBTC FT transfer event in the transaction."
+        : `Expected sBTC contract ${sbtcContractId}, got ${tx.contract_call.contract_id}, and the transaction moved no sBTC.`,
     };
   }
-  if (
-    ftEvent.sender !== params.bounty.posterStxAddress ||
-    ftEvent.recipient !== params.acceptedSubmission.submitterStxAddress
-  ) {
+  // Search every sBTC transfer, not the first: a routed payout may move a fee
+  // before the payout itself.
+  const toWinner = sbtcTransfers.filter(
+    (ev) =>
+      ev.sender === params.bounty.posterStxAddress &&
+      ev.recipient === params.acceptedSubmission.submitterStxAddress
+  );
+  if (toWinner.length === 0) {
     return {
       ok: false,
       code: "WRONG_RECIPIENT",
@@ -256,17 +262,9 @@ export async function verifyPayoutTxid(params: {
   }
 
   // (6) Amount.
-  const amountFromArg = readUintArg(tx.contract_call.function_args, "amount");
-  const amountFromEvent = parseAmount(ftEvent.amount);
-  const amount = amountFromEvent ?? amountFromArg;
-  if (amount == null) {
-    return {
-      ok: false,
-      code: "AMOUNT_TOO_LOW",
-      message: "Could not determine transfer amount.",
-    };
-  }
-  if (amount < params.bounty.rewardSats) {
+  const payouts = toWinner.filter((ev) => ev.amount >= params.bounty.rewardSats);
+  if (payouts.length === 0) {
+    const amount = Math.max(...toWinner.map((ev) => ev.amount));
     return {
       ok: false,
       code: "AMOUNT_TOO_LOW",
@@ -276,9 +274,17 @@ export async function verifyPayoutTxid(params: {
 
   // (7) Memo: must equal `BNTY:{bountyId}`. This is the binding that prevents
   // a poster from passing off an unrelated transfer as a bounty payment.
+  // Routed payout: the top-level args belong to the wrapper, so the memo is
+  // read from the print `sbtc-token.transfer` emits right after its FT
+  // transfer. Only that contract can emit a print under its own id, and
+  // requiring the next event index binds the memo to this very transfer.
   const expected = buildExpectedMemo(params.bounty.id);
-  const memoHex = readMemoArg(tx.contract_call.function_args);
-  if (!memoHex || !memosMatch(memoHex, expected.hex)) {
+  const memoMatches = isDirect
+    ? memosMatch(readMemoArg(tx.contract_call.function_args), expected.hex)
+    : payouts.some((ev) =>
+        memosMatch(readSbtcMemoPrint(tx.events, sbtcContractId, ev.eventIndex), expected.hex)
+      );
+  if (!memoMatches) {
     return {
       ok: false,
       code: "MEMO_MISMATCH",
@@ -316,14 +322,20 @@ interface HiroFunctionArg {
   type?: string;
 }
 
-interface HiroFtTransferEvent {
-  event_type: "fungible_token_asset";
+interface HiroTxEvent {
+  event_index?: number;
+  event_type: "fungible_token_asset" | "smart_contract_log" | string;
   asset?: {
     asset_event_type?: string;
     asset_id?: string;
     sender?: string;
     recipient?: string;
     amount?: string;
+  };
+  contract_log?: {
+    contract_id?: string;
+    topic?: string;
+    value?: { hex?: string };
   };
   // Legacy / alternative shapes some endpoints surface:
   sender?: string;
@@ -346,7 +358,7 @@ interface HiroTxResponse {
     function_name: string;
     function_args: HiroFunctionArg[];
   };
-  events?: HiroFtTransferEvent[];
+  events?: HiroTxEvent[];
 }
 
 // ---------------------------------------------------------------------------
@@ -377,14 +389,6 @@ function readPrincipalArg(args: HiroFunctionArg[] | undefined, name: string): st
   return null;
 }
 
-function readUintArg(args: HiroFunctionArg[] | undefined, name: string): number | null {
-  if (!args) return null;
-  const cv = decodeArg(args.find((a) => a.name === name));
-  if (!cv || cv.type !== ClarityType.UInt) return null;
-  const n = Number(cv.value);
-  return Number.isFinite(n) ? n : null;
-}
-
 function readMemoArg(args: HiroFunctionArg[] | undefined): string | null {
   if (!args) return null;
   const cv = decodeArg(args.find((a) => a.name === "memo"));
@@ -395,30 +399,52 @@ function readMemoArg(args: HiroFunctionArg[] | undefined): string | null {
   return inner.value.toLowerCase().replace(/^0x/, "");
 }
 
-function memosMatch(actualHex: string, expectedHex: string): boolean {
+/**
+ * Memo printed by `sbtc-token.transfer` for the FT transfer at `ftEventIndex`.
+ * The contract prints the unwrapped memo buffer as the event right after its
+ * `ft-transfer?`, so anything else at that index is not this transfer's memo.
+ */
+function readSbtcMemoPrint(
+  events: HiroTxEvent[] | undefined,
+  sbtcContractId: string,
+  ftEventIndex: number | null
+): string | null {
+  if (!events || ftEventIndex == null) return null;
+  const ev = events.find((e) => e.event_index === ftEventIndex + 1);
+  if (ev?.event_type !== "smart_contract_log") return null;
+  if (ev.contract_log?.contract_id !== sbtcContractId || ev.contract_log.topic !== "print") {
+    return null;
+  }
+  const cv = decodeArg(ev.contract_log.value);
+  if (!cv || cv.type !== ClarityType.Buffer) return null;
+  return cv.value.toLowerCase().replace(/^0x/, "");
+}
+
+function memosMatch(actualHex: string | null, expectedHex: string): boolean {
+  if (!actualHex) return false;
   const a = actualHex.replace(/^0x/, "").toLowerCase();
   const b = expectedHex.replace(/^0x/, "").toLowerCase();
   return a === b;
 }
 
-function findSbtcTransferEvent(
-  events: HiroFtTransferEvent[] | undefined,
+function findSbtcTransferEvents(
+  events: HiroTxEvent[] | undefined,
   expectedAssetId: string
-): { sender: string; recipient: string; amount: string } | null {
-  if (!events) return null;
-  for (const ev of events) {
+): { eventIndex: number | null; sender: string; recipient: string; amount: number }[] {
+  const found = [];
+  for (const ev of events ?? []) {
     if (ev.event_type !== "fungible_token_asset") continue;
     const sender = ev.asset?.sender ?? ev.sender;
     const recipient = ev.asset?.recipient ?? ev.recipient;
-    const amount = ev.asset?.amount ?? ev.amount;
+    const amount = parseAmount(ev.asset?.amount ?? ev.amount);
     const assetId = ev.asset?.asset_id ?? ev.asset_id;
     // sBTC asset_id looks like `${sbtcContractId}::sbtc-token` — anchor on `::`
     // so we don't accidentally match a sibling like `sbtc-token-extended`.
-    if (assetId && assetId.startsWith(`${expectedAssetId}::`) && sender && recipient && amount) {
-      return { sender, recipient, amount };
+    if (assetId && assetId.startsWith(`${expectedAssetId}::`) && sender && recipient && amount != null) {
+      found.push({ eventIndex: ev.event_index ?? null, sender, recipient, amount });
     }
   }
-  return null;
+  return found;
 }
 
 function parseAmount(amount: string | undefined): number | null {
