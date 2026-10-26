@@ -7,10 +7,12 @@
  *   - sBTC `transfer` contract call
  *   - sender = poster, recipient = winner, amount >= rewardSats
  *   - memo = BNTY:{bountyId}  (the anti-fraud binding)
- *   - block_time > acceptedAt - 60s
+ *   - block_time in [acceptedAt - 60s, acceptedAt + PAY_GRACE_MS)
  *
- * Allowed only when bounty's derived status is `winner-announced`. The
- * canonical txid that Hiro returns is what we store (not the raw input).
+ * Allowed when the bounty's derived status is `winner-announced`, or when it
+ * is `abandoned` after acceptance and the verified payment tx itself landed
+ * inside the pay-grace window (#1110). The canonical txid that Hiro returns is
+ * what we store (not the raw input).
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -18,6 +20,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import {
+  PAY_GRACE_MS,
   SIGNATURE_WINDOW_SECONDS,
   bountyStatus,
   buildPaidMessage,
@@ -93,9 +96,12 @@ export async function POST(
       );
     }
 
-    // Status guard — must be winner-announced
+    // Status guard — must be winner-announced, or abandoned-after-accept
+    // (a poster who paid on-chain inside PAY_GRACE_MS may submit proof late).
     const status = bountyStatus(bounty);
-    if (status !== "winner-announced") {
+    const isAbandonedAfterAccept =
+      status === "abandoned" && Boolean(bounty.acceptedAt);
+    if (status !== "winner-announced" && !isAbandonedAfterAccept) {
       return NextResponse.json(
         {
           error: "invalid_state",
@@ -160,6 +166,29 @@ export async function POST(
 
     // Persist — use Hiro's canonical tx_id as the stored value.
     const paidAt = verify.blockTimeIso ?? new Date().toISOString();
+    const acceptedMs = bounty.acceptedAt ? Date.parse(bounty.acceptedAt) : NaN;
+    const paidMs = Date.parse(paidAt);
+    if (
+      !Number.isNaN(acceptedMs) &&
+      !Number.isNaN(paidMs) &&
+      paidMs >= acceptedMs + PAY_GRACE_MS
+    ) {
+      logger.warn("bounty.paid_after_grace", {
+        bountyId: bounty.id,
+        acceptedAt: bounty.acceptedAt,
+        paidAt,
+        txid: data.txid,
+      });
+      return NextResponse.json(
+        {
+          error: "invalid_state",
+          message: `Cannot mark paid in status "${status}". Payment landed after the pay-grace window closed.`,
+          status,
+        },
+        { status: 422 }
+      );
+    }
+
     let ok = false;
     try {
       ok = await setPaid(db, bounty.id, verify.canonicalTxid, paidAt);
