@@ -6,18 +6,6 @@ import { getSBTCAsset } from "../x402-config";
 import { networkToCAIP2 } from "x402-stacks";
 import { createMockKVWithOptions } from "./kv-mock";
 
-const mocks = vi.hoisted(() => ({
-  submitViaRPC: vi.fn(),
-}));
-
-vi.mock("../relay-rpc", async () => {
-  const actual = await vi.importActual<typeof import("../relay-rpc")>("../relay-rpc");
-  return {
-    ...actual,
-    submitViaRPC: mocks.submitViaRPC,
-  };
-});
-
 vi.mock("@stacks/transactions", () => ({
   AuthType: { Sponsored: 1 },
   StacksWireType: { Address: "address" },
@@ -35,7 +23,7 @@ vi.mock("@stacks/transactions", () => ({
   addressToString: vi.fn(() => "SP2SENDERTESTADDRESS"),
 }));
 
-describe("verifyInboxPayment RPC contract", () => {
+describe("verifyInboxPayment sponsored (RPC sponsorPayment)", () => {
   const recipientStxAddress = "SP2J6ZY48GV1EZ5V2V5RB9MP66SW86PYKKNRV9EJ7";
   const network = "mainnet";
   const payload = {
@@ -51,66 +39,61 @@ describe("verifyInboxPayment RPC contract", () => {
     vi.clearAllMocks();
   });
 
-  it("preserves relay-owned paymentId and canonical checkStatusUrl from the RPC path", async () => {
-    mocks.submitViaRPC.mockResolvedValue({
-      success: true,
-      paymentStatus: "pending",
-      paymentId: "pay_rpc_hint_case",
-      checkStatusUrl: "https://relay.example/check/pay_rpc_hint_case",
+  it("sponsors through the binding and returns the txid and payer", async () => {
+    const sponsorPayment = vi.fn().mockResolvedValue({
+      success: true, txid: "ab".repeat(32), payer: "SP2SENDERTESTADDRESS", fee: "3000",
     });
+    const relayRPC = { sponsorPayment } as unknown as RelayRPC;
 
-    const relayRPC = {} as RelayRPC;
     const result = await verifyInboxPayment(
-      payload,
-      recipientStxAddress,
-      network,
-      "https://relay.example",
-      undefined,
-      undefined,
-      relayRPC
+      payload, recipientStxAddress, network, "https://relay.example", undefined, undefined, relayRPC
     );
 
-    expect(result).toMatchObject({
-      success: true,
-      paymentStatus: "pending",
-      paymentId: "pay_rpc_hint_case",
-      checkStatusUrl: "https://relay.example/check/pay_rpc_hint_case",
+    expect(sponsorPayment).toHaveBeenCalledWith("00", {
+      expectedRecipient: recipientStxAddress,
+      minAmount: expect.any(String),
+      tokenType: "sBTC",
     });
+    expect(result).toMatchObject({ success: true, payerStxAddress: "SP2SENDERTESTADDRESS", paymentTxid: "ab".repeat(32) });
   });
 
-  it("counts missing canonical identity as a relay failure for breaker accounting (P4: ratelimits binding)", async () => {
-    const { kv } = createMockKVWithOptions();
-    mocks.submitViaRPC.mockResolvedValue({
-      success: false,
-      errorCode: "MISSING_CANONICAL_IDENTITY",
-      error: "Relay accepted payment but did not return a canonical payment identity",
-    });
-
-    // P4: circuit breaker now uses env.RATE_LIMIT_RELAY_FAILURES.limit()
-    // instead of a KV-RMW counter. Mock the binding and assert it was
-    // called when the relay failure code is breaker-eligible.
+  it("maps a relay refusal to a typed error without counting it as a relay failure", async () => {
     const limit = vi.fn().mockResolvedValue({ success: true });
-    const cfEnv = {
-      RATE_LIMIT_RELAY_FAILURES: { limit },
-    } as unknown as CloudflareEnv;
+    const cfEnv = { RATE_LIMIT_RELAY_FAILURES: { limit } } as unknown as CloudflareEnv;
+    const relayRPC = {
+      sponsorPayment: vi.fn().mockResolvedValue({
+        success: false, code: "RATE_LIMITED", error: "Too many sponsored payments", retryable: true,
+      }),
+    } as unknown as RelayRPC;
 
-    const relayRPC = {} as RelayRPC;
     const result = await verifyInboxPayment(
-      payload,
-      recipientStxAddress,
-      network,
-      "https://relay.example",
-      undefined,
-      kv,
-      relayRPC,
-      undefined,
-      cfEnv
+      payload, recipientStxAddress, network, "https://relay.example", undefined, undefined, relayRPC, undefined, cfEnv
     );
 
-    expect(result.success).toBe(false);
-    expect(result.errorCode).toBe("MISSING_CANONICAL_IDENTITY");
-    // Failure was counted via the ratelimits binding (atomic per-key
-    // counter, replaces the prior `kv.put("inbox:relay:circuit-breaker:count", ...)` shape).
+    expect(result).toMatchObject({ success: false, errorCode: "RATE_LIMITED", relayCode: "RATE_LIMITED" });
+    expect(limit).not.toHaveBeenCalled();
+  });
+
+  it("counts a sponsored broadcast failure toward the relay circuit breaker", async () => {
+    const { kv } = createMockKVWithOptions();
+    const limit = vi.fn().mockResolvedValue({ success: true });
+    const cfEnv = { RATE_LIMIT_RELAY_FAILURES: { limit } } as unknown as CloudflareEnv;
+    const relayRPC = {
+      sponsorPayment: vi.fn().mockResolvedValue({
+        success: false, code: "BROADCAST_FAILED", error: "node unreachable", retryable: true,
+      }),
+    } as unknown as RelayRPC;
+
+    const result = await verifyInboxPayment(
+      payload, recipientStxAddress, network, "https://relay.example", undefined, kv, relayRPC, undefined, cfEnv
+    );
+
+    expect(result).toMatchObject({ success: false, errorCode: "BROADCAST_FAILED" });
     expect(limit).toHaveBeenCalledWith({ key: "relay-failures" });
+  });
+
+  it("refuses sponsored payments when the relay binding is missing", async () => {
+    const result = await verifyInboxPayment(payload, recipientStxAddress, network, "https://relay.example");
+    expect(result).toMatchObject({ success: false, errorCode: "RELAY_ERROR" });
   });
 });

@@ -19,6 +19,7 @@ interface CloudflareEnv {
   CF_PAGES_COMMIT_SHA?: string; // Pages-provided commit SHA when available
   X402_NETWORK?: "mainnet" | "testnet"; // Stacks network for x402 verification
   X402_RELAY_URL?: string; // x402 relay URL for all payment settlement (default: https://x402-relay.aibtc.com)
+  X402_SPONSOR_FEE_PAYER?: string; // relay sponsor address advertised as 402 extra.feePayer (gasless inbox sends); unset = senders pay gas
   X402_RELAY?: import("./lib/inbox/relay-rpc").RelayRPC; // x402 sponsor relay RPC service binding (undefined in local dev)
   INBOX_RECONCILIATION_QUEUE?: Queue<import("./lib/inbox/reconciliation-queue").InboxReconciliationQueueMessage>;
   // Scheduled background work runs from a Cloudflare Cron Trigger (see

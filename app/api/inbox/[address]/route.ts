@@ -899,7 +899,8 @@ export async function POST(
   const paymentRequirements = buildInboxPaymentRequirements(
     agent.stxAddress,
     network,
-    networkCAIP2
+    networkCAIP2,
+    env.X402_SPONSOR_FEE_PAYER?.trim() || undefined
   );
   const paymentRequiredBody = {
     x402Version: 2 as const,
@@ -1502,6 +1503,20 @@ export async function POST(
           status: isCircuitOpen ? 503 : 502,
           headers: { "Retry-After": String(relayRetryAfter) },
         }
+      );
+    }
+
+    // RATE_LIMITED — the relay caps sponsored payments per sender.
+    if (errorCode === "RATE_LIMITED") {
+      return NextResponse.json(
+        {
+          error: paymentResult.error ?? "Too many sponsored payments from this sender",
+          code: errorCode,
+          retryable: true,
+          retryAfter: 60,
+          nextSteps: "Wait a minute, then re-sign and resend the payment",
+        },
+        { status: 429, headers: { "Retry-After": "60" } }
       );
     }
 

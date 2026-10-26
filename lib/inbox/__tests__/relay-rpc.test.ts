@@ -897,8 +897,8 @@ describe("tx-schemas 1.0.0 schema compatibility", () => {
   });
 
   describe("new RpcErrorCode variants map to correct InboxPaymentErrorCode", () => {
-    it("maps SPONSOR_EXHAUSTED to INSUFFICIENT_FUNDS", () => {
-      expect(mapRPCErrorCode("SPONSOR_EXHAUSTED")).toBe("INSUFFICIENT_FUNDS");
+    it("maps SPONSOR_EXHAUSTED to RELAY_ERROR (relay-side, not the sender's funds)", () => {
+      expect(mapRPCErrorCode("SPONSOR_EXHAUSTED")).toBe("RELAY_ERROR");
     });
 
     it("maps ORIGIN_CHAINING_LIMIT to NONCE_CONFLICT", () => {

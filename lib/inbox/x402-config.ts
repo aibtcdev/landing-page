@@ -22,15 +22,22 @@ export function getSBTCAsset(network: "mainnet" | "testnet"): string {
  * Key design: dynamic payTo — the recipient agent's STX address is used
  * as the payment recipient, not a single platform address.
  *
+ * When `feePayer` is set, it is advertised as `extra.feePayer`: x402-stacks
+ * clients (>=2.1.0) then sign a sponsored transfer with fee 0, and the relay
+ * co-signs and pays the STX gas. Without it, clients sign a standard transfer
+ * and pay their own gas.
+ *
  * @param recipientStxAddress - Recipient agent's Stacks address from AgentRecord
  * @param network - Stacks network (mainnet or testnet)
  * @param networkCAIP2 - Network in CAIP-2 format (from networkToCAIP2)
+ * @param feePayer - Relay sponsor address to advertise, or undefined for self-paid gas
  * @returns Payment requirements for x402 verification
  */
 export function buildInboxPaymentRequirements(
   recipientStxAddress: string,
   network: "mainnet" | "testnet",
-  networkCAIP2: `stacks:${string}`
+  networkCAIP2: `stacks:${string}`,
+  feePayer?: string
 ) {
   const asset = getSBTCAsset(network);
 
@@ -46,6 +53,7 @@ export function buildInboxPaymentRequirements(
         type: "fixed" as const,
         tier: "inbox-message",
       },
+      ...(feePayer && { feePayer }),
     },
   };
 }
