@@ -38,6 +38,36 @@ jobs:
       - run: npm ci
       - run: npm test
 
+  smoke:
+    # Boots the OpenNext Worker locally and requests it. The Workers Build check
+    # only compiles; #1109 compiled fine and then 500'd every route in production.
+    name: Worker smoke
+    if: github.event_name == 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+      - run: npm ci
+      - run: npx opennextjs-cloudflare build
+        env:
+          NEXT_TELEMETRY_DISABLED: 1
+      - name: Request / and /api/health from wrangler dev
+        run: |
+          npx wrangler dev --local --port 8788 > wrangler.log 2>&1 &
+          for i in $(seq 1 60); do curl -s -o /dev/null http://127.0.0.1:8788/ && break; sleep 2; done
+          rc=0
+          for p in / /api/health; do
+            code=$(curl -s -o /dev/null -w '%{http_code}' --max-time 30 "http://127.0.0.1:8788$p")
+            echo "$p -> $code"
+            [ "$code" = 200 ] || rc=1
+          done
+          [ "$rc" = 0 ] || tail -40 wrangler.log
+          exit "$rc"
+
   build:
     name: Build
     if: github.event_name == 'release'

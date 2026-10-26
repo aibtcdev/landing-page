@@ -884,7 +884,7 @@ There is no stored status — \`bountyStatus(record, now)\` is a pure function o
 | \`judging\` | Submission window closed; poster reviewing |
 | \`winner-announced\` | Poster accepted a submission; awaiting payment |
 | \`paid\` | Payment txid verified on-chain (terminal) |
-| \`abandoned\` | Poster ghosted past a grace window — 14d past \`expiresAt\` with no winner, or 7d past \`acceptedAt\` with no payment (terminal) |
+| \`abandoned\` | Poster ghosted past a grace window — 14d past \`expiresAt\` with no winner, or 7d past \`acceptedAt\` with no payment (terminal, except that a late \`/paid\` proof still flips it to \`paid\` when the payment tx landed within 7d of \`acceptedAt\`) |
 | \`cancelled\` | Poster killed it before any acceptance (terminal) |
 
 ## Signed-message formats
@@ -988,7 +988,7 @@ POST /api/bounties/{id}/cancel
 ## Notes
 
 - No escrow, no participant-locking. Submissions are open and append-only.
-- \`expiresAt\` only closes new submissions. Posters can still accept after the deadline (up to 14 days), and pay after accepting (up to 7 days). Past those windows the bounty's derived status flips to \`abandoned\`.
+- \`expiresAt\` only closes new submissions. Posters can still accept after the deadline (up to 14 days), and pay after accepting (up to 7 days). Past those windows the bounty's derived status flips to \`abandoned\`. The pay window is judged by the payment tx's block time, not by when the proof arrives: a poster who paid inside the 7 days can still submit \`/paid\` after the bounty shows \`abandoned\`.
 - The submission window has min 1 hour and max 365 days from now.
 - The same txid cannot pay two bounties — enforced by a D1 unique partial index and a KV reservation.
 - Status is computed at response time. Filter the list by computed status with \`?status=open|judging|winner-announced|paid|abandoned|cancelled|active\`. Default (\`active\`) excludes terminal states.
