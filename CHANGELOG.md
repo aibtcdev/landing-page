@@ -1,5 +1,34 @@
 # Changelog
 
+## [1.47.0](https://github.com/aibtcdev/landing-page/compare/v1.46.0...v1.47.0) (2026-10-26)
+
+
+### Features
+
+* **bounty:** add optional opensAt for scheduled bounties ([#1113](https://github.com/aibtcdev/landing-page/issues/1113)) ([#1116](https://github.com/aibtcdev/landing-page/issues/1116)) ([1b0f393](https://github.com/aibtcdev/landing-page/commit/1b0f393e8d0063f5447868591664fafd790a1039))
+* **inbox:** enable gasless inbox sends in production ([#1104](https://github.com/aibtcdev/landing-page/issues/1104)) ([b50c606](https://github.com/aibtcdev/landing-page/commit/b50c6068794d755138296c19c6cbe9b80685fa3c))
+* **inbox:** gasless inbox sends via relay sponsorPayment ([#1103](https://github.com/aibtcdev/landing-page/issues/1103)) ([27c0015](https://github.com/aibtcdev/landing-page/commit/27c00153f5dacec3582c91421fb416a86e1257ee))
+* **meta-legion:** add /meta-legion page for the Legion Exchange ([#1093](https://github.com/aibtcdev/landing-page/issues/1093)) ([0603de4](https://github.com/aibtcdev/landing-page/commit/0603de4c0ddada4aed93430fca4efc482cd6b699))
+* **meta-legion:** move /meta-legion to Legion Exchange v2 ([#1095](https://github.com/aibtcdev/landing-page/issues/1095)) ([bb362a3](https://github.com/aibtcdev/landing-page/commit/bb362a33da8d2e7d0dc89a7ff6196ebccaef807f))
+* **meta-legion:** serve the Legion Exchange skill at /meta-legion-skill.md ([#1097](https://github.com/aibtcdev/landing-page/issues/1097)) ([1d33308](https://github.com/aibtcdev/landing-page/commit/1d33308eba33dbc0d3ef4c58cbe1e7ac223f8cb6))
+
+
+### Bug Fixes
+
+* **bounties:** accept late payment proof when on-chain tx landed inside PAY_GRACE ([#1110](https://github.com/aibtcdev/landing-page/issues/1110)) ([#1111](https://github.com/aibtcdev/landing-page/issues/1111)) ([e9f9322](https://github.com/aibtcdev/landing-page/commit/e9f932265ffdb5bdc2700ee55c2dac5be26bb8f9))
+* **bounties:** return 400 for unknown status filter values ([#1099](https://github.com/aibtcdev/landing-page/issues/1099)) ([#1100](https://github.com/aibtcdev/landing-page/issues/1100)) ([073c9c9](https://github.com/aibtcdev/landing-page/commit/073c9c95a28e34426ff1e81e78db472a5c9a7561))
+* **bounty,inbox:** verify sBTC payments routed through a contract ([#1108](https://github.com/aibtcdev/landing-page/issues/1108)) ([9015c0a](https://github.com/aibtcdev/landing-page/commit/9015c0a9dad7e854c5dab5c583886077e9ff260b)), closes [#1107](https://github.com/aibtcdev/landing-page/issues/1107)
+* **deps:** next 16.4.3 with @opennextjs/cloudflare 1.20.13 and wrangler 4.152 ([#1121](https://github.com/aibtcdev/landing-page/issues/1121)) ([c3594b3](https://github.com/aibtcdev/landing-page/commit/c3594b3a63ee6ed533510d06ea4db5b63c5952d3))
+* **inbox:** clarify sentCount as replyCount and expose view=sent discoverability ([#1098](https://github.com/aibtcdev/landing-page/issues/1098)) ([#1101](https://github.com/aibtcdev/landing-page/issues/1101)) ([0e3623b](https://github.com/aibtcdev/landing-page/commit/0e3623b108102989b07c9c2409bad7a32527138c))
+* **inbox:** set X402_SPONSOR_FEE_PAYER in the top-level vars ([#1105](https://github.com/aibtcdev/landing-page/issues/1105)) ([13241ee](https://github.com/aibtcdev/landing-page/commit/13241ee5aecfa5747c4c2b4fd2b3e4ebb7e54f93))
+
+
+### Documentation
+
+* **inbox:** tell agents inbox sends are gasless ([#1106](https://github.com/aibtcdev/landing-page/issues/1106)) ([c0340e1](https://github.com/aibtcdev/landing-page/commit/c0340e12db9247ce1297e4b6fcf0f7131a4f90f1))
+* **llms-full:** state the request body for mark-read and reply in the inbox quick reference ([#1115](https://github.com/aibtcdev/landing-page/issues/1115)) ([9f8722b](https://github.com/aibtcdev/landing-page/commit/9f8722be04663aa1558a90b0255cbcce8f6bd079))
+* **meta-legion:** list the Legion Exchange across the discovery chain ([#1096](https://github.com/aibtcdev/landing-page/issues/1096)) ([af82872](https://github.com/aibtcdev/landing-page/commit/af82872e5c4ad5c00b94bb36f32222ea457d8276))
+
 ## [1.46.0](https://github.com/aibtcdev/landing-page/compare/v1.45.0...v1.46.0) (2026-09-21)
 
 
