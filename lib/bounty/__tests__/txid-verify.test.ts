@@ -9,6 +9,7 @@ import {
 } from "@stacks/transactions";
 import { buildExpectedMemo, verifyPayoutTxid } from "../txid-verify";
 import { SBTC_CONTRACT_MAINNET } from "../constants";
+import { TX_EVENT_MAX, TX_EVENT_PAGE_SIZE } from "@/lib/stacks-tx-events";
 import type { BountyRecord, BountySubmission } from "../types";
 
 const BOUNTY_ID = "01HNX7TEST";
@@ -95,6 +96,7 @@ function makeHiroTx(overrides: Record<string, unknown> = {}) {
       {
         event_type: "fungible_token_asset",
         asset: {
+          asset_event_type: "transfer",
           asset_id: `${SBTC_CONTRACT_MAINNET}::sbtc-token`,
           sender: POSTER_STX,
           recipient: SUBMITTER_STX,
@@ -181,6 +183,42 @@ async function verifyRouted(events?: unknown[], bounty: BountyRecord = makeBount
     acceptedSubmission: makeSubmission(),
     fetchFn: mockFetch({ json: () => makeRoutedTx(events) }),
   });
+}
+
+// Hiro pages the events: the first response carries `firstPage` of them and
+// `event_count` the total, and `event_offset` asks for the rest. Like Hiro, it
+// refuses an `event_limit` above 100.
+function pagedFetch(tx: { events: unknown[] }, firstPage: number, laterPage?: "fail" | "empty") {
+  return vi.fn(async (url: string) => {
+    const params = new URL(url).searchParams;
+    const offset = Number(params.get("event_offset") ?? 0);
+    if (!(Number(params.get("event_limit")) <= 100)) {
+      return { status: 400, ok: false, json: async () => ({}) };
+    }
+    if (offset > 0 && laterPage === "fail") {
+      return { status: 503, ok: false, json: async () => ({}) };
+    }
+    const events =
+      offset > 0 && laterPage === "empty"
+        ? []
+        : tx.events.slice(offset, offset + (offset === 0 ? firstPage : TX_EVENT_PAGE_SIZE));
+    return {
+      status: 200,
+      ok: true,
+      json: async () => ({ ...tx, event_count: tx.events.length, events }),
+    };
+  }) as unknown as typeof fetch & ReturnType<typeof vi.fn>;
+}
+
+async function verifyPaged(firstPage: number, laterPage?: "fail" | "empty") {
+  const fetchFn = pagedFetch(makeRoutedTx() as { events: unknown[] }, firstPage, laterPage);
+  const r = await verifyPayoutTxid({
+    txid: "0xabc",
+    bounty: makeBounty(),
+    acceptedSubmission: makeSubmission(),
+    fetchFn,
+  });
+  return { r, fetchFn };
 }
 
 describe("buildExpectedMemo", () => {
@@ -331,6 +369,51 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyRouted(undefined, makeBounty({ rewardSats: 10000 }));
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("AMOUNT_TOO_LOW");
+  });
+
+  it("routed: reads the events past the first page to find the payout", async () => {
+    const { r } = await verifyPaged(2);
+    expect(r).toMatchObject({ ok: true, canonicalTxid: "0xabc123" });
+  });
+
+  it("routed: reads the memo print when it starts the next page", async () => {
+    const { r } = await verifyPaged(3);
+    expect(r).toMatchObject({ ok: true, canonicalTxid: "0xabc123" });
+  });
+
+  it("returns HIRO_UNREACHABLE when a later page of events fails", async () => {
+    const { r } = await verifyPaged(2, "fail");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
+  });
+
+  it("returns HIRO_UNREACHABLE when a later page comes back empty", async () => {
+    const { r } = await verifyPaged(2, "empty");
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
+  });
+
+  it("returns EVENTS_TRUNCATED without paging when the tx has too many events", async () => {
+    const fetchFn = mockFetch({ json: () => ({ ...makeRoutedTx(), event_count: TX_EVENT_MAX + 1 }) });
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn,
+    });
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("EVENTS_TRUNCATED");
+    expect(fetchFn).toHaveBeenCalledTimes(1);
+  });
+
+  // Hiro gives a mint no sender, so this event shape does not occur; the test
+  // pins the explicit `asset_event_type` check.
+  it("routed: ignores an sBTC FT event that is not a transfer", async () => {
+    const mint = ftEvent(0, POSTER_STX, SUBMITTER_STX, 5000);
+    mint.asset.asset_event_type = "mint";
+    const r = await verifyRouted([mint, memoPrint(1, SBTC_CONTRACT_MAINNET)]);
+    expect(r.ok).toBe(false);
+    if (!r.ok) expect(r.code).toBe("WRONG_CONTRACT");
   });
 
   it("returns WRONG_FUNCTION when function_name is not 'transfer'", async () => {

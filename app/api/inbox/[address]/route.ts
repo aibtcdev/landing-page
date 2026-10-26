@@ -1184,7 +1184,10 @@ export async function POST(
           error: txidResult.error || "Transaction verification failed",
           code: txidResult.errorCode,
           retryable: false,
-          nextSteps: "Ensure the transaction is confirmed, is an sBTC transfer of >= 100 sats, and the recipient matches.",
+          nextSteps:
+            txidResult.errorCode === "EVENTS_TRUNCATED"
+              ? "Pay in a transaction of its own, then retry with its txid."
+              : "Ensure the transaction is confirmed, is an sBTC transfer of >= 100 sats, and the recipient matches.",
         },
         { status: 400 }
       );

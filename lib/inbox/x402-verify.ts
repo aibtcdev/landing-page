@@ -49,6 +49,7 @@ import type { RelayRPC } from "./relay-rpc";
 import { mapRPCErrorCode } from "./relay-rpc";
 import type { Logger } from "../logging";
 import { stacksApiFetch, buildHiroHeaders, parseRetryAfterMs } from "../stacks-api-fetch";
+import { loadRemainingTxEvents, txEventsQuery } from "../stacks-tx-events";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "../identity/constants";
 import type { TerminalReason } from "@aibtc/tx-schemas/terminal-reasons";
@@ -66,6 +67,7 @@ interface StacksTxData {
   tx_status: string;
   sender_address: string;
   tx_type: string;
+  event_count?: number;
   contract_call?: {
     contract_id: string;
     function_name: string;
@@ -78,6 +80,7 @@ interface StacksTxData {
   events?: Array<{
     event_type: string;
     asset?: {
+      asset_event_type?: string;
       asset_id?: string;
       sender?: string;
       recipient?: string;
@@ -132,7 +135,8 @@ export type TxidPaymentErrorCode =
   | "NOT_SBTC_TRANSFER"
   | "INVALID_TX_ARGS"
   | "INSUFFICIENT_AMOUNT"
-  | "RECIPIENT_MISMATCH";
+  | "RECIPIENT_MISMATCH"
+  | "EVENTS_TRUNCATED";
 
 /**
  * Result of x402 payment verification for inbox messages.
@@ -657,6 +661,9 @@ export async function verifyTxidPayment(
 
   const apiBase =
     network === "mainnet" ? STACKS_API_BASE : STACKS_API_TESTNET_BASE;
+  const txUrl = `${apiBase}/extended/v1/tx/${fullTxid}`;
+  const fetchTx = (url: string) =>
+    stacksApiFetch(url, { method: "GET", headers: buildHiroHeaders(hiroApiKey) }, { logger: log });
 
   log.info("Verifying txid payment recovery", {
     txid: fullTxid,
@@ -696,14 +703,7 @@ export async function verifyTxidPayment(
 
     // 3. Fetch from API
     try {
-      const response = await stacksApiFetch(
-        `${apiBase}/extended/v1/tx/${fullTxid}`,
-        {
-          method: "GET",
-          headers: buildHiroHeaders(hiroApiKey),
-        },
-        { logger: log }
-      );
+      const response = await fetchTx(`${txUrl}${txEventsQuery(0)}`);
       if (!response.ok) {
         if (response.status === 404) {
           // Cache the negative result to prevent repeated lookups.
@@ -802,11 +802,44 @@ export async function verifyTxidPayment(
   // transfer (e.g. a gasless transfer): the payment is then read from the sBTC
   // FT events, which the calling contract cannot forge, not from its args.
   if (txData.contract_call.contract_id !== expectedContractId) {
+    // A payment late in a long transaction sits past Hiro's first page.
+    const events = await loadRemainingTxEvents(txData, txUrl, fetchTx);
+    if (events.state === "unreachable") {
+      if (events.response?.status === 429) {
+        const retryAfterMs = parseRetryAfterMs(events.response);
+        return {
+          success: false,
+          error: "Stacks API rate limit reached. Please retry after a short delay.",
+          errorCode: "RATE_LIMITED",
+          retryAfterSeconds: retryAfterMs != null ? Math.ceil(retryAfterMs / 1000) : 30,
+        };
+      }
+      return {
+        success: false,
+        error: "Could not read the transaction events",
+        errorCode: "API_ERROR",
+        retryAfterSeconds: 30,
+      };
+    }
+    if (events.state === "truncated") {
+      return {
+        success: false,
+        error: `Transaction has ${txData.event_count} events, too many to verify. Pay in a transaction of its own.`,
+        errorCode: "EVENTS_TRUNCATED",
+      };
+    }
+    if (events.fetched) {
+      setCachedTransaction(normalizedTxid, txData, kv, log).catch((err) => {
+        log.warn("verifyTxidPayment.kv_cache_write_failed", { error: String(err), txid: fullTxid });
+      });
+    }
+
     const payerStxAddress = txData.sender_address;
     const fromPayer = (txData.events ?? []).filter(
       (ev) =>
         ev.event_type === "fungible_token_asset" &&
-        ev.asset?.asset_id?.startsWith(`${expectedContractId}::`) &&
+        ev.asset?.asset_event_type === "transfer" &&
+        ev.asset.asset_id?.startsWith(`${expectedContractId}::`) &&
         ev.asset.sender === payerStxAddress
     );
     if (fromPayer.length === 0) {

@@ -3695,7 +3695,7 @@ export function GET() {
           },
           responses: {
             "200": { description: "Payment verified, bounty marked paid", content: { "application/json": { schema: { $ref: "#/components/schemas/BountyResponse" } } } },
-            "400": { description: "Verification failure (wrong contract/sender/recipient/amount/memo, or signature)" },
+            "400": { description: "Verification failure (wrong contract/sender/recipient/amount/memo, a transaction with too many events to verify, or signature)" },
             "403": { description: "Signature does not match poster" },
             "404": { description: "Bounty not found" },
             "409": { description: "Txid already redeemed by another bounty" },

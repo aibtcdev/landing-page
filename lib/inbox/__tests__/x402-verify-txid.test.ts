@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyTxidPayment } from "../x402-verify";
 import { INBOX_PRICE_SATS, SBTC_CONTRACTS } from "../constants";
+import { TX_EVENT_MAX, TX_EVENT_PAGE_SIZE } from "@/lib/stacks-tx-events";
+import { createMockKV } from "./kv-mock";
 
 const SBTC = `${SBTC_CONTRACTS.mainnet.address}.${SBTC_CONTRACTS.mainnet.name}`;
 const PAYER = "SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR";
@@ -69,6 +71,27 @@ function stubHiro(tx: unknown) {
   );
 }
 
+// Hiro pages the events: the first response carries `firstPage` of them and
+// `event_count` the total, and `event_offset` asks for the rest. Like Hiro, it
+// refuses an `event_limit` above 100. `laterPage` replaces every later page.
+function stubPagedHiro(
+  tx: { events: unknown[] },
+  firstPage: number,
+  opts: { eventCount?: number; laterPage?: () => Response } = {}
+) {
+  const fetchMock = vi.fn(async (url: string | URL | Request) => {
+    const params = new URL(String(url)).searchParams;
+    const offset = Number(params.get("event_offset") ?? 0);
+    if (!(Number(params.get("event_limit")) <= 100)) return new Response("{}", { status: 400 });
+    if (offset > 0 && opts.laterPage) return opts.laterPage();
+    const events = tx.events.slice(offset, offset + (offset === 0 ? firstPage : TX_EVENT_PAGE_SIZE));
+    const body = { ...tx, event_count: opts.eventCount ?? tx.events.length, events };
+    return new Response(JSON.stringify(body), { status: 200 });
+  });
+  vi.stubGlobal("fetch", fetchMock);
+  return fetchMock;
+}
+
 describe("verifyTxidPayment", () => {
   afterEach(() => {
     vi.unstubAllGlobals();
@@ -86,6 +109,74 @@ describe("verifyTxidPayment", () => {
     );
     const r = await verifyTxidPayment(TXID, RECIPIENT);
     expect(r).toMatchObject({ success: true, payerStxAddress: PAYER, paymentTxid: TXID });
+  });
+
+  it("routed: reads the events past the first page to find the payment", async () => {
+    stubPagedHiro(
+      routedTx([ftEvent(0, PAYER, WRAPPER, 10), ftEvent(1, PAYER, RECIPIENT, INBOX_PRICE_SATS)]),
+      1
+    );
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: true, payerStxAddress: PAYER, paymentTxid: TXID });
+  });
+
+  it("rewrites a cached first-page-only transaction with every event", async () => {
+    const tx = routedTx([ftEvent(0, PAYER, WRAPPER, 10), ftEvent(1, PAYER, RECIPIENT, INBOX_PRICE_SATS)]);
+    const kv = createMockKV();
+    await kv.put(`cache:tx:${TXID}`, JSON.stringify({ ...tx, event_count: 2, events: tx.events.slice(0, 1) }));
+    stubPagedHiro(tx, 1);
+    const r = await verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
+    expect(r).toMatchObject({ success: true });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    const cached = JSON.parse((await kv.get(`cache:tx:${TXID}`)) as string);
+    expect(cached.events).toHaveLength(2);
+  });
+
+  it("returns EVENTS_TRUNCATED without paging when the tx has too many events", async () => {
+    const fetchMock = stubPagedHiro(routedTx([ftEvent(0, PAYER, RECIPIENT, INBOX_PRICE_SATS)]), 1, {
+      eventCount: TX_EVENT_MAX + 1,
+    });
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
+    expect(fetchMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("returns a retryable API_ERROR when a later page of events fails", async () => {
+    stubPagedHiro(
+      routedTx([ftEvent(0, PAYER, WRAPPER, 10), ftEvent(1, PAYER, RECIPIENT, INBOX_PRICE_SATS)]),
+      1,
+      { laterPage: () => new Response("{}", { status: 404 }) }
+    );
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+  });
+
+  it("returns RATE_LIMITED with Hiro's Retry-After when a later page is rate-limited", async () => {
+    stubPagedHiro(
+      routedTx([ftEvent(0, PAYER, WRAPPER, 10), ftEvent(1, PAYER, RECIPIENT, INBOX_PRICE_SATS)]),
+      1,
+      { laterPage: () => new Response("{}", { status: 429, headers: { "Retry-After": "7" } }) }
+    );
+    // stacksApiFetch retries a 429 after Retry-After; skip the waits.
+    vi.useFakeTimers();
+    try {
+      const pending = verifyTxidPayment(TXID, RECIPIENT);
+      await vi.runAllTimersAsync();
+      const r = await pending;
+      expect(r).toMatchObject({ success: false, errorCode: "RATE_LIMITED", retryAfterSeconds: 7 });
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+
+  // Hiro gives a mint no sender, so this event shape does not occur; the test
+  // pins the explicit `asset_event_type` check.
+  it("routed: ignores an sBTC FT event that is not a transfer", async () => {
+    const mint = ftEvent(0, PAYER, RECIPIENT, INBOX_PRICE_SATS);
+    mint.asset.asset_event_type = "mint";
+    stubHiro(routedTx([mint]));
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: false, errorCode: "NOT_SBTC_TRANSFER" });
   });
 
   it("routed: returns NOT_SBTC_TRANSFER when the sender moved no sBTC", async () => {
