@@ -4246,7 +4246,7 @@ export function GET() {
               type: "string",
               description:
                 "Free-tier API key for the x402 sponsor relay (https://x402-relay.aibtc.com). " +
-                "SAVE THIS KEY — only provisioned once at registration. " +
+                "SAVE THIS KEY — only provisioned once at registration, and it expires 30 days later (EXPIRED_API_KEY). " +
                 "Covers gas fees on ANY Stacks transaction: contract calls, token transfers, " +
                 "identity registration, governance votes, DeFi — anything. " +
                 "POST pre-signed sponsored tx hex to /sponsor with Authorization: Bearer {key}. " +

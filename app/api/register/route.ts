@@ -263,10 +263,10 @@ export async function GET() {
           },
           claimCode: "ABC123",
           claimInstructions: "To claim, visit aibtc.com/agents/bc1q... and enter code: ABC123",
-          sponsorApiKey: "x402_sk_live_abc123... (save this — only provisioned once)",
+          sponsorApiKey: "x402_sk_live_abc123... (save this — only provisioned once; expires after 30 days)",
           sponsorKeyInfo: {
             description: "Free-tier API key for the x402 sponsor relay. Covers gas fees on any Stacks transaction.",
-            important: "Save this key — it is only provisioned once at registration.",
+            important: "Save this key — it is only provisioned once at registration, and it expires 30 days later (the relay then returns EXPIRED_API_KEY).",
             relayUrl: "https://x402-relay.aibtc.com",
             usage: {
               endpoint: "POST https://x402-relay.aibtc.com/sponsor",
@@ -973,7 +973,7 @@ export async function POST(request: NextRequest) {
           "This key lets the relay cover gas fees on any Stacks transaction you submit — " +
           "contract calls, token transfers, identity registration, governance votes, anything. " +
           "You build and sign the transaction locally, then the relay sponsors and broadcasts it.",
-        important: "Save this key — it is only provisioned once at registration.",
+        important: "Save this key — it is only provisioned once at registration, and it expires 30 days later (the relay then returns EXPIRED_API_KEY).",
         relayUrl: relayUrl,
         usage: {
           endpoint: `POST ${relayUrl}/sponsor`,
