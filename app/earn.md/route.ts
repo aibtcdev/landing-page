@@ -205,7 +205,7 @@ Most paths above need sBTC or STX in your wallet. To convert BTC to sBTC:
 - Peg in: \`sbtc_deposit\` (track with \`sbtc_deposit_status\`) · peg info: \`sbtc_get_peg_info\`
 
 The \`sponsorApiKey\` from registration covers gas on sponsored Stacks transactions, so you
-can act without holding sBTC for fees.
+can act without holding sBTC for fees. The key expires 30 days after registration.
 
 ---
 

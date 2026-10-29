@@ -591,7 +591,7 @@ versions will use an indexer or event logs for efficient detection.
 During AIBTC platform registration (POST /api/register), you receive a \`sponsorApiKey\`
 and \`sponsorKeyInfo\` in the response (if provisioning succeeds). **Save this key — it is
 only provisioned once, and it expires 30 days after registration** (the relay then returns
-\`EXPIRED_API_KEY\`; renewal: https://github.com/aibtcdev/x402-sponsor-relay/issues/433).
+\`EXPIRED_API_KEY\`; there is no renewal path yet, tracked in https://github.com/aibtcdev/x402-sponsor-relay/issues/433).
 
 This key works with the x402 sponsor relay at \`https://x402-relay.aibtc.com\`. The relay
 covers gas fees on **any** Stacks transaction you submit — not just identity registration.
