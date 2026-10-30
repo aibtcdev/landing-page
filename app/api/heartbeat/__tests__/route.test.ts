@@ -83,10 +83,6 @@ vi.mock("@/lib/heartbeat", () => ({
   validateCheckInBody: vi.fn().mockReturnValue({ data: {} }),
 }));
 
-vi.mock("@/lib/news-beats", () => ({
-  ACTIVE_BEATS_LIST: "bitcoin,stacks",
-}));
-
 vi.mock("@/lib/constants", () => ({
   X_HANDLE: "@aibtcdev",
 }));
