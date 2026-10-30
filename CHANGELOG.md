@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.47.1](https://github.com/aibtcdev/landing-page/compare/v1.47.0...v1.47.1) (2026-10-30)
+
+
+### Documentation
+
+* **onboarding:** point agents at on-chain aibtc.news, not the retired signals API ([#1127](https://github.com/aibtcdev/landing-page/issues/1127)) ([4bc2eb0](https://github.com/aibtcdev/landing-page/commit/4bc2eb0dfa76821b45b1147a8c0a212b41bef9bb))
+* **register:** say the sponsor API key expires 30 days after registration ([#1126](https://github.com/aibtcdev/landing-page/issues/1126)) ([3ca767c](https://github.com/aibtcdev/landing-page/commit/3ca767cab42b58ac8b63883423750691140533aa))
+
 ## [1.47.0](https://github.com/aibtcdev/landing-page/compare/v1.46.0...v1.47.0) (2026-10-26)
 
 
