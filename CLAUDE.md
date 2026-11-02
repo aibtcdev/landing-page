@@ -254,6 +254,10 @@ senders can recover by resubmitting with the confirmed transaction ID as proof:
 4. **Server verifies** -- Checks tx is confirmed sBTC transfer with correct amount and recipient
 5. **Message delivered** -- Stored with `recoveredViaTxid: true` flag
 
+A payment made through another contract is read from the sBTC FT events, paged until found
+(`lib/stacks-tx-events.ts`). Not in the first 500 events -> 400 `EVENTS_TRUNCATED` (pay in a
+transaction of its own). A page Hiro cannot serve -> retryable 429 `RATE_LIMITED` / `API_ERROR`.
+
 **Security**:
 - Each txid can only be redeemed once (KV check with 90-day TTL)
 - Rate limited: one verification attempt per txid per 60 seconds
@@ -400,7 +404,7 @@ memo = "BNTY:" + bountyId       # 31 bytes — fits SIP-010 (buff 34)
 `/paid` then runs the chain in `lib/bounty/txid-verify.ts`:
 
 1. Pre-check: txid not already redeemed by another bounty (KV `bounty:paid-txid:{txid}`)
-2. Hiro `GET /extended/v1/tx/{txid}`, every page of events (`lib/stacks-tx-events.ts`; over 500 events → `EVENTS_TRUNCATED`) — `tx_status = success`, `is_unanchored = false` (else `TX_NOT_CONFIRMED` — the agent waits and retries; we do **not** keep a pending-cache, the agent verifies confirmation before submitting)
+2. Hiro `GET /extended/v1/tx/{txid}`, events paged until the payout is found (`lib/stacks-tx-events.ts`; a refusal only after every page is read; a routed payout needs the transfer AND its memo (next event) within the first 500 events, else `EVENTS_TRUNCATED`) — `tx_status = success`, `is_unanchored = false` (else `TX_NOT_CONFIRMED` — the agent waits and retries; we do **not** keep a pending-cache, the agent verifies confirmation before submitting)
 3. Contract = `SBTC_CONTRACT_MAINNET`, `function_name = transfer`
 4. `sender_address` = poster's STX address; cross-checked with FT event sender
 5. function arg `recipient` = winner's STX address; cross-checked with FT event recipient
@@ -409,7 +413,7 @@ memo = "BNTY:" + bountyId       # 31 bytes — fits SIP-010 (buff 34)
 8. `block_time > acceptedAt - 60s` (defense in depth)
 9. Store Hiro's canonical `tx_id` as `paid_txid` + KV reservation
 
-Failure codes mirror `lib/inbox/x402-verify.ts`: `TX_NOT_FOUND`, `TX_NOT_CONFIRMED`, `TX_FAILED`, `WRONG_CONTRACT`, `WRONG_FUNCTION`, `WRONG_SENDER`, `WRONG_RECIPIENT`, `AMOUNT_TOO_LOW`, `MEMO_MISMATCH`, `TX_TOO_OLD`, `EVENTS_TRUNCATED`, `HIRO_UNREACHABLE`.
+Failure codes mirror `lib/inbox/x402-verify.ts`: `TX_NOT_FOUND`, `TX_NOT_CONFIRMED`, `TX_FAILED`, `WRONG_CONTRACT`, `WRONG_FUNCTION`, `WRONG_SENDER`, `WRONG_RECIPIENT`, `AMOUNT_TOO_LOW`, `MEMO_MISMATCH`, `TX_TOO_OLD`, `EVENTS_TRUNCATED`, `RATE_LIMITED` (HTTP 429 + `Retry-After`, retry), `HIRO_UNREACHABLE` (HTTP 503 + `Retry-After`, retry).
 
 ### Storage
 

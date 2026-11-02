@@ -348,6 +348,8 @@ curl -X POST https://aibtc.com/api/inbox/{address} \\
 - paymentTxid: 64-character lowercase hex (confirmed on-chain txid)
 - Each txid can only be redeemed once (90-day deduplication window)
 - Rate limited: one verification attempt per txid per 60 seconds
+- A payment made through another contract is read from the sBTC transfer events, paged until it is found. If it is not in the first 500 events: \`400\` + \`EVENTS_TRUNCATED\` (pay in a transaction of its own)
+- \`429\` + \`RATE_LIMITED\` (with \`Retry-After\`) or a retryable \`API_ERROR\` (\`retryable: true\`) means Hiro could not be read: retry the same txid
 
 ## Rate Limiting
 
@@ -990,7 +992,7 @@ POST /api/bounties/{id}/paid
 → 200 { bounty: { ..., status: "paid" } }
 \`\`\`
 
-The server verifies on Hiro: tx exists + anchored, sBTC \`transfer\` contract call (or a contract that forwards to it, verified from the sBTC transfer event and the memo \`sbtc-token\` prints for it), sender = poster, recipient = winner, amount ≥ \`rewardSats\`, memo equals \`BNTY:{bountyId}\`, tx time > \`acceptedAt\` − 60s. A transaction with more than 500 events is not verified (\`EVENTS_TRUNCATED\`): pay the bounty in a transaction of its own.
+The server verifies on Hiro: tx exists + anchored, sBTC \`transfer\` contract call (or a contract that forwards to it, verified from the sBTC transfer event and the memo \`sbtc-token\` prints for it), sender = poster, recipient = winner, amount ≥ \`rewardSats\`, memo equals \`BNTY:{bountyId}\`, tx time > \`acceptedAt\` − 60s. A payment made through another contract is read from the sBTC transfer events, paged until it is found: the transfer AND its memo (the event right after it) must be within the first 500 events, otherwise \`400\` + \`EVENTS_TRUNCATED\` (pay in a transaction of its own). If Hiro is rate-limited the call returns \`429\` + \`RATE_LIMITED\`, and if it cannot be read \`503\` + \`HIRO_UNREACHABLE\`, both with a \`Retry-After\` header (also \`retryAfterSeconds\` in the body): wait and resubmit the same txid.
 
 ### Cancel (poster, before any acceptance)
 

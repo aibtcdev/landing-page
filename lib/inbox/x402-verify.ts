@@ -48,8 +48,8 @@ import {
 import type { RelayRPC } from "./relay-rpc";
 import { mapRPCErrorCode } from "./relay-rpc";
 import type { Logger } from "../logging";
-import { stacksApiFetch, buildHiroHeaders, parseRetryAfterMs } from "../stacks-api-fetch";
-import { loadRemainingTxEvents, txEventsQuery } from "../stacks-tx-events";
+import { stacksApiFetch, buildHiroHeaders, retryAfterSeconds, DEFAULT_RETRY_AFTER_SECONDS } from "../stacks-api-fetch";
+import { loadTxEventsUntil, txEventsQuery } from "../stacks-tx-events";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "../identity/constants";
 import type { TerminalReason } from "@aibtc/tx-schemas/terminal-reasons";
@@ -637,6 +637,31 @@ export async function verifyInboxPayment(
   };
 }
 
+/** sBTC FT transfers the payer sent, in event order. */
+function sbtcTransfersFromPayer(
+  events: StacksTxData["events"],
+  sbtcContractId: string,
+  payerStxAddress: string
+) {
+  return (events ?? []).filter(
+    (ev) =>
+      ev.event_type === "fungible_token_asset" &&
+      ev.asset?.asset_event_type === "transfer" &&
+      ev.asset.asset_id?.startsWith(`${sbtcContractId}::`) &&
+      ev.asset.sender === payerStxAddress
+  );
+}
+
+/** Stacks API answered 429 after `stacksApiFetch` used up its retries: retryable, not a verdict. */
+function rateLimitedResult(response: Response): InboxPaymentVerification {
+  return {
+    success: false,
+    error: "Stacks API rate limit reached. Please retry after a short delay.",
+    errorCode: "RATE_LIMITED",
+    retryAfterSeconds: retryAfterSeconds(response),
+  };
+}
+
 /**
  * Verify a confirmed on-chain txid as payment proof for inbox message recovery.
  *
@@ -724,18 +749,12 @@ export async function verifyTxidPayment(
         if (response.status === 429) {
           // All 429 retries exhausted by stacksApiFetch — surface as RATE_LIMITED so
           // the caller can return HTTP 429 with Retry-After guidance to the agent.
-          const retryAfterMs = parseRetryAfterMs(response);
-          const retryAfterSeconds = retryAfterMs != null ? Math.ceil(retryAfterMs / 1000) : 30;
+          const limited = rateLimitedResult(response);
           log.warn("[verifyTxidPayment] Stacks API rate limit exhausted", {
             txid: fullTxid,
-            retryAfterSeconds,
+            retryAfterSeconds: limited.retryAfterSeconds,
           });
-          return {
-            success: false,
-            error: "Stacks API rate limit reached. Please retry after a short delay.",
-            errorCode: "RATE_LIMITED",
-            retryAfterSeconds,
-          };
+          return limited;
         }
 
         return {
@@ -775,15 +794,23 @@ export async function verifyTxidPayment(
     };
   }
 
-  // Fire-and-forget cache write for confirmed transactions
-  if (!cachedTx) {
+  // One fire-and-forget write of `cache:tx:{txid}` per request. A routed call
+  // writes after its events are loaded (below), so the entry carries them.
+  const sbtcContract = SBTC_CONTRACTS[network];
+  const expectedContractId = `${sbtcContract.address}.${sbtcContract.name}`;
+  const isRouted =
+    txData.tx_type === "contract_call" &&
+    txData.contract_call != null &&
+    txData.contract_call.contract_id !== expectedContractId;
+  const cacheTx = () => {
     setCachedTransaction(normalizedTxid, txData, kv, log).catch((err) => {
       log.warn("verifyTxidPayment.kv_cache_write_failed", {
         error: String(err),
         txid: fullTxid,
       });
     });
-  }
+  };
+  if (!cachedTx && !isRouted) cacheTx();
 
   // Require contract call (not a token transfer or other tx type)
   if (txData.tx_type !== "contract_call" || !txData.contract_call) {
@@ -795,30 +822,29 @@ export async function verifyTxidPayment(
   }
 
   // Verify the call targets the sBTC token contract's transfer function
-  const sbtcContract = SBTC_CONTRACTS[network];
-  const expectedContractId = `${sbtcContract.address}.${sbtcContract.name}`;
-
   // A call to another contract is accepted when it forwards to the sBTC
   // transfer (e.g. a gasless transfer): the payment is then read from the sBTC
   // FT events, which the calling contract cannot forge, not from its args.
   if (txData.contract_call.contract_id !== expectedContractId) {
-    // A payment late in a long transaction sits past Hiro's first page.
-    const events = await loadRemainingTxEvents(txData, txUrl, fetchTx);
+    // A payment late in a long transaction sits past Hiro's first page. Paging
+    // stops at the first payment the checks below accept; a refusal is only
+    // issued once every page is read (or `EVENTS_TRUNCATED`).
+    const payerStxAddress = txData.sender_address;
+    const paymentFound = (evs: NonNullable<StacksTxData["events"]>) =>
+      sbtcTransfersFromPayer(evs, expectedContractId, payerStxAddress).some(
+        (ev) =>
+          ev.asset?.recipient === recipientStxAddress &&
+          Number(ev.asset?.amount) >= INBOX_PRICE_SATS
+      );
+    const events = await loadTxEventsUntil(txData, txUrl, fetchTx, paymentFound);
+    if (!cachedTx || events.pages > 0) cacheTx();
     if (events.state === "unreachable") {
-      if (events.response?.status === 429) {
-        const retryAfterMs = parseRetryAfterMs(events.response);
-        return {
-          success: false,
-          error: "Stacks API rate limit reached. Please retry after a short delay.",
-          errorCode: "RATE_LIMITED",
-          retryAfterSeconds: retryAfterMs != null ? Math.ceil(retryAfterMs / 1000) : 30,
-        };
-      }
+      if (events.response?.status === 429) return rateLimitedResult(events.response);
       return {
         success: false,
         error: "Could not read the transaction events",
         errorCode: "API_ERROR",
-        retryAfterSeconds: 30,
+        retryAfterSeconds: DEFAULT_RETRY_AFTER_SECONDS,
       };
     }
     if (events.state === "truncated") {
@@ -828,20 +854,8 @@ export async function verifyTxidPayment(
         errorCode: "EVENTS_TRUNCATED",
       };
     }
-    if (events.fetched) {
-      setCachedTransaction(normalizedTxid, txData, kv, log).catch((err) => {
-        log.warn("verifyTxidPayment.kv_cache_write_failed", { error: String(err), txid: fullTxid });
-      });
-    }
 
-    const payerStxAddress = txData.sender_address;
-    const fromPayer = (txData.events ?? []).filter(
-      (ev) =>
-        ev.event_type === "fungible_token_asset" &&
-        ev.asset?.asset_event_type === "transfer" &&
-        ev.asset.asset_id?.startsWith(`${expectedContractId}::`) &&
-        ev.asset.sender === payerStxAddress
-    );
+    const fromPayer = sbtcTransfersFromPayer(txData.events, expectedContractId, payerStxAddress);
     if (fromPayer.length === 0) {
       return {
         success: false,

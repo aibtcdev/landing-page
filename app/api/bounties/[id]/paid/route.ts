@@ -18,6 +18,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { DEFAULT_RETRY_AFTER_SECONDS } from "@/lib/stacks-api-fetch";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import {
   PAY_GRACE_MS,
@@ -154,6 +155,22 @@ export async function POST(
         code: verify.code,
         txid: data.txid,
       });
+      if (verify.code === "RATE_LIMITED" || verify.code === "HIRO_UNREACHABLE") {
+        // Retryable: Hiro could not be read, the txid has not been judged.
+        const retryAfter = verify.retryAfterSeconds ?? DEFAULT_RETRY_AFTER_SECONDS;
+        return NextResponse.json(
+          {
+            error: verify.code.toLowerCase(),
+            message: verify.message,
+            code: verify.code,
+            retryAfterSeconds: retryAfter,
+          },
+          {
+            status: verify.code === "RATE_LIMITED" ? 429 : 503,
+            headers: { "Retry-After": String(retryAfter) },
+          }
+        );
+      }
       return NextResponse.json(
         {
           error: verify.code.toLowerCase(),
