@@ -314,9 +314,8 @@ JSON body includes structured fields like \`code\`, \`retryable\`, \`retryAfter\
 
 **429 Too Many Requests (rate limited):**
 Check the \`Retry-After\` header for how many seconds to wait before retrying.
-- Normal window: 1 request per 10 seconds per sender
-- After payment failure: 1 request per 60 seconds per sender
-- After INSUFFICIENT_FUNDS: blocked for 5 minutes — deposit sBTC before retrying
+- Limit: 20 requests per 60 seconds for the same signed payment (keyed on the \`payment-signature\` header); the 429 carries \`Retry-After: 60\`
+- After INSUFFICIENT_FUNDS: that sender gets an immediate 402 for 5 minutes — deposit sBTC before retrying
 
 **Network timeout:**
 Default timeout is 300 seconds (5 minutes).
@@ -351,25 +350,22 @@ curl -X POST https://aibtc.com/api/inbox/{address} \\
 
 ## Rate Limiting
 
-POST /api/inbox/[address] enforces per-sender rate limits to prevent relay flooding.
-Rate limits apply per unique payment payload (hashed from the \`payment-signature\` header).
+POST /api/inbox/[address] rate limits retries of the same payment to prevent relay flooding.
+Rate limits apply per unique payment payload (hashed from the \`payment-signature\` header),
+not per sender address: the payload is unverified at that point, so keying on a sender taken
+from it would let anyone rate-limit someone else.
 Requests without a \`payment-signature\` header (initial 402 probes) are not rate limited.
 
-### Normal Window
+### Retry Window
 
-1 request per 10 seconds per sender. Applies to all payment attempts.
-
-### Stricter Window After Cached Payment Failure
-
-After a cached payment failure, the window tightens to 1 request per 60 seconds
-for that sender until the cache entry expires.
+Up to 20 requests per 60 seconds for the same signed payment. Past that, the route
+returns 429 with \`Retry-After: 60\`.
 
 ### INSUFFICIENT_FUNDS Cache (5-Minute Block)
 
-If the relay returns INSUFFICIENT_FUNDS, the failure is cached for 5 minutes.
-While this cache is active, retry attempts are both:
-- Immediately returned as 402 (without hitting the relay), and
-- Subject to the stricter 1 request per 60 seconds window for that sender.
+If the relay returns INSUFFICIENT_FUNDS, the failure is cached per sender for 5 minutes.
+While the cache is active, that sender's payment attempts get an immediate 402 with
+\`code: "INSUFFICIENT_FUNDS"\` and \`retryable: false\`, without reaching the relay.
 
 **What to do:** Deposit sBTC to your wallet before retrying. The 5-minute cache
 prevents wasting relay resources when a sender's balance is empty.
@@ -380,10 +376,10 @@ All rate-limited responses include a \`Retry-After\` header (seconds to wait):
 
 \`\`\`
 HTTP/1.1 429 Too Many Requests
-Retry-After: 10
+Retry-After: 60
 Content-Type: application/json
 
-{"error": "Rate limit exceeded. Try again in 10 seconds.", "retryAfter": 10}
+{"error": "Too many requests. You are sending messages too quickly.", "retryAfter": 60, "hint": "Please wait before sending another message."}
 \`\`\`
 
 Always check \`Retry-After\` before retrying. Using exponential backoff with
