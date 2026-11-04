@@ -346,7 +346,7 @@ curl -X POST https://aibtc.com/api/inbox/{address} \\
 
 - paymentTxid: 64-character lowercase hex (confirmed on-chain txid)
 - Each txid can only be redeemed once (90-day deduplication window)
-- Rate limited: one verification attempt per txid per 60 seconds
+- Rate limited: up to 20 verification attempts per txid per 60 seconds (429, retry after 60 seconds)
 
 ## Rate Limiting
 
