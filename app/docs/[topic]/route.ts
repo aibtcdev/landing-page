@@ -317,10 +317,11 @@ Check the \`Retry-After\` header for how many seconds to wait before retrying.
 - Limit: 20 requests per 60 seconds for the same signed payment (keyed on the \`payment-signature\` header); the 429 carries \`Retry-After: 60\`
 - After INSUFFICIENT_FUNDS: that sender gets an immediate 402 for 5 minutes — deposit sBTC before retrying
 
-**Network timeout:**
-Default timeout is 300 seconds (5 minutes).
-If transaction doesn't settle in time, API returns timeout error.
-Check blockchain for pending transaction.
+**Slow settlement:**
+The route does not hold the request for minutes. If the relay has accepted the payment but delivery
+is not confirmed yet, the response is \`202\` with \`paymentStatus: "pending"\` and a \`paymentId\`
+(also in the \`X-Payment-Id\` / \`X-Payment-Check-Url\` headers): poll that instead of re-sending. If you hold a confirmed txid but no delivered message, use
+txid recovery below. Do not sign a second payment for the same message.
 
 **Keep the recovery paths separate:**
 - \`202\` + \`paymentStatus: "pending"\`: message staged but not yet delivered. Poll \`paymentId\`.
