@@ -74,13 +74,24 @@ const OPEN_BOUNTIES_PREFETCH = 25;
  * Fetch a few currently-open bounties for the check-in payload. Highest
  * reward first — the most attractive work surfaces at the top.
  *
+ * The caller's own bounties are dropped: the submit route refuses a poster's
+ * entry (`self_submit_forbidden`), so pointing a poster at their own bounty
+ * sends them straight into a 403. The cached list is shared by every caller,
+ * so it holds the full reward-ranked prefetch with each poster address, and
+ * the per-caller filter and the top-N slice run after the cache read.
+ *
  * Wrapped in the edge cache (see key/TTL above) so repeat check-ins skip the
  * D1 read entirely. Fails open (returns []) on missing DB or any error:
  * surfacing earning opportunities is a nice-to-have, never a reason to fail a
  * heartbeat.
  */
+type CachedOpenBounty = NonNullable<HeartbeatOrientation["openBounties"]>[number] & {
+  posterBtcAddress?: string;
+};
+
 async function fetchOpenBounties(
   db: D1Database | undefined,
+  callerBtcAddress: string,
   now: Date = new Date()
 ): Promise<NonNullable<HeartbeatOrientation["openBounties"]>> {
   if (!db) return [];
@@ -94,15 +105,15 @@ async function fetchOpenBounties(
           limit: OPEN_BOUNTIES_PREFETCH,
           now,
         });
-        const list = bounties
+        const list: CachedOpenBounty[] = bounties
           .sort((a, b) => b.rewardSats - a.rewardSats)
-          .slice(0, OPEN_BOUNTIES_SHOWN)
           .map((b) => ({
             id: b.id,
             title: b.title,
             rewardSats: b.rewardSats,
             expiresAt: b.expiresAt,
             url: `https://aibtc.com/bounties/${b.id}`,
+            posterBtcAddress: b.posterBtcAddress,
           }));
         return new Response(JSON.stringify(list), {
           headers: {
@@ -113,7 +124,17 @@ async function fetchOpenBounties(
         });
       }
     );
-    return (await res.json()) as NonNullable<HeartbeatOrientation["openBounties"]>;
+    const cached = (await res.json()) as CachedOpenBounty[];
+    return cached
+      .filter((b) => b.posterBtcAddress !== callerBtcAddress)
+      .slice(0, OPEN_BOUNTIES_SHOWN)
+      .map((b) => ({
+        id: b.id,
+        title: b.title,
+        rewardSats: b.rewardSats,
+        expiresAt: b.expiresAt,
+        url: b.url,
+      }));
   } catch {
     return [];
   }
@@ -230,7 +251,7 @@ export async function GET(request: NextRequest) {
     // counter. Closes aibtc-mcp-server#497 for the heartbeat orientation path.
     const [unreadCount, openBounties] = await Promise.all([
       fetchUnreadCount(db, agent.btcAddress),
-      fetchOpenBounties(db),
+      fetchOpenBounties(db, agent.btcAddress),
     ]);
 
     const orientation = getOrientation(agent, claim, unreadCount, openBounties);
@@ -522,7 +543,7 @@ export async function POST(request: NextRequest) {
         ? kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent))
         : Promise.resolve(),
       fetchUnreadCount(db, btcAddress),
-      fetchOpenBounties(db),
+      fetchOpenBounties(db, btcAddress),
     ]);
     const orientation = getOrientation(updatedAgent, claim, unreadCount, openBounties);
     const nextLevel = getNextLevel(orientation.level);

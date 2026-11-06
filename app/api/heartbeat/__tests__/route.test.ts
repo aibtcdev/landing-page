@@ -99,6 +99,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { validateCheckInBody } from "@/lib/heartbeat";
+import { listBounties } from "@/lib/bounty";
 
 // ---- fixtures ---------------------------------------------------------------
 
@@ -450,5 +451,54 @@ describe("heartbeat POST — response shape regression", () => {
     expect(body).toHaveProperty("level");
     expect(body).toHaveProperty("levelName");
     expect(body).toHaveProperty("orientation");
+  });
+});
+
+describe("heartbeat POST — open bounties skip the caller's own", () => {
+  function bounty(id: string, rewardSats: number, posterBtcAddress: string) {
+    return {
+      id,
+      title: `bounty ${id}`,
+      rewardSats,
+      expiresAt: "2026-02-01T00:00:00.000Z",
+      posterBtcAddress,
+    };
+  }
+
+  it("drops bounties the caller posted (submit would refuse them) and still shows three others", async () => {
+    const OTHER = "bc1qotherposter";
+    (listBounties as Mock).mockResolvedValueOnce({
+      bounties: [
+        bounty("own-top", 50_000, TEST_BTC),
+        bounty("a", 9_000, OTHER),
+        bounty("own-mid", 8_500, TEST_BTC),
+        bounty("b", 8_000, OTHER),
+        bounty("c", 7_000, OTHER),
+        bounty("d", 6_000, OTHER),
+      ],
+      total: 6,
+    });
+    const mock = buildMockD1();
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: buildMockKv(),
+        DB: mock.db,
+        RATE_LIMIT_CHECKIN: {
+          limit: vi.fn().mockResolvedValue({ success: true }),
+        } as unknown as RateLimit,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const response = await POST(buildPostRequest());
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      orientation: { openBounties?: Array<Record<string, unknown>> };
+    };
+    const shown = body.orientation.openBounties ?? [];
+    expect(shown.map((b) => b.id)).toEqual(["a", "b", "c"]);
+    // The poster address is only used for the filter; the public shape is unchanged.
+    for (const b of shown) expect(b).not.toHaveProperty("posterBtcAddress");
   });
 });
