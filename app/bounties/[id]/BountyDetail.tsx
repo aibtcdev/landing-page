@@ -385,7 +385,7 @@ function BountyDetailView({
                 })}
                 {submissionCount > submissions.length && (
                   <a
-                    href={`/api/bounties/${bounty.id}/submissions`}
+                    href={`/api/bounties/${bounty.id}/submissions?limit=100`}
                     target="_blank"
                     rel="noopener noreferrer"
                     className="block text-xs text-[#7DA2FF]/70 hover:text-[#7DA2FF] mt-1"

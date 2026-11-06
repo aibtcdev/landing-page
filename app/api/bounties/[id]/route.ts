@@ -28,6 +28,9 @@ import {
   type BountyWinner,
 } from "@/lib/bounty";
 
+/** Submissions inlined in the detail response; the rest are paged via /submissions. */
+const DETAIL_SUBMISSIONS_PAGE = 20;
+
 export async function GET(
   _request: NextRequest,
   { params }: { params: Promise<{ id: string }> }
@@ -54,13 +57,19 @@ export async function GET(
   const now = new Date();
   const status: BountyStatus = bountyStatus(bounty, now);
 
+  // The inline page is the OLDEST submissions (created_at ASC), so once a
+  // bounty passes the page size the newest entries are not in this response.
+  // `submissionsNextOffset` tells a poster to page through
+  // /api/bounties/{id}/submissions instead of judging from this page alone.
   const { submissions, total: submissionCount } = await listSubmissionsForBounty(
     db,
     bounty.id,
-    20,
+    DETAIL_SUBMISSIONS_PAGE,
     0,
     bounty.submissionCount
   );
+  const submissionsNextOffset =
+    submissions.length < submissionCount ? submissions.length : null;
   // One submission per agent, so submissionCount is also distinct submitters.
   // Omitted rather than failing the detail read if the attempts table is
   // unavailable (e.g. migration 029 not yet applied).
@@ -91,6 +100,7 @@ export async function GET(
       bounty: { ...bounty, status },
       submissions,
       submissionCount,
+      submissionsNextOffset,
       ...(engagement && { engagement }),
       ...(winner && { winner }),
       ...(payment && { payment }),
