@@ -23,6 +23,16 @@ export function validateSignatureFormat(signature: string): string[] {
   return errors;
 }
 
+/**
+ * Drop one leading "0x"/"0X" from a hex string. The MCP's stacks_sign_message
+ * returns RSV signatures as "0x" + hex and the register docs describe the field
+ * as 0x-prefixed, but @stacks/transactions' publicKeyFromSignatureRsv prepends
+ * its own "0x" and throws on "0x0x...". Accept both forms.
+ */
+export function stripHexPrefix(value: string): string {
+  return /^0x/i.test(value) ? value.slice(2) : value;
+}
+
 /** Validate ISO 8601 canonical format (must match Date.toISOString() output). */
 export function validateCanonicalISO8601(
   value: string,

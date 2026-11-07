@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse, after } from "next/server";
+import { stripHexPrefix } from "@/lib/validation/signature";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
@@ -422,11 +423,12 @@ async function validateReferrer(
   }
 }
 
-function verifyStacksSignature(signature: string): {
+function verifyStacksSignature(rawSignature: string): {
   valid: boolean;
   address: string;
   publicKey: string;
 } {
+  const signature = stripHexPrefix(rawSignature);
   const messageHash = hashMessage(EXPECTED_MESSAGE);
   const messageHashHex = bytesToHex(messageHash);
 
