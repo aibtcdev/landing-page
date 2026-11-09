@@ -30,6 +30,10 @@ function toMarkdown(data: SkillsData): string {
     "npx skills add aibtcdev/skills",
     "```",
     "",
+    "`npx skills add` copies only each skill's own folder. Skills that import the repo's shared `src/` code",
+    "or npm packages fail with \"Cannot find module\" when run from that copy; run them from a full checkout",
+    "(`git clone https://github.com/aibtcdev/skills`, then `bun install`). Tracked in aibtcdev/skills#470.",
+    "",
   ];
 
   for (const skill of data.skills) {
