@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SKILLS_CHECKOUT_MARKDOWN } from "@/lib/skills-checkout";
 import { X_HANDLE } from "@/lib/constants";
 
 export async function GET() {
@@ -1312,17 +1313,9 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-\`npx skills add\` copies only each skill's own folder. Most skills (wallet, btc, stx, sbtc, transfer, signing, inbox, identity, x402 and others) also import the repo's shared \`src/\` code and npm packages, so a copied folder alone fails with "Cannot find module". Run those from a full checkout:
+${SKILLS_CHECKOUT_MARKDOWN}
 
-\`\`\`
-git clone https://github.com/aibtcdev/skills && cd skills
-bun install
-bun run wallet/wallet.ts --help
-\`\`\`
-
-Tracked in https://github.com/aibtcdev/skills/issues/470.
-
-### Notable Skills (skills-v0.42.0)
+### Notable Skills
 
 | Skill | Description |
 |-------|-------------|

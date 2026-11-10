@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  SKILLS_CHECKOUT_MARKDOWN,
+  SKILLS_CLONE_COMMAND,
+  SKILLS_INSTALL_COMMAND,
+} from "@/lib/skills-checkout";
 
 interface Skill {
   name: string;
@@ -30,9 +35,7 @@ function toMarkdown(data: SkillsData): string {
     "npx skills add aibtcdev/skills",
     "```",
     "",
-    "`npx skills add` copies only each skill's own folder. Skills that import the repo's shared `src/` code",
-    "or npm packages fail with \"Cannot find module\" when run from that copy; run them from a full checkout",
-    "(`git clone https://github.com/aibtcdev/skills`, then `bun install`). Tracked in aibtcdev/skills#470.",
+    SKILLS_CHECKOUT_MARKDOWN,
     "",
   ];
 
@@ -47,6 +50,16 @@ function toMarkdown(data: SkillsData): string {
     lines.push(`npx skills add aibtcdev/skills/${skill.name}`);
     lines.push("```");
     lines.push("");
+    const runnable = entries.filter((e) => /\.(ts|js)$/.test(e));
+    if (runnable.length > 0) {
+      lines.push("From a full checkout (needs the repo's shared `src/`):");
+      lines.push("```");
+      lines.push(SKILLS_CLONE_COMMAND);
+      lines.push(SKILLS_INSTALL_COMMAND);
+      for (const e of runnable) lines.push(`bun run ${e} --help`);
+      lines.push("```");
+      lines.push("");
+    }
 
     if (skill.tags.length > 0) {
       lines.push(`**Tags:** ${skill.tags.join(", ")}`);

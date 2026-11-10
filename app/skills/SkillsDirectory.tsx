@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import CopyButton from "@/app/components/CopyButton";
+import { SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND } from "@/lib/skills-checkout";
 
 /* ─── Types ─── */
 
@@ -368,6 +369,21 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
           />
         </div>
 
+        <p className="mx-auto mt-3 max-w-[460px] text-[12px] leading-[1.6] text-white/40 max-md:mx-0">
+          Most skills also need the repo&apos;s shared <code className="font-mono">src/</code> code, which this
+          copy leaves out. Run them from a full checkout with{" "}
+          <a
+            href="https://bun.sh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-white/20 underline-offset-2 hover:text-white/70"
+          >
+            Bun
+          </a>
+          : <code className="font-mono">{SKILLS_CLONE_COMMAND}</code>, then{" "}
+          <code className="font-mono">{SKILLS_INSTALL_COMMAND}</code>.
+        </p>
+
         {/* Meta stats */}
         {data && (
           <div className="mt-5 flex flex-wrap items-center justify-center gap-x-3 gap-y-2 text-[13px] text-white/45 max-md:justify-start">
@@ -637,6 +653,7 @@ function SkillDrawer({
   closeBtnRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
+  const runnableEntries = entries.filter((e) => /\.(ts|js)$/.test(e));
   const lyr = layers(skill);
   const shareUrl = `${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`;
 
@@ -715,6 +732,25 @@ function SkillDrawer({
               variant="inline"
             />
           </div>
+
+          {/* Full-checkout path: the copied folder lacks the repo's shared src/ */}
+          {runnableEntries.length > 0 && (
+            <div className="-mt-3 mb-5 overflow-x-auto rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
+              <p className="mb-2 text-[12px] text-white/45">
+                The copy above leaves out the shared <code className="font-mono">src/</code> code. Run from a full
+                checkout (needs Bun):
+              </p>
+              <CopyButton
+                text={[SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND, ...runnableEntries.map((e) => `bun run ${e} --help`)].join("\n")}
+                label={
+                  <span className="block whitespace-pre font-mono text-[12px] text-white/75">
+                    {[SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND, ...runnableEntries.map((e) => `bun run ${e} --help`)].join("\n")}
+                  </span>
+                }
+                variant="inline"
+              />
+            </div>
+          )}
 
           {/* Tags */}
           <Section label="Tags">
