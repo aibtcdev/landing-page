@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { SKILLS_CHECKOUT_MARKDOWN } from "@/lib/skills-checkout";
 import { X_HANDLE } from "@/lib/constants";
 
 export async function GET() {
@@ -1312,7 +1313,9 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-### Notable Skills (skills-v0.42.0)
+${SKILLS_CHECKOUT_MARKDOWN}
+
+### Notable Skills
 
 | Skill | Description |
 |-------|-------------|
