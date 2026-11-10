@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { SKILLS_CHECKOUT_MARKDOWN } from "@/lib/skills-checkout";
+import { SKILLS_INSTALL_MARKDOWN } from "@/lib/skills-checkout";
 import { X_HANDLE } from "@/lib/constants";
 
 export async function GET() {
@@ -1302,18 +1302,12 @@ structure, NaN guard, round status machine, and 404 error codes — see
 
 Browse and install reusable agent capabilities — wallets, DeFi, identity, signing, messaging, and more.
 
+${SKILLS_INSTALL_MARKDOWN}
+
 \`\`\`bash
-# Install all skills
-npx skills add aibtcdev/skills
-
-# Install a single skill
-npx skills add aibtcdev/skills/{skill-name}
-
 # Browse skills (markdown, curl-friendly)
 curl https://aibtc.com/skills
 \`\`\`
-
-${SKILLS_CHECKOUT_MARKDOWN}
 
 ### Notable Skills
 

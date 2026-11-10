@@ -3,7 +3,13 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import CopyButton from "@/app/components/CopyButton";
-import { SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND } from "@/lib/skills-checkout";
+import {
+  SKILLS_CLONE_COMMAND,
+  SKILLS_INSTALL_COMMAND,
+  SKILLS_INSTALL_URL,
+  fullCheckoutCommands,
+  needsFullCheckout,
+} from "@/lib/skills-checkout";
 
 /* ─── Types ─── */
 
@@ -653,7 +659,7 @@ function SkillDrawer({
   closeBtnRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
-  const runnableEntries = entries.filter((e) => /\.(ts|js)$/.test(e));
+  const checkoutCommands = needsFullCheckout(skill.name) ? fullCheckoutCommands(entries) : null;
   const lyr = layers(skill);
   const shareUrl = `${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`;
 
@@ -714,37 +720,45 @@ function SkillDrawer({
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <p className="mb-5 text-[14px] leading-[1.65] text-white/70">{skill.description}</p>
 
-          {/* Install command */}
-          <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
-            <CopyButton
-              text={`npx skills add aibtcdev/skills/${skill.name}`}
-              label={
-                <span className="flex items-center gap-2 whitespace-nowrap">
-                  <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
-                  <span className="font-mono text-[13px] max-md:text-[12px] text-white/85">
-                    npx skills add aibtcdev/skills/{skill.name}
-                  </span>
-                  <svg aria-hidden="true" className="size-3.5 shrink-0 text-white/40 transition-colors group-hover:text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </span>
-              }
-              variant="inline"
-            />
-          </div>
-
-          {/* Full-checkout path: the copied folder lacks the repo's shared src/ */}
-          {runnableEntries.length > 0 && (
-            <div className="-mt-3 mb-5 overflow-x-auto rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-              <p className="mb-2 text-[12px] text-white/45">
-                The copy above leaves out the shared <code className="font-mono">src/</code> code. Run from a full
-                checkout (needs Bun):
+          {/* Install command: skills that import the repo's shared src/lib/ only run from a full checkout */}
+          {checkoutCommands ? (
+            <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
+              <p className="mb-2 text-[12px] text-white/55">
+                Runs from a full checkout. This skill imports the repo&apos;s shared{" "}
+                <code className="font-mono">src/lib/</code>, so{" "}
+                <code className="font-mono">npx skills add</code> alone won&apos;t start it. Needs Bun.{" "}
+                <a
+                  href={SKILLS_INSTALL_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-white/20 underline-offset-2 hover:text-white/80"
+                >
+                  Install guide
+                </a>
               </p>
               <CopyButton
-                text={[SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND, ...runnableEntries.map((e) => `bun run ${e} --help`)].join("\n")}
+                text={checkoutCommands.join("\n")}
                 label={
-                  <span className="block whitespace-pre font-mono text-[12px] text-white/75">
-                    {[SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND, ...runnableEntries.map((e) => `bun run ${e} --help`)].join("\n")}
+                  <span className="block whitespace-pre font-mono text-[12px] text-white/80">
+                    {checkoutCommands.join("\n")}
+                  </span>
+                }
+                variant="inline"
+              />
+            </div>
+          ) : (
+            <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
+              <CopyButton
+                text={`npx skills add aibtcdev/skills/${skill.name}`}
+                label={
+                  <span className="flex items-center gap-2 whitespace-nowrap">
+                    <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
+                    <span className="font-mono text-[13px] max-md:text-[12px] text-white/85">
+                      npx skills add aibtcdev/skills/{skill.name}
+                    </span>
+                    <svg aria-hidden="true" className="size-3.5 shrink-0 text-white/40 transition-colors group-hover:text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
                   </span>
                 }
                 variant="inline"
