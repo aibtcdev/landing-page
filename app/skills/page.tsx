@@ -5,7 +5,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import SkillsDirectory from "./SkillsDirectory";
 import type { SkillsData } from "./SkillsDirectory";
-import { SKILLS_MANIFEST_URL } from "@/lib/skills-checkout";
+import { SKILLS_MANIFEST_URL } from "@/lib/skills-install";
 
 export const metadata: Metadata = {
   title: "Skills",

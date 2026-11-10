@@ -7,9 +7,9 @@ import {
   SKILLS_CLONE_COMMAND,
   SKILLS_INSTALL_COMMAND,
   SKILLS_INSTALL_URL,
-  fullCheckoutCommands,
-  needsFullCheckout,
-} from "@/lib/skills-checkout";
+  skillFolder,
+  skillInstallCommands,
+} from "@/lib/skills-install";
 
 /* ─── Types ─── */
 
@@ -23,8 +23,8 @@ export interface Skill {
   userInvocable: boolean;
   author?: string;
   authorAgent?: string;
-  /** false: imports the repo's shared src/lib/, runs only from a full checkout (aibtcdev/skills#475) */
-  standalone?: boolean;
+  /** Run inside the installed skill folder, e.g. "bun install"; absent on doc-only skills */
+  install?: string;
 }
 
 export interface SkillsData {
@@ -200,9 +200,13 @@ function categoryTags(skill: Skill): string[] {
 
 /* ─── Component ─── */
 
+const HERO_COMMANDS = [
+  "npx skills add aibtcdev/skills/<skill>",
+  `cd ${skillFolder("<skill>")} && ${SKILLS_INSTALL_COMMAND}`,
+];
+
 export default function SkillsDirectory({ initialData }: { initialData: SkillsData | null }) {
   const data = initialData;
-  const checkoutCount = data ? data.skills.filter(needsFullCheckout).length : null;
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -338,7 +342,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
 
         <p className="mx-auto max-w-[560px] text-[clamp(15px,1.4vw,17px)] leading-[1.6] text-white/55 max-md:mx-0">
           Drop-in capabilities for wallets, DeFi, identity, signing, and messaging
-          on Bitcoin, run from one checkout of the skills repo.
+          on Bitcoin, installed with npx and Bun.
         </p>
 
         {/* Terminal install block — echoes the home page browser-frame motif */}
@@ -354,11 +358,11 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
             </span>
           </div>
           <CopyButton
-            text={`${SKILLS_CLONE_COMMAND}\n${SKILLS_INSTALL_COMMAND}`}
+            text={HERO_COMMANDS.join("\n")}
             label={
               <span className="flex w-full items-start gap-2.5 px-4 py-3 text-left">
                 <span className="min-w-0 flex-1 overflow-x-auto">
-                  {[SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND].map((cmd) => (
+                  {HERO_COMMANDS.map((cmd) => (
                     <span key={cmd} className="flex gap-2.5 whitespace-nowrap">
                       <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
                       <span className="font-mono text-[13px] max-md:text-[12px] text-white/90">{cmd}</span>
@@ -383,7 +387,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
         </div>
 
         <p className="mx-auto mt-3 max-w-[460px] text-[12px] leading-[1.6] text-white/40 max-md:mx-0">
-          Every skill runs from this checkout (needs{" "}
+          Needs{" "}
           <a
             href="https://bun.sh"
             target="_blank"
@@ -392,10 +396,11 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
           >
             Bun
           </a>
-          ). <code className="font-mono">npx skills add</code> copies only each skill&apos;s folder, so
-          {checkoutCount !== null ? ` the ${checkoutCount} skills` : " skills"} marked &ldquo;Runs from a full
-          checkout&rdquo; won&apos;t start that way; the rest also install alone with{" "}
-          <code className="font-mono">npx skills add aibtcdev/skills/&lt;skill&gt;</code>.{" "}
+          . Run <code className="font-mono">{SKILLS_INSTALL_COMMAND}</code> inside the folder the installer reports
+          (<code className="font-mono">-g</code>: <code className="font-mono">~/.agents/skills/&lt;skill&gt;</code>).
+          To use many skills at once, clone the repo instead:{" "}
+          <code className="font-mono">{SKILLS_CLONE_COMMAND}</code>, then{" "}
+          <code className="font-mono">{SKILLS_INSTALL_COMMAND}</code>.{" "}
           <a
             href={SKILLS_INSTALL_URL}
             target="_blank"
@@ -675,7 +680,7 @@ function SkillDrawer({
   closeBtnRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
-  const checkoutCommands = needsFullCheckout(skill) ? fullCheckoutCommands(entries) : null;
+  const installCommands = skillInstallCommands(skill);
   const lyr = layers(skill);
   const shareUrl = `${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`;
 
@@ -736,13 +741,22 @@ function SkillDrawer({
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <p className="mb-5 text-[14px] leading-[1.65] text-white/70">{skill.description}</p>
 
-          {/* Install command: skills that import the repo's shared src/lib/ only run from a full checkout */}
-          {checkoutCommands ? (
+          {/* Install command: npx, then bun install inside the installed folder when the skill has an install step */}
+          {installCommands.length > 1 ? (
             <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
-              <p className="mb-2 text-[12px] text-white/55">
-                Runs from a full checkout. This skill imports the repo&apos;s shared{" "}
-                <code className="font-mono">src/lib/</code>, so{" "}
-                <code className="font-mono">npx skills add</code> alone won&apos;t start it. Needs Bun.{" "}
+              <CopyButton
+                text={installCommands.join("\n")}
+                label={
+                  <span className="block whitespace-pre font-mono text-[12px] text-white/80">
+                    {installCommands.join("\n")}
+                  </span>
+                }
+                variant="inline"
+              />
+              <p className="mt-2 text-[12px] text-white/45">
+                Needs Bun. Run <code className="font-mono">{skill.install}</code> inside the folder the installer
+                reports (<code className="font-mono">-g</code>:{" "}
+                <code className="font-mono">~/{skillFolder(skill.name)}</code>).{" "}
                 <a
                   href={SKILLS_INSTALL_URL}
                   target="_blank"
@@ -752,15 +766,6 @@ function SkillDrawer({
                   Install guide
                 </a>
               </p>
-              <CopyButton
-                text={checkoutCommands.join("\n")}
-                label={
-                  <span className="block whitespace-pre font-mono text-[12px] text-white/80">
-                    {checkoutCommands.join("\n")}
-                  </span>
-                }
-                variant="inline"
-              />
             </div>
           ) : (
             <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
