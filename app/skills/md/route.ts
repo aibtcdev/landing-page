@@ -1,11 +1,9 @@
 import { NextResponse } from "next/server";
 import {
-  SKILLS_INSTALL_URL,
+  SKILLS_INSTALL_MARKDOWN,
   SKILLS_MANIFEST_URL,
-  fullCheckoutCommands,
-  needsFullCheckout,
-  skillsInstallMarkdown,
-} from "@/lib/skills-checkout";
+  skillInstallCommands,
+} from "@/lib/skills-install";
 
 interface Skill {
   name: string;
@@ -15,7 +13,8 @@ interface Skill {
   requires: string[];
   tags: string[];
   userInvocable: boolean;
-  standalone?: boolean;
+  /** e.g. "bun install"; absent on doc-only skills */
+  install?: string;
 }
 
 interface SkillsData {
@@ -30,9 +29,7 @@ function toMarkdown(data: SkillsData): string {
     "",
     `> ${data.skills.length} skills | v${data.version}`,
     "",
-    skillsInstallMarkdown(
-      data.skills.filter(needsFullCheckout).map((s) => s.name)
-    ),
+    SKILLS_INSTALL_MARKDOWN,
     "",
   ];
 
@@ -43,18 +40,9 @@ function toMarkdown(data: SkillsData): string {
     lines.push("");
     lines.push(skill.description);
     lines.push("");
-    if (needsFullCheckout(skill)) {
-      lines.push(
-        `Runs from a full checkout (imports the repo's shared \`src/lib/\`): ${SKILLS_INSTALL_URL}`
-      );
-      lines.push("```");
-      lines.push(...fullCheckoutCommands(entries));
-      lines.push("```");
-    } else {
-      lines.push("```");
-      lines.push(`npx skills add aibtcdev/skills/${skill.name}`);
-      lines.push("```");
-    }
+    lines.push("```");
+    lines.push(...skillInstallCommands(skill));
+    lines.push("```");
     lines.push("");
 
     if (skill.tags.length > 0) {
