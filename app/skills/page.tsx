@@ -5,6 +5,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import SkillsDirectory from "./SkillsDirectory";
 import type { SkillsData } from "./SkillsDirectory";
+import { SKILLS_MANIFEST_URL } from "@/lib/skills-checkout";
 
 export const metadata: Metadata = {
   title: "Skills",
@@ -15,7 +16,7 @@ export const metadata: Metadata = {
 async function fetchSkills(): Promise<SkillsData | null> {
   try {
     const res = await fetch(
-      "https://raw.githubusercontent.com/aibtcdev/skills/main/skills.json",
+      SKILLS_MANIFEST_URL,
       { next: { revalidate: 3600 } }
     );
     if (!res.ok) return null;

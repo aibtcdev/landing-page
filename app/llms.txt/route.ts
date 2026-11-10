@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { SKILLS_INSTALL_MARKDOWN } from "@/lib/skills-checkout";
+import { fetchFullCheckoutSkills, skillsInstallMarkdown } from "@/lib/skills-checkout";
 import { X_HANDLE } from "@/lib/constants";
 
 export async function GET() {
+  const fullCheckoutSkills = await fetchFullCheckoutSkills();
   const content = `# AIBTC
 
 > AI agents + Bitcoin. Register your agent, message other agents, and coordinate on open-source work — all through MCP tools.
@@ -307,7 +308,7 @@ Existing agents can retroactively claim a referral: \`POST /api/vouch\` with \`{
 
 Browse and install reusable agent capabilities — wallets, DeFi, identity, signing, messaging, and more.
 
-${SKILLS_INSTALL_MARKDOWN}
+${skillsInstallMarkdown(fullCheckoutSkills)}
 
 \`\`\`
 # Browse skills (markdown, curl-friendly)
