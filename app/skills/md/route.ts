@@ -1,8 +1,10 @@
 import { NextResponse } from "next/server";
 import {
-  SKILLS_CHECKOUT_MARKDOWN,
-  SKILLS_CLONE_COMMAND,
-  SKILLS_INSTALL_COMMAND,
+  SKILLS_INSTALL_URL,
+  SKILLS_MANIFEST_URL,
+  fullCheckoutCommands,
+  needsFullCheckout,
+  skillsInstallMarkdown,
 } from "@/lib/skills-checkout";
 
 interface Skill {
@@ -13,6 +15,7 @@ interface Skill {
   requires: string[];
   tags: string[];
   userInvocable: boolean;
+  standalone?: boolean;
 }
 
 interface SkillsData {
@@ -21,21 +24,15 @@ interface SkillsData {
   skills: Skill[];
 }
 
-const SKILLS_URL =
-  "https://raw.githubusercontent.com/aibtcdev/skills/main/skills.json";
-
 function toMarkdown(data: SkillsData): string {
   const lines: string[] = [
     "# AIBTC Agent Skills",
     "",
     `> ${data.skills.length} skills | v${data.version}`,
     "",
-    "Install all skills:",
-    "```",
-    "npx skills add aibtcdev/skills",
-    "```",
-    "",
-    SKILLS_CHECKOUT_MARKDOWN,
+    skillsInstallMarkdown(
+      data.skills.filter(needsFullCheckout).map((s) => s.name)
+    ),
     "",
   ];
 
@@ -46,20 +43,19 @@ function toMarkdown(data: SkillsData): string {
     lines.push("");
     lines.push(skill.description);
     lines.push("");
-    lines.push("```");
-    lines.push(`npx skills add aibtcdev/skills/${skill.name}`);
-    lines.push("```");
-    lines.push("");
-    const runnable = entries.filter((e) => /\.(ts|js)$/.test(e));
-    if (runnable.length > 0) {
-      lines.push("From a full checkout (needs the repo's shared `src/`):");
+    if (needsFullCheckout(skill)) {
+      lines.push(
+        `Runs from a full checkout (imports the repo's shared \`src/lib/\`): ${SKILLS_INSTALL_URL}`
+      );
       lines.push("```");
-      lines.push(SKILLS_CLONE_COMMAND);
-      lines.push(SKILLS_INSTALL_COMMAND);
-      for (const e of runnable) lines.push(`bun run ${e} --help`);
+      lines.push(...fullCheckoutCommands(entries));
       lines.push("```");
-      lines.push("");
+    } else {
+      lines.push("```");
+      lines.push(`npx skills add aibtcdev/skills/${skill.name}`);
+      lines.push("```");
     }
+    lines.push("");
 
     if (skill.tags.length > 0) {
       lines.push(`**Tags:** ${skill.tags.join(", ")}`);
@@ -81,7 +77,7 @@ function toMarkdown(data: SkillsData): string {
 
 export async function GET() {
   try {
-    const res = await fetch(SKILLS_URL, { next: { revalidate: 3600 } });
+    const res = await fetch(SKILLS_MANIFEST_URL, { next: { revalidate: 3600 } });
     if (!res.ok) {
       return new NextResponse("Failed to fetch skills data", { status: 502 });
     }

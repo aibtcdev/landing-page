@@ -3,7 +3,13 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import CopyButton from "@/app/components/CopyButton";
-import { SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND } from "@/lib/skills-checkout";
+import {
+  SKILLS_CLONE_COMMAND,
+  SKILLS_INSTALL_COMMAND,
+  SKILLS_INSTALL_URL,
+  fullCheckoutCommands,
+  needsFullCheckout,
+} from "@/lib/skills-checkout";
 
 /* ─── Types ─── */
 
@@ -17,6 +23,8 @@ export interface Skill {
   userInvocable: boolean;
   author?: string;
   authorAgent?: string;
+  /** false: imports the repo's shared src/lib/, runs only from a full checkout (aibtcdev/skills#475) */
+  standalone?: boolean;
 }
 
 export interface SkillsData {
@@ -194,6 +202,7 @@ function categoryTags(skill: Skill): string[] {
 
 export default function SkillsDirectory({ initialData }: { initialData: SkillsData | null }) {
   const data = initialData;
+  const checkoutCount = data ? data.skills.filter(needsFullCheckout).length : null;
   const searchParams = useSearchParams();
   const [query, setQuery] = useState("");
   const [tagFilter, setTagFilter] = useState<string | null>(null);
@@ -329,7 +338,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
 
         <p className="mx-auto max-w-[560px] text-[clamp(15px,1.4vw,17px)] leading-[1.6] text-white/55 max-md:mx-0">
           Drop-in capabilities for wallets, DeFi, identity, signing, and messaging
-          on Bitcoin, installed with a single command.
+          on Bitcoin, run from one checkout of the skills repo.
         </p>
 
         {/* Terminal install block — echoes the home page browser-frame motif */}
@@ -345,16 +354,20 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
             </span>
           </div>
           <CopyButton
-            text="npx skills add aibtcdev/skills"
+            text={`${SKILLS_CLONE_COMMAND}\n${SKILLS_INSTALL_COMMAND}`}
             label={
-              <span className="flex w-full items-center gap-2.5 px-4 py-3 text-left">
-                <span className="font-mono text-[14px] text-[#F7931A]/70">$</span>
-                <span className="font-mono text-[14px] max-md:text-[13px] text-white/90">
-                  npx skills add aibtcdev/skills
+              <span className="flex w-full items-start gap-2.5 px-4 py-3 text-left">
+                <span className="min-w-0 flex-1 overflow-x-auto">
+                  {[SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND].map((cmd) => (
+                    <span key={cmd} className="flex gap-2.5 whitespace-nowrap">
+                      <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
+                      <span className="font-mono text-[13px] max-md:text-[12px] text-white/90">{cmd}</span>
+                    </span>
+                  ))}
                 </span>
                 <svg
                   aria-hidden="true"
-                  className="ml-auto size-3.5 shrink-0 text-white/30 transition-colors group-hover:text-white/60"
+                  className="mt-0.5 size-3.5 shrink-0 text-white/30 transition-colors group-hover:text-white/60"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -370,8 +383,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
         </div>
 
         <p className="mx-auto mt-3 max-w-[460px] text-[12px] leading-[1.6] text-white/40 max-md:mx-0">
-          Most skills also need the repo&apos;s shared <code className="font-mono">src/</code> code, which this
-          copy leaves out. Run them from a full checkout with{" "}
+          Every skill runs from this checkout (needs{" "}
           <a
             href="https://bun.sh"
             target="_blank"
@@ -380,8 +392,18 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
           >
             Bun
           </a>
-          : <code className="font-mono">{SKILLS_CLONE_COMMAND}</code>, then{" "}
-          <code className="font-mono">{SKILLS_INSTALL_COMMAND}</code>.
+          ). <code className="font-mono">npx skills add</code> copies only each skill&apos;s folder, so
+          {checkoutCount !== null ? ` the ${checkoutCount} skills` : " skills"} marked &ldquo;Runs from a full
+          checkout&rdquo; won&apos;t start that way; the rest also install alone with{" "}
+          <code className="font-mono">npx skills add aibtcdev/skills/&lt;skill&gt;</code>.{" "}
+          <a
+            href={SKILLS_INSTALL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-white/20 underline-offset-2 hover:text-white/70"
+          >
+            Install guide
+          </a>
         </p>
 
         {/* Meta stats */}
@@ -653,7 +675,7 @@ function SkillDrawer({
   closeBtnRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
-  const runnableEntries = entries.filter((e) => /\.(ts|js)$/.test(e));
+  const checkoutCommands = needsFullCheckout(skill) ? fullCheckoutCommands(entries) : null;
   const lyr = layers(skill);
   const shareUrl = `${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`;
 
@@ -714,37 +736,45 @@ function SkillDrawer({
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <p className="mb-5 text-[14px] leading-[1.65] text-white/70">{skill.description}</p>
 
-          {/* Install command */}
-          <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
-            <CopyButton
-              text={`npx skills add aibtcdev/skills/${skill.name}`}
-              label={
-                <span className="flex items-center gap-2 whitespace-nowrap">
-                  <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
-                  <span className="font-mono text-[13px] max-md:text-[12px] text-white/85">
-                    npx skills add aibtcdev/skills/{skill.name}
-                  </span>
-                  <svg aria-hidden="true" className="size-3.5 shrink-0 text-white/40 transition-colors group-hover:text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </span>
-              }
-              variant="inline"
-            />
-          </div>
-
-          {/* Full-checkout path: the copied folder lacks the repo's shared src/ */}
-          {runnableEntries.length > 0 && (
-            <div className="-mt-3 mb-5 overflow-x-auto rounded-lg border border-white/[0.08] bg-white/[0.02] px-4 py-3">
-              <p className="mb-2 text-[12px] text-white/45">
-                The copy above leaves out the shared <code className="font-mono">src/</code> code. Run from a full
-                checkout (needs Bun):
+          {/* Install command: skills that import the repo's shared src/lib/ only run from a full checkout */}
+          {checkoutCommands ? (
+            <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
+              <p className="mb-2 text-[12px] text-white/55">
+                Runs from a full checkout. This skill imports the repo&apos;s shared{" "}
+                <code className="font-mono">src/lib/</code>, so{" "}
+                <code className="font-mono">npx skills add</code> alone won&apos;t start it. Needs Bun.{" "}
+                <a
+                  href={SKILLS_INSTALL_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-white/20 underline-offset-2 hover:text-white/80"
+                >
+                  Install guide
+                </a>
               </p>
               <CopyButton
-                text={[SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND, ...runnableEntries.map((e) => `bun run ${e} --help`)].join("\n")}
+                text={checkoutCommands.join("\n")}
                 label={
-                  <span className="block whitespace-pre font-mono text-[12px] text-white/75">
-                    {[SKILLS_CLONE_COMMAND, SKILLS_INSTALL_COMMAND, ...runnableEntries.map((e) => `bun run ${e} --help`)].join("\n")}
+                  <span className="block whitespace-pre font-mono text-[12px] text-white/80">
+                    {checkoutCommands.join("\n")}
+                  </span>
+                }
+                variant="inline"
+              />
+            </div>
+          ) : (
+            <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
+              <CopyButton
+                text={`npx skills add aibtcdev/skills/${skill.name}`}
+                label={
+                  <span className="flex items-center gap-2 whitespace-nowrap">
+                    <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
+                    <span className="font-mono text-[13px] max-md:text-[12px] text-white/85">
+                      npx skills add aibtcdev/skills/{skill.name}
+                    </span>
+                    <svg aria-hidden="true" className="size-3.5 shrink-0 text-white/40 transition-colors group-hover:text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
                   </span>
                 }
                 variant="inline"

@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
-import { SKILLS_CHECKOUT_MARKDOWN } from "@/lib/skills-checkout";
+import { fetchFullCheckoutSkills, skillsInstallMarkdown } from "@/lib/skills-checkout";
 import { X_HANDLE } from "@/lib/constants";
 
 export async function GET() {
+  const fullCheckoutSkills = await fetchFullCheckoutSkills();
   const content = `# AIBTC - Full Documentation
 
 > AIBTC gives AI agents Bitcoin and Stacks blockchain capabilities through
@@ -1302,18 +1303,12 @@ structure, NaN guard, round status machine, and 404 error codes — see
 
 Browse and install reusable agent capabilities — wallets, DeFi, identity, signing, messaging, and more.
 
+${skillsInstallMarkdown(fullCheckoutSkills)}
+
 \`\`\`bash
-# Install all skills
-npx skills add aibtcdev/skills
-
-# Install a single skill
-npx skills add aibtcdev/skills/{skill-name}
-
 # Browse skills (markdown, curl-friendly)
 curl https://aibtc.com/skills
 \`\`\`
-
-${SKILLS_CHECKOUT_MARKDOWN}
 
 ### Notable Skills
 
