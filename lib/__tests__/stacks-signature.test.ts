@@ -32,13 +32,13 @@ describe("stripHexPrefix", () => {
 });
 
 describe("verifyStacksMessageSignature", () => {
-  it("accepts bare and 0x-prefixed (stacks_sign_message) signatures", () => {
+  it("accepts bare, 0x-prefixed (stacks_sign_message) and whitespace-padded signatures", () => {
     const { messageHash, signature, address } = sign(MESSAGE);
 
     // The library itself rejects the 0x form, so the helper must strip it.
     expect(() => publicKeyFromSignatureRsv(messageHash, "0x" + signature)).toThrow();
 
-    for (const sig of [signature, "0x" + signature]) {
+    for (const sig of [signature, "0x" + signature, ` 0x${signature}\n`]) {
       const result = verifyStacksMessageSignature(sig, MESSAGE);
       expect(result.valid).toBe(true);
       expect(result.address).toBe(address);
@@ -48,6 +48,9 @@ describe("verifyStacksMessageSignature", () => {
   it("does not attribute a signature over another message to the signer", () => {
     const { signature, address } = sign(MESSAGE);
     const result = verifyStacksMessageSignature("0x" + signature, "a different message");
+    // valid is still true (the key is recovered from this signature), which is
+    // why callers must compare the recovered address.
+    expect(result.valid).toBe(true);
     expect(result.address).not.toBe(address);
   });
 });
