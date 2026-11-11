@@ -42,6 +42,7 @@ vi.mock("@/lib/inbox/stats", () => ({
 // mock above) and prepare() reflects only the UPDATE.
 vi.mock("@/lib/bounty", () => ({
   listBounties: vi.fn().mockResolvedValue({ bounties: [], total: 0 }),
+  submittedBountyIds: vi.fn().mockResolvedValue(new Set()),
 }));
 
 // #551: heartbeat now logs via the structured Logger (and threads it into
@@ -94,12 +95,12 @@ vi.mock("@/lib/bitcoin-verify", () => ({
 
 // ---- imports after mocks ----------------------------------------------------
 
-import { POST } from "../route";
+import { GET, POST } from "../route";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { lookupAgentWithLevel } from "@/lib/agent-lookup";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { validateCheckInBody } from "@/lib/heartbeat";
-import { listBounties } from "@/lib/bounty";
+import { listBounties, submittedBountyIds } from "@/lib/bounty";
 
 // ---- fixtures ---------------------------------------------------------------
 
@@ -500,5 +501,70 @@ describe("heartbeat POST — open bounties skip the caller's own", () => {
     expect(shown.map((b) => b.id)).toEqual(["a", "b", "c"]);
     // The poster address is only used for the filter; the public shape is unchanged.
     for (const b of shown) expect(b).not.toHaveProperty("posterBtcAddress");
+  });
+
+  it("drops bounties the caller already submitted to (submit would 409)", async () => {
+    const OTHER = "bc1qotherposter";
+    (listBounties as Mock).mockResolvedValueOnce({
+      bounties: [
+        bounty("a", 9_000, OTHER),
+        bounty("b", 8_000, OTHER),
+        bounty("c", 7_000, OTHER),
+        bounty("d", 6_000, OTHER),
+      ],
+      total: 4,
+    });
+    (submittedBountyIds as Mock).mockResolvedValueOnce(new Set(["a"]));
+    const mock = buildMockD1();
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: {
+        VERIFIED_AGENTS: buildMockKv(),
+        DB: mock.db,
+        RATE_LIMIT_CHECKIN: {
+          limit: vi.fn().mockResolvedValue({ success: true }),
+        } as unknown as RateLimit,
+      },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const response = await POST(buildPostRequest());
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      orientation: { openBounties?: Array<Record<string, unknown>> };
+    };
+    expect((body.orientation.openBounties ?? []).map((b) => b.id)).toEqual(["b", "c", "d"]);
+    expect(submittedBountyIds).toHaveBeenCalledWith(mock.db, TEST_BTC, ["a", "b", "c", "d"]);
+  });
+
+  it("GET orientation applies the same filters for the looked-up agent", async () => {
+    const OTHER = "bc1qotherposter";
+    (listBounties as Mock).mockResolvedValueOnce({
+      bounties: [
+        bounty("own", 50_000, TEST_BTC),
+        bounty("a", 9_000, OTHER),
+        bounty("b", 8_000, OTHER),
+        bounty("c", 7_000, OTHER),
+        bounty("d", 6_000, OTHER),
+      ],
+      total: 5,
+    });
+    (submittedBountyIds as Mock).mockResolvedValueOnce(new Set(["b"]));
+    const mock = buildMockD1();
+    (getCloudflareContext as Mock).mockResolvedValue({
+      env: { VERIFIED_AGENTS: buildMockKv(), DB: mock.db },
+      ctx: { waitUntil: vi.fn() },
+    });
+
+    const response = await GET(
+      new NextRequest(`http://localhost/api/heartbeat?address=${TEST_BTC}`)
+    );
+
+    expect(response.status).toBe(200);
+    const body = (await response.json()) as {
+      orientation: { openBounties?: Array<Record<string, unknown>> };
+    };
+    expect((body.orientation.openBounties ?? []).map((b) => b.id)).toEqual(["a", "c", "d"]);
+    expect(submittedBountyIds).toHaveBeenCalledWith(mock.db, TEST_BTC, ["a", "b", "c", "d"]);
   });
 });

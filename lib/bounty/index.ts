@@ -73,6 +73,7 @@ export {
   listSubmissionsBySubmitter,
   insertSubmission,
   hasSubmission,
+  submittedBountyIds,
   recordSubmitAttempt,
   getSubmitAttemptCounts,
 } from "./d1-helpers";

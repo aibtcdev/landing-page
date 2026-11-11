@@ -8,7 +8,7 @@ import { X_HANDLE } from "@/lib/constants";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
 import { getAgentInboxStats } from "@/lib/inbox/stats";
-import { listBounties } from "@/lib/bounty";
+import { listBounties, submittedBountyIds } from "@/lib/bounty";
 import { withEdgeCache } from "@/lib/edge-cache";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import {
@@ -74,11 +74,13 @@ const OPEN_BOUNTIES_PREFETCH = 25;
  * Fetch a few currently-open bounties for the check-in payload. Highest
  * reward first — the most attractive work surfaces at the top.
  *
- * The caller's own bounties are dropped: the submit route refuses a poster's
- * entry (`self_submit_forbidden`), so pointing a poster at their own bounty
- * sends them straight into a 403. The cached list is shared by every caller,
- * so it holds the full reward-ranked prefetch with each poster address, and
- * the per-caller filter and the top-N slice run after the cache read.
+ * Bounties the caller cannot enter are dropped: their own (the submit route
+ * refuses with 400 `self_submit_forbidden`) and ones they already submitted
+ * to (409 `already_submitted`). The cached list is shared by every caller,
+ * so it holds the full reward-ranked prefetch with each poster address; the
+ * per-caller filters and the top-N slice run after the cache read. The
+ * already-submitted check is one indexed D1 read over the remaining
+ * candidates.
  *
  * Wrapped in the edge cache (see key/TTL above) so repeat check-ins skip the
  * D1 read entirely. Fails open (returns []) on missing DB or any error:
@@ -125,16 +127,16 @@ async function fetchOpenBounties(
       }
     );
     const cached = (await res.json()) as CachedOpenBounty[];
-    return cached
-      .filter((b) => b.posterBtcAddress !== callerBtcAddress)
+    const notOwn = cached.filter((b) => b.posterBtcAddress !== callerBtcAddress);
+    const submitted = await submittedBountyIds(
+      db,
+      callerBtcAddress,
+      notOwn.map((b) => b.id)
+    );
+    return notOwn
+      .filter((b) => !submitted.has(b.id))
       .slice(0, OPEN_BOUNTIES_SHOWN)
-      .map((b) => ({
-        id: b.id,
-        title: b.title,
-        rewardSats: b.rewardSats,
-        expiresAt: b.expiresAt,
-        url: b.url,
-      }));
+      .map(({ posterBtcAddress: _poster, ...rest }) => rest);
   } catch {
     return [];
   }
@@ -543,7 +545,8 @@ export async function POST(request: NextRequest) {
         ? kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent))
         : Promise.resolve(),
       fetchUnreadCount(db, btcAddress),
-      fetchOpenBounties(db, btcAddress),
+      // Stored record's address, the same string the submit route compares.
+      fetchOpenBounties(db, updatedAgent.btcAddress),
     ]);
     const orientation = getOrientation(updatedAgent, claim, unreadCount, openBounties);
     const nextLevel = getNextLevel(orientation.level);
