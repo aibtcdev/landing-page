@@ -566,6 +566,29 @@ export async function hasSubmission(
   return row != null;
 }
 
+/**
+ * Which of `bountyIds` this agent has already submitted to. One indexed read
+ * (`idx_submissions_submitter`) for a small candidate set, used to keep the
+ * heartbeat from pointing an agent at a bounty the submit route would refuse
+ * with 409 `already_submitted`.
+ */
+export async function submittedBountyIds(
+  db: D1Database,
+  submitterBtcAddress: string,
+  bountyIds: string[]
+): Promise<Set<string>> {
+  if (bountyIds.length === 0) return new Set();
+  const placeholders = bountyIds.map(() => "?").join(", ");
+  const { results } = await db
+    .prepare(
+      `SELECT DISTINCT bounty_id FROM bounty_submissions
+       WHERE submitter_btc_address = ? AND bounty_id IN (${placeholders})`
+    )
+    .bind(submitterBtcAddress, ...bountyIds)
+    .all<{ bounty_id: string }>();
+  return new Set((results ?? []).map((r) => r.bounty_id));
+}
+
 // ── Submit attempts (#1040) ───────────────────────────────────────────────
 
 export type SubmitAttemptOutcome = "not_registered" | "closed" | "store_failed";
