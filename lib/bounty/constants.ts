@@ -48,15 +48,15 @@ export const ACCEPT_GRACE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
  */
 export const PAY_GRACE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+/** Submissions inlined in the bounty detail (API + page); the rest are paged via /submissions. */
+export const DETAIL_SUBMISSIONS_PAGE = 20;
+
 /**
  * SIP-010 memo prefix used to bind an on-chain sBTC transfer to a specific
  * bounty. The full memo is `BNTY:` + `bountyId` (26-char ulid).
  *
  * Total = 5 + 26 = 31 bytes, fits in the SIP-010 `(buff 34)` memo field.
  */
-/** Submissions inlined in the bounty detail (API + page); the rest are paged via /submissions. */
-export const DETAIL_SUBMISSIONS_PAGE = 20;
-
 export const MEMO_PREFIX = "BNTY:";
 
 /** sBTC token contracts per network. Mirrors `lib/inbox/constants.ts`. */
