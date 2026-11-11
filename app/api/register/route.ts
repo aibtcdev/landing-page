@@ -1,18 +1,9 @@
 import { NextRequest, NextResponse, after } from "next/server";
-import { stripHexPrefix } from "@/lib/validation/signature";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
 import { syncBnsLookup } from "@/lib/bns-reverse-index";
-import {
-  publicKeyFromSignatureRsv,
-  getAddressFromPublicKey,
-} from "@stacks/transactions";
-import {
-  hashMessage,
-  verifyMessageSignatureRsv,
-} from "@stacks/encryption";
-import { bytesToHex } from "@stacks/common";
+import { verifyStacksMessageSignature } from "@/lib/stacks-signature";
 import { generateName } from "@/lib/name-generator";
 import { computeLevel, getNextLevel } from "@/lib/levels";
 import { verifyBitcoinSignature, bip322VerifyP2TR } from "@/lib/bitcoin-verify";
@@ -423,31 +414,6 @@ async function validateReferrer(
   }
 }
 
-function verifyStacksSignature(rawSignature: string): {
-  valid: boolean;
-  address: string;
-  publicKey: string;
-} {
-  const signature = stripHexPrefix(rawSignature);
-  const messageHash = hashMessage(EXPECTED_MESSAGE);
-  const messageHashHex = bytesToHex(messageHash);
-
-  const recoveredPubKey = publicKeyFromSignatureRsv(messageHashHex, signature);
-  const recoveredAddress = getAddressFromPublicKey(recoveredPubKey, "mainnet");
-
-  const valid = verifyMessageSignatureRsv({
-    signature,
-    message: EXPECTED_MESSAGE,
-    publicKey: recoveredPubKey,
-  });
-
-  return {
-    valid,
-    address: recoveredAddress,
-    publicKey: recoveredPubKey,
-  };
-}
-
 /** Build a structured JSON error response for registration failures. */
 function registrationError(
   error: string,
@@ -647,7 +613,7 @@ export async function POST(request: NextRequest) {
 
     let stxResult;
     try {
-      stxResult = verifyStacksSignature(stacksSignature);
+      stxResult = verifyStacksMessageSignature(stacksSignature, EXPECTED_MESSAGE);
     } catch (e) {
       return registrationError(
         `Invalid Stacks signature: ${(e as Error).message}`,
