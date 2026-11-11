@@ -1,15 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
-import {
-  publicKeyFromSignatureRsv,
-  getAddressFromPublicKey,
-} from "@stacks/transactions";
-import {
-  hashMessage,
-  verifyMessageSignatureRsv,
-} from "@stacks/encryption";
-import { bytesToHex } from "@stacks/common";
+import { verifyStacksMessageSignature } from "@/lib/stacks-signature";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { computeLevel } from "@/lib/levels";
 import { generateName } from "@/lib/name-generator";
@@ -23,18 +15,6 @@ import {
   getVouchIndex,
 } from "@/lib/vouch";
 import type { ClaimStatus } from "@/lib/types";
-
-function verifyStacksSignature(signature: string, message: string): {
-  valid: boolean;
-  address: string;
-} {
-  const messageHash = hashMessage(message);
-  const messageHashHex = bytesToHex(messageHash);
-  const recoveredPubKey = publicKeyFromSignatureRsv(messageHashHex, signature);
-  const recoveredAddress = getAddressFromPublicKey(recoveredPubKey, "mainnet");
-  const valid = verifyMessageSignatureRsv({ signature, message, publicKey: recoveredPubKey });
-  return { valid, address: recoveredAddress };
-}
 
 export async function GET() {
   return NextResponse.json({
@@ -164,7 +144,7 @@ export async function POST(request: NextRequest) {
       const expectedMessage = `Referral code for ${trimmedStx}`;
       let sigResult;
       try {
-        sigResult = verifyStacksSignature(stxSignature!, expectedMessage);
+        sigResult = verifyStacksMessageSignature(stxSignature!, expectedMessage);
       } catch (e) {
         return NextResponse.json(
           { error: `Invalid signature: ${(e as Error).message}` },
