@@ -3,6 +3,13 @@
 import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import CopyButton from "@/app/components/CopyButton";
+import {
+  SKILLS_CLONE_COMMAND,
+  SKILLS_INSTALL_COMMAND,
+  SKILLS_INSTALL_URL,
+  skillFolder,
+  skillInstallCommands,
+} from "@/lib/skills-install";
 
 /* ─── Types ─── */
 
@@ -16,6 +23,8 @@ export interface Skill {
   userInvocable: boolean;
   author?: string;
   authorAgent?: string;
+  /** Run inside the installed skill folder, e.g. "bun install"; absent on doc-only skills */
+  install?: string;
 }
 
 export interface SkillsData {
@@ -179,6 +188,11 @@ function categoryTags(skill: Skill): string[] {
 
 /* ─── Component ─── */
 
+const HERO_COMMANDS = [
+  "npx skills add aibtcdev/skills/<skill>",
+  `cd ${skillFolder("<skill>")} && ${SKILLS_INSTALL_COMMAND}`,
+];
+
 export default function SkillsDirectory({ initialData }: { initialData: SkillsData | null }) {
   const data = initialData;
   const searchParams = useSearchParams();
@@ -316,7 +330,7 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
 
         <p className="mx-auto max-w-[560px] text-[clamp(15px,1.4vw,17px)] leading-[1.6] text-white/55 max-md:mx-0">
           Drop-in capabilities for wallets, DeFi, identity, signing, and messaging
-          on Bitcoin, installed with a single command.
+          on Bitcoin, installed with npx and Bun.
         </p>
 
         {/* Terminal install block — echoes the home page browser-frame motif */}
@@ -332,16 +346,20 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
             </span>
           </div>
           <CopyButton
-            text="npx skills add aibtcdev/skills"
+            text={HERO_COMMANDS.join("\n")}
             label={
-              <span className="flex w-full items-center gap-2.5 px-4 py-3 text-left">
-                <span className="font-mono text-[14px] text-[#F7931A]/70">$</span>
-                <span className="font-mono text-[14px] max-md:text-[13px] text-white/90">
-                  npx skills add aibtcdev/skills
+              <span className="flex w-full items-start gap-2.5 px-4 py-3 text-left">
+                <span className="min-w-0 flex-1 overflow-x-auto">
+                  {HERO_COMMANDS.map((cmd) => (
+                    <span key={cmd} className="flex gap-2.5 whitespace-nowrap">
+                      <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
+                      <span className="font-mono text-[13px] max-md:text-[12px] text-white/90">{cmd}</span>
+                    </span>
+                  ))}
                 </span>
                 <svg
                   aria-hidden="true"
-                  className="ml-auto size-3.5 shrink-0 text-white/30 transition-colors group-hover:text-white/60"
+                  className="mt-0.5 size-3.5 shrink-0 text-white/30 transition-colors group-hover:text-white/60"
                   fill="none"
                   viewBox="0 0 24 24"
                   stroke="currentColor"
@@ -355,6 +373,31 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
             className="block w-full !rounded-none"
           />
         </div>
+
+        <p className="mx-auto mt-3 max-w-[460px] text-[12px] leading-[1.6] text-white/40 max-md:mx-0">
+          Needs{" "}
+          <a
+            href="https://bun.sh"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-white/20 underline-offset-2 hover:text-white/70"
+          >
+            Bun
+          </a>
+          . Run <code className="font-mono">{SKILLS_INSTALL_COMMAND}</code> inside the folder the installer reports
+          (<code className="font-mono">-g</code>: <code className="font-mono">~/.agents/skills/&lt;skill&gt;</code>).
+          To use many skills at once, clone the repo instead:{" "}
+          <code className="font-mono">{SKILLS_CLONE_COMMAND}</code>, then{" "}
+          <code className="font-mono">{SKILLS_INSTALL_COMMAND}</code>.{" "}
+          <a
+            href={SKILLS_INSTALL_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="underline decoration-white/20 underline-offset-2 hover:text-white/70"
+          >
+            Install guide
+          </a>
+        </p>
 
         {/* Meta stats */}
         {data && (
@@ -625,6 +668,7 @@ function SkillDrawer({
   closeBtnRef: React.RefObject<HTMLButtonElement | null>;
 }) {
   const entries = Array.isArray(skill.entry) ? skill.entry : [skill.entry];
+  const installCommands = skillInstallCommands(skill);
   const lyr = layers(skill);
   const shareUrl = `${typeof window !== "undefined" ? window.location.origin : "https://aibtc.com"}/skills?skill=${encodeURIComponent(skill.name)}`;
 
@@ -685,24 +729,51 @@ function SkillDrawer({
         <div className="flex-1 overflow-y-auto px-5 py-5">
           <p className="mb-5 text-[14px] leading-[1.65] text-white/70">{skill.description}</p>
 
-          {/* Install command */}
-          <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
-            <CopyButton
-              text={`npx skills add aibtcdev/skills/${skill.name}`}
-              label={
-                <span className="flex items-center gap-2 whitespace-nowrap">
-                  <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
-                  <span className="font-mono text-[13px] max-md:text-[12px] text-white/85">
-                    npx skills add aibtcdev/skills/{skill.name}
+          {/* Install command: npx, then bun install inside the installed folder when the skill has an install step */}
+          {installCommands.length > 1 ? (
+            <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
+              <CopyButton
+                text={installCommands.join("\n")}
+                label={
+                  <span className="block whitespace-pre font-mono text-[12px] text-white/80">
+                    {installCommands.join("\n")}
                   </span>
-                  <svg aria-hidden="true" className="size-3.5 shrink-0 text-white/40 transition-colors group-hover:text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                    <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
-                  </svg>
-                </span>
-              }
-              variant="inline"
-            />
-          </div>
+                }
+                variant="inline"
+              />
+              <p className="mt-2 text-[12px] text-white/45">
+                Needs Bun. Run <code className="font-mono">{skill.install}</code> inside the folder the installer
+                reports (<code className="font-mono">-g</code>:{" "}
+                <code className="font-mono">~/{skillFolder(skill.name)}</code>).{" "}
+                <a
+                  href={SKILLS_INSTALL_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="underline decoration-white/20 underline-offset-2 hover:text-white/80"
+                >
+                  Install guide
+                </a>
+              </p>
+            </div>
+          ) : (
+            <div className="mb-5 overflow-x-auto rounded-lg border border-[#F7931A]/20 bg-[#F7931A]/[0.05] px-4 py-3">
+              <CopyButton
+                text={`npx skills add aibtcdev/skills/${skill.name}`}
+                label={
+                  <span className="flex items-center gap-2 whitespace-nowrap">
+                    <span className="font-mono text-[13px] text-[#F7931A]/70">$</span>
+                    <span className="font-mono text-[13px] max-md:text-[12px] text-white/85">
+                      npx skills add aibtcdev/skills/{skill.name}
+                    </span>
+                    <svg aria-hidden="true" className="size-3.5 shrink-0 text-white/40 transition-colors group-hover:text-white/70" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
+                      <path strokeLinecap="round" strokeLinejoin="round" d="M8 16H6a2 2 0 01-2-2V6a2 2 0 012-2h8a2 2 0 012 2v2m-6 12h8a2 2 0 002-2v-8a2 2 0 00-2-2h-8a2 2 0 00-2 2v8a2 2 0 002 2z" />
+                    </svg>
+                  </span>
+                }
+                variant="inline"
+              />
+            </div>
+          )}
 
           {/* Tags */}
           <Section label="Tags">
