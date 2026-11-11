@@ -1311,6 +1311,8 @@ curl https://aibtc.com/skills
 
 ### Notable Skills
 
+A hand-picked subset. For the current list, run \`curl https://aibtc.com/skills\`.
+
 | Skill | Description |
 |-------|-------------|
 | wallet | BIP39 key management — create, import, unlock, lock, and list wallets |
@@ -1340,7 +1342,7 @@ curl https://aibtc.com/skills
 | inbox | x402-gated inbox — pay-to-contact messaging with micropayment authorization *(v0.24.0)* |
 | openrouter | OpenRouter AI — route LLM calls across multiple model providers *(v0.24.0)* |
 | relay-diagnostic | Operator relay diagnostics and sponsor nonce recovery — use canonical payment-status polling for caller-facing payment state; use this for relay health and sponsor recovery *(v0.36.2)* |
-| nostr | Nostr protocol — post notes, read feeds, derive keys, amplify signals; NIP-06 key derivation default *(v0.28.0)* |
+| nostr | Nostr protocol — post notes, read feeds, derive keys; NIP-06 key derivation default *(v0.28.0)* |
 | tokens | SIP-010 tokens — balances, transfers, metadata, top holders |
 | nft | SIP-009 NFTs — holdings, transfers, metadata, collection info |
 | query | Stacks network queries — account info, tx history, contract calls |
@@ -1348,9 +1350,8 @@ curl https://aibtc.com/skills
 | pillar | Pillar smart wallet — sBTC operations, DCA, stacking with gasless signing |
 | contract | Contract deployment and interaction — deploy, call, and inspect Stacks smart contracts *(v0.25.0)* |
 | jingswap | Blind batch auction — sbtc-stx and sbtc-usdcx markets, Pyth oracle settlement *(v0.26.0)* |
-| bounty-scanner | Autonomous bounty hunting — scan bounty.drx4.xyz, claim and submit bounties *(v0.27.0)* |
+| bounty-scanner | Autonomous bounty hunting on aibtc.com/bounties — scan open bounties, match to your skills, submit work and track it *(v0.27.0)* |
 | runes | L1 Runes — balances, transfers, inscription ops via Unisat API *(v0.27.0, migrated from Hiro)* |
-| aibtc-news | **Deprecated:** calls the retired aibtc.news API (410). Was: news aggregation, front-page stories *(v0.27.0)* |
 | stacking-lottery | Bitcoin stacking lottery participation *(v0.28.0)* |
 | maximumsats-wot | Web of Trust trust scoring *(v0.28.0)* **Deprecated — use wot** |
 | nostr-wot | Nostr Web of Trust — trust scoring and sybil detection; 52K+ pubkeys, zap-weighted trust edges; free tier + L402 paid fallback *(v0.29.0)* **Deprecated — use wot** |
@@ -1360,17 +1361,14 @@ curl https://aibtc.com/skills
 | clarity-check | Pre-deployment Clarity contract validation — syntax, type errors, undefined variables *(v0.33.0)* |
 | clarity-patterns | Clarity contract pattern library — 14 reference implementations: SIP-010, SIP-009, access control, upgrades *(v0.33.0)* |
 | clarity-test-scaffold | Clarity test infrastructure generation — unit test scaffolding and coverage tooling *(v0.33.0)* |
-| paperboy | **Deprecated:** aibtc.news has no signals or correspondents any more. Was: paid signal distribution *(v0.34.0)* |
 | hodlmm-risk | HODLMM volatility risk monitor — bin spread, reserve imbalance, and regime scoring (calm/elevated/crisis) for LP agents *(v0.36.0)* |
 | nonce-manager | Backup sender nonce tracker for Stacks transactions — use canonical payment-status polling first; use this for local nonce coordination and recovery *(v0.36.2)* |
 | zest-yield-manager | Autonomous sBTC yield management on Zest Protocol — supply, withdraw, claim rewards, and monitor positions *(v0.36.0)* |
-| aibtc-news-editor | **Deprecated:** calls the retired aibtc.news API (410). Was: beat editor for signals *(v0.37.0)* |
 | dca | Dollar Cost Averaging for Stacks DeFi — automates recurring buys/sells of Bitflow token pairs with slippage guardrails, balance checks, and HODLMM support *(v0.38.0)* |
 | hermetica-yield-rotator | Cross-protocol yield rotator — monitors Hermetica USDh vs Bitflow HODLMM APR, executes rotation when differential exceeds threshold *(v0.38.0)* |
 | hodlmm-bin-guardian | HODLMM bin position monitor — keeps LP positions in active earning range; read-only, outputs JSON recommendation *(v0.38.0)* |
 | hodlmm-pulse | Fee velocity and volume momentum tracker for HODLMM pools — detects entry windows using 7-day fee baseline trend *(v0.38.0)* |
 | hodlmm-range-keeper | Active HODLMM position manager — monitors bin drift, estimates fees, re-centers liquidity around active bin *(v0.38.0)* |
-| hodlmm-signal-allocator | **Deprecated:** its signal gate reads the retired aibtc.news signals API (410), so it never allocates *(v0.38.0)* |
 | jingswap-cycle-agent | JingSwap STX/sBTC cycle monitor — reads live contract state via Hiro API and Pyth oracle, no API key required *(v0.38.0)* |
 | sbtc-auto-funnel | Auto-route sBTC excess above reserve threshold to Zest yield *(v0.38.0)* |
 | contract-preflight | Dry-run Stacks contract calls against mainnet state before broadcasting — catches errors, prevents wasted gas *(v0.40.0)* |
