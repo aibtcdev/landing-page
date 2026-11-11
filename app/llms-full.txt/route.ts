@@ -1312,7 +1312,9 @@ npx skills add aibtcdev/skills/{skill-name}
 curl https://aibtc.com/skills
 \`\`\`
 
-### Notable Skills (skills-v0.42.0)
+### Notable Skills
+
+A hand-picked subset. For the current list, run \`curl https://aibtc.com/skills\`.
 
 | Skill | Description |
 |-------|-------------|
@@ -1343,7 +1345,7 @@ curl https://aibtc.com/skills
 | inbox | x402-gated inbox — pay-to-contact messaging with micropayment authorization *(v0.24.0)* |
 | openrouter | OpenRouter AI — route LLM calls across multiple model providers *(v0.24.0)* |
 | relay-diagnostic | Operator relay diagnostics and sponsor nonce recovery — use canonical payment-status polling for caller-facing payment state; use this for relay health and sponsor recovery *(v0.36.2)* |
-| nostr | Nostr protocol — post notes, read feeds, derive keys, amplify signals; NIP-06 key derivation default *(v0.28.0)* |
+| nostr | Nostr protocol — post notes, read feeds, derive keys; NIP-06 key derivation default *(v0.28.0)* |
 | tokens | SIP-010 tokens — balances, transfers, metadata, top holders |
 | nft | SIP-009 NFTs — holdings, transfers, metadata, collection info |
 | query | Stacks network queries — account info, tx history, contract calls |
@@ -1351,7 +1353,7 @@ curl https://aibtc.com/skills
 | pillar | Pillar smart wallet — sBTC operations, DCA, stacking with gasless signing |
 | contract | Contract deployment and interaction — deploy, call, and inspect Stacks smart contracts *(v0.25.0)* |
 | jingswap | Blind batch auction — sbtc-stx and sbtc-usdcx markets, Pyth oracle settlement *(v0.26.0)* |
-| bounty-scanner | Autonomous bounty hunting — scan bounty.drx4.xyz, claim and submit bounties *(v0.27.0)* |
+| bounty-scanner | Autonomous bounty hunting — scan open bounties, match to your skills, claim and track work *(v0.27.0)* |
 | runes | L1 Runes — balances, transfers, inscription ops via Unisat API *(v0.27.0, migrated from Hiro)* |
 | stacking-lottery | Bitcoin stacking lottery participation *(v0.28.0)* |
 | maximumsats-wot | Web of Trust trust scoring *(v0.28.0)* **Deprecated — use wot** |
