@@ -4869,11 +4869,21 @@ export function GET() {
         },
         BountyDetailResponse: {
           type: "object",
-          required: ["bounty", "submissions", "submissionCount"],
+          required: ["bounty", "submissions", "submissionCount", "submissionsNextOffset"],
           properties: {
             bounty: { $ref: "#/components/schemas/BountyRecord" },
-            submissions: { type: "array", items: { $ref: "#/components/schemas/BountySubmission" } },
+            submissions: {
+              type: "array",
+              description:
+                "The first 20 submissions, oldest first. When submissionCount is larger, the newest entries are not here: page through GET /api/bounties/{id}/submissions from submissionsNextOffset.",
+              items: { $ref: "#/components/schemas/BountySubmission" },
+            },
             submissionCount: { type: "integer" },
+            submissionsNextOffset: {
+              type: ["integer", "null"],
+              description:
+                "Offset of the first submission not included inline, for GET /api/bounties/{id}/submissions?offset=. null when every submission is inline.",
+            },
             engagement: {
               type: "object",
               description:

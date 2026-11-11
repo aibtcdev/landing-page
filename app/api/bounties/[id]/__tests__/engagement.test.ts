@@ -69,3 +69,56 @@ describe("GET /api/bounties/[id] engagement (#1040)", () => {
     expect(body.engagement).toBeUndefined();
   });
 });
+
+describe("GET /api/bounties/[id] submissions paging", () => {
+  it("returns submissionsNextOffset when the inline page holds fewer than submissionCount", async () => {
+    countsMock.mockResolvedValue(undefined);
+    getBountyMock.mockResolvedValueOnce({
+      id: BOUNTY_ID,
+      posterBtcAddress: "bc1qposter",
+      posterStxAddress: "SPPOSTER",
+      title: "t",
+      description: "d",
+      rewardSats: 1000,
+      submissionCount: 22,
+      createdAt: new Date(Date.now() - 1000).toISOString(),
+      updatedAt: new Date(Date.now() - 1000).toISOString(),
+      expiresAt: new Date(Date.now() + 86_400_000).toISOString(),
+    });
+    const page = Array.from({ length: 20 }, (_, i) => ({ id: `s${i}` }));
+    listSubmissionsMock.mockResolvedValueOnce({ submissions: page, total: 22 });
+
+    const res = await detail();
+
+    expect(listSubmissionsMock).toHaveBeenCalledWith({}, BOUNTY_ID, 20, 0, 22);
+    const body = (await res.json()) as { submissionsNextOffset: number | null; submissionCount: number };
+    expect(body.submissionCount).toBe(22);
+    expect(body.submissionsNextOffset).toBe(20);
+  });
+
+  it("returns submissionsNextOffset null when every submission is inline", async () => {
+    countsMock.mockResolvedValue(undefined);
+    listSubmissionsMock.mockResolvedValueOnce({
+      submissions: [{ id: "a" }, { id: "b" }],
+      total: 2,
+    });
+
+    const res = await detail();
+
+    const body = (await res.json()) as { submissionsNextOffset: number | null };
+    expect(body.submissionsNextOffset).toBeNull();
+  });
+
+  it("returns null on a short page even when the stored count is higher", async () => {
+    countsMock.mockResolvedValue(undefined);
+    listSubmissionsMock.mockResolvedValueOnce({
+      submissions: [{ id: "a" }, { id: "b" }],
+      total: 5,
+    });
+
+    const res = await detail();
+
+    const body = (await res.json()) as { submissionsNextOffset: number | null };
+    expect(body.submissionsNextOffset).toBeNull();
+  });
+});

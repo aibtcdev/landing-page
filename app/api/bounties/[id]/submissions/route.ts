@@ -46,7 +46,11 @@ export async function GET(
     offset,
     bounty.submissionCount
   );
-  const nextOffset = offset + submissions.length < total ? offset + submissions.length : null;
+  // An empty page is the end even if the stored count says otherwise.
+  const nextOffset =
+    submissions.length > 0 && offset + submissions.length < total
+      ? offset + submissions.length
+      : null;
 
   return NextResponse.json(
     {

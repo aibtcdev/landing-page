@@ -1,6 +1,8 @@
 "use client";
 
 import { useState } from "react";
+import { fetcher } from "@/lib/fetcher";
+import { DETAIL_SUBMISSIONS_PAGE } from "@/lib/bounty/constants";
 import Link from "next/link";
 import type { BountyDetailData } from "../types";
 import type { BountySubmission } from "@/lib/bounty";
@@ -231,6 +233,60 @@ function BountyDetailView({
   explorerUrl: string | null;
 }) {
   const [activeTab, setActiveTab] = useState<"submissions" | "details">("submissions");
+  // Submissions past the inline page, loaded on demand from /submissions.
+  const [moreSubmissions, setMoreSubmissions] = useState<BountySubmission[]>([]);
+  // Same rule as the detail route's submissionsNextOffset: a full inline page
+  // with more counted behind it.
+  const [nextOffset, setNextOffset] = useState<number | null>(
+    submissions.length === DETAIL_SUBMISSIONS_PAGE && submissions.length < submissionCount
+      ? submissions.length
+      : null
+  );
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
+  // Display names for submitters on loaded pages (SSR only resolved the first page).
+  const [loadedNames, setLoadedNames] = useState<Record<string, string>>({});
+  const names = { ...agentNames, ...loadedNames };
+  const shownIds = new Set(orderedSubmissions.map((s) => s.id));
+  const visibleSubmissions = [
+    ...orderedSubmissions,
+    ...moreSubmissions.filter((s) => !shownIds.has(s.id)),
+  ];
+
+  async function loadMoreSubmissions() {
+    if (nextOffset === null || loadingMore) return;
+    setLoadingMore(true);
+    setLoadMoreFailed(false);
+    try {
+      const page = await fetcher<{ submissions: BountySubmission[]; nextOffset: number | null }>(
+        `/api/bounties/${bounty.id}/submissions?limit=100&offset=${nextOffset}`
+      );
+      setMoreSubmissions((prev) => [...prev, ...page.submissions]);
+      setNextOffset(page.nextOffset);
+      void resolveNames(page.submissions.map((s) => s.submitterBtcAddress));
+    } catch {
+      setLoadMoreFailed(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
+
+  /** Look up display names for new submitters, 5 at a time; misses keep the address. */
+  async function resolveNames(addresses: string[]) {
+    const todo = [...new Set(addresses)].filter((a) => !names[a]);
+    for (let i = 0; i < todo.length; i += 5) {
+      const found = await Promise.all(
+        todo.slice(i, i + 5).map((addr) =>
+          fetcher<{ agent?: { displayName?: string } }>(`/api/agents/${addr}`)
+            .then((r) => [addr, r.agent?.displayName] as const)
+            .catch(() => [addr, undefined] as const)
+        )
+      );
+      const batch: Record<string, string> = {};
+      for (const [addr, name] of found) if (name) batch[addr] = name;
+      if (Object.keys(batch).length > 0) setLoadedNames((prev) => ({ ...prev, ...batch }));
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -365,9 +421,9 @@ function BountyDetailView({
         {/* SUBMISSIONS PANEL (default, winner pinned at top) */}
         {activeTab === "submissions" && (
           <div className="pt-5">
-            {orderedSubmissions.length > 0 ? (
+            {visibleSubmissions.length > 0 ? (
               <div className="space-y-2">
-                {orderedSubmissions.map((sub) => {
+                {visibleSubmissions.map((sub) => {
                   const isWinner = winner?.submissionId === sub.id;
                   return (
                     <SubmissionCard
@@ -375,7 +431,7 @@ function BountyDetailView({
                       sub={sub}
                       isWinner={isWinner}
                       acceptedAt={isWinner ? winner?.acceptedAt : undefined}
-                      agentNames={agentNames}
+                      agentNames={names}
                       paidTxid={isWinner ? bounty.paidTxid : undefined}
                       paidAt={isWinner ? bounty.paidAt : undefined}
                       explorerUrl={isWinner ? explorerUrl : null}
@@ -383,15 +439,19 @@ function BountyDetailView({
                     />
                   );
                 })}
-                {submissionCount > submissions.length && (
-                  <a
-                    href={`/api/bounties/${bounty.id}/submissions`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-xs text-[#7DA2FF]/70 hover:text-[#7DA2FF] mt-1"
+                {nextOffset !== null && (
+                  <button
+                    type="button"
+                    onClick={loadMoreSubmissions}
+                    disabled={loadingMore}
+                    className="block text-xs text-[#7DA2FF]/70 hover:text-[#7DA2FF] disabled:opacity-50 mt-1"
                   >
-                    See all {submissionCount} submissions (API) →
-                  </a>
+                    {loadingMore
+                      ? "Loading…"
+                      : loadMoreFailed
+                        ? "Couldn't load more submissions. Try again"
+                        : `Show more (${visibleSubmissions.length} of ${submissionCount} shown) →`}
+                  </button>
                 )}
               </div>
             ) : (
