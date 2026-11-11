@@ -476,7 +476,7 @@ export async function listSubmissionsForBounty(
     .prepare(
       `SELECT ${SUBMISSION_COLUMNS} FROM bounty_submissions
        WHERE bounty_id = ?
-       ORDER BY created_at ASC
+       ORDER BY created_at ASC, id ASC
        LIMIT ? OFFSET ?`
     )
     .bind(bountyId, cappedLimit, cappedOffset)

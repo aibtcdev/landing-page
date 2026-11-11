@@ -4869,7 +4869,7 @@ export function GET() {
         },
         BountyDetailResponse: {
           type: "object",
-          required: ["bounty", "submissions", "submissionCount"],
+          required: ["bounty", "submissions", "submissionCount", "submissionsNextOffset"],
           properties: {
             bounty: { $ref: "#/components/schemas/BountyRecord" },
             submissions: {
@@ -4880,8 +4880,7 @@ export function GET() {
             },
             submissionCount: { type: "integer" },
             submissionsNextOffset: {
-              type: "integer",
-              nullable: true,
+              type: ["integer", "null"],
               description:
                 "Offset of the first submission not included inline, for GET /api/bounties/{id}/submissions?offset=. null when every submission is inline.",
             },

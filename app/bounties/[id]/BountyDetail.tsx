@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { fetcher } from "@/lib/fetcher";
 import Link from "next/link";
 import type { BountyDetailData } from "../types";
 import type { BountySubmission } from "@/lib/bounty";
@@ -231,6 +232,35 @@ function BountyDetailView({
   explorerUrl: string | null;
 }) {
   const [activeTab, setActiveTab] = useState<"submissions" | "details">("submissions");
+  // Submissions past the inline page, loaded on demand from /submissions.
+  const [moreSubmissions, setMoreSubmissions] = useState<BountySubmission[]>([]);
+  const [nextOffset, setNextOffset] = useState<number | null>(
+    submissions.length < submissionCount ? submissions.length : null
+  );
+  const [loadingMore, setLoadingMore] = useState(false);
+  const [loadMoreFailed, setLoadMoreFailed] = useState(false);
+  const shownIds = new Set(orderedSubmissions.map((s) => s.id));
+  const visibleSubmissions = [
+    ...orderedSubmissions,
+    ...moreSubmissions.filter((s) => !shownIds.has(s.id)),
+  ];
+
+  async function loadMoreSubmissions() {
+    if (nextOffset === null || loadingMore) return;
+    setLoadingMore(true);
+    setLoadMoreFailed(false);
+    try {
+      const page = await fetcher<{ submissions: BountySubmission[]; nextOffset: number | null }>(
+        `/api/bounties/${bounty.id}/submissions?limit=100&offset=${nextOffset}`
+      );
+      setMoreSubmissions((prev) => [...prev, ...page.submissions]);
+      setNextOffset(page.submissions.length > 0 ? page.nextOffset : null);
+    } catch {
+      setLoadMoreFailed(true);
+    } finally {
+      setLoadingMore(false);
+    }
+  }
 
   return (
     <div className="space-y-5">
@@ -365,9 +395,9 @@ function BountyDetailView({
         {/* SUBMISSIONS PANEL (default, winner pinned at top) */}
         {activeTab === "submissions" && (
           <div className="pt-5">
-            {orderedSubmissions.length > 0 ? (
+            {visibleSubmissions.length > 0 ? (
               <div className="space-y-2">
-                {orderedSubmissions.map((sub) => {
+                {visibleSubmissions.map((sub) => {
                   const isWinner = winner?.submissionId === sub.id;
                   return (
                     <SubmissionCard
@@ -383,15 +413,19 @@ function BountyDetailView({
                     />
                   );
                 })}
-                {submissionCount > submissions.length && (
-                  <a
-                    href={`/api/bounties/${bounty.id}/submissions?limit=100`}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-xs text-[#7DA2FF]/70 hover:text-[#7DA2FF] mt-1"
+                {nextOffset !== null && (
+                  <button
+                    type="button"
+                    onClick={loadMoreSubmissions}
+                    disabled={loadingMore}
+                    className="block text-xs text-[#7DA2FF]/70 hover:text-[#7DA2FF] disabled:opacity-50 mt-1"
                   >
-                    See all {submissionCount} submissions (API) →
-                  </a>
+                    {loadingMore
+                      ? "Loading…"
+                      : loadMoreFailed
+                        ? "Couldn't load more submissions. Try again"
+                        : `Show more (${visibleSubmissions.length} of ${submissionCount} shown) →`}
+                  </button>
                 )}
               </div>
             ) : (

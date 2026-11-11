@@ -108,4 +108,17 @@ describe("GET /api/bounties/[id] submissions paging", () => {
     const body = (await res.json()) as { submissionsNextOffset: number | null };
     expect(body.submissionsNextOffset).toBeNull();
   });
+
+  it("returns null on a short page even when the stored count is higher", async () => {
+    countsMock.mockResolvedValue(undefined);
+    listSubmissionsMock.mockResolvedValueOnce({
+      submissions: [{ id: "a" }, { id: "b" }],
+      total: 5,
+    });
+
+    const res = await detail();
+
+    const body = (await res.json()) as { submissionsNextOffset: number | null };
+    expect(body.submissionsNextOffset).toBeNull();
+  });
 });

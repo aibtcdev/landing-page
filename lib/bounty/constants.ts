@@ -54,6 +54,9 @@ export const PAY_GRACE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
  *
  * Total = 5 + 26 = 31 bytes, fits in the SIP-010 `(buff 34)` memo field.
  */
+/** Submissions inlined in the bounty detail (API + page); the rest are paged via /submissions. */
+export const DETAIL_SUBMISSIONS_PAGE = 20;
+
 export const MEMO_PREFIX = "BNTY:";
 
 /** sBTC token contracts per network. Mirrors `lib/inbox/constants.ts`. */

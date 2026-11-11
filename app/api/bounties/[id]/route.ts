@@ -16,6 +16,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import {
   bountyStatus,
   buildExpectedMemo,
+  DETAIL_SUBMISSIONS_PAGE,
   getBounty,
   getSubmission,
   getSubmitAttemptCounts,
@@ -27,9 +28,6 @@ import {
   type BountySubmission,
   type BountyWinner,
 } from "@/lib/bounty";
-
-/** Submissions inlined in the detail response; the rest are paged via /submissions. */
-const DETAIL_SUBMISSIONS_PAGE = 20;
 
 export async function GET(
   _request: NextRequest,
@@ -68,8 +66,12 @@ export async function GET(
     0,
     bounty.submissionCount
   );
+  // A full page with more counted behind it means there is a next page. A
+  // short page is the end even if the stored count says otherwise.
   const submissionsNextOffset =
-    submissions.length < submissionCount ? submissions.length : null;
+    submissions.length === DETAIL_SUBMISSIONS_PAGE && submissions.length < submissionCount
+      ? submissions.length
+      : null;
   // One submission per agent, so submissionCount is also distinct submitters.
   // Omitted rather than failing the detail read if the attempts table is
   // unavailable (e.g. migration 029 not yet applied).
