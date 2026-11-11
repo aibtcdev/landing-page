@@ -128,11 +128,12 @@ async function fetchOpenBounties(
     );
     const cached = (await res.json()) as CachedOpenBounty[];
     const notOwn = cached.filter((b) => b.posterBtcAddress !== callerBtcAddress);
+    // A failed lookup only costs the already-submitted filter, not the list.
     const submitted = await submittedBountyIds(
       db,
       callerBtcAddress,
       notOwn.map((b) => b.id)
-    );
+    ).catch(() => new Set<string>());
     return notOwn
       .filter((b) => !submitted.has(b.id))
       .slice(0, OPEN_BOUNTIES_SHOWN)
