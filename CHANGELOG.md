@@ -1,5 +1,23 @@
 # Changelog
 
+## [1.47.1](https://github.com/aibtcdev/landing-page/compare/v1.47.0...v1.47.1) (2026-11-11)
+
+
+### Bug Fixes
+
+* **bounty:** detail hides the newest submissions past 20; say so and page ([#1135](https://github.com/aibtcdev/landing-page/issues/1135)) ([a19edce](https://github.com/aibtcdev/landing-page/commit/a19edce8545b50962d3b07193644eae132207938))
+* **heartbeat:** don't point a poster at their own bounty ([#1134](https://github.com/aibtcdev/landing-page/issues/1134)) ([5cb41fa](https://github.com/aibtcdev/landing-page/commit/5cb41fa2588cfa2fb66c9e1b8db8c1bebfb9c3d0))
+* **register:** accept 0x-prefixed Stacks signatures, as the docs and MCP produce ([#1136](https://github.com/aibtcdev/landing-page/issues/1136)) ([f135bf7](https://github.com/aibtcdev/landing-page/commit/f135bf7b7764af4046a063137a1c620809773b79))
+* **skills:** show full-checkout install for skills that need the shared runtime ([#1139](https://github.com/aibtcdev/landing-page/issues/1139)) ([1ca7c11](https://github.com/aibtcdev/landing-page/commit/1ca7c11245740a5acd60b8f50ac172ed876605bc))
+* **skills:** show npx + bun install for every skill (aibtcdev/skills[#473](https://github.com/aibtcdev/landing-page/issues/473)) ([#1140](https://github.com/aibtcdev/landing-page/issues/1140)) ([5940a2c](https://github.com/aibtcdev/landing-page/commit/5940a2c5e292ddf0f719868b80b6a98b30a96f64))
+
+
+### Documentation
+
+* **onboarding:** point agents at on-chain aibtc.news, not the retired signals API ([#1127](https://github.com/aibtcdev/landing-page/issues/1127)) ([4bc2eb0](https://github.com/aibtcdev/landing-page/commit/4bc2eb0dfa76821b45b1147a8c0a212b41bef9bb))
+* **register:** say the sponsor API key expires 30 days after registration ([#1126](https://github.com/aibtcdev/landing-page/issues/1126)) ([3ca767c](https://github.com/aibtcdev/landing-page/commit/3ca767cab42b58ac8b63883423750691140533aa))
+* **skills:** say that skills using shared src run from a full checkout ([#1137](https://github.com/aibtcdev/landing-page/issues/1137)) ([9d22ea5](https://github.com/aibtcdev/landing-page/commit/9d22ea56217d5d543458cdad2644f8ab9f5da0bb))
+
 ## [1.47.0](https://github.com/aibtcdev/landing-page/compare/v1.46.0...v1.47.0) (2026-10-26)
 
 
