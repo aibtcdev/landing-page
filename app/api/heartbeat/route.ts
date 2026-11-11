@@ -11,6 +11,7 @@ import { getAgentInboxStats } from "@/lib/inbox/stats";
 import { listBounties, submittedBountyIds } from "@/lib/bounty";
 import { withEdgeCache } from "@/lib/edge-cache";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
+import type { Logger } from "@/lib/logging";
 import {
   CHECK_IN_MESSAGE_FORMAT,
   CHECK_IN_RATE_LIMIT_SECONDS,
@@ -49,15 +50,20 @@ function getOrientation(
 }
 
 /**
- * Global edge-cache key + TTL for the open-bounties lookup. The list is
- * identical for every agent, so a single shared entry serves all check-ins —
- * not keyed per-address. `caches.default` is per-colo, so the effective D1
- * cost is ~one read per colo per TTL window instead of one per check-in
- * (~13k/day across the active fleet collapses to a handful). Edge reads/writes
- * are free. 120s staleness is harmless: a new bounty appears within 2 min, and
- * a just-closed one is rejected at the submit endpoint regardless.
+ * Global edge-cache key + TTL for the open-bounties lookup. The cached list
+ * is identical for every agent, so a single shared entry serves all
+ * check-ins (not keyed per-address); per-caller filtering runs after the
+ * cache read. `caches.default` is per-colo, so the list query costs ~one D1
+ * read per colo per TTL window instead of one per check-in. Each check-in
+ * still makes one small indexed D1 read for the caller's own submissions
+ * (see fetchOpenBounties). Edge reads/writes are free. 120s staleness is
+ * harmless: a new bounty appears within 2 min, and a just-closed one is
+ * rejected at the submit endpoint regardless.
+ *
+ * v2: entries hold the full prefetch with poster addresses, so v1 entries
+ * (three public items) must not be reused.
  */
-const OPEN_BOUNTIES_CACHE_KEY = "https://cache.aibtc.local/heartbeat/open-bounties";
+const OPEN_BOUNTIES_CACHE_KEY = "https://cache.aibtc.local/heartbeat/open-bounties/v2";
 const OPEN_BOUNTIES_CACHE_TTL_SECONDS = 120;
 /**
  * How many open bounties we want to show vs. how many we prefetch before
@@ -82,10 +88,11 @@ const OPEN_BOUNTIES_PREFETCH = 25;
  * already-submitted check is one indexed D1 read over the remaining
  * candidates.
  *
- * Wrapped in the edge cache (see key/TTL above) so repeat check-ins skip the
- * D1 read entirely. Fails open (returns []) on missing DB or any error:
- * surfacing earning opportunities is a nice-to-have, never a reason to fail a
- * heartbeat.
+ * The list read is edge-cached (see key/TTL above); only the per-caller
+ * already-submitted lookup hits D1 on every check-in. Fails open (returns [])
+ * on missing DB or any list error, and skips only the already-submitted
+ * filter if that lookup fails: surfacing earning opportunities is a
+ * nice-to-have, never a reason to fail a heartbeat.
  */
 type CachedOpenBounty = NonNullable<HeartbeatOrientation["openBounties"]>[number] & {
   posterBtcAddress?: string;
@@ -94,6 +101,7 @@ type CachedOpenBounty = NonNullable<HeartbeatOrientation["openBounties"]>[number
 async function fetchOpenBounties(
   db: D1Database | undefined,
   callerBtcAddress: string,
+  logger: Logger,
   now: Date = new Date()
 ): Promise<NonNullable<HeartbeatOrientation["openBounties"]>> {
   if (!db) return [];
@@ -133,7 +141,12 @@ async function fetchOpenBounties(
       db,
       callerBtcAddress,
       notOwn.map((b) => b.id)
-    ).catch(() => new Set<string>());
+    ).catch((e) => {
+      logger.warn("heartbeat.submitted_bounties_lookup_failed", {
+        error: (e as Error)?.message ?? String(e),
+      });
+      return new Set<string>();
+    });
     return notOwn
       .filter((b) => !submitted.has(b.id))
       .slice(0, OPEN_BOUNTIES_SHOWN)
@@ -254,7 +267,11 @@ export async function GET(request: NextRequest) {
     // counter. Closes aibtc-mcp-server#497 for the heartbeat orientation path.
     const [unreadCount, openBounties] = await Promise.all([
       fetchUnreadCount(db, agent.btcAddress),
-      fetchOpenBounties(db, agent.btcAddress),
+      fetchOpenBounties(
+        db,
+        agent.btcAddress,
+        createConsoleLogger({ path: new URL(request.url).pathname })
+      ),
     ]);
 
     const orientation = getOrientation(agent, claim, unreadCount, openBounties);
@@ -547,7 +564,7 @@ export async function POST(request: NextRequest) {
         : Promise.resolve(),
       fetchUnreadCount(db, btcAddress),
       // Stored record's address, the same string the submit route compares.
-      fetchOpenBounties(db, updatedAgent.btcAddress),
+      fetchOpenBounties(db, updatedAgent.btcAddress, logger),
     ]);
     const orientation = getOrientation(updatedAgent, claim, unreadCount, openBounties);
     const nextLevel = getNextLevel(orientation.level);
