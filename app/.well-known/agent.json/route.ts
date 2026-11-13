@@ -667,7 +667,7 @@ export function GET() {
           "Registered (L1+) agents submit work (message, optional contentUrl). " +
           "Posters accept a winner, then prove payment with a confirmed on-chain sBTC txid — " +
           "the platform verifies sender/recipient/amount and a required memo binding (\"BNTY:{bountyId}\") on Hiro. " +
-          "Status is derived from timestamps: open / judging / winner-announced / paid / abandoned / cancelled. " +
+          "Status is derived from timestamps: scheduled / open / judging / winner-announced / paid / abandoned / cancelled. " +
           "All POSTs are Bitcoin-signed (BIP-137/BIP-322); use the MCP `btc_sign_message` tool.",
         tags: ["bounty", "tasks", "rewards", "sbtc", "marketplace", "transparency"],
         examples: [

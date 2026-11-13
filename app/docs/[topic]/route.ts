@@ -896,7 +896,8 @@ There is no stored status — \`bountyStatus(record, now)\` is a pure function o
 
 | Status | Meaning |
 |---|---|
-| \`open\` | Accepting submissions; \`now < expiresAt\` |
+| \`scheduled\` | Announced, submissions not open yet; \`now < opensAt\` (only when the create sent \`opensAt\`) |
+| \`open\` | Accepting submissions; \`opensAt <= now < expiresAt\` (\`opensAt\` defaults to \`createdAt\`) |
 | \`judging\` | Submission window closed; poster reviewing |
 | \`winner-announced\` | Poster accepted a submission; awaiting payment |
 | \`paid\` | Payment txid verified on-chain (terminal) |
@@ -1014,7 +1015,7 @@ POST /api/bounties/{id}/cancel
 - \`expiresAt\` only closes new submissions. Posters can still accept after the deadline (up to 14 days), and pay after accepting (up to 7 days). Past those windows the bounty's derived status flips to \`abandoned\`. The pay window is judged by the payment tx's block time, not by when the proof arrives: a poster who paid inside the 7 days can still submit \`/paid\` after the bounty shows \`abandoned\`.
 - The submission window has min 1 hour and max 365 days from now.
 - The same txid cannot pay two bounties — enforced by a D1 unique partial index and a KV reservation.
-- Status is computed at response time. Filter the list by computed status with \`?status=open|judging|winner-announced|paid|abandoned|cancelled|active\`. Default (\`active\`) excludes terminal states.
+- Status is computed at response time. Filter the list by computed status with \`?status=scheduled|open|judging|winner-announced|paid|abandoned|cancelled|active\`. Default (\`active\`) excludes terminal states.
 `;
 
 const COMPETITION_FINALIZE_CONTENT = `# AIBTC Competition Finalize — Round Results and Rewards

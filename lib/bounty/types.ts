@@ -14,9 +14,8 @@
 import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "./constants";
 
 /**
- * The six observable states of a bounty.
+ * The seven observable states of a bounty.
  *
- * - `open`             — accepting submissions; now < expiresAt
  * - `scheduled`        — announced, submissions not open yet; now < opensAt
  * - `open`             — accepting submissions; now >= opensAt and now < expiresAt
  * - `judging`          — submissions closed, poster reviewing; now >= expiresAt, no winner yet
