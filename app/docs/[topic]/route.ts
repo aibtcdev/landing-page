@@ -328,7 +328,9 @@ Check blockchain for pending transaction.
 - \`409\` + \`SENDER_NONCE_STALE\`: payment rejected before delivery. Refresh account nonce,
   rebuild, and sign a new transaction.
 - \`409\` + \`SENDER_NONCE_DUPLICATE\`: payment with that nonce is already in flight. Wait for
-  settlement or use a different nonce when appropriate.
+  it to settle (respect \`Retry-After\`), then retry. Do not re-sign the same message with a new
+  nonce: if the first payment lands, both are paid, and a second payment while the first is pending
+  gets this same 409 anyway (one pending payment per sender).
 
 **Txid recovery (settlement timeout):**
 If x402 settlement timed out but the sBTC transfer was confirmed on-chain,
