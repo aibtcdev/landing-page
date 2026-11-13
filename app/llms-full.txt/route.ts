@@ -454,9 +454,8 @@ The inbox list endpoint supports query parameters for direction and read-status 
 - \`unreadCount\`: Number of unread inbound messages.
 - \`excludes\`: Array of directions omitted from current view (\`["sent"]\` on received/all, \`["received"]\` on sent).
 
-**Sender rate limiting:** POST /api/inbox/[address] is rate limited per sender STX address.
-Normal: 1 request per 10 seconds. After payment failure: 1 request per 60 seconds.
-INSUFFICIENT_FUNDS failures are cached for 5 minutes — deposit sBTC before retrying.
+**Rate limiting:** POST /api/inbox/[address] is rate limited per signed payment (keyed on the \`payment-signature\` header, not the sender): up to 20 requests per 60 seconds.
+INSUFFICIENT_FUNDS failures are cached per sender for 5 minutes (immediate 402 meanwhile) — deposit sBTC before retrying.
 All rate-limited responses return 429 with \`Retry-After\` header. Initial 402 probes (no \`payment-signature\` header) are not rate limited.
 See /docs/messaging.txt for full rate limiting details.
 
