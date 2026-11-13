@@ -64,6 +64,8 @@ export interface BountyRecord {
   paidAt?: string;
   /** ISO. Poster cancelled before acceptance. */
   cancelledAt?: string;
+  cancelReason?: string;
+  rulingUrl?: string;
   updatedAt: string;
   tags?: string[];
 }

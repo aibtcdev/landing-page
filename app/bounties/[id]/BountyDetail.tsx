@@ -308,6 +308,26 @@ function BountyDetailView({
             <h1 className="mt-2.5 break-words text-[23px] font-medium leading-[1.3] tracking-[-0.012em] text-pretty text-white max-md:text-xl">
               {bounty.title}
             </h1>
+            {(bounty.cancelReason || bounty.rulingUrl) && (
+              <div className="mt-3 rounded-md border border-white/[0.08] bg-white/[0.02] p-3 text-[13px] leading-relaxed text-white/70">
+                <div className="text-[10.5px] uppercase tracking-[0.11em] text-white/40 mb-1">
+                  Cancellation Note
+                </div>
+                {bounty.cancelReason && <p className="text-white/80">{bounty.cancelReason}</p>}
+                {bounty.rulingUrl && (
+                  <p className={bounty.cancelReason ? "mt-1.5" : ""}>
+                    <a
+                      href={bounty.rulingUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-[#7DA2FF] hover:underline"
+                    >
+                      Ruling / evidence ↗
+                    </a>
+                  </p>
+                )}
+              </div>
+            )}
           </div>
           <div className="shrink-0 text-right">
             <div className="flex items-center justify-end gap-2 tabular-nums">

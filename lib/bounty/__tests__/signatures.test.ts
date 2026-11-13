@@ -93,6 +93,33 @@ describe("message builders", () => {
       "AIBTC Bounty Cancel | B | T"
     );
   });
+
+  it("buildCancelMessage appends reason and rulingUrl when either is present", () => {
+    expect(
+      buildCancelMessage({
+        bountyId: "B",
+        signedAt: "T",
+        reason: "No passing entries",
+        rulingUrl: "https://gist.github.com/secret-mars/123",
+      })
+    ).toBe("AIBTC Bounty Cancel | B | T | No passing entries | https://gist.github.com/secret-mars/123");
+
+    expect(
+      buildCancelMessage({
+        bountyId: "B",
+        signedAt: "T",
+        reason: "No passing entries",
+      })
+    ).toBe("AIBTC Bounty Cancel | B | T | No passing entries | ");
+
+    expect(
+      buildCancelMessage({
+        bountyId: "B",
+        signedAt: "T",
+        rulingUrl: "https://gist.github.com/secret-mars/123",
+      })
+    ).toBe("AIBTC Bounty Cancel | B | T |  | https://gist.github.com/secret-mars/123");
+  });
 });
 
 describe("isWithinSignatureWindow", () => {

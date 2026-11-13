@@ -13,6 +13,8 @@ import {
   DESCRIPTION_MAX,
   SUBMISSION_MESSAGE_MAX,
   SUBMISSION_URL_MAX,
+  CANCEL_REASON_MAX,
+  RULING_URL_MAX,
   TAGS_MAX,
   TAG_LENGTH_MAX,
   MIN_EXPIRY_HOURS,
@@ -534,7 +536,15 @@ export function validatePaid(body: unknown):
 
 /** Validate the POST /api/bounties/[id]/cancel body. */
 export function validateCancel(body: unknown):
-  | { data: { signedAt: string; signature: string }; errors?: never }
+  | {
+      data: {
+        signedAt: string;
+        signature: string;
+        reason?: string;
+        rulingUrl?: string;
+      };
+      errors?: never;
+    }
   | { data?: never; errors: ValidationHint[] } {
   if (!body || typeof body !== "object") {
     return {
@@ -542,23 +552,91 @@ export function validateCancel(body: unknown):
         {
           field: "body",
           message: "Request body must be a JSON object",
-          hint: "Send JSON with signedAt, signature.",
+          hint: "Send JSON with signedAt, signature (and optional reason, rulingUrl).",
         },
       ],
     };
   }
   const b = body as Record<string, unknown>;
   const errors: FieldError[] = [];
+
+  let reason: string | undefined;
+  if (b.reason !== undefined && b.reason !== null && b.reason !== "") {
+    if (typeof b.reason !== "string") {
+      errors.push({
+        message: "reason must be a string",
+        hint: {
+          field: "reason",
+          message: "reason must be a string",
+          hint: "Optional explanation of why the bounty was cancelled.",
+        },
+      });
+    } else if (b.reason.length > CANCEL_REASON_MAX) {
+      errors.push({
+        message: `reason exceeds ${CANCEL_REASON_MAX} characters`,
+        hint: {
+          field: "reason",
+          message: `reason exceeds ${CANCEL_REASON_MAX} characters`,
+          hint: `Trim to ${CANCEL_REASON_MAX} or fewer. Current: ${b.reason.length}.`,
+        },
+      });
+    } else {
+      reason = b.reason.trim();
+    }
+  }
+
+  let rulingUrl: string | undefined;
+  if (b.rulingUrl !== undefined && b.rulingUrl !== null && b.rulingUrl !== "") {
+    if (typeof b.rulingUrl !== "string") {
+      errors.push({
+        message: "rulingUrl must be a string",
+        hint: {
+          field: "rulingUrl",
+          message: "rulingUrl must be a string",
+          hint: "Optional URL linking to a ruling or off-board notes.",
+        },
+      });
+    } else if (b.rulingUrl.length > RULING_URL_MAX) {
+      errors.push({
+        message: `rulingUrl exceeds ${RULING_URL_MAX} characters`,
+        hint: {
+          field: "rulingUrl",
+          message: `rulingUrl exceeds ${RULING_URL_MAX} characters`,
+          hint: "Use a shorter URL.",
+        },
+      });
+    } else if (!/^https?:\/\//.test(b.rulingUrl)) {
+      errors.push({
+        message: "rulingUrl must start with http:// or https://",
+        hint: {
+          field: "rulingUrl",
+          message: "rulingUrl must start with http:// or https://",
+          hint: "Provide a full URL.",
+          example: "https://gist.github.com/secret-mars/6421f0e1cbbea5edad848d03e5b3460c",
+        },
+      });
+    } else {
+      rulingUrl = b.rulingUrl.trim();
+    }
+  }
+
   pushIsoTimestampError(errors, b.signedAt, "signedAt", "ISO timestamp used when signing.");
-  pushSignatureError(
-    errors,
-    b.signature,
-    "signature",
-    "AIBTC Bounty Cancel | {bountyId} | {signedAt}"
-  );
+
+  const hasOptional = reason !== undefined || rulingUrl !== undefined;
+  const messageFormat = hasOptional
+    ? "AIBTC Bounty Cancel | {bountyId} | {signedAt} | {reason} | {rulingUrl}"
+    : "AIBTC Bounty Cancel | {bountyId} | {signedAt}";
+
+  pushSignatureError(errors, b.signature, "signature", messageFormat);
+
   if (errors.length > 0) return { errors: errors.map((e) => e.hint) };
   return {
-    data: { signedAt: b.signedAt as string, signature: b.signature as string },
+    data: {
+      signedAt: b.signedAt as string,
+      signature: b.signature as string,
+      ...(reason !== undefined && { reason }),
+      ...(rulingUrl !== undefined && { rulingUrl }),
+    },
   };
 }
 

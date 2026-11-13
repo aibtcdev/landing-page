@@ -56,7 +56,12 @@ export async function POST(
     const bounty = await getBounty(db, id);
     if (!bounty) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
-    const message = buildCancelMessage({ bountyId: bounty.id, signedAt: data.signedAt });
+    const message = buildCancelMessage({
+      bountyId: bounty.id,
+      signedAt: data.signedAt,
+      reason: data.reason,
+      rulingUrl: data.rulingUrl,
+    });
     let sigResult;
     try {
       sigResult = verifyBitcoinSignature(data.signature, message, bounty.posterBtcAddress);
@@ -89,7 +94,7 @@ export async function POST(
     }
 
     const cancelledAt = new Date().toISOString();
-    const ok = await setCancelled(db, bounty.id, cancelledAt);
+    const ok = await setCancelled(db, bounty.id, cancelledAt, data.reason, data.rulingUrl);
     if (!ok) {
       return NextResponse.json(
         { error: "conflict", message: "Bounty state changed concurrently." },
