@@ -182,6 +182,45 @@ describe("POST /api/bounties/[id]/paid — pay-grace window vs proof arrival (#1
     expect(setPaidMock).not.toHaveBeenCalled();
   });
 
+  it("answers 429 with Retry-After when Hiro is rate-limited, not a terminal 400", async () => {
+    getBountyMock.mockResolvedValue(makeBounty());
+    verifyPayoutTxidMock.mockResolvedValue({
+      ok: false,
+      code: "RATE_LIMITED",
+      message: "Hiro rate limit reached. Retry after a short delay.",
+      retryAfterSeconds: 7,
+    });
+
+    const res = await POST(paidRequest(), {
+      params: Promise.resolve({ id: BOUNTY_ID }),
+    });
+
+    expect(res.status).toBe(429);
+    expect(res.headers.get("Retry-After")).toBe("7");
+    const json = (await res.json()) as { code: string; retryAfterSeconds: number };
+    expect(json).toMatchObject({ code: "RATE_LIMITED", retryAfterSeconds: 7 });
+    expect(setPaidMock).not.toHaveBeenCalled();
+  });
+
+  it("answers 503 with Retry-After when Hiro cannot be read, not a terminal 400", async () => {
+    getBountyMock.mockResolvedValue(makeBounty());
+    verifyPayoutTxidMock.mockResolvedValue({
+      ok: false,
+      code: "HIRO_UNREACHABLE",
+      message: "Could not read the transaction events.",
+    });
+
+    const res = await POST(paidRequest(), {
+      params: Promise.resolve({ id: BOUNTY_ID }),
+    });
+
+    expect(res.status).toBe(503);
+    expect(res.headers.get("Retry-After")).toBe("30");
+    const json = (await res.json()) as { code: string; retryAfterSeconds: number };
+    expect(json).toMatchObject({ code: "HIRO_UNREACHABLE", retryAfterSeconds: 30 });
+    expect(setPaidMock).not.toHaveBeenCalled();
+  });
+
   it("rejects with 422 before hitting Hiro when bounty was abandoned without ever accepting a submission", async () => {
     const expiresAt = new Date(Date.now() - ACCEPT_GRACE_MS - 86_400_000).toISOString();
     const unacceptedAbandoned = makeBounty({

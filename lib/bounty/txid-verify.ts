@@ -22,7 +22,8 @@
 import type { BountyRecord, BountySubmission } from "./types";
 import { MEMO_PREFIX, SBTC_CONTRACTS, SBTC_CONTRACT_MAINNET } from "./constants";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "@/lib/identity/constants";
-import { stacksApiFetch } from "@/lib/stacks-api-fetch";
+import { retryAfterSeconds, stacksApiFetch } from "@/lib/stacks-api-fetch";
+import { loadTxEventsUntil, txEventsQuery } from "@/lib/stacks-tx-events";
 import type { Logger } from "@/lib/logging";
 import {
   ClarityType,
@@ -45,6 +46,8 @@ export type TxidVerifyFailureCode =
   | "AMOUNT_TOO_LOW"
   | "MEMO_MISMATCH"
   | "TX_TOO_OLD"
+  | "EVENTS_TRUNCATED"
+  | "RATE_LIMITED"
   | "HIRO_UNREACHABLE";
 
 export type TxidVerifyResult =
@@ -54,7 +57,23 @@ export type TxidVerifyResult =
       canonicalTxid: string;
       blockTimeIso: string;
     }
-  | { ok: false; code: TxidVerifyFailureCode; message: string };
+  | {
+      ok: false;
+      code: TxidVerifyFailureCode;
+      message: string;
+      /** Set on `RATE_LIMITED`: seconds to wait before resubmitting. */
+      retryAfterSeconds?: number;
+    };
+
+/** Hiro answered 429 after `stacksApiFetch` used up its retries: retryable, not a verdict. */
+function rateLimitedResult(response: Response): TxidVerifyResult {
+  return {
+    ok: false,
+    code: "RATE_LIMITED",
+    message: "Hiro rate limit reached. Retry after a short delay.",
+    retryAfterSeconds: retryAfterSeconds(response),
+  };
+}
 
 /**
  * Build the expected SIP-010 memo for a given bountyId.
@@ -121,11 +140,11 @@ export async function verifyPayoutTxid(params: {
     params.fetchFn ?? ((url, init) => stacksApiFetch(url, init, { logger }));
 
   // Pass the txid to Hiro as-is — Hiro accepts both 0x-prefixed and bare hex.
+  const txUrl = `${apiBase}/extended/v1/tx/${encodeURIComponent(params.txid)}`;
+  const fetchJson = (url: string) => fetchFn(url, { headers: { accept: "application/json" } });
   let res: Response;
   try {
-    res = await fetchFn(`${apiBase}/extended/v1/tx/${encodeURIComponent(params.txid)}`, {
-      headers: { accept: "application/json" },
-    });
+    res = await fetchJson(`${txUrl}${txEventsQuery(0)}`);
   } catch {
     return { ok: false, code: "HIRO_UNREACHABLE", message: "Could not reach Hiro." };
   }
@@ -137,6 +156,7 @@ export async function verifyPayoutTxid(params: {
       message: `Transaction ${params.txid} not found on Stacks.`,
     };
   }
+  if (res.status === 429) return rateLimitedResult(res);
   if (!res.ok) {
     return {
       ok: false,
@@ -195,6 +215,8 @@ export async function verifyPayoutTxid(params: {
     };
   }
 
+  // Checks that need no events come first: a wrong-sender or stale tx must not
+  // cost a page fetch.
   // (4) Sender. Trust both top-level `sender_address` AND the second
   // function_arg (`sender` principal in SIP-010 transfer): they must agree.
   if (tx.sender_address !== params.bounty.posterStxAddress) {
@@ -230,6 +252,62 @@ export async function verifyPayoutTxid(params: {
         message: `Recipient ${recipientArg} does not match winner's STX address ${params.acceptedSubmission.submitterStxAddress}.`,
       };
     }
+  }
+
+  // (8) Tx time > acceptedAt - 60s skew. Prefer `block_time_iso` (Stacks
+  // block time — when the tx actually landed in a Stacks block) over
+  // `burn_block_time_iso` (Bitcoin anchor block time — can lag by 30+ min).
+  // Using the burn block time falsely rejects payouts whose sBTC transfer
+  // landed after `acceptedAt` but were anchored to an older Bitcoin block.
+  const blockTimeIso = tx.block_time_iso ?? tx.burn_block_time_iso ?? now.toISOString();
+  const blockTimeMs = Date.parse(blockTimeIso);
+  const acceptedMs = params.bounty.acceptedAt ? Date.parse(params.bounty.acceptedAt) : 0;
+  if (!Number.isNaN(blockTimeMs) && blockTimeMs + 60_000 < acceptedMs) {
+    return {
+      ok: false,
+      code: "TX_TOO_OLD",
+      message: "Transaction predates acceptance — cannot be the payout for this bounty.",
+    };
+  }
+
+  // The checks below read the events. A payout accepted from the events loaded
+  // so far is on-chain proof, so paging stops at the first one; a refusal is
+  // only issued once every page is read (a missing page might hold the payout).
+  // `payoutFound` accepts exactly what the checks below accept.
+  const expected = buildExpectedMemo(params.bounty.id);
+  const directMemoMatches = isDirect && memosMatch(readMemoArg(tx.contract_call.function_args), expected.hex);
+  // A direct transfer's memo is an arg: a wrong one is known without the events.
+  if (isDirect && !directMemoMatches) {
+    return {
+      ok: false,
+      code: "MEMO_MISMATCH",
+      message: `Memo did not match. Expected ${expected.hex} ("${expected.ascii}"). Include this memo in the sBTC transfer.`,
+    };
+  }
+  const payoutFound = (evs: HiroTxEvent[]): boolean => {
+    const payouts = findSbtcTransferEvents(evs, sbtcContractId).filter(
+      (ev) =>
+        ev.sender === params.bounty.posterStxAddress &&
+        ev.recipient === params.acceptedSubmission.submitterStxAddress &&
+        ev.amount >= params.bounty.rewardSats
+    );
+    if (isDirect) return payouts.length > 0;
+    // The memo print sits at `eventIndex + 1`; if that page is not loaded yet, keep paging.
+    return payouts.some((ev) =>
+      memosMatch(readSbtcMemoPrint(evs, sbtcContractId, ev.eventIndex), expected.hex)
+    );
+  };
+  const events = await loadTxEventsUntil(tx, txUrl, fetchJson, payoutFound);
+  if (events.state === "unreachable") {
+    if (events.response?.status === 429) return rateLimitedResult(events.response);
+    return { ok: false, code: "HIRO_UNREACHABLE", message: "Could not read the transaction events." };
+  }
+  if (events.state === "truncated") {
+    return {
+      ok: false,
+      code: "EVENTS_TRUNCATED",
+      message: `Transaction has ${tx.event_count} events, too many to verify. Pay the bounty in a transaction of its own.`,
+    };
   }
 
   // Cross-check with the FT transfer events for the same parties + amount —
@@ -278,9 +356,8 @@ export async function verifyPayoutTxid(params: {
   // read from the print `sbtc-token.transfer` emits right after its FT
   // transfer. Only that contract can emit a print under its own id, and
   // requiring the next event index binds the memo to this very transfer.
-  const expected = buildExpectedMemo(params.bounty.id);
   const memoMatches = isDirect
-    ? memosMatch(readMemoArg(tx.contract_call.function_args), expected.hex)
+    ? directMemoMatches
     : payouts.some((ev) =>
         memosMatch(readSbtcMemoPrint(tx.events, sbtcContractId, ev.eventIndex), expected.hex)
       );
@@ -289,22 +366,6 @@ export async function verifyPayoutTxid(params: {
       ok: false,
       code: "MEMO_MISMATCH",
       message: `Memo did not match. Expected ${expected.hex} ("${expected.ascii}"). Include this memo in the sBTC transfer.`,
-    };
-  }
-
-  // (8) Tx time > acceptedAt - 60s skew. Prefer `block_time_iso` (Stacks
-  // block time — when the tx actually landed in a Stacks block) over
-  // `burn_block_time_iso` (Bitcoin anchor block time — can lag by 30+ min).
-  // Using the burn block time falsely rejects payouts whose sBTC transfer
-  // landed after `acceptedAt` but were anchored to an older Bitcoin block.
-  const blockTimeIso = tx.block_time_iso ?? tx.burn_block_time_iso ?? now.toISOString();
-  const blockTimeMs = Date.parse(blockTimeIso);
-  const acceptedMs = params.bounty.acceptedAt ? Date.parse(params.bounty.acceptedAt) : 0;
-  if (!Number.isNaN(blockTimeMs) && blockTimeMs + 60_000 < acceptedMs) {
-    return {
-      ok: false,
-      code: "TX_TOO_OLD",
-      message: "Transaction predates acceptance — cannot be the payout for this bounty.",
     };
   }
 
@@ -351,6 +412,7 @@ interface HiroTxResponse {
   tx_type: "contract_call" | string;
   sender_address: string;
   is_unanchored: boolean;
+  event_count?: number;
   block_time_iso?: string;
   burn_block_time_iso?: string;
   contract_call?: {
@@ -434,6 +496,7 @@ function findSbtcTransferEvents(
   const found = [];
   for (const ev of events ?? []) {
     if (ev.event_type !== "fungible_token_asset") continue;
+    if ((ev.asset?.asset_event_type ?? ev.asset_event_type) !== "transfer") continue;
     const sender = ev.asset?.sender ?? ev.sender;
     const recipient = ev.asset?.recipient ?? ev.recipient;
     const amount = parseAmount(ev.asset?.amount ?? ev.amount);
