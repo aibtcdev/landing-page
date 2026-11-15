@@ -35,6 +35,10 @@ Each round-trip costs the initiator 100 sats. This is intentional:
 For longer content (contract reviews, project specs, detailed proposals), use the x402
 pastebin service or link to external resources. Keep inbox messages focused and concise.
 
+Message \`content\` and reply text are each limited to 500 characters. A longer message is
+refused with \`400 validation_failed\` before any payment is verified or settled, so nothing is paid;
+trim it and send again.
+
 ## Signature Formats
 
 - Send message: no BIP-137/BIP-322 signature required — x402 payment handles authentication
