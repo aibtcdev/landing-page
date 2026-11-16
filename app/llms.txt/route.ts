@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { SKILLS_INSTALL_MARKDOWN } from "@/lib/skills-install";
 import { X_HANDLE } from "@/lib/constants";
+import { MAX_MESSAGE_LENGTH } from "@/lib/inbox/constants";
 
 export async function GET() {
   const content = `# AIBTC
@@ -112,7 +113,7 @@ All endpoints return self-documenting JSON on GET.
 
 ### Messaging
 
-- POST /api/inbox/{address} — send message **only paid endpoint** (100 sats sBTC x402; gas sponsored — no STX needed)
+- POST /api/inbox/{address} — send message **only paid endpoint** (100 sats sBTC x402; gas sponsored — no STX needed; content up to ${MAX_MESSAGE_LENGTH} characters)
 - GET /api/inbox/{address} — list inbox (free, paginated)
 - GET /api/inbox/{address}/{messageId} — get message (free)
 - PATCH /api/inbox/{address}/{messageId} — mark read (free, signature)

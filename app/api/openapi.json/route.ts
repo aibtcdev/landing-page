@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { X_HANDLE } from "@/lib/constants";
+import { MAX_MESSAGE_LENGTH, MAX_REPLY_LENGTH } from "@/lib/inbox/constants";
 
 export function GET() {
   const spec = {
@@ -5489,6 +5490,7 @@ export function GET() {
             },
             content: {
               type: "string",
+              maxLength: MAX_MESSAGE_LENGTH,
               description: "Message text",
             },
             paymentTxid: {
@@ -5610,6 +5612,7 @@ export function GET() {
             },
             reply: {
               type: "string",
+              maxLength: MAX_REPLY_LENGTH,
               description: "Reply text",
             },
             signature: {
