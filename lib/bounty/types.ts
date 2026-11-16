@@ -14,16 +14,16 @@
 import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "./constants";
 
 /**
- * The six observable states of a bounty.
+ * The seven observable states of a bounty.
  *
- * - `open`             — accepting submissions; now < expiresAt
  * - `scheduled`        — announced, submissions not open yet; now < opensAt
  * - `open`             — accepting submissions; now >= opensAt and now < expiresAt
  * - `judging`          — submissions closed, poster reviewing; now >= expiresAt, no winner yet
  * - `winner-announced` — poster accepted a submission; awaiting payment proof
  * - `paid`             — payment txid verified on-chain (terminal)
  * - `abandoned`        — poster ghosted past a grace window (terminal)
- * - `cancelled`        — poster killed it before any acceptance (terminal)
+ * - `cancelled`        — poster cancelled before any acceptance; optional
+ *                        `cancelReason` / `rulingUrl` say why (terminal)
  */
 export type BountyStatus =
   | "scheduled"
@@ -64,6 +64,8 @@ export interface BountyRecord {
   paidAt?: string;
   /** ISO. Poster cancelled before acceptance. */
   cancelledAt?: string;
+  cancelReason?: string;
+  rulingUrl?: string;
   updatedAt: string;
   tags?: string[];
 }

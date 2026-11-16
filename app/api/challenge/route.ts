@@ -15,15 +15,7 @@ import {
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { shouldFailClosed } from "@/lib/env";
 import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
-import {
-  publicKeyFromSignatureRsv,
-  getAddressFromPublicKey,
-} from "@stacks/transactions";
-import {
-  hashMessage,
-  verifyMessageSignatureRsv,
-} from "@stacks/encryption";
-import { bytesToHex } from "@stacks/common";
+import { verifyStacksMessageSignature } from "@/lib/stacks-signature";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { getAgentLevel } from "@/lib/levels";
 
@@ -37,33 +29,6 @@ function getAddressType(address: string): "stx" | "btc" | null {
   if (address.startsWith("SP")) return "stx";
   if (address.startsWith("bc1")) return "btc";
   return null;
-}
-
-/**
- * Verify Stacks signature.
- */
-function verifyStacksSignature(signature: string, message: string): {
-  valid: boolean;
-  address: string;
-  publicKey: string;
-} {
-  const messageHash = hashMessage(message);
-  const messageHashHex = bytesToHex(messageHash);
-
-  const recoveredPubKey = publicKeyFromSignatureRsv(messageHashHex, signature);
-  const recoveredAddress = getAddressFromPublicKey(recoveredPubKey, "mainnet");
-
-  const valid = verifyMessageSignatureRsv({
-    signature,
-    message,
-    publicKey: recoveredPubKey,
-  });
-
-  return {
-    valid,
-    address: recoveredAddress,
-    publicKey: recoveredPubKey,
-  };
 }
 
 /**
@@ -348,7 +313,7 @@ export async function POST(request: NextRequest) {
     } else {
       // Stacks
       try {
-        const stxResult = verifyStacksSignature(signature, challenge);
+        const stxResult = verifyStacksMessageSignature(signature, challenge);
         if (!stxResult.valid) {
           return NextResponse.json(
             { error: "Stacks signature verification failed" },

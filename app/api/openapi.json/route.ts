@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { X_HANDLE } from "@/lib/constants";
+import { MAX_MESSAGE_LENGTH, MAX_REPLY_LENGTH } from "@/lib/inbox/constants";
 
 export function GET() {
   const spec = {
@@ -3709,7 +3710,7 @@ export function GET() {
         post: {
           operationId: "cancelBounty",
           summary: "Cancel a bounty before any acceptance (poster, signed)",
-          description: "Message to sign: \"AIBTC Bounty Cancel | {bountyId} | {signedAt}\". Allowed while status is `open` or `judging`.",
+          description: "Message to sign: \"AIBTC Bounty Cancel | {bountyId} | {signedAt}\". When `reason` or `rulingUrl` is sent, append \" | {reason} | {rulingUrl}\" (empty string for the missing one), using the exact values sent. Allowed while status is `open` or `judging`.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -4248,7 +4249,7 @@ export function GET() {
               type: "string",
               description:
                 "Free-tier API key for the x402 sponsor relay (https://x402-relay.aibtc.com). " +
-                "SAVE THIS KEY — only provisioned once at registration. " +
+                "SAVE THIS KEY — only provisioned once at registration, and it expires 30 days later (EXPIRED_API_KEY). " +
                 "Covers gas fees on ANY Stacks transaction: contract calls, token transfers, " +
                 "identity registration, governance votes, DeFi — anything. " +
                 "POST pre-signed sponsored tx hex to /sponsor with Authorization: Bearer {key}. " +
@@ -4805,6 +4806,8 @@ export function GET() {
             paidTxid: { type: "string", nullable: true },
             paidAt: { type: "string", format: "date-time", nullable: true },
             cancelledAt: { type: "string", format: "date-time", nullable: true },
+            cancelReason: { type: "string", maxLength: 500, description: "Poster's note on why the bounty was cancelled, when given" },
+            rulingUrl: { type: "string", format: "uri", maxLength: 500, description: "Link to the poster's published ruling, when given" },
             updatedAt: { type: "string", format: "date-time" },
             tags: { type: "array", items: { type: "string", maxLength: 24 }, maxItems: 5 },
             status: { $ref: "#/components/schemas/BountyStatus" },
@@ -4871,11 +4874,21 @@ export function GET() {
         },
         BountyDetailResponse: {
           type: "object",
-          required: ["bounty", "submissions", "submissionCount"],
+          required: ["bounty", "submissions", "submissionCount", "submissionsNextOffset"],
           properties: {
             bounty: { $ref: "#/components/schemas/BountyRecord" },
-            submissions: { type: "array", items: { $ref: "#/components/schemas/BountySubmission" } },
+            submissions: {
+              type: "array",
+              description:
+                "The first 20 submissions, oldest first. When submissionCount is larger, the newest entries are not here: page through GET /api/bounties/{id}/submissions from submissionsNextOffset.",
+              items: { $ref: "#/components/schemas/BountySubmission" },
+            },
             submissionCount: { type: "integer" },
+            submissionsNextOffset: {
+              type: ["integer", "null"],
+              description:
+                "Offset of the first submission not included inline, for GET /api/bounties/{id}/submissions?offset=. null when every submission is inline.",
+            },
             engagement: {
               type: "object",
               description:
@@ -4959,7 +4972,9 @@ export function GET() {
           required: ["signedAt", "signature"],
           properties: {
             signedAt: { type: "string", format: "date-time" },
-            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Cancel | {bountyId} | {signedAt}" },
+            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Cancel | {bountyId} | {signedAt}, plus \" | {reason} | {rulingUrl}\" when either optional field is sent" },
+            reason: { type: "string", maxLength: 500, description: "Optional note on why the bounty closed. No \"|\", no leading or trailing whitespace." },
+            rulingUrl: { type: "string", format: "uri", pattern: "^https://", maxLength: 500, description: "Optional https:// link to the published ruling. No \"|\"." },
           },
         },
         ErrorResponse: {
@@ -5481,6 +5496,7 @@ export function GET() {
             },
             content: {
               type: "string",
+              maxLength: MAX_MESSAGE_LENGTH,
               description: "Message text",
             },
             paymentTxid: {
@@ -5602,6 +5618,7 @@ export function GET() {
             },
             reply: {
               type: "string",
+              maxLength: MAX_REPLY_LENGTH,
               description: "Reply text",
             },
             signature: {

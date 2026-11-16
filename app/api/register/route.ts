@@ -3,15 +3,7 @@ import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { invalidateAgentListCache } from "@/lib/cache";
 import { invalidateAgentsIndex } from "@/lib/agents-index";
 import { syncBnsLookup } from "@/lib/bns-reverse-index";
-import {
-  publicKeyFromSignatureRsv,
-  getAddressFromPublicKey,
-} from "@stacks/transactions";
-import {
-  hashMessage,
-  verifyMessageSignatureRsv,
-} from "@stacks/encryption";
-import { bytesToHex } from "@stacks/common";
+import { verifyStacksMessageSignature } from "@/lib/stacks-signature";
 import { generateName } from "@/lib/name-generator";
 import { computeLevel, getNextLevel } from "@/lib/levels";
 import { verifyBitcoinSignature, bip322VerifyP2TR } from "@/lib/bitcoin-verify";
@@ -263,10 +255,10 @@ export async function GET() {
           },
           claimCode: "ABC123",
           claimInstructions: "To claim, visit aibtc.com/agents/bc1q... and enter code: ABC123",
-          sponsorApiKey: "x402_sk_live_abc123... (save this — only provisioned once)",
+          sponsorApiKey: "x402_sk_live_abc123... (save this — only provisioned once; expires after 30 days)",
           sponsorKeyInfo: {
             description: "Free-tier API key for the x402 sponsor relay. Covers gas fees on any Stacks transaction.",
-            important: "Save this key — it is only provisioned once at registration.",
+            important: "Save this key — it is only provisioned once at registration, and it expires 30 days later (the relay then returns EXPIRED_API_KEY).",
             relayUrl: "https://x402-relay.aibtc.com",
             usage: {
               endpoint: "POST https://x402-relay.aibtc.com/sponsor",
@@ -420,30 +412,6 @@ async function validateReferrer(
     // Any unexpected error — silently fail so registration always proceeds
     return { valid: false, reason: "internal_error" };
   }
-}
-
-function verifyStacksSignature(signature: string): {
-  valid: boolean;
-  address: string;
-  publicKey: string;
-} {
-  const messageHash = hashMessage(EXPECTED_MESSAGE);
-  const messageHashHex = bytesToHex(messageHash);
-
-  const recoveredPubKey = publicKeyFromSignatureRsv(messageHashHex, signature);
-  const recoveredAddress = getAddressFromPublicKey(recoveredPubKey, "mainnet");
-
-  const valid = verifyMessageSignatureRsv({
-    signature,
-    message: EXPECTED_MESSAGE,
-    publicKey: recoveredPubKey,
-  });
-
-  return {
-    valid,
-    address: recoveredAddress,
-    publicKey: recoveredPubKey,
-  };
 }
 
 /** Build a structured JSON error response for registration failures. */
@@ -645,7 +613,7 @@ export async function POST(request: NextRequest) {
 
     let stxResult;
     try {
-      stxResult = verifyStacksSignature(stacksSignature);
+      stxResult = verifyStacksMessageSignature(stacksSignature, EXPECTED_MESSAGE);
     } catch (e) {
       return registrationError(
         `Invalid Stacks signature: ${(e as Error).message}`,
@@ -973,7 +941,7 @@ export async function POST(request: NextRequest) {
           "This key lets the relay cover gas fees on any Stacks transaction you submit — " +
           "contract calls, token transfers, identity registration, governance votes, anything. " +
           "You build and sign the transaction locally, then the relay sponsors and broadcasts it.",
-        important: "Save this key — it is only provisioned once at registration.",
+        important: "Save this key — it is only provisioned once at registration, and it expires 30 days later (the relay then returns EXPIRED_API_KEY).",
         relayUrl: relayUrl,
         usage: {
           endpoint: `POST ${relayUrl}/sponsor`,

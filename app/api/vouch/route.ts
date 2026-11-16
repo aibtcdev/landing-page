@@ -6,15 +6,7 @@ import { generateName } from "@/lib/name-generator";
 import { computeLevel } from "@/lib/levels";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { updateAgentInD1 } from "@/lib/d1/agents-mirror";
-import {
-  publicKeyFromSignatureRsv,
-  getAddressFromPublicKey,
-} from "@stacks/transactions";
-import {
-  hashMessage,
-  verifyMessageSignatureRsv,
-} from "@stacks/encryption";
-import { bytesToHex } from "@stacks/common";
+import { verifyStacksMessageSignature } from "@/lib/stacks-signature";
 import {
   getVouchIndex,
   lookupReferralCode,
@@ -24,18 +16,6 @@ import {
   type VouchRecord,
 } from "@/lib/vouch";
 import type { ClaimStatus } from "@/lib/types";
-
-function verifyStacksSignature(signature: string, message: string): {
-  valid: boolean;
-  address: string;
-} {
-  const messageHash = hashMessage(message);
-  const messageHashHex = bytesToHex(messageHash);
-  const recoveredPubKey = publicKeyFromSignatureRsv(messageHashHex, signature);
-  const recoveredAddress = getAddressFromPublicKey(recoveredPubKey, "mainnet");
-  const valid = verifyMessageSignatureRsv({ signature, message, publicKey: recoveredPubKey });
-  return { valid, address: recoveredAddress };
-}
 
 /**
  * GET /api/vouch
@@ -192,7 +172,7 @@ export async function POST(request: NextRequest) {
       const trimmedStx = stxAddress!.trim();
       let sigResult;
       try {
-        sigResult = verifyStacksSignature(stxSignature!, expectedMessage);
+        sigResult = verifyStacksMessageSignature(stxSignature!, expectedMessage);
       } catch (e) {
         return NextResponse.json(
           { error: `Invalid signature: ${(e as Error).message}` },

@@ -97,10 +97,16 @@ export function buildPaidMessage(params: {
 export function buildCancelMessage(params: {
   bountyId: string;
   signedAt: string;
+  reason?: string;
+  rulingUrl?: string;
 }): string {
-  return SIGNATURE_MESSAGE_FORMATS.CANCEL
+  const message = SIGNATURE_MESSAGE_FORMATS.CANCEL
     .replace("{bountyId}", params.bountyId)
     .replace("{signedAt}", params.signedAt);
+  if (params.reason != null || params.rulingUrl != null) {
+    return `${message} | ${params.reason ?? ""} | ${params.rulingUrl ?? ""}`;
+  }
+  return message;
 }
 
 /**

@@ -6,7 +6,7 @@ import Navbar from "../components/Navbar";
 import Footer from "../components/Footer";
 import BountyDirectory from "./BountyDirectory";
 import type { BountyWithStatus } from "./types";
-import { bountyStatus, listBounties } from "@/lib/bounty";
+import { bountyStatus, listBounties, type BountyRecord } from "@/lib/bounty";
 import { lookupAgent } from "@/lib/agent-lookup";
 
 export const metadata: Metadata = {
@@ -43,10 +43,16 @@ async function fetchBounties(): Promise<{ bounties: BountyWithStatus[]; total: n
     if (!db) return null;
     const now = new Date();
     // Fetch every bounty regardless of status — the client filter chips
-    // (All / Open / Judging / Winner / Paid / Abandoned / Cancelled) need
-    // the full set to filter against. Paid + abandoned bounties stay
-    // visible forever for transparency.
-    const { bounties, total } = await listBounties(db, { limit: 100, now });
+    // (All / Open / Judging / Winner / Paid / Abandoned / Cancelled) and the
+    // "Paid out" total need the full set. listBounties caps a page at 100,
+    // so read pages until one comes back short.
+    const bounties: BountyRecord[] = [];
+    for (;;) {
+      const page = await listBounties(db, { limit: 100, offset: bounties.length, now });
+      bounties.push(...page.bounties);
+      if (page.bounties.length < 100) break;
+    }
+    const total = bounties.length;
 
     // Enrich each bounty with the poster's display name so cards can show
     // identity instead of a raw BTC address. Dedupe by poster so the same

@@ -1,4 +1,9 @@
 import { NextResponse } from "next/server";
+import {
+  SKILLS_INSTALL_MARKDOWN,
+  SKILLS_MANIFEST_URL,
+  skillInstallCommands,
+} from "@/lib/skills-install";
 
 interface Skill {
   name: string;
@@ -8,6 +13,8 @@ interface Skill {
   requires: string[];
   tags: string[];
   userInvocable: boolean;
+  /** e.g. "bun install"; absent on doc-only skills */
+  install?: string;
 }
 
 interface SkillsData {
@@ -16,19 +23,13 @@ interface SkillsData {
   skills: Skill[];
 }
 
-const SKILLS_URL =
-  "https://raw.githubusercontent.com/aibtcdev/skills/main/skills.json";
-
 function toMarkdown(data: SkillsData): string {
   const lines: string[] = [
     "# AIBTC Agent Skills",
     "",
     `> ${data.skills.length} skills | v${data.version}`,
     "",
-    "Install all skills:",
-    "```",
-    "npx skills add aibtcdev/skills",
-    "```",
+    SKILLS_INSTALL_MARKDOWN,
     "",
   ];
 
@@ -40,7 +41,7 @@ function toMarkdown(data: SkillsData): string {
     lines.push(skill.description);
     lines.push("");
     lines.push("```");
-    lines.push(`npx skills add aibtcdev/skills/${skill.name}`);
+    lines.push(...skillInstallCommands(skill));
     lines.push("```");
     lines.push("");
 
@@ -64,7 +65,7 @@ function toMarkdown(data: SkillsData): string {
 
 export async function GET() {
   try {
-    const res = await fetch(SKILLS_URL, { next: { revalidate: 3600 } });
+    const res = await fetch(SKILLS_MANIFEST_URL, { next: { revalidate: 3600 } });
     if (!res.ok) {
       return new NextResponse("Failed to fetch skills data", { status: 502 });
     }

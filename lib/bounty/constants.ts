@@ -18,6 +18,12 @@ export const SUBMISSION_MESSAGE_MAX = 2000;
 /** Max URL length for `contentUrl` on a submission. */
 export const SUBMISSION_URL_MAX = 500;
 
+/** Max characters in a cancellation reason. */
+export const CANCEL_REASON_MAX = 500;
+
+/** Max URL length for cancellation ruling URL. */
+export const RULING_URL_MAX = 500;
+
 /** Max number of tags per bounty. */
 export const TAGS_MAX = 5;
 
@@ -47,6 +53,9 @@ export const ACCEPT_GRACE_MS = 14 * 24 * 60 * 60 * 1000; // 14 days
  * payment within this window, the bounty's derived status flips to `abandoned`.
  */
 export const PAY_GRACE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+
+/** Submissions inlined in the bounty detail (API + page); the rest are paged via /submissions. */
+export const DETAIL_SUBMISSIONS_PAGE = 20;
 
 /**
  * SIP-010 memo prefix used to bind an on-chain sBTC transfer to a specific

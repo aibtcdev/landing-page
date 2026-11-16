@@ -11,6 +11,7 @@ import {
   getBounty,
   getSubmission,
   listSubmissionsForBounty,
+  DETAIL_SUBMISSIONS_PAGE,
   SBTC_CONTRACT_MAINNET,
   type BountyPaymentHint,
   type BountyWinner,
@@ -34,7 +35,7 @@ async function fetchBountyDetail(id: string): Promise<BountyDetailData | null> {
 
     const now = new Date();
     const status = bountyStatus(bounty, now);
-    const { submissions, total } = await listSubmissionsForBounty(db, id, 20, 0, bounty.submissionCount);
+    const { submissions, total } = await listSubmissionsForBounty(db, id, DETAIL_SUBMISSIONS_PAGE, 0, bounty.submissionCount);
 
     let winner: BountyWinner | undefined;
     if (bounty.acceptedSubmissionId && bounty.acceptedAt) {
