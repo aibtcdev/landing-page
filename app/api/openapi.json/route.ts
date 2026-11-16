@@ -5183,7 +5183,6 @@ export function GET() {
             },
           },
         },
-      },
         GetNameResponse: {
           type: "object",
           required: ["name", "parts", "hash", "address"],
@@ -5627,6 +5626,7 @@ export function GET() {
             },
           },
         },
+      },
     },
   };
 
