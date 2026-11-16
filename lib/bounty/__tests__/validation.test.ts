@@ -131,7 +131,7 @@ describe("validateCancel with optional reason and rulingUrl (#1129)", () => {
     }
   });
 
-  it("rejects rulingUrl that does not start with http:// or https://", () => {
+  it("rejects rulingUrl that does not start with https://", () => {
     const res = validateCancel({
       ...validCancel,
       rulingUrl: "ftp://example.com/ruling",
@@ -166,5 +166,33 @@ describe("validateCancel with optional reason and rulingUrl (#1129)", () => {
         "AIBTC Bounty Cancel | {bountyId} | {signedAt} | {reason} | {rulingUrl}"
       );
     }
+  });
+  it("rejects an http:// rulingUrl", () => {
+    const res = validateCancel({ ...validCancel, rulingUrl: "http://example.com/r" });
+    expect("errors" in res && res.errors?.some((e) => e.field === "rulingUrl")).toBe(true);
+  });
+
+  it("rejects values with surrounding whitespace instead of trimming them", () => {
+    for (const body of [
+      { reason: "no entry passed\n" },
+      { reason: "   " },
+      { rulingUrl: " https://example.com/r" },
+    ]) {
+      const res = validateCancel({ ...validCancel, ...body });
+      expect("errors" in res && res.errors?.length).toBeTruthy();
+    }
+  });
+
+  it("rejects | in reason or rulingUrl so the signed message splits one way", () => {
+    const a = validateCancel({ ...validCancel, reason: "a | https://b", rulingUrl: "https://c" });
+    const b = validateCancel({ ...validCancel, reason: "a", rulingUrl: "https://b|c" });
+    expect("errors" in a && a.errors?.some((e) => e.field === "reason")).toBe(true);
+    expect("errors" in b && b.errors?.some((e) => e.field === "rulingUrl")).toBe(true);
+  });
+
+  it("keeps the extended signature hint when reason itself is invalid", () => {
+    const res = validateCancel({ signedAt: new Date().toISOString(), signature: "bad", reason: "x".repeat(501) });
+    const sigErr = "errors" in res ? res.errors?.find((e) => e.field === "signature") : undefined;
+    expect(sigErr?.hint).toContain("| {reason} | {rulingUrl}");
   });
 });

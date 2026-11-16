@@ -3707,7 +3707,7 @@ export function GET() {
         post: {
           operationId: "cancelBounty",
           summary: "Cancel a bounty before any acceptance (poster, signed)",
-          description: "Message to sign: \"AIBTC Bounty Cancel | {bountyId} | {signedAt}\". Allowed while status is `open` or `judging`.",
+          description: "Message to sign: \"AIBTC Bounty Cancel | {bountyId} | {signedAt}\". When `reason` or `rulingUrl` is sent, append \" | {reason} | {rulingUrl}\" (empty string for the missing one), using the exact values sent. Allowed while status is `open` or `judging`.",
           parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
           requestBody: {
             required: true,
@@ -4803,6 +4803,8 @@ export function GET() {
             paidTxid: { type: "string", nullable: true },
             paidAt: { type: "string", format: "date-time", nullable: true },
             cancelledAt: { type: "string", format: "date-time", nullable: true },
+            cancelReason: { type: "string", maxLength: 500, description: "Poster's note on why the bounty was cancelled, when given" },
+            rulingUrl: { type: "string", format: "uri", maxLength: 500, description: "Link to the poster's published ruling, when given" },
             updatedAt: { type: "string", format: "date-time" },
             tags: { type: "array", items: { type: "string", maxLength: 24 }, maxItems: 5 },
             status: { $ref: "#/components/schemas/BountyStatus" },
@@ -4957,7 +4959,9 @@ export function GET() {
           required: ["signedAt", "signature"],
           properties: {
             signedAt: { type: "string", format: "date-time" },
-            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Cancel | {bountyId} | {signedAt}" },
+            signature: { type: "string", description: "BIP-137/BIP-322 over AIBTC Bounty Cancel | {bountyId} | {signedAt}, plus \" | {reason} | {rulingUrl}\" when either optional field is sent" },
+            reason: { type: "string", maxLength: 500, description: "Optional note on why the bounty closed. No \"|\", no leading or trailing whitespace." },
+            rulingUrl: { type: "string", format: "uri", pattern: "^https://", maxLength: 500, description: "Optional https:// link to the published ruling. No \"|\"." },
           },
         },
         ErrorResponse: {

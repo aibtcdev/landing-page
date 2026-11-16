@@ -257,7 +257,9 @@ function BountyDetailView({
                 <div className="text-[10.5px] uppercase tracking-[0.11em] text-white/40 mb-1">
                   Cancellation Note
                 </div>
-                {bounty.cancelReason && <p className="text-white/80">{bounty.cancelReason}</p>}
+                {bounty.cancelReason && (
+                  <p className="whitespace-pre-wrap break-words text-white/80">{bounty.cancelReason}</p>
+                )}
                 {bounty.rulingUrl && (
                   <p className={bounty.cancelReason ? "mt-1.5" : ""}>
                     <a
