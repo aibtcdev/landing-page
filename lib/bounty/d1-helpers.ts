@@ -32,6 +32,8 @@ interface D1BountyRow {
   paid_txid: string | null;
   paid_at: string | null;
   cancelled_at: string | null;
+  cancel_reason: string | null;
+  ruling_url: string | null;
   updated_at: string;
   tags: string | null;
 }
@@ -65,6 +67,8 @@ function rowToBounty(row: D1BountyRow): BountyRecord {
     ...(row.paid_txid != null && { paidTxid: row.paid_txid }),
     ...(row.paid_at != null && { paidAt: row.paid_at }),
     ...(row.cancelled_at != null && { cancelledAt: row.cancelled_at }),
+    ...(row.cancel_reason != null && { cancelReason: row.cancel_reason }),
+    ...(row.ruling_url != null && { rulingUrl: row.ruling_url }),
     updatedAt: row.updated_at,
     ...(row.tags != null && safeParseTags(row.tags)),
   };
@@ -180,7 +184,7 @@ const BOUNTY_COLUMNS = `
   id, poster_btc_address, poster_stx_address, title, description,
   reward_sats, submission_count, created_at, expires_at, opens_at,
   accepted_submission_id, accepted_at, paid_txid, paid_at,
-  cancelled_at, updated_at, tags
+  cancelled_at, cancel_reason, ruling_url, updated_at, tags
 `;
 
 /** Fetch one bounty by id. Returns null if not found. */
@@ -406,20 +410,22 @@ export async function setPaid(
 export async function setCancelled(
   db: D1Database,
   bountyId: string,
-  cancelledAt: string
+  cancelledAt: string,
+  reason?: string,
+  rulingUrl?: string
 ): Promise<boolean> {
   const acceptCutoff = new Date(Date.parse(cancelledAt) - ACCEPT_GRACE_MS).toISOString();
   const result = await db
     .prepare(
       `UPDATE bounties
-       SET cancelled_at = ?, updated_at = ?
+       SET cancelled_at = ?, cancel_reason = ?, ruling_url = ?, updated_at = ?
        WHERE id = ?
          AND cancelled_at IS NULL
          AND paid_at IS NULL
          AND accepted_at IS NULL
          AND expires_at > ?`
     )
-    .bind(cancelledAt, cancelledAt, bountyId, acceptCutoff)
+    .bind(cancelledAt, reason ?? null, rulingUrl ?? null, cancelledAt, bountyId, acceptCutoff)
     .run();
   return (result.meta?.changes ?? 0) > 0;
 }

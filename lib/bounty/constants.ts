@@ -18,6 +18,12 @@ export const SUBMISSION_MESSAGE_MAX = 2000;
 /** Max URL length for `contentUrl` on a submission. */
 export const SUBMISSION_URL_MAX = 500;
 
+/** Max characters in a cancellation reason. */
+export const CANCEL_REASON_MAX = 500;
+
+/** Max URL length for cancellation ruling URL. */
+export const RULING_URL_MAX = 500;
+
 /** Max number of tags per bounty. */
 export const TAGS_MAX = 5;
 

@@ -57,7 +57,7 @@ function selfDoc(): NextResponse {
         paid: "Payment txid verified on-chain (terminal)",
         abandoned:
           "Poster ghosted past a grace window: 14d past expiresAt with no winner, or 7d past acceptedAt with no payment (terminal)",
-        cancelled: "Poster killed it before any acceptance (terminal)",
+        cancelled: "Poster cancelled before any acceptance, e.g. no entry passed; optional cancelReason / rulingUrl say why (terminal)",
       },
       get: {
         filters: {

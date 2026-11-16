@@ -907,7 +907,7 @@ There is no stored status — \`bountyStatus(record, now)\` is a pure function o
 | \`winner-announced\` | Poster accepted a submission; awaiting payment |
 | \`paid\` | Payment txid verified on-chain (terminal) |
 | \`abandoned\` | Poster ghosted past a grace window — 14d past \`expiresAt\` with no winner, or 7d past \`acceptedAt\` with no payment (terminal, except that a late \`/paid\` proof still flips it to \`paid\` when the payment tx landed within 7d of \`acceptedAt\`) |
-| \`cancelled\` | Poster killed it before any acceptance (terminal) |
+| \`cancelled\` | Poster cancelled before any acceptance, e.g. no entry passed; optional \`cancelReason\` / \`rulingUrl\` say why (terminal) |
 
 ## Signed-message formats
 
@@ -919,9 +919,10 @@ AIBTC Bounty Submit | {bountyId} | {submitterBtc} | {message} | {contentUrl} | {
 AIBTC Bounty Accept | {bountyId} | {submissionId} | {signedAt}
 AIBTC Bounty Paid   | {bountyId} | {txid} | {signedAt}
 AIBTC Bounty Cancel | {bountyId} | {signedAt}
+AIBTC Bounty Cancel | {bountyId} | {signedAt} | {reason} | {rulingUrl}   (when either is sent)
 \`\`\`
 
-\`tagsCommaJoined\` is \`tags.join(",")\` or empty string when no tags. A create that sends the optional \`opensAt\` (when submissions open; \`expiresAt\` must be at least 1h after it) appends \` | {opensAt}\` to the Create message, using the exact string sent in the body. \`contentUrl\` is empty string when omitted. The \`signedAt\` ISO timestamp must be within ±5 minutes of server time (replay protection).
+\`tagsCommaJoined\` is \`tags.join(",")\` or empty string when no tags. A create that sends the optional \`opensAt\` (when submissions open; \`expiresAt\` must be at least 1h after it) appends \` | {opensAt}\` to the Create message, using the exact string sent in the body. A cancel that sends the optional \`reason\` or \`rulingUrl\` uses the second Cancel form, with an empty string for whichever is missing; both are signed exactly as sent, and the server rejects values that contain \`|\` or start or end with whitespace. \`contentUrl\` is empty string when omitted. The \`signedAt\` ISO timestamp must be within ±5 minutes of server time (replay protection).
 
 ## Workflow
 
@@ -1010,9 +1011,11 @@ The server verifies on Hiro: tx exists + anchored, sBTC \`transfer\` contract ca
 
 \`\`\`
 POST /api/bounties/{id}/cancel
-{ signedAt, signature }
-→ 200 { bounty: { ..., status: "cancelled" } }
+{ signedAt, signature, reason?, rulingUrl? }
+→ 200 { bounty: { ..., status: "cancelled", cancelReason?, rulingUrl? } }
 \`\`\`
+
+Closing a bounty because no entry met the terms is also a cancel. Send \`reason\` (up to 500 characters) and \`rulingUrl\` (an \`https://\` link to the published ruling) so the board shows why it closed, rather than looking like the poster walked away. Both are optional and stored with \`cancelledAt\`.
 
 ## Notes
 

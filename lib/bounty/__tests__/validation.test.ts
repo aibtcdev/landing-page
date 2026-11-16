@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { validateCreateBounty } from "../validation";
+import { validateCreateBounty, validateCancel } from "../validation";
 
 function validBody(overrides: Record<string, unknown> = {}) {
   const now = Date.now();
@@ -74,5 +74,125 @@ describe("validateCreateBounty with optional opensAt (#1113)", () => {
     const expiresAt = new Date(now + 2 * 86400000 + 3600000).toISOString();
     const res = validateCreateBounty(validBody({ opensAt, expiresAt }));
     expect("data" in res && res.data).toBeTruthy();
+  });
+});
+
+describe("validateCancel with optional reason and rulingUrl (#1129)", () => {
+  const validCancel = {
+    signedAt: new Date().toISOString(),
+    signature: "G".repeat(88),
+  };
+
+  it("accepts cancel without reason and rulingUrl", () => {
+    const res = validateCancel(validCancel);
+    expect("data" in res && res.data).toBeTruthy();
+    if ("data" in res && res.data) {
+      expect(res.data.reason).toBeUndefined();
+      expect(res.data.rulingUrl).toBeUndefined();
+    }
+  });
+
+  it("accepts cancel with valid reason and rulingUrl", () => {
+    const res = validateCancel({
+      ...validCancel,
+      reason: "None of the submissions met requirements",
+      rulingUrl: "https://gist.github.com/secret-mars/6421f0e1cbbea5edad848d03e5b3460c",
+    });
+    expect("data" in res && res.data).toBeTruthy();
+    if ("data" in res && res.data) {
+      expect(res.data.reason).toBe("None of the submissions met requirements");
+      expect(res.data.rulingUrl).toBe(
+        "https://gist.github.com/secret-mars/6421f0e1cbbea5edad848d03e5b3460c"
+      );
+    }
+  });
+
+  it("ignores empty strings for reason and rulingUrl", () => {
+    const res = validateCancel({
+      ...validCancel,
+      reason: "",
+      rulingUrl: "",
+    });
+    expect("data" in res && res.data).toBeTruthy();
+    if ("data" in res && res.data) {
+      expect(res.data.reason).toBeUndefined();
+      expect(res.data.rulingUrl).toBeUndefined();
+    }
+  });
+
+  it("rejects reason that exceeds 500 characters", () => {
+    const res = validateCancel({
+      ...validCancel,
+      reason: "a".repeat(501),
+    });
+    expect("errors" in res && res.errors).toBeTruthy();
+    if ("errors" in res && res.errors) {
+      expect(res.errors.some((e) => e.field === "reason")).toBe(true);
+    }
+  });
+
+  it("rejects rulingUrl that does not start with https://", () => {
+    const res = validateCancel({
+      ...validCancel,
+      rulingUrl: "ftp://example.com/ruling",
+    });
+    expect("errors" in res && res.errors).toBeTruthy();
+    if ("errors" in res && res.errors) {
+      expect(res.errors.some((e) => e.field === "rulingUrl")).toBe(true);
+    }
+  });
+
+  it("rejects rulingUrl exceeding 500 characters", () => {
+    const res = validateCancel({
+      ...validCancel,
+      rulingUrl: `https://example.com/${"a".repeat(490)}`,
+    });
+    expect("errors" in res && res.errors).toBeTruthy();
+    if ("errors" in res && res.errors) {
+      expect(res.errors.some((e) => e.field === "rulingUrl")).toBe(true);
+    }
+  });
+
+  it("provides extended signature template hint when optional fields are sent", () => {
+    const res = validateCancel({
+      signedAt: new Date().toISOString(),
+      signature: "invalid-signature",
+      reason: "Test reason",
+    });
+    expect("errors" in res && res.errors).toBeTruthy();
+    if ("errors" in res && res.errors) {
+      const sigErr = res.errors.find((e) => e.field === "signature");
+      expect(sigErr?.hint).toContain(
+        "AIBTC Bounty Cancel | {bountyId} | {signedAt} | {reason} | {rulingUrl}"
+      );
+    }
+  });
+  it("rejects an http:// rulingUrl", () => {
+    const res = validateCancel({ ...validCancel, rulingUrl: "http://example.com/r" });
+    expect("errors" in res && res.errors?.some((e) => e.field === "rulingUrl")).toBe(true);
+  });
+
+  it("rejects values with surrounding whitespace instead of trimming them", () => {
+    for (const body of [
+      { reason: "no entry passed\n" },
+      { reason: "   " },
+      { rulingUrl: " https://example.com/r" },
+    ]) {
+      const res = validateCancel({ ...validCancel, ...body });
+      expect("errors" in res && res.errors?.length).toBeTruthy();
+    }
+  });
+
+  it("rejects | in reason or rulingUrl so the signed message splits one way", () => {
+    const a = validateCancel({ ...validCancel, reason: "a | https://b", rulingUrl: "https://c" });
+    const b = validateCancel({ ...validCancel, reason: "a", rulingUrl: "https://b|c" });
+    expect("errors" in a && a.errors?.some((e) => e.field === "reason")).toBe(true);
+    expect("errors" in b && b.errors?.some((e) => e.field === "rulingUrl")).toBe(true);
+  });
+
+  it("keeps the extended signature hint when reason itself is invalid", () => {
+    const res = validateCancel({ signedAt: new Date().toISOString(), signature: "bad", reason: "x".repeat(501) });
+    const sigErr = "errors" in res ? res.errors?.find((e) => e.field === "signature") : undefined;
+    expect(sigErr?.hint).toContain("| {reason} | {rulingUrl}");
   });
 });

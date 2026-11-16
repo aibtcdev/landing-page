@@ -13,6 +13,9 @@ import {
   DESCRIPTION_MAX,
   SUBMISSION_MESSAGE_MAX,
   SUBMISSION_URL_MAX,
+  CANCEL_REASON_MAX,
+  RULING_URL_MAX,
+  SIGNATURE_MESSAGE_FORMATS,
   TAGS_MAX,
   TAG_LENGTH_MAX,
   MIN_EXPIRY_HOURS,
@@ -532,9 +535,61 @@ export function validatePaid(body: unknown):
   };
 }
 
+/** Extended cancel message, used when `reason` or `rulingUrl` is sent. */
+const CANCEL_EXTENDED_FORMAT = `${SIGNATURE_MESSAGE_FORMATS.CANCEL} | {reason} | {rulingUrl}`;
+
+function isPresent(v: unknown): boolean {
+  return v !== undefined && v !== null && v !== "";
+}
+
+/**
+ * Validate an optional free-text cancel field. The value is signed verbatim,
+ * so it is rejected (never silently trimmed) when it has surrounding
+ * whitespace, and `|` is rejected so the signed message splits one way only.
+ * Missing, null and "" all mean omitted.
+ */
+function validateCancelText(
+  errors: FieldError[],
+  value: unknown,
+  field: "reason" | "rulingUrl",
+  max: number,
+  about: string
+): string | undefined {
+  if (!isPresent(value)) return undefined;
+  const fail = (message: string, hint: string) => {
+    errors.push({ message, hint: { field, message, hint } });
+    return undefined;
+  };
+  if (typeof value !== "string") return fail(`${field} must be a string`, about);
+  if (value.trim() !== value) {
+    return fail(
+      `${field} must not start or end with whitespace`,
+      `Trim ${field}, then sign and send the trimmed value. It is signed exactly as sent.`
+    );
+  }
+  if (value.length > max) {
+    return fail(`${field} exceeds ${max} characters`, `Trim to ${max} or fewer. Current: ${value.length}.`);
+  }
+  if (value.includes("|")) {
+    return fail(
+      `${field} must not contain "|"`,
+      `"|" separates fields in the signed message. Remove it from ${field}.`
+    );
+  }
+  return value;
+}
+
 /** Validate the POST /api/bounties/[id]/cancel body. */
 export function validateCancel(body: unknown):
-  | { data: { signedAt: string; signature: string }; errors?: never }
+  | {
+      data: {
+        signedAt: string;
+        signature: string;
+        reason?: string;
+        rulingUrl?: string;
+      };
+      errors?: never;
+    }
   | { data?: never; errors: ValidationHint[] } {
   if (!body || typeof body !== "object") {
     return {
@@ -542,23 +597,49 @@ export function validateCancel(body: unknown):
         {
           field: "body",
           message: "Request body must be a JSON object",
-          hint: "Send JSON with signedAt, signature.",
+          hint: "Send JSON with signedAt, signature (and optional reason, rulingUrl).",
         },
       ],
     };
   }
   const b = body as Record<string, unknown>;
   const errors: FieldError[] = [];
+
+  const reason = validateCancelText(errors, b.reason, "reason", CANCEL_REASON_MAX,
+    "Optional note on why the bounty closed, e.g. that no entry met the terms.");
+  const rulingUrl = validateCancelText(errors, b.rulingUrl, "rulingUrl", RULING_URL_MAX,
+    "Optional https:// link to the published ruling or notes.");
+  if (rulingUrl !== undefined && !rulingUrl.startsWith("https://")) {
+    errors.push({
+      message: "rulingUrl must start with https://",
+      hint: {
+        field: "rulingUrl",
+        message: "rulingUrl must start with https://",
+        hint: "Provide a full https:// URL.",
+        example: "https://gist.github.com/your-handle/abc123",
+      },
+    });
+  }
+
   pushIsoTimestampError(errors, b.signedAt, "signedAt", "ISO timestamp used when signing.");
-  pushSignatureError(
-    errors,
-    b.signature,
-    "signature",
-    "AIBTC Bounty Cancel | {bountyId} | {signedAt}"
-  );
+
+  // Pick the hint from what the client sent, not from what validated, so a
+  // bad reason still points at the extended message format.
+  const sentOptional = isPresent(b.reason) || isPresent(b.rulingUrl);
+  const messageFormat = sentOptional
+    ? CANCEL_EXTENDED_FORMAT
+    : SIGNATURE_MESSAGE_FORMATS.CANCEL;
+
+  pushSignatureError(errors, b.signature, "signature", messageFormat);
+
   if (errors.length > 0) return { errors: errors.map((e) => e.hint) };
   return {
-    data: { signedAt: b.signedAt as string, signature: b.signature as string },
+    data: {
+      signedAt: b.signedAt as string,
+      signature: b.signature as string,
+      ...(reason !== undefined && { reason }),
+      ...(rulingUrl !== undefined && { rulingUrl }),
+    },
   };
 }
 

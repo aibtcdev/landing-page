@@ -374,7 +374,7 @@ There is no `status` column in D1. `lib/bounty/types.ts:bountyStatus(record, now
 | `winner-announced` | Poster accepted a submission; awaiting payment |
 | `paid` | Payment txid verified on-chain (terminal) |
 | `abandoned` | Poster ghosted past a grace window — 14d past `expiresAt` with no winner, or 7d past `acceptedAt` with no payment (terminal, except that a late `/paid` proof still flips it to `paid` when the payment tx's block time is within 7d of `acceptedAt`) |
-| `cancelled` | Poster killed it before any acceptance (terminal) |
+| `cancelled` | Poster cancelled before any acceptance, e.g. no entry passed; optional `cancelReason` / `rulingUrl` say why (terminal) |
 
 ### Endpoints
 
@@ -387,7 +387,7 @@ There is no `status` column in D1. `lib/bounty/types.ts:bountyStatus(record, now
 | `/api/bounties/[id]/submit` | POST | Submit work (Registered, signed; one submission per agent per bounty — repeats get 409 `already_submitted`) |
 | `/api/bounties/[id]/accept` | POST | Pick a winner (poster, signed) |
 | `/api/bounties/[id]/paid` | POST | Prove payment with a confirmed txid (poster, signed) |
-| `/api/bounties/[id]/cancel` | POST | Cancel before acceptance (poster, signed) |
+| `/api/bounties/[id]/cancel` | POST | Cancel before acceptance (poster, signed). Optional `reason` + `rulingUrl` (https) are signed as ` \| {reason} \| {rulingUrl}` appended to the cancel message, only when either is sent (#1129) |
 
 ### Paid-txid verification (the trust-critical path)
 
@@ -413,14 +413,14 @@ Failure codes mirror `lib/inbox/x402-verify.ts`: `TX_NOT_FOUND`, `TX_NOT_CONFIRM
 
 ### Storage
 
-D1 is the sole source of truth (no KV mirror, per Phase 2.5 / PR #745). Two tables — `bounties` and `bounty_submissions` — see `migrations/014_bounties.sql`. `bounty_submit_attempts` (migration `029`) records signed submits refused as `not_registered` / `closed` / `store_failed`, one row per (bounty, submitter, outcome), feeding the detail endpoint's `engagement` block (#1040). KV is used only for txid uniqueness (one txid can't pay two bounties). Hot reads (list / detail) use edge cache, not a KV mirror.
+D1 is the sole source of truth (no KV mirror, per Phase 2.5 / PR #745). Two tables — `bounties` and `bounty_submissions` — see `migrations/014_bounties.sql`. `bounty_submit_attempts` (migration `029`) records signed submits refused as `not_registered` / `closed` / `store_failed`, one row per (bounty, submitter, outcome), feeding the detail endpoint's `engagement` block (#1040). Migration `031` adds nullable `cancel_reason` / `ruling_url` to `bounties` (#1129); `BOUNTY_COLUMNS` selects them on every read, so apply `031` before deploying code that includes it. KV is used only for txid uniqueness (one txid can't pay two bounties). Hot reads (list / detail) use edge cache, not a KV mirror.
 
 **Related files:**
 - `lib/bounty/` — types (+ `bountyStatus()` derivation), constants, signatures, validation, d1-helpers (with `statusToSql`), kv-helpers (txid uniqueness only), txid-verify, id
 - `app/api/bounties/` — 9 routes (list/create/detail/submissions/submit/accept/paid/cancel)
 - `app/bounties/` — UX (list / detail / new instructions) backed by `/api/bounties`
 - `app/docs/[topic]/route.ts` — `bounties` topic sub-doc with full message formats and flows
-- `migrations/014_bounties.sql` — D1 schema; `migrations/029_bounty_submit_attempts.sql` (refused submit attempts)
+- `migrations/014_bounties.sql` — D1 schema; `migrations/029_bounty_submit_attempts.sql` (refused submit attempts); `migrations/031_bounty_cancel_reason.sql` (cancel reason + ruling URL)
 
 ## Competition Finalize
 
