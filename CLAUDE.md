@@ -256,7 +256,7 @@ senders can recover by resubmitting with the confirmed transaction ID as proof:
 
 **Security**:
 - Each txid can only be redeemed once (KV check with 90-day TTL)
-- Rate limited: one verification attempt per txid per 60 seconds
+- Rate limited: up to 20 verification attempts per txid per 60 seconds (`RATE_LIMIT_MUTATING`, key `txid-recovery:{txid}`)
 - Sender signature verification matches x402 path behavior (returns 400 on failure)
 
 ### Implementation Details
@@ -369,7 +369,8 @@ There is no `status` column in D1. `lib/bounty/types.ts:bountyStatus(record, now
 
 | Status | Meaning |
 |---|---|
-| `open` | Accepting submissions; `now < expiresAt` |
+| `scheduled` | Announced, submissions not open yet; `now < opensAt` (only when created with `opensAt`) |
+| `open` | Accepting submissions; `opensAt <= now < expiresAt` (`opensAt` defaults to `createdAt`) |
 | `judging` | Submission window closed; poster reviewing |
 | `winner-announced` | Poster accepted a submission; awaiting payment |
 | `paid` | Payment txid verified on-chain (terminal) |
