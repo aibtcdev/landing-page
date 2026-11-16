@@ -23,7 +23,12 @@ import type { BountyRecord, BountySubmission } from "./types";
 import { MEMO_PREFIX, SBTC_CONTRACTS, SBTC_CONTRACT_MAINNET } from "./constants";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "@/lib/identity/constants";
 import { retryAfterSeconds, stacksApiFetch } from "@/lib/stacks-api-fetch";
-import { loadTxEventsUntil, txEventsQuery } from "@/lib/stacks-tx-events";
+import {
+  TX_EVENT_MAX,
+  TX_EVENT_PAGE_FETCH_CONFIG,
+  loadTxEventsUntil,
+  txEventsQuery,
+} from "@/lib/stacks-tx-events";
 import type { Logger } from "@/lib/logging";
 import {
   ClarityType,
@@ -138,10 +143,15 @@ export async function verifyPayoutTxid(params: {
   const apiBase = network === "mainnet" ? STACKS_API_BASE : STACKS_API_TESTNET_BASE;
   const fetchFn =
     params.fetchFn ?? ((url, init) => stacksApiFetch(url, init, { logger }));
+  // Later event pages fail fast (see TX_EVENT_PAGE_FETCH_CONFIG).
+  const pageFetchFn =
+    params.fetchFn ??
+    ((url, init) => stacksApiFetch(url, init, { ...TX_EVENT_PAGE_FETCH_CONFIG, logger }));
 
   // Pass the txid to Hiro as-is — Hiro accepts both 0x-prefixed and bare hex.
   const txUrl = `${apiBase}/extended/v1/tx/${encodeURIComponent(params.txid)}`;
-  const fetchJson = (url: string) => fetchFn(url, { headers: { accept: "application/json" } });
+  const jsonInit: RequestInit = { headers: { accept: "application/json" } };
+  const fetchJson = (url: string) => fetchFn(url, jsonInit);
   let res: Response;
   try {
     res = await fetchJson(`${txUrl}${txEventsQuery(0)}`);
@@ -157,11 +167,20 @@ export async function verifyPayoutTxid(params: {
     };
   }
   if (res.status === 429) return rateLimitedResult(res);
-  if (!res.ok) {
+  if (res.status >= 500) {
     return {
       ok: false,
       code: "HIRO_UNREACHABLE",
       message: `Hiro returned ${res.status}.`,
+    };
+  }
+  if (!res.ok) {
+    // Any other 4xx is Hiro refusing this txid (e.g. 400 for one that is not
+    // hex). Final: retrying the same txid gets the same answer.
+    return {
+      ok: false,
+      code: "TX_NOT_FOUND",
+      message: `Hiro rejected txid ${params.txid} (HTTP ${res.status}). Check it is the 64-hex-character txid of the payout.`,
     };
   }
 
@@ -297,16 +316,21 @@ export async function verifyPayoutTxid(params: {
       memosMatch(readSbtcMemoPrint(evs, sbtcContractId, ev.eventIndex), expected.hex)
     );
   };
-  const events = await loadTxEventsUntil(tx, txUrl, fetchJson, payoutFound);
+  const events = await loadTxEventsUntil(
+    tx,
+    txUrl,
+    (url) => pageFetchFn(url, jsonInit),
+    payoutFound
+  );
   if (events.state === "unreachable") {
     if (events.response?.status === 429) return rateLimitedResult(events.response);
     return { ok: false, code: "HIRO_UNREACHABLE", message: "Could not read the transaction events." };
   }
-  if (events.state === "truncated") {
+  if (events.state === "truncated" || events.state === "incomplete") {
     return {
       ok: false,
       code: "EVENTS_TRUNCATED",
-      message: `Transaction has ${tx.event_count} events, too many to verify. Pay the bounty in a transaction of its own.`,
+      message: unverifiableMessage(tx.event_count, events.state),
     };
   }
 
@@ -356,11 +380,12 @@ export async function verifyPayoutTxid(params: {
   // read from the print `sbtc-token.transfer` emits right after its FT
   // transfer. Only that contract can emit a print under its own id, and
   // requiring the next event index binds the memo to this very transfer.
-  const memoMatches = isDirect
-    ? directMemoMatches
-    : payouts.some((ev) =>
-        memosMatch(readSbtcMemoPrint(tx.events, sbtcContractId, ev.eventIndex), expected.hex)
-      );
+  // A direct transfer's memo was already checked from its args above.
+  const memoMatches =
+    isDirect ||
+    payouts.some((ev) =>
+      memosMatch(readSbtcMemoPrint(tx.events, sbtcContractId, ev.eventIndex), expected.hex)
+    );
   if (!memoMatches) {
     return {
       ok: false,
@@ -370,6 +395,22 @@ export async function verifyPayoutTxid(params: {
   }
 
   return { ok: true, canonicalTxid: tx.tx_id, blockTimeIso };
+}
+
+/**
+ * `EVENTS_TRUNCATED` message. The payout may well be on-chain, so the poster is
+ * told NOT to pay again: a second transfer would pay the winner twice.
+ */
+function unverifiableMessage(eventCount: number | undefined, state: "truncated" | "incomplete"): string {
+  const why =
+    state === "truncated"
+      ? `The transaction has ${eventCount} events and the payout is not in the first ${TX_EVENT_MAX}`
+      : "Hiro did not return all of the transaction's events";
+  return (
+    `${why}, so it cannot be verified automatically. Do not pay the winner again: ` +
+    "report the txid at https://github.com/aibtcdev/landing-page/issues so it can be checked by hand. " +
+    "Send future payouts as a direct sbtc-token transfer."
+  );
 }
 
 // ---------------------------------------------------------------------------
@@ -496,7 +537,10 @@ function findSbtcTransferEvents(
   const found = [];
   for (const ev of events ?? []) {
     if (ev.event_type !== "fungible_token_asset") continue;
-    if ((ev.asset?.asset_event_type ?? ev.asset_event_type) !== "transfer") continue;
+    // Skip mints and burns. An event in the alternative shape may carry no
+    // type at all; it still has to name a sender and recipient below.
+    const type = ev.asset?.asset_event_type ?? ev.asset_event_type;
+    if (type != null && type !== "transfer") continue;
     const sender = ev.asset?.sender ?? ev.sender;
     const recipient = ev.asset?.recipient ?? ev.recipient;
     const amount = parseAmount(ev.asset?.amount ?? ev.amount);

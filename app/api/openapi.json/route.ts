@@ -3695,7 +3695,7 @@ export function GET() {
           },
           responses: {
             "200": { description: "Payment verified, bounty marked paid", content: { "application/json": { schema: { $ref: "#/components/schemas/BountyResponse" } } } },
-            "400": { description: "Verification failure (wrong contract/sender/recipient/amount/memo, a routed payout (or its memo) not within the first 500 events: EVENTS_TRUNCATED, or signature)" },
+            "400": { description: "Verification failure (wrong contract/sender/recipient/amount/memo, a routed payout (or its memo) not within the first 500 events: EVENTS_TRUNCATED, which is final and does not mean the payout is missing, so do not pay again; a txid Hiro rejects as malformed: TX_NOT_FOUND; or signature)" },
             "403": { description: "Signature does not match poster" },
             "404": { description: "Bounty not found" },
             "409": { description: "Txid already redeemed by another bounty" },

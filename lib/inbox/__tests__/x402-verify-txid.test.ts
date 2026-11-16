@@ -201,7 +201,8 @@ describe("verifyTxidPayment", () => {
     });
     vi.stubGlobal("fetch", fetchMock);
     const r = await verifyTxidPayment(TXID, RECIPIENT);
-    expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+    expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
+    expect(r).not.toHaveProperty("retryAfterSeconds");
     expect(fetchMock).toHaveBeenCalledTimes(1 + Math.ceil(TX_EVENT_MAX / TX_EVENT_PAGE_SIZE));
   });
 
@@ -243,12 +244,41 @@ describe("verifyTxidPayment", () => {
     expect(put.mock.calls.filter(([key]) => key === `cache:tx:${TXID}`)).toHaveLength(1);
   });
 
-  it("returns a retryable API_ERROR when a later page fails before any payment is found", async () => {
+  it("returns a final EVENTS_TRUNCATED when a later page is a 404", async () => {
     stubPagedHiro(routedTx(longEvents(150, {})), 100, {
       laterPage: () => new Response("{}", { status: 404 }),
     });
     const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
+    expect(r).not.toHaveProperty("retryAfterSeconds");
+  });
+
+  it("returns a retryable API_ERROR when a later page is a 5xx before any payment is found", async () => {
+    stubPagedHiro(routedTx(longEvents(150, {})), 100, {
+      laterPage: () => new Response("{}", { status: 503 }),
+    });
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
     expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+  });
+
+  it("does not write cache:tx when a later page fails", async () => {
+    const kv = createMockKV();
+    const put = vi.spyOn(kv, "put");
+    stubPagedHiro(routedTx(longEvents(150, {})), 100, {
+      laterPage: () => new Response("{}", { status: 503 }),
+    });
+    const r = await verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
+    expect(r).toMatchObject({ success: false, errorCode: "API_ERROR" });
+    await new Promise((resolve) => setTimeout(resolve, 0));
+    expect(put.mock.calls.filter(([key]) => key === `cache:tx:${TXID}`)).toHaveLength(0);
+  });
+
+  it("routed: accepts an FT transfer event that carries no asset_event_type", async () => {
+    const ev = ftEvent(0, PAYER, RECIPIENT, INBOX_PRICE_SATS);
+    delete (ev.asset as { asset_event_type?: string }).asset_event_type;
+    stubHiro(routedTx([ev]));
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: true });
   });
 
   it("returns RATE_LIMITED with Hiro's Retry-After when a later page is rate-limited before any payment", async () => {

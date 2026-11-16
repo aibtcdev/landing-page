@@ -438,10 +438,10 @@ describe("verifyPayoutTxid", () => {
     if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
   });
 
-  it("returns HIRO_UNREACHABLE when a later page comes back empty", async () => {
+  it("returns a final EVENTS_TRUNCATED when a later page comes back empty", async () => {
     const { r } = await verifyPaged(2, "empty");
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
+    if (!r.ok) expect(r.code).toBe("EVENTS_TRUNCATED");
   });
 
   it("accepts a payout at the start of a 600-event tx without reading another page", async () => {
@@ -503,6 +503,54 @@ describe("verifyPayoutTxid", () => {
     expect(fetchFn).toHaveBeenCalledTimes(1 + 4);
   });
 
+  it("EVENTS_TRUNCATED tells the poster not to pay again", async () => {
+    const { r } = await verifyLong(longTx(600, {}));
+    expect(r.ok).toBe(false);
+    if (!r.ok) {
+      expect(r.message).toContain("Do not pay the winner again");
+      expect(r.message).not.toMatch(/of its own/);
+    }
+  });
+
+  it("maps a Hiro 4xx on the txid to a final TX_NOT_FOUND, and only a 5xx to HIRO_UNREACHABLE", async () => {
+    for (const [status, code] of [
+      [400, "TX_NOT_FOUND"],
+      [503, "HIRO_UNREACHABLE"],
+    ] as const) {
+      const fetchFn = vi.fn(async () => ({ status, ok: false, json: async () => ({}) }));
+      const r = await verifyPayoutTxid({
+        txid: "not-hex",
+        bounty: makeBounty(),
+        acceptedSubmission: makeSubmission(),
+        fetchFn: fetchFn as unknown as typeof fetch,
+      });
+      expect(r.ok).toBe(false);
+      if (!r.ok) expect(r.code).toBe(code);
+    }
+  });
+
+  it("accepts an FT event in the alternative shape that carries no asset_event_type", async () => {
+    const legacy = {
+      event_index: 0,
+      event_type: "fungible_token_asset",
+      asset_id: `${SBTC_CONTRACT_MAINNET}::sbtc-token`,
+      sender: POSTER_STX,
+      recipient: SUBMITTER_STX,
+      amount: "5000",
+    };
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn: (async () => ({
+        status: 200,
+        ok: true,
+        json: async () => makeHiroTx({ events: [legacy] }),
+      })) as unknown as typeof fetch,
+    });
+    expect(r).toMatchObject({ ok: true });
+  });
+
   it("returns RATE_LIMITED with Retry-After when a later page is rate-limited before any payout", async () => {
     const cancel = vi.fn(async () => {});
     const fetchFn = pagedFetch(longTx(150, {}), TX_EVENT_PAGE_SIZE, "rate-limited", { cancel });
@@ -535,7 +583,7 @@ describe("verifyPayoutTxid", () => {
       fetchFn,
     });
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
+    if (!r.ok) expect(r.code).toBe("EVENTS_TRUNCATED");
     expect(fetchFn).toHaveBeenCalledTimes(1 + Math.ceil(TX_EVENT_MAX / TX_EVENT_PAGE_SIZE));
   });
 

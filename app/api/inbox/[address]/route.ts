@@ -23,6 +23,7 @@ import {
 // Import directly from constants to avoid test-mock interference on the barrel.
 import { SPONSOR_NONCE_TTL_MS } from "@/lib/inbox/constants";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
+import { DEFAULT_RETRY_AFTER_SECONDS } from "@/lib/stacks-api-fetch";
 import { networkToCAIP2, X402_HEADERS } from "x402-stacks";
 import type { PaymentPayloadV2 } from "x402-stacks";
 import { HttpPaymentPayloadSchema } from "@aibtc/tx-schemas/http";
@@ -1135,7 +1136,7 @@ export async function POST(
       }
 
       if (txidResult.errorCode === "RATE_LIMITED") {
-        const retryAfter = txidResult.retryAfterSeconds ?? 30;
+        const retryAfter = txidResult.retryAfterSeconds ?? DEFAULT_RETRY_AFTER_SECONDS;
         logger.warn("Txid verification rate limited by Stacks API", {
           retryAfter,
         });
@@ -1186,7 +1187,7 @@ export async function POST(
           retryable: false,
           nextSteps:
             txidResult.errorCode === "EVENTS_TRUNCATED"
-              ? "Pay in a transaction of its own, then retry with its txid."
+              ? "Do not pay again. Report the txid at https://github.com/aibtcdev/landing-page/issues so it can be checked by hand, and send future payments as a direct sbtc-token transfer."
               : "Ensure the transaction is confirmed, is an sBTC transfer of >= 100 sats, and the recipient matches.",
         },
         { status: 400 }

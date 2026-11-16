@@ -49,7 +49,7 @@ import type { RelayRPC } from "./relay-rpc";
 import { mapRPCErrorCode } from "./relay-rpc";
 import type { Logger } from "../logging";
 import { stacksApiFetch, buildHiroHeaders, retryAfterSeconds, DEFAULT_RETRY_AFTER_SECONDS } from "../stacks-api-fetch";
-import { loadTxEventsUntil, txEventsQuery } from "../stacks-tx-events";
+import { TX_EVENT_MAX, TX_EVENT_PAGE_FETCH_CONFIG, loadTxEventsUntil, txEventsQuery } from "../stacks-tx-events";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "../identity/constants";
 import type { TerminalReason } from "@aibtc/tx-schemas/terminal-reasons";
@@ -646,7 +646,9 @@ function sbtcTransfersFromPayer(
   return (events ?? []).filter(
     (ev) =>
       ev.event_type === "fungible_token_asset" &&
-      ev.asset?.asset_event_type === "transfer" &&
+      // Skip mints and burns; an event without a type is judged on its fields.
+      ev.asset != null &&
+      (ev.asset.asset_event_type ?? "transfer") === "transfer" &&
       ev.asset.asset_id?.startsWith(`${sbtcContractId}::`) &&
       ev.asset.sender === payerStxAddress
   );
@@ -687,8 +689,11 @@ export async function verifyTxidPayment(
   const apiBase =
     network === "mainnet" ? STACKS_API_BASE : STACKS_API_TESTNET_BASE;
   const txUrl = `${apiBase}/extended/v1/tx/${fullTxid}`;
-  const fetchTx = (url: string) =>
-    stacksApiFetch(url, { method: "GET", headers: buildHiroHeaders(hiroApiKey) }, { logger: log });
+  const txInit: RequestInit = { method: "GET", headers: buildHiroHeaders(hiroApiKey) };
+  const fetchTx = (url: string) => stacksApiFetch(url, txInit, { logger: log });
+  // Later event pages fail fast (see TX_EVENT_PAGE_FETCH_CONFIG).
+  const fetchTxPage = (url: string) =>
+    stacksApiFetch(url, txInit, { ...TX_EVENT_PAGE_FETCH_CONFIG, logger: log });
 
   log.info("Verifying txid payment recovery", {
     txid: fullTxid,
@@ -761,7 +766,7 @@ export async function verifyTxidPayment(
           success: false,
           error: `Stacks API error: ${response.status}`,
           errorCode: "API_ERROR",
-          ...(response.status >= 500 && { retryAfterSeconds: 30 }),
+          ...(response.status >= 500 && { retryAfterSeconds: DEFAULT_RETRY_AFTER_SECONDS }),
         };
       }
       txData = (await response.json()) as StacksTxData;
@@ -771,7 +776,7 @@ export async function verifyTxidPayment(
         success: false,
         error: `Failed to verify transaction: ${String(error)}`,
         errorCode: "API_ERROR",
-        retryAfterSeconds: 30,
+        retryAfterSeconds: DEFAULT_RETRY_AFTER_SECONDS,
       };
     }
   }
@@ -836,8 +841,11 @@ export async function verifyTxidPayment(
           ev.asset?.recipient === recipientStxAddress &&
           Number(ev.asset?.amount) >= INBOX_PRICE_SATS
       );
-    const events = await loadTxEventsUntil(txData, txUrl, fetchTx, paymentFound);
-    if (!cachedTx || events.pages > 0) cacheTx();
+    const events = await loadTxEventsUntil(txData, txUrl, fetchTxPage, paymentFound);
+    // Cache only a load that will not change on retry, and only when the
+    // entry is new or gained events: a failed page must not rewrite it.
+    const settled = events.state !== "unreachable" && events.state !== "incomplete";
+    if (settled && (!cachedTx || events.pages > 0)) cacheTx();
     if (events.state === "unreachable") {
       if (events.response?.status === 429) return rateLimitedResult(events.response);
       return {
@@ -847,10 +855,15 @@ export async function verifyTxidPayment(
         retryAfterSeconds: DEFAULT_RETRY_AFTER_SECONDS,
       };
     }
-    if (events.state === "truncated") {
+    if (events.state === "truncated" || events.state === "incomplete") {
+      // The payment may be on-chain: never tell the sender to pay again.
+      const why =
+        events.state === "truncated"
+          ? `Transaction has ${txData.event_count} events and the payment is not in the first ${TX_EVENT_MAX}`
+          : "The Stacks API did not return all of the transaction's events";
       return {
         success: false,
-        error: `Transaction has ${txData.event_count} events, too many to verify. Pay in a transaction of its own.`,
+        error: `${why}, so it cannot be verified automatically.`,
         errorCode: "EVENTS_TRUNCATED",
       };
     }
