@@ -23,7 +23,8 @@ import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "./constants";
  * - `winner-announced` — poster accepted a submission; awaiting payment proof
  * - `paid`             — payment txid verified on-chain (terminal)
  * - `abandoned`        — poster ghosted past a grace window (terminal)
- * - `cancelled`        — poster killed it before any acceptance (terminal)
+ * - `cancelled`        — poster cancelled before any acceptance; optional
+ *                        `cancelReason` / `rulingUrl` say why (terminal)
  */
 export type BountyStatus =
   | "scheduled"

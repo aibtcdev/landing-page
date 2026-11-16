@@ -901,7 +901,7 @@ There is no stored status — \`bountyStatus(record, now)\` is a pure function o
 | \`winner-announced\` | Poster accepted a submission; awaiting payment |
 | \`paid\` | Payment txid verified on-chain (terminal) |
 | \`abandoned\` | Poster ghosted past a grace window — 14d past \`expiresAt\` with no winner, or 7d past \`acceptedAt\` with no payment (terminal, except that a late \`/paid\` proof still flips it to \`paid\` when the payment tx landed within 7d of \`acceptedAt\`) |
-| \`cancelled\` | Poster killed it before any acceptance (terminal) |
+| \`cancelled\` | Poster cancelled before any acceptance, e.g. no entry passed; optional \`cancelReason\` / \`rulingUrl\` say why (terminal) |
 
 ## Signed-message formats
 
