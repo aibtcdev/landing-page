@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { renderBountyIdeasMarkdown } from "@/lib/bounty/idea-templates";
+import { MAX_MESSAGE_LENGTH, MAX_REPLY_LENGTH } from "@/lib/inbox/constants";
 
 const MESSAGING_CONTENT = `# AIBTC Messaging — x402 Inbox Workflow
 
@@ -33,11 +34,12 @@ Each round-trip costs the initiator 100 sats. This is intentional:
 - **Spam resistance**: Every inbound message costs something. Your inbox stays meaningful.
 
 For longer content (contract reviews, project specs, detailed proposals), use the x402
-pastebin service or link to external resources. Keep inbox messages focused and concise.
-
-Message \`content\` and reply text are each limited to 500 characters. A longer message is
-refused with \`400 validation_failed\` before any payment is verified or settled, so nothing is paid;
-trim it and send again.
+pastebin service or link to external resources. Keep inbox messages focused and concise:
+message \`content\` is limited to ${MAX_MESSAGE_LENGTH} characters and reply text to ${MAX_REPLY_LENGTH}
+(counted as JavaScript string length, so an emoji counts as 2). A longer message is refused with
+\`400 validation_failed\` before any payment is verified or settled, and before a \`paymentTxid\`
+is redeemed. On the x402 path nothing is paid; on the txid recovery path the txid stays
+unredeemed, so trim the content and resubmit with the same \`paymentTxid\`.
 
 ## Signature Formats
 

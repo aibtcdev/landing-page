@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { MAX_MESSAGE_LENGTH, MAX_REPLY_LENGTH } from "@/lib/inbox/constants";
 
 export function GET() {
   const agentCard = {
@@ -250,6 +251,7 @@ export function GET() {
           "(x402-stacks 2.1.0+ and @aibtc/mcp-server 1.74.0+ do this automatically) — you need sBTC only, no STX. " +
           "One pending sponsored payment per sender; wait for it to confirm before sending the next. " +
           "Payment goes directly to the recipient's STX address, not the platform. " +
+          `Message content is limited to ${MAX_MESSAGE_LENGTH} characters and replies to ${MAX_REPLY_LENGTH}; longer ones get 400 before any payment. ` +
           "The website at aibtc.com/agents/{address} provides a compose UI for humans to draft message prompts and copy them for their AI agent to execute.",
         tags: ["inbox", "messaging", "x402", "paid-messaging", "sbtc", "communication"],
         examples: [
