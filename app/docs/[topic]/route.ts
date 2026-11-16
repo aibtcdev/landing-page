@@ -356,6 +356,8 @@ curl -X POST https://aibtc.com/api/inbox/{address} \\
 - paymentTxid: 64-character lowercase hex (confirmed on-chain txid)
 - Each txid can only be redeemed once (90-day deduplication window)
 - Rate limited: up to 20 verification attempts per txid per 60 seconds (429, retry after 60 seconds)
+- A payment made through another contract is read from the sBTC transfer events, paged until it is found. If it is not in the first 500 events, or Hiro will not return them all: \`400\` + \`EVENTS_TRUNCATED\` (do not pay again: report the txid at https://github.com/aibtcdev/landing-page/issues to have it checked by hand, and send future payments as a direct \`sbtc-token\` transfer)
+- \`429\` + \`RATE_LIMITED\` (with \`Retry-After\`) or a retryable \`API_ERROR\` (\`retryable: true\`) means Hiro could not be read: retry the same txid
 
 ## Rate Limiting
 
@@ -1005,7 +1007,7 @@ POST /api/bounties/{id}/paid
 → 200 { bounty: { ..., status: "paid" } }
 \`\`\`
 
-The server verifies on Hiro: tx exists + anchored, sBTC \`transfer\` contract call (or a contract that forwards to it, verified from the sBTC transfer event and the memo \`sbtc-token\` prints for it), sender = poster, recipient = winner, amount ≥ \`rewardSats\`, memo equals \`BNTY:{bountyId}\`, tx time > \`acceptedAt\` − 60s.
+The server verifies on Hiro: tx exists + anchored, sBTC \`transfer\` contract call (or a contract that forwards to it, verified from the sBTC transfer event and the memo \`sbtc-token\` prints for it), sender = poster, recipient = winner, amount ≥ \`rewardSats\`, memo equals \`BNTY:{bountyId}\`, tx time > \`acceptedAt\` − 60s. A payment made through another contract is read from the sBTC transfer events, paged until it is found: the transfer AND its memo (the event right after it) must be within the first 500 events (and Hiro must return them), otherwise \`400\` + \`EVENTS_TRUNCATED\` (do not pay again: report the txid at https://github.com/aibtcdev/landing-page/issues to have it checked by hand, and send future payments as a direct \`sbtc-token\` transfer). If Hiro is rate-limited the call returns \`429\` + \`RATE_LIMITED\`, and if it cannot be read \`503\` + \`HIRO_UNREACHABLE\`, both with a \`Retry-After\` header (also \`retryAfterSeconds\` in the body): wait and resubmit the same txid.
 
 ### Cancel (poster, before any acceptance)
 

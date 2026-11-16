@@ -182,6 +182,15 @@ export function parseRetryAfterMs(response: Response): number | null {
   return Math.min(seconds * 1000, MAX_RETRY_AFTER_MS);
 }
 
+/** Wait suggested to a client when Hiro's 429 names none. */
+export const DEFAULT_RETRY_AFTER_SECONDS = 30;
+
+/** Seconds to tell a client to wait after a Hiro 429, from its `Retry-After`. */
+export function retryAfterSeconds(response: Response): number {
+  const ms = parseRetryAfterMs(response);
+  return ms != null ? Math.ceil(ms / 1000) : DEFAULT_RETRY_AFTER_SECONDS;
+}
+
 function sleep(ms: number): Promise<void> {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
