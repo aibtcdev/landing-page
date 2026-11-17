@@ -438,10 +438,11 @@ describe("verifyPayoutTxid", () => {
     if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
   });
 
-  it("returns a final EVENTS_TRUNCATED when a later page comes back empty", async () => {
+  // #1146: page 0 already found the tx, so an empty later page is lag, not a verdict.
+  it("returns a retryable HIRO_UNREACHABLE when a later page comes back empty", async () => {
     const { r } = await verifyPaged(2, "empty");
     expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("EVENTS_TRUNCATED");
+    if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
   });
 
   it("accepts a payout at the start of a 600-event tx without reading another page", async () => {
@@ -512,9 +513,12 @@ describe("verifyPayoutTxid", () => {
     }
   });
 
-  it("maps a Hiro 4xx on the txid to a final TX_NOT_FOUND, and only a 5xx to HIRO_UNREACHABLE", async () => {
+  it("maps a Hiro 400 on the txid to a final TX_NOT_FOUND, and other 4xx and 5xx to HIRO_UNREACHABLE", async () => {
     for (const [status, code] of [
       [400, "TX_NOT_FOUND"],
+      [401, "HIRO_UNREACHABLE"],
+      [403, "HIRO_UNREACHABLE"],
+      [408, "HIRO_UNREACHABLE"],
       [503, "HIRO_UNREACHABLE"],
     ] as const) {
       const fetchFn = vi.fn(async () => ({ status, ok: false, json: async () => ({}) }));
@@ -526,6 +530,22 @@ describe("verifyPayoutTxid", () => {
       });
       expect(r.ok).toBe(false);
       if (!r.ok) expect(r.code).toBe(code);
+    }
+  });
+
+  it("sends the Hiro API key on the first fetch and on every later page", async () => {
+    const fetchFn = pagedFetch(makeRoutedTx() as { events: unknown[] }, 2);
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn,
+      hiroApiKey: "test-key",
+    });
+    expect(r).toMatchObject({ ok: true });
+    expect(fetchFn.mock.calls.length).toBeGreaterThan(1);
+    for (const [, init] of fetchFn.mock.calls as [string, RequestInit][]) {
+      expect(init.headers).toMatchObject({ accept: "application/json", "x-api-key": "test-key" });
     }
   });
 

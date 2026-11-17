@@ -244,13 +244,42 @@ describe("verifyTxidPayment", () => {
     expect(put.mock.calls.filter(([key]) => key === `cache:tx:${TXID}`)).toHaveLength(1);
   });
 
-  it("returns a final EVENTS_TRUNCATED when a later page is a 404", async () => {
+  it("returns a final EVENTS_TRUNCATED when a later page is a 400", async () => {
     stubPagedHiro(routedTx(longEvents(150, {})), 100, {
-      laterPage: () => new Response("{}", { status: 404 }),
+      laterPage: () => new Response("{}", { status: 400 }),
     });
     const r = await verifyTxidPayment(TXID, RECIPIENT);
     expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
     expect(r).not.toHaveProperty("retryAfterSeconds");
+  });
+
+  // #1146: page 0 already found the tx, so a 404 / other 4xx / empty later page
+  // is replica or indexer lag, not a verdict on the payment.
+  it("returns a retryable API_ERROR when a later page is a 404, 403 or 408, or comes back empty", async () => {
+    for (const laterPage of [
+      () => new Response("{}", { status: 404 }),
+      () => new Response("{}", { status: 403 }),
+      () => new Response("{}", { status: 408 }),
+      () => new Response(JSON.stringify({ events: [] }), { status: 200 }),
+    ]) {
+      stubPagedHiro(routedTx(longEvents(150, {})), 100, { laterPage });
+      const r = await verifyTxidPayment(TXID, RECIPIENT);
+      expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+    }
+  });
+
+  it("routed: accepts an FT transfer in the flat event shape, as the bounty verifier does", async () => {
+    const flat = {
+      event_index: 0,
+      event_type: "fungible_token_asset",
+      asset_id: `${SBTC}::sbtc-token`,
+      sender: PAYER,
+      recipient: RECIPIENT,
+      amount: String(INBOX_PRICE_SATS),
+    };
+    stubHiro(routedTx([flat]));
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: true, payerStxAddress: PAYER });
   });
 
   it("returns a retryable API_ERROR when a later page is a 5xx before any payment is found", async () => {

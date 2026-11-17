@@ -255,10 +255,13 @@ senders can recover by resubmitting with the confirmed transaction ID as proof:
 5. **Message delivered** -- Stored with `recoveredViaTxid: true` flag
 
 A payment made through another contract is read from the sBTC FT events, paged until found
-(`lib/stacks-tx-events.ts`). Not in the first 500 events, or Hiro will not serve the rest (empty or
-4xx page, page cap) -> final 400 `EVENTS_TRUNCATED`, whose message tells the sender not to pay again.
-Only a 429 / 5xx / network failure is retryable (429 `RATE_LIMITED` / 502 `API_ERROR`). Later pages
-use `TX_EVENT_PAGE_FETCH_CONFIG` (1 retry, 3.5s per attempt) so the request path fails fast.
+(`lib/stacks-tx-events.ts`). Not in the first 500 events, or Hiro will not serve the rest (a 400/422
+later page, page cap) -> final 400 `EVENTS_TRUNCATED`, whose message tells the sender not to pay again.
+A 429 / 5xx / network failure, and a 404, other 4xx or empty later page (page 0 already found the tx,
+so that is replica or indexer lag), is retryable (429 `RATE_LIMITED` / 502 `API_ERROR`). Later pages
+use `TX_EVENT_PAGE_FETCH_CONFIG` (a single attempt, no retry, 3.5s timeout; `retries` counts attempts)
+so the request path fails fast and the client retries the request. FT events are read through
+`readFtTransfer` (nested `asset.x` or flat `x` shape), shared with the bounty verifier.
 
 **Security**:
 - Each txid can only be redeemed once (KV check with 90-day TTL)
@@ -407,7 +410,7 @@ memo = "BNTY:" + bountyId       # 31 bytes — fits SIP-010 (buff 34)
 `/paid` then runs the chain in `lib/bounty/txid-verify.ts`:
 
 1. Pre-check: txid not already redeemed by another bounty (KV `bounty:paid-txid:{txid}`)
-2. Hiro `GET /extended/v1/tx/{txid}`, events paged until the payout is found (`lib/stacks-tx-events.ts`; a refusal only after every page is read). Direct and routed payouts both page; the transfer (and, for a routed payout, its memo print at the next event index) must be within the first 500 events and Hiro must serve them, else final `EVENTS_TRUNCATED` (message says do not pay again). A Hiro 4xx on the txid other than 404/429 is `TX_NOT_FOUND`; only 5xx / network is `HIRO_UNREACHABLE` — `tx_status = success`, `is_unanchored = false` (else `TX_NOT_CONFIRMED` — the agent waits and retries; we do **not** keep a pending-cache, the agent verifies confirmation before submitting)
+2. Hiro `GET /extended/v1/tx/{txid}`, events paged until the payout is found (`lib/stacks-tx-events.ts`; a refusal only after every page is read). Direct and routed payouts both page; the transfer (and, for a routed payout, its memo print at the next event index) must be within the first 500 events and Hiro must serve them, else final `EVENTS_TRUNCATED` (message says do not pay again). A Hiro 404 or 400 on the txid is `TX_NOT_FOUND`; 429 is `RATE_LIMITED`; any other 4xx (401/403/408: the path to Hiro, not the txid), 5xx or network failure is `HIRO_UNREACHABLE`. Every Hiro request sends `env.HIRO_API_KEY`. Then: `tx_status = success`, `is_unanchored = false` (else `TX_NOT_CONFIRMED` — the agent waits and retries; we do **not** keep a pending-cache, the agent verifies confirmation before submitting)
 3. Contract = `SBTC_CONTRACT_MAINNET`, `function_name = transfer`
 4. `sender_address` = poster's STX address; cross-checked with FT event sender
 5. function arg `recipient` = winner's STX address; cross-checked with FT event recipient

@@ -22,12 +22,14 @@
 import type { BountyRecord, BountySubmission } from "./types";
 import { MEMO_PREFIX, SBTC_CONTRACTS, SBTC_CONTRACT_MAINNET } from "./constants";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "@/lib/identity/constants";
-import { retryAfterSeconds, stacksApiFetch } from "@/lib/stacks-api-fetch";
+import { buildHiroHeaders, retryAfterSeconds, stacksApiFetch } from "@/lib/stacks-api-fetch";
 import {
   TX_EVENT_MAX,
   TX_EVENT_PAGE_FETCH_CONFIG,
   loadTxEventsUntil,
+  readFtTransfers,
   txEventsQuery,
+  type FtTransfer,
 } from "@/lib/stacks-tx-events";
 import type { Logger } from "@/lib/logging";
 import {
@@ -132,6 +134,11 @@ export async function verifyPayoutTxid(params: {
   now?: Date;
   /** Pass-through Logger for Hiro rate-limit + retry telemetry. */
   logger?: Logger;
+  /**
+   * Hiro API key (`env.HIRO_API_KEY`). Without it every page fetch is an
+   * anonymous request on the shared Worker IP, and 429s much sooner.
+   */
+  hiroApiKey?: string;
 }): Promise<TxidVerifyResult> {
   const network = params.network ?? "mainnet";
   const now = params.now ?? new Date();
@@ -150,7 +157,9 @@ export async function verifyPayoutTxid(params: {
 
   // Pass the txid to Hiro as-is — Hiro accepts both 0x-prefixed and bare hex.
   const txUrl = `${apiBase}/extended/v1/tx/${encodeURIComponent(params.txid)}`;
-  const jsonInit: RequestInit = { headers: { accept: "application/json" } };
+  const jsonInit: RequestInit = {
+    headers: { accept: "application/json", ...buildHiroHeaders(params.hiroApiKey) },
+  };
   const fetchJson = (url: string) => fetchFn(url, jsonInit);
   let res: Response;
   try {
@@ -174,13 +183,22 @@ export async function verifyPayoutTxid(params: {
       message: `Hiro returned ${res.status}.`,
     };
   }
-  if (!res.ok) {
-    // Any other 4xx is Hiro refusing this txid (e.g. 400 for one that is not
-    // hex). Final: retrying the same txid gets the same answer.
+  if (res.status === 400) {
+    // Hiro refusing this txid (e.g. not hex). Final: retrying the same txid
+    // gets the same answer.
     return {
       ok: false,
       code: "TX_NOT_FOUND",
       message: `Hiro rejected txid ${params.txid} (HTTP ${res.status}). Check it is the 64-hex-character txid of the payout.`,
+    };
+  }
+  if (!res.ok) {
+    // Any other 4xx (401, 403, 408, ...) is about the path to Hiro, not the
+    // txid, so it is not a verdict on the payout: retryable.
+    return {
+      ok: false,
+      code: "HIRO_UNREACHABLE",
+      message: `Hiro returned ${res.status}.`,
     };
   }
 
@@ -530,32 +548,10 @@ function memosMatch(actualHex: string | null, expectedHex: string): boolean {
   return a === b;
 }
 
-function findSbtcTransferEvents(
-  events: HiroTxEvent[] | undefined,
-  expectedAssetId: string
-): { eventIndex: number | null; sender: string; recipient: string; amount: number }[] {
-  const found = [];
-  for (const ev of events ?? []) {
-    if (ev.event_type !== "fungible_token_asset") continue;
-    // Skip mints and burns. An event in the alternative shape may carry no
-    // type at all; it still has to name a sender and recipient below.
-    const type = ev.asset?.asset_event_type ?? ev.asset_event_type;
-    if (type != null && type !== "transfer") continue;
-    const sender = ev.asset?.sender ?? ev.sender;
-    const recipient = ev.asset?.recipient ?? ev.recipient;
-    const amount = parseAmount(ev.asset?.amount ?? ev.amount);
-    const assetId = ev.asset?.asset_id ?? ev.asset_id;
-    // sBTC asset_id looks like `${sbtcContractId}::sbtc-token` — anchor on `::`
-    // so we don't accidentally match a sibling like `sbtc-token-extended`.
-    if (assetId && assetId.startsWith(`${expectedAssetId}::`) && sender && recipient && amount != null) {
-      found.push({ eventIndex: ev.event_index ?? null, sender, recipient, amount });
-    }
-  }
-  return found;
-}
-
-function parseAmount(amount: string | undefined): number | null {
-  if (amount == null) return null;
-  const n = Number(amount);
-  return Number.isFinite(n) ? n : null;
+/**
+ * sBTC transfers in `events`, read through the normaliser the inbox verifier
+ * shares (`readFtTransfers`), so both judge the flat and nested shapes alike.
+ */
+function findSbtcTransferEvents(events: HiroTxEvent[] | undefined, sbtcContractId: string): FtTransfer[] {
+  return readFtTransfers(events, sbtcContractId);
 }
