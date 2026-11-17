@@ -26,6 +26,7 @@ import { buildHiroHeaders, retryAfterSeconds, stacksApiFetch } from "@/lib/stack
 import {
   TX_EVENT_MAX,
   TX_EVENT_PAGE_FETCH_CONFIG,
+  boundTxEventsGap,
   loadTxEventsUntil,
   readFtTransfers,
   txEventsQuery,
@@ -139,6 +140,11 @@ export async function verifyPayoutTxid(params: {
    * anonymous request on the shared Worker IP, and 429s much sooner.
    */
   hiroApiKey?: string;
+  /**
+   * KV for the event-gap bound (`boundTxEventsGap`). Without it a lasting gap
+   * in Hiro's events stays a retryable `HIRO_UNREACHABLE`.
+   */
+  kv?: Pick<KVNamespace, "get" | "put">;
 }): Promise<TxidVerifyResult> {
   const network = params.network ?? "mainnet";
   const now = params.now ?? new Date();
@@ -334,11 +340,12 @@ export async function verifyPayoutTxid(params: {
       memosMatch(readSbtcMemoPrint(evs, sbtcContractId, ev.eventIndex), expected.hex)
     );
   };
-  const events = await loadTxEventsUntil(
-    tx,
-    txUrl,
-    (url) => pageFetchFn(url, jsonInit),
-    payoutFound
+  // A gap that outlives lag becomes `incomplete`: final, "do not pay again".
+  const events = await boundTxEventsGap(
+    await loadTxEventsUntil(tx, txUrl, (url) => pageFetchFn(url, jsonInit), payoutFound),
+    params.txid,
+    params.kv,
+    now.getTime()
   );
   if (events.state === "unreachable") {
     if (events.response?.status === 429) return rateLimitedResult(events.response);

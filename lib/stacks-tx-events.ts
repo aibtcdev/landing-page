@@ -15,7 +15,10 @@
  *
  * Page 0 already found the transaction, so a later page that comes back 404,
  * empty, or with any 4xx other than 400/422 is most plausibly a replica or
- * indexer lagging behind (#1146): it is `unreachable`, not `incomplete`.
+ * indexer lagging behind (#1146): it is `unreachable`, not `incomplete`. Such
+ * a load carries `gapOffset`, and `boundTxEventsGap` turns it final once the
+ * same gap outlives lag (`TX_EVENT_GAP_MAX_HITS` / `TX_EVENT_GAP_MAX_AGE_MS`),
+ * so a lasting hole in Hiro's index still ends in a verdict.
  */
 
 import type { StacksApiFetchConfig } from "./stacks-api-fetch";
@@ -72,24 +75,22 @@ export interface FtTransfer {
 /**
  * Read `ev` as a transfer of `contractId`'s fungible token, or `null` if it is
  * not one. Accepts both the nested (`ev.asset.x`) and the flat (`ev.x`) shape,
- * so every payment verifier judges the same event the same way (#1146). Mints
- * and burns are skipped; an event that carries no type is judged on its
- * fields. The asset id is anchored on `::` so that a sibling contract such as
- * `sbtc-token-extended` never matches.
+ * so every payment verifier judges the same event the same way (#1146). One
+ * shape is picked per event (`asset` when present, else the event itself), so
+ * a transfer is never assembled from fields of both. Mints and burns are
+ * skipped; an event that carries no type is judged on its fields. The asset id
+ * is anchored on `::` so that a sibling contract such as `sbtc-token-extended`
+ * never matches.
  */
 export function readFtTransfer(ev: HiroFtEventLike, contractId: string): FtTransfer | null {
   if (ev.event_type !== "fungible_token_asset") return null;
-  const type = ev.asset?.asset_event_type ?? ev.asset_event_type;
-  if (type != null && type !== "transfer") return null;
-  const assetId = ev.asset?.asset_id ?? ev.asset_id;
-  const sender = ev.asset?.sender ?? ev.sender;
-  const recipient = ev.asset?.recipient ?? ev.recipient;
-  const rawAmount = ev.asset?.amount ?? ev.amount;
-  const amount = rawAmount == null ? NaN : Number(rawAmount);
-  if (!assetId?.startsWith(`${contractId}::`) || !sender || !recipient || !Number.isFinite(amount)) {
+  const f: HiroFtEventFields = ev.asset ?? ev;
+  if (f.asset_event_type != null && f.asset_event_type !== "transfer") return null;
+  const amount = f.amount == null ? NaN : Number(f.amount);
+  if (!f.asset_id?.startsWith(`${contractId}::`) || !f.sender || !f.recipient || !Number.isFinite(amount)) {
     return null;
   }
-  return { eventIndex: ev.event_index ?? null, sender, recipient, amount };
+  return { eventIndex: ev.event_index ?? null, sender: f.sender, recipient: f.recipient, amount };
 }
 
 /** Every transfer of `contractId`'s token in `events`, in event order. */
@@ -129,9 +130,11 @@ export type TxEventsLoad =
   /**
    * A page could not be read (network, timeout, 429, 5xx, or a 404 / other 4xx /
    * empty later page, which after page 0 found the tx means lag); retrying may
-   * succeed.
+   * succeed. `gapOffset` is set only for the lag case: Hiro answered, but not
+   * with the page at that offset. `boundTxEventsGap` bounds how long that stays
+   * retryable.
    */
-  | { state: "unreachable"; pages: number; response?: Response };
+  | { state: "unreachable"; pages: number; response?: Response; gapOffset?: number };
 
 /** Later-page HTTP statuses that are a verdict on the request itself, not lag. */
 const FINAL_LATER_PAGE_STATUSES = new Set([400, 422]);
@@ -166,9 +169,15 @@ export async function loadTxEventsUntil<E>(
       if (!res.ok) {
         // Release the connection; the headers (Retry-After) stay readable.
         await res.body?.cancel().catch(() => {});
-        return FINAL_LATER_PAGE_STATUSES.has(res.status)
-          ? { state: "incomplete", pages }
-          : { state: "unreachable", pages, response: res };
+        if (FINAL_LATER_PAGE_STATUSES.has(res.status)) return { state: "incomplete", pages };
+        // 429 and 5xx are about Hiro's load, not this page: no gap.
+        const lag = res.status !== 429 && res.status < 500;
+        return {
+          state: "unreachable",
+          pages,
+          response: res,
+          ...(lag && { gapOffset: events.length }),
+        };
       }
       page = ((await res.json()) as { events?: E[] }).events;
     } catch {
@@ -176,8 +185,69 @@ export async function loadTxEventsUntil<E>(
     }
     // Hiro counted more events than it returns. Page 0 already served the tx,
     // so this is most plausibly a lagging replica or indexer: retryable.
-    if (!page?.length) return { state: "unreachable", pages };
+    if (!page?.length) return { state: "unreachable", pages, gapOffset: events.length };
     events.push(...page);
     pages++;
   }
+}
+
+/** A gap the same txid has hit this many times is a hole, not lag. */
+export const TX_EVENT_GAP_MAX_HITS = 5;
+
+/** A gap still there this long after it was first hit is a hole, not lag. */
+export const TX_EVENT_GAP_MAX_AGE_MS = 15 * 60 * 1000;
+
+/** How long a gap record is kept; well past `TX_EVENT_GAP_MAX_AGE_MS`. */
+const TX_EVENT_GAP_TTL_SECONDS = 24 * 60 * 60;
+
+/** KV key of the gap record for `txid` at event `offset`. */
+export function txEventsGapKey(txid: string, offset: number): string {
+  const id = txid.toLowerCase().replace(/^0x/, "");
+  return `tx-events-gap:${id}:${offset}`;
+}
+
+/** The KV methods `boundTxEventsGap` uses. */
+type GapKV = Pick<KVNamespace, "get" | "put">;
+
+interface GapRecord {
+  firstAt: number;
+  hits: number;
+}
+
+/**
+ * Bound the time an event gap stays retryable. A load that is `unreachable`
+ * with a `gapOffset` (Hiro answered, but served no page at that offset) is
+ * counted in KV under txid + offset. Once the same gap has been hit
+ * `TX_EVENT_GAP_MAX_HITS` times, or `TX_EVENT_GAP_MAX_AGE_MS` after the first
+ * hit, the load is returned as `incomplete`, which callers treat as final with
+ * their "do not pay again" message. Lag is retried; a lasting hole still ends.
+ *
+ * Any other load is returned as is. Without KV, or when KV fails, the load
+ * also stays as is (retryable): a gap is never made final on a guess. KV is
+ * eventually consistent, so concurrent requests may undercount hits; the age
+ * bound still ends the gap.
+ */
+export async function boundTxEventsGap(
+  load: TxEventsLoad,
+  txid: string,
+  kv: GapKV | undefined,
+  now: number = Date.now()
+): Promise<TxEventsLoad> {
+  if (load.state !== "unreachable" || load.gapOffset == null || !kv) return load;
+  const key = txEventsGapKey(txid, load.gapOffset);
+  try {
+    const prev = await kv.get(key);
+    const parsed = prev ? (JSON.parse(prev) as Partial<GapRecord>) : null;
+    const record: GapRecord = {
+      firstAt: typeof parsed?.firstAt === "number" ? parsed.firstAt : now,
+      hits: (typeof parsed?.hits === "number" ? parsed.hits : 0) + 1,
+    };
+    await kv.put(key, JSON.stringify(record), { expirationTtl: TX_EVENT_GAP_TTL_SECONDS });
+    if (record.hits >= TX_EVENT_GAP_MAX_HITS || now - record.firstAt >= TX_EVENT_GAP_MAX_AGE_MS) {
+      return { state: "incomplete", pages: load.pages };
+    }
+  } catch {
+    // Fail open: the load stays retryable.
+  }
+  return load;
 }

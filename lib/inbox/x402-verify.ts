@@ -52,6 +52,7 @@ import { stacksApiFetch, buildHiroHeaders, retryAfterSeconds, DEFAULT_RETRY_AFTE
 import {
   TX_EVENT_MAX,
   TX_EVENT_PAGE_FETCH_CONFIG,
+  boundTxEventsGap,
   loadTxEventsUntil,
   readFtTransfers,
   txEventsQuery,
@@ -756,11 +757,14 @@ export async function verifyTxidPayment(
           return limited;
         }
 
+        // Same rule as the bounty verifier (#1146): only a 400 is a verdict on
+        // the txid itself. 404 is handled above; any other 4xx (401/403/408 ...)
+        // or 5xx is about the path to Hiro, so the sender may retry.
         return {
           success: false,
           error: `Stacks API error: ${response.status}`,
           errorCode: "API_ERROR",
-          ...(response.status >= 500 && { retryAfterSeconds: DEFAULT_RETRY_AFTER_SECONDS }),
+          ...(response.status !== 400 && { retryAfterSeconds: DEFAULT_RETRY_AFTER_SECONDS }),
         };
       }
       txData = (await response.json()) as StacksTxData;
@@ -833,7 +837,12 @@ export async function verifyTxidPayment(
       sbtcTransfersFromPayer(evs, expectedContractId, payerStxAddress).some(
         (t) => t.recipient === recipientStxAddress && t.amount >= INBOX_PRICE_SATS
       );
-    const events = await loadTxEventsUntil(txData, txUrl, fetchTxPage, paymentFound);
+    // A gap that outlives lag becomes `incomplete`: final, "do not pay again".
+    const events = await boundTxEventsGap(
+      await loadTxEventsUntil(txData, txUrl, fetchTxPage, paymentFound),
+      normalizedTxid,
+      kv
+    );
     // Cache only a load that will not change on retry, and only when the
     // entry is new or gained events: a failed page must not rewrite it.
     const settled = events.state !== "unreachable" && events.state !== "incomplete";

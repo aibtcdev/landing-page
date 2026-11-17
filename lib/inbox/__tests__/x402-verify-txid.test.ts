@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyTxidPayment } from "../x402-verify";
 import { INBOX_PRICE_SATS, SBTC_CONTRACTS } from "../constants";
-import { TX_EVENT_MAX, TX_EVENT_PAGE_SIZE } from "@/lib/stacks-tx-events";
+import { TX_EVENT_GAP_MAX_HITS, TX_EVENT_MAX, TX_EVENT_PAGE_SIZE } from "@/lib/stacks-tx-events";
 import { createMockKV } from "./kv-mock";
 
 const SBTC = `${SBTC_CONTRACTS.mainnet.address}.${SBTC_CONTRACTS.mainnet.name}`;
@@ -266,6 +266,32 @@ describe("verifyTxidPayment", () => {
       const r = await verifyTxidPayment(TXID, RECIPIENT);
       expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
     }
+  });
+
+  it("turns a later-page gap final (EVENTS_TRUNCATED) once it has outlived lag", async () => {
+    const kv = createMockKV();
+    stubPagedHiro(routedTx(longEvents(150, {})), 100, {
+      laterPage: () => new Response(JSON.stringify({ events: [] }), { status: 200 }),
+    });
+    for (let i = 1; i < TX_EVENT_GAP_MAX_HITS; i++) {
+      const r = await verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
+      expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+    }
+    const r = await verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
+    expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
+    expect(r).not.toHaveProperty("retryAfterSeconds");
+  });
+
+  it("keeps a page-0 4xx other than 400/404 retryable; a 400 stays final", async () => {
+    for (const status of [401, 403, 408]) {
+      vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status })));
+      const r = await verifyTxidPayment(TXID, RECIPIENT);
+      expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+    }
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status: 400 })));
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: false, errorCode: "API_ERROR" });
+    expect(r).not.toHaveProperty("retryAfterSeconds");
   });
 
   it("routed: accepts an FT transfer in the flat event shape, as the bounty verifier does", async () => {

@@ -9,7 +9,13 @@ import {
 } from "@stacks/transactions";
 import { buildExpectedMemo, verifyPayoutTxid } from "../txid-verify";
 import { SBTC_CONTRACT_MAINNET } from "../constants";
-import { TX_EVENT_MAX, TX_EVENT_PAGE_SIZE } from "@/lib/stacks-tx-events";
+import {
+  TX_EVENT_GAP_MAX_AGE_MS,
+  TX_EVENT_GAP_MAX_HITS,
+  TX_EVENT_MAX,
+  TX_EVENT_PAGE_SIZE,
+} from "@/lib/stacks-tx-events";
+import { createMockKV } from "@/lib/inbox/__tests__/kv-mock";
 import type { BountyRecord, BountySubmission } from "../types";
 
 const BOUNTY_ID = "01HNX7TEST";
@@ -443,6 +449,61 @@ describe("verifyPayoutTxid", () => {
     const { r } = await verifyPaged(2, "empty");
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
+  });
+
+  // Review of #1147: a lasting hole must still end, with the "do not pay again" text.
+  it("turns a repeated later-page gap into a final EVENTS_TRUNCATED", async () => {
+    const kv = createMockKV();
+    const verifyGap = (now: Date) =>
+      verifyPayoutTxid({
+        txid: "0xabc",
+        bounty: makeBounty(),
+        acceptedSubmission: makeSubmission(),
+        fetchFn: pagedFetch(makeRoutedTx() as { events: unknown[] }, 2, "empty"),
+        kv,
+        now,
+      });
+    const t0 = Date.parse("2026-05-16T00:00:00Z");
+    for (let i = 1; i < TX_EVENT_GAP_MAX_HITS; i++) {
+      const r = await verifyGap(new Date(t0 + i * 1000));
+      expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+    }
+    const r = await verifyGap(new Date(t0 + TX_EVENT_GAP_MAX_HITS * 1000));
+    expect(r).toMatchObject({ ok: false, code: "EVENTS_TRUNCATED" });
+    if (!r.ok) expect(r.message).toContain("Do not pay the winner again");
+  });
+
+  it("turns a later-page gap final once it is older than TX_EVENT_GAP_MAX_AGE_MS", async () => {
+    const kv = createMockKV();
+    const verifyGap = (now: Date) =>
+      verifyPayoutTxid({
+        txid: "0xabc",
+        bounty: makeBounty(),
+        acceptedSubmission: makeSubmission(),
+        fetchFn: pagedFetch(makeRoutedTx() as { events: unknown[] }, 2, "empty"),
+        kv,
+        now,
+      });
+    const t0 = Date.parse("2026-05-16T00:00:00Z");
+    expect(await verifyGap(new Date(t0))).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+    expect(await verifyGap(new Date(t0 + TX_EVENT_GAP_MAX_AGE_MS))).toMatchObject({
+      ok: false,
+      code: "EVENTS_TRUNCATED",
+    });
+  });
+
+  it("never counts a 5xx later page as a gap", async () => {
+    const kv = createMockKV();
+    for (let i = 0; i <= TX_EVENT_GAP_MAX_HITS; i++) {
+      const r = await verifyPayoutTxid({
+        txid: "0xabc",
+        bounty: makeBounty(),
+        acceptedSubmission: makeSubmission(),
+        fetchFn: pagedFetch(makeRoutedTx() as { events: unknown[] }, 2, "fail"),
+        kv,
+      });
+      expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+    }
   });
 
   it("accepts a payout at the start of a 600-event tx without reading another page", async () => {
