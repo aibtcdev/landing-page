@@ -438,12 +438,6 @@ describe("verifyPayoutTxid", () => {
     if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
   });
 
-  it("returns a final EVENTS_TRUNCATED when a later page comes back empty", async () => {
-    const { r } = await verifyPaged(2, "empty");
-    expect(r.ok).toBe(false);
-    if (!r.ok) expect(r.code).toBe("EVENTS_TRUNCATED");
-  });
-
   it("accepts a payout at the start of a 600-event tx without reading another page", async () => {
     const { r, fetchFn } = await verifyLong(
       longTx(600, { 3: ftEvent(3, POSTER_STX, SUBMITTER_STX, 5000) })
@@ -512,7 +506,7 @@ describe("verifyPayoutTxid", () => {
     }
   });
 
-  it("maps a Hiro 4xx on the txid to a final TX_NOT_FOUND, and only a 5xx to HIRO_UNREACHABLE", async () => {
+  it("maps a Hiro 400 on the txid to a final TX_NOT_FOUND, and a 5xx to HIRO_UNREACHABLE", async () => {
     for (const [status, code] of [
       [400, "TX_NOT_FOUND"],
       [503, "HIRO_UNREACHABLE"],
@@ -795,5 +789,68 @@ describe("verifyPayoutTxid", () => {
     });
     expect(r.ok).toBe(false);
     if (!r.ok) expect(r.code).toBe("HIRO_UNREACHABLE");
+  });
+});
+
+describe("verifyPayoutTxid: which Hiro answers are final (#1146)", () => {
+  const laterPageStatus = (status: number) =>
+    vi.fn(async (url: string) => {
+      const offset = Number(new URL(url).searchParams.get("event_offset") ?? 0);
+      if (offset > 0) {
+        return { status, ok: false, headers: new Headers(), body: { cancel: async () => {} }, json: async () => ({}) };
+      }
+      const tx = longTx(150, {});
+      return { status: 200, ok: true, json: async () => ({ ...tx, event_count: 150, events: tx.events.slice(0, 100) }) };
+    }) as unknown as typeof fetch;
+
+  it("keeps a later page that is empty retryable (HIRO_UNREACHABLE)", async () => {
+    const { r } = await verifyPaged(2, "empty");
+    expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+  });
+
+  it.each([401, 403, 404, 408])("keeps a later page %i retryable (HIRO_UNREACHABLE)", async (status) => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn: laterPageStatus(status),
+    });
+    expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+  });
+
+  it.each([400, 422])("treats a later page %i as final (EVENTS_TRUNCATED)", async (status) => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn: laterPageStatus(status),
+    });
+    expect(r).toMatchObject({ ok: false, code: "EVENTS_TRUNCATED" });
+  });
+
+  it.each([401, 403, 408])("maps a %i on the txid to HIRO_UNREACHABLE, not TX_NOT_FOUND", async (status) => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn: vi.fn(async () => ({ status, ok: false, json: async () => ({}) })) as unknown as typeof fetch,
+    });
+    expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+  });
+
+  it("sends the Hiro API key on every request", async () => {
+    const fetchFn = pagedFetch(makeRoutedTx() as { events: unknown[] }, 2);
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn,
+      hiroApiKey: "test-key",
+    });
+    expect(r).toMatchObject({ ok: true });
+    expect(fetchFn.mock.calls.length).toBeGreaterThan(1);
+    for (const [, init] of fetchFn.mock.calls as [string, RequestInit][]) {
+      expect(new Headers(init.headers).get("x-api-key")).toBe("test-key");
+    }
   });
 });

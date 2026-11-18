@@ -244,15 +244,6 @@ describe("verifyTxidPayment", () => {
     expect(put.mock.calls.filter(([key]) => key === `cache:tx:${TXID}`)).toHaveLength(1);
   });
 
-  it("returns a final EVENTS_TRUNCATED when a later page is a 404", async () => {
-    stubPagedHiro(routedTx(longEvents(150, {})), 100, {
-      laterPage: () => new Response("{}", { status: 404 }),
-    });
-    const r = await verifyTxidPayment(TXID, RECIPIENT);
-    expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
-    expect(r).not.toHaveProperty("retryAfterSeconds");
-  });
-
   it("returns a retryable API_ERROR when a later page is a 5xx before any payment is found", async () => {
     stubPagedHiro(routedTx(longEvents(150, {})), 100, {
       laterPage: () => new Response("{}", { status: 503 }),
@@ -325,5 +316,55 @@ describe("verifyTxidPayment", () => {
     );
     const r = await verifyTxidPayment(TXID, RECIPIENT);
     expect(r).toMatchObject({ success: false, errorCode: "INSUFFICIENT_AMOUNT" });
+  });
+});
+
+describe("verifyTxidPayment: which Hiro answers are final (#1146)", () => {
+  afterEach(() => {
+    vi.unstubAllGlobals();
+  });
+
+  it.each([401, 403, 404, 408])("keeps a later page %i retryable (API_ERROR)", async (status) => {
+    stubPagedHiro(routedTx(longEvents(150, {})), 100, {
+      laterPage: () => new Response("{}", { status }),
+    });
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+  });
+
+  it("keeps an empty later page retryable (API_ERROR)", async () => {
+    stubPagedHiro(routedTx(longEvents(150, {})), 100, {
+      laterPage: () => new Response(JSON.stringify({ events: [] }), { status: 200 }),
+    });
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+  });
+
+  it.each([400, 422])("treats a later page %i as final (EVENTS_TRUNCATED)", async (status) => {
+    stubPagedHiro(routedTx(longEvents(150, {})), 100, {
+      laterPage: () => new Response("{}", { status }),
+    });
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
+  });
+
+  it.each([401, 403, 408])("keeps a %i on the txid retryable (API_ERROR)", async (status) => {
+    vi.stubGlobal("fetch", vi.fn(async () => new Response("{}", { status })));
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+  });
+
+  it("routed: accepts an FT transfer in the flat shape, like the bounty verifier", async () => {
+    const flat = {
+      event_index: 0,
+      event_type: "fungible_token_asset",
+      asset_id: `${SBTC}::sbtc-token`,
+      sender: PAYER,
+      recipient: RECIPIENT,
+      amount: String(INBOX_PRICE_SATS),
+    };
+    stubHiro(routedTx([flat]));
+    const r = await verifyTxidPayment(TXID, RECIPIENT);
+    expect(r).toMatchObject({ success: true });
   });
 });
