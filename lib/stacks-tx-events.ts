@@ -100,26 +100,31 @@ export function txEventsQuery(offset: number): string {
 /**
  * Outcome of `loadTxEventsUntil`. `pages` is how many later pages were loaded
  * into `tx.events` (failed fetches are not counted), so `pages > 0` means the
- * events grew.
+ * events grew. `loadedOffsets` lists the offsets those pages started at, so
+ * `boundTxEventsGap` can clear a gap that has healed.
  */
-export type TxEventsLoad =
+export type TxEventsLoad = { pages: number; loadedOffsets?: number[] } & (
   /** `found` accepted the events loaded so far. */
-  | { state: "found"; pages: number }
+  | { state: "found" }
   /** `tx.events` holds every event and `found` did not accept them. */
-  | { state: "complete"; pages: number }
+  | { state: "complete" }
   /** `TX_EVENT_MAX` events were loaded without a match and the transaction has more. Final. */
-  | { state: "truncated"; pages: number }
+  | { state: "truncated" }
   /**
-   * Hiro will not serve the rest: a later page rejected with 400 / 422, or the
+   * Hiro will not serve the rest: a later page rejected with 400 / 422, the
    * page-fetch cap reached short of `TX_EVENT_MAX` (pages smaller than
-   * requested). The same request gets the same answer, so this is final.
+   * requested), or a gap `boundTxEventsGap` has given up on. Final.
    */
-  | { state: "incomplete"; pages: number }
+  | { state: "incomplete" }
   /**
    * A page could not be read (network, timeout, any non-ok status but 400 /
-   * 422, or an empty page while events are still missing); retrying may succeed.
+   * 422, or an empty page while events are still missing); retrying may
+   * succeed. `gapOffset` is set only for a 404 or an empty page: Hiro answered
+   * but has no page at that offset yet, most likely index lag.
+   * `boundTxEventsGap` limits how long that stays retryable.
    */
-  | { state: "unreachable"; pages: number; response?: Response };
+  | { state: "unreachable"; response?: Response; gapOffset?: number }
+);
 
 /**
  * Append the events missing from `tx.events`, one page at a time, and stop as
@@ -135,14 +140,16 @@ export async function loadTxEventsUntil<E>(
 ): Promise<TxEventsLoad> {
   const total = tx.event_count;
   const events = (tx.events ??= []);
-  let pages = 0;
+  const loadedOffsets: number[] = [];
   let fetches = 0;
+  const loaded = () =>
+    loadedOffsets.length ? { pages: loadedOffsets.length, loadedOffsets } : { pages: 0 };
 
   for (;;) {
-    if (found(events)) return { state: "found", pages };
-    if (total == null || events.length >= total) return { state: "complete", pages };
-    if (events.length >= TX_EVENT_MAX) return { state: "truncated", pages };
-    if (fetches >= TX_EVENT_MAX_PAGE_FETCHES) return { state: "incomplete", pages };
+    if (found(events)) return { state: "found", ...loaded() };
+    if (total == null || events.length >= total) return { state: "complete", ...loaded() };
+    if (events.length >= TX_EVENT_MAX) return { state: "truncated", ...loaded() };
+    if (fetches >= TX_EVENT_MAX_PAGE_FETCHES) return { state: "incomplete", ...loaded() };
 
     let page: E[] | undefined;
     fetches++;
@@ -151,18 +158,87 @@ export async function loadTxEventsUntil<E>(
       if (!res.ok) {
         // Release the connection; the headers (Retry-After) stay readable.
         await res.body?.cancel().catch(() => {});
-        return isFinalHiroRejection(res.status)
-          ? { state: "incomplete", pages }
-          : { state: "unreachable", pages, response: res };
+        if (isFinalHiroRejection(res.status)) return { state: "incomplete", ...loaded() };
+        // Only a 404 is lag at this offset; 401/403/408, 429 and 5xx are about
+        // the path to Hiro, not this page, so they never start the gap clock.
+        return {
+          state: "unreachable",
+          ...loaded(),
+          response: res,
+          ...(res.status === 404 && { gapOffset: events.length }),
+        };
       }
       page = ((await res.json()) as { events?: E[] }).events;
     } catch {
-      return { state: "unreachable", pages };
+      return { state: "unreachable", ...loaded() };
     }
     // Hiro counted more events than it returns. Page 0 already found the tx,
     // so this is most likely a replica or indexer still catching up: retryable.
-    if (!page?.length) return { state: "unreachable", pages };
+    if (!page?.length) return { state: "unreachable", ...loaded(), gapOffset: events.length };
+    loadedOffsets.push(events.length);
     events.push(...page);
-    pages++;
   }
+}
+
+/** A gap still there this long after it was first hit is a hole, not lag. */
+export const TX_EVENT_GAP_MAX_AGE_MS = 15 * 60 * 1000;
+
+/** How long a gap record is kept; well past `TX_EVENT_GAP_MAX_AGE_MS`. */
+const TX_EVENT_GAP_TTL_SECONDS = 24 * 60 * 60;
+
+/** KV key of the gap record for `txid` at event `offset`. */
+export function txEventsGapKey(txid: string, offset: number): string {
+  return `tx-events-gap:${txid.toLowerCase().replace(/^0x/, "")}:${offset}`;
+}
+
+/**
+ * Bound how long an event gap stays retryable, so a hole in Hiro's index that
+ * never heals still ends in a verdict. The first time a load hits a gap
+ * (`gapOffset`), the time is written to KV under txid + offset, once. From
+ * `TX_EVENT_GAP_MAX_AGE_MS` after that first hit, the load comes back as
+ * `incomplete`, which callers report as final with their "do not pay again"
+ * message. The bound depends on time only, not on how often clients retry, and
+ * the record is never rewritten, so concurrent requests cannot move it.
+ *
+ * A page read at an offset clears any record there, so a gap that healed does
+ * not make a later lag at that offset final at once. Without KV, or when KV
+ * fails, the load is returned as is: a gap is never made final on a guess.
+ *
+ * Approach from aibtcdev/landing-page#1147.
+ */
+export async function boundTxEventsGap(
+  load: TxEventsLoad,
+  txid: string,
+  kv: Pick<KVNamespace, "get" | "put" | "delete"> | undefined,
+  now: number = Date.now()
+): Promise<TxEventsLoad> {
+  if (!kv) return load;
+  try {
+    for (const offset of load.loadedOffsets ?? []) {
+      const key = txEventsGapKey(txid, offset);
+      // A get costs less than a delete, and most loads have no record to clear.
+      if ((await kv.get(key)) != null) await kv.delete(key);
+    }
+  } catch {
+    // A record left behind only shortens a later gap's window: carry on.
+  }
+  if (load.state !== "unreachable" || load.gapOffset == null) return load;
+  const key = txEventsGapKey(txid, load.gapOffset);
+  try {
+    const prev = await kv.get(key);
+    const firstAt = prev ? (JSON.parse(prev) as { firstAt?: unknown }).firstAt : undefined;
+    if (typeof firstAt !== "number") {
+      await kv.put(key, JSON.stringify({ firstAt: now }), {
+        expirationTtl: TX_EVENT_GAP_TTL_SECONDS,
+      });
+      return load;
+    }
+    if (now - firstAt >= TX_EVENT_GAP_MAX_AGE_MS) {
+      const { pages, loadedOffsets } = load;
+      return { state: "incomplete", pages, ...(loadedOffsets && { loadedOffsets }) };
+    }
+  } catch {
+    // Fail open: the load stays retryable.
+  }
+  return load;
 }
