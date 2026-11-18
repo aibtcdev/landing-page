@@ -1,7 +1,7 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { verifyTxidPayment } from "../x402-verify";
 import { INBOX_PRICE_SATS, SBTC_CONTRACTS } from "../constants";
-import { TX_EVENT_GAP_MAX_HITS, TX_EVENT_MAX, TX_EVENT_PAGE_SIZE } from "@/lib/stacks-tx-events";
+import { TX_EVENT_GAP_MAX_AGE_MS, TX_EVENT_MAX, TX_EVENT_PAGE_SIZE, txEventsGapKey } from "@/lib/stacks-tx-events";
 import { createMockKV } from "./kv-mock";
 
 const SBTC = `${SBTC_CONTRACTS.mainnet.address}.${SBTC_CONTRACTS.mainnet.name}`;
@@ -255,11 +255,12 @@ describe("verifyTxidPayment", () => {
 
   // #1146: page 0 already found the tx, so a 404 / other 4xx / empty later page
   // is replica or indexer lag, not a verdict on the payment.
-  it("returns a retryable API_ERROR when a later page is a 404, 403 or 408, or comes back empty", async () => {
+  it("returns a retryable API_ERROR when a later page is a 404, 403, 408 or 422, or comes back empty", async () => {
     for (const laterPage of [
       () => new Response("{}", { status: 404 }),
       () => new Response("{}", { status: 403 }),
       () => new Response("{}", { status: 408 }),
+      () => new Response("{}", { status: 422 }),
       () => new Response(JSON.stringify({ events: [] }), { status: 200 }),
     ]) {
       stubPagedHiro(routedTx(longEvents(150, {})), 100, { laterPage });
@@ -268,18 +269,49 @@ describe("verifyTxidPayment", () => {
     }
   });
 
-  it("turns a later-page gap final (EVENTS_TRUNCATED) once it has outlived lag", async () => {
+  it("turns a later-page gap final (EVENTS_TRUNCATED) only once it is older than TX_EVENT_GAP_MAX_AGE_MS", async () => {
     const kv = createMockKV();
-    stubPagedHiro(routedTx(longEvents(150, {})), 100, {
-      laterPage: () => new Response(JSON.stringify({ events: [] }), { status: 200 }),
-    });
-    for (let i = 1; i < TX_EVENT_GAP_MAX_HITS; i++) {
-      const r = await verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
-      expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+    const t0 = Date.parse("2026-05-16T00:00:00Z");
+    const clock = vi.spyOn(Date, "now");
+    try {
+      for (const laterPage of [
+        () => new Response(JSON.stringify({ events: [] }), { status: 200 }),
+        () => new Response("{}", { status: 404 }),
+      ]) {
+        await kv.delete(txEventsGapKey(TXID, 100));
+        stubPagedHiro(routedTx(longEvents(150, {})), 100, { laterPage });
+        // Many fast retries inside the window stay retryable.
+        for (let i = 0; i < 20; i++) {
+          clock.mockReturnValue(t0 + i * 1000);
+          const r = await verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
+          expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+        }
+        clock.mockReturnValue(t0 + TX_EVENT_GAP_MAX_AGE_MS);
+        const r = await verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
+        expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
+        expect(r).not.toHaveProperty("retryAfterSeconds");
+      }
+    } finally {
+      clock.mockRestore();
     }
-    const r = await verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
-    expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
-    expect(r).not.toHaveProperty("retryAfterSeconds");
+  });
+
+  it("never turns a later-page 403 final, however long it lasts", async () => {
+    const kv = createMockKV();
+    const t0 = Date.parse("2026-05-16T00:00:00Z");
+    const clock = vi.spyOn(Date, "now");
+    try {
+      stubPagedHiro(routedTx(longEvents(150, {})), 100, {
+        laterPage: () => new Response("{}", { status: 403 }),
+      });
+      for (const at of [0, TX_EVENT_GAP_MAX_AGE_MS, 2 * TX_EVENT_GAP_MAX_AGE_MS]) {
+        clock.mockReturnValue(t0 + at);
+        const r = await verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
+        expect(r).toMatchObject({ success: false, errorCode: "API_ERROR", retryAfterSeconds: 30 });
+      }
+    } finally {
+      clock.mockRestore();
+    }
   });
 
   it("keeps a page-0 4xx other than 400/404 retryable; a 400 stays final", async () => {

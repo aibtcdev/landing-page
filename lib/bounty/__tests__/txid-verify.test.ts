@@ -11,7 +11,6 @@ import { buildExpectedMemo, verifyPayoutTxid } from "../txid-verify";
 import { SBTC_CONTRACT_MAINNET } from "../constants";
 import {
   TX_EVENT_GAP_MAX_AGE_MS,
-  TX_EVENT_GAP_MAX_HITS,
   TX_EVENT_MAX,
   TX_EVENT_PAGE_SIZE,
 } from "@/lib/stacks-tx-events";
@@ -198,7 +197,7 @@ async function verifyRouted(events?: unknown[], bounty: BountyRecord = makeBount
 function pagedFetch(
   tx: { events: unknown[] },
   firstPage: number,
-  laterPage?: "fail" | "empty" | "rate-limited",
+  laterPage?: "fail" | "empty" | "rate-limited" | "forbidden",
   opts: { pageSize?: number; cancel?: ReturnType<typeof vi.fn> } = {}
 ) {
   return vi.fn(async (url: string) => {
@@ -207,10 +206,10 @@ function pagedFetch(
     if (!(Number(params.get("event_limit")) <= 100)) {
       return { status: 400, ok: false, json: async () => ({}) };
     }
-    if (offset > 0 && (laterPage === "fail" || laterPage === "rate-limited")) {
+    if (offset > 0 && (laterPage === "fail" || laterPage === "rate-limited" || laterPage === "forbidden")) {
       const limited = laterPage === "rate-limited";
       return {
-        status: limited ? 429 : 503,
+        status: limited ? 429 : laterPage === "forbidden" ? 403 : 503,
         ok: false,
         headers: new Headers(limited ? { "Retry-After": "7" } : {}),
         body: { cancel: opts.cancel ?? (async () => {}) },
@@ -452,7 +451,9 @@ describe("verifyPayoutTxid", () => {
   });
 
   // Review of #1147: a lasting hole must still end, with the "do not pay again" text.
-  it("turns a repeated later-page gap into a final EVENTS_TRUNCATED", async () => {
+  // Second review of #1147: a poster retrying at the Retry-After pace (30s) must
+  // not turn a few minutes of Hiro lag into the final answer.
+  it("keeps a later-page gap retryable for retries every 30s until TX_EVENT_GAP_MAX_AGE_MS", async () => {
     const kv = createMockKV();
     const verifyGap = (now: Date) =>
       verifyPayoutTxid({
@@ -464,11 +465,11 @@ describe("verifyPayoutTxid", () => {
         now,
       });
     const t0 = Date.parse("2026-05-16T00:00:00Z");
-    for (let i = 1; i < TX_EVENT_GAP_MAX_HITS; i++) {
-      const r = await verifyGap(new Date(t0 + i * 1000));
+    for (let at = 0; at < TX_EVENT_GAP_MAX_AGE_MS; at += 30_000) {
+      const r = await verifyGap(new Date(t0 + at));
       expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
     }
-    const r = await verifyGap(new Date(t0 + TX_EVENT_GAP_MAX_HITS * 1000));
+    const r = await verifyGap(new Date(t0 + TX_EVENT_GAP_MAX_AGE_MS));
     expect(r).toMatchObject({ ok: false, code: "EVENTS_TRUNCATED" });
     if (!r.ok) expect(r.message).toContain("Do not pay the winner again");
   });
@@ -492,17 +493,21 @@ describe("verifyPayoutTxid", () => {
     });
   });
 
-  it("never counts a 5xx later page as a gap", async () => {
-    const kv = createMockKV();
-    for (let i = 0; i <= TX_EVENT_GAP_MAX_HITS; i++) {
-      const r = await verifyPayoutTxid({
-        txid: "0xabc",
-        bounty: makeBounty(),
-        acceptedSubmission: makeSubmission(),
-        fetchFn: pagedFetch(makeRoutedTx() as { events: unknown[] }, 2, "fail"),
-        kv,
-      });
-      expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+  it("never counts a 5xx or a 403 later page as a gap", async () => {
+    const t0 = Date.parse("2026-05-16T00:00:00Z");
+    for (const mode of ["fail", "forbidden"] as const) {
+      const kv = createMockKV();
+      for (const at of [0, TX_EVENT_GAP_MAX_AGE_MS, 2 * TX_EVENT_GAP_MAX_AGE_MS]) {
+        const r = await verifyPayoutTxid({
+          txid: "0xabc",
+          bounty: makeBounty(),
+          acceptedSubmission: makeSubmission(),
+          fetchFn: pagedFetch(makeRoutedTx() as { events: unknown[] }, 2, mode),
+          kv,
+          now: new Date(t0 + at),
+        });
+        expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+      }
     }
   });
 

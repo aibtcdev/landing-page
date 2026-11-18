@@ -1,7 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
   TX_EVENT_GAP_MAX_AGE_MS,
-  TX_EVENT_GAP_MAX_HITS,
   boundTxEventsGap,
   loadTxEventsUntil,
   readFtTransfer,
@@ -75,17 +74,20 @@ describe("loadTxEventsUntil gapOffset", () => {
   const tx = () => ({ event_count: 150, events: Array.from({ length: 100 }, (_, i) => i) });
   const never = () => false;
 
-  it("marks an empty later page and a 404/403 later page as a gap at the missing offset", async () => {
+  it("marks only an empty or a 404 later page as a gap at the missing offset", async () => {
     const empty = await loadTxEventsUntil(tx(), "u", async () => new Response(JSON.stringify({ events: [] })), never);
     expect(empty).toMatchObject({ state: "unreachable", gapOffset: 100 });
-    for (const status of [404, 403, 408]) {
-      const r = await loadTxEventsUntil(tx(), "u", async () => new Response("{}", { status }), never);
-      expect(r).toMatchObject({ state: "unreachable", gapOffset: 100 });
-    }
+    const notFound = await loadTxEventsUntil(tx(), "u", async () => new Response("{}", { status: 404 }), never);
+    expect(notFound).toMatchObject({ state: "unreachable", gapOffset: 100 });
   });
 
-  it("does not mark a 429, a 5xx or a network failure as a gap", async () => {
-    for (const status of [429, 500, 503]) {
+  it("treats a later-page 400 as final, the same as page 0", async () => {
+    const r = await loadTxEventsUntil(tx(), "u", async () => new Response("{}", { status: 400 }), never);
+    expect(r).toEqual({ state: "incomplete", pages: 0 });
+  });
+
+  it("does not mark 401/403/408/422, a 429, a 5xx or a network failure as a gap", async () => {
+    for (const status of [401, 403, 408, 422, 429, 500, 503]) {
       const r = await loadTxEventsUntil(tx(), "u", async () => new Response("{}", { status }), never);
       expect(r.state).toBe("unreachable");
       expect(r).not.toHaveProperty("gapOffset");
@@ -93,19 +95,35 @@ describe("loadTxEventsUntil gapOffset", () => {
     const thrown = await loadTxEventsUntil(tx(), "u", async () => { throw new Error("net"); }, never);
     expect(thrown).toEqual({ state: "unreachable", pages: 0 });
   });
+
+  it("reports the offsets of the later pages it loaded", async () => {
+    const big = { event_count: 320, events: Array.from({ length: 100 }, (_, i) => i) };
+    const fetchPage = async (url: string) => {
+      const offset = Number(new URL(url, "https://h").searchParams.get("event_offset"));
+      const n = Math.min(100, 320 - offset);
+      return new Response(JSON.stringify({ events: Array.from({ length: n }, (_, i) => offset + i) }));
+    };
+    expect(await loadTxEventsUntil(big, "https://h/tx", fetchPage, never)).toEqual({
+      state: "complete",
+      pages: 3,
+      loadedOffsets: [100, 200, 300],
+    });
+  });
 });
 
 describe("boundTxEventsGap", () => {
   const TXID = "0xAB" + "cd".repeat(31);
   const gap: TxEventsLoad = { state: "unreachable", pages: 0, gapOffset: 100 };
 
-  it("keeps a gap retryable until it has been hit TX_EVENT_GAP_MAX_HITS times", async () => {
+  // Review of #1147: retry speed and other submitters must not end the window early.
+  it("keeps a gap retryable however often it is hit inside TX_EVENT_GAP_MAX_AGE_MS", async () => {
     const kv = createMockKV();
     const t0 = 1_000_000;
-    for (let i = 1; i < TX_EVENT_GAP_MAX_HITS; i++) {
+    for (let i = 0; i < 50; i++) {
       expect(await boundTxEventsGap(gap, TXID, kv, t0 + i)).toBe(gap);
     }
-    expect(await boundTxEventsGap(gap, TXID, kv, t0 + TX_EVENT_GAP_MAX_HITS)).toEqual({
+    expect(await boundTxEventsGap(gap, TXID, kv, t0 + TX_EVENT_GAP_MAX_AGE_MS - 1)).toBe(gap);
+    expect(await boundTxEventsGap(gap, TXID, kv, t0 + TX_EVENT_GAP_MAX_AGE_MS)).toEqual({
       state: "incomplete",
       pages: 0,
     });
@@ -119,17 +137,42 @@ describe("boundTxEventsGap", () => {
     expect((await boundTxEventsGap(gap, TXID, kv, t0 + TX_EVENT_GAP_MAX_AGE_MS)).state).toBe("incomplete");
   });
 
-  it("counts per txid and per offset, with or without 0x and in any case", async () => {
+  it("records the first hit once, per txid and per offset, with or without 0x and in any case", async () => {
     const kv = createMockKV();
+    const put = vi.spyOn(kv, "put");
     await boundTxEventsGap(gap, TXID, kv, 1);
+    await boundTxEventsGap(gap, TXID, kv, 2);
+    expect(put).toHaveBeenCalledTimes(1);
     expect(txEventsGapKey(TXID, 100)).toBe(txEventsGapKey(TXID.slice(2).toLowerCase(), 100));
-    expect(JSON.parse((await kv.get(txEventsGapKey(TXID, 100))) as string)).toEqual({ firstAt: 1, hits: 1 });
+    expect(JSON.parse((await kv.get(txEventsGapKey(TXID, 100))) as string)).toEqual({ firstAt: 1 });
     expect(await kv.get(txEventsGapKey(TXID, 200))).toBeNull();
+  });
+
+  it("clears the record of a gap once a load reads a page at that offset", async () => {
+    const kv = createMockKV();
+    const t0 = 1_000_000;
+    await boundTxEventsGap(gap, TXID, kv, t0);
+    const healed: TxEventsLoad = { state: "found", pages: 1, loadedOffsets: [100] };
+    expect(await boundTxEventsGap(healed, TXID, kv, t0 + 1000)).toBe(healed);
+    expect(await kv.get(txEventsGapKey(TXID, 100))).toBeNull();
+    // A new lag at the same offset later on starts a fresh window instead of being final.
+    const later = t0 + 2 * TX_EVENT_GAP_MAX_AGE_MS;
+    expect(await boundTxEventsGap(gap, TXID, kv, later)).toBe(gap);
+    // A gap further on keeps the offsets read before it, and clears them too.
+    await boundTxEventsGap({ state: "unreachable", pages: 0, gapOffset: 200 }, TXID, kv, later);
+    const moved: TxEventsLoad = { state: "unreachable", pages: 1, loadedOffsets: [100], gapOffset: 200 };
+    expect(await boundTxEventsGap(moved, TXID, kv, later + TX_EVENT_GAP_MAX_AGE_MS)).toEqual({
+      state: "incomplete",
+      pages: 1,
+      loadedOffsets: [100],
+    });
+    expect(await kv.get(txEventsGapKey(TXID, 100))).toBeNull();
   });
 
   it("leaves every other load alone and writes nothing", async () => {
     const kv = createMockKV();
     const put = vi.spyOn(kv, "put");
+    const del = vi.spyOn(kv, "delete");
     const loads: TxEventsLoad[] = [
       { state: "unreachable", pages: 0 },
       { state: "found", pages: 1 },
@@ -139,6 +182,7 @@ describe("boundTxEventsGap", () => {
     ];
     for (const load of loads) expect(await boundTxEventsGap(load, TXID, kv)).toBe(load);
     expect(put).not.toHaveBeenCalled();
+    expect(del).not.toHaveBeenCalled();
   });
 
   it("stays retryable without KV or when KV fails", async () => {

@@ -144,7 +144,7 @@ export async function verifyPayoutTxid(params: {
    * KV for the event-gap bound (`boundTxEventsGap`). Without it a lasting gap
    * in Hiro's events stays a retryable `HIRO_UNREACHABLE`.
    */
-  kv?: Pick<KVNamespace, "get" | "put">;
+  kv?: Pick<KVNamespace, "get" | "put" | "delete">;
 }): Promise<TxidVerifyResult> {
   const network = params.network ?? "mainnet";
   const now = params.now ?? new Date();

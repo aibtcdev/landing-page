@@ -255,14 +255,16 @@ senders can recover by resubmitting with the confirmed transaction ID as proof:
 5. **Message delivered** -- Stored with `recoveredViaTxid: true` flag
 
 A payment made through another contract is read from the sBTC FT events, paged until found
-(`lib/stacks-tx-events.ts`). Not in the first 500 events, or Hiro will not serve the rest (a 400/422
+(`lib/stacks-tx-events.ts`). Not in the first 500 events, or Hiro will not serve the rest (a 400
 later page, page cap) -> final 400 `EVENTS_TRUNCATED`, whose message tells the sender not to pay again.
-A 429 / 5xx / network failure, and a 404, other 4xx or empty later page (page 0 already found the tx,
-so that is replica or indexer lag), is retryable (429 `RATE_LIMITED` / 502 `API_ERROR`). That lag case
-is bounded: `boundTxEventsGap` counts it in KV under `tx-events-gap:{txid}:{offset}`, and once the
-same gap is hit `TX_EVENT_GAP_MAX_HITS` (5) times or `TX_EVENT_GAP_MAX_AGE_MS` (15 min) after the first
-hit it becomes the final `EVENTS_TRUNCATED`, so a lasting hole in Hiro still ends. A page-0 4xx other
-than 400/404 (401/403/408: the path to Hiro, not the txid) is a retryable `API_ERROR`. Later pages
+A 429 / 5xx / network failure, any other 4xx, and an empty later page are retryable (429 `RATE_LIMITED`
+/ 502 `API_ERROR`). A 404 or empty later page (page 0 already found the tx, so that is replica or
+indexer lag) is bounded: `boundTxEventsGap` writes the time of the first hit once to KV under
+`tx-events-gap:{txid}:{offset}`, and from `TX_EVENT_GAP_MAX_AGE_MS` (15 min) after it the gap is the
+final `EVENTS_TRUNCATED`, so a lasting hole in Hiro still ends. The bound is time only, so retry speed
+cannot shorten it; a load that reads a page at that offset deletes the record. A 4xx other than
+400/404 (401/403/408/422: the path to Hiro, not the txid) is a retryable `API_ERROR` on any page and
+never counts as a gap. Later pages
 use `TX_EVENT_PAGE_FETCH_CONFIG` (a single attempt, no retry, 3.5s timeout; `retries` counts attempts)
 so the request path fails fast and the client retries the request. FT events are read through
 `readFtTransfer` (nested `asset.x` or flat `x` shape, one shape per event), shared with the bounty verifier.
@@ -414,7 +416,7 @@ memo = "BNTY:" + bountyId       # 31 bytes — fits SIP-010 (buff 34)
 `/paid` then runs the chain in `lib/bounty/txid-verify.ts`:
 
 1. Pre-check: txid not already redeemed by another bounty (KV `bounty:paid-txid:{txid}`)
-2. Hiro `GET /extended/v1/tx/{txid}`, events paged until the payout is found (`lib/stacks-tx-events.ts`; a refusal only after every page is read). Direct and routed payouts both page; the transfer (and, for a routed payout, its memo print at the next event index) must be within the first 500 events and Hiro must serve them, else final `EVENTS_TRUNCATED` (message says do not pay again). A later page that is empty, 404 or another non-final 4xx is lag and `HIRO_UNREACHABLE`, but bounded: the same gap (KV `tx-events-gap:{txid}:{offset}`) hit 5 times or 15 min after the first hit is final `EVENTS_TRUNCATED` (`boundTxEventsGap`; the route passes `kv`). A Hiro 404 or 400 on the txid is `TX_NOT_FOUND`; 429 is `RATE_LIMITED`; any other 4xx (401/403/408: the path to Hiro, not the txid), 5xx or network failure is `HIRO_UNREACHABLE`. Every Hiro request sends `env.HIRO_API_KEY`. Then: `tx_status = success`, `is_unanchored = false` (else `TX_NOT_CONFIRMED` — the agent waits and retries; we do **not** keep a pending-cache, the agent verifies confirmation before submitting)
+2. Hiro `GET /extended/v1/tx/{txid}`, events paged until the payout is found (`lib/stacks-tx-events.ts`; a refusal only after every page is read). Direct and routed payouts both page; the transfer (and, for a routed payout, its memo print at the next event index) must be within the first 500 events and Hiro must serve them, else final `EVENTS_TRUNCATED` (message says do not pay again). A later page that is empty or 404 is lag and `HIRO_UNREACHABLE`, but bounded: 15 min after the first hit of the same gap (KV `tx-events-gap:{txid}:{offset}`, written once) it is final `EVENTS_TRUNCATED` (`boundTxEventsGap`; the route passes `kv`). A later-page 400 is final; any other later-page 4xx is `HIRO_UNREACHABLE` and never counts as a gap. A Hiro 404 or 400 on the txid is `TX_NOT_FOUND`; 429 is `RATE_LIMITED`; any other 4xx (401/403/408: the path to Hiro, not the txid), 5xx or network failure is `HIRO_UNREACHABLE`. Every Hiro request sends `env.HIRO_API_KEY`. Then: `tx_status = success`, `is_unanchored = false` (else `TX_NOT_CONFIRMED` — the agent waits and retries; we do **not** keep a pending-cache, the agent verifies confirmation before submitting)
 3. Contract = `SBTC_CONTRACT_MAINNET`, `function_name = transfer`
 4. `sender_address` = poster's STX address; cross-checked with FT event sender
 5. function arg `recipient` = winner's STX address; cross-checked with FT event recipient
@@ -690,7 +692,7 @@ All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
 | `referral-code:{btcAddress}` | ReferralCodeRecord | Agent's private referral code |
 | `referral-lookup:{CODE}` | btcAddress (string) | Reverse lookup: referral code → referrer |
 | `bounty:paid-txid:{txid}` | bountyId (string) | Bounty payment txid uniqueness — one txid can't pay two bounties (TTL: 365 days; D1 unique partial index on `paid_txid` is the durable enforcement) |
-| `tx-events-gap:{txid}:{offset}` | `{firstAt, hits}` | Event-page gap counter for `/paid` and inbox txid recovery; bounds how long a Hiro gap stays retryable (`boundTxEventsGap`, TTL: 24h) |
+| `tx-events-gap:{txid}:{offset}` | `{firstAt}` | First time an event-page gap was hit, for `/paid` and inbox txid recovery; bounds how long a Hiro gap stays retryable (`boundTxEventsGap`, written once, deleted when that page loads, TTL: 24h) |
 
 Both `stx:` and `btc:` keys point to identical records and must be updated together.
 

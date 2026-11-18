@@ -13,12 +13,15 @@
  * `complete`. `truncated` and `incomplete` are final (retrying repeats the same
  * answer); only `unreachable` is worth retrying.
  *
- * Page 0 already found the transaction, so a later page that comes back 404,
- * empty, or with any 4xx other than 400/422 is most plausibly a replica or
- * indexer lagging behind (#1146): it is `unreachable`, not `incomplete`. Such
- * a load carries `gapOffset`, and `boundTxEventsGap` turns it final once the
- * same gap outlives lag (`TX_EVENT_GAP_MAX_HITS` / `TX_EVENT_GAP_MAX_AGE_MS`),
- * so a lasting hole in Hiro's index still ends in a verdict.
+ * Status codes on a later page follow the page-0 rule of both verifiers: only
+ * a 400 is a verdict on the request (`incomplete`, final). Page 0 already found
+ * the transaction, so a later page that comes back 404 or empty is most
+ * plausibly a replica or indexer lagging behind (#1146): it is `unreachable`
+ * and carries `gapOffset`, and `boundTxEventsGap` turns it final once the same
+ * gap is older than `TX_EVENT_GAP_MAX_AGE_MS`, so a lasting hole in Hiro's
+ * index still ends in a verdict. Any other 4xx (401/403/408/422 ...) is about
+ * the path to Hiro, not the page, and stays retryable with no `gapOffset`,
+ * like a 429, a 5xx or a network failure.
  */
 
 import type { StacksApiFetchConfig } from "./stacks-api-fetch";
@@ -111,33 +114,41 @@ export function txEventsQuery(offset: number): string {
 /**
  * Outcome of `loadTxEventsUntil`. `pages` is how many later pages were loaded
  * into `tx.events` (failed fetches are not counted), so `pages > 0` means the
- * events grew.
+ * events grew. `loadedOffsets` lists the offsets those pages started at; it is
+ * present only when `pages > 0`, and `boundTxEventsGap` clears any gap record
+ * at those offsets.
  */
-export type TxEventsLoad =
+export type TxEventsLoad = { pages: number; loadedOffsets?: number[] } & (
   /** `found` accepted the events loaded so far. */
-  | { state: "found"; pages: number }
+  | { state: "found" }
   /** `tx.events` holds every event and `found` did not accept them. */
-  | { state: "complete"; pages: number }
+  | { state: "complete" }
   /** `TX_EVENT_MAX` events were loaded without a match and the transaction has more. Final. */
-  | { state: "truncated"; pages: number }
+  | { state: "truncated" }
   /**
-   * Hiro will not serve the rest: a later page refused as a bad request
-   * (400/422), or the page-fetch cap reached short of `TX_EVENT_MAX` (pages
-   * smaller than requested). The same request gets the same answer, so this is
-   * final, not retryable.
-   */
-  | { state: "incomplete"; pages: number }
-  /**
-   * A page could not be read (network, timeout, 429, 5xx, or a 404 / other 4xx /
-   * empty later page, which after page 0 found the tx means lag); retrying may
-   * succeed. `gapOffset` is set only for the lag case: Hiro answered, but not
-   * with the page at that offset. `boundTxEventsGap` bounds how long that stays
+   * Hiro will not serve the rest: a later page refused as a bad request (400),
+   * or the page-fetch cap reached short of `TX_EVENT_MAX` (pages smaller than
+   * requested). The same request gets the same answer, so this is final, not
    * retryable.
    */
-  | { state: "unreachable"; pages: number; response?: Response; gapOffset?: number };
+  | { state: "incomplete" }
+  /**
+   * A page could not be read (network, timeout, 429, 5xx, any 4xx other than
+   * 400, or an empty later page); retrying may succeed. `gapOffset` is set only
+   * for the lag case, a 404 or an empty page: Hiro answered, but has no page at
+   * that offset yet. `boundTxEventsGap` bounds how long that stays retryable.
+   */
+  | { state: "unreachable"; response?: Response; gapOffset?: number }
+);
 
-/** Later-page HTTP statuses that are a verdict on the request itself, not lag. */
-const FINAL_LATER_PAGE_STATUSES = new Set([400, 422]);
+/**
+ * Later-page HTTP status that is a verdict on the request itself. The same
+ * rule as page 0 in both verifiers, where only a 400 is final.
+ */
+const FINAL_LATER_PAGE_STATUS = 400;
+
+/** Later-page HTTP status that, after page 0 found the tx, means index lag. */
+const LAG_LATER_PAGE_STATUS = 404;
 
 /**
  * Append the events missing from `tx.events`, one page at a time, and stop as
@@ -153,14 +164,16 @@ export async function loadTxEventsUntil<E>(
 ): Promise<TxEventsLoad> {
   const total = tx.event_count;
   const events = (tx.events ??= []);
-  let pages = 0;
+  const loadedOffsets: number[] = [];
   let fetches = 0;
+  const pages = () =>
+    loadedOffsets.length ? { pages: loadedOffsets.length, loadedOffsets } : { pages: 0 };
 
   for (;;) {
-    if (found(events)) return { state: "found", pages };
-    if (total == null || events.length >= total) return { state: "complete", pages };
-    if (events.length >= TX_EVENT_MAX) return { state: "truncated", pages };
-    if (fetches >= TX_EVENT_MAX_PAGE_FETCHES) return { state: "incomplete", pages };
+    if (found(events)) return { state: "found", ...pages() };
+    if (total == null || events.length >= total) return { state: "complete", ...pages() };
+    if (events.length >= TX_EVENT_MAX) return { state: "truncated", ...pages() };
+    if (fetches >= TX_EVENT_MAX_PAGE_FETCHES) return { state: "incomplete", ...pages() };
 
     let page: E[] | undefined;
     fetches++;
@@ -169,30 +182,27 @@ export async function loadTxEventsUntil<E>(
       if (!res.ok) {
         // Release the connection; the headers (Retry-After) stay readable.
         await res.body?.cancel().catch(() => {});
-        if (FINAL_LATER_PAGE_STATUSES.has(res.status)) return { state: "incomplete", pages };
-        // 429 and 5xx are about Hiro's load, not this page: no gap.
-        const lag = res.status !== 429 && res.status < 500;
+        if (res.status === FINAL_LATER_PAGE_STATUS) return { state: "incomplete", ...pages() };
+        // Only a 404 is lag at this offset. 401/403/408/422, 429 and 5xx are
+        // about the path to Hiro or its load, not this page: no gap.
         return {
           state: "unreachable",
-          pages,
+          ...pages(),
           response: res,
-          ...(lag && { gapOffset: events.length }),
+          ...(res.status === LAG_LATER_PAGE_STATUS && { gapOffset: events.length }),
         };
       }
       page = ((await res.json()) as { events?: E[] }).events;
     } catch {
-      return { state: "unreachable", pages };
+      return { state: "unreachable", ...pages() };
     }
     // Hiro counted more events than it returns. Page 0 already served the tx,
     // so this is most plausibly a lagging replica or indexer: retryable.
-    if (!page?.length) return { state: "unreachable", pages, gapOffset: events.length };
+    if (!page?.length) return { state: "unreachable", ...pages(), gapOffset: events.length };
+    loadedOffsets.push(events.length);
     events.push(...page);
-    pages++;
   }
 }
-
-/** A gap the same txid has hit this many times is a hole, not lag. */
-export const TX_EVENT_GAP_MAX_HITS = 5;
 
 /** A gap still there this long after it was first hit is a hole, not lag. */
 export const TX_EVENT_GAP_MAX_AGE_MS = 15 * 60 * 1000;
@@ -207,25 +217,28 @@ export function txEventsGapKey(txid: string, offset: number): string {
 }
 
 /** The KV methods `boundTxEventsGap` uses. */
-type GapKV = Pick<KVNamespace, "get" | "put">;
+type GapKV = Pick<KVNamespace, "get" | "put" | "delete">;
 
 interface GapRecord {
   firstAt: number;
-  hits: number;
 }
 
 /**
  * Bound the time an event gap stays retryable. A load that is `unreachable`
- * with a `gapOffset` (Hiro answered, but served no page at that offset) is
- * counted in KV under txid + offset. Once the same gap has been hit
- * `TX_EVENT_GAP_MAX_HITS` times, or `TX_EVENT_GAP_MAX_AGE_MS` after the first
- * hit, the load is returned as `incomplete`, which callers treat as final with
- * their "do not pay again" message. Lag is retried; a lasting hole still ends.
+ * with a `gapOffset` (Hiro answered, but has no page at that offset yet)
+ * records the time of the first hit in KV under txid + offset, written once.
+ * From `TX_EVENT_GAP_MAX_AGE_MS` after that first hit, the load is returned as
+ * `incomplete`, which callers treat as final with their "do not pay again"
+ * message. Lag is retried; a lasting hole still ends. The bound depends only
+ * on time, not on how often or how fast clients retry, and the record is never
+ * rewritten, so concurrent requests cannot move it.
+ *
+ * A load that read a page at an offset (`loadedOffsets`) clears any gap record
+ * there, so a gap that healed does not make a later lag at that offset final
+ * straight away.
  *
  * Any other load is returned as is. Without KV, or when KV fails, the load
- * also stays as is (retryable): a gap is never made final on a guess. KV is
- * eventually consistent, so concurrent requests may undercount hits; the age
- * bound still ends the gap.
+ * also stays as is (retryable): a gap is never made final on a guess.
  */
 export async function boundTxEventsGap(
   load: TxEventsLoad,
@@ -233,18 +246,29 @@ export async function boundTxEventsGap(
   kv: GapKV | undefined,
   now: number = Date.now()
 ): Promise<TxEventsLoad> {
-  if (load.state !== "unreachable" || load.gapOffset == null || !kv) return load;
+  if (!kv) return load;
+  try {
+    for (const offset of load.loadedOffsets ?? []) {
+      const key = txEventsGapKey(txid, offset);
+      // A get costs less than a delete, and most loads have no record to clear.
+      if ((await kv.get(key)) != null) await kv.delete(key);
+    }
+  } catch {
+    // A record left behind only shortens a later gap's window: carry on.
+  }
+  if (load.state !== "unreachable" || load.gapOffset == null) return load;
   const key = txEventsGapKey(txid, load.gapOffset);
   try {
     const prev = await kv.get(key);
-    const parsed = prev ? (JSON.parse(prev) as Partial<GapRecord>) : null;
-    const record: GapRecord = {
-      firstAt: typeof parsed?.firstAt === "number" ? parsed.firstAt : now,
-      hits: (typeof parsed?.hits === "number" ? parsed.hits : 0) + 1,
-    };
-    await kv.put(key, JSON.stringify(record), { expirationTtl: TX_EVENT_GAP_TTL_SECONDS });
-    if (record.hits >= TX_EVENT_GAP_MAX_HITS || now - record.firstAt >= TX_EVENT_GAP_MAX_AGE_MS) {
-      return { state: "incomplete", pages: load.pages };
+    const firstAt = prev ? (JSON.parse(prev) as Partial<GapRecord>).firstAt : undefined;
+    if (typeof firstAt !== "number") {
+      const record: GapRecord = { firstAt: now };
+      await kv.put(key, JSON.stringify(record), { expirationTtl: TX_EVENT_GAP_TTL_SECONDS });
+      return load;
+    }
+    if (now - firstAt >= TX_EVENT_GAP_MAX_AGE_MS) {
+      const { pages, loadedOffsets } = load;
+      return { state: "incomplete", pages, ...(loadedOffsets && { loadedOffsets }) };
     }
   } catch {
     // Fail open: the load stays retryable.
