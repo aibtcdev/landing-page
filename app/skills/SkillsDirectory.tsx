@@ -4,7 +4,6 @@ import { useState, useEffect, useMemo, useRef, useCallback } from "react";
 import { useSearchParams } from "next/navigation";
 import CopyButton from "@/app/components/CopyButton";
 import {
-  SKILLS_CLONE_COMMAND,
   SKILLS_INSTALL_COMMAND,
   SKILLS_INSTALL_URL,
   skillFolder,
@@ -387,20 +386,6 @@ export default function SkillsDirectory({ initialData }: { initialData: SkillsDa
         </div>
 
         <p className="mx-auto mt-3 max-w-[460px] text-[12px] leading-[1.6] text-white/40 max-md:mx-0">
-          Needs{" "}
-          <a
-            href="https://bun.sh"
-            target="_blank"
-            rel="noopener noreferrer"
-            className="underline decoration-white/20 underline-offset-2 hover:text-white/70"
-          >
-            Bun
-          </a>
-          . Run <code className="font-mono">{SKILLS_INSTALL_COMMAND}</code> inside the folder the installer reports
-          (<code className="font-mono">-g</code>: <code className="font-mono">~/.agents/skills/&lt;skill&gt;</code>).
-          To use many skills at once, clone the repo instead:{" "}
-          <code className="font-mono">{SKILLS_CLONE_COMMAND}</code>, then{" "}
-          <code className="font-mono">{SKILLS_INSTALL_COMMAND}</code>.{" "}
           <a
             href={SKILLS_INSTALL_URL}
             target="_blank"
