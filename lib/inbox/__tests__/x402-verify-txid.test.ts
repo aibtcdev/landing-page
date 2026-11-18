@@ -368,3 +368,38 @@ describe("verifyTxidPayment: which Hiro answers are final (#1146)", () => {
     expect(r).toMatchObject({ success: true });
   });
 });
+
+describe("verifyTxidPayment: a gap that never heals still ends (#1146 follow-up)", () => {
+  afterEach(() => {
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+  });
+
+  const verifyAt = async (status: number, kv: KVNamespace, at: string) => {
+    vi.setSystemTime(new Date(at));
+    stubPagedHiro(routedTx(longEvents(150, {})), 100, {
+      laterPage: () =>
+        status === 200
+          ? new Response(JSON.stringify({ events: [] }), { status: 200 })
+          : new Response("{}", { status }),
+    });
+    return verifyTxidPayment(TXID, RECIPIENT, "mainnet", undefined, kv);
+  };
+
+  it.each([200, 404])("keeps a gap (later page %i) retryable for 15 minutes, then returns EVENTS_TRUNCATED", async (status) => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const kv = createMockKV();
+    expect(await verifyAt(status, kv, "2026-05-16T00:00:00Z")).toMatchObject({ errorCode: "API_ERROR", retryAfterSeconds: 30 });
+    expect(await verifyAt(status, kv, "2026-05-16T00:14:30Z")).toMatchObject({ errorCode: "API_ERROR" });
+    const r = await verifyAt(status, kv, "2026-05-16T00:15:00Z");
+    expect(r).toMatchObject({ success: false, errorCode: "EVENTS_TRUNCATED" });
+    expect(r).not.toHaveProperty("retryAfterSeconds");
+  });
+
+  it("never turns a later-page 403 final", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    const kv = createMockKV();
+    expect(await verifyAt(403, kv, "2026-05-16T00:00:00Z")).toMatchObject({ errorCode: "API_ERROR" });
+    expect(await verifyAt(403, kv, "2026-05-17T00:00:00Z")).toMatchObject({ errorCode: "API_ERROR", retryAfterSeconds: 30 });
+  });
+});

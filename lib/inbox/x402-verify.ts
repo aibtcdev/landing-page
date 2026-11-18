@@ -52,6 +52,7 @@ import { stacksApiFetch, buildHiroHeaders, retryAfterSeconds, DEFAULT_RETRY_AFTE
 import {
   TX_EVENT_MAX,
   TX_EVENT_PAGE_FETCH_CONFIG,
+  boundTxEventsGap,
   isFinalHiroRejection,
   loadTxEventsUntil,
   readFtTransfer,
@@ -842,7 +843,11 @@ export async function verifyTxidPayment(
         (ev) =>
           ev.recipient === recipientStxAddress && ev.amount >= INBOX_PRICE_SATS
       );
-    const events = await loadTxEventsUntil(txData, txUrl, fetchTxPage, paymentFound);
+    const events = await boundTxEventsGap(
+      await loadTxEventsUntil(txData, txUrl, fetchTxPage, paymentFound),
+      normalizedTxid,
+      kv
+    );
     // Cache only a load that will not change on retry, and only when the
     // entry is new or gained events: a failed page must not rewrite it.
     const settled = events.state !== "unreachable" && events.state !== "incomplete";

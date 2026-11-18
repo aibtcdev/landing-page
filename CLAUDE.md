@@ -259,6 +259,8 @@ A payment made through another contract is read from the sBTC FT events, paged u
 page, page cap) -> final 400 `EVENTS_TRUNCATED`, whose message tells the sender not to pay again.
 Any other failure (401, 403, 404, 408, 429, 5xx, an empty later page, network) is retryable
 (429 `RATE_LIMITED` / 502 `API_ERROR`); `isFinalHiroRejection()` holds the rule for both verifiers.
+A 404 or empty later page is index lag, so `boundTxEventsGap()` caps it: retryable for 15 minutes
+from the first hit (KV `tx-events-gap:`), then final `EVENTS_TRUNCATED`. `/paid` uses the same cap.
 Later pages use `TX_EVENT_PAGE_FETCH_CONFIG` (one attempt per page, no retry, 3.5s timeout) so the
 request path fails fast and the client retries instead. FT events are read in either shape (nested
 `asset` or flat) through `readFtTransfer()`, shared with the bounty verifier.
@@ -685,6 +687,7 @@ All data stored in Cloudflare KV namespace `VERIFIED_AGENTS`:
 | `vouch:index:{btcAddress}` | VouchAgentIndex | Per-agent vouch index (agents they've vouched for) |
 | `referral-code:{btcAddress}` | ReferralCodeRecord | Agent's private referral code |
 | `referral-lookup:{CODE}` | btcAddress (string) | Reverse lookup: referral code → referrer |
+| `tx-events-gap:{txid}:{offset}` | `{firstAt}` (ms) | First time Hiro had no events page at this offset; after 15 min the gap is final `EVENTS_TRUNCATED`, cleared when the page loads (TTL: 24h) |
 | `bounty:paid-txid:{txid}` | bountyId (string) | Bounty payment txid uniqueness — one txid can't pay two bounties (TTL: 365 days; D1 unique partial index on `paid_txid` is the durable enforcement) |
 
 Both `stx:` and `btc:` keys point to identical records and must be updated together.

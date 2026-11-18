@@ -11,6 +11,7 @@ import { buildExpectedMemo, verifyPayoutTxid } from "../txid-verify";
 import { SBTC_CONTRACT_MAINNET } from "../constants";
 import { TX_EVENT_MAX, TX_EVENT_PAGE_SIZE } from "@/lib/stacks-tx-events";
 import type { BountyRecord, BountySubmission } from "../types";
+import { createMockKV } from "@/lib/inbox/__tests__/kv-mock";
 
 const BOUNTY_ID = "01HNX7TEST";
 const POSTER_STX = "SP2C2YFP12AJZB4MABJBAJ55XECVS7E4PMMZ89YZR";
@@ -852,5 +853,32 @@ describe("verifyPayoutTxid: which Hiro answers are final (#1146)", () => {
     for (const [, init] of fetchFn.mock.calls as [string, RequestInit][]) {
       expect(new Headers(init.headers).get("x-api-key")).toBe("test-key");
     }
+  });
+});
+
+describe("verifyPayoutTxid: a gap that never heals still ends (#1146 follow-up)", () => {
+  const verifyAt = (laterPage: "empty" | "fail", kv: KVNamespace, at: string) =>
+    verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      acceptedSubmission: makeSubmission(),
+      fetchFn: pagedFetch(longTx(150, {}), TX_EVENT_PAGE_SIZE, laterPage),
+      kv,
+      now: new Date(at),
+    });
+
+  it("keeps an empty later page retryable for 15 minutes, then returns EVENTS_TRUNCATED", async () => {
+    const kv = createMockKV();
+    expect(await verifyAt("empty", kv, "2026-05-16T00:00:00Z")).toMatchObject({ code: "HIRO_UNREACHABLE" });
+    expect(await verifyAt("empty", kv, "2026-05-16T00:14:30Z")).toMatchObject({ code: "HIRO_UNREACHABLE" });
+    const r = await verifyAt("empty", kv, "2026-05-16T00:15:00Z");
+    expect(r).toMatchObject({ code: "EVENTS_TRUNCATED" });
+    if (!r.ok) expect(r.message).toMatch(/Do not pay the winner again/);
+  });
+
+  it("never turns a later-page 5xx final", async () => {
+    const kv = createMockKV();
+    expect(await verifyAt("fail", kv, "2026-05-16T00:00:00Z")).toMatchObject({ code: "HIRO_UNREACHABLE" });
+    expect(await verifyAt("fail", kv, "2026-05-17T00:00:00Z")).toMatchObject({ code: "HIRO_UNREACHABLE" });
   });
 });
