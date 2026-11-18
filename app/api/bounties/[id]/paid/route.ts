@@ -147,6 +147,7 @@ export async function POST(
       bounty,
       acceptedSubmission,
       logger,
+      hiroApiKey: env.HIRO_API_KEY,
     });
     if (!verify.ok) {
       const statusCode = verify.code === "TX_NOT_CONFIRMED" ? 422 : 400;

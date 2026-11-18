@@ -22,12 +22,15 @@
 import type { BountyRecord, BountySubmission } from "./types";
 import { MEMO_PREFIX, SBTC_CONTRACTS, SBTC_CONTRACT_MAINNET } from "./constants";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "@/lib/identity/constants";
-import { retryAfterSeconds, stacksApiFetch } from "@/lib/stacks-api-fetch";
+import { buildHiroHeaders, retryAfterSeconds, stacksApiFetch } from "@/lib/stacks-api-fetch";
 import {
   TX_EVENT_MAX,
   TX_EVENT_PAGE_FETCH_CONFIG,
+  isFinalHiroRejection,
   loadTxEventsUntil,
+  readFtTransfer,
   txEventsQuery,
+  type HiroFtEvent,
 } from "@/lib/stacks-tx-events";
 import type { Logger } from "@/lib/logging";
 import {
@@ -132,6 +135,8 @@ export async function verifyPayoutTxid(params: {
   now?: Date;
   /** Pass-through Logger for Hiro rate-limit + retry telemetry. */
   logger?: Logger;
+  /** Hiro API key, sent on every request so they do not go out anonymous. */
+  hiroApiKey?: string;
 }): Promise<TxidVerifyResult> {
   const network = params.network ?? "mainnet";
   const now = params.now ?? new Date();
@@ -150,7 +155,9 @@ export async function verifyPayoutTxid(params: {
 
   // Pass the txid to Hiro as-is — Hiro accepts both 0x-prefixed and bare hex.
   const txUrl = `${apiBase}/extended/v1/tx/${encodeURIComponent(params.txid)}`;
-  const jsonInit: RequestInit = { headers: { accept: "application/json" } };
+  const jsonInit: RequestInit = {
+    headers: { accept: "application/json", ...buildHiroHeaders(params.hiroApiKey) },
+  };
   const fetchJson = (url: string) => fetchFn(url, jsonInit);
   let res: Response;
   try {
@@ -167,20 +174,21 @@ export async function verifyPayoutTxid(params: {
     };
   }
   if (res.status === 429) return rateLimitedResult(res);
-  if (res.status >= 500) {
-    return {
-      ok: false,
-      code: "HIRO_UNREACHABLE",
-      message: `Hiro returned ${res.status}.`,
-    };
-  }
-  if (!res.ok) {
-    // Any other 4xx is Hiro refusing this txid (e.g. 400 for one that is not
-    // hex). Final: retrying the same txid gets the same answer.
+  if (isFinalHiroRejection(res.status)) {
+    // Hiro refusing this txid (e.g. 400 for one that is not hex). Final:
+    // retrying the same txid gets the same answer.
     return {
       ok: false,
       code: "TX_NOT_FOUND",
       message: `Hiro rejected txid ${params.txid} (HTTP ${res.status}). Check it is the 64-hex-character txid of the payout.`,
+    };
+  }
+  if (!res.ok) {
+    // 401, 403, 408, 5xx...: about the path to Hiro, not the txid. Retryable.
+    return {
+      ok: false,
+      code: "HIRO_UNREACHABLE",
+      message: `Hiro returned ${res.status}.`,
     };
   }
 
@@ -424,27 +432,14 @@ interface HiroFunctionArg {
   type?: string;
 }
 
-interface HiroTxEvent {
+/** FT fields in either shape (see `readFtTransfer`), plus the print log. */
+interface HiroTxEvent extends HiroFtEvent {
   event_index?: number;
-  event_type: "fungible_token_asset" | "smart_contract_log" | string;
-  asset?: {
-    asset_event_type?: string;
-    asset_id?: string;
-    sender?: string;
-    recipient?: string;
-    amount?: string;
-  };
   contract_log?: {
     contract_id?: string;
     topic?: string;
     value?: { hex?: string };
   };
-  // Legacy / alternative shapes some endpoints surface:
-  sender?: string;
-  recipient?: string;
-  amount?: string;
-  asset_event_type?: string;
-  asset_id?: string;
 }
 
 interface HiroTxResponse {
@@ -536,26 +531,13 @@ function findSbtcTransferEvents(
 ): { eventIndex: number | null; sender: string; recipient: string; amount: number }[] {
   const found = [];
   for (const ev of events ?? []) {
-    if (ev.event_type !== "fungible_token_asset") continue;
-    // Skip mints and burns. An event in the alternative shape may carry no
-    // type at all; it still has to name a sender and recipient below.
-    const type = ev.asset?.asset_event_type ?? ev.asset_event_type;
-    if (type != null && type !== "transfer") continue;
-    const sender = ev.asset?.sender ?? ev.sender;
-    const recipient = ev.asset?.recipient ?? ev.recipient;
-    const amount = parseAmount(ev.asset?.amount ?? ev.amount);
-    const assetId = ev.asset?.asset_id ?? ev.asset_id;
+    const transfer = readFtTransfer(ev);
     // sBTC asset_id looks like `${sbtcContractId}::sbtc-token` — anchor on `::`
     // so we don't accidentally match a sibling like `sbtc-token-extended`.
-    if (assetId && assetId.startsWith(`${expectedAssetId}::`) && sender && recipient && amount != null) {
+    if (transfer && transfer.assetId.startsWith(`${expectedAssetId}::`)) {
+      const { sender, recipient, amount } = transfer;
       found.push({ eventIndex: ev.event_index ?? null, sender, recipient, amount });
     }
   }
   return found;
-}
-
-function parseAmount(amount: string | undefined): number | null {
-  if (amount == null) return null;
-  const n = Number(amount);
-  return Number.isFinite(n) ? n : null;
 }

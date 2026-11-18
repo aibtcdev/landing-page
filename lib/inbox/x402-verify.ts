@@ -49,7 +49,15 @@ import type { RelayRPC } from "./relay-rpc";
 import { mapRPCErrorCode } from "./relay-rpc";
 import type { Logger } from "../logging";
 import { stacksApiFetch, buildHiroHeaders, retryAfterSeconds, DEFAULT_RETRY_AFTER_SECONDS } from "../stacks-api-fetch";
-import { TX_EVENT_MAX, TX_EVENT_PAGE_FETCH_CONFIG, loadTxEventsUntil, txEventsQuery } from "../stacks-tx-events";
+import {
+  TX_EVENT_MAX,
+  TX_EVENT_PAGE_FETCH_CONFIG,
+  isFinalHiroRejection,
+  loadTxEventsUntil,
+  readFtTransfer,
+  txEventsQuery,
+  type HiroFtEvent,
+} from "../stacks-tx-events";
 import { getCachedTransaction, setCachedTransaction } from "../identity/kv-cache";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "../identity/constants";
 import type { TerminalReason } from "@aibtc/tx-schemas/terminal-reasons";
@@ -77,16 +85,7 @@ interface StacksTxData {
       repr: string;
     }>;
   };
-  events?: Array<{
-    event_type: string;
-    asset?: {
-      asset_event_type?: string;
-      asset_id?: string;
-      sender?: string;
-      recipient?: string;
-      amount?: string;
-    };
-  }>;
+  events?: HiroFtEvent[];
 }
 
 /**
@@ -637,21 +636,20 @@ export async function verifyInboxPayment(
   };
 }
 
-/** sBTC FT transfers the payer sent, in event order. */
+/** sBTC FT transfers the payer sent, in event order, from either event shape. */
 function sbtcTransfersFromPayer(
   events: StacksTxData["events"],
   sbtcContractId: string,
   payerStxAddress: string
 ) {
-  return (events ?? []).filter(
-    (ev) =>
-      ev.event_type === "fungible_token_asset" &&
-      // Skip mints and burns; an event without a type is judged on its fields.
-      ev.asset != null &&
-      (ev.asset.asset_event_type ?? "transfer") === "transfer" &&
-      ev.asset.asset_id?.startsWith(`${sbtcContractId}::`) &&
-      ev.asset.sender === payerStxAddress
-  );
+  return (events ?? []).flatMap((ev) => {
+    const transfer = readFtTransfer(ev);
+    return transfer &&
+      transfer.assetId.startsWith(`${sbtcContractId}::`) &&
+      transfer.sender === payerStxAddress
+      ? [transfer]
+      : [];
+  });
 }
 
 /** Stacks API answered 429 after `stacksApiFetch` used up its retries: retryable, not a verdict. */
@@ -762,11 +760,15 @@ export async function verifyTxidPayment(
           return limited;
         }
 
+        // Only a 400 / 422 rejects the txid itself; 401, 403, 408, 5xx... are
+        // about the path to the Stacks API, so the sender is told to retry.
         return {
           success: false,
           error: `Stacks API error: ${response.status}`,
           errorCode: "API_ERROR",
-          ...(response.status >= 500 && { retryAfterSeconds: DEFAULT_RETRY_AFTER_SECONDS }),
+          ...(!isFinalHiroRejection(response.status) && {
+            retryAfterSeconds: DEFAULT_RETRY_AFTER_SECONDS,
+          }),
         };
       }
       txData = (await response.json()) as StacksTxData;
@@ -838,8 +840,7 @@ export async function verifyTxidPayment(
     const paymentFound = (evs: NonNullable<StacksTxData["events"]>) =>
       sbtcTransfersFromPayer(evs, expectedContractId, payerStxAddress).some(
         (ev) =>
-          ev.asset?.recipient === recipientStxAddress &&
-          Number(ev.asset?.amount) >= INBOX_PRICE_SATS
+          ev.recipient === recipientStxAddress && ev.amount >= INBOX_PRICE_SATS
       );
     const events = await loadTxEventsUntil(txData, txUrl, fetchTxPage, paymentFound);
     // Cache only a load that will not change on retry, and only when the
@@ -877,7 +878,7 @@ export async function verifyTxidPayment(
       };
     }
     // Search every transfer, not the first: a fee may move before the payment.
-    const toRecipient = fromPayer.filter((ev) => ev.asset?.recipient === recipientStxAddress);
+    const toRecipient = fromPayer.filter((ev) => ev.recipient === recipientStxAddress);
     if (toRecipient.length === 0) {
       return {
         success: false,
@@ -885,7 +886,7 @@ export async function verifyTxidPayment(
         errorCode: "RECIPIENT_MISMATCH",
       };
     }
-    const transferAmount = Math.max(...toRecipient.map((ev) => Number(ev.asset?.amount)));
+    const transferAmount = Math.max(...toRecipient.map((ev) => ev.amount));
     if (!(transferAmount >= INBOX_PRICE_SATS)) {
       return {
         success: false,
