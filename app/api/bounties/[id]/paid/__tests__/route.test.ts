@@ -361,10 +361,30 @@ describe("POST /api/bounties/[id]/paid: team payouts", () => {
     expect(json.paidMembers.map((m) => m.btcAddress)).toEqual([PARTNER_BTC]);
   });
 
-  it("answers 409 already_paid once every member is paid, without calling Hiro", async () => {
+  it("answers a retry of an already recorded txid from D1, without calling Hiro", async () => {
     getBountyMock.mockResolvedValue(makeBounty());
     listMembersMock.mockResolvedValue(
-      new Map([[SUBMISSION_ID, TEAM.map((m) => ({ ...m, paidTxid: TXID }))]])
+      new Map([[SUBMISSION_ID, [member(WINNER_BTC, WINNER_STX, 2500, TXID), member(PARTNER_BTC, PARTNER_STX, 2500)]]])
+    );
+    // Sent without the 0x prefix: still the same txid.
+    const res = await POST(paidRequest(TXID.slice(2)), { params: Promise.resolve({ id: BOUNTY_ID }) });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as {
+      alreadyRecorded: boolean;
+      paidMembers: { btcAddress: string }[];
+      payout: { membersPaid: number };
+    };
+    expect(json.alreadyRecorded).toBe(true);
+    expect(json.paidMembers.map((m) => m.btcAddress)).toEqual([WINNER_BTC]);
+    expect(json.payout.membersPaid).toBe(1);
+    expect(verifyPayoutTxidMock).not.toHaveBeenCalled();
+  });
+
+  it("answers 409 already_paid once every member is paid, without calling Hiro", async () => {
+    getBountyMock.mockResolvedValue(makeBounty());
+    // Paid by other txids; this one is new.
+    listMembersMock.mockResolvedValue(
+      new Map([[SUBMISSION_ID, TEAM.map((m, i) => ({ ...m, paidTxid: `0xother${i}` }))]])
     );
     const res = await POST(paidRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
     expect(res.status).toBe(409);
