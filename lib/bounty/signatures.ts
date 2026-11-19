@@ -52,7 +52,9 @@ export function buildCreateMessage(params: {
  * Build the message a submitter signs to submit work to a bounty.
  *
  * Full submission body is included — `contentUrl` is empty string when
- * omitted.
+ * omitted. A team entry appends ` | {teammates}` (the teammate BTC addresses
+ * comma-joined, in the order sent), so a solo submit signs the same message
+ * as before.
  */
 export function buildSubmitMessage(params: {
   bountyId: string;
@@ -60,12 +62,34 @@ export function buildSubmitMessage(params: {
   message: string;
   contentUrl?: string;
   signedAt: string;
+  teammates?: string[];
 }): string {
-  return SIGNATURE_MESSAGE_FORMATS.SUBMIT
+  const message = SIGNATURE_MESSAGE_FORMATS.SUBMIT
     .replace("{bountyId}", params.bountyId)
     .replace("{submitterBtc}", params.submitterBtcAddress)
     .replace("{message}", params.message)
     .replace("{contentUrl}", params.contentUrl ?? "")
+    .replace("{signedAt}", params.signedAt);
+  return params.teammates && params.teammates.length > 0
+    ? `${message} | ${params.teammates.join(",")}`
+    : message;
+}
+
+/**
+ * Build the message a teammate signs to confirm they are on a team
+ * submission. The team is fixed when the submission is stored, so signing for
+ * this submissionId is agreeing to that exact team and its even split.
+ */
+export function buildTeamConfirmMessage(params: {
+  bountyId: string;
+  submissionId: string;
+  memberBtcAddress: string;
+  signedAt: string;
+}): string {
+  return SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM
+    .replace("{bountyId}", params.bountyId)
+    .replace("{submissionId}", params.submissionId)
+    .replace("{memberBtc}", params.memberBtcAddress)
     .replace("{signedAt}", params.signedAt);
 }
 
