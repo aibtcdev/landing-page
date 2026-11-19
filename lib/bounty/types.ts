@@ -101,7 +101,7 @@ export interface BountyTeamMember {
   btcAddress: string;
   stxAddress: string;
   role: "lead" | "member";
-  /** This member's even share of the reward, fixed at submit time. */
+  /** This member's even share of the reward. Re-split only if a pending teammate leaves. */
   shareSats: number;
   confirmed: boolean;
   confirmedAt?: string;
