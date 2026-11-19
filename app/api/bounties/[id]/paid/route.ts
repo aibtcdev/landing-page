@@ -4,7 +4,6 @@
  * Poster proves payment with an on-chain sBTC txid. The poster pays every
  * member of the winning submission directly (a solo entry has one member),
  * and each member's transfer is verified on its own. Verification chain:
- *   - txid not already redeemed by another bounty (cheap pre-check)
  *   - tx exists on Hiro, anchored, status=success
  *   - sBTC `transfer` contract call
  *   - sender = poster, recipient = an unpaid member, amount >= that member's share
@@ -32,12 +31,12 @@ import {
   bountyStatus,
   buildPaidMessage,
   buildPayout,
+  ensureLeadMember,
   getBounty,
-  isTxidRedeemed,
+  getSubmission,
   isWithinSignatureWindow,
   listMembers,
   recordMemberPayments,
-  reserveTxid,
   validatePaid,
   verifyPayoutTxid,
 } from "@/lib/bounty";
@@ -138,7 +137,15 @@ export async function POST(
     }
 
     const submissionId = bounty.acceptedSubmissionId;
-    const team = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
+    let team = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
+    if (team.length === 0) {
+      // A solo entry stored by older code has no member rows yet.
+      const accepted = await getSubmission(db, submissionId);
+      if (accepted) {
+        await ensureLeadMember(db, accepted, bounty.rewardSats);
+        team = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
+      }
+    }
     if (team.length === 0) {
       return NextResponse.json(
         { error: "submission_not_found", message: "Accepted submission has no members on record." },
@@ -157,20 +164,9 @@ export async function POST(
       );
     }
 
-    // Cheap pre-check: txid not already redeemed by another bounty.
-    const existingBountyId = await isTxidRedeemed(kv, data.txid);
-    if (existingBountyId && existingBountyId !== bounty.id) {
-      return NextResponse.json(
-        {
-          error: "txid_already_redeemed",
-          message: "This txid has already paid another bounty.",
-          existingBountyId,
-        },
-        { status: 409 }
-      );
-    }
-
-    // On-chain verification via Hiro
+    // On-chain verification via Hiro. One txid may pay members of several
+    // bounties: each transfer carries its own BNTY memo, and each transfer is
+    // recorded once (unique on txid + event index), so no txid-wide lock.
     const verify = await verifyPayoutTxid({
       txid: data.txid,
       bounty,
@@ -251,8 +247,7 @@ export async function POST(
         payments: verify.matched.map((m) => ({ btcAddress: m.btcAddress, eventIndex: m.eventIndex })),
       });
     } catch (e) {
-      // Unique index conflict: this transfer is already recorded, or this
-      // canonical txid already completed another bounty.
+      // Unique index conflict: this exact transfer is already recorded.
       logger.warn("bounty.paid_unique_violation", {
         bountyId: bounty.id,
         canonicalTxid: verify.canonicalTxid,
@@ -261,7 +256,7 @@ export async function POST(
       return NextResponse.json(
         {
           error: "txid_already_redeemed",
-          message: "This transfer is already recorded, or this txid already paid another bounty.",
+          message: "This transfer is already recorded as a payout.",
         },
         { status: 409 }
       );
@@ -271,21 +266,6 @@ export async function POST(
         { error: "conflict", message: "Bounty state changed concurrently. Re-fetch the bounty." },
         { status: 409 }
       );
-    }
-
-    // D1 has already committed the paid_txid — the unique partial index is
-    // the durable enforcement. KV reservation is the cheap pre-check for
-    // *future* /paid requests against other bounties; if it fails (KV blip),
-    // log and keep going so the user doesn't see a 500 after a successful
-    // payment.
-    try {
-      await reserveTxid(kv, verify.canonicalTxid, bounty.id);
-    } catch (e) {
-      logger.warn("bounty.paid_kv_reserve_failed", {
-        bountyId: bounty.id,
-        canonicalTxid: verify.canonicalTxid,
-        error: String(e),
-      });
     }
 
     logger.info(recorded.bountyPaid ? "bounty.paid" : "bounty.member_paid", {
