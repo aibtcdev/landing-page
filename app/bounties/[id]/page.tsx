@@ -38,11 +38,18 @@ async function fetchBountyDetail(id: string): Promise<BountyDetailData | null> {
     );
     const agentNames: Record<string, string> = {};
     if (kv) {
-      const lookups = await Promise.all(
-        addressesToLookup.map(async (addr) => [addr, await lookupAgent(kv, addr, db)] as const)
-      );
-      for (const [addr, agent] of lookups) {
-        if (agent?.displayName) agentNames[addr] = agent.displayName;
+      // Teams multiply the addresses on a page, so look them up 5 at a time
+      // (Workers allow 6 concurrent outgoing connections), like the client's
+      // load-more name resolution.
+      for (let i = 0; i < addressesToLookup.length; i += 5) {
+        const lookups = await Promise.all(
+          addressesToLookup
+            .slice(i, i + 5)
+            .map(async (addr) => [addr, await lookupAgent(kv, addr, db).catch(() => null)] as const)
+        );
+        for (const [addr, agent] of lookups) {
+          if (agent?.displayName) agentNames[addr] = agent.displayName;
+        }
       }
     }
 
