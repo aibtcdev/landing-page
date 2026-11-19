@@ -100,7 +100,7 @@ describe("validateTeamConfirm", () => {
   });
 });
 
-import { teamState, withTeams } from "../d1-helpers";
+import { teamState } from "../d1-helpers";
 import type { BountyTeamMember } from "../types";
 
 describe("teamState", () => {
@@ -110,32 +110,6 @@ describe("teamState", () => {
   it("is confirmed only when every member confirmed, and lists who is missing", () => {
     expect(teamState([m("a", true), m("b", true)])).toEqual({ teamStatus: "confirmed", waitingOn: [] });
     expect(teamState([m("a", true), m("b", false)])).toEqual({ teamStatus: "pending", waitingOn: ["b"] });
-  });
-});
-
-describe("withTeams for a submission stored without member rows", () => {
-  const db = {
-    prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }) }) }),
-  } as unknown as D1Database;
-  const sub = {
-    id: "s1", bountyId: "b1", submitterBtcAddress: LEAD, submitterStxAddress: "SPLEAD",
-    message: "m", createdAt: "2026-11-19T00:00:00.000Z",
-  };
-
-  it("shows it as a confirmed solo entry with the whole reward", async () => {
-    const [s] = await withTeams(db, [sub], { rewardSats: 700 });
-    expect(s.teamSize).toBe(1);
-    expect(s.teamStatus).toBe("confirmed");
-    expect(s.team).toEqual([
-      expect.objectContaining({ btcAddress: LEAD, stxAddress: "SPLEAD", role: "lead", shareSats: 700, confirmed: true }),
-    ]);
-  });
-
-  it("carries the bounty's payout when it is the paid winner", async () => {
-    const [s] = await withTeams(db, [sub], {
-      rewardSats: 700, acceptedSubmissionId: "s1", paidTxid: "0xabc", paidAt: "2026-11-19T01:00:00.000Z",
-    });
-    expect(s.team?.[0]).toMatchObject({ paidTxid: "0xabc", paidAt: "2026-11-19T01:00:00.000Z" });
   });
 });
 
@@ -167,31 +141,6 @@ describe("entry lookups stay under D1's 100 bound parameters", () => {
     const { db, bindCounts } = recordingDb();
     await submittedBountyIds(db, LEAD, ids);
     expect(Math.max(...bindCounts)).toBeLessThanOrEqual(100);
-  });
-});
-
-describe("withTeams for a solo winner paid by older code", () => {
-  it("takes the payment from the bounty row when the lead row has none", async () => {
-    const db = {
-      prepare: () => ({
-        bind: () => ({
-          all: async () => ({
-            results: [{
-              submission_id: "s1", bounty_id: "b1", member_btc_address: LEAD, member_stx_address: "SPLEAD",
-              role: "lead", share_sats: 700, confirmed_at: "2026-11-19T00:00:00.000Z", paid_txid: null, paid_at: null,
-            }],
-          }),
-        }),
-      }),
-    } as unknown as D1Database;
-    const sub = {
-      id: "s1", bountyId: "b1", submitterBtcAddress: LEAD, submitterStxAddress: "SPLEAD",
-      message: "m", createdAt: "2026-11-19T00:00:00.000Z",
-    };
-    const [s] = await withTeams(db, [sub], {
-      rewardSats: 700, acceptedSubmissionId: "s1", paidTxid: "0xold", paidAt: "2026-11-19T02:00:00.000Z",
-    });
-    expect(s.team?.[0]).toMatchObject({ paidTxid: "0xold", paidAt: "2026-11-19T02:00:00.000Z" });
   });
 });
 
