@@ -13,7 +13,6 @@ import {
   type BountyRecord,
   type BountyStatus,
   type BountySubmission,
-  type BountyTeamMember,
   type BountyWinner,
 } from "./types";
 
@@ -65,9 +64,13 @@ export async function loadBountyDetail(
   if (bounty.acceptedSubmissionId && !winningSub) {
     winningSub = (await getSubmission(db, bounty.acceptedSubmissionId)) ?? undefined;
   }
-  const withTeam = await withTeams(db, winningSub && !page.submissions.includes(winningSub)
-    ? [...page.submissions, winningSub]
-    : page.submissions);
+  const withTeam = await withTeams(
+    db,
+    winningSub && !page.submissions.includes(winningSub)
+      ? [...page.submissions, winningSub]
+      : page.submissions,
+    bounty
+  );
   const submissions = withTeam.slice(0, page.submissions.length);
   const winnerSub = bounty.acceptedSubmissionId
     ? withTeam.find((s) => s.id === bounty.acceptedSubmissionId)
@@ -76,23 +79,8 @@ export async function loadBountyDetail(
   const parts: BountyDetailParts = { status, submissions, submissionCount, submissionsNextOffset };
   if (!winnerSub || !bounty.acceptedAt) return parts;
 
-  // A winner stored by older code has no member rows: show it as the solo
-  // entry it is (whole reward to the lead, paid if the bounty row says so),
-  // built in memory so this read path never writes.
-  const team: BountyTeamMember[] =
-    winnerSub.team && winnerSub.team.length > 0
-      ? winnerSub.team
-      : [
-          {
-            btcAddress: winnerSub.submitterBtcAddress,
-            stxAddress: winnerSub.submitterStxAddress,
-            role: "lead",
-            shareSats: bounty.rewardSats,
-            confirmed: true,
-            ...(bounty.paidTxid && { paidTxid: bounty.paidTxid }),
-            ...(bounty.paidAt && { paidAt: bounty.paidAt }),
-          },
-        ];
+  // withTeams already gives a winner stored without member rows its solo team.
+  const team = winnerSub.team ?? [];
   parts.winner = {
     submissionId: winnerSub.id,
     submitterBtcAddress: winnerSub.submitterBtcAddress,
