@@ -25,6 +25,7 @@ const getBountyMock = vi.fn();
 const enteredAgentsMock = vi.fn();
 const listMembersMock = vi.fn();
 const dropInvitesMock = vi.fn();
+const removeMemberMock = vi.fn();
 const insertSubmissionMock = vi.fn();
 const recordSubmitAttemptMock = vi.fn();
 vi.mock("@/lib/bounty", async (importOriginal) => {
@@ -37,6 +38,7 @@ vi.mock("@/lib/bounty", async (importOriginal) => {
     enteredAgents: (...args: unknown[]) => enteredAgentsMock(...args),
     listMembers: (...args: unknown[]) => listMembersMock(...args),
     dropUnconfirmableInvites: (...args: unknown[]) => dropInvitesMock(...args),
+    removePendingMember: (...args: unknown[]) => removeMemberMock(...args),
     insertSubmission: (...args: unknown[]) => insertSubmissionMock(...args),
     recordSubmitAttempt: (...args: unknown[]) => recordSubmitAttemptMock(...args),
   };
@@ -100,6 +102,7 @@ beforeEach(() => {
   enteredAgentsMock.mockResolvedValue(new Set());
   listMembersMock.mockResolvedValue(new Map());
   dropInvitesMock.mockResolvedValue(0);
+  removeMemberMock.mockResolvedValue(true);
   insertSubmissionMock.mockResolvedValue(undefined);
   recordSubmitAttemptMock.mockResolvedValue(undefined);
 });
@@ -250,6 +253,25 @@ describe("POST /api/bounties/[id]/submit: team entries", () => {
   it("drops the lead's other pending invites on this bounty once they have an entry", async () => {
     await call({ teammates: [MATE1_BTC] });
     expect(dropInvitesMock).toHaveBeenCalledWith({}, BOUNTY_ID, SUBMITTER_BTC);
+  });
+
+  it("tells the lead when their own pending invites on this bounty were dropped", async () => {
+    dropInvitesMock.mockResolvedValue(2);
+    const res = await call({});
+    const json = (await res.json()) as { droppedInvites?: number };
+    expect(json.droppedInvites).toBe(2);
+  });
+
+  it("drops a teammate who entered this bounty elsewhere while the lead was submitting", async () => {
+    // Before the insert nobody has entered; right after, MATE1 has.
+    enteredAgentsMock.mockResolvedValueOnce(new Set()).mockResolvedValueOnce(new Set([MATE1_BTC]));
+    listMembersMock.mockResolvedValue(
+      new Map([[expect.any(String) as unknown as string, []]])
+    );
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(201);
+    expect(removeMemberMock).toHaveBeenCalledWith({}, expect.objectContaining({ memberBtcAddress: MATE1_BTC }));
+    expect(((await res.json()) as { droppedTeammates?: string[] }).droppedTeammates).toEqual([MATE1_BTC]);
   });
 
   it("still answers 201 if dropping old invites fails (best-effort)", async () => {
