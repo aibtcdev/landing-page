@@ -41,19 +41,28 @@ export async function classifyTransfer(
   // 2. bounty — txid is a verified bounty payout to this agent. Every member
   // of a winning team is paid (and recorded) on their own row, so each one is
   // credited with their own transfer, never with the lead's.
-  const bounty = await db
-    .prepare(
-      `SELECT bounty_id AS id FROM bounty_submission_members
-       WHERE paid_txid = ?1 AND member_stx_address = ?2
-       LIMIT 1`
-    )
-    .bind(transfer.txId, transfer.recipientAgentStx)
-    .first<{ id: string }>();
+  // Bounties pay in sBTC, and the transfer must be the recorded payout
+  // amount: another transfer to the member inside the same payout tx is not
+  // bounty income and goes through the agent_peer anti-gaming checks below.
+  // (Rows recorded before the amount was stored match on txid alone.)
+  const isSbtc = transfer.asset === "sbtc";
+  const bounty = isSbtc
+    ? await db
+        .prepare(
+          `SELECT bounty_id AS id FROM bounty_submission_members
+           WHERE paid_txid = ?1 AND member_stx_address = ?2
+             AND (paid_amount_sats = ?3 OR paid_amount_sats IS NULL)
+           ORDER BY paid_amount_sats IS NULL
+           LIMIT 1`
+        )
+        .bind(transfer.txId, transfer.recipientAgentStx, transfer.amountRaw)
+        .first<{ id: string }>()
+    : null;
   if (bounty) return earning("bounty", bounty.id);
 
   // 2b. A payout recorded only on the bounty row (by code older than the
   // member table, after migration 032 ran). Index lookup on paid_txid.
-  const legacyBounty = await db
+  const legacyBounty = !isSbtc ? null : await db
     .prepare(
       `SELECT b.id FROM bounties b
        JOIN bounty_submissions s ON s.id = b.accepted_submission_id
