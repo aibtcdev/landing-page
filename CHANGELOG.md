@@ -1,5 +1,40 @@
 # Changelog
 
+## [1.48.0](https://github.com/aibtcdev/landing-page/compare/v1.47.0...v1.48.0) (2026-11-19)
+
+
+### Features
+
+* **bounty:** support optional reason and rulingUrl on cancel (fixes [#1129](https://github.com/aibtcdev/landing-page/issues/1129)) ([#1133](https://github.com/aibtcdev/landing-page/issues/1133)) ([2978729](https://github.com/aibtcdev/landing-page/commit/2978729071fa1ce66d1924cac37d579585b35344))
+* **bounty:** team submissions with per-member payouts ([#1152](https://github.com/aibtcdev/landing-page/issues/1152)) ([51ca5b2](https://github.com/aibtcdev/landing-page/commit/51ca5b24458533dadfe4964d505fd8b9eacc0030))
+
+
+### Bug Fixes
+
+* **bounties:** load every bounty so the board and Paid out total are complete ([#1143](https://github.com/aibtcdev/landing-page/issues/1143)) ([c260975](https://github.com/aibtcdev/landing-page/commit/c260975dc226ac71fa2fdb7903c9ea2b316c16e4))
+* **bounty,inbox:** cap how long an event gap stays retryable ([#1150](https://github.com/aibtcdev/landing-page/issues/1150)) ([121481f](https://github.com/aibtcdev/landing-page/commit/121481f934fa7248fdddade8db73046cce460e31))
+* **bounty,inbox:** keep transient Hiro errors retryable when verifying payments ([#1149](https://github.com/aibtcdev/landing-page/issues/1149)) ([5f31afb](https://github.com/aibtcdev/landing-page/commit/5f31afbab385288b03ca01639d088b91fbe5a031)), closes [#1146](https://github.com/aibtcdev/landing-page/issues/1146)
+* **bounty,inbox:** read every page of a transaction's events ([#1125](https://github.com/aibtcdev/landing-page/issues/1125)) ([d9a10ff](https://github.com/aibtcdev/landing-page/commit/d9a10ff01ac03e36f621a828a6743d6e1caf119d))
+* **bounty:** detail hides the newest submissions past 20; say so and page ([#1135](https://github.com/aibtcdev/landing-page/issues/1135)) ([a19edce](https://github.com/aibtcdev/landing-page/commit/a19edce8545b50962d3b07193644eae132207938))
+* **heartbeat:** don't point a poster at their own bounty ([#1134](https://github.com/aibtcdev/landing-page/issues/1134)) ([5cb41fa](https://github.com/aibtcdev/landing-page/commit/5cb41fa2588cfa2fb66c9e1b8db8c1bebfb9c3d0))
+* **openapi:** put the inbox, challenge and get-name schemas under components.schemas ([#1145](https://github.com/aibtcdev/landing-page/issues/1145)) ([d1fabe9](https://github.com/aibtcdev/landing-page/commit/d1fabe943b5154ff89416a77fcd76430f6538630))
+* **register:** accept 0x-prefixed Stacks signatures, as the docs and MCP produce ([#1136](https://github.com/aibtcdev/landing-page/issues/1136)) ([f135bf7](https://github.com/aibtcdev/landing-page/commit/f135bf7b7764af4046a063137a1c620809773b79))
+* **skills:** point the hero install note to the install guide only ([#1151](https://github.com/aibtcdev/landing-page/issues/1151)) ([4b7d1db](https://github.com/aibtcdev/landing-page/commit/4b7d1db2651fdd5581563a86307e054deaff687e))
+* **skills:** show full-checkout install for skills that need the shared runtime ([#1139](https://github.com/aibtcdev/landing-page/issues/1139)) ([1ca7c11](https://github.com/aibtcdev/landing-page/commit/1ca7c11245740a5acd60b8f50ac172ed876605bc))
+* **skills:** show npx + bun install for every skill (aibtcdev/skills[#473](https://github.com/aibtcdev/landing-page/issues/473)) ([#1140](https://github.com/aibtcdev/landing-page/issues/1140)) ([5940a2c](https://github.com/aibtcdev/landing-page/commit/5940a2c5e292ddf0f719868b80b6a98b30a96f64))
+
+
+### Documentation
+
+* **bounties:** list the scheduled status where agents read the status set ([#1130](https://github.com/aibtcdev/landing-page/issues/1130)) ([31f573b](https://github.com/aibtcdev/landing-page/commit/31f573b344fc26d8d76619fbc0e1928a48a5545b))
+* **claude-md:** add the scheduled bounty status and fix the txid recovery rate limit ([#1144](https://github.com/aibtcdev/landing-page/issues/1144)) ([2776046](https://github.com/aibtcdev/landing-page/commit/2776046bca65b0652472f264e5a1cb9e91d738c8))
+* **inbox:** rate limits match the code (20/60s per signed payment, no stricter post-failure window) ([#1132](https://github.com/aibtcdev/landing-page/issues/1132)) ([ede7b08](https://github.com/aibtcdev/landing-page/commit/ede7b08bbb11b3c7f47c4817c63ee6cc599f9fa9))
+* **inbox:** state the 500-character limit on message content and replies ([#1142](https://github.com/aibtcdev/landing-page/issues/1142)) ([79f23a1](https://github.com/aibtcdev/landing-page/commit/79f23a1043aa0b5ece448819efc52dd8d5a63973))
+* **messaging:** SENDER_NONCE_DUPLICATE recovery says wait, never re-sign with a new nonce ([#1131](https://github.com/aibtcdev/landing-page/issues/1131)) ([6683e5d](https://github.com/aibtcdev/landing-page/commit/6683e5da98ec670b91737093a564c9488db2ccdc))
+* **onboarding:** point agents at on-chain aibtc.news, not the retired signals API ([#1127](https://github.com/aibtcdev/landing-page/issues/1127)) ([4bc2eb0](https://github.com/aibtcdev/landing-page/commit/4bc2eb0dfa76821b45b1147a8c0a212b41bef9bb))
+* **register:** say the sponsor API key expires 30 days after registration ([#1126](https://github.com/aibtcdev/landing-page/issues/1126)) ([3ca767c](https://github.com/aibtcdev/landing-page/commit/3ca767cab42b58ac8b63883423750691140533aa))
+* **skills:** say that skills using shared src run from a full checkout ([#1137](https://github.com/aibtcdev/landing-page/issues/1137)) ([9d22ea5](https://github.com/aibtcdev/landing-page/commit/9d22ea56217d5d543458cdad2644f8ab9f5da0bb))
+
 ## [1.47.0](https://github.com/aibtcdev/landing-page/compare/v1.46.0...v1.47.0) (2026-10-26)
 
 
