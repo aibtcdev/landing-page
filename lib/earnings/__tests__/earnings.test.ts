@@ -111,17 +111,15 @@ function transfer(overrides: Partial<InboundTransfer> = {}): InboundTransfer {
 }
 
 /** D1 mock whose three classification queries return preset rows (or null). */
-function classifyDb(rows: { inbox?: unknown; bounty?: unknown; legacyBounty?: unknown; agent?: unknown }) {
+function classifyDb(rows: { inbox?: unknown; bounty?: unknown; agent?: unknown }) {
   return {
     prepare: vi.fn((sql: string) => ({
       bind: vi.fn(() => ({
         first: vi.fn().mockResolvedValue(
           sql.includes("inbox_messages")
             ? rows.inbox ?? null
-            : sql.includes("FROM bounties b")
-              ? rows.legacyBounty ?? null
-              : sql.includes("bounty_submission_members")
-                ? rows.bounty ?? null
+            : sql.includes("bounty_submission_members")
+              ? rows.bounty ?? null
               : sql.includes("agents")
                 ? rows.agent ?? null
                 : null
@@ -159,24 +157,6 @@ describe("classifyTransfer", () => {
     } as unknown as D1Database;
     await classifyTransfer(db, transfer());
     expect(boundAmount).toBe(transfer().amountRaw);
-  });
-
-  it("the legacy bounty-row fallback only applies when no member payment is recorded", async () => {
-    let legacySql = "";
-    const db = {
-      prepare: vi.fn((sql: string) => {
-        if (sql.includes("FROM bounties b")) legacySql = sql;
-        return { bind: vi.fn(() => ({ first: vi.fn().mockResolvedValue(null) })) };
-      }),
-    } as unknown as D1Database;
-    await classifyTransfer(db, transfer());
-    expect(legacySql).toContain("NOT EXISTS");
-    expect(legacySql).toContain("m.paid_txid IS NOT NULL");
-  });
-
-  it("classifies a payout recorded only on the bounty row (older code) as a bounty", async () => {
-    const c = await classifyTransfer(classifyDb({ legacyBounty: { id: "b2" } }), transfer());
-    expect(c).toMatchObject({ sourceClass: "bounty", sourceSubclass: "b2", isEarning: true });
   });
 
   it("classifies a registered peer agent", async () => {
