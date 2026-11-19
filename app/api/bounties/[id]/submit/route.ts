@@ -41,10 +41,12 @@ import {
   isWithinSignatureWindow,
   listMembers,
   recordSubmitAttempt,
+  removePendingMember,
   splitReward,
   teamState,
   validateSubmit,
   type BountySubmission,
+  type BountyTeamMember,
   type SubmitAttemptOutcome,
 } from "@/lib/bounty";
 
@@ -331,11 +333,24 @@ export async function POST(
       );
     }
 
+    // A teammate who entered this bounty elsewhere between the check above
+    // and the insert can never confirm (teammate rows are not covered by the
+    // one-entry index). Drop them now so this team is not left waiting.
+    const lateEntered = teammateAgents.length
+      ? await enteredAgents(db, bounty.id, teammateAgents.map((a) => a.btcAddress)).catch(() => new Set<string>())
+      : new Set<string>();
+    for (const addr of lateEntered) {
+      await removePendingMember(db, { bountyId: bounty.id, submissionId: submission.id, memberBtcAddress: addr }).catch(
+        (e) => logger.warn("bounty.drop_late_teammate_failed", { error: String(e) })
+      );
+    }
+
     // The lead now has an entry here, so any pending invites naming them on
     // this bounty can never be confirmed: drop them so those teams re-split.
-    await dropUnconfirmableInvites(db, bounty.id, submitter.btcAddress).catch((e) =>
-      logger.warn("bounty.drop_invites_failed", { error: String(e) })
-    );
+    const droppedInvites = await dropUnconfirmableInvites(db, bounty.id, submitter.btcAddress).catch((e) => {
+      logger.warn("bounty.drop_invites_failed", { error: String(e) });
+      return 0;
+    });
 
     logger.info("bounty.submitted", {
       bountyId: bounty.id,
@@ -344,15 +359,35 @@ export async function POST(
       teamSize,
     });
 
-    const team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
+    // The team as just stored; re-read only if a late teammate was dropped.
+    const team: BountyTeamMember[] =
+      lateEntered.size > 0
+        ? ((await listMembers(db, [submission.id])).get(submission.id) ?? [])
+        : members.map((m, i) => ({
+            btcAddress: m.btcAddress,
+            stxAddress: m.stxAddress,
+            role: i === 0 ? "lead" : "member",
+            shareSats: m.shareSats,
+            confirmed: i === 0,
+            ...(i === 0 && { confirmedAt: nowIso }),
+          }));
     const { teamStatus, waitingOn } = teamState(team);
     return NextResponse.json(
       {
         submission: {
           ...submission,
+          teamSize: team.length,
           team,
           teamStatus,
         },
+        ...(lateEntered.size > 0 && {
+          droppedTeammates: [...lateEntered],
+          droppedTeammatesNote: "These agents entered this bounty another way while you were submitting, so they were dropped from your team and the reward re-split.",
+        }),
+        ...(droppedInvites > 0 && {
+          droppedInvites,
+          droppedInvitesNote: "You had pending team invites on this bounty; they were declined because you now have your own entry.",
+        }),
         ...(waitingOn.length > 0 && {
           nextStep: {
             description: `Each teammate must confirm before the poster can accept this entry. Waiting on: ${waitingOn.join(", ")}.`,
