@@ -63,6 +63,7 @@ interface D1MemberRow {
   share_sats: number;
   confirmed_at: string | null;
   paid_txid: string | null;
+  paid_amount_sats: number | null;
   paid_at: string | null;
 }
 
@@ -125,6 +126,7 @@ function rowToMember(row: D1MemberRow): BountyTeamMember {
     confirmed: row.confirmed_at != null,
     ...(row.confirmed_at != null && { confirmedAt: row.confirmed_at }),
     ...(row.paid_txid != null && { paidTxid: row.paid_txid }),
+    ...(row.paid_amount_sats != null && { paidAmountSats: row.paid_amount_sats }),
     ...(row.paid_at != null && { paidAt: row.paid_at }),
   };
 }
@@ -491,25 +493,21 @@ export async function recordMemberPayments(
       payCutoff,
       params.submissionId
     );
-  // A partial payout still changes what the bounty shows, so clients syncing
-  // on updatedAt must see it. In the same batch, guarded on a member row now
-  // carrying this payment, so a call that cannot have recorded anything does
-  // not bump it. (Two concurrent calls with the same txid can both pass the
-  // guard; that only bumps updatedAt once more, nothing else changes.)
-  const touch = db
-    .prepare(
-      `UPDATE bounties SET updated_at = ?
-       WHERE id = ? AND EXISTS (
-         SELECT 1 FROM bounty_submission_members
-         WHERE submission_id = ? AND paid_txid = ? AND paid_at = ?
-       )`
-    )
-    .bind(nowIso, params.bountyId, params.submissionId, params.txid, params.paidAt);
-  const results = await db.batch([...memberWrites, touch, bountyWrite]);
+  const results = await db.batch([...memberWrites, bountyWrite]);
   const recordedMembers = params.payments
     .filter((_, i) => (results[i].meta?.changes ?? 0) > 0)
     .map((p) => p.btcAddress);
-  const bountyPaid = (results[memberWrites.length + 1].meta?.changes ?? 0) > 0;
+  const bountyPaid = (results[memberWrites.length].meta?.changes ?? 0) > 0;
+  // A partial payout still changes what the bounty shows; clients syncing on
+  // updatedAt must see it. Only when this call recorded someone and did not
+  // complete the payout (completion already set updated_at). A failure here
+  // surfaces as an error; a retry is then answered "already recorded".
+  if (recordedMembers.length > 0 && !bountyPaid) {
+    await db
+      .prepare(`UPDATE bounties SET updated_at = ? WHERE id = ?`)
+      .bind(nowIso, params.bountyId)
+      .run();
+  }
   return { recordedMembers, bountyPaid };
 }
 
@@ -789,18 +787,22 @@ export async function listMembers(
 ): Promise<Map<string, BountyTeamMember[]>> {
   const out = new Map<string, BountyTeamMember[]>();
   if (submissionIds.length === 0) return out;
-  const placeholders = submissionIds.map(() => "?").join(", ");
-  const { results } = await db
-    .prepare(
-      `SELECT submission_id, bounty_id, member_btc_address, member_stx_address,
-              role, share_sats, confirmed_at, paid_txid, paid_at
-       FROM bounty_submission_members
-       WHERE submission_id IN (${placeholders})
-       ORDER BY submission_id, CASE role WHEN 'lead' THEN 0 ELSE 1 END, rowid`
+  // Chunked: a list page can carry more ids than D1's 100 bound parameters.
+  const pages = await Promise.all(
+    chunk(submissionIds, 90).map((ids) =>
+      db
+        .prepare(
+          `SELECT submission_id, bounty_id, member_btc_address, member_stx_address,
+                  role, share_sats, confirmed_at, paid_txid, paid_amount_sats, paid_at
+           FROM bounty_submission_members
+           WHERE submission_id IN (${ids.map(() => "?").join(", ")})
+           ORDER BY submission_id, CASE role WHEN 'lead' THEN 0 ELSE 1 END, rowid`
+        )
+        .bind(...ids)
+        .all<D1MemberRow>()
     )
-    .bind(...submissionIds)
-    .all<D1MemberRow>();
-  for (const row of results ?? []) {
+  );
+  for (const row of pages.flatMap((p) => p.results ?? [])) {
     const list = out.get(row.submission_id) ?? [];
     list.push(rowToMember(row));
     out.set(row.submission_id, list);
