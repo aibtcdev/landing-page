@@ -25,6 +25,7 @@ import {
   insertBounty,
   listBounties,
   listSubmissionsBySubmitter,
+  withTeams,
   generateBountyId,
   type BountyRecord,
   type BountyStatus,
@@ -157,14 +158,17 @@ export async function GET(request: NextRequest) {
   // submissions for one-call agent-centric views.
   let bySubmitter: Record<string, ReturnType<typeof submitterRow>[]> | undefined;
   if (submitter && bounties.length > 0) {
-    const subs = await listSubmissionsBySubmitter(
+    // With teams, an entry can be led by someone else: attach the team so the
+    // agent sees the lead, their own role and their share.
+    const byId = new Map(bounties.map((b) => [b.id, b]));
+    const subs = await withTeams(
       db,
-      submitter,
-      bounties.map((b) => b.id)
+      await listSubmissionsBySubmitter(db, submitter, bounties.map((b) => b.id)),
+      (s) => byId.get(s.bountyId)
     );
     bySubmitter = {};
     for (const s of subs) {
-      (bySubmitter[s.bountyId] ??= []).push(submitterRow(s));
+      (bySubmitter[s.bountyId] ??= []).push(submitterRow(s, submitter));
     }
   }
 
@@ -394,12 +398,18 @@ function clampInt(raw: string | null, fallback: number, min: number, max: number
   return Math.min(Math.max(n, min), max);
 }
 
-function submitterRow(s: import("@/lib/bounty").BountySubmission) {
+function submitterRow(s: import("@/lib/bounty").BountySubmission, agent: string) {
+  const me = s.team?.find((m) => m.btcAddress === agent);
   return {
     id: s.id,
     bountyId: s.bountyId,
     contentUrl: s.contentUrl,
     message: s.message,
     createdAt: s.createdAt,
+    leadBtcAddress: s.submitterBtcAddress,
+    teamSize: s.teamSize,
+    team: s.team,
+    teamStatus: s.teamStatus,
+    ...(me && { yourRole: me.role, yourShareSats: me.shareSats }),
   };
 }
