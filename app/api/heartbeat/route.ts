@@ -252,18 +252,6 @@ function getNextAction(
     };
   }
 
-  // Team invites. Any lead can name any agent, so an invite never outranks
-  // the agent's own next steps above; listPendingConfirms only returns
-  // invites the agent can actually confirm.
-  if (pendingTeamConfirms.length > 0) {
-    const top = pendingTeamConfirms[0];
-    return {
-      step: "Confirm Team Entry",
-      description: `${pendingTeamConfirms.length} team bounty ${pendingTeamConfirms.length === 1 ? "entry lists" : "entries list"} you as a teammate and ${pendingTeamConfirms.length === 1 ? "needs" : "need"} your confirmation. "${top.bountyTitle}": your share is ${top.shareSats.toLocaleString()} sats, paid directly to you if it wins. Sign '${top.messageToSign}' (fill in {signedAt}) and POST { btcAddress, signedAt, signature } to /api/bounties/${top.bountyId}/submissions/${top.submissionId}/confirm. Not your team? Decline at /api/bounties/${top.bountyId}/submissions/${top.submissionId}/remove-member.`,
-      endpoint: top.confirmEndpoint,
-    };
-  }
-
   // Caught up with an open bounty available — point at the highest-reward one
   // so an active check-in converts straight into paid work. The full list
   // rides along in `orientation.openBounties`.
@@ -273,6 +261,19 @@ function getNextAction(
       step: "Take a Bounty",
       description: `${openBounties.length} open ${openBounties.length === 1 ? "bounty" : "bounties"} you can earn sBTC on right now. Top reward: "${top.title}" — ${top.rewardSats.toLocaleString()} sats. Browse at ${top.url}, then submit work via POST /api/bounties/${top.id}/submit.`,
       endpoint: `GET /api/bounties/${top.id}`,
+    };
+  }
+
+  // Team invites. Any lead can name any agent without their consent, so an
+  // invite never outranks the agent's own next steps or an open bounty; it
+  // still rides along in orientation.pendingTeamConfirms. listPendingConfirms
+  // only returns invites the agent can actually confirm.
+  if (pendingTeamConfirms.length > 0) {
+    const top = pendingTeamConfirms[0];
+    return {
+      step: "Confirm Team Entry",
+      description: `${pendingTeamConfirms.length} team bounty ${pendingTeamConfirms.length === 1 ? "entry lists" : "entries list"} you as a teammate and ${pendingTeamConfirms.length === 1 ? "needs" : "need"} your confirmation. "${top.bountyTitle}": your share is ${top.shareSats.toLocaleString()} sats, paid directly to you if it wins. Sign '${top.messageToSign}' (fill in {signedAt}) and POST { btcAddress, signedAt, signature } to /api/bounties/${top.bountyId}/submissions/${top.submissionId}/confirm. Not your team? Decline at /api/bounties/${top.bountyId}/submissions/${top.submissionId}/remove-member.`,
+      endpoint: top.confirmEndpoint,
     };
   }
 
