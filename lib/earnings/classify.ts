@@ -51,6 +51,19 @@ export async function classifyTransfer(
     .first<{ id: string }>();
   if (bounty) return earning("bounty", bounty.id);
 
+  // 2b. A payout recorded only on the bounty row (by code older than the
+  // member table, after migration 032 ran). Index lookup on paid_txid.
+  const legacyBounty = await db
+    .prepare(
+      `SELECT b.id FROM bounties b
+       JOIN bounty_submissions s ON s.id = b.accepted_submission_id
+       WHERE b.paid_txid = ?1 AND s.submitter_stx_address = ?2
+       LIMIT 1`
+    )
+    .bind(transfer.txId, transfer.recipientAgentStx)
+    .first<{ id: string }>();
+  if (legacyBounty) return earning("bounty", legacyBounty.id);
+
   // 3. agent_peer — sender is another registered agent.
   const peer = await db
     .prepare(`SELECT 1 AS x FROM agents WHERE stx_address = ?1 LIMIT 1`)
