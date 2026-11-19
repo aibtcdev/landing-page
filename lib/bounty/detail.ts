@@ -88,8 +88,7 @@ export async function loadBountyDetail(
     db,
     winningSub && !page.submissions.includes(winningSub)
       ? [...page.submissions, winningSub]
-      : page.submissions,
-    bounty
+      : page.submissions
   );
   const submissions = withTeam.slice(0, page.submissions.length);
   const winnerSub = bounty.acceptedSubmissionId
@@ -99,7 +98,6 @@ export async function loadBountyDetail(
   const parts: BountyDetailParts = { status, submissions, submissionCount, submissionsNextOffset };
   if (!winnerSub || !bounty.acceptedAt) return parts;
 
-  // withTeams already gives a winner stored without member rows its solo team.
   const team = winnerSub.team ?? [];
   parts.winner = {
     submissionId: winnerSub.id,
