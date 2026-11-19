@@ -31,6 +31,26 @@ export interface BountyDetailParts {
   payment?: BountyPaymentHint;
 }
 
+/**
+ * THE payment hint shape: one sBTC transfer per member still owed (recipient,
+ * amount, memo, contract). Used by the detail view and the /accept response so
+ * both describe payments the same way.
+ */
+export function buildPaymentHints(
+  bountyId: string,
+  owed: { btcAddress: string; stxAddress: string; amountSats: number }[]
+): BountyPaymentHint[] {
+  const memo = buildExpectedMemo(bountyId);
+  return owed.map((u) => ({
+    expectedMemo: memo.ascii,
+    expectedMemoHex: memo.hex,
+    recipientStxAddress: u.stxAddress,
+    recipientBtcAddress: u.btcAddress,
+    amountSats: u.amountSats,
+    sbtcContract: SBTC_CONTRACT_MAINNET,
+  }));
+}
+
 export async function loadBountyDetail(
   db: D1Database,
   bounty: BountyRecord,
@@ -93,15 +113,7 @@ export async function loadBountyDetail(
   parts.payout = buildPayout(team);
 
   if (status === "winner-announced") {
-    const memo = buildExpectedMemo(bounty.id);
-    parts.payments = parts.payout.unpaid.map((u) => ({
-      expectedMemo: memo.ascii,
-      expectedMemoHex: memo.hex,
-      recipientStxAddress: u.stxAddress,
-      recipientBtcAddress: u.btcAddress,
-      amountSats: u.amountSats,
-      sbtcContract: SBTC_CONTRACT_MAINNET,
-    }));
+    parts.payments = buildPaymentHints(bounty.id, parts.payout.unpaid);
     if (team.length === 1 && parts.payments.length === 1) parts.payment = parts.payments[0];
   }
   return parts;
