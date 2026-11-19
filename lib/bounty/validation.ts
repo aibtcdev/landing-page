@@ -490,12 +490,16 @@ export function validateSubmit(body: unknown):
   };
 }
 
-/** Validate the POST /api/bounties/[id]/submissions/[submissionId]/remove-member body. */
-export function validateTeamRemove(body: unknown):
-  | {
-      data: { signerBtcAddress: string; memberBtcAddress: string; signedAt: string; signature: string };
-      errors?: never;
-    }
+/**
+ * Shared core for the signed team-member bodies (confirm, remove-member):
+ * BTC address fields, a signedAt and a signature over `template`.
+ */
+function validateSignedAddressBody<K extends string>(
+  body: unknown,
+  addressFields: K[],
+  template: string
+):
+  | { data: Record<K, string> & { signedAt: string; signature: string }; errors?: never }
   | { data?: never; errors: ValidationHint[] } {
   if (!body || typeof body !== "object") {
     return {
@@ -503,56 +507,37 @@ export function validateTeamRemove(body: unknown):
         {
           field: "body",
           message: "Request body must be a JSON object",
-          hint: "Send JSON with signerBtcAddress, memberBtcAddress, signedAt, signature.",
+          hint: `Send JSON with ${[...addressFields, "signedAt", "signature"].join(", ")}.`,
         },
       ],
     };
   }
   const b = body as Record<string, unknown>;
   const errors: FieldError[] = [];
-  pushBtcAddressError(errors, b.signerBtcAddress, "signerBtcAddress");
-  pushBtcAddressError(errors, b.memberBtcAddress, "memberBtcAddress");
+  for (const f of addressFields) pushBtcAddressError(errors, b[f], f);
   pushIsoTimestampError(errors, b.signedAt, "signedAt", "ISO timestamp used when signing.");
-  pushSignatureError(errors, b.signature, "signature", SIGNATURE_MESSAGE_FORMATS.TEAM_REMOVE);
+  pushSignatureError(errors, b.signature, "signature", template);
   if (errors.length > 0) return { errors: errors.map((e) => e.hint) };
-  return {
-    data: {
-      signerBtcAddress: b.signerBtcAddress as string,
-      memberBtcAddress: b.memberBtcAddress as string,
-      signedAt: b.signedAt as string,
-      signature: b.signature as string,
-    },
+  const data = { signedAt: b.signedAt as string, signature: b.signature as string } as Record<K, string> & {
+    signedAt: string;
+    signature: string;
   };
+  for (const f of addressFields) (data as Record<string, string>)[f] = b[f] as string;
+  return { data };
+}
+
+/** Validate the POST /api/bounties/[id]/submissions/[submissionId]/remove-member body. */
+export function validateTeamRemove(body: unknown) {
+  return validateSignedAddressBody(
+    body,
+    ["signerBtcAddress", "memberBtcAddress"],
+    SIGNATURE_MESSAGE_FORMATS.TEAM_REMOVE
+  );
 }
 
 /** Validate the POST /api/bounties/[id]/submissions/[submissionId]/confirm body. */
-export function validateTeamConfirm(body: unknown):
-  | { data: { btcAddress: string; signedAt: string; signature: string }; errors?: never }
-  | { data?: never; errors: ValidationHint[] } {
-  if (!body || typeof body !== "object") {
-    return {
-      errors: [
-        {
-          field: "body",
-          message: "Request body must be a JSON object",
-          hint: "Send JSON with btcAddress, signedAt, signature.",
-        },
-      ],
-    };
-  }
-  const b = body as Record<string, unknown>;
-  const errors: FieldError[] = [];
-  pushBtcAddressError(errors, b.btcAddress, "btcAddress");
-  pushIsoTimestampError(errors, b.signedAt, "signedAt", "ISO timestamp used when signing.");
-  pushSignatureError(errors, b.signature, "signature", SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM);
-  if (errors.length > 0) return { errors: errors.map((e) => e.hint) };
-  return {
-    data: {
-      btcAddress: b.btcAddress as string,
-      signedAt: b.signedAt as string,
-      signature: b.signature as string,
-    },
-  };
+export function validateTeamConfirm(body: unknown) {
+  return validateSignedAddressBody(body, ["btcAddress"], SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM);
 }
 
 /** Validate the POST /api/bounties/[id]/accept body. */
