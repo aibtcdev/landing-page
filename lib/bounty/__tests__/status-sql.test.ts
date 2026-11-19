@@ -169,8 +169,9 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
   }
 
   it("computes payCutoff from the on-chain paidAt timestamp rather than wall-clock arrival", async () => {
-    // member write, bounty write
-    const { db, binds } = mockDb([1, 1]);
+    // Batch order: member write, updated_at touch, bounty write. (binds are
+    // in build order: member, bounty, touch.)
+    const { db, binds } = mockDb([1, 1, 1]);
     const paidAt = "2026-10-09T14:43:24.000Z";
     const before = Date.now();
     const result = await recordMemberPayments(db, {
@@ -214,7 +215,7 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
   });
 
   it("reports a partial team payout without flipping the bounty to paid, and bumps updated_at", async () => {
-    const { db, runs } = mockDb([1, 0]);
+    const { db, binds } = mockDb([1, 1, 0]);
     const result = await recordMemberPayments(db, {
       bountyId: "b1",
       submissionId: "s1",
@@ -223,11 +224,12 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
       payments: [{ btcAddress: "bc1qlead", eventIndex: 2 }],
     });
     expect(result).toEqual({ recorded: 1, recordedMembers: ["bc1qlead"], bountyPaid: false });
-    expect(runs).toEqual([[expect.any(String), "b1"]]);
+    // The touch is guarded on a member row now carrying this payment.
+    expect(binds[2]).toEqual([expect.any(String), "b1", "s1", "0xabc", "2026-10-09T14:43:24.000Z"]);
   });
 
-  it("does not touch updated_at when nothing was recorded", async () => {
-    const { db, runs } = mockDb([0, 0]);
+  it("reports nothing recorded when no member row changed", async () => {
+    const { db } = mockDb([0, 0, 0]);
     const result = await recordMemberPayments(db, {
       bountyId: "b1",
       submissionId: "s1",
@@ -236,6 +238,5 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
       payments: [{ btcAddress: "bc1qlead", eventIndex: 2 }],
     });
     expect(result).toEqual({ recorded: 0, recordedMembers: [], bountyPaid: false });
-    expect(runs).toEqual([]);
   });
 });
