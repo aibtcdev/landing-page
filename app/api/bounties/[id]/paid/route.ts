@@ -238,7 +238,7 @@ export async function POST(
       );
     }
 
-    let recorded: { recorded: number; bountyPaid: boolean };
+    let recorded: { recorded: number; recordedMembers: string[]; bountyPaid: boolean };
     try {
       recorded = await recordMemberPayments(db, {
         bountyId: bounty.id,
@@ -279,7 +279,7 @@ export async function POST(
       bountyId: bounty.id,
       canonicalTxid: verify.canonicalTxid,
       paidAt,
-      members: verify.matched.map((m) => m.btcAddress),
+      members: recorded.recordedMembers,
     });
 
     const fresh = await getBounty(db, bounty.id);
@@ -287,11 +287,11 @@ export async function POST(
     const payout = buildPayout(freshTeam);
     return NextResponse.json({
       bounty: { ...fresh, status: bountyStatus(fresh!) },
-      paidMembers: verify.matched.map((m) => ({
-        btcAddress: m.btcAddress,
-        stxAddress: m.stxAddress,
-        amountSats: m.amount,
-      })),
+      // Only the members this call recorded (one paid concurrently by another
+      // txid is not claimed for this one).
+      paidMembers: verify.matched
+        .filter((m) => recorded.recordedMembers.includes(m.btcAddress))
+        .map((m) => ({ btcAddress: m.btcAddress, stxAddress: m.stxAddress, amountSats: m.amount })),
       payout,
       ...(verify.underpaid.length > 0 && { underpaid: verify.underpaid }),
       message:
