@@ -86,15 +86,6 @@ export const SBTC_CONTRACTS = {
 /** Default action signatures use mainnet sBTC. */
 export const SBTC_CONTRACT_MAINNET = `${SBTC_CONTRACTS.mainnet.address}.${SBTC_CONTRACTS.mainnet.name}`;
 
-/** KV key prefixes — txid uniqueness only. No record mirror, no pending cache. */
-export const KV_PREFIXES = {
-  /** `bounty:paid-txid:{txid}` → bountyId. One txid can pay one bounty. */
-  PAID_TXID: "bounty:paid-txid:",
-} as const;
-
-/** TTL for the paid-txid uniqueness reservation (365 days). */
-export const PAID_TXID_TTL_SECONDS = 365 * 24 * 60 * 60;
-
 /** Signed-message templates. Build via `lib/bounty/signatures.ts`. */
 export const SIGNATURE_MESSAGE_FORMATS = {
   CREATE:
