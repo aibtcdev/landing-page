@@ -34,6 +34,9 @@ import {
 
 type Params = { params: Promise<{ id: string; submissionId: string }> };
 
+/** The one-entry-per-agent unique index (bounty_id, member_btc_address). */
+const ONE_ENTRY_CONSTRAINT = "UNIQUE constraint failed: bounty_submission_members.bounty_id";
+
 export async function GET(_request: NextRequest, { params }: Params) {
   const { id, submissionId } = await params;
   return NextResponse.json(
@@ -195,7 +198,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       confirmedNow = await confirmMember(db, submissionId, data.btcAddress, new Date().toISOString());
     } catch (e) {
       // The unique index on confirmed entries refused a concurrent second entry.
-      if (String(e).includes("UNIQUE")) return alreadyEntered();
+      if (String(e).includes(ONE_ENTRY_CONSTRAINT)) return alreadyEntered();
       throw e;
     }
     const fresh = (await listMembers(db, [submissionId])).get(submissionId) ?? team;
