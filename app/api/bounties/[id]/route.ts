@@ -64,7 +64,13 @@ export async function GET(
     },
     {
       headers: {
-        "Cache-Control": "public, max-age=15, s-maxage=15, stale-while-revalidate=60",
+        // While a winner is being paid, `payments` changes after every /paid
+        // call; a cached copy could show an already paid member as owed and
+        // lead to a second transfer, so it is never cached then.
+        "Cache-Control":
+          status === "winner-announced"
+            ? "private, no-store"
+            : "public, max-age=15, s-maxage=15, stale-while-revalidate=60",
       },
     }
   );
