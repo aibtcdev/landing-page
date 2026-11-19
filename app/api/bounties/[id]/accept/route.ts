@@ -118,7 +118,7 @@ export async function POST(
       return NextResponse.json(
         {
           error: "team_not_confirmed",
-          message: `This team entry cannot be accepted until every member confirms. Waiting on: ${waitingOn.join(", ")}. Each confirms at POST /api/bounties/${bounty.id}/submissions/${submission.id}/confirm.`,
+          message: `This team entry cannot be accepted until every member confirms. Waiting on: ${waitingOn.join(", ")}. Each confirms at POST /api/bounties/${bounty.id}/submissions/${submission.id}/confirm; the lead can drop a teammate who will not confirm at POST /api/bounties/${bounty.id}/submissions/${submission.id}/remove-member.`,
           waitingOn,
         },
         { status: 422 }
