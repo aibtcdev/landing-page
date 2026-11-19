@@ -299,11 +299,33 @@ describe("POST /api/bounties/[id]/submit: team entries", () => {
     });
   });
 
-  it("maps a concurrent unique-index refusal to 409, not a storage failure", async () => {
-    insertSubmissionMock.mockRejectedValue(new Error("D1_ERROR: UNIQUE constraint failed"));
+  it("maps a concurrent duplicate entry by the lead to 409 already_submitted", async () => {
+    // Teammates are stored unconfirmed, so only the lead's own row can hit the
+    // one-entry unique index (a retried submit racing the first).
+    insertSubmissionMock.mockRejectedValue(
+      new Error(
+        "D1_ERROR: UNIQUE constraint failed: bounty_submission_members.bounty_id, bounty_submission_members.member_btc_address"
+      )
+    );
     const res = await call({ teammates: [MATE1_BTC] });
     expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toBe("already_submitted");
     expect(recordSubmitAttemptMock).not.toHaveBeenCalled();
+  });
+
+  it("does not report another table's unique violation as a duplicate entry", async () => {
+    insertSubmissionMock.mockRejectedValue(new Error("D1_ERROR: UNIQUE constraint failed: bounty_submissions.id"));
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as { error: string }).error).toBe("submit_failed");
+  });
+
+  it("an agent who is only invited to another team can still be named (invites do not block)", async () => {
+    // enteredAgents only reports confirmed memberships and leads, so an
+    // unconfirmed invite elsewhere leaves MATE1 free.
+    enteredAgentsMock.mockResolvedValue(new Set());
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(201);
   });
 
   it("refuses a team larger than the reward in sats", async () => {
