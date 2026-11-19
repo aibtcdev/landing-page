@@ -195,10 +195,11 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
       "s1",
       expectedCutoff,
     ]);
-    // Bounty row: flips to paid only when no member is left unpaid.
+    // Bounty row: flips to paid only when no member is left unpaid, taking
+    // paid_txid / paid_at from the latest member payment (selected in SQL).
     expect(binds[1]).toEqual([
-      "0x5b60",
-      paidAt,
+      "s1",
+      "s1",
       expect.any(String),
       "mukrrrze1aaffcc1ff00",
       "s1",
