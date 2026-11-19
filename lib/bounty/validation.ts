@@ -490,6 +490,41 @@ export function validateSubmit(body: unknown):
   };
 }
 
+/** Validate the POST /api/bounties/[id]/submissions/[submissionId]/remove-member body. */
+export function validateTeamRemove(body: unknown):
+  | {
+      data: { signerBtcAddress: string; memberBtcAddress: string; signedAt: string; signature: string };
+      errors?: never;
+    }
+  | { data?: never; errors: ValidationHint[] } {
+  if (!body || typeof body !== "object") {
+    return {
+      errors: [
+        {
+          field: "body",
+          message: "Request body must be a JSON object",
+          hint: "Send JSON with signerBtcAddress, memberBtcAddress, signedAt, signature.",
+        },
+      ],
+    };
+  }
+  const b = body as Record<string, unknown>;
+  const errors: FieldError[] = [];
+  pushBtcAddressError(errors, b.signerBtcAddress, "signerBtcAddress");
+  pushBtcAddressError(errors, b.memberBtcAddress, "memberBtcAddress");
+  pushIsoTimestampError(errors, b.signedAt, "signedAt", "ISO timestamp used when signing.");
+  pushSignatureError(errors, b.signature, "signature", SIGNATURE_MESSAGE_FORMATS.TEAM_REMOVE);
+  if (errors.length > 0) return { errors: errors.map((e) => e.hint) };
+  return {
+    data: {
+      signerBtcAddress: b.signerBtcAddress as string,
+      memberBtcAddress: b.memberBtcAddress as string,
+      signedAt: b.signedAt as string,
+      signature: b.signature as string,
+    },
+  };
+}
+
 /** Validate the POST /api/bounties/[id]/submissions/[submissionId]/confirm body. */
 export function validateTeamConfirm(body: unknown):
   | { data: { btcAddress: string; signedAt: string; signature: string }; errors?: never }
