@@ -118,10 +118,10 @@ function classifyDb(rows: { inbox?: unknown; bounty?: unknown; legacyBounty?: un
         first: vi.fn().mockResolvedValue(
           sql.includes("inbox_messages")
             ? rows.inbox ?? null
-            : sql.includes("bounty_submission_members")
-              ? rows.bounty ?? null
-              : sql.includes("FROM bounties b")
-                ? rows.legacyBounty ?? null
+            : sql.includes("FROM bounties b")
+              ? rows.legacyBounty ?? null
+              : sql.includes("bounty_submission_members")
+                ? rows.bounty ?? null
               : sql.includes("agents")
                 ? rows.agent ?? null
                 : null
@@ -152,13 +152,26 @@ describe("classifyTransfer", () => {
     const db = {
       prepare: vi.fn((sql: string) => ({
         bind: vi.fn((...args: unknown[]) => {
-          if (sql.includes("bounty_submission_members")) boundAmount = args[2];
+          if (sql.includes("paid_amount_sats")) boundAmount = args[2];
           return { first: vi.fn().mockResolvedValue(null) };
         }),
       })),
     } as unknown as D1Database;
     await classifyTransfer(db, transfer());
     expect(boundAmount).toBe(transfer().amountRaw);
+  });
+
+  it("the legacy bounty-row fallback only applies when no member payment is recorded", async () => {
+    let legacySql = "";
+    const db = {
+      prepare: vi.fn((sql: string) => {
+        if (sql.includes("FROM bounties b")) legacySql = sql;
+        return { bind: vi.fn(() => ({ first: vi.fn().mockResolvedValue(null) })) };
+      }),
+    } as unknown as D1Database;
+    await classifyTransfer(db, transfer());
+    expect(legacySql).toContain("NOT EXISTS");
+    expect(legacySql).toContain("m.paid_txid IS NOT NULL");
   });
 
   it("classifies a payout recorded only on the bounty row (older code) as a bounty", async () => {
