@@ -42,6 +42,7 @@ import {
   listMembers,
   recordSubmitAttempt,
   splitReward,
+  teamState,
   validateSubmit,
   type BountySubmission,
   type SubmitAttemptOutcome,
@@ -344,19 +345,17 @@ export async function POST(
     });
 
     const team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
-    const pending = team.filter((m) => !m.confirmed);
+    const { teamStatus, waitingOn } = teamState(team);
     return NextResponse.json(
       {
         submission: {
           ...submission,
           team,
-          teamStatus: pending.length === 0 ? "confirmed" : "pending",
+          teamStatus,
         },
-        ...(pending.length > 0 && {
+        ...(waitingOn.length > 0 && {
           nextStep: {
-            description: `Each teammate must confirm before the poster can accept this entry. Waiting on: ${pending
-              .map((m) => m.btcAddress)
-              .join(", ")}.`,
+            description: `Each teammate must confirm before the poster can accept this entry. Waiting on: ${waitingOn.join(", ")}.`,
             confirmEndpoint: `POST /api/bounties/${bounty.id}/submissions/${submission.id}/confirm`,
             messageToSign: buildTeamConfirmMessage({
               bountyId: bounty.id,
