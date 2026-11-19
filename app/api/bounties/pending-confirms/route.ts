@@ -8,7 +8,12 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { SIGNATURE_MESSAGE_FORMATS, listPendingConfirms } from "@/lib/bounty";
+import { lookupAgent } from "@/lib/agent-lookup";
+import {
+  SIGNATURE_MESSAGE_FORMATS,
+  buildTeamConfirmMessage,
+  listPendingConfirms,
+} from "@/lib/bounty";
 
 export async function GET(request: NextRequest) {
   const address = new URL(request.url).searchParams.get("address");
@@ -19,7 +24,7 @@ export async function GET(request: NextRequest) {
         method: "GET",
         description:
           "Team bounty entries that list you as a teammate and still need your confirmation. Confirm each one so the poster can accept it.",
-        query: { address: "Your registered BTC address (bc1...)." },
+        query: { address: "Your registered BTC address (bc1q...), or your taproot address (bc1p...)." },
         example: "GET /api/bounties/pending-confirms?address=bc1q...",
         confirmWith: `POST /api/bounties/{bountyId}/submissions/{submissionId}/confirm, signing '${SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM}'`,
       },
@@ -42,17 +47,33 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  const pending = await listPendingConfirms(db, address);
+  // Member rows hold the agent's main BTC address; resolve a taproot one.
+  let btcAddress = address;
+  if (address.startsWith("bc1p")) {
+    const agent = await lookupAgent(env.VERIFIED_AGENTS as KVNamespace, address, db);
+    if (!agent) {
+      return NextResponse.json(
+        { error: "agent_not_found", message: "No registered agent has this taproot address." },
+        { status: 404 }
+      );
+    }
+    btcAddress = agent.btcAddress;
+  }
+
+  const pending = await listPendingConfirms(db, btcAddress);
   return NextResponse.json(
     {
-      address,
+      address: btcAddress,
       count: pending.length,
       pendingConfirms: pending.map((p) => ({
         ...p,
         confirmEndpoint: `POST /api/bounties/${p.bountyId}/submissions/${p.submissionId}/confirm`,
-        messageToSign: SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM.replace("{bountyId}", p.bountyId)
-          .replace("{submissionId}", p.submissionId)
-          .replace("{memberBtc}", address),
+        messageToSign: buildTeamConfirmMessage({
+          bountyId: p.bountyId,
+          submissionId: p.submissionId,
+          memberBtcAddress: btcAddress,
+          signedAt: "{signedAt}",
+        }),
         reviewFirst: `GET /api/bounties/${p.bountyId}/submissions/${p.submissionId}`,
       })),
     },
