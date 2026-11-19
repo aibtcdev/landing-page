@@ -35,6 +35,7 @@ import {
   getBounty,
   getSubmission,
   isWithinSignatureWindow,
+  isPaidTransferConflict,
   listMembers,
   recordMemberPayments,
   validatePaid,
@@ -244,10 +245,16 @@ export async function POST(
         submissionId,
         txid: verify.canonicalTxid,
         paidAt,
-        payments: verify.matched.map((m) => ({ btcAddress: m.btcAddress, eventIndex: m.eventIndex })),
+        // Hiro always gives an event_index in practice; -1 keeps a missing one
+        // inside the (paid_txid, paid_event_index) unique index, which treats
+        // NULLs as distinct. A routed payout needs the index to bind its memo,
+        // so only a direct transfer (one event) can ever reach this with -1.
+        payments: verify.matched.map((m) => ({ btcAddress: m.btcAddress, eventIndex: m.eventIndex ?? -1 })),
       });
     } catch (e) {
-      // Unique index conflict: this exact transfer is already recorded.
+      // Only the one-record-per-transfer index means "already recorded";
+      // anything else is a server error, not a duplicate.
+      if (!isPaidTransferConflict(e)) throw e;
       logger.warn("bounty.paid_unique_violation", {
         bountyId: bounty.id,
         canonicalTxid: verify.canonicalTxid,
