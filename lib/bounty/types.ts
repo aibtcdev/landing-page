@@ -106,6 +106,8 @@ export interface BountyTeamMember {
   confirmed: boolean;
   confirmedAt?: string;
   paidTxid?: string;
+  /** The verified amount of this member's payout transfer, in sats. */
+  paidAmountSats?: number;
   paidAt?: string;
 }
 
