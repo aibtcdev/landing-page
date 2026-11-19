@@ -182,7 +182,7 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
     });
     const after = Date.now();
 
-    expect(result).toEqual({ recorded: 1, bountyPaid: true });
+    expect(result).toEqual({ recorded: 1, recordedMembers: ["bc1qwinner"], bountyPaid: true });
     const expectedCutoff = new Date(Date.parse(paidAt) - PAY_GRACE_MS).toISOString();
     // Member row: txid, event index, on-chain paidAt, then the guarded bounty state.
     expect(binds[0]).toEqual([
@@ -221,7 +221,7 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
       paidAt: "2026-10-09T14:43:24.000Z",
       payments: [{ btcAddress: "bc1qlead", eventIndex: 2 }],
     });
-    expect(result).toEqual({ recorded: 1, bountyPaid: false });
+    expect(result).toEqual({ recorded: 1, recordedMembers: ["bc1qlead"], bountyPaid: false });
     expect(runs).toEqual([[expect.any(String), "b1"]]);
   });
 
@@ -234,7 +234,7 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
       paidAt: "2026-10-09T14:43:24.000Z",
       payments: [{ btcAddress: "bc1qlead", eventIndex: 2 }],
     });
-    expect(result).toEqual({ recorded: 0, bountyPaid: false });
+    expect(result).toEqual({ recorded: 0, recordedMembers: [], bountyPaid: false });
     expect(runs).toEqual([]);
   });
 });
