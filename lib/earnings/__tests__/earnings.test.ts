@@ -111,7 +111,7 @@ function transfer(overrides: Partial<InboundTransfer> = {}): InboundTransfer {
 }
 
 /** D1 mock whose three classification queries return preset rows (or null). */
-function classifyDb(rows: { inbox?: unknown; bounty?: unknown; agent?: unknown }) {
+function classifyDb(rows: { inbox?: unknown; bounty?: unknown; legacyBounty?: unknown; agent?: unknown }) {
   return {
     prepare: vi.fn((sql: string) => ({
       bind: vi.fn(() => ({
@@ -120,6 +120,8 @@ function classifyDb(rows: { inbox?: unknown; bounty?: unknown; agent?: unknown }
             ? rows.inbox ?? null
             : sql.includes("bounty_submission_members")
               ? rows.bounty ?? null
+              : sql.includes("FROM bounties b")
+                ? rows.legacyBounty ?? null
               : sql.includes("agents")
                 ? rows.agent ?? null
                 : null
@@ -138,6 +140,11 @@ describe("classifyTransfer", () => {
   it("classifies a paid bounty to the winner", async () => {
     const c = await classifyTransfer(classifyDb({ bounty: { id: "b1" } }), transfer());
     expect(c).toMatchObject({ sourceClass: "bounty", sourceSubclass: "b1", isEarning: true });
+  });
+
+  it("classifies a payout recorded only on the bounty row (older code) as a bounty", async () => {
+    const c = await classifyTransfer(classifyDb({ legacyBounty: { id: "b2" } }), transfer());
+    expect(c).toMatchObject({ sourceClass: "bounty", sourceSubclass: "b2", isEarning: true });
   });
 
   it("classifies a registered peer agent", async () => {
