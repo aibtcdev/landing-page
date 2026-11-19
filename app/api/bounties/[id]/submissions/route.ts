@@ -7,7 +7,7 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { getBounty, listSubmissionsForBounty } from "@/lib/bounty";
+import { getBounty, listSubmissionsForBounty, withTeams } from "@/lib/bounty";
 
 function clampInt(raw: string | null, fallback: number, min: number, max: number): number {
   if (raw == null) return fallback;
@@ -56,7 +56,7 @@ export async function GET(
     {
       bountyId: id,
       submissionCount: total,
-      submissions,
+      submissions: await withTeams(db, submissions),
       limit,
       offset,
       nextOffset,
