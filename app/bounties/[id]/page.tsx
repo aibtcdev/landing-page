@@ -5,17 +5,8 @@ import Navbar from "../../components/Navbar";
 import Footer from "../../components/Footer";
 import BountyDetail from "./BountyDetail";
 import type { BountyDetailData, BountyWithStatus } from "../types";
-import {
-  bountyStatus,
-  buildExpectedMemo,
-  getBounty,
-  getSubmission,
-  listSubmissionsForBounty,
-  DETAIL_SUBMISSIONS_PAGE,
-  SBTC_CONTRACT_MAINNET,
-  type BountyPaymentHint,
-  type BountyWinner,
-} from "@/lib/bounty";
+import { getBounty } from "@/lib/bounty";
+import { loadBountyDetail } from "@/lib/bounty/detail";
 import { lookupAgent } from "@/lib/agent-lookup";
 import { stripMarkdown } from "../utils";
 
@@ -33,43 +24,17 @@ async function fetchBountyDetail(id: string): Promise<BountyDetailData | null> {
     const bounty = await getBounty(db, id);
     if (!bounty) return null;
 
-    const now = new Date();
-    const status = bountyStatus(bounty, now);
-    const { submissions, total } = await listSubmissionsForBounty(db, id, DETAIL_SUBMISSIONS_PAGE, 0, bounty.submissionCount);
-
-    let winner: BountyWinner | undefined;
-    if (bounty.acceptedSubmissionId && bounty.acceptedAt) {
-      const winningSub =
-        submissions.find((s) => s.id === bounty.acceptedSubmissionId) ??
-        (await getSubmission(db, bounty.acceptedSubmissionId));
-      if (winningSub) {
-        winner = {
-          submissionId: winningSub.id,
-          submitterBtcAddress: winningSub.submitterBtcAddress,
-          submitterStxAddress: winningSub.submitterStxAddress,
-          ...(winningSub.contentUrl && { contentUrl: winningSub.contentUrl }),
-          message: winningSub.message,
-          acceptedAt: bounty.acceptedAt,
-        };
-      }
-    }
-
-    let payment: BountyPaymentHint | undefined;
-    if (status === "winner-announced" && winner) {
-      const memo = buildExpectedMemo(bounty.id);
-      payment = {
-        expectedMemo: memo.ascii,
-        expectedMemoHex: memo.hex,
-        recipientStxAddress: winner.submitterStxAddress,
-        amountSats: bounty.rewardSats,
-        sbtcContract: SBTC_CONTRACT_MAINNET,
-      };
-    }
+    const detail = await loadBountyDetail(db, bounty);
+    const { status, submissions, submissionCount: total, winner, payments, payout } = detail;
 
     // Enrich with display names for every actor on the page (poster + all
     // submitters). Dedupe so we don't look up the same address twice.
     const addressesToLookup = Array.from(
-      new Set([bounty.posterBtcAddress, ...submissions.map((s) => s.submitterBtcAddress)])
+      new Set([
+        bounty.posterBtcAddress,
+        ...submissions.flatMap((s) => [s.submitterBtcAddress, ...(s.team ?? []).map((m) => m.btcAddress)]),
+        ...(winner?.team ?? []).map((m) => m.btcAddress),
+      ])
     );
     const agentNames: Record<string, string> = {};
     if (kv) {
@@ -93,7 +58,8 @@ async function fetchBountyDetail(id: string): Promise<BountyDetailData | null> {
       submissions,
       submissionCount: total,
       ...(winner && { winner }),
-      ...(payment && { payment }),
+      ...(payout && { payout }),
+      ...(payments && { payments }),
       agentNames,
     };
   } catch {
