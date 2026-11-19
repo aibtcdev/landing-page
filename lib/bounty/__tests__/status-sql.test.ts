@@ -153,23 +153,24 @@ describe("active", () => {
 describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
   function mockDb(changes: number[]) {
     const binds: unknown[][] = [];
+    const runs: unknown[][] = [];
     const db = {
       prepare: vi.fn().mockImplementation(() => ({
         bind: (...args: unknown[]) => {
           binds.push(args);
-          return { args };
+          return { args, run: async () => (runs.push(args), { meta: { changes: 1 } }) };
         },
       })),
       batch: vi.fn().mockImplementation(async (stmts: unknown[]) =>
         stmts.map((_, i) => ({ meta: { changes: changes[i] ?? 0 } }))
       ),
     } as unknown as D1Database;
-    return { db, binds };
+    return { db, binds, runs };
   }
 
   it("computes payCutoff from the on-chain paidAt timestamp rather than wall-clock arrival", async () => {
-    // member write, bounty write, updated_at touch
-    const { db, binds } = mockDb([1, 1, 1]);
+    // member write, bounty write
+    const { db, binds } = mockDb([1, 1]);
     const paidAt = "2026-10-09T14:43:24.000Z";
     const before = Date.now();
     const result = await recordMemberPayments(db, {
@@ -211,8 +212,8 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
     expect(updatedAt).toBeLessThanOrEqual(after);
   });
 
-  it("reports a partial team payout without flipping the bounty to paid", async () => {
-    const { db } = mockDb([1, 0, 1]);
+  it("reports a partial team payout without flipping the bounty to paid, and bumps updated_at", async () => {
+    const { db, runs } = mockDb([1, 0]);
     const result = await recordMemberPayments(db, {
       bountyId: "b1",
       submissionId: "s1",
@@ -221,5 +222,19 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
       payments: [{ btcAddress: "bc1qlead", eventIndex: 2 }],
     });
     expect(result).toEqual({ recorded: 1, bountyPaid: false });
+    expect(runs).toEqual([[expect.any(String), "b1"]]);
+  });
+
+  it("does not touch updated_at when nothing was recorded", async () => {
+    const { db, runs } = mockDb([0, 0]);
+    const result = await recordMemberPayments(db, {
+      bountyId: "b1",
+      submissionId: "s1",
+      txid: "0xabc",
+      paidAt: "2026-10-09T14:43:24.000Z",
+      payments: [{ btcAddress: "bc1qlead", eventIndex: 2 }],
+    });
+    expect(result).toEqual({ recorded: 0, bountyPaid: false });
+    expect(runs).toEqual([]);
   });
 });
