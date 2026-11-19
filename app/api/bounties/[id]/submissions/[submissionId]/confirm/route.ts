@@ -33,6 +33,7 @@ import {
   getSubmission,
   isWithinSignatureWindow,
   listMembers,
+  teamState,
   validateTeamConfirm,
 } from "@/lib/bounty";
 
@@ -159,10 +160,9 @@ export async function POST(request: NextRequest, { params }: Params) {
           ...(!confirmedNow && { alreadyConfirmed: true }),
           submissionId,
           bountyId: id,
-          yourShareSats: me.shareSats,
+          yourShareSats: list.find((m) => m.btcAddress === me.btcAddress)?.shareSats ?? me.shareSats,
           team: list,
-          teamStatus: list.every((m) => m.confirmed) ? "confirmed" : "pending",
-          waitingOn: list.filter((m) => !m.confirmed).map((m) => m.btcAddress),
+          ...teamState(list),
         },
         { status }
       );
