@@ -99,3 +99,42 @@ describe("validateTeamConfirm", () => {
     expect((r.errors ?? []).map((e) => e.field).sort()).toEqual(["btcAddress", "signature", "signedAt"]);
   });
 });
+
+import { teamState, withTeams } from "../d1-helpers";
+import type { BountyTeamMember } from "../types";
+
+describe("teamState", () => {
+  const m = (btcAddress: string, confirmed: boolean): BountyTeamMember => ({
+    btcAddress, stxAddress: "SP", role: "member", shareSats: 1, confirmed,
+  });
+  it("is confirmed only when every member confirmed, and lists who is missing", () => {
+    expect(teamState([m("a", true), m("b", true)])).toEqual({ teamStatus: "confirmed", waitingOn: [] });
+    expect(teamState([m("a", true), m("b", false)])).toEqual({ teamStatus: "pending", waitingOn: ["b"] });
+  });
+});
+
+describe("withTeams for a submission stored without member rows", () => {
+  const db = {
+    prepare: () => ({ bind: () => ({ all: async () => ({ results: [] }) }) }),
+  } as unknown as D1Database;
+  const sub = {
+    id: "s1", bountyId: "b1", submitterBtcAddress: LEAD, submitterStxAddress: "SPLEAD",
+    message: "m", createdAt: "2026-11-19T00:00:00.000Z",
+  };
+
+  it("shows it as a confirmed solo entry with the whole reward", async () => {
+    const [s] = await withTeams(db, [sub], { rewardSats: 700 });
+    expect(s.teamSize).toBe(1);
+    expect(s.teamStatus).toBe("confirmed");
+    expect(s.team).toEqual([
+      expect.objectContaining({ btcAddress: LEAD, stxAddress: "SPLEAD", role: "lead", shareSats: 700, confirmed: true }),
+    ]);
+  });
+
+  it("carries the bounty's payout when it is the paid winner", async () => {
+    const [s] = await withTeams(db, [sub], {
+      rewardSats: 700, acceptedSubmissionId: "s1", paidTxid: "0xabc", paidAt: "2026-11-19T01:00:00.000Z",
+    });
+    expect(s.team?.[0]).toMatchObject({ paidTxid: "0xabc", paidAt: "2026-11-19T01:00:00.000Z" });
+  });
+});
