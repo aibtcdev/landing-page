@@ -32,9 +32,7 @@ import {
   bountyStatus,
   buildPaidMessage,
   buildPayout,
-  ensureLeadMember,
   getBounty,
-  getSubmission,
   isWithinSignatureWindow,
   isPaidTransferConflict,
   listMembers,
@@ -171,15 +169,7 @@ export async function POST(
     }
 
     const submissionId = bounty.acceptedSubmissionId;
-    let team = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
-    if (team.length === 0) {
-      // A solo entry stored by older code has no member rows yet.
-      const accepted = await getSubmission(db, submissionId);
-      if (accepted) {
-        await ensureLeadMember(db, accepted, bounty.rewardSats);
-        team = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
-      }
-    }
+    const team = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
     if (team.length === 0) {
       return NextResponse.json(
         { error: "submission_not_found", message: "Accepted submission has no members on record." },
