@@ -32,6 +32,7 @@ CREATE TABLE IF NOT EXISTS bounty_submission_members (
   confirmed_at        TEXT,
   paid_txid           TEXT,
   paid_event_index    INTEGER,
+  paid_amount_sats    INTEGER,   -- verified transfer amount; the earnings classifier matches on it
   paid_at             TEXT,
   legacy              INTEGER NOT NULL DEFAULT 0,
   PRIMARY KEY (submission_id, member_btc_address)
