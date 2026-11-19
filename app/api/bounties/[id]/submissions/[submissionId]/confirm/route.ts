@@ -130,14 +130,13 @@ export async function POST(request: NextRequest, { params }: Params) {
       );
     }
 
-    const submission = await getSubmission(db, submissionId);
+    const [submission, bounty] = await Promise.all([getSubmission(db, submissionId), getBounty(db, id)]);
     if (!submission || submission.bountyId !== id) {
       return NextResponse.json(
         { error: "submission_not_found", message: "No such submission on this bounty." },
         { status: 404 }
       );
     }
-    const bounty = await getBounty(db, id);
     if (!bounty) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
     const team = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
@@ -196,12 +195,29 @@ export async function POST(request: NextRequest, { params }: Params) {
 
     let confirmedNow: boolean;
     try {
-      confirmedNow = await confirmMember(db, submissionId, data.btcAddress, new Date().toISOString());
+      confirmedNow = await confirmMember(db, {
+        bountyId: id,
+        submissionId,
+        btcAddress: data.btcAddress,
+        confirmedAt: new Date().toISOString(),
+      });
     } catch (e) {
       // The unique index on confirmed entries refused a concurrent second entry.
       if (isOneEntryConflict(e)) return alreadyEntered();
       throw e;
     }
+    if (!confirmedNow) {
+      // Nothing written: either a concurrent request already confirmed this
+      // member, or the bounty closed (cancelled / winner picked) meanwhile.
+      const now = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
+      if (!now.find((m) => m.btcAddress === data.btcAddress)?.confirmed) {
+        return NextResponse.json(
+          { error: "bounty_closed", message: "This bounty changed while confirming; it no longer takes confirmations." },
+          { status: 422 }
+        );
+      }
+    }
+
     // This is now their entry, so their other pending invites on this bounty
     // can never be confirmed: drop them so those teams re-split.
     if (confirmedNow) {
