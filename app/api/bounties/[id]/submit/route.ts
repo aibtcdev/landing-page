@@ -8,7 +8,9 @@
  *
  * Team entries: the lead lists up to 4 `teammates` (BTC addresses). Every
  * teammate must be a registered agent, must not be the poster, and must not
- * already have an entry on this bounty. The reward is split evenly; each
+ * already have an entry on this bounty. Being named is only an invite: it does
+ * not count as an entry until the teammate confirms, so a lead cannot lock
+ * other agents out of a bounty by naming them. The reward is split evenly; each
  * teammate then confirms with their own signature at
  * POST /api/bounties/{id}/submissions/{submissionId}/confirm, and the entry
  * can only be accepted once everyone has confirmed.
@@ -29,6 +31,7 @@ import {
   TEAM_MAX,
   bountyStatus,
   buildSubmitMessage,
+  buildTeamConfirmMessage,
   enteredAgents,
   generateSubmissionId,
   getBounty,
@@ -302,13 +305,16 @@ export async function POST(
     try {
       await insertSubmission(db, submission, nowIso, members);
     } catch (e) {
-      // The unique index on (bounty_id, member) rejects a concurrent entry
-      // by any member; report it as such rather than a storage failure.
-      if (String(e).includes("UNIQUE")) {
+      // Teammates are stored unconfirmed, so the unique index on confirmed
+      // entries can only refuse the lead's own row: the lead entered this
+      // bounty concurrently (e.g. a retried submit racing the first).
+      if (String(e).includes("bounty_submission_members")) {
         return NextResponse.json(
           {
-            error: "teammate_already_entered",
-            message: "An agent on this team entered this bounty at the same time. Re-check and retry.",
+            error: "already_submitted",
+            message:
+              "You have already entered this bounty (solo or on a team). One entry per agent. " +
+              "Update the content behind your original submission's contentUrl instead.",
           },
           { status: 409 }
         );
@@ -343,10 +349,12 @@ export async function POST(
               .map((m) => m.btcAddress)
               .join(", ")}.`,
             confirmEndpoint: `POST /api/bounties/${bounty.id}/submissions/${submission.id}/confirm`,
-            messageToSign: SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM.replace("{bountyId}", bounty.id).replace(
-              "{submissionId}",
-              submission.id
-            ),
+            messageToSign: buildTeamConfirmMessage({
+              bountyId: bounty.id,
+              submissionId: submission.id,
+              memberBtcAddress: "{btcAddress}",
+              signedAt: "{signedAt}",
+            }),
             body: "{ btcAddress, signedAt, signature }",
           },
         }),
