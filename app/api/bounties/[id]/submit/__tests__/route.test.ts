@@ -24,6 +24,7 @@ vi.mock("@/lib/bitcoin-verify", () => ({
 const getBountyMock = vi.fn();
 const enteredAgentsMock = vi.fn();
 const listMembersMock = vi.fn();
+const dropInvitesMock = vi.fn();
 const insertSubmissionMock = vi.fn();
 const recordSubmitAttemptMock = vi.fn();
 vi.mock("@/lib/bounty", async (importOriginal) => {
@@ -35,6 +36,7 @@ vi.mock("@/lib/bounty", async (importOriginal) => {
     getBounty: (...args: unknown[]) => getBountyMock(...args),
     enteredAgents: (...args: unknown[]) => enteredAgentsMock(...args),
     listMembers: (...args: unknown[]) => listMembersMock(...args),
+    dropUnconfirmableInvites: (...args: unknown[]) => dropInvitesMock(...args),
     insertSubmission: (...args: unknown[]) => insertSubmissionMock(...args),
     recordSubmitAttempt: (...args: unknown[]) => recordSubmitAttemptMock(...args),
   };
@@ -97,6 +99,7 @@ beforeEach(() => {
   getBountyMock.mockResolvedValue(openBounty());
   enteredAgentsMock.mockResolvedValue(new Set());
   listMembersMock.mockResolvedValue(new Map());
+  dropInvitesMock.mockResolvedValue(0);
   insertSubmissionMock.mockResolvedValue(undefined);
   recordSubmitAttemptMock.mockResolvedValue(undefined);
 });
@@ -242,6 +245,17 @@ describe("POST /api/bounties/[id]/submit: team entries", () => {
       { btcAddress: MATE2_BTC, stxAddress: `SP-${MATE2_BTC}`, shareSats: 1666 },
     ]);
     expect(insertSubmissionMock.mock.calls[0][1].teamSize).toBe(3);
+  });
+
+  it("drops the lead's other pending invites on this bounty once they have an entry", async () => {
+    await call({ teammates: [MATE1_BTC] });
+    expect(dropInvitesMock).toHaveBeenCalledWith({}, BOUNTY_ID, SUBMITTER_BTC);
+  });
+
+  it("still answers 201 if dropping old invites fails (best-effort)", async () => {
+    dropInvitesMock.mockRejectedValue(new Error("D1 down"));
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(201);
   });
 
   it("signs over the teammates: the submit message ends with them in order", async () => {
