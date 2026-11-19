@@ -55,7 +55,12 @@ export async function GET(
     },
     {
       headers: {
-        "Cache-Control": "public, max-age=15, s-maxage=15, stale-while-revalidate=60",
+        // Team payout state changes after every /paid while a winner is being
+        // paid; never serve a stale copy then (see the detail route).
+        "Cache-Control":
+          bountyStatus(bounty) === "winner-announced"
+            ? "private, no-store"
+            : "public, max-age=15, s-maxage=15, stale-while-revalidate=60",
       },
     }
   );
