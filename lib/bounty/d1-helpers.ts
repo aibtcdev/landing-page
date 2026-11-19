@@ -17,6 +17,7 @@ import type {
   BountyTeamMember,
 } from "./types";
 import { ACCEPT_GRACE_MS, PAY_GRACE_MS } from "./constants";
+import { splitReward } from "./types";
 
 // ---------------------------------------------------------------------------
 // Row shapes (snake_case as returned by D1) + mappers
@@ -230,7 +231,7 @@ export async function getBounty(db: D1Database, id: string): Promise<BountyRecor
 export interface ListBountiesFilters {
   status?: BountyStatus | "active";
   posterBtcAddress?: string;
-  /** Filter to bounties this agent has entered, as lead or teammate (via JOIN). */
+  /** Filter to bounties this agent has an entry on, as lead or confirmed teammate (via JOIN). */
   submitterBtcAddress?: string;
   /** JSON-array tag filter — exact match on any tag in the JSON array. */
   tag?: string;
@@ -278,14 +279,12 @@ export async function listBounties(
 
   let joinClause = "";
   if (filters.submitterBtcAddress) {
+    // Bounties this agent has an entry on; a pending invite is not an entry.
+    const q = entriesSql([filters.submitterBtcAddress]);
     joinClause = `
-      INNER JOIN (
-        SELECT bounty_id FROM bounty_submission_members WHERE member_btc_address = ?
-        UNION
-        SELECT bounty_id FROM bounty_submissions WHERE submitter_btc_address = ?
-      ) s ON s.bounty_id = b.id
+      INNER JOIN (SELECT DISTINCT bounty_id FROM (${q.sql})) s ON s.bounty_id = b.id
     `;
-    bindings.unshift(filters.submitterBtcAddress, filters.submitterBtcAddress);
+    bindings.unshift(...q.bindings);
   }
   if (filters.posterBtcAddress) {
     conditions.push("b.poster_btc_address = ?");
@@ -417,9 +416,10 @@ export async function setAccepted(
  * is accepted even if the proof arrives after `PAY_GRACE_MS` elapsed (#1110).
  *
  * `bounties.paid_txid` is the txid that completed the payout; for a solo
- * entry that is its only payment, as before. Unique indexes reject a txid
- * that already completed another bounty, and a transfer event recorded twice;
- * either throws and the batch rolls back.
+ * entry that is its only payment, as before. It is not unique: one txid may
+ * pay members of several bounties, each transfer bound to its bounty by the
+ * BNTY memo. What stops a transfer counting twice is the unique index on
+ * (paid_txid, paid_event_index); a repeat throws and the batch rolls back.
  *
  * Returns how many member rows were written and whether the bounty is now paid.
  */
@@ -484,17 +484,19 @@ export async function recordMemberPayments(
       payCutoff,
       params.submissionId
     );
-  // A partial payout still changes what the bounty shows; clients syncing on
-  // updatedAt must see it.
-  const touch = db
-    .prepare(`UPDATE bounties SET updated_at = ? WHERE id = ?`)
-    .bind(nowIso, params.bountyId);
-
-  const results = await db.batch([...memberWrites, bountyWrite, touch]);
+  const results = await db.batch([...memberWrites, bountyWrite]);
   const recorded = results
     .slice(0, memberWrites.length)
     .reduce((n, r) => n + (r.meta?.changes ?? 0), 0);
   const bountyPaid = (results[memberWrites.length].meta?.changes ?? 0) > 0;
+  // A partial payout still changes what the bounty shows, so clients syncing
+  // on updatedAt must see it; a call that recorded nothing changes nothing.
+  if (recorded > 0 && !bountyPaid) {
+    await db
+      .prepare(`UPDATE bounties SET updated_at = ? WHERE id = ?`)
+      .bind(nowIso, params.bountyId)
+      .run();
+  }
   return { recorded, bountyPaid };
 }
 
@@ -592,9 +594,10 @@ export async function listSubmissionsForBounty(
 }
 
 /**
- * List the submissions an agent is on, as lead or teammate, optionally
- * restricted to some bounties (used by the `yourSubmissions` decoration on
- * `?submitter=` list responses).
+ * List the agent's entries (submissions they lead or confirmed as a teammate),
+ * optionally restricted to some bounties (used by the `yourSubmissions`
+ * decoration on `?submitter=` list responses). Pending invites are not
+ * entries; they are listed by listPendingConfirms.
  */
 export async function listSubmissionsBySubmitter(
   db: D1Database,
@@ -605,7 +608,8 @@ export async function listSubmissionsBySubmitter(
   const cols = SUBMISSION_COLUMNS.split(",").map((c) => `s.${c.trim()}`).join(", ");
   let sql = `SELECT ${cols} FROM bounty_submissions s
     WHERE (s.submitter_btc_address = ?
-      OR s.id IN (SELECT submission_id FROM bounty_submission_members WHERE member_btc_address = ?))`;
+      OR s.id IN (SELECT submission_id FROM bounty_submission_members
+                  WHERE member_btc_address = ? AND confirmed_at IS NOT NULL))`;
   const bindings: (string | number)[] = [submitterBtcAddress, submitterBtcAddress];
   if (bountyIds && bountyIds.length > 0) {
     const placeholders = bountyIds.map(() => "?").join(", ");
@@ -680,39 +684,42 @@ export async function insertSubmission(
   ]);
 }
 
-/** Has this agent entered this bounty, solo or on a team? */
-export async function hasSubmission(
-  db: D1Database,
-  bountyId: string,
-  submitterBtcAddress: string
-): Promise<boolean> {
-  return (await enteredAgents(db, bountyId, [submitterBtcAddress])).size > 0;
+/**
+ * THE rule for "this agent has an entry on this bounty", as SQL: a confirmed
+ * membership (lead, or teammate who confirmed) or a submission they lead (the
+ * second half also covers submissions stored without member rows). A pending
+ * invite does not count, so naming an agent as a teammate can never lock that
+ * agent out of a bounty. Every "has entered" read goes through here so the
+ * submit, confirm, heartbeat and list paths cannot drift apart.
+ *
+ * Returns `(bounty_id, agent)` rows for the given agents, optionally limited to
+ * some bounties, plus the bindings in order. Both halves are index searches
+ * (idx_members_agent; idx_submissions_submitter / idx_submissions_bounty).
+ */
+function entriesSql(agents: string[], bountyIds?: string[]): { sql: string; bindings: string[] } {
+  const a = agents.map(() => "?").join(", ");
+  const b = bountyIds ? bountyIds.map(() => "?").join(", ") : "";
+  const bountyFilter = bountyIds ? ` AND bounty_id IN (${b})` : "";
+  return {
+    sql: `SELECT bounty_id, member_btc_address AS agent FROM bounty_submission_members
+          WHERE confirmed_at IS NOT NULL AND member_btc_address IN (${a})${bountyFilter}
+          UNION
+          SELECT bounty_id, submitter_btc_address AS agent FROM bounty_submissions
+          WHERE submitter_btc_address IN (${a})${bountyFilter}`,
+    bindings: [...agents, ...(bountyIds ?? []), ...agents, ...(bountyIds ?? [])],
+  };
 }
 
-/**
- * Which of `btcAddresses` already have an entry on this bounty: a confirmed
- * membership (lead, or teammate who confirmed) or a submission they lead.
- * A pending invite does not count, so a lead naming an agent as a teammate
- * can never lock that agent out of the bounty.
- */
+/** Which of `btcAddresses` already have an entry on this bounty (see entriesSql). */
 export async function enteredAgents(
   db: D1Database,
   bountyId: string,
   btcAddresses: string[]
 ): Promise<Set<string>> {
   if (btcAddresses.length === 0) return new Set();
-  const placeholders = btcAddresses.map(() => "?").join(", ");
-  const { results } = await db
-    .prepare(
-      `SELECT member_btc_address AS a FROM bounty_submission_members
-       WHERE bounty_id = ? AND confirmed_at IS NOT NULL AND member_btc_address IN (${placeholders})
-       UNION
-       SELECT submitter_btc_address AS a FROM bounty_submissions
-       WHERE bounty_id = ? AND submitter_btc_address IN (${placeholders})`
-    )
-    .bind(bountyId, ...btcAddresses, bountyId, ...btcAddresses)
-    .all<{ a: string }>();
-  return new Set((results ?? []).map((r) => r.a));
+  const q = entriesSql(btcAddresses, [bountyId]);
+  const { results } = await db.prepare(q.sql).bind(...q.bindings).all<{ agent: string }>();
+  return new Set((results ?? []).map((r) => r.agent));
 }
 
 /**
@@ -810,6 +817,51 @@ export async function confirmMember(
   return (result.meta?.changes ?? 0) > 0;
 }
 
+/**
+ * Remove a pending (unconfirmed) member from a submission and re-split the
+ * reward evenly across the members left, lead first. One batch, so the
+ * removal and the new shares commit together; every write requires the
+ * bounty to still have no winner, so a removal cannot race an acceptance.
+ * Returns false when nothing was removed (already confirmed, not a member,
+ * or the bounty moved on).
+ */
+export async function removePendingMember(
+  db: D1Database,
+  params: {
+    bountyId: string;
+    submissionId: string;
+    memberBtcAddress: string;
+    rewardSats: number;
+    /** Members who stay, lead first, in their stored order. */
+    remaining: string[];
+  }
+): Promise<boolean> {
+  const open = `EXISTS (SELECT 1 FROM bounties WHERE id = ? AND accepted_at IS NULL
+                        AND cancelled_at IS NULL AND paid_at IS NULL)`;
+  const shares = splitReward(params.rewardSats, params.remaining.length);
+  const results = await db.batch([
+    db
+      .prepare(
+        `DELETE FROM bounty_submission_members
+         WHERE submission_id = ? AND member_btc_address = ? AND confirmed_at IS NULL
+           AND role = 'member' AND ${open}`
+      )
+      .bind(params.submissionId, params.memberBtcAddress, params.bountyId),
+    ...params.remaining.map((addr, i) =>
+      db
+        .prepare(
+          // Re-split only if the removal above actually happened.
+          `UPDATE bounty_submission_members SET share_sats = ?
+           WHERE submission_id = ? AND member_btc_address = ? AND ${open}
+             AND NOT EXISTS (SELECT 1 FROM bounty_submission_members
+                             WHERE submission_id = ? AND member_btc_address = ?)`
+        )
+        .bind(shares[i], params.submissionId, addr, params.bountyId, params.submissionId, params.memberBtcAddress)
+    ),
+  ]);
+  return (results[0].meta?.changes ?? 0) > 0;
+}
+
 /** Payout progress of a team: who is paid, who is still owed and how much. */
 export function buildPayout(team: BountyTeamMember[]): BountyPayout {
   const unpaid = team.filter((m) => !m.paidTxid);
@@ -831,26 +883,36 @@ export interface PendingTeamConfirm {
   expiresAt: string;
   submissionId: string;
   leadBtcAddress: string;
-  teamSize: number;
+  /** Omitted when the caller skips it (the heartbeat). */
+  teamSize?: number;
   shareSats: number;
 }
 
 /**
- * Team entries waiting for this agent's confirmation, on bounties that still
- * accept confirmations (no winner picked, not cancelled or paid, not past the
- * accept-grace cutoff).
+ * Team entries waiting for this agent's confirmation that they can actually
+ * confirm: the bounty still accepts confirmations (no winner picked, not
+ * cancelled or paid, not past the accept-grace cutoff) and the agent has no
+ * entry on it yet (an invite they could only answer with 409 is left out).
+ *
+ * `limit` bounds the read; the heartbeat asks for a few and skips the team
+ * size. The first query reads the small idx_members_pending; the entry check
+ * runs only when there are pending rows.
  */
 export async function listPendingConfirms(
   db: D1Database,
   btcAddress: string,
-  now: Date = new Date()
+  options: { limit?: number; withTeamSize?: boolean; now?: Date } = {}
 ): Promise<PendingTeamConfirm[]> {
+  const limit = Math.min(Math.max(options.limit ?? 50, 1), 50);
+  const now = options.now ?? new Date();
   const acceptCutoff = new Date(now.getTime() - ACCEPT_GRACE_MS).toISOString();
+  const teamSizeCol = options.withTeamSize === false
+    ? "0 AS team_size"
+    : "(SELECT COUNT(*) FROM bounty_submission_members t WHERE t.submission_id = s.id) AS team_size";
   const { results } = await db
     .prepare(
       `SELECT b.id AS bounty_id, b.title, b.reward_sats, b.expires_at,
-              s.id AS submission_id, s.submitter_btc_address, m.share_sats,
-              (SELECT COUNT(*) FROM bounty_submission_members t WHERE t.submission_id = s.id) AS team_size
+              s.id AS submission_id, s.submitter_btc_address, m.share_sats, ${teamSizeCol}
        FROM bounty_submission_members m
        JOIN bounty_submissions s ON s.id = m.submission_id
        JOIN bounties b ON b.id = m.bounty_id
@@ -858,9 +920,9 @@ export async function listPendingConfirms(
          AND b.accepted_at IS NULL AND b.cancelled_at IS NULL AND b.paid_at IS NULL
          AND b.expires_at > ?
        ORDER BY s.created_at DESC
-       LIMIT 50`
+       LIMIT ?`
     )
-    .bind(btcAddress, acceptCutoff)
+    .bind(btcAddress, acceptCutoff, limit)
     .all<{
       bounty_id: string;
       title: string;
@@ -871,14 +933,17 @@ export async function listPendingConfirms(
       team_size: number;
       share_sats: number;
     }>();
-  return (results ?? []).map((r) => ({
+  const rows = results ?? [];
+  if (rows.length === 0) return [];
+  const entered = await submittedBountyIds(db, btcAddress, [...new Set(rows.map((r) => r.bounty_id))]);
+  return rows.filter((r) => !entered.has(r.bounty_id)).map((r) => ({
     bountyId: r.bounty_id,
     bountyTitle: r.title,
     rewardSats: r.reward_sats,
     expiresAt: r.expires_at,
     submissionId: r.submission_id,
     leadBtcAddress: r.submitter_btc_address,
-    teamSize: r.team_size,
+    ...(options.withTeamSize !== false && { teamSize: r.team_size }),
     shareSats: r.share_sats,
   }));
 }
@@ -895,17 +960,8 @@ export async function submittedBountyIds(
   bountyIds: string[]
 ): Promise<Set<string>> {
   if (bountyIds.length === 0) return new Set();
-  const placeholders = bountyIds.map(() => "?").join(", ");
-  const { results } = await db
-    .prepare(
-      `SELECT bounty_id FROM bounty_submission_members
-       WHERE member_btc_address = ? AND confirmed_at IS NOT NULL AND bounty_id IN (${placeholders})
-       UNION
-       SELECT bounty_id FROM bounty_submissions
-       WHERE submitter_btc_address = ? AND bounty_id IN (${placeholders})`
-    )
-    .bind(submitterBtcAddress, ...bountyIds, submitterBtcAddress, ...bountyIds)
-    .all<{ bounty_id: string }>();
+  const q = entriesSql([submitterBtcAddress], bountyIds);
+  const { results } = await db.prepare(q.sql).bind(...q.bindings).all<{ bounty_id: string }>();
   return new Set((results ?? []).map((r) => r.bounty_id));
 }
 
