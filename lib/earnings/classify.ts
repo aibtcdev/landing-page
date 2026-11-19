@@ -38,12 +38,13 @@ export async function classifyTransfer(
     .first<{ message_id: string }>();
   if (inbox) return earning("inbox_message", inbox.message_id);
 
-  // 2. bounty — txid matches a paid bounty whose accepted winner is this agent.
+  // 2. bounty — txid is a verified bounty payout to this agent. Every member
+  // of a winning team is paid (and recorded) on their own row, so each one is
+  // credited with their own transfer, never with the lead's.
   const bounty = await db
     .prepare(
-      `SELECT b.id FROM bounties b
-       JOIN bounty_submissions s ON s.id = b.accepted_submission_id
-       WHERE b.paid_txid = ?1 AND s.submitter_stx_address = ?2
+      `SELECT bounty_id AS id FROM bounty_submission_members
+       WHERE paid_txid = ?1 AND member_stx_address = ?2
        LIMIT 1`
     )
     .bind(transfer.txId, transfer.recipientAgentStx)
