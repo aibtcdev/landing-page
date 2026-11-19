@@ -44,7 +44,7 @@ export async function classifyTransfer(
   // Bounties pay in sBTC, and the transfer must be the recorded payout
   // amount: another transfer to the member inside the same payout tx is not
   // bounty income and goes through the agent_peer anti-gaming checks below.
-  // (Rows recorded before the amount was stored match on txid alone.)
+  // (Rows backfilled from before the amount was stored match on txid alone.)
   const isSbtc = transfer.asset === "sbtc";
   const bounty = isSbtc
     ? await db
@@ -59,25 +59,6 @@ export async function classifyTransfer(
         .first<{ id: string }>()
     : null;
   if (bounty) return earning("bounty", bounty.id);
-
-  // 2b. A payout recorded only on the bounty row (by code older than the
-  // member table, after migration 032 ran): only when no member payment is
-  // recorded for that entry, so team payouts always go through the amount
-  // check above. Index lookup on paid_txid.
-  const legacyBounty = !isSbtc ? null : await db
-    .prepare(
-      `SELECT b.id FROM bounties b
-       JOIN bounty_submissions s ON s.id = b.accepted_submission_id
-       WHERE b.paid_txid = ?1 AND s.submitter_stx_address = ?2
-         AND NOT EXISTS (
-           SELECT 1 FROM bounty_submission_members m
-           WHERE m.submission_id = b.accepted_submission_id AND m.paid_txid IS NOT NULL
-         )
-       LIMIT 1`
-    )
-    .bind(transfer.txId, transfer.recipientAgentStx)
-    .first<{ id: string }>();
-  if (legacyBounty) return earning("bounty", legacyBounty.id);
 
   // 3. agent_peer — sender is another registered agent.
   const peer = await db
