@@ -162,13 +162,10 @@ export async function POST(request: NextRequest, { params }: Params) {
       );
     }
 
-    const remaining = team.filter((m) => m.btcAddress !== data.memberBtcAddress).map((m) => m.btcAddress);
     const removed = await removePendingMember(db, {
       bountyId: id,
       submissionId,
       memberBtcAddress: data.memberBtcAddress,
-      rewardSats: bounty.rewardSats,
-      remaining,
     });
     if (!removed) {
       return NextResponse.json(
