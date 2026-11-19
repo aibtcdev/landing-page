@@ -433,7 +433,7 @@ export async function recordMemberPayments(
     paidAt: string;
     payments: { btcAddress: string; eventIndex: number | null }[];
   }
-): Promise<{ recorded: number; recordedMembers: string[]; bountyPaid: boolean }> {
+): Promise<{ recordedMembers: string[]; bountyPaid: boolean }> {
   const payCutoff = new Date(Date.parse(params.paidAt) - PAY_GRACE_MS).toISOString();
   const nowIso = new Date().toISOString();
   const bountyAcceptedUnpaid = `EXISTS (
@@ -491,8 +491,10 @@ export async function recordMemberPayments(
       params.submissionId
     );
   // A partial payout still changes what the bounty shows, so clients syncing
-  // on updatedAt must see it. In the same batch, and only if a member row now
-  // carries this payment (so a call that recorded nothing changes nothing).
+  // on updatedAt must see it. In the same batch, guarded on a member row now
+  // carrying this payment, so a call that cannot have recorded anything does
+  // not bump it. (Two concurrent calls with the same txid can both pass the
+  // guard; that only bumps updatedAt once more, nothing else changes.)
   const touch = db
     .prepare(
       `UPDATE bounties SET updated_at = ?
@@ -506,9 +508,8 @@ export async function recordMemberPayments(
   const recordedMembers = params.payments
     .filter((_, i) => (results[i].meta?.changes ?? 0) > 0)
     .map((p) => p.btcAddress);
-  const recorded = recordedMembers.length;
   const bountyPaid = (results[memberWrites.length + 1].meta?.changes ?? 0) > 0;
-  return { recorded, recordedMembers, bountyPaid };
+  return { recordedMembers, bountyPaid };
 }
 
 /**
@@ -954,19 +955,23 @@ export async function dropUnconfirmableInvites(
     .all<{ submission_id: string }>();
   const submissionIds = (results ?? []).map((r) => r.submission_id);
   if (submissionIds.length === 0) return 0;
-  // One batch: drop every such invite, then re-split each affected team from
-  // the rows left (an idempotent recompute of the even split).
-  const out = await db.batch([
-    db
-      .prepare(
-        `DELETE FROM bounty_submission_members
-         WHERE member_btc_address = ? AND bounty_id = ? AND confirmed_at IS NULL
-           AND role = 'member' AND ${OPEN_BOUNTY}`
-      )
-      .bind(btcAddress, bountyId, bountyId),
-    ...submissionIds.map((id) => resplitStatement(db, bountyId, id)),
-  ]);
-  return out[0].meta?.changes ?? 0;
+  // One batch. Each delete is scoped to a submission read above and paired
+  // with that team's re-split, so an invite created after the read is left
+  // alone (and is dropped by its own submit/confirm path), never deleted
+  // without a re-split.
+  const out = await db.batch(
+    submissionIds.flatMap((id) => [
+      db
+        .prepare(
+          `DELETE FROM bounty_submission_members
+           WHERE submission_id = ? AND member_btc_address = ? AND confirmed_at IS NULL
+             AND role = 'member' AND ${OPEN_BOUNTY}`
+        )
+        .bind(id, btcAddress, bountyId),
+      resplitStatement(db, bountyId, id),
+    ])
+  );
+  return out.filter((_, i) => i % 2 === 0).reduce((n, r) => n + (r.meta?.changes ?? 0), 0);
 }
 
 /** Was this D1 error the one-entry-per-agent unique index (bounty_id, member)? */
