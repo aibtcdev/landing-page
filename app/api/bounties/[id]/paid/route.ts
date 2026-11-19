@@ -153,6 +153,32 @@ export async function POST(
         { status: 500 }
       );
     }
+    // Idempotent retry: this txid is already recorded for members of this
+    // entry (e.g. the first response was lost). Answer from D1 without
+    // asking Hiro again. Txids compare without the 0x prefix, as Hiro's
+    // canonical tx_id has it and a client may send it either way.
+    const bareTxid = (t: string) => t.toLowerCase().replace(/^0x/, "");
+    const alreadyRecorded = team.filter((m) => m.paidTxid && bareTxid(m.paidTxid) === bareTxid(data.txid));
+    if (alreadyRecorded.length > 0) {
+      const payout = buildPayout(team);
+      return NextResponse.json({
+        bounty: { ...bounty, status },
+        alreadyRecorded: true,
+        paidMembers: alreadyRecorded.map((m) => ({
+          btcAddress: m.btcAddress,
+          stxAddress: m.stxAddress,
+          amountSats: m.shareSats,
+        })),
+        payout,
+        message:
+          payout.unpaid.length === 0
+            ? "This txid is already recorded. Every member is paid."
+            : `This txid is already recorded. ${payout.membersPaid} of ${payout.membersTotal} members paid; still owed: ${payout.unpaid
+                .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
+                .join(", ")}.`,
+      });
+    }
+
     const unpaid = team.filter((m) => !m.paidTxid);
     if (unpaid.length === 0) {
       return NextResponse.json(
@@ -282,8 +308,11 @@ export async function POST(
       members: recorded.recordedMembers,
     });
 
-    const fresh = await getBounty(db, bounty.id);
-    const freshTeam = (await listMembers(db, [submissionId])).get(submissionId) ?? team;
+    const [fresh, freshMembers] = await Promise.all([
+      getBounty(db, bounty.id),
+      listMembers(db, [submissionId]),
+    ]);
+    const freshTeam = freshMembers.get(submissionId) ?? team;
     const payout = buildPayout(freshTeam);
     return NextResponse.json({
       bounty: { ...fresh, status: bountyStatus(fresh!) },
