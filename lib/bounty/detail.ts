@@ -13,6 +13,7 @@ import {
   type BountyRecord,
   type BountyStatus,
   type BountySubmission,
+  type BountyTeamMember,
   type BountyWinner,
 } from "./types";
 
@@ -75,7 +76,23 @@ export async function loadBountyDetail(
   const parts: BountyDetailParts = { status, submissions, submissionCount, submissionsNextOffset };
   if (!winnerSub || !bounty.acceptedAt) return parts;
 
-  const team = winnerSub.team ?? [];
+  // A winner stored by older code has no member rows: show it as the solo
+  // entry it is (whole reward to the lead, paid if the bounty row says so),
+  // built in memory so this read path never writes.
+  const team: BountyTeamMember[] =
+    winnerSub.team && winnerSub.team.length > 0
+      ? winnerSub.team
+      : [
+          {
+            btcAddress: winnerSub.submitterBtcAddress,
+            stxAddress: winnerSub.submitterStxAddress,
+            role: "lead",
+            shareSats: bounty.rewardSats,
+            confirmed: true,
+            ...(bounty.paidTxid && { paidTxid: bounty.paidTxid }),
+            ...(bounty.paidAt && { paidAt: bounty.paidAt }),
+          },
+        ];
   parts.winner = {
     submissionId: winnerSub.id,
     submitterBtcAddress: winnerSub.submitterBtcAddress,
