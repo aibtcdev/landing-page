@@ -134,6 +134,24 @@ export function buildCancelMessage(params: {
 }
 
 /**
+ * Build the message that removes a pending teammate from a team submission.
+ * Signed by the lead (dropping a teammate who has not confirmed) or by that
+ * teammate (declining the invite).
+ */
+export function buildTeamRemoveMessage(params: {
+  bountyId: string;
+  submissionId: string;
+  memberBtcAddress: string;
+  signedAt: string;
+}): string {
+  return SIGNATURE_MESSAGE_FORMATS.TEAM_REMOVE
+    .replace("{bountyId}", params.bountyId)
+    .replace("{submissionId}", params.submissionId)
+    .replace("{memberBtc}", params.memberBtcAddress)
+    .replace("{signedAt}", params.signedAt);
+}
+
+/**
  * Check whether a signed-at ISO timestamp is within the replay window.
  *
  * Returns true when `|now - signedAt| <= windowSeconds`.
