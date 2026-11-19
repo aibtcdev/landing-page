@@ -9,13 +9,18 @@
 -- Every submission has member rows; a solo submission is a team of one, so
 -- reads and the payout check follow a single path.
 --
--- share_sats is fixed at submit time: floor(reward_sats / team_size), with
--- the remainder going to the lead.
+-- share_sats is fixed at submit time: floor(reward_sats / team size), with
+-- the remainder going to the lead. The team size is the number of member rows.
+--
+-- Only CONFIRMED memberships count as an entry. A lead can name any agent as a
+-- teammate, so an unconfirmed invite must never lock that agent out of the
+-- bounty: they can still submit their own entry or confirm another team, and
+-- confirming a second entry on the same bounty is refused.
 --
 -- Backfilled rows are `legacy = 1`. Prod has older duplicate entries
 -- (one agent, two submissions on one bounty) from before the one-entry rule,
 -- so the one-entry-per-agent unique index covers new rows only. The submit
--- route still checks every row before inserting.
+-- and confirm routes still check every row.
 
 CREATE TABLE IF NOT EXISTS bounty_submission_members (
   submission_id       TEXT    NOT NULL REFERENCES bounty_submissions(id),
@@ -32,14 +37,21 @@ CREATE TABLE IF NOT EXISTS bounty_submission_members (
   PRIMARY KEY (submission_id, member_btc_address)
 );
 
--- One entry per agent per bounty, solo or on a team (new rows only, see above).
+-- One confirmed entry per agent per bounty, solo or on a team (new rows only,
+-- see above). Partial on confirmed_at, so a pending invite never conflicts.
 CREATE UNIQUE INDEX IF NOT EXISTS idx_members_bounty_agent
   ON bounty_submission_members(bounty_id, member_btc_address)
-  WHERE legacy = 0;
+  WHERE legacy = 0 AND confirmed_at IS NOT NULL;
 
--- "Has this agent entered this bounty" and "pending confirms for this agent".
+-- "Has this agent entered this bounty" and "bounties this agent is on".
 CREATE INDEX IF NOT EXISTS idx_members_agent
   ON bounty_submission_members(member_btc_address, bounty_id);
+
+-- Pending invites per agent. Small (most rows are confirmed), so the
+-- heartbeat's "anything waiting on me" check is a cheap probe.
+CREATE INDEX IF NOT EXISTS idx_members_pending
+  ON bounty_submission_members(member_btc_address)
+  WHERE confirmed_at IS NULL;
 
 -- One on-chain transfer event pays one member once. Also serves the earnings
 -- classifier lookup by paid_txid.
@@ -47,7 +59,10 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_members_paid_event
   ON bounty_submission_members(paid_txid, paid_event_index)
   WHERE paid_txid IS NOT NULL;
 
-ALTER TABLE bounty_submissions ADD COLUMN team_size INTEGER NOT NULL DEFAULT 1;
+-- One transaction may now pay members of several bounties (each transfer
+-- carries its own BNTY memo, and each transfer is recorded once above), so
+-- the txid that completes a bounty no longer has to be unique across bounties.
+DROP INDEX IF EXISTS idx_bounties_paid_txid;
 
 -- Backfill: every existing submission becomes a confirmed team of one.
 INSERT OR IGNORE INTO bounty_submission_members
