@@ -17,6 +17,9 @@
 -- bounty: they can still submit their own entry or confirm another team, and
 -- confirming a second entry on the same bounty is refused.
 --
+-- After deploying the code, run scripts/bounty-teams-post-deploy-backfill.sql
+-- once: it repeats this backfill for rows the old code wrote in between.
+--
 -- Backfilled rows are `legacy = 1`. Prod has older duplicate entries
 -- (one agent, two submissions on one bounty) from before the one-entry rule,
 -- so the one-entry-per-agent unique index covers new rows only. The submit
@@ -63,11 +66,7 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_members_paid_event
 -- One transaction may now pay members of several bounties (each transfer
 -- carries its own BNTY memo, and each transfer is recorded once above), so
 -- the txid that completes a bounty no longer has to be unique across bounties.
--- Kept as a plain index: the earnings classifier still looks a payout up by
--- bounties.paid_txid for payouts recorded before member rows existed.
 DROP INDEX IF EXISTS idx_bounties_paid_txid;
-CREATE INDEX IF NOT EXISTS idx_bounties_paid_txid_lookup
-  ON bounties(paid_txid) WHERE paid_txid IS NOT NULL;
 
 -- Backfill: every existing submission becomes a confirmed team of one.
 INSERT OR IGNORE INTO bounty_submission_members
