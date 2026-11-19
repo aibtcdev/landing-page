@@ -62,7 +62,11 @@ CREATE UNIQUE INDEX IF NOT EXISTS idx_members_paid_event
 -- One transaction may now pay members of several bounties (each transfer
 -- carries its own BNTY memo, and each transfer is recorded once above), so
 -- the txid that completes a bounty no longer has to be unique across bounties.
+-- Kept as a plain index: the earnings classifier still looks a payout up by
+-- bounties.paid_txid for payouts recorded before member rows existed.
 DROP INDEX IF EXISTS idx_bounties_paid_txid;
+CREATE INDEX IF NOT EXISTS idx_bounties_paid_txid_lookup
+  ON bounties(paid_txid) WHERE paid_txid IS NOT NULL;
 
 -- Backfill: every existing submission becomes a confirmed team of one.
 INSERT OR IGNORE INTO bounty_submission_members
