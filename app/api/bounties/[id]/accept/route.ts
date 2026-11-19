@@ -19,6 +19,7 @@ import {
   getSubmission,
   isWithinSignatureWindow,
   listMembers,
+  teamState,
   setAccepted,
   validateAccept,
 } from "@/lib/bounty";
@@ -113,8 +114,17 @@ export async function POST(
       await ensureLeadMember(db, submission, bounty.rewardSats);
       team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
     }
-    const waitingOn = team.filter((m) => !m.confirmed).map((m) => m.btcAddress);
-    if (team.length === 0 || waitingOn.length > 0) {
+    if (team.length === 0) {
+      // ensureLeadMember could not create the lead row: a storage problem,
+      // not something a confirm or a removal can fix.
+      logger.error("bounty.accept_no_members", { submissionId: submission.id });
+      return NextResponse.json(
+        { error: "internal", message: "Could not load this submission's members. Retry shortly." },
+        { status: 500 }
+      );
+    }
+    const { waitingOn } = teamState(team);
+    if (waitingOn.length > 0) {
       return NextResponse.json(
         {
           error: "team_not_confirmed",
