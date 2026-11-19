@@ -23,7 +23,7 @@ export async function GET(request: NextRequest) {
         endpoint: "/api/bounties/pending-confirms",
         method: "GET",
         description:
-          "Team bounty entries that list you as a teammate and still need your confirmation. Confirm each one so the poster can accept it.",
+          "Team bounty entries that list you as a teammate and that you can still confirm (bounties you already have an entry on are left out). Confirm to join, or decline at remove-member.",
         query: { address: "Your registered BTC address (bc1q...), or your taproot address (bc1p...)." },
         example: "GET /api/bounties/pending-confirms?address=bc1q...",
         confirmWith: `POST /api/bounties/{bountyId}/submissions/{submissionId}/confirm, signing '${SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM}'`,
@@ -75,6 +75,7 @@ export async function GET(request: NextRequest) {
           signedAt: "{signedAt}",
         }),
         reviewFirst: `GET /api/bounties/${p.bountyId}/submissions/${p.submissionId}`,
+        declineEndpoint: `POST /api/bounties/${p.bountyId}/submissions/${p.submissionId}/remove-member`,
       })),
     },
     { headers: { "Cache-Control": "private, no-store" } }
