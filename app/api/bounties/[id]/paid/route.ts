@@ -24,6 +24,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { DEFAULT_RETRY_AFTER_SECONDS } from "@/lib/stacks-api-fetch";
+import { stripHexPrefix } from "@/lib/validation/signature";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import {
   PAY_GRACE_MS,
@@ -40,6 +41,7 @@ import {
   recordMemberPayments,
   validatePaid,
   verifyPayoutTxid,
+  type BountyTeamMember,
 } from "@/lib/bounty";
 
 export async function POST(
@@ -109,7 +111,34 @@ export async function POST(
     const status = bountyStatus(bounty);
     const isAbandonedAfterAccept =
       status === "abandoned" && Boolean(bounty.acceptedAt);
+    // The reply for a txid already recorded on this entry (a retry after a
+    // lost response): 200 with what is recorded, so a client never takes it
+    // as a failure and pays again. Txids compare without 0x and case.
+    const sameTxid = (a: string, b: string) =>
+      stripHexPrefix(a).toLowerCase() === stripHexPrefix(b).toLowerCase();
+    const recordedReply = (team: BountyTeamMember[]) => {
+      const mine = team.filter((m) => m.paidTxid && sameTxid(m.paidTxid, data.txid));
+      if (mine.length === 0) return null;
+      const payout = buildPayout(team);
+      return NextResponse.json({
+        bounty: { ...bounty, status },
+        alreadyRecorded: true,
+        paidMembers: mine.map((m) => ({ btcAddress: m.btcAddress, stxAddress: m.stxAddress, amountSats: m.shareSats })),
+        payout,
+        message:
+          payout.unpaid.length === 0
+            ? "This txid is already recorded. Every member is paid."
+            : `This txid is already recorded. ${payout.membersPaid} of ${payout.membersTotal} members paid; still owed: ${payout.unpaid
+                .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
+                .join(", ")}.`,
+      });
+    };
+
     if (status === "paid") {
+      const done = bounty.acceptedSubmissionId
+        ? recordedReply((await listMembers(db, [bounty.acceptedSubmissionId])).get(bounty.acceptedSubmissionId) ?? [])
+        : null;
+      if (done) return done;
       return NextResponse.json(
         {
           error: "already_paid",
@@ -153,34 +182,10 @@ export async function POST(
         { status: 500 }
       );
     }
-    // Idempotent retry: this txid is already recorded for members of this
-    // entry (e.g. the first response was lost). Answer from D1 without
-    // asking Hiro again. Txids compare without the 0x prefix, as Hiro's
-    // canonical tx_id has it and a client may send it either way.
-    const bareTxid = (t: string) => t.toLowerCase().replace(/^0x/, "");
-    const alreadyRecorded = team.filter((m) => m.paidTxid && bareTxid(m.paidTxid) === bareTxid(data.txid));
-    if (alreadyRecorded.length > 0) {
-      const payout = buildPayout(team);
-      return NextResponse.json({
-        bounty: { ...bounty, status },
-        alreadyRecorded: true,
-        paidMembers: alreadyRecorded.map((m) => ({
-          btcAddress: m.btcAddress,
-          stxAddress: m.stxAddress,
-          amountSats: m.shareSats,
-        })),
-        payout,
-        message:
-          payout.unpaid.length === 0
-            ? "This txid is already recorded. Every member is paid."
-            : `This txid is already recorded. ${payout.membersPaid} of ${payout.membersTotal} members paid; still owed: ${payout.unpaid
-                .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
-                .join(", ")}.`,
-      });
-    }
-
     const unpaid = team.filter((m) => !m.paidTxid);
     if (unpaid.length === 0) {
+      const done = recordedReply(team);
+      if (done) return done;
       return NextResponse.json(
         {
           error: "already_paid",
@@ -207,6 +212,11 @@ export async function POST(
       kv,
     });
     if (!verify.ok) {
+      // Retrying a txid already recorded for some members: re-verifying lets
+      // any other member it pays be recorded, and when it adds nobody the
+      // answer is "already recorded", not an error.
+      const retryReply = verify.code !== "RATE_LIMITED" && verify.code !== "HIRO_UNREACHABLE" ? recordedReply(team) : null;
+      if (retryReply) return retryReply;
       const statusCode = verify.code === "TX_NOT_CONFIRMED" ? 422 : 400;
       logger.warn("bounty.paid_verification_failed", {
         bountyId: bounty.id,
@@ -264,7 +274,7 @@ export async function POST(
       );
     }
 
-    let recorded: { recorded: number; recordedMembers: string[]; bountyPaid: boolean };
+    let recorded: { recordedMembers: string[]; bountyPaid: boolean };
     try {
       recorded = await recordMemberPayments(db, {
         bountyId: bounty.id,
@@ -294,7 +304,7 @@ export async function POST(
         { status: 409 }
       );
     }
-    if (recorded.recorded === 0) {
+    if (recorded.recordedMembers.length === 0) {
       return NextResponse.json(
         { error: "conflict", message: "Bounty state changed concurrently. Re-fetch the bounty." },
         { status: 409 }
