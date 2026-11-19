@@ -142,6 +142,25 @@ describe("classifyTransfer", () => {
     expect(c).toMatchObject({ sourceClass: "bounty", sourceSubclass: "b1", isEarning: true });
   });
 
+  it("does not class a non-sBTC transfer in a payout tx as a bounty", async () => {
+    const c = await classifyTransfer(classifyDb({ bounty: { id: "b1" } }), { ...transfer(), asset: "stx" });
+    expect(c.sourceClass).not.toBe("bounty");
+  });
+
+  it("matches the bounty payout on the recorded amount", async () => {
+    let boundAmount: unknown;
+    const db = {
+      prepare: vi.fn((sql: string) => ({
+        bind: vi.fn((...args: unknown[]) => {
+          if (sql.includes("bounty_submission_members")) boundAmount = args[2];
+          return { first: vi.fn().mockResolvedValue(null) };
+        }),
+      })),
+    } as unknown as D1Database;
+    await classifyTransfer(db, transfer());
+    expect(boundAmount).toBe(transfer().amountRaw);
+  });
+
   it("classifies a payout recorded only on the bounty row (older code) as a bounty", async () => {
     const c = await classifyTransfer(classifyDb({ legacyBounty: { id: "b2" } }), transfer());
     expect(c).toMatchObject({ sourceClass: "bounty", sourceSubclass: "b2", isEarning: true });
