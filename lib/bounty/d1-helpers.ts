@@ -414,8 +414,8 @@ export async function setAccepted(
  * a payment that landed inside `[accepted_at - 60s, accepted_at + PAY_GRACE_MS)`
  * is accepted even if the proof arrives after `PAY_GRACE_MS` elapsed (#1110).
  *
- * `bounties.paid_txid` is the txid that completed the payout; for a solo
- * entry that is its only payment, as before. It is not unique: one txid may
+ * `bounties.paid_txid` / `paid_at` are the latest member payment by block
+ * time; for a solo entry that is its only payment, as before. It is not unique: one txid may
  * pay members of several bounties, each transfer bound to its bounty by the
  * BNTY memo. What stops a transfer counting twice is the unique index on
  * (paid_txid, paid_event_index); a repeat throws and the batch rolls back.
@@ -462,8 +462,14 @@ export async function recordMemberPayments(
   );
   const bountyWrite = db
     .prepare(
+      // paid_txid / paid_at are the LATEST member payment by block time, not
+      // whichever /paid call happened to complete the payout.
       `UPDATE bounties
-       SET paid_txid = ?, paid_at = ?, updated_at = ?
+       SET paid_txid = (SELECT paid_txid FROM bounty_submission_members
+                        WHERE submission_id = ?
+                        ORDER BY paid_at DESC, paid_event_index DESC LIMIT 1),
+           paid_at = (SELECT MAX(paid_at) FROM bounty_submission_members WHERE submission_id = ?),
+           updated_at = ?
        WHERE id = ?
          AND accepted_submission_id = ?
          AND accepted_at IS NOT NULL
@@ -476,8 +482,8 @@ export async function recordMemberPayments(
          )`
     )
     .bind(
-      params.txid,
-      params.paidAt,
+      params.submissionId,
+      params.submissionId,
       nowIso,
       params.bountyId,
       params.submissionId,
@@ -609,14 +615,34 @@ export async function listSubmissionsBySubmitter(
   bountyIds?: string[]
 ): Promise<BountySubmission[]> {
   if (bountyIds && bountyIds.length === 0) return [];
-  const cols = SUBMISSION_COLUMNS.split(",").map((c) => `s.${c.trim()}`).join(", ");
-  const q = entriesSql([submitterBtcAddress], bountyIds);
-  const sql = `SELECT ${cols} FROM bounty_submissions s
-    WHERE s.id IN (SELECT submission_id FROM (${q.sql}))
-    ORDER BY s.created_at DESC`;
-  const bindings: (string | number)[] = [...q.bindings];
-  const rows = await db.prepare(sql).bind(...bindings).all<D1SubmissionRow>();
-  return (rows.results ?? []).map(rowToSubmission);
+  // entriesSql binds its lists twice (one per UNION half); chunk the bounty
+  // ids so a page of up to 100 bounties stays under D1's 100-parameter limit.
+  const chunks = bountyIds ? chunk(bountyIds, MAX_IDS_PER_QUERY) : [undefined];
+  const out: BountySubmission[] = [];
+  for (const ids of chunks) {
+    const q = entriesSql([submitterBtcAddress], ids);
+    const rows = await db
+      .prepare(
+        `SELECT ${SUBMISSION_COLUMNS} FROM bounty_submissions
+         WHERE id IN (SELECT submission_id FROM (${q.sql}))`
+      )
+      .bind(...q.bindings)
+      .all<D1SubmissionRow>();
+    out.push(...(rows.results ?? []).map(rowToSubmission));
+  }
+  return out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
+}
+
+/**
+ * Ids per query for helpers built on entriesSql, which binds the id list
+ * twice: 2 * 45 + 2 agent bindings stays under D1's 100 bound parameters.
+ */
+const MAX_IDS_PER_QUERY = 45;
+
+function chunk<T>(items: T[], size: number): T[][] {
+  const out: T[][] = [];
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
+  return out;
 }
 
 /**
@@ -831,16 +857,17 @@ export async function withTeams(
  */
 export async function confirmMember(
   db: D1Database,
-  submissionId: string,
-  btcAddress: string,
-  confirmedAt: string
+  params: { bountyId: string; submissionId: string; btcAddress: string; confirmedAt: string }
 ): Promise<boolean> {
+  // The bounty guard is in the UPDATE itself, so a confirm racing a cancel or
+  // an accept cannot land on a closed bounty.
   const result = await db
     .prepare(
       `UPDATE bounty_submission_members SET confirmed_at = ?
-       WHERE submission_id = ? AND member_btc_address = ? AND confirmed_at IS NULL`
+       WHERE submission_id = ? AND member_btc_address = ? AND confirmed_at IS NULL
+         AND ${OPEN_BOUNTY}`
     )
-    .bind(confirmedAt, submissionId, btcAddress)
+    .bind(params.confirmedAt, params.submissionId, params.btcAddress, params.bountyId)
     .run();
   return (result.meta?.changes ?? 0) > 0;
 }
@@ -1049,9 +1076,13 @@ export async function submittedBountyIds(
   bountyIds: string[]
 ): Promise<Set<string>> {
   if (bountyIds.length === 0) return new Set();
-  const q = entriesSql([submitterBtcAddress], bountyIds);
-  const { results } = await db.prepare(q.sql).bind(...q.bindings).all<{ bounty_id: string }>();
-  return new Set((results ?? []).map((r) => r.bounty_id));
+  const out = new Set<string>();
+  for (const ids of chunk(bountyIds, MAX_IDS_PER_QUERY)) {
+    const q = entriesSql([submitterBtcAddress], ids);
+    const { results } = await db.prepare(q.sql).bind(...q.bindings).all<{ bounty_id: string }>();
+    for (const r of results ?? []) out.add(r.bounty_id);
+  }
+  return out;
 }
 
 // ── Submit attempts (#1040) ───────────────────────────────────────────────
