@@ -194,3 +194,22 @@ describe("withTeams for a solo winner paid by older code", () => {
     expect(s.team?.[0]).toMatchObject({ paidTxid: "0xold", paidAt: "2026-11-19T02:00:00.000Z" });
   });
 });
+
+import { listMembers } from "../d1-helpers";
+
+describe("listMembers stays under D1's 100 bound parameters", () => {
+  it("chunks a large id list", async () => {
+    const bindCounts: number[] = [];
+    const db = {
+      prepare: () => ({
+        bind: (...args: unknown[]) => {
+          bindCounts.push(args.length);
+          return { all: async () => ({ results: [] }) };
+        },
+      }),
+    } as unknown as D1Database;
+    await listMembers(db, Array.from({ length: 150 }, (_, i) => `s${i}`));
+    expect(bindCounts.length).toBe(2);
+    expect(Math.max(...bindCounts)).toBeLessThanOrEqual(100);
+  });
+});
