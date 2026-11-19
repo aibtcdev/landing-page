@@ -50,4 +50,17 @@ export interface HeartbeatOrientation {
     expiresAt: string;
     url: string;
   }>;
+  /**
+   * Team bounty entries that list this agent as a teammate and still need
+   * their confirmation. Omitted when none or the lookup fails.
+   */
+  pendingTeamConfirms?: Array<{
+    bountyId: string;
+    bountyTitle: string;
+    submissionId: string;
+    leadBtcAddress: string;
+    shareSats: number;
+    confirmEndpoint: string;
+    messageToSign: string;
+  }>;
 }
