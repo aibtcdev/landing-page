@@ -367,6 +367,14 @@ export async function verifyPayoutTxid(params: {
     now.getTime()
   );
   if (events.state === "unreachable") {
+    // Payouts already proven on the pages that did load are on-chain fact:
+    // record them now (a team keeps paging for the members not yet found,
+    // and a later page failing must not hold the found ones back). Only when
+    // nothing is proven yet is the failure a retryable "try again".
+    const proven = matchPayouts(tx.events ?? []);
+    if (proven.length > 0) {
+      return { ok: true, canonicalTxid: tx.tx_id, blockTimeIso, matched: proven, underpaid: [] };
+    }
     if (events.response?.status === 429) return rateLimitedResult(events.response);
     return { ok: false, code: "HIRO_UNREACHABLE", message: "Could not read the transaction events." };
   }
@@ -432,7 +440,10 @@ export async function verifyPayoutTxid(params: {
       ok: false,
       code: "AMOUNT_TOO_LOW",
       message: underpaid
-        .map((u) => `Transferred ${u.amount} sats < owed ${u.required} sats to ${u.btcAddress}.`)
+        .map(
+          (u) =>
+            `Transferred ${u.amount} sats < owed ${u.required} sats to ${u.btcAddress}. Each member needs ONE transfer of at least their share; smaller transfers are not added together, so do not send a top-up.`
+        )
         .join(" "),
     };
   }
