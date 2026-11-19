@@ -376,8 +376,14 @@ export async function verifyPayoutTxid(params: {
   const underpaid = params.recipients
     .filter((r) => !matched.some((m) => m.stxAddress === r.stxAddress))
     .flatMap((r) => {
+      // Only transfers bound to THIS bounty count: one tx may also pay this
+      // member for another bounty (its own memo), which is not an underpayment
+      // here. A direct transfer's memo was already checked from its args.
       const sent = sbtcTransfers.filter(
-        (ev) => ev.sender === params.bounty.posterStxAddress && ev.recipient === r.stxAddress
+        (ev) =>
+          ev.sender === params.bounty.posterStxAddress &&
+          ev.recipient === r.stxAddress &&
+          (isDirect || memosMatch(readSbtcMemoPrint(tx.events, sbtcContractId, ev.eventIndex), expected.hex))
       );
       if (sent.length === 0) return [];
       const amount = Math.max(...sent.map((ev) => ev.amount));
