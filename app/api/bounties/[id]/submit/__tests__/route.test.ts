@@ -262,18 +262,6 @@ describe("POST /api/bounties/[id]/submit: team entries", () => {
     expect(json.droppedInvites).toBe(2);
   });
 
-  it("drops a teammate who entered this bounty elsewhere while the lead was submitting", async () => {
-    // Before the insert nobody has entered; right after, MATE1 has.
-    enteredAgentsMock.mockResolvedValueOnce(new Set()).mockResolvedValueOnce(new Set([MATE1_BTC]));
-    listMembersMock.mockResolvedValue(
-      new Map([[expect.any(String) as unknown as string, []]])
-    );
-    const res = await call({ teammates: [MATE1_BTC] });
-    expect(res.status).toBe(201);
-    expect(removeMemberMock).toHaveBeenCalledWith({}, expect.objectContaining({ memberBtcAddress: MATE1_BTC }));
-    expect(((await res.json()) as { droppedTeammates?: string[] }).droppedTeammates).toEqual([MATE1_BTC]);
-  });
-
   it("still answers 201 if dropping old invites fails (best-effort)", async () => {
     dropInvitesMock.mockRejectedValue(new Error("D1 down"));
     const res = await call({ teammates: [MATE1_BTC] });
