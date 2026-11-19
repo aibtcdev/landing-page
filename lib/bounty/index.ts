@@ -83,6 +83,7 @@ export {
   ensureLeadMember,
   listMembers,
   withTeams,
+  teamState,
   confirmMember,
   removePendingMember,
   dropUnconfirmableInvites,
