@@ -80,7 +80,6 @@ export {
   listSubmissionsBySubmitter,
   insertSubmission,
   enteredAgents,
-  ensureLeadMember,
   listMembers,
   withTeams,
   teamState,
