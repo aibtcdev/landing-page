@@ -16,7 +16,6 @@ import {
   bountyStatus,
   buildAcceptMessage,
   getBounty,
-  ensureLeadMember,
   getSubmission,
   isWithinSignatureWindow,
   listMembers,
@@ -109,15 +108,10 @@ export async function POST(
       );
     }
 
-    let team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
+    const team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
     if (team.length === 0) {
-      // A solo entry stored by older code has no member rows yet.
-      await ensureLeadMember(db, submission, bounty.rewardSats);
-      team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
-    }
-    if (team.length === 0) {
-      // ensureLeadMember could not create the lead row: a storage problem,
-      // not something a confirm or a removal can fix.
+      // Every submission has member rows (migration 032 + its post-deploy
+      // backfill); none means a storage problem a confirm cannot fix.
       logger.error("bounty.accept_no_members", { submissionId: submission.id });
       return NextResponse.json(
         { error: "internal", message: "Could not load this submission's members. Retry shortly." },
