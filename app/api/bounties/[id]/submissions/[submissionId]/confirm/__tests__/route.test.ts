@@ -89,6 +89,12 @@ describe("POST /api/bounties/[id]/submissions/[submissionId]/confirm", () => {
     expect(((await res.json()) as { error: string }).error).toBe("already_entered");
   });
 
+  it("does not turn an unrelated database error into already_entered", async () => {
+    confirmMemberMock.mockRejectedValue(new Error("D1_ERROR: database is locked"));
+    const res = await call();
+    expect(res.status).toBe(500);
+  });
+
   it("is idempotent for a teammate who already confirmed this entry", async () => {
     listMembersMock.mockReset().mockResolvedValue(new Map([[SUB_ID, team(true)]]));
     const res = await call();
