@@ -38,8 +38,8 @@ const MATE = "bc1qmate00000000000000000000000000000000000";
 
 function team(mateConfirmed: boolean) {
   return [
-    { btcAddress: LEAD, stxAddress: "SP1", role: "lead", shareSats: 500, confirmed: true },
-    { btcAddress: MATE, stxAddress: "SP2", role: "member", shareSats: 500, confirmed: mateConfirmed },
+    { btcAddress: LEAD, stxAddress: "SP1", role: "lead", shareSats: 334, confirmed: true },
+    { btcAddress: MATE, stxAddress: "SP2", role: "member", shareSats: 333, confirmed: mateConfirmed },
   ];
 }
 
@@ -77,6 +77,18 @@ describe("POST /api/bounties/[id]/submissions/[submissionId]/confirm", () => {
     expect(confirmMemberMock).toHaveBeenCalledWith({}, SUB_ID, MATE, expect.any(String));
     // Their other pending invites on this bounty can no longer be confirmed.
     expect(dropInvitesMock).toHaveBeenCalledWith({}, BOUNTY_ID, MATE);
+  });
+
+  it("reports the teammate's share from the fresh team, not the one read before confirming", async () => {
+    // A concurrent removal re-split the team between the read and the confirm.
+    listMembersMock.mockReset()
+      .mockResolvedValueOnce(new Map([[SUB_ID, team(false)]]))
+      .mockResolvedValue(new Map([[SUB_ID, [
+        { btcAddress: LEAD, stxAddress: "SP1", role: "lead", shareSats: 500, confirmed: true },
+        { btcAddress: MATE, stxAddress: "SP2", role: "member", shareSats: 500, confirmed: true },
+      ]]]));
+    const res = await call();
+    expect(((await res.json()) as { yourShareSats: number }).yourShareSats).toBe(500);
   });
 
   it("refuses with 409 already_entered when the teammate already has an entry on this bounty", async () => {
