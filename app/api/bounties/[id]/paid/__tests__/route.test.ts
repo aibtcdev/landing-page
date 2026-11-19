@@ -132,7 +132,7 @@ beforeEach(() => {
   });
   isTxidRedeemedMock.mockResolvedValue(null);
   listMembersMock.mockResolvedValue(new Map([[SUBMISSION_ID, SOLO_TEAM]]));
-  recordMemberPaymentsMock.mockResolvedValue({ recorded: 1, bountyPaid: true });
+  recordMemberPaymentsMock.mockResolvedValue({ recorded: 1, recordedMembers: [WINNER_BTC], bountyPaid: true });
   reserveTxidMock.mockResolvedValue(undefined);
 });
 
@@ -298,7 +298,7 @@ describe("POST /api/bounties/[id]/paid: team payouts", () => {
       matched: [{ btcAddress: WINNER_BTC, stxAddress: WINNER_STX, eventIndex: 0, amount: 2500 }],
       underpaid: [],
     });
-    recordMemberPaymentsMock.mockResolvedValue({ recorded: 1, bountyPaid: false });
+    recordMemberPaymentsMock.mockResolvedValue({ recorded: 1, recordedMembers: [WINNER_BTC], bountyPaid: false });
 
     await POST(paidRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
 
@@ -324,7 +324,7 @@ describe("POST /api/bounties/[id]/paid: team payouts", () => {
       matched: [{ btcAddress: WINNER_BTC, stxAddress: WINNER_STX, eventIndex: 0, amount: 5000 }],
       underpaid: [],
     });
-    recordMemberPaymentsMock.mockResolvedValue({ recorded: 1, bountyPaid: false });
+    recordMemberPaymentsMock.mockResolvedValue({ recorded: 1, recordedMembers: [WINNER_BTC], bountyPaid: false });
 
     const res = await POST(paidRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
     expect(res.status).toBe(200);
@@ -337,6 +337,28 @@ describe("POST /api/bounties/[id]/paid: team payouts", () => {
     expect(json.payout).toMatchObject({ membersPaid: 1, membersTotal: 2 });
     expect(json.payout.unpaid).toEqual([{ btcAddress: PARTNER_BTC, stxAddress: PARTNER_STX, amountSats: 2500 }]);
     expect(json.message).toContain(PARTNER_STX);
+  });
+
+  it("paidMembers lists only the members this call recorded", async () => {
+    const bounty = makeBounty();
+    const blockTimeIso = new Date(Date.parse(bounty.acceptedAt!) + 3_600_000).toISOString();
+    getBountyMock.mockResolvedValue(bounty);
+    listMembersMock.mockResolvedValue(new Map([[SUBMISSION_ID, TEAM]]));
+    verifyPayoutTxidMock.mockResolvedValue({
+      ok: true,
+      canonicalTxid: TXID,
+      blockTimeIso,
+      matched: [
+        { btcAddress: WINNER_BTC, stxAddress: WINNER_STX, eventIndex: 0, amount: 2500 },
+        { btcAddress: PARTNER_BTC, stxAddress: PARTNER_STX, eventIndex: 2, amount: 2500 },
+      ],
+      underpaid: [],
+    });
+    // The lead was already recorded by a concurrent call with another txid.
+    recordMemberPaymentsMock.mockResolvedValue({ recorded: 1, recordedMembers: [PARTNER_BTC], bountyPaid: true });
+    const res = await POST(paidRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
+    const json = (await res.json()) as { paidMembers: { btcAddress: string }[] };
+    expect(json.paidMembers.map((m) => m.btcAddress)).toEqual([PARTNER_BTC]);
   });
 
   it("answers 409 already_paid once every member is paid, without calling Hiro", async () => {
