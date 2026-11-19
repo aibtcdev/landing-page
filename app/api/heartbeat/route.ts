@@ -72,8 +72,9 @@ async function fetchPendingTeamConfirms(
 ): Promise<NonNullable<HeartbeatOrientation["pendingTeamConfirms"]>> {
   if (!db) return [];
   try {
-    const pending = await listPendingConfirms(db, btcAddress);
-    return pending.slice(0, 5).map((p) => ({
+    // A few, without the per-row team size: this runs on every check-in.
+    const pending = await listPendingConfirms(db, btcAddress, { limit: 5, withTeamSize: false });
+    return pending.map((p) => ({
       bountyId: p.bountyId,
       bountyTitle: p.bountyTitle,
       submissionId: p.submissionId,
@@ -232,17 +233,6 @@ function getNextAction(
     };
   }
 
-  // A teammate is waiting on this agent: the entry cannot be accepted (or
-  // paid) until they confirm, so this comes before everything optional.
-  if (pendingTeamConfirms.length > 0) {
-    const top = pendingTeamConfirms[0];
-    return {
-      step: "Confirm Team Entry",
-      description: `${pendingTeamConfirms.length} team bounty ${pendingTeamConfirms.length === 1 ? "entry lists" : "entries list"} you as a teammate and ${pendingTeamConfirms.length === 1 ? "needs" : "need"} your confirmation. "${top.bountyTitle}": your share is ${top.shareSats.toLocaleString()} sats, paid directly to you if it wins. Sign '${top.messageToSign}' (fill in {signedAt}) and POST { btcAddress, signedAt, signature } to /api/bounties/${top.bountyId}/submissions/${top.submissionId}/confirm.`,
-      endpoint: top.confirmEndpoint,
-    };
-  }
-
   // Level 1 with check-ins: advance to Genesis
   if (level === 1) {
     return {
@@ -259,6 +249,18 @@ function getNextAction(
       step: "Check Inbox",
       description: `You have ${unreadCount} unread message${unreadCount === 1 ? "" : "s"}. Check your inbox at /api/inbox/${agent.btcAddress}`,
       endpoint: `GET /api/inbox/${agent.btcAddress}`,
+    };
+  }
+
+  // Team invites. Any lead can name any agent, so an invite never outranks
+  // the agent's own next steps above; listPendingConfirms only returns
+  // invites the agent can actually confirm.
+  if (pendingTeamConfirms.length > 0) {
+    const top = pendingTeamConfirms[0];
+    return {
+      step: "Confirm Team Entry",
+      description: `${pendingTeamConfirms.length} team bounty ${pendingTeamConfirms.length === 1 ? "entry lists" : "entries list"} you as a teammate and ${pendingTeamConfirms.length === 1 ? "needs" : "need"} your confirmation. "${top.bountyTitle}": your share is ${top.shareSats.toLocaleString()} sats, paid directly to you if it wins. Sign '${top.messageToSign}' (fill in {signedAt}) and POST { btcAddress, signedAt, signature } to /api/bounties/${top.bountyId}/submissions/${top.submissionId}/confirm. Not your team? Decline at /api/bounties/${top.bountyId}/submissions/${top.submissionId}/remove-member.`,
+      endpoint: top.confirmEndpoint,
     };
   }
 
