@@ -1016,3 +1016,54 @@ describe("verifyPayoutTxid underpaid only counts this bounty's transfers", () =>
     expect(r).toMatchObject({ ok: false, code: "MEMO_MISMATCH" });
   });
 });
+
+describe("verifyPayoutTxid records proven team payouts when a later page fails", () => {
+  const lead: PayoutRecipient = { btcAddress: "bc1qlead", stxAddress: SUBMITTER_STX, amountSats: 2500 };
+  const partner: PayoutRecipient = { btcAddress: "bc1qpartner", stxAddress: OTHER_STX, amountSats: 2500 };
+  // The lead's payout is on page 0; the tx says it has 150 events, so the
+  // verifier keeps paging for the partner, and page 1 keeps failing.
+  const filler = Array.from({ length: 146 }, (_, i) => ({
+    event_index: i + 4,
+    event_type: "smart_contract_log",
+    contract_log: { contract_id: WRAPPER, topic: "print", value: { hex: "0x00" } },
+  }));
+  const tx = makeRoutedTx([
+    ftEvent(0, POSTER_STX, SUBMITTER_STX, 2500),
+    memoPrint(1, SBTC_CONTRACT_MAINNET),
+    ftEvent(2, POSTER_STX, WRAPPER, 10),
+    memoPrint(3, WRAPPER, "fee"),
+    ...filler,
+  ]) as { events: unknown[] };
+
+  it("returns the payout proven on the loaded page instead of HIRO_UNREACHABLE", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [lead, partner],
+      fetchFn: pagedFetch(tx, 100, "fail"),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.matched.map((m) => m.btcAddress)).toEqual(["bc1qlead"]);
+  });
+
+  it("stays retryable when nothing is proven yet", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [partner],
+      fetchFn: pagedFetch(tx, 100, "fail"),
+    });
+    expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+  });
+
+  it("AMOUNT_TOO_LOW tells the poster not to send a top-up", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [partner],
+      fetchFn: mockFetch({ json: () => makeRoutedTx([ftEvent(0, POSTER_STX, OTHER_STX, 900), memoPrint(1, SBTC_CONTRACT_MAINNET)]) }),
+    });
+    expect(r).toMatchObject({ ok: false, code: "AMOUNT_TOO_LOW" });
+    if (!r.ok) expect(r.message).toMatch(/do not send a top-up/);
+  });
+});
