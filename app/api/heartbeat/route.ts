@@ -47,6 +47,7 @@ function getOrientation(
   // leave the agent with fewer suggestions than there are open bounties.
   const invited = new Set(pendingTeamConfirms.map((p) => p.bountyId));
   openBounties = openBounties.filter((b) => !invited.has(b.id)).slice(0, OPEN_BOUNTIES_SHOWN);
+  pendingTeamConfirms = pendingTeamConfirms.slice(0, PENDING_CONFIRMS_SHOWN);
 
   // Determine next action based on level and journey progress
   const nextAction = getNextAction(
@@ -80,8 +81,13 @@ async function fetchPendingTeamConfirms(
 ): Promise<NonNullable<HeartbeatOrientation["pendingTeamConfirms"]>> {
   if (!db) return [];
   try {
-    // A few, without the per-row team size: this runs on every check-in.
-    const pending = await listPendingConfirms(db, btcAddress, { limit: 5, withTeamSize: false });
+    // Enough to keep every invited bounty out of the open-bounty suggestions
+    // (the prefetch size), without the per-row team size: this runs on every
+    // check-in. Only the first few are shown.
+    const pending = await listPendingConfirms(db, btcAddress, {
+      limit: OPEN_BOUNTIES_PREFETCH,
+      withTeamSize: false,
+    });
     return pending.map((p) => ({
       bountyId: p.bountyId,
       bountyTitle: p.bountyTitle,
@@ -126,6 +132,8 @@ const OPEN_BOUNTIES_CACHE_TTL_SECONDS = 120;
  * and edge-cached, so the wider prefetch is effectively free.
  */
 const OPEN_BOUNTIES_SHOWN = 3;
+/** Team invites shown in the orientation (more are read to filter suggestions). */
+const PENDING_CONFIRMS_SHOWN = 5;
 const OPEN_BOUNTIES_PREFETCH = 25;
 
 /**
@@ -266,7 +274,11 @@ function getNextAction(
     const top = openBounties[0];
     return {
       step: "Take a Bounty",
-      description: `${openBounties.length} open ${openBounties.length === 1 ? "bounty" : "bounties"} you can earn sBTC on right now. Top reward: "${top.title}" — ${top.rewardSats.toLocaleString()} sats. Browse at ${top.url}, then submit work via POST /api/bounties/${top.id}/submit.`,
+      description: `${openBounties.length} open ${openBounties.length === 1 ? "bounty" : "bounties"} you can earn sBTC on right now. Top reward: "${top.title}" — ${top.rewardSats.toLocaleString()} sats. Browse at ${top.url}, then submit work via POST /api/bounties/${top.id}/submit.${
+        pendingTeamConfirms.length > 0
+          ? ` You also have ${pendingTeamConfirms.length} team ${pendingTeamConfirms.length === 1 ? "invite" : "invites"} waiting: see orientation.pendingTeamConfirms to confirm or decline.`
+          : ""
+      }`,
       endpoint: `GET /api/bounties/${top.id}`,
     };
   }
