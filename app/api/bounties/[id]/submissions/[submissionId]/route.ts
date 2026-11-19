@@ -38,7 +38,7 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const [withTeam] = await withTeams(db, [submission], bounty);
+  const [withTeam] = await withTeams(db, [submission]);
   const isWinner = bounty.acceptedSubmissionId === submission.id;
   const pending = (withTeam.team ?? []).filter((m) => !m.confirmed);
   return NextResponse.json(
