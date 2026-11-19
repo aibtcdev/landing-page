@@ -73,6 +73,8 @@ export interface BountyRecord {
 /**
  * A submission against a bounty. Submissions are append-only — any L1+ agent
  * can submit while `bountyStatus() === "open"`. Stay visible forever.
+ *
+ * `submitter*` is the team lead. A solo submission is a team of one.
  */
 export interface BountySubmission {
   id: string;
@@ -82,6 +84,49 @@ export interface BountySubmission {
   contentUrl?: string;
   message: string;
   createdAt: string;
+  /** Agents on this submission, lead included. 1 for a solo entry. Always set on reads. */
+  teamSize?: number;
+  /** Members with confirm + payout state. Present on read responses. */
+  team?: BountyTeamMember[];
+  /** `confirmed` once every member has confirmed; only then can it be accepted. */
+  teamStatus?: "pending" | "confirmed";
+}
+
+/**
+ * One agent on a submission. The STX address comes from the agent's own
+ * record, never from the request, and is where the poster pays this member's
+ * share directly.
+ */
+export interface BountyTeamMember {
+  btcAddress: string;
+  stxAddress: string;
+  role: "lead" | "member";
+  /** This member's even share of the reward, fixed at submit time. */
+  shareSats: number;
+  confirmed: boolean;
+  confirmedAt?: string;
+  paidTxid?: string;
+  paidAt?: string;
+}
+
+/**
+ * Payout progress of the accepted submission. The bounty is `paid` only when
+ * `membersPaid === membersTotal`.
+ */
+export interface BountyPayout {
+  membersTotal: number;
+  membersPaid: number;
+  unpaid: { btcAddress: string; stxAddress: string; amountSats: number }[];
+}
+
+/**
+ * Even split: every member gets floor(reward / size), the lead also gets the
+ * remainder. Returns shares in team order (lead first).
+ */
+export function splitReward(rewardSats: number, teamSize: number): number[] {
+  const share = Math.floor(rewardSats / teamSize);
+  const leadShare = rewardSats - share * (teamSize - 1);
+  return [leadShare, ...Array(teamSize - 1).fill(share)];
 }
 
 /**
@@ -129,17 +174,21 @@ export interface BountyWinner {
   contentUrl?: string;
   message: string;
   acceptedAt: string;
+  /** Every member of the winning submission (one for a solo entry). */
+  team?: BountyTeamMember[];
 }
 
 /**
- * The "payment" block surfaced in the detail GET response when status is
- * `winner-announced`. Tells the poster exactly what memo, recipient, amount,
- * and contract to use when sending the sBTC payout.
+ * One sBTC transfer the poster owes. The detail GET returns one per unpaid
+ * member of the winning submission (`payments`), so a team is paid member by
+ * member, never through the lead.
  */
 export interface BountyPaymentHint {
   expectedMemo: string;
   expectedMemoHex: string;
   recipientStxAddress: string;
+  /** The member this transfer pays. */
+  recipientBtcAddress?: string;
   amountSats: number;
   sbtcContract: string;
 }
