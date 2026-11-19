@@ -169,3 +169,28 @@ describe("entry lookups stay under D1's 100 bound parameters", () => {
     expect(Math.max(...bindCounts)).toBeLessThanOrEqual(100);
   });
 });
+
+describe("withTeams for a solo winner paid by older code", () => {
+  it("takes the payment from the bounty row when the lead row has none", async () => {
+    const db = {
+      prepare: () => ({
+        bind: () => ({
+          all: async () => ({
+            results: [{
+              submission_id: "s1", bounty_id: "b1", member_btc_address: LEAD, member_stx_address: "SPLEAD",
+              role: "lead", share_sats: 700, confirmed_at: "2026-11-19T00:00:00.000Z", paid_txid: null, paid_at: null,
+            }],
+          }),
+        }),
+      }),
+    } as unknown as D1Database;
+    const sub = {
+      id: "s1", bountyId: "b1", submitterBtcAddress: LEAD, submitterStxAddress: "SPLEAD",
+      message: "m", createdAt: "2026-11-19T00:00:00.000Z",
+    };
+    const [s] = await withTeams(db, [sub], {
+      rewardSats: 700, acceptedSubmissionId: "s1", paidTxid: "0xold", paidAt: "2026-11-19T02:00:00.000Z",
+    });
+    expect(s.team?.[0]).toMatchObject({ paidTxid: "0xold", paidAt: "2026-11-19T02:00:00.000Z" });
+  });
+});
