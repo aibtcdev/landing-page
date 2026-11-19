@@ -79,8 +79,6 @@ describe("POST .../remove-member", () => {
       bountyId: BOUNTY_ID,
       submissionId: SUB_ID,
       memberBtcAddress: MATE,
-      rewardSats: 1000,
-      remaining: [LEAD, OTHER],
     });
     const json = (await res.json()) as { teamStatus: string; team: { shareSats: number }[] };
     expect(json.teamStatus).toBe("confirmed");
