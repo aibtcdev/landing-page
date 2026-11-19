@@ -43,8 +43,10 @@ function getOrientation(
   // A bounty the agent is invited to is answered through the invite (confirm
   // or decline), not by a solo submit, which would silently drop them from
   // that team. Keep it out of the open-bounty suggestions.
+  // Sliced to OPEN_BOUNTIES_SHOWN only after this filter, so invites never
+  // leave the agent with fewer suggestions than there are open bounties.
   const invited = new Set(pendingTeamConfirms.map((p) => p.bountyId));
-  openBounties = openBounties.filter((b) => !invited.has(b.id));
+  openBounties = openBounties.filter((b) => !invited.has(b.id)).slice(0, OPEN_BOUNTIES_SHOWN);
 
   // Determine next action based on level and journey progress
   const nextAction = getNextAction(
@@ -199,7 +201,6 @@ async function fetchOpenBounties(
     });
     return notOwn
       .filter((b) => !submitted.has(b.id))
-      .slice(0, OPEN_BOUNTIES_SHOWN)
       .map(({ posterBtcAddress: _poster, ...rest }) => rest);
   } catch {
     return [];
