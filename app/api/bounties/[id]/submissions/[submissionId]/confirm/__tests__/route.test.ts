@@ -74,7 +74,12 @@ describe("POST /api/bounties/[id]/submissions/[submissionId]/confirm", () => {
     const res = await call();
     expect(res.status).toBe(200);
     expect(((await res.json()) as { teamStatus: string }).teamStatus).toBe("confirmed");
-    expect(confirmMemberMock).toHaveBeenCalledWith({}, SUB_ID, MATE, expect.any(String));
+    expect(confirmMemberMock).toHaveBeenCalledWith({}, {
+      bountyId: BOUNTY_ID,
+      submissionId: SUB_ID,
+      btcAddress: MATE,
+      confirmedAt: expect.any(String),
+    });
     // Their other pending invites on this bounty can no longer be confirmed.
     expect(dropInvitesMock).toHaveBeenCalledWith({}, BOUNTY_ID, MATE);
   });
@@ -89,6 +94,15 @@ describe("POST /api/bounties/[id]/submissions/[submissionId]/confirm", () => {
       ]]]));
     const res = await call();
     expect(((await res.json()) as { yourShareSats: number }).yourShareSats).toBe(500);
+  });
+
+  it("returns 422 bounty_closed when the bounty closed between the check and the write", async () => {
+    confirmMemberMock.mockResolvedValue(false);
+    listMembersMock.mockReset().mockResolvedValue(new Map([[SUB_ID, team(false)]]));
+    const res = await call();
+    expect(res.status).toBe(422);
+    expect(((await res.json()) as { error: string }).error).toBe("bounty_closed");
+    expect(dropInvitesMock).not.toHaveBeenCalled();
   });
 
   it("refuses with 409 already_entered when the teammate already has an entry on this bounty", async () => {
