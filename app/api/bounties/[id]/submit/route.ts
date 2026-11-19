@@ -32,8 +32,10 @@ import {
   bountyStatus,
   buildSubmitMessage,
   buildTeamConfirmMessage,
+  dropUnconfirmableInvites,
   enteredAgents,
   generateSubmissionId,
+  isOneEntryConflict,
   getBounty,
   insertSubmission,
   isWithinSignatureWindow,
@@ -309,7 +311,7 @@ export async function POST(
       // (bounty_id, member_btc_address) can only refuse the lead's own row:
       // the lead entered this bounty concurrently (a retried submit racing
       // the first). Any other failure is a storage failure.
-      if (String(e).includes("UNIQUE constraint failed: bounty_submission_members.bounty_id")) {
+      if (isOneEntryConflict(e)) {
         return NextResponse.json(
           {
             error: "already_submitted",
@@ -327,6 +329,12 @@ export async function POST(
         { status: 500 }
       );
     }
+
+    // The lead now has an entry here, so any pending invites naming them on
+    // this bounty can never be confirmed: drop them so those teams re-split.
+    await dropUnconfirmableInvites(db, bounty.id, submitter.btcAddress).catch((e) =>
+      logger.warn("bounty.drop_invites_failed", { error: String(e) })
+    );
 
     logger.info("bounty.submitted", {
       bountyId: bounty.id,
