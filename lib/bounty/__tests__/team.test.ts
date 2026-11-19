@@ -138,3 +138,34 @@ describe("withTeams for a submission stored without member rows", () => {
     expect(s.team?.[0]).toMatchObject({ paidTxid: "0xabc", paidAt: "2026-11-19T01:00:00.000Z" });
   });
 });
+
+import { listSubmissionsBySubmitter, submittedBountyIds } from "../d1-helpers";
+
+describe("entry lookups stay under D1's 100 bound parameters", () => {
+  function recordingDb() {
+    const bindCounts: number[] = [];
+    const db = {
+      prepare: () => ({
+        bind: (...args: unknown[]) => {
+          bindCounts.push(args.length);
+          return { all: async () => ({ results: [] }) };
+        },
+      }),
+    } as unknown as D1Database;
+    return { db, bindCounts };
+  }
+  const ids = Array.from({ length: 100 }, (_, i) => `b${i}`);
+
+  it("listSubmissionsBySubmitter chunks a 100-bounty page", async () => {
+    const { db, bindCounts } = recordingDb();
+    await listSubmissionsBySubmitter(db, LEAD, ids);
+    expect(bindCounts.length).toBeGreaterThan(1);
+    expect(Math.max(...bindCounts)).toBeLessThanOrEqual(100);
+  });
+
+  it("submittedBountyIds chunks too", async () => {
+    const { db, bindCounts } = recordingDb();
+    await submittedBountyIds(db, LEAD, ids);
+    expect(Math.max(...bindCounts)).toBeLessThanOrEqual(100);
+  });
+});
