@@ -33,8 +33,6 @@ export {
   DETAIL_SUBMISSIONS_PAGE,
   SBTC_CONTRACTS,
   SBTC_CONTRACT_MAINNET,
-  KV_PREFIXES,
-  PAID_TXID_TTL_SECONDS,
   SIGNATURE_MESSAGE_FORMATS,
   TEAM_MAX,
 } from "./constants";
@@ -81,6 +79,7 @@ export {
   insertSubmission,
   hasSubmission,
   enteredAgents,
+  ensureLeadMember,
   listMembers,
   withTeams,
   confirmMember,
@@ -90,8 +89,6 @@ export {
   recordSubmitAttempt,
   getSubmitAttemptCounts,
 } from "./d1-helpers";
-
-export { isTxidRedeemed, reserveTxid } from "./kv-helpers";
 
 export { generateBountyId, generateSubmissionId } from "./id";
 
