@@ -313,6 +313,15 @@ describe("POST /api/bounties/[id]/submit: team entries", () => {
     expect(recordSubmitAttemptMock).not.toHaveBeenCalled();
   });
 
+  it("does not report another member-table failure as a duplicate entry", async () => {
+    insertSubmissionMock.mockRejectedValue(
+      new Error("D1_ERROR: UNIQUE constraint failed: bounty_submission_members.submission_id, bounty_submission_members.member_btc_address")
+    );
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(500);
+    expect(recordSubmitAttemptMock).toHaveBeenCalledWith({}, BOUNTY_ID, SUBMITTER_BTC, "store_failed", expect.any(String));
+  });
+
   it("does not report another table's unique violation as a duplicate entry", async () => {
     insertSubmissionMock.mockRejectedValue(new Error("D1_ERROR: UNIQUE constraint failed: bounty_submissions.id"));
     const res = await call({ teammates: [MATE1_BTC] });
