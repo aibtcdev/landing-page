@@ -1,11 +1,13 @@
 /**
  * POST /api/bounties/[id]/paid
  *
- * Poster proves payment with an on-chain sBTC txid. Verification chain:
+ * Poster proves payment with an on-chain sBTC txid. The poster pays every
+ * member of the winning submission directly (a solo entry has one member),
+ * and each member's transfer is verified on its own. Verification chain:
  *   - txid not already redeemed by another bounty (cheap pre-check)
  *   - tx exists on Hiro, anchored, status=success
  *   - sBTC `transfer` contract call
- *   - sender = poster, recipient = winner, amount >= rewardSats
+ *   - sender = poster, recipient = an unpaid member, amount >= that member's share
  *   - memo = BNTY:{bountyId}  (the anti-fraud binding)
  *   - block_time in [acceptedAt - 60s, acceptedAt + PAY_GRACE_MS)
  *
@@ -13,6 +15,10 @@
  * is `abandoned` after acceptance and the verified payment tx itself landed
  * inside the pay-grace window (#1110). The canonical txid that Hiro returns is
  * what we store (not the raw input).
+ *
+ * One txid can pay several members (a contract call with one transfer each).
+ * The bounty flips to `paid` only once no member is left unpaid; until then
+ * the response's `payout.unpaid` lists who is still owed and how much.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -25,12 +31,13 @@ import {
   SIGNATURE_WINDOW_SECONDS,
   bountyStatus,
   buildPaidMessage,
+  buildPayout,
   getBounty,
-  getSubmission,
   isTxidRedeemed,
   isWithinSignatureWindow,
+  listMembers,
+  recordMemberPayments,
   reserveTxid,
-  setPaid,
   validatePaid,
   verifyPayoutTxid,
 } from "@/lib/bounty";
@@ -102,6 +109,16 @@ export async function POST(
     const status = bountyStatus(bounty);
     const isAbandonedAfterAccept =
       status === "abandoned" && Boolean(bounty.acceptedAt);
+    if (status === "paid") {
+      return NextResponse.json(
+        {
+          error: "already_paid",
+          message: "This bounty is already paid: every member's payment is verified.",
+          status,
+        },
+        { status: 409 }
+      );
+    }
     if (status !== "winner-announced" && !isAbandonedAfterAccept) {
       return NextResponse.json(
         {
@@ -120,11 +137,23 @@ export async function POST(
       );
     }
 
-    const acceptedSubmission = await getSubmission(db, bounty.acceptedSubmissionId);
-    if (!acceptedSubmission) {
+    const submissionId = bounty.acceptedSubmissionId;
+    const team = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
+    if (team.length === 0) {
       return NextResponse.json(
-        { error: "submission_not_found", message: "Accepted submission record missing." },
+        { error: "submission_not_found", message: "Accepted submission has no members on record." },
         { status: 500 }
+      );
+    }
+    const unpaid = team.filter((m) => !m.paidTxid);
+    if (unpaid.length === 0) {
+      return NextResponse.json(
+        {
+          error: "already_paid",
+          message: "Every member of the winning submission is already paid.",
+          payout: buildPayout(team),
+        },
+        { status: 409 }
       );
     }
 
@@ -145,7 +174,11 @@ export async function POST(
     const verify = await verifyPayoutTxid({
       txid: data.txid,
       bounty,
-      acceptedSubmission,
+      recipients: unpaid.map((m) => ({
+        btcAddress: m.btcAddress,
+        stxAddress: m.stxAddress,
+        amountSats: m.shareSats,
+      })),
       logger,
       hiroApiKey: env.HIRO_API_KEY,
       kv,
@@ -208,11 +241,18 @@ export async function POST(
       );
     }
 
-    let ok = false;
+    let recorded: { recorded: number; bountyPaid: boolean };
     try {
-      ok = await setPaid(db, bounty.id, verify.canonicalTxid, paidAt);
+      recorded = await recordMemberPayments(db, {
+        bountyId: bounty.id,
+        submissionId,
+        txid: verify.canonicalTxid,
+        paidAt,
+        payments: verify.matched.map((m) => ({ btcAddress: m.btcAddress, eventIndex: m.eventIndex })),
+      });
     } catch (e) {
-      // D1 unique partial index conflict — same canonical txid paid another bounty.
+      // Unique index conflict: this transfer is already recorded, or this
+      // canonical txid already completed another bounty.
       logger.warn("bounty.paid_unique_violation", {
         bountyId: bounty.id,
         canonicalTxid: verify.canonicalTxid,
@@ -221,14 +261,14 @@ export async function POST(
       return NextResponse.json(
         {
           error: "txid_already_redeemed",
-          message: "This canonical txid has already paid another bounty.",
+          message: "This transfer is already recorded, or this txid already paid another bounty.",
         },
         { status: 409 }
       );
     }
-    if (!ok) {
+    if (recorded.recorded === 0) {
       return NextResponse.json(
-        { error: "conflict", message: "Bounty state changed concurrently." },
+        { error: "conflict", message: "Bounty state changed concurrently. Re-fetch the bounty." },
         { status: 409 }
       );
     }
@@ -248,15 +288,31 @@ export async function POST(
       });
     }
 
-    logger.info("bounty.paid", {
+    logger.info(recorded.bountyPaid ? "bounty.paid" : "bounty.member_paid", {
       bountyId: bounty.id,
       canonicalTxid: verify.canonicalTxid,
       paidAt,
+      members: verify.matched.map((m) => m.btcAddress),
     });
 
     const fresh = await getBounty(db, bounty.id);
+    const freshTeam = (await listMembers(db, [submissionId])).get(submissionId) ?? team;
+    const payout = buildPayout(freshTeam);
     return NextResponse.json({
       bounty: { ...fresh, status: bountyStatus(fresh!) },
+      paidMembers: verify.matched.map((m) => ({
+        btcAddress: m.btcAddress,
+        stxAddress: m.stxAddress,
+        amountSats: m.amount,
+      })),
+      payout,
+      ...(verify.underpaid.length > 0 && { underpaid: verify.underpaid }),
+      message:
+        payout.unpaid.length === 0
+          ? "Every member is paid. The bounty is paid."
+          : `${payout.membersPaid} of ${payout.membersTotal} members paid. Still owed: ${payout.unpaid
+              .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
+              .join(", ")}. Send each with memo BNTY:${bounty.id}, then POST /paid with that txid.`,
     });
   } catch (e) {
     return NextResponse.json(
