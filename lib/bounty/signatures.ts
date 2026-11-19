@@ -77,8 +77,9 @@ export function buildSubmitMessage(params: {
 
 /**
  * Build the message a teammate signs to confirm they are on a team
- * submission. The team is fixed when the submission is stored, so signing for
- * this submissionId is agreeing to that exact team and its even split.
+ * submission. Signing for this submissionId is agreeing to that team and its
+ * even split. Nobody can be added after the submission is stored; a pending
+ * teammate leaving only raises the other shares.
  */
 export function buildTeamConfirmMessage(params: {
   bountyId: string;
