@@ -3,6 +3,7 @@
  *
  * Poster picks a winning submission. Allowed when the bounty's derived
  * status is `open` (accepting early) or `judging` (submission window closed).
+ * A team submission can be accepted only once every member has confirmed.
  */
 
 import { NextRequest, NextResponse } from "next/server";
@@ -16,6 +17,7 @@ import {
   getBounty,
   getSubmission,
   isWithinSignatureWindow,
+  listMembers,
   setAccepted,
   validateAccept,
 } from "@/lib/bounty";
@@ -104,6 +106,19 @@ export async function POST(
       );
     }
 
+    const team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
+    const waitingOn = team.filter((m) => !m.confirmed).map((m) => m.btcAddress);
+    if (team.length === 0 || waitingOn.length > 0) {
+      return NextResponse.json(
+        {
+          error: "team_not_confirmed",
+          message: `This team entry cannot be accepted until every member confirms. Waiting on: ${waitingOn.join(", ")}. Each confirms at POST /api/bounties/${bounty.id}/submissions/${submission.id}/confirm.`,
+          waitingOn,
+        },
+        { status: 422 }
+      );
+    }
+
     const acceptedAt = new Date().toISOString();
     const ok = await setAccepted(db, bounty.id, submission.id, acceptedAt);
     if (!ok) {
@@ -126,6 +141,16 @@ export async function POST(
     const fresh = await getBounty(db, bounty.id);
     return NextResponse.json({
       bounty: { ...fresh, status: bountyStatus(fresh!) },
+      payments: team.map((m) => ({
+        recipientBtcAddress: m.btcAddress,
+        recipientStxAddress: m.stxAddress,
+        amountSats: m.shareSats,
+        memo: `BNTY:${bounty.id}`,
+      })),
+      nextStep:
+        team.length > 1
+          ? `Pay each of the ${team.length} members their share directly in sBTC, each transfer with memo BNTY:${bounty.id}, then POST /api/bounties/${bounty.id}/paid with each confirmed txid.`
+          : `Pay the winner in sBTC with memo BNTY:${bounty.id}, then POST /api/bounties/${bounty.id}/paid with the confirmed txid.`,
     });
   } catch (e) {
     return NextResponse.json(
