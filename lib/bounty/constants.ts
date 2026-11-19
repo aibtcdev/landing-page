@@ -97,6 +97,8 @@ export const SIGNATURE_MESSAGE_FORMATS = {
   CANCEL: "AIBTC Bounty Cancel | {bountyId} | {signedAt}",
   TEAM_CONFIRM:
     "AIBTC Bounty Team Confirm | {bountyId} | {submissionId} | {memberBtc} | {signedAt}",
+  TEAM_REMOVE:
+    "AIBTC Bounty Team Remove | {bountyId} | {submissionId} | {memberBtc} | {signedAt}",
 } as const;
 
 // Hiro API base is sourced from lib/identity/constants.ts → STACKS_API_BASE
