@@ -490,23 +490,24 @@ export async function recordMemberPayments(
       payCutoff,
       params.submissionId
     );
-  const results = await db.batch([...memberWrites, bountyWrite]);
+  // A partial payout still changes what the bounty shows, so clients syncing
+  // on updatedAt must see it. In the same batch, and only if a member row now
+  // carries this payment (so a call that recorded nothing changes nothing).
+  const touch = db
+    .prepare(
+      `UPDATE bounties SET updated_at = ?
+       WHERE id = ? AND EXISTS (
+         SELECT 1 FROM bounty_submission_members
+         WHERE submission_id = ? AND paid_txid = ? AND paid_at = ?
+       )`
+    )
+    .bind(nowIso, params.bountyId, params.submissionId, params.txid, params.paidAt);
+  const results = await db.batch([...memberWrites, touch, bountyWrite]);
   const recordedMembers = params.payments
     .filter((_, i) => (results[i].meta?.changes ?? 0) > 0)
     .map((p) => p.btcAddress);
   const recorded = recordedMembers.length;
-  const bountyPaid = (results[memberWrites.length].meta?.changes ?? 0) > 0;
-  // A partial payout still changes what the bounty shows, so clients syncing
-  // on updatedAt must see it; a call that recorded nothing changes nothing.
-  if (recorded > 0 && !bountyPaid) {
-    // Best-effort: the payments are already committed above, so a failure
-    // here must not be reported as a failed payout.
-    await db
-      .prepare(`UPDATE bounties SET updated_at = ? WHERE id = ?`)
-      .bind(nowIso, params.bountyId)
-      .run()
-      .catch(() => {});
-  }
+  const bountyPaid = (results[memberWrites.length + 1].meta?.changes ?? 0) > 0;
   return { recorded, recordedMembers, bountyPaid };
 }
 
