@@ -15,6 +15,7 @@ import {
   bountyStatus,
   buildAcceptMessage,
   getBounty,
+  ensureLeadMember,
   getSubmission,
   isWithinSignatureWindow,
   listMembers,
@@ -106,7 +107,12 @@ export async function POST(
       );
     }
 
-    const team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
+    let team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
+    if (team.length === 0) {
+      // A solo entry stored by older code has no member rows yet.
+      await ensureLeadMember(db, submission, bounty.rewardSats);
+      team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
+    }
     const waitingOn = team.filter((m) => !m.confirmed).map((m) => m.btcAddress);
     if (team.length === 0 || waitingOn.length > 0) {
       return NextResponse.json(
