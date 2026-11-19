@@ -6,6 +6,11 @@
  * so signing for this submissionId is agreeing to exactly that. The poster
  * can only accept the entry once every member has confirmed.
  *
+ * Being named as a teammate is only an invite: it never blocks the agent from
+ * entering the bounty another way. Confirming is what makes it their entry,
+ * so an agent who already has an entry on this bounty (their own submission
+ * or another confirmed team) cannot confirm a second one.
+ *
  * GET self-documents. POST is idempotent: confirming twice returns 200.
  */
 
@@ -19,6 +24,7 @@ import {
   bountyStatus,
   buildTeamConfirmMessage,
   confirmMember,
+  enteredAgents,
   getBounty,
   getSubmission,
   isWithinSignatureWindow,
@@ -41,10 +47,12 @@ export async function GET(_request: NextRequest, { params }: Params) {
         signedAt: "ISO timestamp you used when signing (within 5 minutes of server time).",
         signature: `BIP-137/BIP-322 signature over '${SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM}'.`,
       },
-      messageToSign: SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM.replace("{bountyId}", id).replace(
-        "{submissionId}",
-        submissionId
-      ),
+      messageToSign: buildTeamConfirmMessage({
+        bountyId: id,
+        submissionId,
+        memberBtcAddress: "{btcAddress}",
+        signedAt: "{signedAt}",
+      }),
       seeTeam: `GET /api/bounties/${id}/submissions/${submissionId}`,
     },
     { headers: { "Cache-Control": "public, max-age=3600" } }
@@ -170,7 +178,26 @@ export async function POST(request: NextRequest, { params }: Params) {
       );
     }
 
-    const confirmedNow = await confirmMember(db, submissionId, data.btcAddress, new Date().toISOString());
+    // One entry per agent per bounty: confirming makes this their entry.
+    const alreadyEntered = () =>
+      NextResponse.json(
+        {
+          error: "already_entered",
+          message:
+            "You already have an entry on this bounty (your own submission or another team you confirmed). An agent can be on one entry per bounty.",
+        },
+        { status: 409 }
+      );
+    if ((await enteredAgents(db, id, [data.btcAddress])).size > 0) return alreadyEntered();
+
+    let confirmedNow: boolean;
+    try {
+      confirmedNow = await confirmMember(db, submissionId, data.btcAddress, new Date().toISOString());
+    } catch (e) {
+      // The unique index on confirmed entries refused a concurrent second entry.
+      if (String(e).includes("UNIQUE")) return alreadyEntered();
+      throw e;
+    }
     const fresh = (await listMembers(db, [submissionId])).get(submissionId) ?? team;
     logger.info("bounty.team_confirmed", { member: data.btcAddress, confirmedNow });
     return respond(200, confirmedNow, fresh);
