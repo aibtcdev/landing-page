@@ -363,9 +363,33 @@ describe("POST /api/bounties/[id]/paid: team payouts", () => {
     const blockTimeIso = new Date(Date.parse(bounty.acceptedAt!) + 3_600_000).toISOString();
     getBountyMock.mockResolvedValue(bounty);
     verifyPayoutTxidMock.mockResolvedValue(verifiedSolo(blockTimeIso));
-    recordMemberPaymentsMock.mockRejectedValue(new Error("UNIQUE constraint failed"));
+    recordMemberPaymentsMock.mockRejectedValue(
+      new Error("D1_ERROR: UNIQUE constraint failed: bounty_submission_members.paid_txid, bounty_submission_members.paid_event_index")
+    );
     const res = await POST(paidRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
     expect(res.status).toBe(409);
     expect(((await res.json()) as { error: string }).error).toBe("txid_already_redeemed");
+  });
+
+  it("answers 500, not a duplicate, when recording fails for another reason", async () => {
+    const bounty = makeBounty();
+    const blockTimeIso = new Date(Date.parse(bounty.acceptedAt!) + 3_600_000).toISOString();
+    getBountyMock.mockResolvedValue(bounty);
+    verifyPayoutTxidMock.mockResolvedValue(verifiedSolo(blockTimeIso));
+    recordMemberPaymentsMock.mockRejectedValue(new Error("D1_ERROR: database is locked"));
+    const res = await POST(paidRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
+    expect(res.status).toBe(500);
+  });
+
+  it("stores a missing event index as -1 so the per-transfer unique index still applies", async () => {
+    const bounty = makeBounty();
+    const blockTimeIso = new Date(Date.parse(bounty.acceptedAt!) + 3_600_000).toISOString();
+    getBountyMock.mockResolvedValue(bounty);
+    verifyPayoutTxidMock.mockResolvedValue({
+      ...verifiedSolo(blockTimeIso),
+      matched: [{ btcAddress: WINNER_BTC, stxAddress: WINNER_STX, eventIndex: null, amount: 5000 }],
+    });
+    await POST(paidRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
+    expect(recordMemberPaymentsMock.mock.calls[0][1].payments).toEqual([{ btcAddress: WINNER_BTC, eventIndex: -1 }]);
   });
 });
