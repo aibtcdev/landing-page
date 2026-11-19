@@ -996,3 +996,23 @@ describe("verifyPayoutTxid team payouts", () => {
     if (r.ok) expect(r.matched.map((m) => m.btcAddress)).toEqual(["bc1qlead"]);
   });
 });
+
+describe("verifyPayoutTxid underpaid only counts this bounty's transfers", () => {
+  it("a smaller transfer to a member for ANOTHER bounty is not reported as underpaid here", async () => {
+    const partner: PayoutRecipient = { btcAddress: "bc1qpartner", stxAddress: OTHER_STX, amountSats: 2500 };
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [partner],
+      fetchFn: mockFetch({
+        json: () =>
+          makeRoutedTx([
+            ftEvent(0, POSTER_STX, OTHER_STX, 1000),
+            memoPrint(1, SBTC_CONTRACT_MAINNET, "01HNX7OTHER"),
+          ]),
+      }),
+    });
+    // Not AMOUNT_TOO_LOW: the only transfer to the partner is bound to another bounty.
+    expect(r).toMatchObject({ ok: false, code: "MEMO_MISMATCH" });
+  });
+});
