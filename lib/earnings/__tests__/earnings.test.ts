@@ -118,7 +118,7 @@ function classifyDb(rows: { inbox?: unknown; bounty?: unknown; agent?: unknown }
         first: vi.fn().mockResolvedValue(
           sql.includes("inbox_messages")
             ? rows.inbox ?? null
-            : sql.includes("bounties")
+            : sql.includes("bounty_submission_members")
               ? rows.bounty ?? null
               : sql.includes("agents")
                 ? rows.agent ?? null
