@@ -40,6 +40,12 @@ function getOrientation(
   const levelInfo = getAgentLevel(agent, claim);
   const displayName = agent.displayName || generateName(agent.btcAddress);
 
+  // A bounty the agent is invited to is answered through the invite (confirm
+  // or decline), not by a solo submit, which would silently drop them from
+  // that team. Keep it out of the open-bounty suggestions.
+  const invited = new Set(pendingTeamConfirms.map((p) => p.bountyId));
+  openBounties = openBounties.filter((b) => !invited.has(b.id));
+
   // Determine next action based on level and journey progress
   const nextAction = getNextAction(
     levelInfo.level,
