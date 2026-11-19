@@ -14,6 +14,7 @@ const getSubmissionMock = vi.fn();
 const listMembersMock = vi.fn();
 const enteredAgentsMock = vi.fn();
 const confirmMemberMock = vi.fn();
+const dropInvitesMock = vi.fn();
 vi.mock("@/lib/bounty", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/lib/bounty")>();
   return {
@@ -23,6 +24,7 @@ vi.mock("@/lib/bounty", async (importOriginal) => {
     listMembers: (...args: unknown[]) => listMembersMock(...args),
     enteredAgents: (...args: unknown[]) => enteredAgentsMock(...args),
     confirmMember: (...args: unknown[]) => confirmMemberMock(...args),
+    dropUnconfirmableInvites: (...args: unknown[]) => dropInvitesMock(...args),
   };
 });
 
@@ -64,6 +66,7 @@ beforeEach(() => {
     .mockResolvedValue(new Map([[SUB_ID, team(true)]]));
   enteredAgentsMock.mockResolvedValue(new Set());
   confirmMemberMock.mockResolvedValue(true);
+  dropInvitesMock.mockResolvedValue(0);
 });
 
 describe("POST /api/bounties/[id]/submissions/[submissionId]/confirm", () => {
@@ -72,6 +75,8 @@ describe("POST /api/bounties/[id]/submissions/[submissionId]/confirm", () => {
     expect(res.status).toBe(200);
     expect(((await res.json()) as { teamStatus: string }).teamStatus).toBe("confirmed");
     expect(confirmMemberMock).toHaveBeenCalledWith({}, SUB_ID, MATE, expect.any(String));
+    // Their other pending invites on this bounty can no longer be confirmed.
+    expect(dropInvitesMock).toHaveBeenCalledWith({}, BOUNTY_ID, MATE);
   });
 
   it("refuses with 409 already_entered when the teammate already has an entry on this bounty", async () => {
