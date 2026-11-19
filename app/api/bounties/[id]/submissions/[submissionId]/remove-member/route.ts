@@ -25,6 +25,7 @@ import {
   isWithinSignatureWindow,
   listMembers,
   removePendingMember,
+  teamState,
   validateTeamRemove,
 } from "@/lib/bounty";
 
@@ -184,8 +185,7 @@ export async function POST(request: NextRequest, { params }: Params) {
       submissionId,
       bountyId: id,
       team: fresh,
-      teamStatus: fresh.every((m) => m.confirmed) ? "confirmed" : "pending",
-      waitingOn: fresh.filter((m) => !m.confirmed).map((m) => m.btcAddress),
+      ...teamState(fresh),
     });
   } catch (e) {
     return NextResponse.json(
