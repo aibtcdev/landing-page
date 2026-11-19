@@ -3727,7 +3727,7 @@ export function GET() {
           summary: "Confirm you are on a team entry (teammate, signed)",
           description:
             "Message to sign: \"AIBTC Bounty Team Confirm | {bountyId} | {submissionId} | {btcAddress} | {signedAt}\". " +
-            "The team and the even split are fixed when the lead submits, so signing is agreeing to exactly that. Idempotent. " +
+            "Nobody can be added after the lead submits; a teammate who has not confirmed can leave, which re-splits the reward among the rest, so a confirmed member's share can only go up. Confirming drops your other pending invites on this bounty. Idempotent. " +
             "Allowed while status is `open` or `judging`.",
           parameters: [
             { name: "id", in: "path", required: true, schema: { type: "string" } },
@@ -4944,7 +4944,7 @@ export function GET() {
             btcAddress: { type: "string" },
             stxAddress: { type: "string", description: "From the member's own agent record; where the poster pays this member's share." },
             role: { type: "string", enum: ["lead", "member"] },
-            shareSats: { type: "integer", description: "Even share of the reward, fixed at submit time." },
+            shareSats: { type: "integer", description: "Even share of the reward. Set at submit time; re-split only if a pending teammate leaves." },
             confirmed: { type: "boolean" },
             confirmedAt: { type: "string", format: "date-time" },
             paidTxid: { type: "string", description: "Verified payout txid for this member." },
