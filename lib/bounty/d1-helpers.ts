@@ -431,7 +431,7 @@ export async function recordMemberPayments(
     txid: string;
     /** Verified on-chain block time of the payment. */
     paidAt: string;
-    payments: { btcAddress: string; eventIndex: number | null }[];
+    payments: { btcAddress: string; eventIndex: number | null; amountSats: number }[];
   }
 ): Promise<{ recordedMembers: string[]; bountyPaid: boolean }> {
   const payCutoff = new Date(Date.parse(params.paidAt) - PAY_GRACE_MS).toISOString();
@@ -445,13 +445,14 @@ export async function recordMemberPayments(
     db
       .prepare(
         `UPDATE bounty_submission_members
-         SET paid_txid = ?, paid_event_index = ?, paid_at = ?
+         SET paid_txid = ?, paid_event_index = ?, paid_amount_sats = ?, paid_at = ?
          WHERE submission_id = ? AND member_btc_address = ? AND paid_txid IS NULL
            AND ${bountyAcceptedUnpaid}`
       )
       .bind(
         params.txid,
         p.eventIndex,
+        p.amountSats,
         params.paidAt,
         params.submissionId,
         p.btcAddress,
@@ -620,18 +621,19 @@ export async function listSubmissionsBySubmitter(
   // entriesSql binds its lists twice (one per UNION half); chunk the bounty
   // ids so a page of up to 100 bounties stays under D1's 100-parameter limit.
   const chunks = bountyIds ? chunk(bountyIds, MAX_IDS_PER_QUERY) : [undefined];
-  const out: BountySubmission[] = [];
-  for (const ids of chunks) {
-    const q = entriesSql([submitterBtcAddress], ids);
-    const rows = await db
-      .prepare(
-        `SELECT ${SUBMISSION_COLUMNS} FROM bounty_submissions
-         WHERE id IN (SELECT submission_id FROM (${q.sql}))`
-      )
-      .bind(...q.bindings)
-      .all<D1SubmissionRow>();
-    out.push(...(rows.results ?? []).map(rowToSubmission));
-  }
+  const pages = await Promise.all(
+    chunks.map((ids) => {
+      const q = entriesSql([submitterBtcAddress], ids);
+      return db
+        .prepare(
+          `SELECT ${SUBMISSION_COLUMNS} FROM bounty_submissions
+           WHERE id IN (SELECT submission_id FROM (${q.sql}))`
+        )
+        .bind(...q.bindings)
+        .all<D1SubmissionRow>();
+    })
+  );
+  const out = pages.flatMap((rows) => (rows.results ?? []).map(rowToSubmission));
   return out.sort((a, b) => (a.createdAt < b.createdAt ? 1 : a.createdAt > b.createdAt ? -1 : 0));
 }
 
@@ -806,6 +808,9 @@ export async function listMembers(
   return out;
 }
 
+/** The bounty fields withTeams needs. */
+type TeamBounty = Pick<BountyRecord, "rewardSats" | "acceptedSubmissionId" | "paidTxid" | "paidAt">;
+
 /** THE rule for a team's state: confirmed once every member has confirmed. */
 export function teamState(team: BountyTeamMember[]): {
   teamStatus: "pending" | "confirmed";
@@ -828,15 +833,22 @@ export function teamState(team: BountyTeamMember[]): {
 export async function withTeams(
   db: D1Database,
   submissions: BountySubmission[],
-  bounty: Pick<BountyRecord, "rewardSats" | "acceptedSubmissionId" | "paidTxid" | "paidAt">
+  bountyOf: TeamBounty | ((s: BountySubmission) => TeamBounty | undefined)
 ): Promise<BountySubmission[]> {
   const teams = await listMembers(db, submissions.map((s) => s.id));
   return submissions.map((s) => {
+    const bounty = typeof bountyOf === "function" ? bountyOf(s) : bountyOf;
     const stored = teams.get(s.id) ?? [];
+    if (!bounty) return { ...s, teamSize: stored.length || 1, team: stored, teamStatus: teamState(stored).teamStatus };
     const isPaidWinner = bounty.acceptedSubmissionId === s.id && bounty.paidTxid;
+    // A solo winner paid by older code (bounty row only) after its lead row
+    // was backfilled: take the payment from the bounty row.
+    const solo = stored.length === 1 && isPaidWinner && !stored[0].paidTxid
+      ? [{ ...stored[0], paidTxid: bounty.paidTxid, ...(bounty.paidAt && { paidAt: bounty.paidAt }) }]
+      : stored;
     const team: BountyTeamMember[] =
-      stored.length > 0
-        ? stored
+      solo.length > 0
+        ? solo
         : [
             {
               btcAddress: s.submitterBtcAddress,
@@ -1082,13 +1094,13 @@ export async function submittedBountyIds(
   bountyIds: string[]
 ): Promise<Set<string>> {
   if (bountyIds.length === 0) return new Set();
-  const out = new Set<string>();
-  for (const ids of chunk(bountyIds, MAX_IDS_PER_QUERY)) {
-    const q = entriesSql([submitterBtcAddress], ids);
-    const { results } = await db.prepare(q.sql).bind(...q.bindings).all<{ bounty_id: string }>();
-    for (const r of results ?? []) out.add(r.bounty_id);
-  }
-  return out;
+  const pages = await Promise.all(
+    chunk(bountyIds, MAX_IDS_PER_QUERY).map((ids) => {
+      const q = entriesSql([submitterBtcAddress], ids);
+      return db.prepare(q.sql).bind(...q.bindings).all<{ bounty_id: string }>();
+    })
+  );
+  return new Set(pages.flatMap((p) => (p.results ?? []).map((r) => r.bounty_id)));
 }
 
 // ── Submit attempts (#1040) ───────────────────────────────────────────────
