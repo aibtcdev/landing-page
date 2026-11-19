@@ -305,10 +305,11 @@ export async function POST(
     try {
       await insertSubmission(db, submission, nowIso, members);
     } catch (e) {
-      // Teammates are stored unconfirmed, so the unique index on confirmed
-      // entries can only refuse the lead's own row: the lead entered this
-      // bounty concurrently (e.g. a retried submit racing the first).
-      if (String(e).includes("bounty_submission_members")) {
+      // Teammates are stored unconfirmed, so the one-entry unique index
+      // (bounty_id, member_btc_address) can only refuse the lead's own row:
+      // the lead entered this bounty concurrently (a retried submit racing
+      // the first). Any other failure is a storage failure.
+      if (String(e).includes("UNIQUE constraint failed: bounty_submission_members.bounty_id")) {
         return NextResponse.json(
           {
             error: "already_submitted",
