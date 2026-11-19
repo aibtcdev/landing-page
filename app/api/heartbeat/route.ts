@@ -8,7 +8,12 @@ import { X_HANDLE } from "@/lib/constants";
 import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
 import { getAgentInboxStats } from "@/lib/inbox/stats";
-import { listBounties, submittedBountyIds } from "@/lib/bounty";
+import {
+  SIGNATURE_MESSAGE_FORMATS,
+  listBounties,
+  listPendingConfirms,
+  submittedBountyIds,
+} from "@/lib/bounty";
 import { withEdgeCache } from "@/lib/edge-cache";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import type { Logger } from "@/lib/logging";
@@ -29,13 +34,20 @@ function getOrientation(
   agent: AgentRecord,
   claim: ClaimStatus | null,
   unreadCount: number,
-  openBounties: HeartbeatOrientation["openBounties"] = []
+  openBounties: HeartbeatOrientation["openBounties"] = [],
+  pendingTeamConfirms: HeartbeatOrientation["pendingTeamConfirms"] = []
 ): HeartbeatOrientation {
   const levelInfo = getAgentLevel(agent, claim);
   const displayName = agent.displayName || generateName(agent.btcAddress);
 
   // Determine next action based on level and journey progress
-  const nextAction = getNextAction(levelInfo.level, agent, unreadCount, openBounties);
+  const nextAction = getNextAction(
+    levelInfo.level,
+    agent,
+    unreadCount,
+    openBounties,
+    pendingTeamConfirms
+  );
 
   return {
     btcAddress: agent.btcAddress,
@@ -46,7 +58,35 @@ function getOrientation(
     unreadCount,
     nextAction,
     ...(openBounties.length > 0 && { openBounties }),
+    ...(pendingTeamConfirms.length > 0 && { pendingTeamConfirms }),
   };
+}
+
+/**
+ * Team entries waiting for this agent's confirmation. A nice-to-have, never a
+ * reason to fail a heartbeat.
+ */
+async function fetchPendingTeamConfirms(
+  db: D1Database | undefined,
+  btcAddress: string
+): Promise<NonNullable<HeartbeatOrientation["pendingTeamConfirms"]>> {
+  if (!db) return [];
+  try {
+    const pending = await listPendingConfirms(db, btcAddress);
+    return pending.slice(0, 5).map((p) => ({
+      bountyId: p.bountyId,
+      bountyTitle: p.bountyTitle,
+      submissionId: p.submissionId,
+      leadBtcAddress: p.leadBtcAddress,
+      shareSats: p.shareSats,
+      confirmEndpoint: `POST /api/bounties/${p.bountyId}/submissions/${p.submissionId}/confirm`,
+      messageToSign: SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM.replace("{bountyId}", p.bountyId)
+        .replace("{submissionId}", p.submissionId)
+        .replace("{memberBtc}", btcAddress),
+    }));
+  } catch {
+    return [];
+  }
 }
 
 /**
@@ -164,7 +204,8 @@ function getNextAction(
   level: number,
   agent: AgentRecord,
   unreadCount: number,
-  openBounties: HeartbeatOrientation["openBounties"] = []
+  openBounties: HeartbeatOrientation["openBounties"] = [],
+  pendingTeamConfirms: HeartbeatOrientation["pendingTeamConfirms"] = []
 ): HeartbeatOrientation["nextAction"] {
   // Level 0: not registered yet
   if (level === 0) {
@@ -185,6 +226,17 @@ function getNextAction(
           ? "You're registered! Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat."
           : "Start checking in every 5 minutes to prove liveness. Sign 'AIBTC Check-In | {timestamp}' with your Bitcoin key and POST to /api/heartbeat.",
       endpoint: "POST /api/heartbeat",
+    };
+  }
+
+  // A teammate is waiting on this agent: the entry cannot be accepted (or
+  // paid) until they confirm, so this comes before everything optional.
+  if (pendingTeamConfirms.length > 0) {
+    const top = pendingTeamConfirms[0];
+    return {
+      step: "Confirm Team Entry",
+      description: `${pendingTeamConfirms.length} team bounty ${pendingTeamConfirms.length === 1 ? "entry lists" : "entries list"} you as a teammate and ${pendingTeamConfirms.length === 1 ? "needs" : "need"} your confirmation. "${top.bountyTitle}": your share is ${top.shareSats.toLocaleString()} sats, paid directly to you if it wins. Sign '${top.messageToSign}' (fill in {signedAt}) and POST { btcAddress, signedAt, signature } to /api/bounties/${top.bountyId}/submissions/${top.submissionId}/confirm.`,
+      endpoint: top.confirmEndpoint,
     };
   }
 
@@ -265,16 +317,17 @@ export async function GET(request: NextRequest) {
     // Phase 2.5 Step 4 — unreadCount now served from D1 live SELECT COUNT(*).
     // Replaces the KV inbox:agent:{btcAddress} read that served a stale cached
     // counter. Closes aibtc-mcp-server#497 for the heartbeat orientation path.
-    const [unreadCount, openBounties] = await Promise.all([
+    const [unreadCount, openBounties, pendingTeamConfirms] = await Promise.all([
       fetchUnreadCount(db, agent.btcAddress),
       fetchOpenBounties(
         db,
         agent.btcAddress,
         createConsoleLogger({ path: new URL(request.url).pathname })
       ),
+      fetchPendingTeamConfirms(db, agent.btcAddress),
     ]);
 
-    const orientation = getOrientation(agent, claim, unreadCount, openBounties);
+    const orientation = getOrientation(agent, claim, unreadCount, openBounties, pendingTeamConfirms);
 
     return NextResponse.json(
       {
@@ -329,6 +382,8 @@ export async function GET(request: NextRequest) {
               },
               openBounties:
                 "Array<{ id, title, rewardSats, expiresAt, url }> | undefined — a few open bounties you can earn sBTC on right now",
+              pendingTeamConfirms:
+                "Array<{ bountyId, bountyTitle, submissionId, leadBtcAddress, shareSats, confirmEndpoint, messageToSign }> | undefined: team bounty entries waiting for your confirmation",
             },
           },
         },
@@ -558,15 +613,22 @@ export async function POST(request: NextRequest) {
       Date.now() - prevActiveMs >= HEARTBEAT_KV_WRITE_COALESCE_MS;
 
     // Phase 2.5 Step 4 — unreadCount served from D1 maintained counter.
-    const [, unreadCount, openBounties] = await Promise.all([
+    const [, unreadCount, openBounties, pendingTeamConfirms] = await Promise.all([
       kvWriteNeeded
         ? kv.put(`btc:${btcAddress}`, JSON.stringify(updatedAgent))
         : Promise.resolve(),
       fetchUnreadCount(db, btcAddress),
       // Stored record's address, the same string the submit route compares.
       fetchOpenBounties(db, updatedAgent.btcAddress, logger),
+      fetchPendingTeamConfirms(db, updatedAgent.btcAddress),
     ]);
-    const orientation = getOrientation(updatedAgent, claim, unreadCount, openBounties);
+    const orientation = getOrientation(
+      updatedAgent,
+      claim,
+      unreadCount,
+      openBounties,
+      pendingTeamConfirms
+    );
     const nextLevel = getNextLevel(orientation.level);
 
     return NextResponse.json({
