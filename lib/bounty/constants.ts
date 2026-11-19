@@ -36,6 +36,12 @@ export const MIN_EXPIRY_HOURS = 1;
 /** Maximum expiry — 365 days from now. */
 export const MAX_EXPIRY_DAYS = 365;
 
+/**
+ * Max agents on one submission, lead included. The reward is split evenly
+ * across the team and the poster pays each member directly.
+ */
+export const TEAM_MAX = 5;
+
 /** Minimum participant level (Registered). Applies to both posters and submitters. */
 export const MIN_SUBMITTER_LEVEL = 1;
 
@@ -98,6 +104,8 @@ export const SIGNATURE_MESSAGE_FORMATS = {
   ACCEPT: "AIBTC Bounty Accept | {bountyId} | {submissionId} | {signedAt}",
   PAID: "AIBTC Bounty Paid | {bountyId} | {txid} | {signedAt}",
   CANCEL: "AIBTC Bounty Cancel | {bountyId} | {signedAt}",
+  TEAM_CONFIRM:
+    "AIBTC Bounty Team Confirm | {bountyId} | {submissionId} | {memberBtc} | {signedAt}",
 } as const;
 
 // Hiro API base is sourced from lib/identity/constants.ts → STACKS_API_BASE
