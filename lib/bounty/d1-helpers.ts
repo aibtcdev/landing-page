@@ -749,37 +749,6 @@ export async function enteredAgents(
   return new Set((results ?? []).map((r) => r.agent));
 }
 
-/**
- * Give a submission that has no member rows its lead row. Covers a
- * submission stored by older code after migration 032 ran but before this
- * code deployed. Marked legacy, like the migration backfill. A no-op when
- * the row exists.
- */
-export async function ensureLeadMember(
-  db: D1Database,
-  submission: BountySubmission,
-  rewardSats: number
-): Promise<void> {
-  await db
-    .prepare(
-      `INSERT OR IGNORE INTO bounty_submission_members
-         (submission_id, bounty_id, member_btc_address, member_stx_address, role,
-          share_sats, confirmed_at, legacy)
-       SELECT ?, ?, ?, ?, 'lead', ?, ?, 1
-       WHERE NOT EXISTS (SELECT 1 FROM bounty_submission_members WHERE submission_id = ?)`
-    )
-    .bind(
-      submission.id,
-      submission.bountyId,
-      submission.submitterBtcAddress,
-      submission.submitterStxAddress,
-      rewardSats,
-      submission.createdAt,
-      submission.id
-    )
-    .run();
-}
-
 /** Team members of each submission, lead first, keyed by submission id. */
 export async function listMembers(
   db: D1Database,
@@ -810,9 +779,6 @@ export async function listMembers(
   return out;
 }
 
-/** The bounty fields withTeams needs. */
-type TeamBounty = Pick<BountyRecord, "rewardSats" | "acceptedSubmissionId" | "paidTxid" | "paidAt">;
-
 /** THE rule for a team's state: confirmed once every member has confirmed. */
 export function teamState(team: BountyTeamMember[]): {
   teamStatus: "pending" | "confirmed";
@@ -822,47 +788,14 @@ export function teamState(team: BountyTeamMember[]): {
   return { teamStatus: waitingOn.length === 0 ? "confirmed" : "pending", waitingOn };
 }
 
-/**
- * Attach `team`, `teamSize` and `teamStatus` to submissions of one bounty (one
- * query for the page).
- *
- * The one read-side place for a submission stored by older code without
- * member rows (after migration 032, before this code deployed): it is shown
- * as the solo entry it is, the lead with the whole reward, paid if the bounty
- * row says so. Built in memory; reads never write. Writes that need the row
- * (accept, paid) create it with ensureLeadMember.
- */
+/** Attach `team`, `teamSize` and `teamStatus` to submissions (one query for the page). */
 export async function withTeams(
   db: D1Database,
-  submissions: BountySubmission[],
-  bountyOf: TeamBounty | ((s: BountySubmission) => TeamBounty | undefined)
+  submissions: BountySubmission[]
 ): Promise<BountySubmission[]> {
   const teams = await listMembers(db, submissions.map((s) => s.id));
   return submissions.map((s) => {
-    const bounty = typeof bountyOf === "function" ? bountyOf(s) : bountyOf;
-    const stored = teams.get(s.id) ?? [];
-    if (!bounty) return { ...s, teamSize: stored.length || 1, team: stored, teamStatus: teamState(stored).teamStatus };
-    const isPaidWinner = bounty.acceptedSubmissionId === s.id && bounty.paidTxid;
-    // A solo winner paid by older code (bounty row only) after its lead row
-    // was backfilled: take the payment from the bounty row.
-    const solo = stored.length === 1 && isPaidWinner && !stored[0].paidTxid
-      ? [{ ...stored[0], paidTxid: bounty.paidTxid, ...(bounty.paidAt && { paidAt: bounty.paidAt }) }]
-      : stored;
-    const team: BountyTeamMember[] =
-      solo.length > 0
-        ? solo
-        : [
-            {
-              btcAddress: s.submitterBtcAddress,
-              stxAddress: s.submitterStxAddress,
-              role: "lead",
-              shareSats: bounty.rewardSats,
-              confirmed: true,
-              confirmedAt: s.createdAt,
-              ...(isPaidWinner && { paidTxid: bounty.paidTxid }),
-              ...(isPaidWinner && bounty.paidAt && { paidAt: bounty.paidAt }),
-            },
-          ];
+    const team = teams.get(s.id) ?? [];
     return { ...s, teamSize: team.length, team, teamStatus: teamState(team).teamStatus };
   });
 }
