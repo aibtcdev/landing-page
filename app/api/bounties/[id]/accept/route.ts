@@ -3,9 +3,11 @@
  *
  * Poster picks a winning submission. Allowed when the bounty's derived
  * status is `open` (accepting early) or `judging` (submission window closed).
+ * A team submission can be accepted only once every member has confirmed.
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { buildPaymentHints } from "@/lib/bounty/detail";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
@@ -16,6 +18,8 @@ import {
   getBounty,
   getSubmission,
   isWithinSignatureWindow,
+  listMembers,
+  teamState,
   setAccepted,
   validateAccept,
 } from "@/lib/bounty";
@@ -104,6 +108,28 @@ export async function POST(
       );
     }
 
+    const team = (await listMembers(db, [submission.id])).get(submission.id) ?? [];
+    if (team.length === 0) {
+      // Every submission has member rows (migration 032 + its post-deploy
+      // backfill); none means a storage problem a confirm cannot fix.
+      logger.error("bounty.accept_no_members", { submissionId: submission.id });
+      return NextResponse.json(
+        { error: "internal", message: "Could not load this submission's members. Retry shortly." },
+        { status: 500 }
+      );
+    }
+    const { waitingOn } = teamState(team);
+    if (waitingOn.length > 0) {
+      return NextResponse.json(
+        {
+          error: "team_not_confirmed",
+          message: `This team entry cannot be accepted until every member confirms. Waiting on: ${waitingOn.join(", ")}. Each confirms at POST /api/bounties/${bounty.id}/submissions/${submission.id}/confirm; the lead can drop a teammate who will not confirm at POST /api/bounties/${bounty.id}/submissions/${submission.id}/remove-member.`,
+          waitingOn,
+        },
+        { status: 422 }
+      );
+    }
+
     const acceptedAt = new Date().toISOString();
     const ok = await setAccepted(db, bounty.id, submission.id, acceptedAt);
     if (!ok) {
@@ -126,6 +152,14 @@ export async function POST(
     const fresh = await getBounty(db, bounty.id);
     return NextResponse.json({
       bounty: { ...fresh, status: bountyStatus(fresh!) },
+      payments: buildPaymentHints(
+        bounty.id,
+        team.map((m) => ({ btcAddress: m.btcAddress, stxAddress: m.stxAddress, amountSats: m.shareSats }))
+      ),
+      nextStep:
+        team.length > 1
+          ? `Pay each of the ${team.length} members their share directly in sBTC, each transfer with memo BNTY:${bounty.id}, then POST /api/bounties/${bounty.id}/paid with each confirmed txid.`
+          : `Pay the winner in sBTC with memo BNTY:${bounty.id}, then POST /api/bounties/${bounty.id}/paid with the confirmed txid.`,
     });
   } catch (e) {
     return NextResponse.json(

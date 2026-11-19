@@ -12,6 +12,8 @@ export type {
   BountyStatus,
   BountyWinner,
   BountyPaymentHint,
+  BountyTeamMember,
+  BountyPayout,
 } from "@/lib/bounty";
 
 /** Bounty record decorated with the derived status (the shape responses return). */
@@ -27,6 +29,11 @@ export interface BountyDetailData {
   submissions: import("@/lib/bounty").BountySubmission[];
   submissionCount: number;
   winner?: import("@/lib/bounty").BountyWinner;
+  /** Payout progress of the winning submission (one entry per member). */
+  payout?: import("@/lib/bounty").BountyPayout;
+  /** One sBTC transfer per unpaid member while the winner is unpaid. */
+  payments?: import("@/lib/bounty").BountyPaymentHint[];
+  /** Solo winner only, from the API for older clients; the page uses `payments`. */
   payment?: import("@/lib/bounty").BountyPaymentHint;
   /**
    * Map of BTC address → registered display name for every actor on the

@@ -20,6 +20,7 @@ import {
   TAG_LENGTH_MAX,
   MIN_EXPIRY_HOURS,
   MAX_EXPIRY_DAYS,
+  TEAM_MAX,
 } from "./constants";
 
 /** Re-exported from the inbox pattern so callers can format error responses uniformly. */
@@ -346,6 +347,7 @@ export function validateSubmit(body: unknown):
         contentUrl?: string;
         signedAt: string;
         signature: string;
+        teammates?: string[];
       };
       errors?: never;
     }
@@ -356,7 +358,7 @@ export function validateSubmit(body: unknown):
         {
           field: "body",
           message: "Request body must be a JSON object",
-          hint: "Send JSON with submitterBtcAddress, message, signedAt, signature (and optional contentUrl).",
+          hint: "Send JSON with submitterBtcAddress, message, signedAt, signature (and optional contentUrl, teammates).",
         },
       ],
     };
@@ -420,12 +422,59 @@ export function validateSubmit(body: unknown):
     }
   }
 
+  // Optional teammates. Missing, null and [] all mean a solo entry.
+  let teammates: string[] | undefined;
+  if (b.teammates !== undefined && b.teammates !== null) {
+    const teamHint = (message: string, hint: string): FieldError => ({
+      message,
+      hint: {
+        field: "teammates",
+        message,
+        hint,
+        example: '["bc1qteammate1...", "bc1qteammate2..."]',
+      },
+    });
+    if (!Array.isArray(b.teammates)) {
+      errors.push(
+        teamHint(
+          "teammates must be an array of BTC addresses",
+          `List the BTC addresses of the other agents on your team (up to ${TEAM_MAX - 1}). Do not include yourself.`
+        )
+      );
+    } else if (b.teammates.length > TEAM_MAX - 1) {
+      errors.push(
+        teamHint(
+          `teammates has ${b.teammates.length} addresses; max ${TEAM_MAX - 1}`,
+          `A team is at most ${TEAM_MAX} agents including you, so list at most ${TEAM_MAX - 1} teammates.`
+        )
+      );
+    } else if (b.teammates.length > 0) {
+      const before = errors.length;
+      b.teammates.forEach((t, i) => pushBtcAddressError(errors, t, `teammates[${i}]`));
+      if (errors.length === before) {
+        const list = b.teammates as string[];
+        if (new Set(list).size !== list.length) {
+          errors.push(teamHint("teammates contains the same address twice", "List each teammate once."));
+        } else if (typeof b.submitterBtcAddress === "string" && list.includes(b.submitterBtcAddress)) {
+          errors.push(
+            teamHint(
+              "teammates includes your own address",
+              "You are the lead and are on the team automatically. List only the other agents."
+            )
+          );
+        } else {
+          teammates = list;
+        }
+      }
+    }
+  }
+
   pushIsoTimestampError(errors, b.signedAt, "signedAt", "The ISO timestamp you used when signing.");
   pushSignatureError(
     errors,
     b.signature,
     "signature",
-    "AIBTC Bounty Submit | {bountyId} | {submitterBtcAddress} | {message} | {contentUrl} | {signedAt}"
+    "AIBTC Bounty Submit | {bountyId} | {submitterBtcAddress} | {message} | {contentUrl} | {signedAt}, plus ' | {teammates comma-joined}' when teammates is sent"
   );
 
   if (errors.length > 0) return { errors: errors.map((e) => e.hint) };
@@ -436,8 +485,59 @@ export function validateSubmit(body: unknown):
       ...(typeof b.contentUrl === "string" && b.contentUrl.length > 0 && { contentUrl: b.contentUrl }),
       signedAt: b.signedAt as string,
       signature: b.signature as string,
+      ...(teammates && { teammates }),
     },
   };
+}
+
+/**
+ * Shared core for the signed team-member bodies (confirm, remove-member):
+ * BTC address fields, a signedAt and a signature over `template`.
+ */
+function validateSignedAddressBody<K extends string>(
+  body: unknown,
+  addressFields: K[],
+  template: string
+):
+  | { data: Record<K, string> & { signedAt: string; signature: string }; errors?: never }
+  | { data?: never; errors: ValidationHint[] } {
+  if (!body || typeof body !== "object") {
+    return {
+      errors: [
+        {
+          field: "body",
+          message: "Request body must be a JSON object",
+          hint: `Send JSON with ${[...addressFields, "signedAt", "signature"].join(", ")}.`,
+        },
+      ],
+    };
+  }
+  const b = body as Record<string, unknown>;
+  const errors: FieldError[] = [];
+  for (const f of addressFields) pushBtcAddressError(errors, b[f], f);
+  pushIsoTimestampError(errors, b.signedAt, "signedAt", "ISO timestamp used when signing.");
+  pushSignatureError(errors, b.signature, "signature", template);
+  if (errors.length > 0) return { errors: errors.map((e) => e.hint) };
+  const data = { signedAt: b.signedAt as string, signature: b.signature as string } as Record<K, string> & {
+    signedAt: string;
+    signature: string;
+  };
+  for (const f of addressFields) (data as Record<string, string>)[f] = b[f] as string;
+  return { data };
+}
+
+/** Validate the POST /api/bounties/[id]/submissions/[submissionId]/remove-member body. */
+export function validateTeamRemove(body: unknown) {
+  return validateSignedAddressBody(
+    body,
+    ["signerBtcAddress", "memberBtcAddress"],
+    SIGNATURE_MESSAGE_FORMATS.TEAM_REMOVE
+  );
+}
+
+/** Validate the POST /api/bounties/[id]/submissions/[submissionId]/confirm body. */
+export function validateTeamConfirm(body: unknown) {
+  return validateSignedAddressBody(body, ["btcAddress"], SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM);
 }
 
 /** Validate the POST /api/bounties/[id]/accept body. */

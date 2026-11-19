@@ -1,11 +1,12 @@
 /**
  * POST /api/bounties/[id]/paid
  *
- * Poster proves payment with an on-chain sBTC txid. Verification chain:
- *   - txid not already redeemed by another bounty (cheap pre-check)
+ * Poster proves payment with an on-chain sBTC txid. The poster pays every
+ * member of the winning submission directly (a solo entry has one member),
+ * and each member's transfer is verified on its own. Verification chain:
  *   - tx exists on Hiro, anchored, status=success
  *   - sBTC `transfer` contract call
- *   - sender = poster, recipient = winner, amount >= rewardSats
+ *   - sender = poster, recipient = an unpaid member, amount >= that member's share
  *   - memo = BNTY:{bountyId}  (the anti-fraud binding)
  *   - block_time in [acceptedAt - 60s, acceptedAt + PAY_GRACE_MS)
  *
@@ -13,26 +14,32 @@
  * is `abandoned` after acceptance and the verified payment tx itself landed
  * inside the pay-grace window (#1110). The canonical txid that Hiro returns is
  * what we store (not the raw input).
+ *
+ * One txid can pay several members (a contract call with one transfer each).
+ * The bounty flips to `paid` only once no member is left unpaid; until then
+ * the response's `payout.unpaid` lists who is still owed and how much.
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { DEFAULT_RETRY_AFTER_SECONDS } from "@/lib/stacks-api-fetch";
+import { stripHexPrefix } from "@/lib/validation/signature";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
 import {
   PAY_GRACE_MS,
   SIGNATURE_WINDOW_SECONDS,
   bountyStatus,
   buildPaidMessage,
+  buildPayout,
   getBounty,
-  getSubmission,
-  isTxidRedeemed,
   isWithinSignatureWindow,
-  reserveTxid,
-  setPaid,
+  isPaidTransferConflict,
+  listMembers,
+  recordMemberPayments,
   validatePaid,
   verifyPayoutTxid,
+  type BountyTeamMember,
 } from "@/lib/bounty";
 
 export async function POST(
@@ -102,6 +109,47 @@ export async function POST(
     const status = bountyStatus(bounty);
     const isAbandonedAfterAccept =
       status === "abandoned" && Boolean(bounty.acceptedAt);
+    // The reply for a txid already recorded on this entry (a retry after a
+    // lost response): 200 with what is recorded, so a client never takes it
+    // as a failure and pays again. Txids compare without 0x and case.
+    const sameTxid = (a: string, b: string) =>
+      stripHexPrefix(a).toLowerCase() === stripHexPrefix(b).toLowerCase();
+    const recordedReply = (team: BountyTeamMember[]) => {
+      const mine = team.filter((m) => m.paidTxid && sameTxid(m.paidTxid, data.txid));
+      if (mine.length === 0) return null;
+      const payout = buildPayout(team);
+      return NextResponse.json({
+        bounty: { ...bounty, status },
+        alreadyRecorded: true,
+        paidMembers: mine.map((m) => ({
+          btcAddress: m.btcAddress,
+          stxAddress: m.stxAddress,
+          amountSats: m.paidAmountSats ?? m.shareSats,
+        })),
+        payout,
+        message:
+          payout.unpaid.length === 0
+            ? "This txid is already recorded. Every member is paid."
+            : `This txid is already recorded. ${payout.membersPaid} of ${payout.membersTotal} members paid; still owed: ${payout.unpaid
+                .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
+                .join(", ")}.`,
+      });
+    };
+
+    if (status === "paid") {
+      const done = bounty.acceptedSubmissionId
+        ? recordedReply((await listMembers(db, [bounty.acceptedSubmissionId])).get(bounty.acceptedSubmissionId) ?? [])
+        : null;
+      if (done) return done;
+      return NextResponse.json(
+        {
+          error: "already_paid",
+          message: "This bounty is already paid: every member's payment is verified.",
+          status,
+        },
+        { status: 409 }
+      );
+    }
     if (status !== "winner-announced" && !isAbandonedAfterAccept) {
       return NextResponse.json(
         {
@@ -120,37 +168,50 @@ export async function POST(
       );
     }
 
-    const acceptedSubmission = await getSubmission(db, bounty.acceptedSubmissionId);
-    if (!acceptedSubmission) {
+    const submissionId = bounty.acceptedSubmissionId;
+    const team = (await listMembers(db, [submissionId])).get(submissionId) ?? [];
+    if (team.length === 0) {
       return NextResponse.json(
-        { error: "submission_not_found", message: "Accepted submission record missing." },
+        { error: "submission_not_found", message: "Accepted submission has no members on record." },
         { status: 500 }
       );
     }
-
-    // Cheap pre-check: txid not already redeemed by another bounty.
-    const existingBountyId = await isTxidRedeemed(kv, data.txid);
-    if (existingBountyId && existingBountyId !== bounty.id) {
+    const unpaid = team.filter((m) => !m.paidTxid);
+    if (unpaid.length === 0) {
+      const done = recordedReply(team);
+      if (done) return done;
       return NextResponse.json(
         {
-          error: "txid_already_redeemed",
-          message: "This txid has already paid another bounty.",
-          existingBountyId,
+          error: "already_paid",
+          message: "Every member of the winning submission is already paid.",
+          payout: buildPayout(team),
         },
         { status: 409 }
       );
     }
 
-    // On-chain verification via Hiro
+    // On-chain verification via Hiro. One txid may pay members of several
+    // bounties: each transfer carries its own BNTY memo, and each transfer is
+    // recorded once (unique on txid + event index), so no txid-wide lock.
     const verify = await verifyPayoutTxid({
       txid: data.txid,
       bounty,
-      acceptedSubmission,
+      recipients: unpaid.map((m) => ({
+        btcAddress: m.btcAddress,
+        stxAddress: m.stxAddress,
+        amountSats: m.shareSats,
+      })),
       logger,
       hiroApiKey: env.HIRO_API_KEY,
       kv,
     });
     if (!verify.ok) {
+      // Retrying a txid already recorded for some members: re-verifying lets
+      // any other member it pays be recorded. When it adds nobody, or Hiro
+      // cannot be read right now, the answer is "already recorded", never an
+      // error a client could take as "not paid".
+      const retryReply = recordedReply(team);
+      if (retryReply) return retryReply;
       const statusCode = verify.code === "TX_NOT_CONFIRMED" ? 422 : 400;
       logger.warn("bounty.paid_verification_failed", {
         bountyId: bounty.id,
@@ -208,11 +269,27 @@ export async function POST(
       );
     }
 
-    let ok = false;
+    let recorded: { recordedMembers: string[]; bountyPaid: boolean };
     try {
-      ok = await setPaid(db, bounty.id, verify.canonicalTxid, paidAt);
+      recorded = await recordMemberPayments(db, {
+        bountyId: bounty.id,
+        submissionId,
+        txid: verify.canonicalTxid,
+        paidAt,
+        // Hiro always gives an event_index in practice; -1 keeps a missing one
+        // inside the (paid_txid, paid_event_index) unique index, which treats
+        // NULLs as distinct. A routed payout needs the index to bind its memo,
+        // so only a direct transfer (one event) can ever reach this with -1.
+        payments: verify.matched.map((m) => ({
+          btcAddress: m.btcAddress,
+          eventIndex: m.eventIndex ?? -1,
+          amountSats: m.amount,
+        })),
+      });
     } catch (e) {
-      // D1 unique partial index conflict — same canonical txid paid another bounty.
+      // Only the one-record-per-transfer index means "already recorded";
+      // anything else is a server error, not a duplicate.
+      if (!isPaidTransferConflict(e)) throw e;
       logger.warn("bounty.paid_unique_violation", {
         bountyId: bounty.id,
         canonicalTxid: verify.canonicalTxid,
@@ -221,42 +298,50 @@ export async function POST(
       return NextResponse.json(
         {
           error: "txid_already_redeemed",
-          message: "This canonical txid has already paid another bounty.",
+          message: "This transfer is already recorded as a payout.",
         },
         { status: 409 }
       );
     }
-    if (!ok) {
+    if (recorded.recordedMembers.length === 0) {
+      // A concurrent call with the same txid recorded these members first.
+      const fresh = (await listMembers(db, [submissionId])).get(submissionId) ?? team;
+      const concurrentReply = recordedReply(fresh);
+      if (concurrentReply) return concurrentReply;
       return NextResponse.json(
-        { error: "conflict", message: "Bounty state changed concurrently." },
+        { error: "conflict", message: "Bounty state changed concurrently. Re-fetch the bounty." },
         { status: 409 }
       );
     }
 
-    // D1 has already committed the paid_txid — the unique partial index is
-    // the durable enforcement. KV reservation is the cheap pre-check for
-    // *future* /paid requests against other bounties; if it fails (KV blip),
-    // log and keep going so the user doesn't see a 500 after a successful
-    // payment.
-    try {
-      await reserveTxid(kv, verify.canonicalTxid, bounty.id);
-    } catch (e) {
-      logger.warn("bounty.paid_kv_reserve_failed", {
-        bountyId: bounty.id,
-        canonicalTxid: verify.canonicalTxid,
-        error: String(e),
-      });
-    }
-
-    logger.info("bounty.paid", {
+    logger.info(recorded.bountyPaid ? "bounty.paid" : "bounty.member_paid", {
       bountyId: bounty.id,
       canonicalTxid: verify.canonicalTxid,
       paidAt,
+      members: recorded.recordedMembers,
     });
 
-    const fresh = await getBounty(db, bounty.id);
+    const [fresh, freshMembers] = await Promise.all([
+      getBounty(db, bounty.id),
+      listMembers(db, [submissionId]),
+    ]);
+    const freshTeam = freshMembers.get(submissionId) ?? team;
+    const payout = buildPayout(freshTeam);
     return NextResponse.json({
       bounty: { ...fresh, status: bountyStatus(fresh!) },
+      // Only the members this call recorded (one paid concurrently by another
+      // txid is not claimed for this one).
+      paidMembers: verify.matched
+        .filter((m) => recorded.recordedMembers.includes(m.btcAddress))
+        .map((m) => ({ btcAddress: m.btcAddress, stxAddress: m.stxAddress, amountSats: m.amount })),
+      payout,
+      ...(verify.underpaid.length > 0 && { underpaid: verify.underpaid }),
+      message:
+        payout.unpaid.length === 0
+          ? "Every member is paid. The bounty is paid."
+          : `${payout.membersPaid} of ${payout.membersTotal} members paid. Still owed: ${payout.unpaid
+              .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
+              .join(", ")}. Send each with memo BNTY:${bounty.id}, then POST /paid with that txid.`,
     });
   } catch (e) {
     return NextResponse.json(

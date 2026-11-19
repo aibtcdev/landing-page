@@ -5,7 +5,7 @@ import { fetcher } from "@/lib/fetcher";
 import { DETAIL_SUBMISSIONS_PAGE } from "@/lib/bounty/constants";
 import Link from "next/link";
 import type { BountyDetailData } from "../types";
-import type { BountySubmission } from "@/lib/bounty";
+import type { BountySubmission, BountyTeamMember } from "@/lib/bounty";
 import {
   statusText,
   statusLabel,
@@ -64,6 +64,74 @@ function BackLink() {
       </svg>
       Back to Bounties
     </Link>
+  );
+}
+
+function explorerTx(txid: string): string {
+  return `https://explorer.hiro.so/txid/${txid}?chain=mainnet`;
+}
+
+/**
+ * Members of a team entry. Before a winner is picked each row shows whether
+ * that member confirmed; on the winning entry it shows whether the poster has
+ * paid that member their share directly.
+ */
+function TeamList({
+  team,
+  isWinner,
+  agentNames,
+}: {
+  team: BountyTeamMember[];
+  isWinner: boolean;
+  agentNames?: Record<string, string>;
+}) {
+  return (
+    <div className="space-y-1.5 border-t border-white/[0.06] pt-2.5">
+      <div className="text-[10px] font-semibold uppercase tracking-wider text-white/40">
+        Team · {team.length} agents · even split
+      </div>
+      {team.map((m) => (
+        <div key={m.btcAddress} className="flex flex-wrap items-center justify-between gap-2 text-[12px]">
+          <div className="flex items-center gap-2 min-w-0">
+            <AgentBadge
+              address={m.btcAddress}
+              name={agentNames?.[m.btcAddress]}
+              size="xs"
+              textClass="text-white/75 font-medium"
+            />
+            {m.role === "lead" && (
+              <span className="rounded border border-white/[0.08] px-1 py-px text-[9.5px] uppercase tracking-wider text-white/45">
+                Lead
+              </span>
+            )}
+            <span className="tabular-nums text-white/50">{formatSatsFull(m.shareSats)} sats</span>
+          </div>
+          {isWinner ? (
+            m.paidTxid ? (
+              <a
+                href={explorerTx(m.paidTxid)}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1 text-emerald-400/90 hover:text-emerald-300"
+              >
+                <CheckIcon className="size-3" />
+                Paid {truncAddr(m.paidTxid)}
+                <ExternalLinkIcon className="size-3" />
+              </a>
+            ) : (
+              <span className="text-amber-400/80">Awaiting payment</span>
+            )
+          ) : m.confirmed ? (
+            <span className="inline-flex items-center gap-1 text-emerald-400/80">
+              <CheckIcon className="size-3" />
+              Confirmed
+            </span>
+          ) : (
+            <span className="text-amber-400/80">Awaiting confirmation</span>
+          )}
+        </div>
+      ))}
+    </div>
   );
 }
 
@@ -136,7 +204,11 @@ function SubmissionCard({
         </a>
       )}
 
-      {isWinner && paidTxid && explorerUrl && rewardSats != null && (
+      {sub.team && sub.team.length > 1 && (
+        <TeamList team={sub.team} isWinner={isWinner} agentNames={agentNames} />
+      )}
+
+      {isWinner && (sub.team?.length ?? 1) <= 1 && paidTxid && explorerUrl && rewardSats != null && (
         <div className="flex flex-wrap items-center justify-between gap-2 border-t border-[#7DA2FF]/10 pt-2.5 text-[12px]">
           <div className="flex items-center gap-2 min-w-0">
             <CheckIcon className="size-3.5 text-emerald-400 shrink-0" />
@@ -176,7 +248,7 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
     );
   }
 
-  const { bounty, submissions, submissionCount, winner, payment, agentNames } = data;
+  const { bounty, submissions, submissionCount, winner, payments, payout, agentNames } = data;
   const tags = bounty.tags ?? [];
   const windowLabel = submissionWindowLabel(bounty.expiresAt, bounty.status, bounty.opensAt);
   const submissionsClosed = windowLabel === "Submissions closed";
@@ -198,7 +270,8 @@ export default function BountyDetail({ data }: { data: BountyDetailData | null }
     submissionCount={submissionCount}
     orderedSubmissions={orderedSubmissions}
     winner={winner}
-    payment={payment}
+    payments={payments}
+    payout={payout}
     agentNames={agentNames}
     tags={tags}
     windowLabel={windowLabel}
@@ -213,7 +286,8 @@ function BountyDetailView({
   submissionCount,
   orderedSubmissions,
   winner,
-  payment,
+  payments,
+  payout,
   agentNames,
   tags,
   windowLabel,
@@ -225,7 +299,8 @@ function BountyDetailView({
   submissionCount: number;
   orderedSubmissions: BountySubmission[];
   winner: BountyDetailData["winner"];
-  payment: BountyDetailData["payment"];
+  payments: BountyDetailData["payments"];
+  payout: BountyDetailData["payout"];
   agentNames: Record<string, string> | undefined;
   tags: string[];
   windowLabel: string | null;
@@ -305,6 +380,11 @@ function BountyDetailView({
               <span className="size-1.5 rounded-full bg-current" aria-hidden="true" />
               {statusLabel(bounty.status)}
             </span>
+            {payout && payout.membersTotal > 1 && (
+              <span className="ml-2 rounded-md border border-white/[0.08] px-1.5 py-0.5 text-[11px] tabular-nums text-white/60">
+                {payout.membersPaid} of {payout.membersTotal} paid
+              </span>
+            )}
             <h1 className="mt-2.5 break-words text-[23px] font-medium leading-[1.3] tracking-[-0.012em] text-pretty text-white max-md:text-xl">
               {bounty.title}
             </h1>
@@ -450,7 +530,7 @@ function BountyDetailView({
                   return (
                     <SubmissionCard
                       key={sub.id}
-                      sub={sub}
+                      sub={isWinner && winner?.team ? { ...sub, team: winner.team } : sub}
                       isWinner={isWinner}
                       acceptedAt={isWinner ? winner?.acceptedAt : undefined}
                       agentNames={names}
@@ -496,18 +576,28 @@ function BountyDetailView({
       </div>
 
       {/* ALWAYS VISIBLE — payment hint (poster) + API reference */}
-      {payment && (
+      {payments && payments.length > 0 && (
         <Section title="Payment Hint (for poster)">
           <div className="rounded-md border border-[#F7931A]/20 bg-[#F7931A]/[0.04] p-4 space-y-2 backdrop-blur-md">
             <p className="text-white/70 text-[13px]">
-              Send {formatSats(payment.amountSats)} sats sBTC to{" "}
-              <span className="text-white/90 font-mono text-[12px]">{truncAddr(payment.recipientStxAddress)}</span> with memo:
+              {payments.length > 1
+                ? `Pay each member directly. Send ${payments.length} sBTC transfers, each with the memo below:`
+                : "Send sBTC with the memo below:"}
             </p>
+            <ul className="space-y-1">
+              {payments.map((p) => (
+                <li key={p.recipientStxAddress} className="text-[13px] text-white/70">
+                  {formatSatsFull(p.amountSats)} sats to{" "}
+                  <span className="text-white/90 font-mono text-[12px]">{truncAddr(p.recipientStxAddress)}</span>
+                </li>
+              ))}
+            </ul>
             <code className="block break-all rounded-md border border-white/[0.06] bg-black/30 p-2 text-[12px] text-[#F7931A]">
-              {payment.expectedMemo}
+              {payments[0].expectedMemo}
             </code>
             <p className="text-[11px] text-white/40">
-              Then call <code className="text-white/60">POST /api/bounties/{bounty.id}/paid</code> with the confirmed txid.
+              Then call <code className="text-white/60">POST /api/bounties/{bounty.id}/paid</code> with each confirmed txid.
+              The bounty is paid once every member is paid.
             </p>
           </div>
         </Section>

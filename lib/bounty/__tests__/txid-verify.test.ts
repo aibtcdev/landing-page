@@ -7,7 +7,7 @@ import {
   uintCV,
   type ClarityValue,
 } from "@stacks/transactions";
-import { buildExpectedMemo, verifyPayoutTxid } from "../txid-verify";
+import { buildExpectedMemo, verifyPayoutTxid, type PayoutRecipient } from "../txid-verify";
 import { SBTC_CONTRACT_MAINNET } from "../constants";
 import { TX_EVENT_MAX, TX_EVENT_PAGE_SIZE } from "@/lib/stacks-tx-events";
 import type { BountyRecord, BountySubmission } from "../types";
@@ -48,6 +48,12 @@ function makeSubmission(overrides: Partial<BountySubmission> = {}): BountySubmis
     createdAt: "2026-05-12T00:00:00Z",
     ...overrides,
   };
+}
+
+/** The winner as a payout recipient; a solo winner is owed the whole reward. */
+function winnerRecipient(amountSats = 5000): PayoutRecipient {
+  const s = makeSubmission();
+  return { btcAddress: s.submitterBtcAddress, stxAddress: s.submitterStxAddress, amountSats };
 }
 
 function memoArg(bountyId: string = BOUNTY_ID) {
@@ -181,7 +187,7 @@ async function verifyRouted(events?: unknown[], bounty: BountyRecord = makeBount
   return verifyPayoutTxid({
     txid: "0xabc",
     bounty,
-    acceptedSubmission: makeSubmission(),
+    recipients: [winnerRecipient(bounty.rewardSats)],
     fetchFn: mockFetch({ json: () => makeRoutedTx(events) }),
   });
 }
@@ -229,7 +235,7 @@ async function verifyPaged(firstPage: number, laterPage?: "fail" | "empty" | "ra
   const r = await verifyPayoutTxid({
     txid: "0xabc",
     bounty: makeBounty(),
-    acceptedSubmission: makeSubmission(),
+    recipients: [winnerRecipient()],
     fetchFn,
   });
   return { r, fetchFn };
@@ -266,7 +272,7 @@ async function verifyLong(
   const r = await verifyPayoutTxid({
     txid: "0xabc",
     bounty: makeBounty(),
-    acceptedSubmission: makeSubmission(),
+    recipients: [winnerRecipient()],
     fetchFn,
     ...overrides,
   });
@@ -293,7 +299,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc123",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({ json: () => makeHiroTx() }),
     });
     expect(r.ok).toBe(true);
@@ -307,7 +313,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xdead",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({ status: 404, json: () => ({}) }),
     });
     expect(r).toEqual({
@@ -321,7 +327,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({ json: () => makeHiroTx({ is_unanchored: true }) }),
     });
     expect(r.ok).toBe(false);
@@ -332,7 +338,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({ json: () => makeHiroTx({ tx_status: "pending" }) }),
     });
     expect(r.ok).toBe(false);
@@ -343,7 +349,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({ json: () => makeHiroTx({ tx_status: "abort_by_post_condition" }) }),
     });
     expect(r.ok).toBe(false);
@@ -354,7 +360,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({
         json: () =>
           makeHiroTx({
@@ -371,7 +377,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({
         json: () =>
           makeHiroTx({
@@ -516,7 +522,7 @@ describe("verifyPayoutTxid", () => {
       const r = await verifyPayoutTxid({
         txid: "not-hex",
         bounty: makeBounty(),
-        acceptedSubmission: makeSubmission(),
+        recipients: [winnerRecipient()],
         fetchFn: fetchFn as unknown as typeof fetch,
       });
       expect(r.ok).toBe(false);
@@ -536,7 +542,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: (async () => ({
         status: 200,
         ok: true,
@@ -552,7 +558,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn,
     });
     expect(r).toMatchObject({ ok: false, code: "RATE_LIMITED", retryAfterSeconds: 7 });
@@ -563,7 +569,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: vi.fn(async () => new Response("{}", { status: 429 })) as unknown as typeof fetch,
     });
     expect(r).toMatchObject({ ok: false, code: "RATE_LIMITED", retryAfterSeconds: 30 });
@@ -574,7 +580,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn,
     });
     expect(r.ok).toBe(false);
@@ -641,7 +647,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({
         json: () => {
           const tx = makeHiroTx();
@@ -658,7 +664,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({ json: () => makeHiroTx({ sender_address: OTHER_STX }) }),
     });
     expect(r.ok).toBe(false);
@@ -669,7 +675,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({
         json: () => {
           const tx = makeHiroTx();
@@ -692,7 +698,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty({ rewardSats: 10000 }),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient(10000)],
       fetchFn: mockFetch({ json: () => makeHiroTx() }),
     });
     expect(r.ok).toBe(false);
@@ -703,7 +709,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({
         json: () => {
           const tx = makeHiroTx();
@@ -723,7 +729,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({
         json: () => {
           const tx = makeHiroTx();
@@ -748,7 +754,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty({ acceptedAt: "2026-05-20T00:00:00Z" }),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({
         json: () => makeHiroTx({ burn_block_time_iso: "2026-05-10T00:00:00Z" }),
       }),
@@ -766,7 +772,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty({ acceptedAt: "2026-05-16T13:01:58Z" }),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: mockFetch({
         json: () =>
           makeHiroTx({
@@ -783,7 +789,7 @@ describe("verifyPayoutTxid", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: (() => {
         throw new Error("network");
       }) as unknown as typeof fetch,
@@ -813,7 +819,7 @@ describe("verifyPayoutTxid: which Hiro answers are final (#1146)", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: laterPageStatus(status),
     });
     expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
@@ -823,7 +829,7 @@ describe("verifyPayoutTxid: which Hiro answers are final (#1146)", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: laterPageStatus(status),
     });
     expect(r).toMatchObject({ ok: false, code: "EVENTS_TRUNCATED" });
@@ -833,7 +839,7 @@ describe("verifyPayoutTxid: which Hiro answers are final (#1146)", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: vi.fn(async () => ({ status, ok: false, json: async () => ({}) })) as unknown as typeof fetch,
     });
     expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
@@ -844,7 +850,7 @@ describe("verifyPayoutTxid: which Hiro answers are final (#1146)", () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn,
       hiroApiKey: "test-key",
     });
@@ -861,7 +867,7 @@ describe("verifyPayoutTxid: a gap that never heals still ends (#1146 follow-up)"
     verifyPayoutTxid({
       txid: "0xabc",
       bounty: makeBounty(),
-      acceptedSubmission: makeSubmission(),
+      recipients: [winnerRecipient()],
       fetchFn: pagedFetch(longTx(150, {}), TX_EVENT_PAGE_SIZE, laterPage),
       kv,
       now: new Date(at),
@@ -880,5 +886,184 @@ describe("verifyPayoutTxid: a gap that never heals still ends (#1146 follow-up)"
     const kv = createMockKV();
     expect(await verifyAt("fail", kv, "2026-05-16T00:00:00Z")).toMatchObject({ code: "HIRO_UNREACHABLE" });
     expect(await verifyAt("fail", kv, "2026-05-17T00:00:00Z")).toMatchObject({ code: "HIRO_UNREACHABLE" });
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Team payouts: every member is paid directly and checked on its own.
+// ---------------------------------------------------------------------------
+
+describe("verifyPayoutTxid team payouts", () => {
+  // 5000 sats split across lead (SUBMITTER_STX) + partner (OTHER_STX).
+  const lead: PayoutRecipient = { btcAddress: "bc1qlead", stxAddress: SUBMITTER_STX, amountSats: 2500 };
+  const partner: PayoutRecipient = { btcAddress: "bc1qpartner", stxAddress: OTHER_STX, amountSats: 2500 };
+
+  function verifyTeam(events: unknown[], recipients: PayoutRecipient[] = [lead, partner]) {
+    return verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients,
+      fetchFn: mockFetch({ json: () => makeRoutedTx(events) }),
+    });
+  }
+
+  it("one batch tx pays both members, each with its own bound memo", async () => {
+    const r = await verifyTeam([
+      ftEvent(0, POSTER_STX, SUBMITTER_STX, 2500),
+      memoPrint(1, SBTC_CONTRACT_MAINNET),
+      ftEvent(2, POSTER_STX, OTHER_STX, 2500),
+      memoPrint(3, SBTC_CONTRACT_MAINNET),
+    ]);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.matched.map((m) => [m.btcAddress, m.eventIndex])).toEqual([
+        ["bc1qlead", 0],
+        ["bc1qpartner", 2],
+      ]);
+      expect(r.underpaid).toEqual([]);
+    }
+  });
+
+  it("paying the lead the whole reward pays only the lead, never the partner", async () => {
+    const r = await verifyTeam([
+      ftEvent(0, POSTER_STX, SUBMITTER_STX, 5000),
+      memoPrint(1, SBTC_CONTRACT_MAINNET),
+    ]);
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.matched.map((m) => m.btcAddress)).toEqual(["bc1qlead"]);
+  });
+
+  it("records the member paid in full and reports the one underpaid", async () => {
+    const r = await verifyTeam([
+      ftEvent(0, POSTER_STX, SUBMITTER_STX, 2500),
+      memoPrint(1, SBTC_CONTRACT_MAINNET),
+      ftEvent(2, POSTER_STX, OTHER_STX, 1000),
+      memoPrint(3, SBTC_CONTRACT_MAINNET),
+    ]);
+    expect(r.ok).toBe(true);
+    if (r.ok) {
+      expect(r.matched.map((m) => m.btcAddress)).toEqual(["bc1qlead"]);
+      expect(r.underpaid).toEqual([{ btcAddress: "bc1qpartner", amount: 1000, required: 2500 }]);
+    }
+  });
+
+  it("does not count a member transfer whose memo is not bound to it", async () => {
+    const r = await verifyTeam(
+      [ftEvent(0, POSTER_STX, OTHER_STX, 2500), memoPrint(1, WRAPPER)],
+      [partner]
+    );
+    expect(r).toMatchObject({ ok: false, code: "MEMO_MISMATCH" });
+  });
+
+  it("refuses AMOUNT_TOO_LOW when the only member transfer is short of their share", async () => {
+    const r = await verifyTeam(
+      [ftEvent(0, POSTER_STX, OTHER_STX, 1000), memoPrint(1, SBTC_CONTRACT_MAINNET)],
+      [partner]
+    );
+    expect(r).toMatchObject({ ok: false, code: "AMOUNT_TOO_LOW" });
+  });
+
+  it("refuses a transfer to an address that is not an unpaid member", async () => {
+    // Lead already paid, so only the partner is still owed.
+    const r = await verifyTeam(
+      [ftEvent(0, POSTER_STX, SUBMITTER_STX, 2500), memoPrint(1, SBTC_CONTRACT_MAINNET)],
+      [partner]
+    );
+    expect(r).toMatchObject({ ok: false, code: "WRONG_RECIPIENT" });
+  });
+
+  it("refuses a team payment sent by someone other than the poster", async () => {
+    const r = await verifyTeam([
+      ftEvent(0, OTHER_STX, SUBMITTER_STX, 2500),
+      memoPrint(1, SBTC_CONTRACT_MAINNET),
+    ]);
+    expect(r).toMatchObject({ ok: false, code: "WRONG_RECIPIENT" });
+  });
+
+  it("a direct transfer pays exactly the member it names, checked against that member's share", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [lead, partner],
+      fetchFn: mockFetch({
+        json: () =>
+          makeHiroTx({
+            events: [{ ...ftEvent(0, POSTER_STX, SUBMITTER_STX, 2500) }],
+          }),
+      }),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.matched.map((m) => m.btcAddress)).toEqual(["bc1qlead"]);
+  });
+});
+
+describe("verifyPayoutTxid underpaid only counts this bounty's transfers", () => {
+  it("a smaller transfer to a member for ANOTHER bounty is not reported as underpaid here", async () => {
+    const partner: PayoutRecipient = { btcAddress: "bc1qpartner", stxAddress: OTHER_STX, amountSats: 2500 };
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [partner],
+      fetchFn: mockFetch({
+        json: () =>
+          makeRoutedTx([
+            ftEvent(0, POSTER_STX, OTHER_STX, 1000),
+            memoPrint(1, SBTC_CONTRACT_MAINNET, "01HNX7OTHER"),
+          ]),
+      }),
+    });
+    // Not AMOUNT_TOO_LOW: the only transfer to the partner is bound to another bounty.
+    expect(r).toMatchObject({ ok: false, code: "MEMO_MISMATCH" });
+  });
+});
+
+describe("verifyPayoutTxid records proven team payouts when a later page fails", () => {
+  const lead: PayoutRecipient = { btcAddress: "bc1qlead", stxAddress: SUBMITTER_STX, amountSats: 2500 };
+  const partner: PayoutRecipient = { btcAddress: "bc1qpartner", stxAddress: OTHER_STX, amountSats: 2500 };
+  // The lead's payout is on page 0; the tx says it has 150 events, so the
+  // verifier keeps paging for the partner, and page 1 keeps failing.
+  const filler = Array.from({ length: 146 }, (_, i) => ({
+    event_index: i + 4,
+    event_type: "smart_contract_log",
+    contract_log: { contract_id: WRAPPER, topic: "print", value: { hex: "0x00" } },
+  }));
+  const tx = makeRoutedTx([
+    ftEvent(0, POSTER_STX, SUBMITTER_STX, 2500),
+    memoPrint(1, SBTC_CONTRACT_MAINNET),
+    ftEvent(2, POSTER_STX, WRAPPER, 10),
+    memoPrint(3, WRAPPER, "fee"),
+    ...filler,
+  ]) as { events: unknown[] };
+
+  it("returns the payout proven on the loaded page instead of HIRO_UNREACHABLE", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [lead, partner],
+      fetchFn: pagedFetch(tx, 100, "fail"),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.matched.map((m) => m.btcAddress)).toEqual(["bc1qlead"]);
+  });
+
+  it("stays retryable when nothing is proven yet", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [partner],
+      fetchFn: pagedFetch(tx, 100, "fail"),
+    });
+    expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
+  });
+
+  it("AMOUNT_TOO_LOW tells the poster not to send a top-up", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [partner],
+      fetchFn: mockFetch({ json: () => makeRoutedTx([ftEvent(0, POSTER_STX, OTHER_STX, 900), memoPrint(1, SBTC_CONTRACT_MAINNET)]) }),
+    });
+    expect(r).toMatchObject({ ok: false, code: "AMOUNT_TOO_LOW" });
+    if (!r.ok) expect(r.message).toMatch(/do not send a top-up/);
   });
 });

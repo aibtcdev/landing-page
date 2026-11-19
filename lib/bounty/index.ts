@@ -11,8 +11,10 @@ export type {
   BountySubmission,
   BountyWinner,
   BountyPaymentHint,
+  BountyTeamMember,
+  BountyPayout,
 } from "./types";
-export { bountyStatus } from "./types";
+export { bountyStatus, splitReward } from "./types";
 
 export {
   TITLE_MAX,
@@ -31,9 +33,8 @@ export {
   DETAIL_SUBMISSIONS_PAGE,
   SBTC_CONTRACTS,
   SBTC_CONTRACT_MAINNET,
-  KV_PREFIXES,
-  PAID_TXID_TTL_SECONDS,
   SIGNATURE_MESSAGE_FORMATS,
+  TEAM_MAX,
 } from "./constants";
 
 export {
@@ -42,6 +43,8 @@ export {
   buildAcceptMessage,
   buildPaidMessage,
   buildCancelMessage,
+  buildTeamConfirmMessage,
+  buildTeamRemoveMessage,
   isWithinSignatureWindow,
 } from "./signatures";
 
@@ -52,6 +55,8 @@ export {
   validateAccept,
   validatePaid,
   validateCancel,
+  validateTeamConfirm,
+  validateTeamRemove,
 } from "./validation";
 
 export type {
@@ -60,6 +65,7 @@ export type {
   ListSubmissionsResult,
   SubmitAttemptCounts,
   SubmitAttemptOutcome,
+  PendingTeamConfirm,
 } from "./d1-helpers";
 export {
   statusToSql,
@@ -67,21 +73,29 @@ export {
   listBounties,
   insertBounty,
   setAccepted,
-  setPaid,
+  recordMemberPayments,
   setCancelled,
   getSubmission,
   listSubmissionsForBounty,
   listSubmissionsBySubmitter,
   insertSubmission,
-  hasSubmission,
+  enteredAgents,
+  listMembers,
+  withTeams,
+  teamState,
+  confirmMember,
+  removePendingMember,
+  dropUnconfirmableInvites,
+  isOneEntryConflict,
+  isPaidTransferConflict,
+  buildPayout,
+  listPendingConfirms,
   submittedBountyIds,
   recordSubmitAttempt,
   getSubmitAttemptCounts,
 } from "./d1-helpers";
 
-export { isTxidRedeemed, reserveTxid } from "./kv-helpers";
-
 export { generateBountyId, generateSubmissionId } from "./id";
 
-export type { TxidVerifyFailureCode, TxidVerifyResult } from "./txid-verify";
+export type { TxidVerifyFailureCode, TxidVerifyResult, PayoutRecipient } from "./txid-verify";
 export { buildExpectedMemo, verifyPayoutTxid } from "./txid-verify";

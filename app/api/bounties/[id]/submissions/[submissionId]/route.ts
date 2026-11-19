@@ -2,12 +2,13 @@
  * GET /api/bounties/[id]/submissions/[submissionId]
  *
  * Single submission permalink. Useful for sharing a specific submission
- * and for the submitter's profile page to link to their work.
+ * and for the submitter's profile page to link to their work. Includes the
+ * team (confirm and payout state per member).
  */
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import { bountyStatus, getBounty, getSubmission } from "@/lib/bounty";
+import { bountyStatus, buildPayout, getBounty, getSubmission, withTeams } from "@/lib/bounty";
 
 export async function GET(
   _request: NextRequest,
@@ -37,16 +38,29 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
+  const [withTeam] = await withTeams(db, [submission]);
+  const isWinner = bounty.acceptedSubmissionId === submission.id;
+  const pending = (withTeam.team ?? []).filter((m) => !m.confirmed);
   return NextResponse.json(
     {
-      submission,
+      submission: withTeam,
       bountyId: bounty.id,
       bountyStatus: bountyStatus(bounty),
-      isWinner: bounty.acceptedSubmissionId === submission.id,
+      isWinner,
+      ...(isWinner && { payout: buildPayout(withTeam.team ?? []) }),
+      ...(pending.length > 0 && {
+        confirmEndpoint: `POST /api/bounties/${bounty.id}/submissions/${submission.id}/confirm`,
+        waitingOn: pending.map((m) => m.btcAddress),
+      }),
     },
     {
       headers: {
-        "Cache-Control": "public, max-age=15, s-maxage=15, stale-while-revalidate=60",
+        // Team payout state changes after every /paid while a winner is being
+        // paid; never serve a stale copy then (see the detail route).
+        "Cache-Control":
+          bountyStatus(bounty) === "winner-announced"
+            ? "private, no-store"
+            : "public, max-age=15, s-maxage=15, stale-while-revalidate=60",
       },
     }
   );

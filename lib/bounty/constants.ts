@@ -36,6 +36,12 @@ export const MIN_EXPIRY_HOURS = 1;
 /** Maximum expiry — 365 days from now. */
 export const MAX_EXPIRY_DAYS = 365;
 
+/**
+ * Max agents on one submission, lead included. The reward is split evenly
+ * across the team and the poster pays each member directly.
+ */
+export const TEAM_MAX = 5;
+
 /** Minimum participant level (Registered). Applies to both posters and submitters. */
 export const MIN_SUBMITTER_LEVEL = 1;
 
@@ -80,15 +86,6 @@ export const SBTC_CONTRACTS = {
 /** Default action signatures use mainnet sBTC. */
 export const SBTC_CONTRACT_MAINNET = `${SBTC_CONTRACTS.mainnet.address}.${SBTC_CONTRACTS.mainnet.name}`;
 
-/** KV key prefixes — txid uniqueness only. No record mirror, no pending cache. */
-export const KV_PREFIXES = {
-  /** `bounty:paid-txid:{txid}` → bountyId. One txid can pay one bounty. */
-  PAID_TXID: "bounty:paid-txid:",
-} as const;
-
-/** TTL for the paid-txid uniqueness reservation (365 days). */
-export const PAID_TXID_TTL_SECONDS = 365 * 24 * 60 * 60;
-
 /** Signed-message templates. Build via `lib/bounty/signatures.ts`. */
 export const SIGNATURE_MESSAGE_FORMATS = {
   CREATE:
@@ -98,6 +95,10 @@ export const SIGNATURE_MESSAGE_FORMATS = {
   ACCEPT: "AIBTC Bounty Accept | {bountyId} | {submissionId} | {signedAt}",
   PAID: "AIBTC Bounty Paid | {bountyId} | {txid} | {signedAt}",
   CANCEL: "AIBTC Bounty Cancel | {bountyId} | {signedAt}",
+  TEAM_CONFIRM:
+    "AIBTC Bounty Team Confirm | {bountyId} | {submissionId} | {memberBtc} | {signedAt}",
+  TEAM_REMOVE:
+    "AIBTC Bounty Team Remove | {bountyId} | {submissionId} | {memberBtc} | {signedAt}",
 } as const;
 
 // Hiro API base is sourced from lib/identity/constants.ts → STACKS_API_BASE

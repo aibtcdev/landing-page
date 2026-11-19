@@ -2,9 +2,11 @@
  * GET /api/bounties/[id]
  *
  * Detail endpoint. Returns the bounty record, its computed status, the first
- * page of submissions, and — when applicable — denormalized `winner` and
- * `payment` blocks so the poster sees exactly who they picked and exactly
- * what memo + recipient + amount to use for payout.
+ * page of submissions (each with its `team`), and, once a submission is
+ * accepted, the `winner` block and `payout` progress. While the winner is
+ * unpaid, `payments` lists one sBTC transfer per unpaid member (recipient,
+ * amount, memo): a team is paid member by member, never through the lead.
+ * `payment` is kept for a solo winner for older clients.
  *
  * `engagement` shows how many agents submitted and how many signed attempts
  * were refused (unregistered, closed, store failure) without a later
@@ -13,21 +15,8 @@
 
 import { NextRequest, NextResponse } from "next/server";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
-import {
-  bountyStatus,
-  buildExpectedMemo,
-  DETAIL_SUBMISSIONS_PAGE,
-  getBounty,
-  getSubmission,
-  getSubmitAttemptCounts,
-  listSubmissionsForBounty,
-  SBTC_CONTRACT_MAINNET,
-  type BountyPaymentHint,
-  type BountyRecord,
-  type BountyStatus,
-  type BountySubmission,
-  type BountyWinner,
-} from "@/lib/bounty";
+import { getBounty, getSubmitAttemptCounts } from "@/lib/bounty";
+import { loadBountyDetail } from "@/lib/bounty/detail";
 
 export async function GET(
   _request: NextRequest,
@@ -52,50 +41,14 @@ export async function GET(
     return NextResponse.json({ error: "not_found" }, { status: 404 });
   }
 
-  const now = new Date();
-  const status: BountyStatus = bountyStatus(bounty, now);
-
-  // The inline page is the OLDEST submissions (created_at ASC), so once a
-  // bounty passes the page size the newest entries are not in this response.
-  // `submissionsNextOffset` tells a poster to page through
-  // /api/bounties/{id}/submissions instead of judging from this page alone.
-  const { submissions, total: submissionCount } = await listSubmissionsForBounty(
-    db,
-    bounty.id,
-    DETAIL_SUBMISSIONS_PAGE,
-    0,
-    bounty.submissionCount
-  );
-  // A full page with more counted behind it means there is a next page. A
-  // short page is the end even if the stored count says otherwise.
-  const submissionsNextOffset =
-    submissions.length === DETAIL_SUBMISSIONS_PAGE && submissions.length < submissionCount
-      ? submissions.length
-      : null;
-  // One submission per agent, so submissionCount is also distinct submitters.
+  const detail = await loadBountyDetail(db, bounty);
+  const { status, submissions, submissionCount, submissionsNextOffset } = detail;
+  // One submission per agent, so submissionCount is also distinct entries.
   // Omitted rather than failing the detail read if the attempts table is
   // unavailable (e.g. migration 029 not yet applied).
   const engagement = await getSubmitAttemptCounts(db, bounty.id, submissionCount).catch(
     () => undefined
   );
-
-  // Winner block — populated whenever the bounty has acceptedAt (i.e. on
-  // winner-announced, paid, and abandoned-after-accept).
-  let winner: BountyWinner | undefined;
-  if (bounty.acceptedSubmissionId && bounty.acceptedAt) {
-    const winningSub =
-      submissions.find((s) => s.id === bounty.acceptedSubmissionId) ??
-      (await getSubmission(db, bounty.acceptedSubmissionId));
-    if (winningSub) {
-      winner = buildWinner(winningSub, bounty.acceptedAt);
-    }
-  }
-
-  // Payment block — only meaningful when status is winner-announced.
-  let payment: BountyPaymentHint | undefined;
-  if (status === "winner-announced" && winner) {
-    payment = buildPaymentHint(bounty, winner.submitterStxAddress);
-  }
 
   return NextResponse.json(
     {
@@ -104,35 +57,21 @@ export async function GET(
       submissionCount,
       submissionsNextOffset,
       ...(engagement && { engagement }),
-      ...(winner && { winner }),
-      ...(payment && { payment }),
+      ...(detail.winner && { winner: detail.winner }),
+      ...(detail.payout && { payout: detail.payout }),
+      ...(detail.payments && { payments: detail.payments }),
+      ...(detail.payment && { payment: detail.payment }),
     },
     {
       headers: {
-        "Cache-Control": "public, max-age=15, s-maxage=15, stale-while-revalidate=60",
+        // While a winner is being paid, `payments` changes after every /paid
+        // call; a cached copy could show an already paid member as owed and
+        // lead to a second transfer, so it is never cached then.
+        "Cache-Control":
+          status === "winner-announced"
+            ? "private, no-store"
+            : "public, max-age=15, s-maxage=15, stale-while-revalidate=60",
       },
     }
   );
-}
-
-function buildWinner(s: BountySubmission, acceptedAt: string): BountyWinner {
-  return {
-    submissionId: s.id,
-    submitterBtcAddress: s.submitterBtcAddress,
-    submitterStxAddress: s.submitterStxAddress,
-    ...(s.contentUrl && { contentUrl: s.contentUrl }),
-    message: s.message,
-    acceptedAt,
-  };
-}
-
-function buildPaymentHint(bounty: BountyRecord, recipientStxAddress: string): BountyPaymentHint {
-  const memo = buildExpectedMemo(bounty.id);
-  return {
-    expectedMemo: memo.ascii,
-    expectedMemoHex: memo.hex,
-    recipientStxAddress,
-    amountSats: bounty.rewardSats,
-    sbtcContract: SBTC_CONTRACT_MAINNET,
-  };
 }

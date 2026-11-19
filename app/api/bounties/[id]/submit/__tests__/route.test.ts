@@ -22,7 +22,10 @@ vi.mock("@/lib/bitcoin-verify", () => ({
 }));
 
 const getBountyMock = vi.fn();
-const hasSubmissionMock = vi.fn();
+const enteredAgentsMock = vi.fn();
+const listMembersMock = vi.fn();
+const dropInvitesMock = vi.fn();
+const removeMemberMock = vi.fn();
 const insertSubmissionMock = vi.fn();
 const recordSubmitAttemptMock = vi.fn();
 vi.mock("@/lib/bounty", async (importOriginal) => {
@@ -32,7 +35,10 @@ vi.mock("@/lib/bounty", async (importOriginal) => {
   return {
     ...actual,
     getBounty: (...args: unknown[]) => getBountyMock(...args),
-    hasSubmission: (...args: unknown[]) => hasSubmissionMock(...args),
+    enteredAgents: (...args: unknown[]) => enteredAgentsMock(...args),
+    listMembers: (...args: unknown[]) => listMembersMock(...args),
+    dropUnconfirmableInvites: (...args: unknown[]) => dropInvitesMock(...args),
+    removePendingMember: (...args: unknown[]) => removeMemberMock(...args),
     insertSubmission: (...args: unknown[]) => insertSubmissionMock(...args),
     recordSubmitAttempt: (...args: unknown[]) => recordSubmitAttemptMock(...args),
   };
@@ -64,8 +70,12 @@ function openBounty() {
   };
 }
 
-function submitRequest() {
+const MATE1_BTC = "bc1qmateone00000000000000000000000000000000";
+const MATE2_BTC = "bc1qmatetwo00000000000000000000000000000000";
+
+function submitRequest(extra: Record<string, unknown> = {}) {
   const body = {
+    ...extra,
     submitterBtcAddress: SUBMITTER_BTC,
     message: "Here is my work.",
     contentUrl: "https://example.com/pr/1",
@@ -83,13 +93,16 @@ function submitRequest() {
 
 beforeEach(() => {
   vi.clearAllMocks();
-  lookupAgentMock.mockResolvedValue({
-    btcAddress: SUBMITTER_BTC,
-    stxAddress: "SPSUBMITTER",
-  });
+  lookupAgentMock.mockImplementation(async (_kv: unknown, addr: string) => ({
+    btcAddress: addr,
+    stxAddress: `SP-${addr}`,
+  }));
   verifySignatureMock.mockReturnValue({ valid: true, address: SUBMITTER_BTC });
   getBountyMock.mockResolvedValue(openBounty());
-  hasSubmissionMock.mockResolvedValue(false);
+  enteredAgentsMock.mockResolvedValue(new Set());
+  listMembersMock.mockResolvedValue(new Map());
+  dropInvitesMock.mockResolvedValue(0);
+  removeMemberMock.mockResolvedValue(true);
   insertSubmissionMock.mockResolvedValue(undefined);
   recordSubmitAttemptMock.mockResolvedValue(undefined);
 });
@@ -105,12 +118,12 @@ describe("POST /api/bounties/[id]/submit — one submission per agent", () => {
     });
 
     expect(res.status).toBe(201);
-    expect(hasSubmissionMock).toHaveBeenCalledWith({}, BOUNTY_ID, SUBMITTER_BTC);
+    expect(enteredAgentsMock).toHaveBeenCalledWith({}, BOUNTY_ID, [SUBMITTER_BTC]);
     expect(insertSubmissionMock).toHaveBeenCalledTimes(1);
   });
 
   it("repeat submission from the same agent is rejected (409 already_submitted)", async () => {
-    hasSubmissionMock.mockResolvedValue(true);
+    enteredAgentsMock.mockResolvedValue(new Set([SUBMITTER_BTC]));
 
     const res = await POST(submitRequest(), {
       params: Promise.resolve({ id: BOUNTY_ID }),
@@ -128,7 +141,7 @@ describe("POST /api/bounties/[id]/submit — one submission per agent", () => {
       ...openBounty(),
       expiresAt: new Date(Date.now() - 1000).toISOString(),
     });
-    hasSubmissionMock.mockResolvedValue(true);
+    enteredAgentsMock.mockResolvedValue(new Set([SUBMITTER_BTC]));
 
     const res = await POST(submitRequest(), {
       params: Promise.resolve({ id: BOUNTY_ID }),
@@ -218,5 +231,140 @@ describe("POST /api/bounties/[id]/submit: refused attempts are recorded (#1040)"
     expect(res.status).toBe(404);
     const body = (await res.json()) as { error: string };
     expect(body.error).toBe("agent_not_found");
+  });
+});
+
+describe("POST /api/bounties/[id]/submit: team entries", () => {
+  const call = (extra: Record<string, unknown>) =>
+    POST(submitRequest(extra), { params: Promise.resolve({ id: BOUNTY_ID }) });
+
+  it("stores the team with an even split, lead first, STX addresses from agent records", async () => {
+    const res = await call({ teammates: [MATE1_BTC, MATE2_BTC] });
+    expect(res.status).toBe(201);
+    const members = insertSubmissionMock.mock.calls[0][3];
+    expect(members).toEqual([
+      { btcAddress: SUBMITTER_BTC, stxAddress: `SP-${SUBMITTER_BTC}`, shareSats: 1668 },
+      { btcAddress: MATE1_BTC, stxAddress: `SP-${MATE1_BTC}`, shareSats: 1666 },
+      { btcAddress: MATE2_BTC, stxAddress: `SP-${MATE2_BTC}`, shareSats: 1666 },
+    ]);
+    expect(insertSubmissionMock.mock.calls[0][1].teamSize).toBe(3);
+  });
+
+  it("drops the lead's other pending invites on this bounty once they have an entry", async () => {
+    await call({ teammates: [MATE1_BTC] });
+    expect(dropInvitesMock).toHaveBeenCalledWith({}, BOUNTY_ID, SUBMITTER_BTC);
+  });
+
+  it("tells the lead when their own pending invites on this bounty were dropped", async () => {
+    dropInvitesMock.mockResolvedValue(2);
+    const res = await call({});
+    const json = (await res.json()) as { droppedInvites?: number };
+    expect(json.droppedInvites).toBe(2);
+  });
+
+  it("still answers 201 if dropping old invites fails (best-effort)", async () => {
+    dropInvitesMock.mockRejectedValue(new Error("D1 down"));
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(201);
+  });
+
+  it("signs over the teammates: the submit message ends with them in order", async () => {
+    await call({ teammates: [MATE2_BTC, MATE1_BTC] });
+    const signed = verifySignatureMock.mock.calls[0][1] as string;
+    expect(signed.endsWith(` | ${MATE2_BTC},${MATE1_BTC}`)).toBe(true);
+  });
+
+  it("tells the lead which teammates still have to confirm", async () => {
+    listMembersMock.mockImplementation(async (_db: unknown, [id]: string[]) =>
+      new Map([
+        [
+          id,
+          [
+            { btcAddress: SUBMITTER_BTC, stxAddress: "SP1", role: "lead", shareSats: 2500, confirmed: true },
+            { btcAddress: MATE1_BTC, stxAddress: "SP2", role: "member", shareSats: 2500, confirmed: false },
+          ],
+        ],
+      ])
+    );
+    const res = await call({ teammates: [MATE1_BTC] });
+    const json = (await res.json()) as {
+      submission: { teamStatus: string };
+      nextStep: { confirmEndpoint: string; description: string };
+    };
+    expect(json.submission.teamStatus).toBe("pending");
+    expect(json.nextStep.description).toContain(MATE1_BTC);
+    expect(json.nextStep.confirmEndpoint).toMatch(/\/submissions\/.+\/confirm$/);
+  });
+
+  it("refuses an unregistered teammate (404) and stores nothing", async () => {
+    lookupAgentMock.mockImplementation(async (_kv: unknown, addr: string) =>
+      addr === MATE1_BTC ? null : { btcAddress: addr, stxAddress: `SP-${addr}` }
+    );
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(404);
+    const json = (await res.json()) as { error: string; addresses: string[] };
+    expect(json).toMatchObject({ error: "teammate_not_registered", addresses: [MATE1_BTC] });
+    expect(insertSubmissionMock).not.toHaveBeenCalled();
+  });
+
+  it("refuses the poster as a teammate", async () => {
+    const res = await call({ teammates: [POSTER_BTC] });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe("teammate_is_poster");
+  });
+
+  it("refuses a teammate who already entered this bounty (409)", async () => {
+    enteredAgentsMock.mockResolvedValue(new Set([MATE1_BTC]));
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string; addresses: string[] })).toMatchObject({
+      error: "teammate_already_entered",
+      addresses: [MATE1_BTC],
+    });
+  });
+
+  it("maps a concurrent duplicate entry by the lead to 409 already_submitted", async () => {
+    // Teammates are stored unconfirmed, so only the lead's own row can hit the
+    // one-entry unique index (a retried submit racing the first).
+    insertSubmissionMock.mockRejectedValue(
+      new Error(
+        "D1_ERROR: UNIQUE constraint failed: bounty_submission_members.bounty_id, bounty_submission_members.member_btc_address"
+      )
+    );
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(409);
+    expect(((await res.json()) as { error: string }).error).toBe("already_submitted");
+    expect(recordSubmitAttemptMock).not.toHaveBeenCalled();
+  });
+
+  it("does not report another member-table failure as a duplicate entry", async () => {
+    insertSubmissionMock.mockRejectedValue(
+      new Error("D1_ERROR: UNIQUE constraint failed: bounty_submission_members.submission_id, bounty_submission_members.member_btc_address")
+    );
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(500);
+    expect(recordSubmitAttemptMock).toHaveBeenCalledWith({}, BOUNTY_ID, SUBMITTER_BTC, "store_failed", expect.any(String));
+  });
+
+  it("does not report another table's unique violation as a duplicate entry", async () => {
+    insertSubmissionMock.mockRejectedValue(new Error("D1_ERROR: UNIQUE constraint failed: bounty_submissions.id"));
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(500);
+    expect(((await res.json()) as { error: string }).error).toBe("submit_failed");
+  });
+
+  it("an agent who is only invited to another team can still be named (invites do not block)", async () => {
+    // enteredAgents only reports confirmed memberships and leads, so an
+    // unconfirmed invite elsewhere leaves MATE1 free.
+    enteredAgentsMock.mockResolvedValue(new Set());
+    const res = await call({ teammates: [MATE1_BTC] });
+    expect(res.status).toBe(201);
+  });
+
+  it("refuses a team larger than the reward in sats", async () => {
+    getBountyMock.mockResolvedValue({ ...openBounty(), rewardSats: 2 });
+    const res = await call({ teammates: [MATE1_BTC, MATE2_BTC] });
+    expect(res.status).toBe(400);
+    expect(((await res.json()) as { error: string }).error).toBe("team_too_large");
   });
 });

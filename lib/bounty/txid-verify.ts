@@ -6,8 +6,9 @@
  *   2. It's a successful sBTC `transfer` contract call, or a call to another
  *      contract that forwards to it (then verified from the events, not the args)
  *   3. Sender = poster's STX address
- *   4. Recipient = winning submitter's STX address
- *   5. Amount >= bounty.rewardSats
+ *   4. Recipient = a still-unpaid member of the winning submission (each
+ *      member of a team is paid directly, never through the lead)
+ *   5. Amount >= that member's share (the whole reward for a solo entry)
  *   6. Memo equals `BNTY:{bountyId}` (the anti-fraud binding — same memo cannot
  *      be reused, and an unrelated transfer to the same winner cannot be passed
  *      off as a bounty payment)
@@ -19,7 +20,7 @@
  * handler maps each code to an HTTP response.
  */
 
-import type { BountyRecord, BountySubmission } from "./types";
+import type { BountyRecord } from "./types";
 import { MEMO_PREFIX, SBTC_CONTRACTS, SBTC_CONTRACT_MAINNET } from "./constants";
 import { STACKS_API_BASE, STACKS_API_TESTNET_BASE } from "@/lib/identity/constants";
 import { buildHiroHeaders, retryAfterSeconds, stacksApiFetch } from "@/lib/stacks-api-fetch";
@@ -59,12 +60,26 @@ export type TxidVerifyFailureCode =
   | "RATE_LIMITED"
   | "HIRO_UNREACHABLE";
 
+/** A member of the winning submission who is still owed their share. */
+export interface PayoutRecipient {
+  btcAddress: string;
+  stxAddress: string;
+  amountSats: number;
+}
+
 export type TxidVerifyResult =
   | {
       ok: true;
       /** The canonical `tx_id` Hiro returned — store this, not the input. */
       canonicalTxid: string;
       blockTimeIso: string;
+      /**
+       * The recipients this tx paid, one transfer event each. A direct
+       * transfer pays one; a contract call can pay several in one tx.
+       */
+      matched: { btcAddress: string; stxAddress: string; eventIndex: number | null; amount: number }[];
+      /** Recipients this tx sent sBTC to, but less than their share (not recorded). */
+      underpaid: { btcAddress: string; amount: number; required: number }[];
     }
   | {
       ok: false;
@@ -111,7 +126,7 @@ export function buildExpectedMemo(bountyId: string): {
 }
 
 /**
- * Verify a payout txid against a specific bounty + accepted submission.
+ * Verify a payout txid against a bounty and the members still owed a share.
  *
  * Pure logic over an injected `fetch` function so the unit tests can stub
  * Hiro without network calls. The route handler wires up the real `fetch`.
@@ -123,7 +138,8 @@ export function buildExpectedMemo(bountyId: string): {
 export async function verifyPayoutTxid(params: {
   txid: string;
   bounty: BountyRecord;
-  acceptedSubmission: BountySubmission;
+  /** Unpaid members of the accepted submission. Must be non-empty. */
+  recipients: PayoutRecipient[];
   /**
    * Override the HTTP fetcher. Defaults to `stacksApiFetch()` from
    * `lib/stacks-api-fetch.ts` (the canonical helper with retry + 429
@@ -149,6 +165,10 @@ export async function verifyPayoutTxid(params: {
       ? SBTC_CONTRACT_MAINNET
       : `${SBTC_CONTRACTS.testnet.address}.${SBTC_CONTRACTS.testnet.name}`;
   const apiBase = network === "mainnet" ? STACKS_API_BASE : STACKS_API_TESTNET_BASE;
+  const byStx = new Map(params.recipients.map((r) => [r.stxAddress, r]));
+  const owedList = params.recipients
+    .map((r) => `${r.amountSats} sats to ${r.stxAddress}`)
+    .join(", ");
   const fetchFn =
     params.fetchFn ?? ((url, init) => stacksApiFetch(url, init, { logger }));
   // Later event pages fail fast (see TX_EVENT_PAGE_FETCH_CONFIG).
@@ -266,7 +286,8 @@ export async function verifyPayoutTxid(params: {
       };
     }
 
-    // (5) Recipient must match the accepted submitter's STX address.
+    // (5) Recipient must be one of the members still owed a share. A direct
+    // transfer has one recipient, so it pays exactly one member.
     const recipientArg = readPrincipalArg(tx.contract_call.function_args, "recipient");
     if (!recipientArg) {
       return {
@@ -275,11 +296,11 @@ export async function verifyPayoutTxid(params: {
         message: "Transaction function args missing a recipient.",
       };
     }
-    if (recipientArg !== params.acceptedSubmission.submitterStxAddress) {
+    if (!byStx.has(recipientArg)) {
       return {
         ok: false,
         code: "WRONG_RECIPIENT",
-        message: `Recipient ${recipientArg} does not match winner's STX address ${params.acceptedSubmission.submitterStxAddress}.`,
+        message: `Recipient ${recipientArg} is not an unpaid member of the winning submission. Still owed: ${owedList}.`,
       };
     }
   }
@@ -300,10 +321,9 @@ export async function verifyPayoutTxid(params: {
     };
   }
 
-  // The checks below read the events. A payout accepted from the events loaded
-  // so far is on-chain proof, so paging stops at the first one; a refusal is
-  // only issued once every page is read (a missing page might hold the payout).
-  // `payoutFound` accepts exactly what the checks below accept.
+  // The checks below read the events. Paging stops once every recipient has
+  // a verified payout in the loaded events; a refusal is only issued once
+  // every page is read (a missing page might hold the payout).
   const expected = buildExpectedMemo(params.bounty.id);
   const directMemoMatches = isDirect && memosMatch(readMemoArg(tx.contract_call.function_args), expected.hex);
   // A direct transfer's memo is an arg: a wrong one is known without the events.
@@ -314,29 +334,76 @@ export async function verifyPayoutTxid(params: {
       message: `Memo did not match. Expected ${expected.hex} ("${expected.ascii}"). Include this memo in the sBTC transfer.`,
     };
   }
-  const payoutFound = (evs: HiroTxEvent[]): boolean => {
-    const payouts = findSbtcTransferEvents(evs, sbtcContractId).filter(
-      (ev) =>
-        ev.sender === params.bounty.posterStxAddress &&
-        ev.recipient === params.acceptedSubmission.submitterStxAddress &&
-        ev.amount >= params.bounty.rewardSats
-    );
-    if (isDirect) return payouts.length > 0;
-    // The memo print sits at `eventIndex + 1`; if that page is not loaded yet, keep paging.
-    return payouts.some((ev) =>
-      memosMatch(readSbtcMemoPrint(evs, sbtcContractId, ev.eventIndex), expected.hex)
-    );
+
+  // One verified transfer per recipient: from the poster, to that member, at
+  // least their share, with the bounty memo bound to that very transfer.
+  // Routed payout: the top-level args belong to the wrapper, so the memo is
+  // read from the print `sbtc-token.transfer` emits right after its FT
+  // transfer. Only that contract can emit a print under its own id, and
+  // requiring the next event index binds the memo to this very transfer.
+  const matchPayouts = (evs: HiroTxEvent[]) => {
+    const matched: { btcAddress: string; stxAddress: string; eventIndex: number | null; amount: number }[] = [];
+    for (const ev of findSbtcTransferEvents(evs, sbtcContractId)) {
+      const r = byStx.get(ev.recipient);
+      if (!r || ev.sender !== params.bounty.posterStxAddress || ev.amount < r.amountSats) continue;
+      if (matched.some((m) => m.stxAddress === r.stxAddress)) continue;
+      if (!isDirect && !memosMatch(readSbtcMemoPrint(evs, sbtcContractId, ev.eventIndex), expected.hex)) {
+        continue;
+      }
+      matched.push({ btcAddress: r.btcAddress, stxAddress: r.stxAddress, eventIndex: ev.eventIndex, amount: ev.amount });
+    }
+    return matched;
   };
+  const wanted = isDirect ? 1 : params.recipients.length;
   const events = await boundTxEventsGap(
-    await loadTxEventsUntil(tx, txUrl, (url) => pageFetchFn(url, jsonInit), payoutFound),
+    await loadTxEventsUntil(
+      tx,
+      txUrl,
+      (url) => pageFetchFn(url, jsonInit),
+      (evs) => matchPayouts(evs).length >= wanted
+    ),
     tx.tx_id ?? params.txid,
     params.kv,
     now.getTime()
   );
   if (events.state === "unreachable") {
+    // Payouts already proven on the pages that did load are on-chain fact:
+    // record them now (a team keeps paging for the members not yet found,
+    // and a later page failing must not hold the found ones back). Only when
+    // nothing is proven yet is the failure a retryable "try again".
+    const proven = matchPayouts(tx.events ?? []);
+    if (proven.length > 0) {
+      return { ok: true, canonicalTxid: tx.tx_id, blockTimeIso, matched: proven, underpaid: [] };
+    }
     if (events.response?.status === 429) return rateLimitedResult(events.response);
     return { ok: false, code: "HIRO_UNREACHABLE", message: "Could not read the transaction events." };
   }
+
+  const matched = matchPayouts(tx.events ?? []);
+  const sbtcTransfers = findSbtcTransferEvents(tx.events, sbtcContractId);
+  const underpaid = params.recipients
+    .filter((r) => !matched.some((m) => m.stxAddress === r.stxAddress))
+    .flatMap((r) => {
+      // Only transfers bound to THIS bounty count: one tx may also pay this
+      // member for another bounty (its own memo), which is not an underpayment
+      // here. A direct transfer's memo was already checked from its args.
+      const sent = sbtcTransfers.filter(
+        (ev) =>
+          ev.sender === params.bounty.posterStxAddress &&
+          ev.recipient === r.stxAddress &&
+          (isDirect || memosMatch(readSbtcMemoPrint(tx.events, sbtcContractId, ev.eventIndex), expected.hex))
+      );
+      if (sent.length === 0) return [];
+      const amount = Math.max(...sent.map((ev) => ev.amount));
+      return amount < r.amountSats ? [{ btcAddress: r.btcAddress, amount, required: r.amountSats }] : [];
+    });
+
+  // A payout found in the events that did load is on-chain proof, even when
+  // later pages could not be read: record what is proven.
+  if (matched.length > 0) {
+    return { ok: true, canonicalTxid: tx.tx_id, blockTimeIso, matched, underpaid };
+  }
+
   if (events.state === "truncated" || events.state === "incomplete") {
     return {
       ok: false,
@@ -345,11 +412,10 @@ export async function verifyPayoutTxid(params: {
     };
   }
 
-  // Cross-check with the FT transfer events for the same parties + amount —
-  // this catches wrapper contracts that pass crafted args but route the
-  // actual transfer differently. For a routed payout the events are the only
-  // source: the calling contract cannot forge an sBTC FT event.
-  const sbtcTransfers = findSbtcTransferEvents(tx.events, sbtcContractId);
+  // Nothing matched: say which check failed. Cross-checking against the FT
+  // events catches wrapper contracts that pass crafted args but route the
+  // actual transfer differently; the calling contract cannot forge an sBTC
+  // FT event.
   if (sbtcTransfers.length === 0) {
     return {
       ok: false,
@@ -359,53 +425,33 @@ export async function verifyPayoutTxid(params: {
         : `Expected sBTC contract ${sbtcContractId}, got ${tx.contract_call.contract_id}, and the transaction moved no sBTC.`,
     };
   }
-  // Search every sBTC transfer, not the first: a routed payout may move a fee
-  // before the payout itself.
-  const toWinner = sbtcTransfers.filter(
-    (ev) =>
-      ev.sender === params.bounty.posterStxAddress &&
-      ev.recipient === params.acceptedSubmission.submitterStxAddress
+  const toMembers = sbtcTransfers.filter(
+    (ev) => ev.sender === params.bounty.posterStxAddress && byStx.has(ev.recipient)
   );
-  if (toWinner.length === 0) {
+  if (toMembers.length === 0) {
     return {
       ok: false,
       code: "WRONG_RECIPIENT",
-      message: "FT event sender/recipient do not match expected.",
+      message: `No sBTC transfer from the poster to an unpaid member. Still owed: ${owedList}.`,
     };
   }
-
-  // (6) Amount.
-  const payouts = toWinner.filter((ev) => ev.amount >= params.bounty.rewardSats);
-  if (payouts.length === 0) {
-    const amount = Math.max(...toWinner.map((ev) => ev.amount));
+  if (underpaid.length > 0) {
     return {
       ok: false,
       code: "AMOUNT_TOO_LOW",
-      message: `Transferred ${amount} sats < promised ${params.bounty.rewardSats} sats.`,
+      message: underpaid
+        .map(
+          (u) =>
+            `Transferred ${u.amount} sats < owed ${u.required} sats to ${u.btcAddress}. Each member needs ONE transfer of at least their share; smaller transfers are not added together, so do not send a top-up.`
+        )
+        .join(" "),
     };
   }
-
-  // (7) Memo: must equal `BNTY:{bountyId}`. This is the binding that prevents
-  // a poster from passing off an unrelated transfer as a bounty payment.
-  // Routed payout: the top-level args belong to the wrapper, so the memo is
-  // read from the print `sbtc-token.transfer` emits right after its FT
-  // transfer. Only that contract can emit a print under its own id, and
-  // requiring the next event index binds the memo to this very transfer.
-  // A direct transfer's memo was already checked from its args above.
-  const memoMatches =
-    isDirect ||
-    payouts.some((ev) =>
-      memosMatch(readSbtcMemoPrint(tx.events, sbtcContractId, ev.eventIndex), expected.hex)
-    );
-  if (!memoMatches) {
-    return {
-      ok: false,
-      code: "MEMO_MISMATCH",
-      message: `Memo did not match. Expected ${expected.hex} ("${expected.ascii}"). Include this memo in the sBTC transfer.`,
-    };
-  }
-
-  return { ok: true, canonicalTxid: tx.tx_id, blockTimeIso };
+  return {
+    ok: false,
+    code: "MEMO_MISMATCH",
+    message: `Memo did not match. Expected ${expected.hex} ("${expected.ascii}"). Include this memo in the sBTC transfer.`,
+  };
 }
 
 /**

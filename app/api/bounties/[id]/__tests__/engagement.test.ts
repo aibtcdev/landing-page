@@ -8,13 +8,17 @@ vi.mock("@opennextjs/cloudflare", () => ({
 const getBountyMock = vi.fn();
 const listSubmissionsMock = vi.fn();
 const countsMock = vi.fn();
-vi.mock("@/lib/bounty", async (importOriginal) => {
-  const actual = await importOriginal<typeof import("@/lib/bounty")>();
+// Mock the D1 layer itself: the route and the shared detail loader
+// (lib/bounty/detail.ts) both read through it.
+vi.mock("@/lib/bounty/d1-helpers", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/bounty/d1-helpers")>();
   return {
     ...actual,
     getBounty: (...args: unknown[]) => getBountyMock(...args),
     listSubmissionsForBounty: (...args: unknown[]) => listSubmissionsMock(...args),
     getSubmitAttemptCounts: (...args: unknown[]) => countsMock(...args),
+    listMembers: async () => new Map(),
+    withTeams: async (_db: unknown, subs: unknown[]) => subs,
   };
 });
 

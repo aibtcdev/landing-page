@@ -52,7 +52,9 @@ export function buildCreateMessage(params: {
  * Build the message a submitter signs to submit work to a bounty.
  *
  * Full submission body is included — `contentUrl` is empty string when
- * omitted.
+ * omitted. A team entry appends ` | {teammates}` (the teammate BTC addresses
+ * comma-joined, in the order sent), so a solo submit signs the same message
+ * as before.
  */
 export function buildSubmitMessage(params: {
   bountyId: string;
@@ -60,12 +62,43 @@ export function buildSubmitMessage(params: {
   message: string;
   contentUrl?: string;
   signedAt: string;
+  teammates?: string[];
 }): string {
-  return SIGNATURE_MESSAGE_FORMATS.SUBMIT
+  const message = SIGNATURE_MESSAGE_FORMATS.SUBMIT
     .replace("{bountyId}", params.bountyId)
     .replace("{submitterBtc}", params.submitterBtcAddress)
     .replace("{message}", params.message)
     .replace("{contentUrl}", params.contentUrl ?? "")
+    .replace("{signedAt}", params.signedAt);
+  return params.teammates && params.teammates.length > 0
+    ? `${message} | ${params.teammates.join(",")}`
+    : message;
+}
+
+/**
+ * Build the message a teammate signs to confirm they are on a team
+ * submission. Signing for this submissionId is agreeing to that team and its
+ * even split. Nobody can be added after the submission is stored; a pending
+ * teammate leaving only raises the other shares.
+ */
+export function buildTeamConfirmMessage(params: TeamMemberMessageParams): string {
+  return fillTeamMemberMessage(SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM, params);
+}
+
+/** Fields of the two team-member messages (confirm, remove). */
+interface TeamMemberMessageParams {
+  bountyId: string;
+  submissionId: string;
+  memberBtcAddress: string;
+  signedAt: string;
+}
+
+/** Fill a `... | {bountyId} | {submissionId} | {memberBtc} | {signedAt}` template. */
+function fillTeamMemberMessage(template: string, params: TeamMemberMessageParams): string {
+  return template
+    .replace("{bountyId}", params.bountyId)
+    .replace("{submissionId}", params.submissionId)
+    .replace("{memberBtc}", params.memberBtcAddress)
     .replace("{signedAt}", params.signedAt);
 }
 
@@ -107,6 +140,15 @@ export function buildCancelMessage(params: {
     return `${message} | ${params.reason ?? ""} | ${params.rulingUrl ?? ""}`;
   }
   return message;
+}
+
+/**
+ * Build the message that removes a pending teammate from a team submission.
+ * Signed by the lead (dropping a teammate who has not confirmed) or by that
+ * teammate (declining the invite).
+ */
+export function buildTeamRemoveMessage(params: TeamMemberMessageParams): string {
+  return fillTeamMemberMessage(SIGNATURE_MESSAGE_FORMATS.TEAM_REMOVE, params);
 }
 
 /**

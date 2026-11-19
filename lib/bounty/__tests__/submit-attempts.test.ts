@@ -1,7 +1,7 @@
 import { describe, it, expect, vi } from "vitest";
 import { getSubmitAttemptCounts, recordSubmitAttempt } from "../d1-helpers";
 
-function mockDb(rows: { outcome: string; n: number }[] = []) {
+function mockDb(rows: { outcome: string; n: number }[] = [], agents: { n: number } | Error | null = null) {
   const bind = vi.fn();
   const stmt = {
     bind: (...args: unknown[]) => {
@@ -9,6 +9,7 @@ function mockDb(rows: { outcome: string; n: number }[] = []) {
       return stmt;
     },
     all: vi.fn().mockResolvedValue({ results: rows }),
+    first: agents instanceof Error ? vi.fn().mockRejectedValue(agents) : vi.fn().mockResolvedValue(agents),
     run: vi.fn().mockResolvedValue({ meta: { changes: 1 } }),
   };
   const prepare = vi.fn().mockReturnValue(stmt);
@@ -29,6 +30,23 @@ describe("getSubmitAttemptCounts", () => {
       submitted: 5,
       refused: { not_registered: 1, closed: 3, store_failed: 0 },
     });
+  });
+
+  it("counts distinct agents on entries (leads plus confirmed teammates), not entries", async () => {
+    // 2 entries, one of them a team of 3: 4 agents.
+    const { db, prepare } = mockDb([], { n: 4 });
+    const counts = await getSubmitAttemptCounts(db, "b1", 2);
+    expect(counts.submitted).toBe(4);
+    const agentSql = prepare.mock.calls.map((c) => c[0] as string).find((q) => q.includes("COUNT(*)"))!;
+    // Reaches members through this bounty's submissions, never a members-wide bounty_id scan.
+    expect(agentSql).toContain("JOIN bounty_submission_members m ON m.submission_id = s.id");
+    expect(agentSql).toContain("m.confirmed_at IS NOT NULL");
+  });
+
+  it("falls back to the entry count when the agent count cannot be read", async () => {
+    const { db } = mockDb([], new Error("D1 down"));
+    const counts = await getSubmitAttemptCounts(db, "b1", 2);
+    expect(counts.submitted).toBe(2);
   });
 
   it("ignores unknown outcome values", async () => {
