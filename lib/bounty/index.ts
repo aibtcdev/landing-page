@@ -44,6 +44,7 @@ export {
   buildPaidMessage,
   buildCancelMessage,
   buildTeamConfirmMessage,
+  buildTeamRemoveMessage,
   isWithinSignatureWindow,
 } from "./signatures";
 
@@ -55,6 +56,7 @@ export {
   validatePaid,
   validateCancel,
   validateTeamConfirm,
+  validateTeamRemove,
 } from "./validation";
 
 export type {
@@ -77,12 +79,12 @@ export {
   listSubmissionsForBounty,
   listSubmissionsBySubmitter,
   insertSubmission,
-  hasSubmission,
   enteredAgents,
   ensureLeadMember,
   listMembers,
   withTeams,
   confirmMember,
+  removePendingMember,
   buildPayout,
   listPendingConfirms,
   submittedBountyIds,
