@@ -2,9 +2,11 @@
  * /api/bounties/[id]/submissions/[submissionId]/confirm
  *
  * A teammate confirms they are on a team submission, signing with their own
- * Bitcoin key. The team and the even split are fixed when the lead submits,
- * so signing for this submissionId is agreeing to exactly that. The poster
- * can only accept the entry once every member has confirmed.
+ * Bitcoin key. Nobody can be added after the lead submits; the only change
+ * is that a teammate who has not confirmed can leave (declines, is dropped by
+ * the lead, or joins another entry), and the reward is re-split across the
+ * rest. So a confirmed member's share can only go up. The poster can only
+ * accept the entry once every member has confirmed.
  *
  * Being named as a teammate is only an invite: it never blocks the agent from
  * entering the bounty another way. Confirming is what makes it their entry,
@@ -24,7 +26,9 @@ import {
   bountyStatus,
   buildTeamConfirmMessage,
   confirmMember,
+  dropUnconfirmableInvites,
   enteredAgents,
+  isOneEntryConflict,
   getBounty,
   getSubmission,
   isWithinSignatureWindow,
@@ -33,9 +37,6 @@ import {
 } from "@/lib/bounty";
 
 type Params = { params: Promise<{ id: string; submissionId: string }> };
-
-/** The one-entry-per-agent unique index (bounty_id, member_btc_address). */
-const ONE_ENTRY_CONSTRAINT = "UNIQUE constraint failed: bounty_submission_members.bounty_id";
 
 export async function GET(_request: NextRequest, { params }: Params) {
   const { id, submissionId } = await params;
@@ -198,8 +199,15 @@ export async function POST(request: NextRequest, { params }: Params) {
       confirmedNow = await confirmMember(db, submissionId, data.btcAddress, new Date().toISOString());
     } catch (e) {
       // The unique index on confirmed entries refused a concurrent second entry.
-      if (String(e).includes(ONE_ENTRY_CONSTRAINT)) return alreadyEntered();
+      if (isOneEntryConflict(e)) return alreadyEntered();
       throw e;
+    }
+    // This is now their entry, so their other pending invites on this bounty
+    // can never be confirmed: drop them so those teams re-split.
+    if (confirmedNow) {
+      await dropUnconfirmableInvites(db, id, data.btcAddress).catch((e) =>
+        logger.warn("bounty.drop_invites_failed", { error: String(e) })
+      );
     }
     const fresh = (await listMembers(db, [submissionId])).get(submissionId) ?? team;
     logger.info("bounty.team_confirmed", { member: data.btcAddress, confirmedNow });
