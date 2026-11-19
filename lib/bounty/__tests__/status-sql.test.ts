@@ -179,7 +179,7 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
       submissionId: "s1",
       txid: "0x5b60",
       paidAt,
-      payments: [{ btcAddress: "bc1qwinner", eventIndex: 0 }],
+      payments: [{ btcAddress: "bc1qwinner", eventIndex: 0, amountSats: 5000 }],
     });
     const after = Date.now();
 
@@ -189,6 +189,7 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
     expect(binds[0]).toEqual([
       "0x5b60",
       0,
+      5000,
       paidAt,
       "s1",
       "bc1qwinner",
@@ -221,7 +222,7 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
       submissionId: "s1",
       txid: "0xabc",
       paidAt: "2026-10-09T14:43:24.000Z",
-      payments: [{ btcAddress: "bc1qlead", eventIndex: 2 }],
+      payments: [{ btcAddress: "bc1qlead", eventIndex: 2, amountSats: 2500 }],
     });
     expect(result).toEqual({ recordedMembers: ["bc1qlead"], bountyPaid: false });
     // The touch is guarded on a member row now carrying this payment.
@@ -235,7 +236,7 @@ describe("recordMemberPayments pay-grace cutoff (#1110)", () => {
       submissionId: "s1",
       txid: "0xabc",
       paidAt: "2026-10-09T14:43:24.000Z",
-      payments: [{ btcAddress: "bc1qlead", eventIndex: 2 }],
+      payments: [{ btcAddress: "bc1qlead", eventIndex: 2, amountSats: 2500 }],
     });
     expect(result).toEqual({ recordedMembers: [], bountyPaid: false });
   });
