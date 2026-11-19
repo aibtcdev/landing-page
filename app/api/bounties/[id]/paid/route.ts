@@ -123,7 +123,11 @@ export async function POST(
       return NextResponse.json({
         bounty: { ...bounty, status },
         alreadyRecorded: true,
-        paidMembers: mine.map((m) => ({ btcAddress: m.btcAddress, stxAddress: m.stxAddress, amountSats: m.shareSats })),
+        paidMembers: mine.map((m) => ({
+          btcAddress: m.btcAddress,
+          stxAddress: m.stxAddress,
+          amountSats: m.paidAmountSats ?? m.shareSats,
+        })),
         payout,
         message:
           payout.unpaid.length === 0
