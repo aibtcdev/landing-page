@@ -7,6 +7,7 @@
  */
 
 import { NextRequest, NextResponse } from "next/server";
+import { buildPaymentHints } from "@/lib/bounty/detail";
 import { getCloudflareContext } from "@opennextjs/cloudflare";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 import { createLogger, createConsoleLogger, isLogsRPC } from "@/lib/logging";
@@ -157,12 +158,10 @@ export async function POST(
     const fresh = await getBounty(db, bounty.id);
     return NextResponse.json({
       bounty: { ...fresh, status: bountyStatus(fresh!) },
-      payments: team.map((m) => ({
-        recipientBtcAddress: m.btcAddress,
-        recipientStxAddress: m.stxAddress,
-        amountSats: m.shareSats,
-        memo: `BNTY:${bounty.id}`,
-      })),
+      payments: buildPaymentHints(
+        bounty.id,
+        team.map((m) => ({ btcAddress: m.btcAddress, stxAddress: m.stxAddress, amountSats: m.shareSats }))
+      ),
       nextStep:
         team.length > 1
           ? `Pay each of the ${team.length} members their share directly in sBTC, each transfer with memo BNTY:${bounty.id}, then POST /api/bounties/${bounty.id}/paid with each confirmed txid.`
