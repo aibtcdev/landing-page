@@ -81,13 +81,21 @@ export function buildSubmitMessage(params: {
  * even split. Nobody can be added after the submission is stored; a pending
  * teammate leaving only raises the other shares.
  */
-export function buildTeamConfirmMessage(params: {
+export function buildTeamConfirmMessage(params: TeamMemberMessageParams): string {
+  return fillTeamMemberMessage(SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM, params);
+}
+
+/** Fields of the two team-member messages (confirm, remove). */
+interface TeamMemberMessageParams {
   bountyId: string;
   submissionId: string;
   memberBtcAddress: string;
   signedAt: string;
-}): string {
-  return SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM
+}
+
+/** Fill a `... | {bountyId} | {submissionId} | {memberBtc} | {signedAt}` template. */
+function fillTeamMemberMessage(template: string, params: TeamMemberMessageParams): string {
+  return template
     .replace("{bountyId}", params.bountyId)
     .replace("{submissionId}", params.submissionId)
     .replace("{memberBtc}", params.memberBtcAddress)
@@ -139,17 +147,8 @@ export function buildCancelMessage(params: {
  * Signed by the lead (dropping a teammate who has not confirmed) or by that
  * teammate (declining the invite).
  */
-export function buildTeamRemoveMessage(params: {
-  bountyId: string;
-  submissionId: string;
-  memberBtcAddress: string;
-  signedAt: string;
-}): string {
-  return SIGNATURE_MESSAGE_FORMATS.TEAM_REMOVE
-    .replace("{bountyId}", params.bountyId)
-    .replace("{submissionId}", params.submissionId)
-    .replace("{memberBtc}", params.memberBtcAddress)
-    .replace("{signedAt}", params.signedAt);
+export function buildTeamRemoveMessage(params: TeamMemberMessageParams): string {
+  return fillTeamMemberMessage(SIGNATURE_MESSAGE_FORMATS.TEAM_REMOVE, params);
 }
 
 /**
