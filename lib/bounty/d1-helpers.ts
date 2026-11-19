@@ -420,7 +420,8 @@ export async function setAccepted(
  * BNTY memo. What stops a transfer counting twice is the unique index on
  * (paid_txid, paid_event_index); a repeat throws and the batch rolls back.
  *
- * Returns how many member rows were written and whether the bounty is now paid.
+ * Returns which members this call actually recorded (a member already paid
+ * by another txid is not), and whether the bounty is now paid.
  */
 export async function recordMemberPayments(
   db: D1Database,
@@ -432,7 +433,7 @@ export async function recordMemberPayments(
     paidAt: string;
     payments: { btcAddress: string; eventIndex: number | null }[];
   }
-): Promise<{ recorded: number; bountyPaid: boolean }> {
+): Promise<{ recorded: number; recordedMembers: string[]; bountyPaid: boolean }> {
   const payCutoff = new Date(Date.parse(params.paidAt) - PAY_GRACE_MS).toISOString();
   const nowIso = new Date().toISOString();
   const bountyAcceptedUnpaid = `EXISTS (
@@ -484,9 +485,10 @@ export async function recordMemberPayments(
       params.submissionId
     );
   const results = await db.batch([...memberWrites, bountyWrite]);
-  const recorded = results
-    .slice(0, memberWrites.length)
-    .reduce((n, r) => n + (r.meta?.changes ?? 0), 0);
+  const recordedMembers = params.payments
+    .filter((_, i) => (results[i].meta?.changes ?? 0) > 0)
+    .map((p) => p.btcAddress);
+  const recorded = recordedMembers.length;
   const bountyPaid = (results[memberWrites.length].meta?.changes ?? 0) > 0;
   // A partial payout still changes what the bounty shows, so clients syncing
   // on updatedAt must see it; a call that recorded nothing changes nothing.
@@ -499,7 +501,7 @@ export async function recordMemberPayments(
       .run()
       .catch(() => {});
   }
-  return { recorded, bountyPaid };
+  return { recorded, recordedMembers, bountyPaid };
 }
 
 /**
@@ -776,21 +778,50 @@ export async function listMembers(
   return out;
 }
 
-/** Attach `team` and `teamStatus` to submissions (one query for the page). */
+/** THE rule for a team's state: confirmed once every member has confirmed. */
+export function teamState(team: BountyTeamMember[]): {
+  teamStatus: "pending" | "confirmed";
+  waitingOn: string[];
+} {
+  const waitingOn = team.filter((m) => !m.confirmed).map((m) => m.btcAddress);
+  return { teamStatus: waitingOn.length === 0 ? "confirmed" : "pending", waitingOn };
+}
+
+/**
+ * Attach `team`, `teamSize` and `teamStatus` to submissions of one bounty (one
+ * query for the page).
+ *
+ * The one read-side place for a submission stored by older code without
+ * member rows (after migration 032, before this code deployed): it is shown
+ * as the solo entry it is, the lead with the whole reward, paid if the bounty
+ * row says so. Built in memory; reads never write. Writes that need the row
+ * (accept, paid) create it with ensureLeadMember.
+ */
 export async function withTeams(
   db: D1Database,
-  submissions: BountySubmission[]
+  submissions: BountySubmission[],
+  bounty: Pick<BountyRecord, "rewardSats" | "acceptedSubmissionId" | "paidTxid" | "paidAt">
 ): Promise<BountySubmission[]> {
   const teams = await listMembers(db, submissions.map((s) => s.id));
   return submissions.map((s) => {
-    const team = teams.get(s.id) ?? [];
-    // No member rows: a solo entry stored by older code (see ensureLeadMember).
-    return {
-      ...s,
-      teamSize: team.length || 1,
-      team,
-      teamStatus: team.every((m) => m.confirmed) ? "confirmed" : "pending",
-    };
+    const stored = teams.get(s.id) ?? [];
+    const isPaidWinner = bounty.acceptedSubmissionId === s.id && bounty.paidTxid;
+    const team: BountyTeamMember[] =
+      stored.length > 0
+        ? stored
+        : [
+            {
+              btcAddress: s.submitterBtcAddress,
+              stxAddress: s.submitterStxAddress,
+              role: "lead",
+              shareSats: bounty.rewardSats,
+              confirmed: true,
+              confirmedAt: s.createdAt,
+              ...(isPaidWinner && { paidTxid: bounty.paidTxid }),
+              ...(isPaidWinner && bounty.paidAt && { paidAt: bounty.paidAt }),
+            },
+          ];
+    return { ...s, teamSize: team.length, team, teamStatus: teamState(team).teamStatus };
   });
 }
 
@@ -831,35 +862,47 @@ export async function removePendingMember(
   db: D1Database,
   params: { bountyId: string; submissionId: string; memberBtcAddress: string }
 ): Promise<boolean> {
-  const open = `EXISTS (SELECT 1 FROM bounties WHERE id = ? AND accepted_at IS NULL
-                        AND cancelled_at IS NULL AND paid_at IS NULL)`;
   const results = await db.batch([
     db
       .prepare(
         `DELETE FROM bounty_submission_members
          WHERE submission_id = ? AND member_btc_address = ? AND confirmed_at IS NULL
-           AND role = 'member' AND ${open}`
+           AND role = 'member' AND ${OPEN_BOUNTY}`
       )
       .bind(params.submissionId, params.memberBtcAddress, params.bountyId),
-    db
-      .prepare(
-        `UPDATE bounty_submission_members
-         SET share_sats = (
-           WITH x AS (
-             SELECT b.reward_sats AS r,
-                    (SELECT COUNT(*) FROM bounty_submission_members t WHERE t.submission_id = ?) AS n
-             FROM bounties b WHERE b.id = ?
-           )
-           SELECT CASE WHEN bounty_submission_members.role = 'lead'
-                       THEN r - (r / n) * (n - 1)
-                       ELSE r / n END
-           FROM x
-         )
-         WHERE submission_id = ? AND ${open}`
-      )
-      .bind(params.submissionId, params.bountyId, params.submissionId, params.bountyId),
+    resplitStatement(db, params.bountyId, params.submissionId),
   ]);
   return (results[0].meta?.changes ?? 0) > 0;
+}
+
+/** Guard: the bounty has no winner yet and is not cancelled or paid. Binds the bounty id. */
+const OPEN_BOUNTY = `EXISTS (SELECT 1 FROM bounties WHERE id = ? AND accepted_at IS NULL
+                     AND cancelled_at IS NULL AND paid_at IS NULL)`;
+
+/**
+ * Set every member's share to the even split of the stored reward across the
+ * rows left (lead gets the remainder). Computed in SQL from current rows, so
+ * it is idempotent and racing changes still end with shares that add up to
+ * the reward. Only while the bounty has no winner.
+ */
+function resplitStatement(db: D1Database, bountyId: string, submissionId: string): D1PreparedStatement {
+  return db
+    .prepare(
+      `UPDATE bounty_submission_members
+       SET share_sats = (
+         WITH x AS (
+           SELECT b.reward_sats AS r,
+                  (SELECT COUNT(*) FROM bounty_submission_members t WHERE t.submission_id = ?) AS n
+           FROM bounties b WHERE b.id = ?
+         )
+         SELECT CASE WHEN bounty_submission_members.role = 'lead'
+                     THEN r - (r / n) * (n - 1)
+                     ELSE r / n END
+         FROM x
+       )
+       WHERE submission_id = ? AND ${OPEN_BOUNTY}`
+    )
+    .bind(submissionId, bountyId, submissionId, bountyId);
 }
 
 /**
@@ -881,13 +924,21 @@ export async function dropUnconfirmableInvites(
     )
     .bind(btcAddress, bountyId)
     .all<{ submission_id: string }>();
-  let dropped = 0;
-  for (const r of results ?? []) {
-    if (await removePendingMember(db, { bountyId, submissionId: r.submission_id, memberBtcAddress: btcAddress })) {
-      dropped++;
-    }
-  }
-  return dropped;
+  const submissionIds = (results ?? []).map((r) => r.submission_id);
+  if (submissionIds.length === 0) return 0;
+  // One batch: drop every such invite, then re-split each affected team from
+  // the rows left (an idempotent recompute of the even split).
+  const out = await db.batch([
+    db
+      .prepare(
+        `DELETE FROM bounty_submission_members
+         WHERE member_btc_address = ? AND bounty_id = ? AND confirmed_at IS NULL
+           AND role = 'member' AND ${OPEN_BOUNTY}`
+      )
+      .bind(btcAddress, bountyId, bountyId),
+    ...submissionIds.map((id) => resplitStatement(db, bountyId, id)),
+  ]);
+  return out[0].meta?.changes ?? 0;
 }
 
 /** Was this D1 error the one-entry-per-agent unique index (bounty_id, member)? */
