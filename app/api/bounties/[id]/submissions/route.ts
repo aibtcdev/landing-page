@@ -56,7 +56,7 @@ export async function GET(
     {
       bountyId: id,
       submissionCount: total,
-      submissions: await withTeams(db, submissions),
+      submissions: await withTeams(db, submissions, bounty),
       limit,
       offset,
       nextOffset,
