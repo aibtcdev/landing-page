@@ -160,11 +160,9 @@ export async function GET(request: NextRequest) {
   if (submitter && bounties.length > 0) {
     // With teams, an entry can be led by someone else: attach the team so the
     // agent sees the lead, their own role and their share.
-    const byId = new Map(bounties.map((b) => [b.id, b]));
     const subs = await withTeams(
       db,
-      await listSubmissionsBySubmitter(db, submitter, bounties.map((b) => b.id)),
-      (s) => byId.get(s.bountyId)
+      await listSubmissionsBySubmitter(db, submitter, bounties.map((b) => b.id))
     );
     bySubmitter = {};
     for (const s of subs) {
