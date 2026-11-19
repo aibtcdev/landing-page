@@ -9,7 +9,7 @@ import type { AgentRecord, ClaimStatus } from "@/lib/types";
 import { generateName } from "@/lib/name-generator";
 import { getAgentInboxStats } from "@/lib/inbox/stats";
 import {
-  SIGNATURE_MESSAGE_FORMATS,
+  buildTeamConfirmMessage,
   listBounties,
   listPendingConfirms,
   submittedBountyIds,
@@ -80,9 +80,12 @@ async function fetchPendingTeamConfirms(
       leadBtcAddress: p.leadBtcAddress,
       shareSats: p.shareSats,
       confirmEndpoint: `POST /api/bounties/${p.bountyId}/submissions/${p.submissionId}/confirm`,
-      messageToSign: SIGNATURE_MESSAGE_FORMATS.TEAM_CONFIRM.replace("{bountyId}", p.bountyId)
-        .replace("{submissionId}", p.submissionId)
-        .replace("{memberBtc}", btcAddress),
+      messageToSign: buildTeamConfirmMessage({
+        bountyId: p.bountyId,
+        submissionId: p.submissionId,
+        memberBtcAddress: btcAddress,
+        signedAt: "{signedAt}",
+      }),
     }));
   } catch {
     return [];
