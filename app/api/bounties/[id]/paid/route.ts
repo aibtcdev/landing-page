@@ -213,9 +213,10 @@ export async function POST(
     });
     if (!verify.ok) {
       // Retrying a txid already recorded for some members: re-verifying lets
-      // any other member it pays be recorded, and when it adds nobody the
-      // answer is "already recorded", not an error.
-      const retryReply = verify.code !== "RATE_LIMITED" && verify.code !== "HIRO_UNREACHABLE" ? recordedReply(team) : null;
+      // any other member it pays be recorded. When it adds nobody, or Hiro
+      // cannot be read right now, the answer is "already recorded", never an
+      // error a client could take as "not paid".
+      const retryReply = recordedReply(team);
       if (retryReply) return retryReply;
       const statusCode = verify.code === "TX_NOT_CONFIRMED" ? 422 : 400;
       logger.warn("bounty.paid_verification_failed", {
@@ -285,7 +286,11 @@ export async function POST(
         // inside the (paid_txid, paid_event_index) unique index, which treats
         // NULLs as distinct. A routed payout needs the index to bind its memo,
         // so only a direct transfer (one event) can ever reach this with -1.
-        payments: verify.matched.map((m) => ({ btcAddress: m.btcAddress, eventIndex: m.eventIndex ?? -1 })),
+        payments: verify.matched.map((m) => ({
+          btcAddress: m.btcAddress,
+          eventIndex: m.eventIndex ?? -1,
+          amountSats: m.amount,
+        })),
       });
     } catch (e) {
       // Only the one-record-per-transfer index means "already recorded";
@@ -305,6 +310,10 @@ export async function POST(
       );
     }
     if (recorded.recordedMembers.length === 0) {
+      // A concurrent call with the same txid recorded these members first.
+      const fresh = (await listMembers(db, [submissionId])).get(submissionId) ?? team;
+      const concurrentReply = recordedReply(fresh);
+      if (concurrentReply) return concurrentReply;
       return NextResponse.json(
         { error: "conflict", message: "Bounty state changed concurrently. Re-fetch the bounty." },
         { status: 409 }
