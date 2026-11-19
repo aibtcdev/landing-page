@@ -116,14 +116,13 @@ export async function POST(request: NextRequest, { params }: Params) {
       );
     }
 
-    const submission = await getSubmission(db, submissionId);
+    const [submission, bounty] = await Promise.all([getSubmission(db, submissionId), getBounty(db, id)]);
     if (!submission || submission.bountyId !== id) {
       return NextResponse.json(
         { error: "submission_not_found", message: "No such submission on this bounty." },
         { status: 404 }
       );
     }
-    const bounty = await getBounty(db, id);
     if (!bounty) return NextResponse.json({ error: "not_found" }, { status: 404 });
 
     // Only the lead or the member themselves may remove that member.
