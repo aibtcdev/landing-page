@@ -47,17 +47,14 @@ export async function GET(request: NextRequest) {
     );
   }
 
-  // Member rows hold the agent's main BTC address; resolve a taproot one.
+  // Member rows hold the agent's main BTC address. A bc1p address may be a
+  // taproot address mapped to a bc1q main address, or itself the main
+  // address (BIP-322 agents): resolve the mapping when there is one,
+  // otherwise use the address as given.
   let btcAddress = address;
   if (address.startsWith("bc1p")) {
-    const agent = await lookupAgent(env.VERIFIED_AGENTS as KVNamespace, address, db);
-    if (!agent) {
-      return NextResponse.json(
-        { error: "agent_not_found", message: "No registered agent has this taproot address." },
-        { status: 404 }
-      );
-    }
-    btcAddress = agent.btcAddress;
+    const agent = await lookupAgent(env.VERIFIED_AGENTS as KVNamespace, address, db).catch(() => null);
+    if (agent?.btcAddress) btcAddress = agent.btcAddress;
   }
 
   const pending = await listPendingConfirms(db, btcAddress);
