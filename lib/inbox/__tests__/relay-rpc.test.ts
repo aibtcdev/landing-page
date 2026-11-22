@@ -128,6 +128,7 @@ describe("submitViaRPC", () => {
   describe("submitPayment rejection — pre-enqueue", () => {
     it("returns failure when submitPayment is rejected with SENDER_NONCE_STALE", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: false,
           code: "SENDER_NONCE_STALE",
@@ -147,6 +148,7 @@ describe("submitViaRPC", () => {
 
     it("returns failure when submitPayment is rejected with SENDER_NONCE_DUPLICATE", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: false,
           code: "SENDER_NONCE_DUPLICATE",
@@ -163,6 +165,7 @@ describe("submitViaRPC", () => {
 
     it("returns failure when submitPayment is rejected with INVALID_TRANSACTION", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: false,
           code: "INVALID_TRANSACTION",
@@ -180,6 +183,7 @@ describe("submitViaRPC", () => {
 
     it("returns RELAY_ERROR when submitPayment is rejected without code", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: false,
           error: "unknown rejection reason",
@@ -196,6 +200,7 @@ describe("submitViaRPC", () => {
 
     it("uses default error message when submitPayment rejection has no error field", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: false,
         }),
@@ -210,6 +215,7 @@ describe("submitViaRPC", () => {
 
     it("passes txHex, settle, and optional paymentIdentifier as separate args to submitPayment", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_args_check",
@@ -232,6 +238,7 @@ describe("submitViaRPC", () => {
 
     it("passes paymentIdentifier through to submitPayment when provided", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_id_passthrough",
@@ -254,6 +261,7 @@ describe("submitViaRPC", () => {
 
     it("fails closed when submitPayment accepts but omits canonical paymentId", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           status: "queued",
@@ -274,6 +282,7 @@ describe("submitViaRPC", () => {
   describe("successful settlement paths", () => {
     it("returns success on confirmed payment with txid", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_001",
@@ -300,6 +309,7 @@ describe("submitViaRPC", () => {
 
     it("includes paymentId in success result", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_002",
@@ -322,6 +332,7 @@ describe("submitViaRPC", () => {
 
     it("prefers checkPayment checkStatusUrl over submitPayment hint", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_hint_preferred",
@@ -346,6 +357,7 @@ describe("submitViaRPC", () => {
 
     it("handles nonce gap warning (accepted=true with warning)", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_gap",
@@ -378,6 +390,7 @@ describe("submitViaRPC", () => {
   describe("failed settlement from checkPayment", () => {
     it("returns failure when checkPayment returns status failed", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_fail_001",
@@ -403,6 +416,7 @@ describe("submitViaRPC", () => {
 
     it("returns RELAY_ERROR when checkPayment fails without errorCode", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_fail_002",
@@ -425,6 +439,7 @@ describe("submitViaRPC", () => {
 
     it("uses default error message when failed check has no error field", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_fail_003",
@@ -446,6 +461,7 @@ describe("submitViaRPC", () => {
 
     it("returns failure when checkPayment returns replaced status", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_replaced",
@@ -468,6 +484,7 @@ describe("submitViaRPC", () => {
 
     it("returns failure when checkPayment returns not_found", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_notfound",
@@ -497,6 +514,7 @@ describe("submitViaRPC", () => {
 
     it("surfaces sender nonce gap terminal metadata from relay polling", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_gap_terminal",
@@ -531,6 +549,7 @@ describe("submitViaRPC", () => {
       // queued is a PENDING_STATUS — poll exhaustion with pending status returns
       // { success: true, paymentStatus: "pending" } since Phase 1.
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_exhaust_001",
@@ -554,6 +573,7 @@ describe("submitViaRPC", () => {
 
     it("falls back to submitPayment checkStatusUrl when polling result omits it", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_submit_hint_only",
@@ -578,6 +598,7 @@ describe("submitViaRPC", () => {
     it("returns pending success when all poll attempts return broadcasting", async () => {
       // broadcasting is a PENDING_STATUS — poll exhaustion returns pending success.
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_exhaust_002",
@@ -602,6 +623,7 @@ describe("submitViaRPC", () => {
       // When all polls return "mempool", the tx is broadcast but not yet confirmed.
       // This is treated as pending success — mirrors the HTTP path's "settlement.status === pending" handling.
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_exhaust_txid",
@@ -628,6 +650,7 @@ describe("submitViaRPC", () => {
       // mempool is a PENDING_STATUS — poll exhaustion returns pending success.
       // paymentTxid is omitted when the relay has no txid yet.
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_no_txid",
@@ -656,6 +679,7 @@ describe("submitViaRPC", () => {
       // With 2 max polls, confirm on attempt 2 — fast path succeeds.
       let callCount = 0;
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_multi_001",
@@ -686,6 +710,7 @@ describe("submitViaRPC", () => {
   describe("submitPayment throwing (RPC exception)", () => {
     it("re-throws when submitPayment rejects with an exception", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockRejectedValue(new Error("RPC connection refused")),
         checkPayment: vi.fn(),
       };
@@ -699,6 +724,7 @@ describe("submitViaRPC", () => {
   describe("checkPayment throwing (RPC exception)", () => {
     it("re-throws when checkPayment rejects with an exception", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_throw_001",
@@ -718,6 +744,7 @@ describe("submitViaRPC", () => {
   describe("logging behavior", () => {
     it("logs debug on submit and on each poll check", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_log_001",
@@ -750,6 +777,7 @@ describe("submitViaRPC", () => {
 
     it("logs warn on submitPayment rejection", async () => {
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: false,
           code: "SENDER_NONCE_STALE",
@@ -771,6 +799,7 @@ describe("submitViaRPC", () => {
     it("logs info on poll exhaustion with pending success", async () => {
       // Since Phase 1, poll exhaustion with pending status logs info (not warn) and succeeds.
       const rpc: RelayRPC = {
+        sponsorPayment: vi.fn(),
         submitPayment: vi.fn().mockResolvedValue({
           accepted: true,
           paymentId: "pay_log_exhaust",
@@ -872,6 +901,7 @@ describe("tx-schemas 1.0.0 schema compatibility", () => {
         vi.useFakeTimers();
 
         const rpc: RelayRPC = {
+          sponsorPayment: vi.fn(),
           submitPayment: vi.fn().mockResolvedValue({
             accepted: true,
             paymentId,
@@ -942,6 +972,7 @@ describe("relay-rpc parser compatibility", () => {
     vi.useFakeTimers();
 
     const rpc: RelayRPC = {
+      sponsorPayment: vi.fn(),
       submitPayment: vi.fn().mockResolvedValue({
         accepted: true,
         paymentId: "pay_unknown_code",
@@ -1020,6 +1051,7 @@ describe("PAYMENT_IDENTIFIER_CONFLICT mapping", () => {
     vi.useFakeTimers();
 
     const rpc: RelayRPC = {
+      sponsorPayment: vi.fn(),
       submitPayment: vi.fn().mockResolvedValue({
         accepted: false,
         code: "PAYMENT_IDENTIFIER_CONFLICT",

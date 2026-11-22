@@ -160,6 +160,7 @@ describe("inbox reconciliation queue", () => {
         VERIFIED_AGENTS: kv,
         DB: db,
         X402_RELAY: {
+          sponsorPayment: vi.fn(),
           submitPayment: vi.fn(),
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_queue_finalize",
@@ -236,6 +237,7 @@ describe("inbox reconciliation queue", () => {
         VERIFIED_AGENTS: kv,
         DB: db,
         X402_RELAY: {
+          sponsorPayment: vi.fn(),
           submitPayment: vi.fn(),
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_queue_retry",
@@ -300,6 +302,7 @@ describe("inbox reconciliation queue", () => {
         VERIFIED_AGENTS: kv,
         DB: db,
         X402_RELAY: {
+          sponsorPayment: vi.fn(),
           submitPayment: vi.fn(),
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_missing_staged",
@@ -373,6 +376,7 @@ describe("inbox reconciliation queue", () => {
         VERIFIED_AGENTS: kv,
         DB: db,
         X402_RELAY: {
+          sponsorPayment: vi.fn(),
           submitPayment: vi.fn(),
           checkPayment: vi.fn().mockResolvedValue({
             paymentId: "pay_queue_retry_binding_missing",
@@ -452,6 +456,7 @@ describe("inbox reconciliation queue", () => {
         VERIFIED_AGENTS: kv,
         DB: db,
         X402_RELAY: {
+          sponsorPayment: vi.fn(),
           submitPayment,
           checkPayment: vi.fn(), // should NOT be called
         },
@@ -538,6 +543,7 @@ describe("inbox reconciliation queue", () => {
         VERIFIED_AGENTS: kv,
         DB: db,
         X402_RELAY: {
+          sponsorPayment: vi.fn(),
           submitPayment,
           checkPayment: vi.fn(), // should NOT be called (TTL already expired)
         },
@@ -636,6 +642,7 @@ describe("inbox reconciliation queue", () => {
         VERIFIED_AGENTS: kv,
         DB: db,
         X402_RELAY: {
+          sponsorPayment: vi.fn(),
           submitPayment: vi.fn().mockResolvedValue({
             accepted: false,
             error: "Relay rejected",
@@ -719,7 +726,7 @@ describe("inbox reconciliation queue", () => {
       {
         VERIFIED_AGENTS: kv,
         DB: db,
-        X402_RELAY: { submitPayment, checkPayment },
+        X402_RELAY: { sponsorPayment: vi.fn(), submitPayment, checkPayment },
         INBOX_RECONCILIATION_QUEUE: { send: queueSend, sendBatch: vi.fn(), metrics: vi.fn() },
       },
       mocks.logger,

@@ -12,7 +12,7 @@ vi.mock("@opennextjs/cloudflare", () => ({
 }));
 
 // Default mock for buildActivityData — each test can override via mockResolvedValueOnce/mockRejectedValueOnce.
-const buildActivityDataMock = vi.fn(async () => ({
+const buildActivityDataMock = vi.fn(async (..._args: unknown[]) => ({
   events: [],
   stats: { totalAgents: 0, activeAgents: 0, totalMessages: 0, totalSatsTransacted: 0 },
 }));

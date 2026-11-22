@@ -290,6 +290,7 @@ describe("submitViaRPC — propagates wire fields to InboxPaymentVerification", 
 
   it("propagates nonceExpiresAt + sponsorNonceValidForMs on pending-success (poll exhausted)", async () => {
     const rpc: RelayRPC = {
+      sponsorPayment: vi.fn(),
       submitPayment: vi.fn().mockResolvedValue({
         accepted: true,
         paymentId: "pay_pending_001",
@@ -317,6 +318,7 @@ describe("submitViaRPC — propagates wire fields to InboxPaymentVerification", 
 
   it("propagates responsible + agentErrorCode on submitPayment rejection", async () => {
     const rpc: RelayRPC = {
+      sponsorPayment: vi.fn(),
       submitPayment: vi.fn().mockResolvedValue({
         accepted: false,
         error: "Sender nonce already confirmed on chain",
@@ -338,6 +340,7 @@ describe("submitViaRPC — propagates wire fields to InboxPaymentVerification", 
 
   it("propagates nonceExpiresAt + sponsorNonceValidForMs on confirmed-success", async () => {
     const rpc: RelayRPC = {
+      sponsorPayment: vi.fn(),
       submitPayment: vi.fn().mockResolvedValue({
         accepted: true,
         paymentId: "pay_confirmed_001",
@@ -364,6 +367,7 @@ describe("submitViaRPC — propagates wire fields to InboxPaymentVerification", 
 
   it("propagates responsible + agentErrorCode on terminal failure (checkPayment status=failed)", async () => {
     const rpc: RelayRPC = {
+      sponsorPayment: vi.fn(),
       submitPayment: vi.fn().mockResolvedValue({
         accepted: true,
         paymentId: "pay_fail_attrib_001",
@@ -391,6 +395,7 @@ describe("submitViaRPC — propagates wire fields to InboxPaymentVerification", 
 
   it("backward compat: relay omitting wire fields → result has undefined extras, no parse error", async () => {
     const rpc: RelayRPC = {
+      sponsorPayment: vi.fn(),
       submitPayment: vi.fn().mockResolvedValue({
         accepted: true,
         paymentId: "pay_legacy_001",

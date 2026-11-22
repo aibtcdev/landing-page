@@ -54,6 +54,7 @@ function makeProfileRow(
     tweet_author: null,
     claimed_at: null,
     reward_satoshis: null,
+    last_check_in_at: null,
     reward_txid: null,
     ...overrides,
   };

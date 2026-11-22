@@ -2047,7 +2047,7 @@ describe("paginated inbox reconciliation (Path A)", () => {
     // Drive the cursor loop manually
     let cursor: string | null = null;
     let pages = 0;
-    let finalBody: {
+    type ReconcilePageBody1 = {
       partial: boolean;
       cursor: string | null;
       kv_count?: number;
@@ -2056,7 +2056,8 @@ describe("paginated inbox reconciliation (Path A)", () => {
       drift_explained?: number;
       drift_unexplained?: number;
       explained_categories?: { partial_cascade?: number };
-    } | null = null;
+    };
+    let finalBody: ReconcilePageBody1 | null = null;
 
     do {
       const params: Record<string, string> = { table: "inbox_messages", maxKeysPerCall: "1" };
@@ -2065,7 +2066,7 @@ describe("paginated inbox reconciliation (Path A)", () => {
       const resp = await POST(buildPostRequest(params));
       expect(resp.status).toBe(200);
 
-      const body = await resp.json() as typeof finalBody;
+      const body = await resp.json() as ReconcilePageBody1;
       expect(body).not.toBeNull();
 
       pages++;
@@ -2278,26 +2279,28 @@ describe("paginated inbox reconciliation (Path A)", () => {
 
     // maxKeysPerCall=1 forces 2 pages: page 1 sees msg_a, page 2 sees msg_b
     let cursor: string | null = null;
-    let finalBody: {
+    type ReconcilePageBody2 = {
       partial: boolean;
+      cursor: string | null;
       kv_count?: number;
       d1_count?: number;
       drift?: number;
       drift_explained?: number;
       explained_categories?: { unique_payment_txid_replay?: number };
-    } | null = null;
+    };
+    let finalBody: ReconcilePageBody2 | null = null;
 
     do {
       const params: Record<string, string> = { table: "inbox_messages", maxKeysPerCall: "1" };
       if (cursor) params.cursor = cursor;
       const resp = await POST(buildPostRequest(params));
       expect(resp.status).toBe(200);
-      const body = await resp.json() as typeof finalBody;
+      const body = await resp.json() as ReconcilePageBody2;
       if (body!.partial === false) {
         finalBody = body;
         cursor = null;
       } else {
-        cursor = (body as { cursor: string }).cursor;
+        cursor = body.cursor;
       }
     } while (cursor !== null);
 
