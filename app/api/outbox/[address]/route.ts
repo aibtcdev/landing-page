@@ -461,6 +461,25 @@ export async function POST(
   try {
     replyInsertResult = await insertReplyToD1(db, kv, outboxReply);
   } catch (err) {
+    // The original sender is not a registered agent, so it has no BTC address to
+    // deliver a reply to (to_btc_address is NOT NULL + FK to agents). Retrying can
+    // never succeed: answer with a permanent 4xx instead of the transient 503.
+    if ((err as Error | undefined)?.name === "ReplyRecipientUnresolvableError") {
+      logger.warn("outbox.reply_recipient_unregistered", {
+        messageId: outboxReply.messageId,
+        recipient: outboxReply.toBtcAddress,
+      });
+      return NextResponse.json(
+        {
+          error: "reply_recipient_unregistered",
+          message:
+            "The sender of this message is not a registered agent, so it cannot receive replies. Do not retry.",
+          messageId: outboxReply.messageId,
+          retryable: false,
+        },
+        { status: 422 }
+      );
+    }
     logger.error("outbox.d1_insert_failed", {
       messageId: outboxReply.messageId,
       error: String(err),
