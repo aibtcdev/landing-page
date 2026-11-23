@@ -95,7 +95,7 @@ import {
   getInboxMessageFromD1,
   getReplyForMessageFromD1,
 } from "@/lib/inbox/d1-reads";
-import { markMessageReadIfUnread } from "@/lib/inbox/d1-dual-write";
+import { insertReplyToD1, markMessageReadIfUnread } from "@/lib/inbox/d1-dual-write";
 import { decrementUnreadStats } from "@/lib/inbox/stats";
 import { verifyBitcoinSignature } from "@/lib/bitcoin-verify";
 
@@ -277,6 +277,34 @@ describe("Phase 2.5 Step 3.5 — POST outbox write-path D1 flip", () => {
     expect(getReplyForMessageFromD1).toHaveBeenCalledOnce();
     const [, , dupeFromAddr] = (getReplyForMessageFromD1 as Mock).mock.calls[0];
     expect(dupeFromAddr).toBe(ADDR_A);
+  });
+
+  it("unregistered reply recipient (#1158): returns permanent 422, not transient 503", async () => {
+    const err = new Error('Unable to resolve reply recipient BTC address from "SP3GXCKM4AB5EB1KJ8V5QSTR1XMTW3R142VQS2NVW"');
+    err.name = "ReplyRecipientUnresolvableError";
+    (insertReplyToD1 as Mock).mockRejectedValueOnce(err);
+
+    const res = await POST(buildPostRequest(ADDR_A), buildContext(ADDR_A));
+
+    expect(res.status).toBe(422);
+    const body = await res.json();
+    expect(body).toMatchObject({
+      error: "reply_recipient_unregistered",
+      messageId: MSG_ID,
+      retryable: false,
+    });
+    expect(res.headers.get("Retry-After")).toBeNull();
+  });
+
+  it("a real D1 failure on reply insert still returns 503 + Retry-After: 5", async () => {
+    (insertReplyToD1 as Mock).mockRejectedValueOnce(new Error("D1_ERROR: connection reset"));
+
+    const res = await POST(buildPostRequest(ADDR_A), buildContext(ADDR_A));
+
+    expect(res.status).toBe(503);
+    const body = await res.json();
+    expect(body).toMatchObject({ error: "transient_d1_unavailable", retry_after: 5 });
+    expect(res.headers.get("Retry-After")).toBe("5");
   });
 
   it("D1-throws on original-message fetch (test 8a): returns 503 + Retry-After: 5", async () => {

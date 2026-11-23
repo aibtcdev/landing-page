@@ -243,6 +243,24 @@ export async function updateMessageStateD1(
  *   read_at             <- NULL
  *   replied_at          <- NULL
  */
+/**
+ * Thrown by insertReplyToD1 when the reply recipient (the original sender) has no
+ * registered BTC address. inbox_messages.to_btc_address is NOT NULL with a foreign key
+ * to agents(btc_address), so a reply to an unregistered sender can never be stored:
+ * this is a permanent condition, not a D1 outage. Callers match on `name` (not
+ * instanceof) so the check survives module mocking in tests.
+ */
+export class ReplyRecipientUnresolvableError extends Error {
+  readonly recipient: string;
+  constructor(recipient: string, messageId: string) {
+    super(
+      `Unable to resolve reply recipient BTC address from "${recipient}" for messageId "${messageId}"`
+    );
+    this.name = "ReplyRecipientUnresolvableError";
+    this.recipient = recipient;
+  }
+}
+
 export async function insertReplyToD1(
   db: D1Database,
   kv: KVNamespace,
@@ -250,9 +268,7 @@ export async function insertReplyToD1(
 ): Promise<D1WriteResult> {
   const resolvedToBtcAddress = await resolveReplyRecipientBtcAddress(kv, reply.toBtcAddress);
   if (!resolvedToBtcAddress) {
-    throw new Error(
-      `Unable to resolve reply recipient BTC address from "${reply.toBtcAddress}" for messageId "${reply.messageId}"`
-    );
+    throw new ReplyRecipientUnresolvableError(reply.toBtcAddress, reply.messageId);
   }
 
   const replyMessageId = deriveReplyD1Id(reply.messageId);

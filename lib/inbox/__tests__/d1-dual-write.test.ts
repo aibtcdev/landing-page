@@ -329,6 +329,16 @@ describe("insertReplyToD1", () => {
     expect(db.prepare).not.toHaveBeenCalled();
   });
 
+  it("names the resolution failure so the outbox can answer 422, not a transient 503 (#1158)", async () => {
+    const db = createMockD1();
+    const kv = createMockKV(); // unregistered sender: no stx:{address} record
+
+    await expect(insertReplyToD1(db, kv, OUTBOX_REPLY)).rejects.toMatchObject({
+      name: "ReplyRecipientUnresolvableError",
+      recipient: OUTBOX_REPLY.toBtcAddress,
+    });
+  });
+
   it("resolves and calls .run()", async () => {
     const db = createMockD1();
     const stmtMock = createPreparedStatement();
