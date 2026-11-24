@@ -81,6 +81,7 @@ export default function AgentList({ agents }: AgentListProps) {
     // Search filter
     if (searchQuery.trim()) {
       const q = searchQuery.trim().toLowerCase();
+      const handleQuery = q.startsWith("@") ? q.slice(1) : q;
       filtered = filtered.filter((a) => {
         const name = generateName(a.btcAddress).toLowerCase();
         return (
@@ -88,7 +89,7 @@ export default function AgentList({ agents }: AgentListProps) {
           a.btcAddress.toLowerCase().includes(q) ||
           a.stxAddress.toLowerCase().includes(q) ||
           (a.bnsName && a.bnsName.toLowerCase().includes(q)) ||
-          (a.owner && a.owner.toLowerCase().includes(q))
+          (a.owner && (a.owner.toLowerCase().includes(q) || (handleQuery.length > 0 && a.owner.toLowerCase().includes(handleQuery))))
         );
       });
     }
