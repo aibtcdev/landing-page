@@ -114,7 +114,10 @@ export async function POST(
     // as a failure and pays again. Txids compare without 0x and case.
     const sameTxid = (a: string, b: string) =>
       stripHexPrefix(a).toLowerCase() === stripHexPrefix(b).toLowerCase();
-    const recordedReply = (team: BountyTeamMember[]) => {
+    // `unread`: Hiro could not be read in full for this txid right now, so a
+    // member not yet recorded may still be paid by it (#1157). Never call
+    // them "owed" then: the poster would pay them twice.
+    const recordedReply = (team: BountyTeamMember[], unread?: { retryAfterSeconds: number }) => {
       const mine = team.filter((m) => m.paidTxid && sameTxid(m.paidTxid, data.txid));
       if (mine.length === 0) return null;
       const payout = buildPayout(team);
@@ -127,12 +130,17 @@ export async function POST(
           amountSats: m.paidAmountSats ?? m.shareSats,
         })),
         payout,
+        ...(unread && payout.unpaid.length > 0 && { eventsIncomplete: true, retryAfterSeconds: unread.retryAfterSeconds }),
         message:
           payout.unpaid.length === 0
             ? "This txid is already recorded. Every member is paid."
-            : `This txid is already recorded. ${payout.membersPaid} of ${payout.membersTotal} members paid; still owed: ${payout.unpaid
-                .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
-                .join(", ")}.`,
+            : unread
+              ? `This txid is already recorded for ${payout.membersPaid} of ${payout.membersTotal} members. Hiro could not be read just now, so this txid has not been checked for ${payout.unpaid
+                  .map((u) => u.stxAddress)
+                  .join(", ")}. Retry POST /paid with this same txid in ${unread.retryAfterSeconds}s before sending them anything.`
+              : `This txid is already recorded. ${payout.membersPaid} of ${payout.membersTotal} members paid; still owed: ${payout.unpaid
+                  .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
+                  .join(", ")}.`,
       });
     };
 
@@ -210,7 +218,12 @@ export async function POST(
       // any other member it pays be recorded. When it adds nobody, or Hiro
       // cannot be read right now, the answer is "already recorded", never an
       // error a client could take as "not paid".
-      const retryReply = recordedReply(team);
+      const unreadable =
+        verify.code === "RATE_LIMITED" || verify.code === "HIRO_UNREACHABLE" || verify.code === "EVENTS_TRUNCATED";
+      const retryReply = recordedReply(
+        team,
+        unreadable ? { retryAfterSeconds: verify.retryAfterSeconds ?? DEFAULT_RETRY_AFTER_SECONDS } : undefined
+      );
       if (retryReply) return retryReply;
       const statusCode = verify.code === "TX_NOT_CONFIRMED" ? 422 : 400;
       logger.warn("bounty.paid_verification_failed", {
@@ -336,12 +349,20 @@ export async function POST(
         .map((m) => ({ btcAddress: m.btcAddress, stxAddress: m.stxAddress, amountSats: m.amount })),
       payout,
       ...(verify.underpaid.length > 0 && { underpaid: verify.underpaid }),
+      ...(verify.eventsIncomplete && payout.unpaid.length > 0 && {
+        eventsIncomplete: true,
+        retryAfterSeconds: verify.retryAfterSeconds ?? DEFAULT_RETRY_AFTER_SECONDS,
+      }),
       message:
         payout.unpaid.length === 0
           ? "Every member is paid. The bounty is paid."
-          : `${payout.membersPaid} of ${payout.membersTotal} members paid. Still owed: ${payout.unpaid
-              .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
-              .join(", ")}. Send each with memo BNTY:${bounty.id}, then POST /paid with that txid.`,
+          : verify.eventsIncomplete
+            ? `${payout.membersPaid} of ${payout.membersTotal} members paid so far. Hiro could not return all of this transaction's events, so it may also pay ${payout.unpaid
+                .map((u) => u.stxAddress)
+                .join(", ")}. Retry POST /paid with this same txid in ${verify.retryAfterSeconds ?? DEFAULT_RETRY_AFTER_SECONDS}s before sending them anything.`
+            : `${payout.membersPaid} of ${payout.membersTotal} members paid. Still owed: ${payout.unpaid
+                .map((u) => `${u.amountSats} sats to ${u.stxAddress}`)
+                .join(", ")}. Send each with memo BNTY:${bounty.id}, then POST /paid with that txid.`,
     });
   } catch (e) {
     return NextResponse.json(
