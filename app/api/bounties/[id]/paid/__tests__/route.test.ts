@@ -387,6 +387,49 @@ describe("POST /api/bounties/[id]/paid: team payouts", () => {
     expect(((await res.json()) as { alreadyRecorded: boolean }).alreadyRecorded).toBe(true);
   });
 
+  it("a partly read tx does not tell the poster to pay members it may already pay (#1157)", async () => {
+    const bounty = makeBounty();
+    const blockTimeIso = new Date(Date.parse(bounty.acceptedAt!) + 3_600_000).toISOString();
+    getBountyMock.mockResolvedValue(bounty);
+    listMembersMock
+      .mockResolvedValueOnce(new Map([[SUBMISSION_ID, TEAM]]))
+      .mockResolvedValueOnce(
+        new Map([[SUBMISSION_ID, [member(WINNER_BTC, WINNER_STX, 2500, TXID), TEAM[1]]]])
+      );
+    verifyPayoutTxidMock.mockResolvedValue({
+      ok: true,
+      canonicalTxid: TXID,
+      blockTimeIso,
+      matched: [{ btcAddress: WINNER_BTC, stxAddress: WINNER_STX, eventIndex: 0, amount: 2500 }],
+      underpaid: [],
+      eventsIncomplete: true,
+    });
+    recordMemberPaymentsMock.mockResolvedValue({ recordedMembers: [WINNER_BTC], bountyPaid: false });
+
+    const res = await POST(paidRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { message: string; eventsIncomplete?: boolean; retryAfterSeconds?: number };
+    expect(json.eventsIncomplete).toBe(true);
+    expect(json.retryAfterSeconds).toBeGreaterThan(0);
+    expect(json.message).not.toMatch(/Send each with memo/);
+    expect(json.message).toMatch(/same txid/);
+  });
+
+  it("a retry during a Hiro outage says the rest of the tx is unchecked, not that members are owed (#1157)", async () => {
+    getBountyMock.mockResolvedValue(makeBounty());
+    listMembersMock.mockResolvedValue(
+      new Map([[SUBMISSION_ID, [member(WINNER_BTC, WINNER_STX, 2500, TXID), member(PARTNER_BTC, PARTNER_STX, 2500)]]])
+    );
+    verifyPayoutTxidMock.mockResolvedValue({ ok: false, code: "RATE_LIMITED", message: "slow down", retryAfterSeconds: 7 });
+    const res = await POST(paidRequest(), { params: Promise.resolve({ id: BOUNTY_ID }) });
+    expect(res.status).toBe(200);
+    const json = (await res.json()) as { alreadyRecorded: boolean; message: string; eventsIncomplete?: boolean; retryAfterSeconds?: number };
+    expect(json.alreadyRecorded).toBe(true);
+    expect(json.eventsIncomplete).toBe(true);
+    expect(json.retryAfterSeconds).toBe(7);
+    expect(json.message).not.toMatch(/still owed/);
+  });
+
   it("a concurrent call that recorded the same txid first gives already recorded, not 409", async () => {
     const bounty = makeBounty();
     const blockTimeIso = new Date(Date.parse(bounty.acceptedAt!) + 3_600_000).toISOString();

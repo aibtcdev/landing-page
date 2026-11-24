@@ -1056,6 +1056,27 @@ describe("verifyPayoutTxid records proven team payouts when a later page fails",
     expect(r).toMatchObject({ ok: false, code: "HIRO_UNREACHABLE" });
   });
 
+  it("flags the proven result as incomplete, so the partner is not reported as unpaid (#1157)", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [lead, partner],
+      fetchFn: pagedFetch(tx, 100, "fail"),
+    });
+    expect(r).toMatchObject({ ok: true, eventsIncomplete: true });
+  });
+
+  it("does not flag a result whose events were read in full", async () => {
+    const r = await verifyPayoutTxid({
+      txid: "0xabc",
+      bounty: makeBounty(),
+      recipients: [lead, partner],
+      fetchFn: pagedFetch(tx, 100),
+    });
+    expect(r.ok).toBe(true);
+    if (r.ok) expect(r.eventsIncomplete).toBeUndefined();
+  });
+
   it("AMOUNT_TOO_LOW tells the poster not to send a top-up", async () => {
     const r = await verifyPayoutTxid({
       txid: "0xabc",

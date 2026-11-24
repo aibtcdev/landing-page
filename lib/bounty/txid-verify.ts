@@ -78,6 +78,15 @@ export type TxidVerifyResult =
        * transfer pays one; a contract call can pay several in one tx.
        */
       matched: { btcAddress: string; stxAddress: string; eventIndex: number | null; amount: number }[];
+      /**
+       * Set when the tx's events could not all be read (a later page was
+       * unreachable, or the read was truncated or incomplete). `matched` is
+       * still proven, but a recipient missing from it may be paid by the
+       * unread events: callers must not report that recipient as owed.
+       */
+      eventsIncomplete?: true;
+      /** Seconds to wait before re-verifying, when Hiro said so. */
+      retryAfterSeconds?: number;
       /** Recipients this tx sent sBTC to, but less than their share (not recorded). */
       underpaid: { btcAddress: string; amount: number; required: number }[];
     }
@@ -373,7 +382,17 @@ export async function verifyPayoutTxid(params: {
     // nothing is proven yet is the failure a retryable "try again".
     const proven = matchPayouts(tx.events ?? []);
     if (proven.length > 0) {
-      return { ok: true, canonicalTxid: tx.tx_id, blockTimeIso, matched: proven, underpaid: [] };
+      const retryAfter =
+        events.response?.status === 429 ? retryAfterSeconds(events.response) : undefined;
+      return {
+        ok: true,
+        canonicalTxid: tx.tx_id,
+        blockTimeIso,
+        matched: proven,
+        underpaid: [],
+        eventsIncomplete: true,
+        ...(retryAfter !== undefined && { retryAfterSeconds: retryAfter }),
+      };
     }
     if (events.response?.status === 429) return rateLimitedResult(events.response);
     return { ok: false, code: "HIRO_UNREACHABLE", message: "Could not read the transaction events." };
@@ -401,7 +420,15 @@ export async function verifyPayoutTxid(params: {
   // A payout found in the events that did load is on-chain proof, even when
   // later pages could not be read: record what is proven.
   if (matched.length > 0) {
-    return { ok: true, canonicalTxid: tx.tx_id, blockTimeIso, matched, underpaid };
+    const partial = events.state === "truncated" || events.state === "incomplete";
+    return {
+      ok: true,
+      canonicalTxid: tx.tx_id,
+      blockTimeIso,
+      matched,
+      underpaid,
+      ...(partial && { eventsIncomplete: true as const }),
+    };
   }
 
   if (events.state === "truncated" || events.state === "incomplete") {
